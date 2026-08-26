@@ -132,6 +132,53 @@ class TestServices(unittest.TestCase):
         with self.assertRaises(ValueError):
             MilestoneService.parse_csv(invalid_csv, "PRJ-999")
 
+    def test_evaluate_constraints_fs_ff_ss_sf(self) -> None:
+        """Verify evaluation of all 4 link types (FS, FF, SS, SF) with positive/negative lags."""
+        tasks = [
+            {"id": 1, "task_name": "Task 1", "start_date": "2026-01-01", "end_date": "2026-01-10"},
+            {"id": 2, "task_name": "Task 2 (FS valid)", "start_date": "2026-01-12", "end_date": "2026-01-20"},
+            {"id": 3, "task_name": "Task 3 (FS violated)", "start_date": "2026-01-08", "end_date": "2026-01-15"},
+            {"id": 4, "task_name": "Task 4 (SS valid with +2d lag)", "start_date": "2026-01-05", "end_date": "2026-01-15"},
+            {"id": 5, "task_name": "Task 5 (FF violated)", "start_date": "2026-01-01", "end_date": "2026-01-09"},
+        ]
+        dependencies = [
+            {"task_id": 2, "predecessor_task_id": 1, "link_type": "FS", "lag_days": 1},   # Req start >= 2026-01-11 (actual: 2026-01-12) -> Valid
+            {"task_id": 3, "predecessor_task_id": 1, "link_type": "FS", "lag_days": 0},   # Req start >= 2026-01-10 (actual: 2026-01-08) -> Violated
+            {"task_id": 4, "predecessor_task_id": 1, "link_type": "SS", "lag_days": 2},   # Req start >= 2026-01-03 (actual: 2026-01-05) -> Valid
+            {"task_id": 5, "predecessor_task_id": 1, "link_type": "FF", "lag_days": 0},   # Req end >= 2026-01-10 (actual: 2026-01-09) -> Violated
+        ]
+
+        evaluated, violations = MilestoneService.evaluate_constraints(tasks, dependencies)
+
+        self.assertEqual(len(evaluated), 4)
+        self.assertFalse(evaluated[0]["is_violated"])
+        self.assertTrue(evaluated[1]["is_violated"])
+        self.assertFalse(evaluated[2]["is_violated"])
+        self.assertTrue(evaluated[3]["is_violated"])
+
+        self.assertEqual(len(violations[2]), 0)
+        self.assertEqual(len(violations[3]), 1)
+        self.assertIn("FS with 'Task 1'", violations[3][0])
+        self.assertEqual(len(violations[5]), 1)
+        self.assertIn("FF with 'Task 1'", violations[5][0])
+
+    def test_evaluate_constraints_external_project(self) -> None:
+        """Verify evaluation of dependencies linked to whole external projects."""
+        tasks = [
+            {"id": 10, "task_name": "Internal Task", "start_date": "2026-02-01", "end_date": "2026-02-15"},
+        ]
+        dependencies = [
+            {"task_id": 10, "predecessor_task_id": None, "predecessor_project_id": "PRJ-EXT", "link_type": "FS", "lag_days": 0},
+        ]
+        # Ext project bounds: start: 2026-01-01, end: 2026-02-05
+        project_bounds = {"PRJ-EXT": ("2026-01-01", "2026-02-05")}
+
+        evaluated, violations = MilestoneService.evaluate_constraints(tasks, dependencies, project_bounds)
+        self.assertEqual(len(evaluated), 1)
+        # Req start >= 2026-02-05, actual is 2026-02-01 -> Violated
+        self.assertTrue(evaluated[0]["is_violated"])
+        self.assertEqual(len(violations[10]), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

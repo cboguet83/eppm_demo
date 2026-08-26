@@ -3,281 +3,1801 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Interactive Gantt</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.css" />
+  <title>Enterprise Interactive Gantt</title>
   <style>
+    :root {
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --milestone: #dc2626;
+      --border: #e2e8f0;
+      --border-dark: #cbd5e1;
+      --bg-header: #f8fafc;
+      --row-hover: rgba(37, 99, 235, 0.07);
+      --text: #0f172a;
+      --text-muted: #64748b;
+      --row-height: 46px;
+      --header-height: 56px;
+      --left-col-width: 280px;
+      --link-normal: #94a3b8;
+      --link-violated: #ef4444;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      margin: 0;
-      padding: 8px 4px;
       background: transparent;
-      color: #1e293b;
+      color: var(--text);
+      overflow-x: hidden;
+      padding: 4px;
     }
-    .gantt-container {
+
+    .gantt-card {
       background: #ffffff;
-      border: 1px solid #e2e8f0;
+      border: 1px solid var(--border);
       border-radius: 8px;
-      padding: 12px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-      overflow-x: auto;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+      overflow: hidden;
     }
-    .controls {
+
+    .toolbar {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 12px;
+      padding: 10px 14px;
+      background: #ffffff;
+      border-bottom: 1px solid var(--border);
       flex-wrap: wrap;
-      gap: 8px;
+      gap: 10px;
     }
+
+    .toolbar-hint {
+      font-size: 12px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
     .view-modes {
       display: flex;
-      gap: 4px;
-      background: #f8fafc;
+      gap: 2px;
+      background: #f1f5f9;
       padding: 3px;
       border-radius: 6px;
-      border: 1px solid #e2e8f0;
+      border: 1px solid var(--border);
     }
+
     .btn-mode {
       background: transparent;
       border: 1px solid transparent;
       border-radius: 4px;
-      padding: 4px 12px;
+      padding: 5px 12px;
       font-size: 12px;
       font-weight: 600;
       cursor: pointer;
       color: #475569;
       transition: all 0.15s ease;
     }
+
     .btn-mode:hover {
       background: #e2e8f0;
-      color: #1e293b;
+      color: var(--text);
     }
+
     .btn-mode.active {
-      background: #2563eb;
+      background: var(--primary);
       color: #ffffff;
-      border-color: #2563eb;
-      box-shadow: 0 1px 2px rgba(37,99,235,0.2);
+      border-color: var(--primary);
+      box-shadow: 0 1px 2px rgba(37, 99, 235, 0.25);
     }
-    .hint {
+
+    /* Main Gantt Split Container */
+    .gantt-main {
+      display: flex;
+      width: 100%;
+      position: relative;
+      background: #ffffff;
+    }
+
+    /* Left Frozen Column */
+    .frozen-column {
+      width: var(--left-col-width);
+      min-width: var(--left-col-width);
+      max-width: var(--left-col-width);
+      flex-shrink: 0;
+      background: #ffffff;
+      border-right: 2px solid var(--border-dark);
+      z-index: 20;
+      box-shadow: 3px 0 8px rgba(0, 0, 0, 0.03);
+    }
+
+    .frozen-header {
+      height: var(--header-height);
+      background: var(--bg-header);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 14px;
       font-size: 12px;
-      color: #64748b;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #475569;
+      justify-content: space-between;
     }
-    /* Custom milestone styling */
-    .gantt .bar-milestone .bar {
-      fill: #dc2626 !important;
+
+    .frozen-row {
+      height: var(--row-height);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      padding: 0 14px;
+      gap: 8px;
+      transition: background 0.15s ease;
+      cursor: context-menu;
     }
-    .gantt .bar-milestone .bar-progress {
-      fill: #b91c1c !important;
+
+    .frozen-row:hover, .frozen-row.highlight {
+      background: var(--row-hover);
+    }
+
+    .task-badge {
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+
+    .task-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex: 1;
+    }
+
+    .task-phase-tag {
+      font-size: 10px;
+      padding: 2px 6px;
+      background: #e0f2fe;
+      color: #0369a1;
+      border-radius: 10px;
+      font-weight: 600;
+      white-space: nowrap;
+      max-width: 90px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Right Scrollable Timeline */
+    .timeline-scroll-container {
+      flex: 1;
+      overflow-x: auto;
+      overflow-y: hidden;
+      position: relative;
+      background: #ffffff;
+    }
+
+    .timeline-inner {
+      position: relative;
+    }
+
+    /* Timeline Header */
+    .timeline-header {
+      height: var(--header-height);
+      background: var(--bg-header);
+      border-bottom: 1px solid var(--border);
+      position: relative;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .header-tier-top {
+      height: 28px;
+      display: flex;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .header-tier-bottom {
+      height: 28px;
+      display: flex;
+    }
+
+    .header-cell {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 600;
+      color: #475569;
+      border-right: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .header-cell.top {
+      font-weight: 700;
+      color: #1e293b;
+      background: #f1f5f9;
+    }
+
+    .header-cell.current-day {
+      background: #eff6ff;
+      color: var(--primary);
+      font-weight: 700;
+    }
+
+    /* Timeline Body & SVG Grid */
+    .timeline-body {
+      position: relative;
+    }
+
+    .grid-svg {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+
+    .timeline-row {
+      height: var(--row-height);
+      border-bottom: 1px solid var(--border);
+      position: relative;
+      transition: background 0.15s ease;
+    }
+
+    .timeline-row:hover, .timeline-row.highlight {
+      background: var(--row-hover);
+    }
+
+    /* Task Bar Rendering */
+    .gantt-bar-wrapper {
+      position: absolute;
+      top: 9px;
+      height: 28px;
+      border-radius: 5px;
+      cursor: grab;
+      display: flex;
+      align-items: center;
+      transition: box-shadow 0.15s ease;
+      z-index: 5;
+    }
+
+    .gantt-bar-wrapper:hover {
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+      z-index: 15;
+    }
+
+    .gantt-bar-wrapper.dragging {
+      cursor: grabbing;
+      opacity: 0.9;
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+      z-index: 25;
+    }
+
+    .gantt-bar-task {
+      background: linear-gradient(135deg, #3b82f6, #2563eb);
+      border: 1px solid #1d4ed8;
+      width: 100%;
+      height: 100%;
+      border-radius: 5px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .bar-progress {
+      position: absolute;
+      top: 0;
+      left: 0;
+      height: 100%;
+      background: rgba(29, 78, 216, 0.5);
+      border-radius: 4px 0 0 4px;
+      pointer-events: none;
+    }
+
+    .bar-label {
+      position: absolute;
+      left: 8px;
+      right: 8px;
+      top: 0;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      font-size: 11px;
+      font-weight: 600;
+      color: #ffffff;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      pointer-events: none;
+    }
+
+    /* Warning Icon Badge Above Bar */
+    .violation-warning-badge {
+      position: absolute;
+      top: -12px;
+      left: 4px;
+      font-size: 13px;
+      cursor: help;
+      z-index: 30;
+      animation: pulse 1.5s infinite;
+      filter: drop-shadow(0 1px 2px rgba(0,0,0,0.2));
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.2); }
+      100% { transform: scale(1); }
+    }
+
+    /* Resize Handles */
+    .resize-handle {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 8px;
+      cursor: ew-resize;
+      z-index: 10;
+      opacity: 0;
+      transition: opacity 0.15s ease;
+    }
+
+    .resize-handle:hover, .gantt-bar-wrapper:hover .resize-handle {
+      opacity: 1;
+      background: rgba(255, 255, 255, 0.3);
+    }
+
+    .resize-handle.left {
+      left: 0;
+      border-radius: 5px 0 0 5px;
+    }
+
+    .resize-handle.right {
+      right: 0;
+      border-radius: 0 5px 5px 0;
+    }
+
+    /* Diamond Milestone Shape */
+    .milestone-diamond-wrapper {
+      position: absolute;
+      top: 13px;
+      width: 20px;
+      height: 20px;
+      cursor: grab;
+      z-index: 10;
+      margin-left: -10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .milestone-diamond-shape {
+      width: 18px;
+      height: 18px;
+      background: #dc2626;
+      border: 2px solid #7f1d1d;
+      transform: rotate(45deg);
+      border-radius: 2px;
+      box-shadow: 0 2px 4px rgba(220, 38, 38, 0.3);
+      transition: transform 0.15s ease, background 0.15s ease;
+    }
+
+    .milestone-diamond-wrapper:hover .milestone-diamond-shape {
+      transform: rotate(45deg) scale(1.15);
+      background: #b91c1c;
+    }
+
+    .milestone-text-label {
+      position: absolute;
+      left: 24px;
+      white-space: nowrap;
+      font-size: 11px;
+      font-weight: 700;
+      color: #991b1b;
+      pointer-events: none;
+    }
+
+    /* Tooltip */
+    #gantt-tooltip {
+      position: fixed;
+      display: none;
+      background: #0f172a;
+      color: #ffffff;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      line-height: 1.4;
+      pointer-events: none;
+      z-index: 4000;
+      box-shadow: 0 6px 16px rgba(0,0,0,0.3);
+      border: 1px solid #334155;
+      max-width: 340px;
+    }
+
+    /* Right-Click Context Menu */
+    .context-menu {
+      position: fixed;
+      display: none;
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+      z-index: 2000;
+      min-width: 220px;
+      padding: 6px 0;
+    }
+
+    .context-menu-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 16px;
+      font-size: 13px;
+      font-weight: 500;
+      color: #1e293b;
+      cursor: pointer;
+      transition: background 0.12s ease;
+    }
+
+    .context-menu-item:hover {
+      background: #f1f5f9;
+      color: var(--primary);
+    }
+
+    .context-menu-item.warning {
+      color: #b45309;
+      background: #fffbeb;
+      font-weight: 600;
+    }
+
+    .context-menu-item.warning:hover {
+      background: #fef3c7;
+      color: #92400e;
+    }
+
+    .context-menu-item.danger {
+      color: #dc2626;
+    }
+
+    .context-menu-item.danger:hover {
+      background: #fef2f2;
+      color: #b91c1c;
+    }
+
+    .context-menu-divider {
+      height: 1px;
+      background: #e2e8f0;
+      margin: 4px 0;
+    }
+
+    /* In-Place Edit Modal */
+    .modal-backdrop {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(15, 23, 42, 0.45);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 3000;
+      backdrop-filter: blur(2px);
+    }
+
+    .modal-dialog {
+      background: #ffffff;
+      border-radius: 10px;
+      width: 580px;
+      max-width: 95vw;
+      max-height: 90vh;
+      box-shadow: 0 20px 35px rgba(0, 0, 0, 0.2);
+      border: 1px solid #e2e8f0;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .modal-header {
+      padding: 14px 18px;
+      background: #f8fafc;
+      border-bottom: 1px solid #e2e8f0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 15px;
+      font-weight: 700;
+      color: #1e293b;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .modal-body {
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .form-row {
+      display: flex;
+      gap: 12px;
+    }
+
+    .form-row .form-group {
+      flex: 1;
+    }
+
+    .form-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: #475569;
+    }
+
+    .form-input, .form-select {
+      padding: 8px 10px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font-size: 13px;
+      color: #0f172a;
+      outline: none;
+      transition: border-color 0.15s ease;
+      background: #ffffff;
+    }
+
+    .form-input:focus, .form-select:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+    }
+
+    /* Dependencies Builder Box */
+    .dep-box {
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 10px;
+      background: #f8fafc;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .dep-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      background: #ffffff;
+      padding: 6px 8px;
+      border-radius: 6px;
+      border: 1px solid #cbd5e1;
+      flex-wrap: wrap;
+    }
+
+    .btn-remove-dep {
+      background: #fee2e2;
+      border: 1px solid #fca5a5;
+      color: #dc2626;
+      border-radius: 4px;
+      padding: 4px 8px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .btn-add-dep {
+      align-self: flex-start;
+      background: #eff6ff;
+      border: 1px dashed #3b82f6;
+      color: #2563eb;
+      border-radius: 6px;
+      padding: 6px 12px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .btn-add-dep:hover {
+      background: #dbeafe;
+    }
+
+    .modal-footer {
+      padding: 12px 18px;
+      background: #f8fafc;
+      border-top: 1px solid #e2e8f0;
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      position: sticky;
+      bottom: 0;
+      z-index: 10;
+    }
+
+    .btn-cancel {
+      padding: 7px 14px;
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #475569;
+      cursor: pointer;
+    }
+
+    .btn-save {
+      padding: 7px 16px;
+      background: var(--primary);
+      border: 1px solid var(--primary);
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #ffffff;
+      cursor: pointer;
+      box-shadow: 0 1px 2px rgba(37, 99, 235, 0.25);
+    }
+
+    .btn-save:hover {
+      background: var(--primary-hover);
+    }
+
+    /* Diagnostics Modal */
+    #diag-modal .modal-body {
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    .violation-card {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-left: 4px solid #ef4444;
+      padding: 10px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      color: #991b1b;
+      line-height: 1.4;
     }
   </style>
 </head>
 <body>
-  <div class="gantt-container">
-    <div class="controls">
-      <div class="hint">💡 <b>Drag</b> bar body to move dates, <b>drag edges</b> to resize duration, or <b>drag handle</b> for progress.</div>
-      <div class="view-modes">
-        <button class="btn-mode" onclick="changeMode('Day', this)">Day</button>
-        <button class="btn-mode" onclick="changeMode('Week', this)">Week</button>
-        <button class="btn-mode active" onclick="changeMode('Month', this)">Month</button>
-        <button class="btn-mode" onclick="changeMode('Quarter', this)">Quarter</button>
-        <button class="btn-mode" onclick="changeMode('Year', this)">Year</button>
-      </div>
+  <div id="gantt-tooltip"></div>
+
+  <!-- Context Menu -->
+  <div class="context-menu" id="context-menu">
+    <div class="context-menu-item warning" id="ctx-violation-btn" onclick="openDiagModal()" style="display:none;">
+      <span>⚠️</span>
+      <span id="ctx-violation-label">View Constraint Issues</span>
     </div>
-    <div id="gantt-target"></div>
+    <div class="context-menu-item" id="ctx-view-pred-btn" onclick="openViewPredecessorsModal()" style="display:none;">
+      <span>🔗</span>
+      <span id="ctx-view-pred-label">View Predecessors</span>
+    </div>
+    <div class="context-menu-item" onclick="openEditModal()">
+      <span>✏️</span>
+      <span>Edit Step &amp; Dependencies</span>
+    </div>
+    <div class="context-menu-item" onclick="markComplete()">
+      <span>✅</span>
+      <span>Mark 100% Complete</span>
+    </div>
+    <div class="context-menu-divider"></div>
+    <div class="context-menu-item danger" onclick="deleteSelectedStep()">
+      <span>🗑️</span>
+      <span>Delete Step</span>
+    </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.min.js"></script>
+  <!-- View Predecessors Modal Dialog -->
+  <div class="modal-backdrop" id="view-pred-backdrop">
+    <div class="modal-dialog" style="width: 540px;">
+      <div class="modal-header">
+        <span id="view-pred-title" style="color:#2563eb;font-weight:700;">🔗 Predecessors for Step</span>
+        <button onclick="closeViewPredecessorsModal()" style="background:none;border:none;font-size:18px;cursor:pointer;color:#64748b;">&times;</button>
+      </div>
+      <div class="modal-body" id="view-pred-body" style="max-height: 420px; overflow-y: auto;"></div>
+      <div class="modal-footer">
+        <button class="btn-cancel" onclick="closeViewPredecessorsModal()">Close</button>
+        <button class="btn-save" onclick="closeViewPredecessorsModal(); openEditModal();">✏️ Edit Dependencies</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Diagnostics Modal Dialog -->
+  <div class="modal-backdrop" id="diag-backdrop">
+    <div class="modal-dialog" style="width: 500px;">
+      <div class="modal-header">
+        <span style="color:#dc2626;font-weight:700;">⚠️ Constraint Violation Diagnostics</span>
+        <button onclick="closeDiagModal()" style="background:none;border:none;font-size:18px;cursor:pointer;color:#64748b;">&times;</button>
+      </div>
+      <div class="modal-body" id="diag-body"></div>
+      <div class="modal-footer">
+        <button class="btn-cancel" onclick="closeDiagModal()">Close</button>
+        <button class="btn-save" onclick="closeDiagModal(); openEditModal();">✏️ Fix in Step Editor</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Task Modal Dialog -->
+  <div class="modal-backdrop" id="modal-backdrop">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <span id="modal-title-header">✏️ Edit Step Details</span>
+        <button onclick="closeEditModal()" style="background:none;border:none;font-size:18px;cursor:pointer;color:#64748b;">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Step / Task Name *</label>
+          <input type="text" class="form-input" id="modal-task-name" placeholder="e.g. UAT Validation" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Phase / Category</label>
+          <input type="text" class="form-input" id="modal-task-phase" placeholder="e.g. Phase 1 - Inception" />
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Start Date *</label>
+            <input type="date" class="form-input" id="modal-start-date" onchange="syncModalEndDate()" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">End Date *</label>
+            <input type="date" class="form-input" id="modal-end-date" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Progress (%)</label>
+            <input type="number" class="form-input" id="modal-progress" min="0" max="100" />
+          </div>
+        </div>
+
+        <!-- Predecessors / Dependencies Builder -->
+        <div class="form-group">
+          <label class="form-label">🔗 Predecessors &amp; Dependencies</label>
+          <div class="dep-box">
+            <div id="dep-rows-list"></div>
+            <button type="button" class="btn-add-dep" onclick="addDependencyRow()">➕ Add Predecessor</button>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-cancel" onclick="closeEditModal()">Cancel</button>
+        <button class="btn-save" onclick="saveEditModal()">💾 Save Changes</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="gantt-card">
+    <!-- Toolbar -->
+    <div class="toolbar">
+      <div class="toolbar-hint">
+        <span>💡</span>
+        <span><b>Drag bar</b> to shift dates &bull; <b>Right-click</b> task for contextual actions &bull; <b>Grey links</b>: Normal &bull; <b style="color:#ef4444;">Red links</b>: Violated</span>
+      </div>
+      <div class="view-modes">
+        <button class="btn-mode" onclick="setViewMode('Day', this)">Day</button>
+        <button class="btn-mode" onclick="setViewMode('Week', this)">Week</button>
+        <button class="btn-mode active" onclick="setViewMode('Month', this)">Month</button>
+        <button class="btn-mode" onclick="setViewMode('Quarter', this)">Quarter</button>
+        <button class="btn-mode" onclick="setViewMode('Year', this)">Year</button>
+      </div>
+    </div>
+
+    <!-- Main Gantt View -->
+    <div class="gantt-main" id="gantt-wrapper">
+      <!-- Frozen Left Column -->
+      <div class="frozen-column">
+        <div class="frozen-header">
+          <span>Task / Step Name</span>
+          <span style="font-size: 10px; color: #94a3b8;">Phase</span>
+        </div>
+        <div id="frozen-rows-container"></div>
+      </div>
+
+      <!-- Right Scrollable Timeline -->
+      <div class="timeline-scroll-container" id="timeline-scroller">
+        <div class="timeline-inner" id="timeline-canvas">
+          <!-- Timeline Header -->
+          <div class="timeline-header" id="timeline-header-container">
+            <div class="header-tier-top" id="header-tier-top"></div>
+            <div class="header-tier-bottom" id="header-tier-bottom"></div>
+          </div>
+
+          <!-- Timeline Rows & SVG Dependencies Grid -->
+          <div class="timeline-body" id="timeline-body-container">
+            <svg class="grid-svg" id="grid-svg" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <!-- Normal Grey Arrow Marker -->
+                <marker id="arrow-normal" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                  <path d="M 0 1 L 10 5 L 0 9 z" fill="#94a3b8" />
+                </marker>
+                <!-- Violated Red Arrow Marker -->
+                <marker id="arrow-violated" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                  <path d="M 0 1 L 10 5 L 0 9 z" fill="#ef4444" />
+                </marker>
+              </defs>
+              <g id="grid-ticks-group"></g>
+              <g id="grid-links-group"></g>
+            </svg>
+            <div id="timeline-rows-container"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script>
-    // --------------------------------------------------------------------------
-    // FRAPPE GANTT EXTENSION: TRUE QUARTER VIEW SUPPORT
-    // --------------------------------------------------------------------------
-    if (window.Gantt) {
-      const origUpdateViewScale = Gantt.prototype.update_view_scale;
-      Gantt.prototype.update_view_scale = function(view_mode) {
-        if (view_mode === 'Quarter') {
-          this.options.view_mode = 'Quarter';
-          this.options.step = 24 * 90;
-          this.options.column_width = 120;
-        } else {
-          origUpdateViewScale.call(this, view_mode);
-        }
-      };
-
-      const origSetupGanttDates = Gantt.prototype.setup_gantt_dates;
-      Gantt.prototype.setup_gantt_dates = function() {
-        if (this.options.view_mode === 'Quarter') {
-          let gantt_start = null, gantt_end = null;
-          for (let task of this.tasks) {
-            if (!gantt_start || task._start < gantt_start) gantt_start = task._start;
-            if (!gantt_end || task._end > gantt_end) gantt_end = task._end;
-          }
-          if (!gantt_start) gantt_start = new Date();
-          if (!gantt_end) gantt_end = new Date();
-
-          const sMonth = Math.floor(gantt_start.getMonth() / 3) * 3;
-          this.gantt_start = new Date(gantt_start.getFullYear(), sMonth, 1);
-
-          const eYear = gantt_end.getFullYear() + 1;
-          const eMonth = (Math.floor(gantt_end.getMonth() / 3) + 1) * 3;
-          this.gantt_end = new Date(eYear, eMonth, 1);
-        } else {
-          origSetupGanttDates.call(this);
-        }
-      };
-
-      const origSetupDateValues = Gantt.prototype.setup_date_values;
-      Gantt.prototype.setup_date_values = function() {
-        if (this.options.view_mode === 'Quarter') {
-          this.dates = [];
-          let cur_date = null;
-          while (cur_date === null || cur_date < this.gantt_end) {
-            if (!cur_date) {
-              cur_date = new Date(this.gantt_start);
-            } else {
-              cur_date = new Date(cur_date);
-              cur_date.setMonth(cur_date.getMonth() + 3);
-            }
-            this.dates.push(cur_date);
-          }
-        } else {
-          origSetupDateValues.call(this);
-        }
-      };
-
-      const origGetDateInfo = Gantt.prototype.get_date_info;
-      Gantt.prototype.get_date_info = function(date, last_date, i) {
-        if (this.options.view_mode === 'Quarter') {
-          const qNum = Math.floor(date.getMonth() / 3) + 1;
-          const year = date.getFullYear();
-          const isYearChange = !last_date || last_date.getFullYear() !== year;
-          return {
-            lower_text: `Q${qNum}`,
-            upper_text: isYearChange ? `${year}` : '',
-            lower_x: null,
-            lower_y: null,
-            upper_x: null,
-            upper_y: null
-          };
-        }
-        return origGetDateInfo.call(this, date, last_date, i);
-      };
-    }
-
-    // --------------------------------------------------------------------------
-    // STREAMLIT COMPONENT PROTOCOL
-    // --------------------------------------------------------------------------
+    // Streamlit Communication Bridge
     const Streamlit = {
       setComponentReady: function() {
         window.parent.postMessage({ isStreamlitMessage: true, type: "streamlit:componentReady", apiVersion: 1 }, "*");
       },
       setFrameHeight: function(height) {
-        window.parent.postMessage({ isStreamlitMessage: true, type: "streamlit:setFrameHeight", height: height || document.body.scrollHeight + 20 }, "*");
+        window.parent.postMessage({ isStreamlitMessage: true, type: "streamlit:setFrameHeight", height: height || document.body.scrollHeight + 10 }, "*");
       },
       setComponentValue: function(value) {
         window.parent.postMessage({ isStreamlitMessage: true, type: "streamlit:setComponentValue", value: value }, "*");
       }
     };
 
-    let ganttChart = null;
+    let tasksData = [];
+    let allProjectsData = []; // list of { id, name }
+    let externalTasksData = {}; // project_id -> list of { id, task_name, start_date, end_date }
+    let currentProjectId = "";
     let currentMode = "Month";
+    let timelineStart = null;
+    let timelineEnd = null;
+    let totalTimelineWidth = 0;
+    let msPerPixel = 1;
+    let selectedContextMenuTask = null;
+
+    // Helper Date Utilities
+    function parseDate(dStr) {
+      if (!dStr) return new Date();
+      const parts = dStr.split('-');
+      return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+    }
 
     function formatDate(d) {
-      if (typeof d === "string") return d;
       const year = d.getFullYear();
       const month = String(d.getMonth() + 1).padStart(2, '0');
       const day = String(d.getDate()).padStart(2, '0');
       return `${year}-${month}-${day}`;
     }
 
-    function changeMode(mode, btn) {
+    function addDays(d, days) {
+      const res = new Date(d);
+      res.setDate(res.getDate() + days);
+      return res;
+    }
+
+    function diffDays(d1, d2) {
+      return Math.round((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
+    }
+
+    function dateToX(date) {
+      if (!timelineStart || !timelineEnd) return 0;
+      const t = date.getTime();
+      const startT = timelineStart.getTime();
+      return Math.round((t - startT) / msPerPixel);
+    }
+
+    function setViewMode(mode, btn) {
       currentMode = mode;
       document.querySelectorAll('.btn-mode').forEach(b => b.classList.remove('active'));
       if (btn) btn.classList.add('active');
-      if (ganttChart) {
-        ganttChart.change_view_mode(mode);
-        setTimeout(() => Streamlit.setFrameHeight(), 100);
+      renderTimeline();
+    }
+
+    // --------------------------------------------------------------------------
+    // TOOLTIP & DIAGNOSTICS
+    // --------------------------------------------------------------------------
+    function showTooltip(e, html) {
+      const tt = document.getElementById('gantt-tooltip');
+      tt.innerHTML = html;
+      tt.style.display = 'block';
+      tt.style.left = `${e.clientX + 14}px`;
+      tt.style.top = `${e.clientY - 20}px`;
+    }
+
+    function hideTooltip() {
+      const tt = document.getElementById('gantt-tooltip');
+      if (tt) tt.style.display = 'none';
+    }
+
+    function openDiagModal() {
+      hideContextMenu();
+      if (!selectedContextMenuTask) return;
+
+      const t = selectedContextMenuTask;
+      const diagBody = document.getElementById('diag-body');
+      const viols = t.violations || [];
+
+      if (viols.length === 0) {
+        diagBody.innerHTML = "<div style='color:#16a34a;'>All dependency constraints are currently satisfied!</div>";
+      } else {
+        diagBody.innerHTML = viols.map(v => `
+          <div class="violation-card" style="margin-bottom:8px;">
+            <b>⚠️ Constraint Issue:</b><br>${v}
+          </div>
+        `).join('');
+      }
+
+      document.getElementById('diag-backdrop').style.display = 'flex';
+    }
+
+    function closeDiagModal() {
+      document.getElementById('diag-backdrop').style.display = 'none';
+    }
+
+    function openViewPredecessorsModal() {
+      hideContextMenu();
+      if (!selectedContextMenuTask) return;
+
+      const t = selectedContextMenuTask;
+      const deps = t.dependenciesList || [];
+      document.getElementById('view-pred-title').innerText = `🔗 Predecessors for: ${t.name}`;
+      const body = document.getElementById('view-pred-body');
+
+      if (deps.length === 0) {
+        body.innerHTML = "<div style='color:#64748b;padding:12px;text-align:center;'>This step has no predecessors defined.</div>";
+      } else {
+        body.innerHTML = deps.map((dep, i) => {
+          const ltypeNames = {
+            "FS": "Finish-to-Start (FS)",
+            "FF": "Finish-to-Finish (FF)",
+            "SS": "Start-to-Start (SS)",
+            "SF": "Start-to-Finish (SF)"
+          };
+          const ltypeName = ltypeNames[dep.link_type] || dep.link_type || 'FS';
+          const lagStr = (dep.lag_days && dep.lag_days !== 0) ? `${dep.lag_days > 0 ? '+' : ''}${dep.lag_days} days offset` : '0 days offset';
+          const isViolated = Boolean(dep.is_violated);
+          const predLabel = dep.pred_label || dep.predecessor_task_name || (dep.predecessor_project_id ? `Project [${dep.predecessor_project_name || dep.predecessor_project_id}]` : `Step #${dep.predecessor_task_id}`);
+
+          return `
+            <div style="background:#f8fafc;border:1px solid ${isViolated ? '#fca5a5' : '#cbd5e1'};border-left:4px solid ${isViolated ? '#ef4444' : '#2563eb'};border-radius:6px;padding:10px 12px;margin-bottom:10px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                <span style="font-weight:700;font-size:13px;color:#0f172a;">${i + 1}. ${predLabel}</span>
+                <span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:#e2e8f0;color:#334155;">${ltypeName}</span>
+              </div>
+              <div style="font-size:12px;color:#475569;margin-bottom:2px;">
+                <b>Dates:</b> ${dep.pred_start || 'N/A'} &rarr; ${dep.pred_end || 'N/A'} &bull; <b>Offset:</b> ${lagStr}
+              </div>
+              ${isViolated ? `
+                <div style="color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;padding:6px 8px;border-radius:4px;font-size:11px;margin-top:6px;">
+                  <b>⚠️ Constraint Violated:</b><br>${dep.violation_text}
+                </div>
+              ` : `
+                <div style="color:#15803d;background:#f0fdf4;border:1px solid #bbf7d0;padding:4px 8px;border-radius:4px;font-size:11px;margin-top:6px;">
+                  <b>✅ Constraint Satisfied</b>
+                </div>
+              `}
+            </div>
+          `;
+        }).join('');
+      }
+
+      document.getElementById('view-pred-backdrop').style.display = 'flex';
+    }
+
+    function closeViewPredecessorsModal() {
+      document.getElementById('view-pred-backdrop').style.display = 'none';
+    }
+
+    // --------------------------------------------------------------------------
+    // CONTEXT MENU
+    // --------------------------------------------------------------------------
+    function showContextMenu(e, task) {
+      e.preventDefault();
+      e.stopPropagation();
+      selectedContextMenuTask = task;
+
+      const menu = document.getElementById('context-menu');
+      const violBtn = document.getElementById('ctx-violation-btn');
+      const violLabel = document.getElementById('ctx-violation-label');
+      const viewPredBtn = document.getElementById('ctx-view-pred-btn');
+      const viewPredLabel = document.getElementById('ctx-view-pred-label');
+      const deps = task.dependenciesList || [];
+
+      if (task.violations && task.violations.length > 0) {
+        violBtn.style.display = 'flex';
+        violLabel.innerText = `⚠️ View ${task.violations.length} Constraint Issue(s)`;
+      } else {
+        violBtn.style.display = 'none';
+      }
+
+      if (deps.length > 0) {
+        viewPredBtn.style.display = 'flex';
+        viewPredLabel.innerText = `View Predecessors (${deps.length})`;
+      } else {
+        viewPredBtn.style.display = 'none';
+      }
+
+      menu.style.display = 'block';
+      menu.style.left = `${Math.min(window.innerWidth - 230, e.clientX)}px`;
+      menu.style.top = `${Math.min(window.innerHeight - 200, e.clientY)}px`;
+    }
+
+    function hideContextMenu() {
+      const menu = document.getElementById('context-menu');
+      if (menu) menu.style.display = 'none';
+    }
+
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('#context-menu')) {
+        hideContextMenu();
+      }
+    });
+
+    // --------------------------------------------------------------------------
+    // IN-PLACE EDIT MODAL & MULTI-DEPENDENCIES BUILDER
+    // --------------------------------------------------------------------------
+    function openEditModal() {
+      hideContextMenu();
+      if (!selectedContextMenuTask) return;
+
+      const t = selectedContextMenuTask;
+      document.getElementById('modal-title-header').innerText = `✏️ Edit: ${t.name}`;
+      document.getElementById('modal-task-name').value = t.name || '';
+      document.getElementById('modal-task-phase').value = t.phase || 'General';
+      document.getElementById('modal-start-date').value = t.start;
+      document.getElementById('modal-end-date').value = t.end;
+      document.getElementById('modal-end-date').min = t.start;
+      document.getElementById('modal-progress').value = t.progress || 0;
+
+      // Populate dependencies list
+      const depList = document.getElementById('dep-rows-list');
+      depList.innerHTML = '';
+      const existingDeps = t.dependenciesList || [];
+      existingDeps.forEach(dep => {
+        addDependencyRow(dep);
+      });
+
+      document.getElementById('modal-backdrop').style.display = 'flex';
+    }
+
+    function syncModalEndDate() {
+      const sDate = document.getElementById('modal-start-date').value;
+      const eInput = document.getElementById('modal-end-date');
+      eInput.min = sDate;
+      if (eInput.value < sDate) {
+        eInput.value = sDate;
       }
     }
 
-    function renderGantt(tasks) {
-      if (!tasks || tasks.length === 0) {
-        document.getElementById('gantt-target').innerHTML = "<div style='padding:20px;text-align:center;color:#64748b;'>No tasks available to display.</div>";
-        Streamlit.setFrameHeight(100);
+    function closeEditModal() {
+      document.getElementById('modal-backdrop').style.display = 'none';
+    }
+
+    function addDependencyRow(initialData = {}) {
+      const depList = document.getElementById('dep-rows-list');
+      const rowDiv = document.createElement('div');
+      rowDiv.className = 'dep-row';
+
+      const isExt = Boolean(initialData.predecessor_project_id && String(initialData.predecessor_project_id) !== String(currentProjectId));
+      const otherProjects = (allProjectsData || []).filter(p => String(p.id) !== String(currentProjectId));
+      const selectedExtProj = initialData.predecessor_project_id || (otherProjects[0] ? otherProjects[0].id : '');
+
+      rowDiv.innerHTML = `
+        <label style="font-size:11px;display:flex;align-items:center;gap:4px;cursor:pointer;white-space:nowrap;">
+          <input type="checkbox" class="dep-is-ext" ${isExt ? 'checked' : ''} onchange="toggleDepExt(this)" /> Ext Project?
+        </label>
+        <select class="form-select dep-proj" style="max-width:140px;${isExt ? '' : 'display:none;'}" onchange="onDepProjChange(this)">
+          ${otherProjects.map(p => `<option value="${p.id}" ${String(selectedExtProj) === String(p.id) ? 'selected' : ''}>${p.name}</option>`).join('')}
+        </select>
+        <select class="form-select dep-target" style="flex:1;min-width:150px;">
+          <!-- Populated dynamically -->
+        </select>
+        <select class="form-select dep-type" style="width:70px;">
+          <option value="FS" ${initialData.link_type === 'FS' ? 'selected' : ''}>FS</option>
+          <option value="FF" ${initialData.link_type === 'FF' ? 'selected' : ''}>FF</option>
+          <option value="SS" ${initialData.link_type === 'SS' ? 'selected' : ''}>SS</option>
+          <option value="SF" ${initialData.link_type === 'SF' ? 'selected' : ''}>SF</option>
+        </select>
+        <input type="number" class="form-input dep-lag" style="width:60px;" title="Offset / Lag in days" placeholder="Lag (d)" value="${initialData.lag_days || 0}" />
+        <button type="button" class="btn-remove-dep" onclick="this.parentElement.remove()" title="Remove dependency">✕</button>
+      `;
+
+      depList.appendChild(rowDiv);
+      populateDepTargets(rowDiv, initialData);
+    }
+
+    function toggleDepExt(chk) {
+      const row = chk.closest('.dep-row');
+      const projSelect = row.querySelector('.dep-proj');
+      if (chk.checked) {
+        projSelect.style.display = 'block';
+      } else {
+        projSelect.style.display = 'none';
+      }
+      populateDepTargets(row);
+    }
+
+    function onDepProjChange(sel) {
+      const row = sel.closest('.dep-row');
+      populateDepTargets(row);
+    }
+
+    function populateDepTargets(rowDiv, initialData = {}) {
+      const chk = rowDiv.querySelector('.dep-is-ext');
+      const targetSelect = rowDiv.querySelector('.dep-target');
+      const projSelect = rowDiv.querySelector('.dep-proj');
+      const otherProjects = (allProjectsData || []).filter(p => String(p.id) !== String(currentProjectId));
+
+      targetSelect.innerHTML = '';
+
+      if (chk.checked) {
+        // External Project
+        const selectedProj = projSelect.value || (otherProjects[0] ? otherProjects[0].id : "");
+        targetSelect.title = "Step (leave blank to link the whole project)";
+        const optWhole = document.createElement('option');
+        optWhole.value = `PROJ:${selectedProj}`;
+        optWhole.innerText = `(leave blank for whole project)`;
+        if (initialData.predecessor_project_id && !initialData.predecessor_task_id) {
+          optWhole.selected = true;
+        }
+        targetSelect.appendChild(optWhole);
+
+        // Populate steps in external project if available
+        const extTasks = externalTasksData[selectedProj] || [];
+        extTasks.forEach(item => {
+          const opt = document.createElement('option');
+          opt.value = `TASK:${item.id}`;
+          opt.innerText = `Step: ${item.task_name}`;
+          if (String(initialData.predecessor_task_id) === String(item.id)) {
+            opt.selected = true;
+          }
+          targetSelect.appendChild(opt);
+        });
+      } else {
+        // Current Project Internal Steps
+        tasksData.forEach(item => {
+          if (selectedContextMenuTask && String(item.id) === String(selectedContextMenuTask.id)) {
+            return; // cannot be predecessor of itself
+          }
+          const opt = document.createElement('option');
+          opt.value = `TASK:${item.id}`;
+          opt.innerText = `${item.name}`;
+          if (String(initialData.predecessor_task_id) === String(item.id)) {
+            opt.selected = true;
+          }
+          targetSelect.appendChild(opt);
+        });
+      }
+    }
+
+    function saveEditModal() {
+      if (!selectedContextMenuTask) return;
+
+      const name = document.getElementById('modal-task-name').value.trim();
+      const phase = document.getElementById('modal-task-phase').value.trim();
+      const start = document.getElementById('modal-start-date').value;
+      const end = document.getElementById('modal-end-date').value;
+      const prog = parseInt(document.getElementById('modal-progress').value, 10) || 0;
+
+      if (!name) {
+        alert("Step Name is required.");
+        return;
+      }
+      if (end < start) {
+        alert("End Date must be greater than or equal to Start Date.");
         return;
       }
 
-      document.getElementById('gantt-target').innerHTML = "";
+      // Collect dependencies
+      const depRows = document.querySelectorAll('#dep-rows-list .dep-row');
+      const dependencies = [];
 
-      try {
-        ganttChart = new Gantt("#gantt-target", tasks, {
-          header_height: 50,
-          column_width: currentMode === 'Day' ? 38 : (currentMode === 'Week' ? 140 : 120),
-          step: 24,
-          view_modes: ['Quarter Day', 'Half Day', 'Day', 'Week', 'Month', 'Quarter', 'Year'],
-          bar_height: 24,
-          bar_corner_radius: 4,
-          arrow_curve: 5,
-          padding: 18,
-          view_mode: currentMode,
-          date_format: 'YYYY-MM-DD',
-          custom_popup_html: function(task) {
-            return `
-              <div class="details-container" style="padding:10px;background:#1e293b;color:#fff;border-radius:6px;font-size:12px;">
-                <h5 style="margin:0 0 5px 0;font-size:13px;color:#38bdf8;">${task.name}</h5>
-                <p style="margin:2px 0;"><b>Phase:</b> ${task.phase || 'General'}</p>
-                <p style="margin:2px 0;"><b>Dates:</b> ${task.start} &rarr; ${task.end}</p>
-                <p style="margin:2px 0;"><b>Progress:</b> ${task.progress}%</p>
-              </div>
-            `;
-          },
-          on_date_change: function(task, start, end) {
-            let sDate = new Date(start);
-            let eDate = new Date(end);
+      depRows.forEach(row => {
+        const isExt = row.querySelector('.dep-is-ext').checked;
+        const targetVal = row.querySelector('.dep-target').value;
+        const linkType = row.querySelector('.dep-type').value;
+        const lagDays = parseInt(row.querySelector('.dep-lag').value, 10) || 0;
 
-            // Handle Frappe Gantt's -1 second subtraction at 23:59:59
-            if (eDate.getHours() === 23 && eDate.getMinutes() === 59) {
-              eDate.setSeconds(eDate.getSeconds() + 1);
+        if (targetVal.startsWith('PROJ:')) {
+          const pId = targetVal.replace('PROJ:', '');
+          dependencies.push({
+            predecessor_task_id: null,
+            predecessor_project_id: pId,
+            link_type: linkType,
+            lag_days: lagDays
+          });
+        } else if (targetVal.startsWith('TASK:')) {
+          const tId = parseInt(targetVal.replace('TASK:', ''), 10);
+          const pId = isExt ? row.querySelector('.dep-proj').value : null;
+          dependencies.push({
+            predecessor_task_id: tId,
+            predecessor_project_id: pId,
+            link_type: linkType,
+            lag_days: lagDays
+          });
+        }
+      });
+
+      closeEditModal();
+
+      Streamlit.setComponentValue({
+        action: "update_task_full",
+        id: parseInt(selectedContextMenuTask.id, 10),
+        task_name: name,
+        phase: phase || "General",
+        start_date: start,
+        end_date: end,
+        progress_pct: Math.max(0, Math.min(100, prog)),
+        dependencies: dependencies,
+        nonce: Date.now() + "_" + Math.random()
+      });
+    }
+
+    function markComplete() {
+      hideContextMenu();
+      if (!selectedContextMenuTask) return;
+
+      Streamlit.setComponentValue({
+        action: "update_progress",
+        id: parseInt(selectedContextMenuTask.id, 10),
+        progress: 100,
+        nonce: Date.now() + "_" + Math.random()
+      });
+    }
+
+    function deleteSelectedStep() {
+      hideContextMenu();
+      if (!selectedContextMenuTask) return;
+
+      if (confirm(`Are you sure you want to delete step '${selectedContextMenuTask.name}'?`)) {
+        Streamlit.setComponentValue({
+          action: "delete_step",
+          id: parseInt(selectedContextMenuTask.id, 10),
+          task_name: selectedContextMenuTask.name,
+          nonce: Date.now() + "_" + Math.random()
+        });
+      }
+    }
+
+    // --------------------------------------------------------------------------
+    // TIMELINE RENDERER
+    // --------------------------------------------------------------------------
+    function computeTimelineBounds() {
+      if (!tasksData || tasksData.length === 0) {
+        timelineStart = new Date();
+        timelineEnd = addDays(timelineStart, 90);
+        return;
+      }
+
+      let minDate = null, maxDate = null;
+      tasksData.forEach(t => {
+        const s = parseDate(t.start);
+        const e = parseDate(t.end);
+        if (!minDate || s < minDate) minDate = s;
+        if (!maxDate || e > maxDate) maxDate = e;
+      });
+
+      if (currentMode === 'Day') {
+        timelineStart = addDays(minDate, -3);
+        timelineEnd = addDays(maxDate, 14);
+      } else if (currentMode === 'Week') {
+        timelineStart = addDays(minDate, -14);
+        timelineEnd = addDays(maxDate, 30);
+      } else if (currentMode === 'Quarter') {
+        const sMonth = Math.floor(minDate.getMonth() / 3) * 3;
+        timelineStart = new Date(minDate.getFullYear(), sMonth, 1);
+        const eYear = maxDate.getFullYear() + 1;
+        const eMonth = (Math.floor(maxDate.getMonth() / 3) + 1) * 3;
+        timelineEnd = new Date(eYear, eMonth, 1);
+      } else if (currentMode === 'Year') {
+        timelineStart = new Date(minDate.getFullYear() - 1, 0, 1);
+        timelineEnd = new Date(maxDate.getFullYear() + 2, 0, 1);
+      } else {
+        timelineStart = new Date(minDate.getFullYear(), minDate.getMonth() - 1, 1);
+        timelineEnd = new Date(maxDate.getFullYear(), maxDate.getMonth() + 4, 1);
+      }
+    }
+
+    function buildHeaderStructure() {
+      const topCells = [];
+      const bottomCells = [];
+      let cur = new Date(timelineStart);
+
+      if (currentMode === 'Day') {
+        const colWidth = 38;
+        let dayCount = 0;
+        let curMonth = null;
+        let monthStartIdx = 0;
+
+        while (cur < timelineEnd) {
+          const mLabel = cur.toLocaleString('default', { month: 'short', year: 'numeric' });
+          if (curMonth === null) {
+            curMonth = mLabel;
+            monthStartIdx = dayCount;
+          } else if (curMonth !== mLabel) {
+            topCells.push({ label: curMonth, width: (dayCount - monthStartIdx) * colWidth });
+            curMonth = mLabel;
+            monthStartIdx = dayCount;
+          }
+
+          bottomCells.push({
+            label: String(cur.getDate()),
+            width: colWidth,
+            isCurrent: formatDate(cur) === formatDate(new Date())
+          });
+
+          cur = addDays(cur, 1);
+          dayCount++;
+        }
+        if (dayCount > monthStartIdx) {
+          topCells.push({ label: curMonth, width: (dayCount - monthStartIdx) * colWidth });
+        }
+        totalTimelineWidth = dayCount * colWidth;
+
+      } else if (currentMode === 'Week') {
+        const colWidth = 65;
+        let weekCount = 0;
+        let curMonth = null;
+        let monthStartIdx = 0;
+
+        while (cur < timelineEnd) {
+          const mLabel = cur.toLocaleString('default', { month: 'short', year: 'numeric' });
+          if (curMonth === null) {
+            curMonth = mLabel;
+            monthStartIdx = weekCount;
+          } else if (curMonth !== mLabel) {
+            topCells.push({ label: curMonth, width: (weekCount - monthStartIdx) * colWidth });
+            curMonth = mLabel;
+            monthStartIdx = weekCount;
+          }
+
+          bottomCells.push({
+            label: `W${Math.ceil(cur.getDate() / 7)}`,
+            width: colWidth
+          });
+
+          cur = addDays(cur, 7);
+          weekCount++;
+        }
+        if (weekCount > monthStartIdx) {
+          topCells.push({ label: curMonth, width: (weekCount - monthStartIdx) * colWidth });
+        }
+        totalTimelineWidth = weekCount * colWidth;
+
+      } else if (currentMode === 'Quarter') {
+        const colWidth = 140;
+        let qCount = 0;
+        let curYear = null;
+        let yearStartIdx = 0;
+
+        cur = new Date(cur.getFullYear(), Math.floor(cur.getMonth() / 3) * 3, 1);
+
+        while (cur < timelineEnd) {
+          const yLabel = String(cur.getFullYear());
+          if (curYear === null) {
+            curYear = yLabel;
+            yearStartIdx = qCount;
+          } else if (curYear !== yLabel) {
+            topCells.push({ label: curYear, width: (qCount - yearStartIdx) * colWidth });
+            curYear = yLabel;
+            yearStartIdx = qCount;
+          }
+
+          const qNum = Math.floor(cur.getMonth() / 3) + 1;
+          bottomCells.push({
+            label: `Q${qNum}`,
+            width: colWidth
+          });
+
+          cur.setMonth(cur.getMonth() + 3);
+          qCount++;
+        }
+        if (qCount > yearStartIdx) {
+          topCells.push({ label: curYear, width: (qCount - yearStartIdx) * colWidth });
+        }
+        totalTimelineWidth = qCount * colWidth;
+
+      } else if (currentMode === 'Year') {
+        const colWidth = 200;
+        let yCount = 0;
+        cur = new Date(cur.getFullYear(), 0, 1);
+
+        while (cur < timelineEnd) {
+          const yLabel = String(cur.getFullYear());
+          topCells.push({ label: yLabel, width: colWidth });
+          bottomCells.push({ label: 'H1', width: colWidth / 2 });
+          bottomCells.push({ label: 'H2', width: colWidth / 2 });
+          cur.setFullYear(cur.getFullYear() + 1);
+          yCount++;
+        }
+        totalTimelineWidth = yCount * colWidth;
+
+      } else {
+        const colWidth = 90;
+        let mCount = 0;
+        let curYear = null;
+        let yearStartIdx = 0;
+
+        cur = new Date(cur.getFullYear(), cur.getMonth(), 1);
+
+        while (cur < timelineEnd) {
+          const yLabel = String(cur.getFullYear());
+          if (curYear === null) {
+            curYear = yLabel;
+            yearStartIdx = mCount;
+          } else if (curYear !== yLabel) {
+            topCells.push({ label: curYear, width: (mCount - yearStartIdx) * colWidth });
+            curYear = yLabel;
+            yearStartIdx = mCount;
+          }
+
+          const mLabel = cur.toLocaleString('default', { month: 'short' });
+          bottomCells.push({
+            label: mLabel,
+            width: colWidth
+          });
+
+          cur.setMonth(cur.getMonth() + 1);
+          mCount++;
+        }
+        if (mCount > yearStartIdx) {
+          topCells.push({ label: curYear, width: (mCount - yearStartIdx) * colWidth });
+        }
+        totalTimelineWidth = mCount * colWidth;
+      }
+
+      msPerPixel = (timelineEnd.getTime() - timelineStart.getTime()) / totalTimelineWidth;
+      return { topCells, bottomCells };
+    }
+
+    function renderTimeline() {
+      computeTimelineBounds();
+      const { topCells, bottomCells } = buildHeaderStructure();
+
+      const canvas = document.getElementById('timeline-canvas');
+      canvas.style.width = `${totalTimelineWidth}px`;
+
+      // 1. Render Headers
+      document.getElementById('header-tier-top').innerHTML = topCells.map(c => `
+        <div class="header-cell top" style="width: ${c.width}px;">${c.label}</div>
+      `).join('');
+
+      document.getElementById('header-tier-bottom').innerHTML = bottomCells.map(c => `
+        <div class="header-cell ${c.isCurrent ? 'current-day' : ''}" style="width: ${c.width}px;">${c.label}</div>
+      `).join('');
+
+      // 2. Render Frozen Left Column Rows
+      const frozenContainer = document.getElementById('frozen-rows-container');
+      frozenContainer.innerHTML = tasksData.map(t => {
+        const isMilestone = t.start === t.end;
+        const icon = isMilestone ? '🔷' : '⏱️';
+        const hasViol = t.violations && t.violations.length > 0;
+        return `
+          <div class="frozen-row" id="frozen-row-${t.id}" 
+               onmouseenter="highlightRow('${t.id}')" 
+               onmouseleave="unhighlightRow('${t.id}')"
+               oncontextmenu="showContextMenu(event, ${JSON.stringify(t).replace(/"/g, '&quot;')})">
+            <span class="task-badge">${icon}</span>
+            <span class="task-title" title="${t.name}">${t.name}</span>
+            ${hasViol ? `<span title="${t.violations.length} constraint violation(s)" style="font-size:12px;cursor:pointer;" onclick="showContextMenu(event, ${JSON.stringify(t).replace(/"/g, '&quot;')})">⚠️</span>` : ''}
+            <span class="task-phase-tag" title="${t.phase}">${t.phase}</span>
+          </div>
+        `;
+      }).join('');
+
+      // 3. Render Right Timeline Rows & Grid
+      const rowsContainer = document.getElementById('timeline-rows-container');
+      const ticksGroup = document.getElementById('grid-ticks-group');
+      const linksGroup = document.getElementById('grid-links-group');
+      const gridSvg = document.getElementById('grid-svg');
+
+      rowsContainer.innerHTML = '';
+      ticksGroup.innerHTML = '';
+      linksGroup.innerHTML = '';
+
+      const totalHeight = tasksData.length * 46;
+      gridSvg.setAttribute('width', totalTimelineWidth);
+      gridSvg.setAttribute('height', totalHeight);
+
+      // Grid vertical ticks
+      let accX = 0;
+      bottomCells.forEach(c => {
+        accX += c.width;
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', accX);
+        line.setAttribute('y1', 0);
+        line.setAttribute('x2', accX);
+        line.setAttribute('y2', totalHeight);
+        line.setAttribute('stroke', '#e2e8f0');
+        line.setAttribute('stroke-width', '1');
+        ticksGroup.appendChild(line);
+      });
+
+      // Render Task Rows
+      const taskPositions = {};
+
+      tasksData.forEach((t, idx) => {
+        const rowEl = document.createElement('div');
+        rowEl.className = 'timeline-row';
+        rowEl.id = `timeline-row-${t.id}`;
+        rowEl.onmouseenter = () => highlightRow(t.id);
+        rowEl.onmouseleave = () => unhighlightRow(t.id);
+
+        const sDate = parseDate(t.start);
+        const eDate = parseDate(t.end);
+        const isMilestone = t.start === t.end;
+
+        const startX = dateToX(sDate);
+        const endX = isMilestone ? startX : Math.max(startX + 24, dateToX(eDate));
+        const barWidth = Math.max(20, endX - startX);
+        const hasViol = t.violations && t.violations.length > 0;
+
+        taskPositions[t.id] = {
+          startX: startX,
+          endX: endX,
+          centerY: idx * 46 + 23,
+          rowIdx: idx,
+          isMilestone: isMilestone,
+          name: t.name
+        };
+
+        if (isMilestone) {
+          const mWrapper = document.createElement('div');
+          mWrapper.className = 'milestone-diamond-wrapper';
+          mWrapper.style.left = `${startX}px`;
+          mWrapper.innerHTML = `
+            ${hasViol ? `<div class="violation-warning-badge" onmouseenter="showTooltip(event, '<b>⚠️ Constraint Violation:</b><br>${t.violations.join('<br>')}')" onmouseleave="hideTooltip()">⚠️</div>` : ''}
+            <div class="milestone-diamond-shape"></div>
+            <div class="milestone-text-label">${t.name}</div>
+          `;
+          mWrapper.oncontextmenu = (e) => showContextMenu(e, t);
+          bindDragEvents(mWrapper, t, true);
+          rowEl.appendChild(mWrapper);
+        } else {
+          const bWrapper = document.createElement('div');
+          bWrapper.className = 'gantt-bar-wrapper';
+          bWrapper.style.left = `${startX}px`;
+          bWrapper.style.width = `${barWidth}px`;
+          bWrapper.innerHTML = `
+            ${hasViol ? `<div class="violation-warning-badge" onmouseenter="showTooltip(event, '<b>⚠️ Constraint Violation:</b><br>${t.violations.join('<br>')}')" onmouseleave="hideTooltip()">⚠️</div>` : ''}
+            <div class="resize-handle left"></div>
+            <div class="gantt-bar-task">
+              <div class="bar-progress" style="width: ${t.progress || 0}%;"></div>
+              <div class="bar-label">${t.name} (${t.progress || 0}%)</div>
+            </div>
+            <div class="resize-handle right"></div>
+          `;
+          bWrapper.oncontextmenu = (e) => showContextMenu(e, t);
+          bindDragEvents(bWrapper, t, false);
+          rowEl.appendChild(bWrapper);
+        }
+
+        rowsContainer.appendChild(rowEl);
+      });
+
+      // 4. Render All Multi-Dependencies Links
+      tasksData.forEach(t => {
+        const deps = t.dependenciesList || [];
+        deps.forEach(dep => {
+          const pTaskId = dep.predecessor_task_id;
+          const isViolated = Boolean(dep.is_violated);
+          const linkColor = isViolated ? '#ef4444' : '#94a3b8';
+          const markerUrl = isViolated ? 'url(#arrow-violated)' : 'url(#arrow-normal)';
+          const strokeW = isViolated ? '2.5' : '1.8';
+
+          if (pTaskId && taskPositions[pTaskId]) {
+            // Internal predecessor within active project
+            const pred = taskPositions[pTaskId];
+            const succ = taskPositions[t.id];
+            const linkType = (dep.link_type || 'FS').toUpperCase();
+
+            // Compute anchor points based on link type
+            let pX, pY, sX, sY;
+
+            if (linkType === 'FS') {
+              pX = pred.isMilestone ? pred.startX + 9 : pred.endX;
+              pY = pred.centerY + 6;
+              sX = succ.isMilestone ? succ.startX - 9 : succ.startX;
+              sY = succ.centerY - 6;
+            } else if (linkType === 'FF') {
+              pX = pred.isMilestone ? pred.startX + 9 : pred.endX;
+              pY = pred.centerY + 6;
+              sX = succ.isMilestone ? succ.startX + 9 : succ.endX;
+              sY = succ.centerY - 6;
+            } else if (linkType === 'SS') {
+              pX = pred.isMilestone ? pred.startX - 9 : pred.startX;
+              pY = pred.centerY + 6;
+              sX = succ.isMilestone ? succ.startX - 9 : succ.startX;
+              sY = succ.centerY - 6;
+            } else { // SF
+              pX = pred.isMilestone ? pred.startX - 9 : pred.startX;
+              pY = pred.centerY + 6;
+              sX = succ.isMilestone ? succ.startX + 9 : succ.endX;
+              sY = succ.centerY - 6;
             }
 
-            const startStr = formatDate(sDate);
-            let endStr = formatDate(eDate);
+            const pRow = pred.rowIdx;
+            const sRow = succ.rowIdx;
 
-            // Ensure valid ordering
-            if (endStr < startStr) {
-              endStr = startStr;
+            let pathD = '';
+            if (sX >= pX + 20) {
+              const midX = pX + (sX - pX) / 2;
+              pathD = `M ${pX} ${pY} H ${midX} V ${sY} H ${sX}`;
+            } else {
+              const exitX = pX + 14;
+              const approachX = sX - 16;
+              const gutterY = sRow >= pRow ? (pRow + 1) * 46 : pRow * 46;
+              pathD = `M ${pX} ${pY} H ${exitX} V ${gutterY} H ${approachX} V ${sY} H ${sX}`;
             }
+
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('d', pathD);
+            path.setAttribute('stroke', linkColor);
+            path.setAttribute('stroke-width', strokeW);
+            path.setAttribute('fill', 'none');
+            path.setAttribute('marker-end', markerUrl);
+            path.setAttribute('opacity', isViolated ? '1' : '0.75');
+            if (isViolated) {
+              path.setAttribute('stroke-dasharray', '4 2');
+            }
+            linksGroup.appendChild(path);
+          } else if (dep.predecessor_project_id || dep.pred_start_date) {
+            // External project / task dependency marker
+            const succ = taskPositions[t.id];
+            if (succ) {
+              const sX = succ.isMilestone ? succ.startX - 9 : succ.startX;
+              const sY = succ.centerY - 6;
+              const inX = sX - 22;
+
+              const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+              path.setAttribute('d', `M ${inX} ${sY} H ${sX}`);
+              path.setAttribute('stroke', linkColor);
+              path.setAttribute('stroke-width', strokeW);
+              path.setAttribute('fill', 'none');
+              path.setAttribute('marker-end', markerUrl);
+              linksGroup.appendChild(path);
+
+              const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+              dot.setAttribute('cx', inX);
+              dot.setAttribute('cy', sY);
+              dot.setAttribute('r', '3.5');
+              dot.setAttribute('fill', linkColor);
+              linksGroup.appendChild(dot);
+            }
+          }
+        });
+      });
+
+      setTimeout(() => Streamlit.setFrameHeight(), 100);
+    }
+
+    function highlightRow(id) {
+      const fRow = document.getElementById(`frozen-row-${id}`);
+      const tRow = document.getElementById(`timeline-row-${id}`);
+      if (fRow) fRow.classList.add('highlight');
+      if (tRow) tRow.classList.add('highlight');
+    }
+
+    function unhighlightRow(id) {
+      const fRow = document.getElementById(`frozen-row-${id}`);
+      const tRow = document.getElementById(`timeline-row-${id}`);
+      if (fRow) fRow.classList.remove('highlight');
+      if (tRow) tRow.classList.remove('highlight');
+    }
+
+    // Drag and drop mechanics
+    function bindDragEvents(element, task, isMilestone) {
+      element.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        const isLeftHandle = e.target.classList.contains('left');
+        const isRightHandle = e.target.classList.contains('right');
+        const isBodyMove = !isLeftHandle && !isRightHandle;
+
+        const startMouseX = e.clientX;
+        const initialStart = parseDate(task.start);
+        const initialEnd = parseDate(task.end);
+        const duration = diffDays(initialStart, initialEnd);
+
+        element.classList.add('dragging');
+
+        function onMouseMove(moveEvent) {
+          const deltaPx = moveEvent.clientX - startMouseX;
+          const deltaMs = deltaPx * msPerPixel;
+          const deltaDays = Math.round(deltaMs / (1000 * 60 * 60 * 24));
+
+          let newStart = new Date(initialStart);
+          let newEnd = new Date(initialEnd);
+
+          if (isMilestone || isBodyMove) {
+            newStart = addDays(initialStart, deltaDays);
+            newEnd = addDays(newStart, duration);
+          } else if (isLeftHandle) {
+            newStart = addDays(initialStart, deltaDays);
+            if (newStart > initialEnd) newStart = new Date(initialEnd);
+          } else if (isRightHandle) {
+            newEnd = addDays(initialEnd, deltaDays);
+            if (newEnd < initialStart) newEnd = new Date(initialStart);
+          }
+
+          const sStr = formatDate(newStart);
+          const eStr = formatDate(newEnd);
+
+          showTooltip(moveEvent, `<b>${task.name}</b><br>${sStr} &rarr; ${eStr}`);
+
+          const newStartX = dateToX(newStart);
+          element.style.left = `${newStartX}px`;
+          if (!isMilestone && !isBodyMove) {
+            const newEndX = dateToX(newEnd);
+            element.style.width = `${Math.max(20, newEndX - newStartX)}px`;
+          }
+        }
+
+        function onMouseUp(upEvent) {
+          window.removeEventListener('mousemove', onMouseMove);
+          window.removeEventListener('mouseup', onMouseUp);
+          element.classList.remove('dragging');
+          hideTooltip();
+
+          const deltaPx = upEvent.clientX - startMouseX;
+          const deltaMs = deltaPx * msPerPixel;
+          const deltaDays = Math.round(deltaMs / (1000 * 60 * 60 * 24));
+
+          if (deltaDays !== 0 || isLeftHandle || isRightHandle) {
+            let finalStart = new Date(initialStart);
+            let finalEnd = new Date(initialEnd);
+
+            if (isMilestone || isBodyMove) {
+              finalStart = addDays(initialStart, deltaDays);
+              finalEnd = addDays(finalStart, duration);
+            } else if (isLeftHandle) {
+              finalStart = addDays(initialStart, deltaDays);
+              if (finalStart > initialEnd) finalStart = new Date(initialEnd);
+            } else if (isRightHandle) {
+              finalEnd = addDays(initialEnd, deltaDays);
+              if (finalEnd < initialStart) finalEnd = new Date(initialStart);
+            }
+
+            const finalStartStr = formatDate(finalStart);
+            const finalEndStr = formatDate(finalEnd);
 
             Streamlit.setComponentValue({
               action: "update_dates",
               id: parseInt(task.id, 10),
-              start_date: startStr,
-              end_date: endStr,
+              start_date: finalStartStr,
+              end_date: finalEndStr,
               task_name: task.name,
               nonce: Date.now() + "_" + Math.random()
             });
-          },
-          on_progress_change: function(task, progress) {
-            Streamlit.setComponentValue({
-              action: "update_progress",
-              id: parseInt(task.id, 10),
-              progress: Math.round(progress),
-              task_name: task.name,
-              nonce: Date.now() + "_" + Math.random()
-            });
+          } else {
+            renderTimeline();
           }
-        });
+        }
 
-        setTimeout(() => Streamlit.setFrameHeight(), 200);
-      } catch (err) {
-        console.error("Error rendering Frappe Gantt:", err);
-      }
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mouseup', onMouseUp);
+      });
     }
 
+    // Listen for data from Streamlit
     window.addEventListener("message", function(event) {
       if (event.data && event.data.type === "streamlit:render") {
         const args = event.data.args || {};
         if (args.tasks) {
-          renderGantt(args.tasks);
+          tasksData = args.tasks;
+          allProjectsData = args.all_projects || [];
+          externalTasksData = args.external_tasks || {};
+          currentProjectId = args.project_id || "";
+          renderTimeline();
         }
       }
     });

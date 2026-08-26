@@ -44,6 +44,129 @@ class MilestoneRepository:
                 params=(project_id.strip(),),
             )
 
+    def get_dependencies_for_project(self, project_id: str) -> list[dict[str, Any]]:
+        """Retrieves all dependency records for steps in a project.
+
+        Args:
+            project_id: Project code.
+
+        Returns:
+            list[dict[str, Any]]: List of dependency dicts.
+        """
+        with get_db(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT d.id, d.task_id, d.predecessor_task_id, d.predecessor_project_id, 
+                       d.link_type, d.lag_days,
+                       p_task.task_name AS predecessor_task_name,
+                       p_task.start_date AS pred_start_date,
+                       p_task.end_date AS pred_end_date,
+                       p_task.project_id AS pred_task_project_id,
+                       p_proj.name AS predecessor_project_name,
+                       s_task.task_name AS task_name
+                FROM task_dependencies d
+                JOIN project_milestones s_task ON d.task_id = s_task.id
+                LEFT JOIN project_milestones p_task ON d.predecessor_task_id = p_task.id
+                LEFT JOIN projects p_proj ON d.predecessor_project_id = p_proj.id
+                WHERE s_task.project_id = ?
+                """,
+                (project_id.strip(),),
+            )
+            cols = [col[0] for col in cursor.description]
+            return [dict(zip(cols, row)) for row in cursor.fetchall()]
+
+    def get_task_dependencies(self, task_id: int) -> list[dict[str, Any]]:
+        """Retrieves all predecessor dependencies for a specific task.
+
+        Args:
+            task_id: Milestone primary key ID.
+
+        Returns:
+            list[dict[str, Any]]: List of dependency dictionaries.
+        """
+        with get_db(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT d.id, d.task_id, d.predecessor_task_id, d.predecessor_project_id, 
+                       d.link_type, d.lag_days,
+                       p_task.task_name AS predecessor_task_name,
+                       p_task.start_date AS pred_start_date,
+                       p_task.end_date AS pred_end_date,
+                       p_task.project_id AS pred_task_project_id,
+                       p_proj.name AS predecessor_project_name
+                FROM task_dependencies d
+                LEFT JOIN project_milestones p_task ON d.predecessor_task_id = p_task.id
+                LEFT JOIN projects p_proj ON d.predecessor_project_id = p_proj.id
+                WHERE d.task_id = ?
+                """,
+                (task_id,),
+            )
+            cols = [col[0] for col in cursor.description]
+            return [dict(zip(cols, row)) for row in cursor.fetchall()]
+
+    def save_task_dependencies(self, task_id: int, dependencies: list[dict[str, Any]]) -> None:
+        """Replaces all dependencies for a task with a new set of dependencies.
+
+        Args:
+            task_id: Milestone primary key ID.
+            dependencies: List of dependency dicts with keys [predecessor_task_id, predecessor_project_id, link_type, lag_days].
+        """
+        with get_db(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM task_dependencies WHERE task_id = ?", (task_id,))
+            for dep in dependencies:
+                p_task = dep.get("predecessor_task_id")
+                if p_task is not None:
+                    try:
+                        p_task = int(p_task)
+                        if p_task == task_id:
+                            continue  # Cannot be predecessor of itself
+                    except (ValueError, TypeError):
+                        p_task = None
+
+                p_proj = dep.get("predecessor_project_id")
+                p_proj = str(p_proj).strip() if p_proj else None
+                l_type = str(dep.get("link_type", "FS")).upper().strip()
+                if l_type not in ("FS", "FF", "SS", "SF"):
+                    l_type = "FS"
+                try:
+                    lag = int(dep.get("lag_days", 0))
+                except (ValueError, TypeError):
+                    lag = 0
+
+                if p_task is not None or p_proj is not None:
+                    cursor.execute(
+                        """
+                        INSERT INTO task_dependencies 
+                        (task_id, predecessor_task_id, predecessor_project_id, link_type, lag_days)
+                        VALUES (?, ?, ?, ?, ?)
+                        """,
+                        (task_id, p_task, p_proj, l_type, lag),
+                    )
+            conn.commit()
+
+    def get_project_date_bounds(self, project_id: str) -> tuple[Optional[str], Optional[str]]:
+        """Calculates the overall earliest start date and latest end date of a project.
+
+        Args:
+            project_id: Project code.
+
+        Returns:
+            tuple[Optional[str], Optional[str]]: (min_start_date, max_end_date).
+        """
+        with get_db(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT MIN(start_date), MAX(end_date) FROM project_milestones WHERE project_id = ?",
+                (project_id.strip(),),
+            )
+            row = cursor.fetchone()
+            if row and row[0] and row[1]:
+                return str(row[0]), str(row[1])
+            return None, None
+
     def create_milestone(
         self,
         project_id: str,
@@ -53,6 +176,7 @@ class MilestoneRepository:
         end_date: str,
         progress_pct: int,
         predecessor_id: Optional[int] = None,
+        dependencies: Optional[list[dict[str, Any]]] = None,
     ) -> int:
         """Creates a single project step or milestone.
 
@@ -63,7 +187,8 @@ class MilestoneRepository:
             start_date: ISO date string.
             end_date: ISO date string.
             progress_pct: Completion percentage.
-            predecessor_id: Optional predecessor milestone ID.
+            predecessor_id: Optional legacy single predecessor milestone ID.
+            dependencies: Optional list of dependency dictionaries.
 
         Returns:
             int: Newly created milestone ID.
@@ -87,7 +212,17 @@ class MilestoneRepository:
                 ),
             )
             conn.commit()
-            return cursor.lastrowid or 0
+            new_id = cursor.lastrowid or 0
+
+        if dependencies is not None:
+            self.save_task_dependencies(new_id, dependencies)
+        elif predecessor_id is not None:
+            self.save_task_dependencies(
+                new_id,
+                [{"predecessor_task_id": predecessor_id, "link_type": "FS", "lag_days": 0}],
+            )
+
+        return new_id
 
     def update_milestone(
         self,
@@ -98,6 +233,7 @@ class MilestoneRepository:
         end_date: str,
         progress_pct: int,
         predecessor_id: Optional[int] = None,
+        dependencies: Optional[list[dict[str, Any]]] = None,
     ) -> bool:
         """Updates an existing project step or milestone.
 
@@ -108,12 +244,12 @@ class MilestoneRepository:
             start_date: Updated ISO start date.
             end_date: Updated ISO end date.
             progress_pct: Updated progress percentage.
-            predecessor_id: Optional predecessor milestone ID.
+            predecessor_id: Optional legacy single predecessor milestone ID.
+            dependencies: Optional list of dependency dictionaries.
 
         Returns:
             bool: True if row was updated.
         """
-        # A task cannot be its own predecessor
         clean_pred = predecessor_id if predecessor_id != milestone_id else None
 
         with get_db(self.db_path) as conn:
@@ -135,7 +271,17 @@ class MilestoneRepository:
                 ),
             )
             conn.commit()
-            return cursor.rowcount > 0
+            updated = cursor.rowcount > 0
+
+        if dependencies is not None:
+            self.save_task_dependencies(milestone_id, dependencies)
+        elif predecessor_id is not None:
+            self.save_task_dependencies(
+                milestone_id,
+                [{"predecessor_task_id": predecessor_id, "link_type": "FS", "lag_days": 0}],
+            )
+
+        return updated
 
     def update_dates(self, milestone_id: int, start_date: str, end_date: str) -> bool:
         """Updates only the start and end dates of a step (e.g. via drag and drop).

@@ -175,6 +175,51 @@ class TestRepositories(unittest.TestCase):
         df_ms = self.milestone_repo.get_milestones_by_project("PRJ-200")
         self.assertEqual(len(df_ms), 2)
 
+    def test_multi_dependencies_and_bounds(self) -> None:
+        """Verify multi-predecessors, external dependencies, and project date bounds."""
+        self.project_repo.create_project("PRJ-301", "Source Project", "Active", 0, 0, {})
+        self.project_repo.create_project("PRJ-302", "Target Project", "Active", 0, 0, {})
+
+        # Add steps to PRJ-301
+        p301_s1 = self.milestone_repo.create_milestone("PRJ-301", "Feasibility", "Phase 1", "2026-03-01", "2026-03-10", 100)
+        p301_s2 = self.milestone_repo.create_milestone("PRJ-301", "Architecture", "Phase 1", "2026-03-11", "2026-03-25", 100)
+
+        # Verify date bounds for PRJ-301
+        min_d, max_d = self.milestone_repo.get_project_date_bounds("PRJ-301")
+        self.assertEqual(min_d, "2026-03-01")
+        self.assertEqual(max_d, "2026-03-25")
+
+        # Add step to PRJ-302 with multi-dependencies: 1 external whole project and 1 external task
+        p302_s1 = self.milestone_repo.create_milestone(
+            "PRJ-302",
+            "Execution Step",
+            "Phase 2",
+            "2026-03-26",
+            "2026-04-10",
+            0,
+            dependencies=[
+                {"predecessor_task_id": None, "predecessor_project_id": "PRJ-301", "link_type": "FS", "lag_days": 1},
+                {"predecessor_task_id": p301_s2, "predecessor_project_id": "PRJ-301", "link_type": "SS", "lag_days": 5},
+            ],
+        )
+        self.assertGreater(p302_s1, 0)
+
+        deps = self.milestone_repo.get_task_dependencies(p302_s1)
+        self.assertEqual(len(deps), 2)
+        link_types = [d["link_type"] for d in deps]
+        self.assertIn("FS", link_types)
+        self.assertIn("SS", link_types)
+
+        # Update dependencies
+        self.milestone_repo.save_task_dependencies(
+            p302_s1,
+            [{"predecessor_task_id": p301_s1, "predecessor_project_id": "PRJ-301", "link_type": "FF", "lag_days": 2}],
+        )
+        updated_deps = self.milestone_repo.get_task_dependencies(p302_s1)
+        self.assertEqual(len(updated_deps), 1)
+        self.assertEqual(updated_deps[0]["link_type"], "FF")
+        self.assertEqual(updated_deps[0]["lag_days"], 2)
+
 
 if __name__ == "__main__":
     unittest.main()

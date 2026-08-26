@@ -121,6 +121,32 @@ def init_db(db_path: Optional[str] = None) -> None:
         if "predecessor_id" not in milestone_cols:
             cursor.execute("ALTER TABLE project_milestones ADD COLUMN predecessor_id INTEGER")
 
+        # 6. Task Dependencies Table (Multi-predecessors, external project/tasks, link types, lag offsets)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS task_dependencies (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                task_id INTEGER NOT NULL,
+                predecessor_task_id INTEGER,
+                predecessor_project_id TEXT,
+                link_type TEXT DEFAULT 'FS',
+                lag_days INTEGER DEFAULT 0,
+                FOREIGN KEY (task_id) REFERENCES project_milestones (id) ON DELETE CASCADE,
+                FOREIGN KEY (predecessor_task_id) REFERENCES project_milestones (id) ON DELETE CASCADE,
+                FOREIGN KEY (predecessor_project_id) REFERENCES projects (id) ON DELETE CASCADE
+            )
+        """)
+
+        # Migration from legacy project_milestones.predecessor_id into task_dependencies if empty
+        cursor.execute("SELECT COUNT(*) FROM task_dependencies")
+        dep_count = cursor.fetchone()[0]
+        if dep_count == 0:
+            cursor.execute("""
+                INSERT INTO task_dependencies (task_id, predecessor_task_id, link_type, lag_days)
+                SELECT id, predecessor_id, 'FS', 0
+                FROM project_milestones
+                WHERE predecessor_id IS NOT NULL
+            """)
+
         # Schema migrations for projects
         cursor.execute("PRAGMA table_info(projects)")
         proj_cols = [col[1] for col in cursor.fetchall()]

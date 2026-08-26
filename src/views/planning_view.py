@@ -69,23 +69,69 @@ def render_planning_milestones(
         )
 
         if chart_mode == "🖐️ Interactive Drag & Drop Gantt":
-            # Convert steps into Frappe Gantt tasks payload
+            # Fetch all dependencies and project bounds for constraint evaluation
+            all_projects_df = project_repo.get_all_projects()
+            all_projects_list = [{"id": str(r["id"]), "name": f"{r['id']} - {r['name']}"} for _, r in all_projects_df.iterrows()]
+            
+            project_bounds: dict[str, tuple[Optional[str], Optional[str]]] = {}
+            external_tasks_map: dict[str, list[dict[str, Any]]] = {}
+            for p_id in all_projects_df["id"]:
+                p_str = str(p_id)
+                project_bounds[p_str] = milestone_repo.get_project_date_bounds(p_str)
+                if p_str != selected_id:
+                    ext_df = milestone_repo.get_milestones_by_project(p_str)
+                    external_tasks_map[p_str] = [
+                        {"id": int(r["id"]), "task_name": str(r["task_name"]), "start_date": str(r["start_date"]), "end_date": str(r["end_date"])}
+                        for _, r in ext_df.iterrows()
+                    ]
+
+            raw_dependencies = milestone_repo.get_dependencies_for_project(selected_id)
+            raw_tasks = [
+                {
+                    "id": int(row["id"]),
+                    "task_name": str(row["task_name"]),
+                    "start_date": str(row["start_date"]),
+                    "end_date": str(row["end_date"]),
+                    "phase": str(row.get("phase", "General")),
+                    "progress_pct": int(row.get("progress_pct", 0)),
+                }
+                for _, row in df_steps.iterrows()
+            ]
+
+            evaluated_deps, task_violations = MilestoneService.evaluate_constraints(
+                raw_tasks, raw_dependencies, project_bounds
+            )
+
+            # Build gantt tasks payload
             gantt_tasks = []
             for _, row in df_steps.iterrows():
-                dep_str = str(int(row["predecessor_id"])) if pd.notna(row.get("predecessor_id")) else ""
+                tid = int(row["id"])
+                task_deps = [d for d in evaluated_deps if int(d["task_id"]) == tid]
+                # Default legacy single predecessor string for fallback
+                first_pred = task_deps[0]["predecessor_task_id"] if task_deps and task_deps[0].get("predecessor_task_id") else None
+                dep_str = str(int(first_pred)) if first_pred is not None else ""
+
                 gantt_tasks.append({
-                    "id": str(int(row["id"])),
+                    "id": str(tid),
                     "name": str(row["task_name"]),
                     "start": str(row["start_date"]),
                     "end": str(row["end_date"]),
                     "progress": int(row.get("progress_pct", 0)),
                     "dependencies": dep_str,
+                    "dependenciesList": task_deps,
+                    "violations": task_violations.get(tid, []),
                     "phase": str(row.get("phase", "General")),
                     "custom_class": "bar-milestone" if row["start_date"] == row["end_date"] else "bar-step",
                 })
 
-            # Render custom drag-and-drop component
-            gantt_event = _interactive_gantt(tasks=gantt_tasks, key=f"gantt_widget_{selected_id}")
+            # Render custom drag-and-drop component with multi-dependency metadata
+            gantt_event = _interactive_gantt(
+                tasks=gantt_tasks,
+                all_projects=all_projects_list,
+                external_tasks=external_tasks_map,
+                project_id=selected_id,
+                key=f"gantt_widget_{selected_id}",
+            )
 
             # Handle bi-directional Drag & Drop changes from JS (deduplicated via nonce)
             if gantt_event and isinstance(gantt_event, dict):
@@ -97,7 +143,26 @@ def render_planning_milestones(
                     action = gantt_event.get("action")
                     step_id = gantt_event.get("id")
 
-                    if action == "update_dates" and step_id:
+                    if action == "update_task_full" and step_id:
+                        t_name = str(gantt_event.get("task_name", "")).strip()
+                        t_phase = str(gantt_event.get("phase", "General")).strip()
+                        t_start = str(gantt_event.get("start_date", "")).strip()
+                        t_end = str(gantt_event.get("end_date", "")).strip()
+                        t_prog = int(gantt_event.get("progress_pct", 0))
+                        t_deps = gantt_event.get("dependencies")
+                        if t_name and t_start and t_end:
+                            milestone_repo.update_milestone(
+                                milestone_id=int(step_id),
+                                task_name=t_name,
+                                phase=t_phase,
+                                start_date=t_start,
+                                end_date=t_end,
+                                progress_pct=t_prog,
+                                dependencies=t_deps,
+                            )
+                            st.toast(f"Updated Step: {t_name}", icon="✏️")
+                            st.rerun()
+                    elif action == "update_dates" and step_id:
                         new_start = str(gantt_event.get("start_date", "")).strip()
                         new_end = str(gantt_event.get("end_date", "")).strip()
                         if new_start and new_end:
@@ -110,6 +175,10 @@ def render_planning_milestones(
                             milestone_repo.update_progress(int(step_id), int(new_prog))
                             st.toast(f"Updated progress for Step #{step_id}: {new_prog}%", icon="📊")
                             st.rerun()
+                    elif action == "delete_step" and step_id:
+                        milestone_repo.delete_milestone(int(step_id))
+                        st.toast(f"Deleted Step #{step_id}", icon="🗑️")
+                        st.rerun()
 
         else:
             # Render Plotly Gantt with squared orthogonal dependency arrows and diamond milestones
@@ -123,57 +192,44 @@ def render_planning_milestones(
             )
 
             df_bars = df_plot[~df_plot["is_milestone"]].copy()
-            if not df_bars.empty:
-                fig = px.timeline(
-                    df_bars,
-                    x_start="start_dt",
-                    x_end="end_dt",
-                    y="task_name",
-                    color="phase",
-                    hover_data=["progress_pct"],
-                    title=f"Schedule Roadmap — {proj_info['name']}",
-                    template="plotly_white",
-                )
-            else:
-                fig = px.timeline(
-                    df_plot,
-                    x_start="start_dt",
-                    x_end="bar_end_dt",
-                    y="task_name",
-                    color="phase",
-                    hover_data=["progress_pct"],
-                    title=f"Schedule Roadmap — {proj_info['name']}",
-                    template="plotly_white",
-                )
+            df_diamonds = df_plot[df_plot["is_milestone"]].copy()
 
-            # Overlay diamond shapes for milestones (start_date == end_date)
-            df_milestones = df_plot[df_plot["is_milestone"]]
-            if not df_milestones.empty:
+            fig = go.Figure()
+
+            if not df_bars.empty:
+                for _, row in df_bars.iterrows():
+                    fig.add_trace(
+                        go.Bar(
+                            x=[(row["bar_end_dt"] - row["start_dt"]).total_seconds() * 1000],
+                            y=[row["task_name"]],
+                            base=[row["start_dt"]],
+                            orientation="h",
+                            name=str(row["phase"]),
+                            marker=dict(color="#2563EB", line=dict(color="#1D4ED8", width=1)),
+                            hovertemplate=f"<b>{row['task_name']}</b><br>Phase: {row['phase']}<br>Start: {row['start_date']}<br>End: {row['end_date']}<br>Progress: {row['progress_pct']}%<extra></extra>",
+                            showlegend=False,
+                        )
+                    )
+
+            if not df_diamonds.empty:
                 fig.add_trace(
                     go.Scatter(
-                        x=df_milestones["start_dt"],
-                        y=df_milestones["task_name"],
+                        x=df_diamonds["start_dt"],
+                        y=df_diamonds["task_name"],
                         mode="markers+text",
-                        marker=dict(
-                            symbol="diamond",
-                            size=18,
-                            color="#DC2626",
-                            line=dict(width=2, color="#7F1D1D"),
-                        ),
-                        name="🔷 Milestones (Key Dates)",
-                        text=df_milestones["task_name"],
-                        textposition="middle right",
-                        hovertemplate="<b>🔷 Milestone: %{y}</b><br>Date: %{x|%Y-%m-%d}<extra></extra>",
+                        marker=dict(symbol="diamond", size=14, color="#DC2626", line=dict(color="#7F1D1D", width=1.5)),
+                        text=df_diamonds["task_name"],
+                        textposition="top right",
+                        name="Milestones",
+                        hovertemplate="<b>Milestone: %{y}</b><br>Date: %{x|%Y-%m-%d}<extra></extra>",
+                        showlegend=False,
                     )
                 )
 
-            # Draw squared dependency links (strictly horizontal & vertical segments)
-            min_date = df_plot["start_dt"].min()
-            max_date = df_plot["end_dt"].max()
-            time_span = max(pd.Timedelta(days=7), max_date - min_date)
-            step_offset = time_span * 0.02
+            # Draw dependency arrows
+            pred_map = {int(r["id"]): r for _, r in df_plot.iterrows()}
+            step_offset = pd.Timedelta(days=1)
 
-            pred_map = {row["id"]: row for _, row in df_plot.iterrows()}
             for _, row in df_plot.iterrows():
                 pred_id = row.get("predecessor_id")
                 if pd.notna(pred_id) and pred_id in pred_map:
@@ -182,6 +238,9 @@ def render_planning_milestones(
                     s_start = row["start_dt"]
                     p_y = pred_row["task_name"]
                     s_y = row["task_name"]
+
+                    is_viol = s_start < p_end
+                    line_col = "#EF4444" if is_viol else "#94A3B8"
 
                     if s_start > p_end:
                         mid_x = p_end + (s_start - p_end) / 2
@@ -199,7 +258,7 @@ def render_planning_milestones(
                             x=route_x,
                             y=route_y,
                             mode="lines",
-                            line=dict(color="#2563EB", width=2),
+                            line=dict(color=line_col, width=2),
                             hoverinfo="skip",
                             showlegend=False,
                         )
@@ -218,7 +277,7 @@ def render_planning_milestones(
                         arrowhead=2,
                         arrowsize=1.2,
                         arrowwidth=2,
-                        arrowcolor="#2563EB",
+                        arrowcolor=line_col,
                     )
 
             fig.update_yaxes(autorange="reversed")
@@ -279,22 +338,71 @@ def render_planning_milestones(
         )
         prog_val = col_d3.slider("Progress (%)", min_value=0, max_value=100, value=0, key="input_step_progress")
 
-        # Predecessor Selection
-        pred_options: list[Optional[int]] = [None]
-        pred_labels: dict[Optional[int], str] = {None: "(None / Independent)"}
-        if not df_steps.empty:
-            for _, s in df_steps.iterrows():
-                sid = int(s["id"])
-                pred_options.append(sid)
-                pred_labels[sid] = f"ID {sid} - {s['task_name']} ({s['start_date']})"
+        # Predecessor & Dependency Configuration
+        st.write("##### 🔗 Predecessor & Dependency Configuration")
+        is_ext = st.checkbox("Link to an external project / task as predecessor", key="chk_add_ext_pred")
 
-        selected_pred = st.selectbox(
-            "Predecessor Step (Optional)",
-            options=pred_options,
-            format_func=lambda x: pred_labels.get(x, "Unknown"),
-            help="Select a preceding step to draw a visual dependency link on the timeline.",
-            key="input_step_pred",
+        all_proj_df = project_repo.get_all_projects()
+        col_p1, col_p2, col_p3 = st.columns([2, 1, 1])
+
+        selected_dep_target: tuple[Optional[str], Optional[int], Optional[str]] = (None, None, None)
+
+        if is_ext:
+            other_projs = [str(p) for p in all_proj_df["id"].tolist() if str(p) != selected_id]
+            if other_projs:
+                ext_proj_sel = col_p1.selectbox(
+                    "External Project",
+                    options=other_projs,
+                    format_func=lambda x: f"{x} - {all_proj_df[all_proj_df['id']==x]['name'].iloc[0]}",
+                    key="sel_ext_proj_add",
+                )
+                ext_steps_df = milestone_repo.get_milestones_by_project(ext_proj_sel)
+                ext_step_options: list[Optional[int]] = [None]
+                ext_step_labels: dict[Optional[int], str] = {None: "(Whole Project)"}
+                if not ext_steps_df.empty:
+                    for _, s in ext_steps_df.iterrows():
+                        sid = int(s["id"])
+                        ext_step_options.append(sid)
+                        ext_step_labels[sid] = f"ID {sid} - {s['task_name']} ({s['start_date']})"
+
+                ext_step_id = col_p1.selectbox(
+                    "Step (leave blank to link the whole project)",
+                    options=ext_step_options,
+                    index=0,
+                    format_func=lambda x: ext_step_labels.get(x, "Unknown"),
+                    key="sel_ext_step_add",
+                )
+                if ext_step_id is not None:
+                    selected_dep_target = ("TASK", int(ext_step_id), ext_proj_sel)
+                else:
+                    selected_dep_target = ("PROJ", None, ext_proj_sel)
+            else:
+                st.info("No other projects available.")
+        else:
+            pred_options: list[Optional[int]] = [None]
+            pred_labels: dict[Optional[int], str] = {None: "(None / Independent)"}
+            if not df_steps.empty:
+                for _, s in df_steps.iterrows():
+                    sid = int(s["id"])
+                    pred_options.append(sid)
+                    pred_labels[sid] = f"ID {sid} - {s['task_name']} ({s['start_date']})"
+
+            selected_pred = col_p1.selectbox(
+                "Predecessor Step (Optional)",
+                options=pred_options,
+                format_func=lambda x: pred_labels.get(x, "Unknown"),
+                key="input_step_pred",
+            )
+            if selected_pred is not None:
+                selected_dep_target = ("TASK", int(selected_pred), None)
+
+        link_type_sel = col_p2.selectbox(
+            "Link Type",
+            options=["FS", "FF", "SS", "SF"],
+            format_func=lambda x: {"FS": "Finish-to-Start (FS)", "FF": "Finish-to-Finish (FF)", "SS": "Start-to-Start (SS)", "SF": "Start-to-Finish (SF)"}.get(x, x),
+            key="sel_link_type_add",
         )
+        lag_offset_val = col_p3.number_input("Offset (days)", min_value=-365, max_value=365, value=0, step=1, key="num_lag_offset_add")
 
         if st.button("➕ Save Step", width="stretch", key="btn_submit_step"):
             clean_task = task_name.strip()
@@ -303,6 +411,22 @@ def render_planning_milestones(
             elif end_d < start_d:
                 st.error("End Date must be greater than or equal to Start Date.")
             else:
+                dep_payload: list[dict[str, Any]] = []
+                if selected_dep_target[0] == "PROJ":
+                    dep_payload.append({
+                        "predecessor_task_id": None,
+                        "predecessor_project_id": selected_dep_target[2],
+                        "link_type": link_type_sel,
+                        "lag_days": int(lag_offset_val),
+                    })
+                elif selected_dep_target[0] == "TASK":
+                    dep_payload.append({
+                        "predecessor_task_id": selected_dep_target[1],
+                        "predecessor_project_id": selected_dep_target[2],
+                        "link_type": link_type_sel,
+                        "lag_days": int(lag_offset_val),
+                    })
+
                 milestone_repo.create_milestone(
                     project_id=selected_id,
                     task_name=clean_task,
@@ -310,7 +434,7 @@ def render_planning_milestones(
                     start_date=start_d.isoformat(),
                     end_date=end_d.isoformat(),
                     progress_pct=int(prog_val),
-                    predecessor_id=selected_pred,
+                    dependencies=dep_payload if dep_payload else None,
                 )
                 if start_d == end_d:
                     st.success(f"Milestone '{clean_task}' (Diamond) added successfully!")
@@ -336,6 +460,8 @@ def render_planning_milestones(
 
             curr_start = pd.to_datetime(curr_step["start_date"]).date()
             curr_end = pd.to_datetime(curr_step["end_date"]).date()
+            curr_deps = milestone_repo.get_task_dependencies(int(edit_step_id))
+            cur_first_dep = curr_deps[0] if curr_deps else {}
 
             with st.form(f"form_edit_step_{edit_step_id}"):
                 col_e1, col_e2 = st.columns(2)
@@ -356,23 +482,86 @@ def render_planning_milestones(
                     value=int(curr_step["progress_pct"]),
                 )
 
-                # Predecessors (exclude self to avoid self-reference cycle)
-                edit_pred_options: list[Optional[int]] = [None]
-                edit_pred_labels: dict[Optional[int], str] = {None: "(None / Independent)"}
-                for _, s in df_steps.iterrows():
-                    sid = int(s["id"])
-                    if sid != edit_step_id:
-                        edit_pred_options.append(sid)
-                        edit_pred_labels[sid] = f"ID {sid} - {s['task_name']} ({s['start_date']})"
+                # Predecessors Configuration
+                st.write("##### 🔗 Predecessor Configuration")
+                is_edit_ext = st.checkbox("Link to an external project / task as predecessor", value=bool(cur_first_dep.get("predecessor_project_id")), key=f"chk_edit_ext_pred_{edit_step_id}")
 
-                cur_pred_val = int(curr_step["predecessor_id"]) if pd.notna(curr_step["predecessor_id"]) else None
-                pred_idx = edit_pred_options.index(cur_pred_val) if cur_pred_val in edit_pred_options else 0
+                col_pe1, col_pe2, col_pe3 = st.columns([2, 1, 1])
+                edit_dep_target: tuple[Optional[str], Optional[int], Optional[str]] = (None, None, None)
 
-                edit_pred = st.selectbox(
-                    "Predecessor Step",
-                    options=edit_pred_options,
-                    index=pred_idx,
-                    format_func=lambda x: edit_pred_labels.get(x, "Unknown"),
+                if is_edit_ext:
+                    other_projs = [str(p) for p in all_proj_df["id"].tolist() if str(p) != selected_id]
+                    if other_projs:
+                        cur_ext_proj = str(cur_first_dep.get("predecessor_project_id")) if cur_first_dep.get("predecessor_project_id") in other_projs else other_projs[0]
+                        ext_proj_idx = other_projs.index(cur_ext_proj) if cur_ext_proj in other_projs else 0
+                        edit_ext_proj = col_pe1.selectbox(
+                            "External Project",
+                            options=other_projs,
+                            index=ext_proj_idx,
+                            format_func=lambda x: f"{x} - {all_proj_df[all_proj_df['id']==x]['name'].iloc[0]}",
+                            key=f"sel_ext_proj_edit_{edit_step_id}",
+                        )
+                        ext_steps_df = milestone_repo.get_milestones_by_project(edit_ext_proj)
+                        ext_step_options = [None]
+                        ext_step_labels = {None: "(Whole Project)"}
+                        if not ext_steps_df.empty:
+                            for _, s in ext_steps_df.iterrows():
+                                sid = int(s["id"])
+                                ext_step_options.append(sid)
+                                ext_step_labels[sid] = f"ID {sid} - {s['task_name']} ({s['start_date']})"
+
+                        cur_ext_task_id = int(cur_first_dep["predecessor_task_id"]) if cur_first_dep.get("predecessor_task_id") else None
+                        ext_task_idx = ext_step_options.index(cur_ext_task_id) if cur_ext_task_id in ext_step_options else 0
+                        edit_ext_step_id = col_pe1.selectbox(
+                            "Step (leave blank to link the whole project)",
+                            options=ext_step_options,
+                            index=ext_task_idx,
+                            format_func=lambda x: ext_step_labels.get(x, "Unknown"),
+                            key=f"sel_ext_step_edit_{edit_step_id}",
+                        )
+                        if edit_ext_step_id is not None:
+                            edit_dep_target = ("TASK", int(edit_ext_step_id), edit_ext_proj)
+                        else:
+                            edit_dep_target = ("PROJ", None, edit_ext_proj)
+                    else:
+                        st.info("No other projects available.")
+                else:
+                    edit_pred_options = [None]
+                    edit_pred_labels = {None: "(None / Independent)"}
+                    for _, s in df_steps.iterrows():
+                        sid = int(s["id"])
+                        if sid != edit_step_id:
+                            edit_pred_options.append(sid)
+                            edit_pred_labels[sid] = f"ID {sid} - {s['task_name']} ({s['start_date']})"
+
+                    cur_pred_val = int(cur_first_dep["predecessor_task_id"]) if cur_first_dep.get("predecessor_task_id") and not cur_first_dep.get("predecessor_project_id") else None
+                    pred_idx = edit_pred_options.index(cur_pred_val) if cur_pred_val in edit_pred_options else 0
+
+                    edit_pred = col_pe1.selectbox(
+                        "Predecessor Step",
+                        options=edit_pred_options,
+                        index=pred_idx,
+                        format_func=lambda x: edit_pred_labels.get(x, "Unknown"),
+                        key=f"sel_int_pred_edit_{edit_step_id}",
+                    )
+                    if edit_pred is not None:
+                        edit_dep_target = ("TASK", int(edit_pred), None)
+
+                cur_ltype = str(cur_first_dep.get("link_type", "FS"))
+                ltype_opts = ["FS", "FF", "SS", "SF"]
+                ltype_idx = ltype_opts.index(cur_ltype) if cur_ltype in ltype_opts else 0
+                edit_ltype = col_pe2.selectbox(
+                    "Link Type",
+                    options=ltype_opts,
+                    index=ltype_idx,
+                    format_func=lambda x: {"FS": "Finish-to-Start (FS)", "FF": "Finish-to-Finish (FF)", "SS": "Start-to-Start (SS)", "SF": "Start-to-Finish (SF)"}.get(x, x),
+                )
+                edit_lag = col_pe3.number_input(
+                    "Offset (days)",
+                    min_value=-365,
+                    max_value=365,
+                    value=int(cur_first_dep.get("lag_days", 0)),
+                    step=1,
                 )
 
                 btn_update_step = st.form_submit_button("💾 Update Step Details", width="stretch")
@@ -383,6 +572,22 @@ def render_planning_milestones(
                     elif edit_end < edit_start:
                         st.error("End Date must be greater than or equal to Start Date.")
                     else:
+                        updated_deps: list[dict[str, Any]] = []
+                        if edit_dep_target[0] == "PROJ":
+                            updated_deps.append({
+                                "predecessor_task_id": None,
+                                "predecessor_project_id": edit_dep_target[2],
+                                "link_type": edit_ltype,
+                                "lag_days": int(edit_lag),
+                            })
+                        elif edit_dep_target[0] == "TASK":
+                            updated_deps.append({
+                                "predecessor_task_id": edit_dep_target[1],
+                                "predecessor_project_id": edit_dep_target[2],
+                                "link_type": edit_ltype,
+                                "lag_days": int(edit_lag),
+                            })
+
                         milestone_repo.update_milestone(
                             milestone_id=edit_step_id,
                             task_name=clean_edit_name,
@@ -390,7 +595,7 @@ def render_planning_milestones(
                             start_date=edit_start.isoformat(),
                             end_date=edit_end.isoformat(),
                             progress_pct=int(edit_prog),
-                            predecessor_id=edit_pred,
+                            dependencies=updated_deps,
                         )
                         st.success(f"Step '{clean_edit_name}' updated successfully!")
                         st.rerun()
