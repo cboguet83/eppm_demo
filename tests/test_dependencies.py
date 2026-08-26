@@ -274,6 +274,43 @@ class TestTaskDependencies(unittest.TestCase):
         self.project_repo.delete_project("PRJ-ALPHA")
         self.assertEqual(len(self.milestone_repo.get_dependencies_for_project("PRJ-ALPHA")), 0)
 
+    # --------------------------------------------------------------------------
+    # 8. MULTI-PROJECT COMBINED CONSTRAINT EVALUATION
+    # --------------------------------------------------------------------------
+    def test_multiproject_constraint_evaluation(self) -> None:
+        """Verify evaluating tasks and dependencies across multiple projects in a single combined timeline."""
+        tasks = [
+            {"id": 1, "task_name": "P1 Task 1", "start_date": "2026-01-01", "end_date": "2026-01-10", "project_id": "PRJ-1"},
+            {"id": 2, "task_name": "P1 Task 2", "start_date": "2026-01-11", "end_date": "2026-01-20", "project_id": "PRJ-1"},
+            {"id": 3, "task_name": "P2 Task 1", "start_date": "2026-01-15", "end_date": "2026-01-25", "project_id": "PRJ-2"},
+            {"id": 4, "task_name": "P2 Task 2", "start_date": "2026-01-05", "end_date": "2026-01-12", "project_id": "PRJ-2"},
+        ]
+
+        deps = [
+            # P1 Task 2 depends on P1 Task 1 (Internal: respected)
+            {"task_id": 2, "predecessor_task_id": 1, "predecessor_project_id": None, "link_type": "FS", "lag_days": 0},
+            # P2 Task 1 depends on P1 Task 2 (Cross-project: violated because P2 Task 1 starts on Jan 15 < P1 Task 2 ends Jan 20)
+            {"task_id": 3, "predecessor_task_id": 2, "predecessor_project_id": "PRJ-1", "link_type": "FS", "lag_days": 0},
+            # P2 Task 2 depends on whole PRJ-1 (Cross-project whole: violated because PRJ-1 ends Jan 20, but P2 Task 2 starts Jan 5)
+            {"task_id": 4, "predecessor_task_id": None, "predecessor_project_id": "PRJ-1", "link_type": "FS", "lag_days": 0},
+        ]
+
+        project_bounds = {
+            "PRJ-1": ("2026-01-01", "2026-01-20"),
+            "PRJ-2": ("2026-01-05", "2026-01-25"),
+        }
+
+        evaluated, violations = MilestoneService.evaluate_constraints(tasks, deps, project_bounds)
+
+        self.assertEqual(len(evaluated), 3)
+        self.assertFalse(evaluated[0]["is_violated"]) # Task 2 -> Task 1
+        self.assertTrue(evaluated[1]["is_violated"])  # Task 3 -> Task 2
+        self.assertTrue(evaluated[2]["is_violated"])  # Task 4 -> PRJ-1
+
+        self.assertEqual(len(violations.get(2, [])), 0)
+        self.assertEqual(len(violations.get(3, [])), 1)
+        self.assertEqual(len(violations.get(4, [])), 1)
+
 
 if __name__ == "__main__":
     unittest.main()
