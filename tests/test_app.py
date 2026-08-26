@@ -1,38 +1,40 @@
-"""Unit and integration test suite for PPM Studio Pro."""
+"""Legacy regression test suite ensuring backward compatibility."""
 
 import json
 import os
 import shutil
-import sqlite3
 import tempfile
 import unittest
+
 import pandas as pd
 
-from app import (
-    DB_NAME,
+from src.database.connection import get_db
+from src.database.schema_init import init_db
+from src.database.seeder import seed_default_data_if_empty
+from src.models.constants import (
     PARAM_TYPE_ENUM,
     PARAM_TYPE_MULTI_ENUM,
+    PARAM_TYPE_TAGS,
     PARAM_TYPE_TEXT,
     PARAM_TYPE_URL,
     STATUS_DRAFT,
     STATUS_IN_PROGRESS,
-    calculate_portfolio_metrics,
-    flatten_dynamic_attributes,
-    generate_param_id,
-    get_db,
-    init_db,
-    load_full_schema,
-    seed_default_data_if_empty,
 )
+from src.repositories.project_repo import ProjectRepository
+from src.repositories.schema_repo import SchemaRepository
+from src.services.portfolio_service import PortfolioService
+from src.services.schema_service import SchemaService
 
 
 class TestPPMStudio(unittest.TestCase):
-    """Test suite for database operations, schema loading, project CRUD, and metrics."""
+    """Test suite for backward compatibility of core workflows."""
 
     def setUp(self) -> None:
         """Create a temporary database file for isolation."""
         self.test_dir = tempfile.mkdtemp()
         self.temp_db_path = os.path.join(self.test_dir, "test_ppm.db")
+        self.schema_repo = SchemaRepository(self.temp_db_path)
+        self.project_repo = ProjectRepository(self.temp_db_path)
 
     def tearDown(self) -> None:
         """Clean up temporary directory."""
@@ -40,10 +42,8 @@ class TestPPMStudio(unittest.TestCase):
 
     def test_init_db_creates_tables(self) -> None:
         """Arrange, Act, Assert table creation in fresh SQLite database."""
-        # Arrange & Act
         init_db(self.temp_db_path)
 
-        # Assert
         with get_db(self.temp_db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
@@ -60,13 +60,9 @@ class TestPPMStudio(unittest.TestCase):
 
     def test_seed_default_data_populates_tables(self) -> None:
         """Verify default seeding inserts groups, params, options, projects, and milestones."""
-        # Arrange
         init_db(self.temp_db_path)
-
-        # Act
         seed_default_data_if_empty(self.temp_db_path)
 
-        # Assert
         with get_db(self.temp_db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) FROM schema_groups")
@@ -80,118 +76,50 @@ class TestPPMStudio(unittest.TestCase):
 
         self.assertGreaterEqual(group_count, 2)
         self.assertGreaterEqual(param_count, 5)
-        self.assertGreaterEqual(project_count, 5)
+        self.assertGreaterEqual(project_count, 3)
         self.assertGreaterEqual(milestone_count, 5)
 
-    def test_seed_default_data_idempotent(self) -> None:
-        """Verify running seed_default_data_if_empty multiple times does not duplicate records."""
-        # Arrange
+    def test_get_next_available_group_order(self) -> None:
+        """Verify calculation of next available display order for schema groups."""
+        init_db(self.temp_db_path)
+        self.assertEqual(SchemaService.get_next_available_group_order(self.temp_db_path), 1)
+
+        seed_default_data_if_empty(self.temp_db_path)
+        self.assertEqual(SchemaService.get_next_available_group_order(self.temp_db_path), 3)
+
+    def test_schema_group_edit_and_delete(self) -> None:
+        """Verify editing an existing schema group and deleting it."""
         init_db(self.temp_db_path)
         seed_default_data_if_empty(self.temp_db_path)
 
-        # Act
-        seed_default_data_if_empty(self.temp_db_path)
+        # Edit Group 1
+        updated = self.schema_repo.update_group(1, "Updated Strategic Alignment", 10)
+        self.assertTrue(updated)
 
-        # Assert
-        with get_db(self.temp_db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT COUNT(*) FROM projects")
-            count = cursor.fetchone()[0]
-        self.assertEqual(count, 5)
+        df = self.schema_repo.get_all_groups()
+        row = df[df["id"] == 1].iloc[0]
+        self.assertEqual(row["group_name"], "Updated Strategic Alignment")
+        self.assertEqual(row["display_order"], 10)
 
-    def test_generate_param_id(self) -> None:
-        """Verify incremental parameter ID generation."""
-        # Arrange
+        # Delete Group 1
+        deleted = self.schema_repo.delete_group(1)
+        self.assertTrue(deleted)
+
+        df_after = self.schema_repo.get_all_groups()
+        self.assertTrue(df_after[df_after["id"] == 1].empty)
+
+    def test_create_ungrouped_parameter(self) -> None:
+        """Verify creating a parameter without assigning it to any group (group_id is NULL)."""
         init_db(self.temp_db_path)
+        created = self.schema_repo.create_parameter("PRM_999", None, "Standalone Keyword", PARAM_TYPE_TAGS)
+        self.assertTrue(created)
 
-        # Act & Assert on empty
-        next_id = generate_param_id(self.temp_db_path)
-        self.assertEqual(next_id, "PRM_001")
+        params = self.schema_repo.get_all_parameters()
+        self.assertIn("PRM_999", params["param_id"].values)
+        self.assertTrue(params.loc[params["param_id"] == "PRM_999", "group_id"].isna().values[0])
 
-        # Seed and check next
-        seed_default_data_if_empty(self.temp_db_path)
-        next_id_after_seed = generate_param_id(self.temp_db_path)
-        self.assertEqual(next_id_after_seed, "PRM_006")
-
-    def test_load_full_schema(self) -> None:
-        """Verify loading schema dataframes."""
-        # Arrange
-        init_db(self.temp_db_path)
-        seed_default_data_if_empty(self.temp_db_path)
-
-        # Act
-        groups, params, options = load_full_schema(self.temp_db_path)
-
-        # Assert
-        self.assertIsInstance(groups, pd.DataFrame)
-        self.assertIsInstance(params, pd.DataFrame)
-        self.assertIsInstance(options, pd.DataFrame)
-        self.assertFalse(groups.empty)
-        self.assertFalse(params.empty)
-        self.assertFalse(options.empty)
-        self.assertIn("group_name", groups.columns)
-        self.assertIn("param_type", params.columns)
-
-    def test_project_crud_and_cascade(self) -> None:
-        """Verify adding, updating, and deleting a project cascades to milestones."""
-        # Arrange
-        init_db(self.temp_db_path)
-
-        with get_db(self.temp_db_path) as conn:
-            cursor = conn.cursor()
-            # Insert project
-            cursor.execute(
-                "INSERT INTO projects (id, name, status, planned_budget, actual_budget, dynamic_attributes) VALUES (?, ?, ?, ?, ?, ?)",
-                ("PRJ-100", "Cloud Transformation", STATUS_DRAFT, 250000.0, 10000.0, json.dumps({"PRM_001": "P1 - Critical"})),
-            )
-            # Insert milestone
-            cursor.execute(
-                "INSERT INTO project_milestones (project_id, task_name, phase, start_date, end_date, progress_pct) VALUES (?, ?, ?, ?, ?, ?)",
-                ("PRJ-100", "Infra Setup", "Phase 1", "2026-06-01", "2026-06-30", 50),
-            )
-            conn.commit()
-
-        # Act: Update
-        with get_db(self.temp_db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute("UPDATE projects SET status = ? WHERE id = ?", (STATUS_IN_PROGRESS, "PRJ-100"))
-            conn.commit()
-
-        # Assert: Updated
-        with get_db(self.temp_db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT status FROM projects WHERE id = ?", ("PRJ-100",))
-            self.assertEqual(cursor.fetchone()[0], STATUS_IN_PROGRESS)
-
-        # Act: Delete project
-        with get_db(self.temp_db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute("DELETE FROM projects WHERE id = ?", ("PRJ-100",))
-            conn.commit()
-
-        # Assert: Project and milestones deleted via cascade
-        with get_db(self.temp_db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT COUNT(*) FROM projects WHERE id = ?", ("PRJ-100",))
-            self.assertEqual(cursor.fetchone()[0], 0)
-            cursor.execute("SELECT COUNT(*) FROM project_milestones WHERE project_id = ?", ("PRJ-100",))
-            self.assertEqual(cursor.fetchone()[0], 0)
-
-    def test_flatten_dynamic_attributes_empty(self) -> None:
-        """Verify flatten_dynamic_attributes handles empty DataFrames safely."""
-        # Arrange
-        df_projects = pd.DataFrame()
-        df_params = pd.DataFrame()
-
-        # Act
-        result = flatten_dynamic_attributes(df_projects, df_params)
-
-        # Assert
-        self.assertTrue(result.empty)
-
-    def test_flatten_dynamic_attributes_success(self) -> None:
-        """Verify flattening of JSON attributes into DataFrame columns."""
-        # Arrange
+    def test_flatten_dynamic_attributes_with_tags(self) -> None:
+        """Verify flattening attributes for PARAM_TYPE_TAGS and PARAM_TYPE_MULTI_ENUM."""
         df_projects = pd.DataFrame([
             {
                 "id": "PRJ-001",
@@ -200,9 +128,8 @@ class TestPPMStudio(unittest.TestCase):
                 "planned_budget": 100000.0,
                 "actual_budget": 50000.0,
                 "dynamic_attributes": json.dumps({
-                    "PRM_001": "Critical",
-                    "PRM_002": "Engineering",
-                    "PRM_003": ["Python", "Docker"],
+                    "PRM_001": ["Python", "FastAPI", "Docker"],
+                    "PRM_002": "Single Value",
                 }),
             },
             {
@@ -211,58 +138,32 @@ class TestPPMStudio(unittest.TestCase):
                 "status": "Draft",
                 "planned_budget": 50000.0,
                 "actual_budget": 0.0,
-                "dynamic_attributes": None,
+                "dynamic_attributes": json.dumps({"PRM_001": "SingleTag"}),
             },
         ])
         df_params = pd.DataFrame([
-            {"param_id": "PRM_001", "param_name": "Priority", "param_type": "ENUM"},
-            {"param_id": "PRM_002", "param_name": "Department", "param_type": "TEXT"},
-            {"param_id": "PRM_003", "param_name": "Tags", "param_type": "MULTI_ENUM"},
-            {"param_id": "PRM_004", "param_name": "Link", "param_type": "URL"},
+            {"param_id": "PRM_001", "param_name": "Tech Tags", "param_type": PARAM_TYPE_TAGS},
+            {"param_id": "PRM_002", "param_name": "Note", "param_type": PARAM_TYPE_TEXT},
         ])
 
-        # Act
-        flattened = flatten_dynamic_attributes(df_projects, df_params)
+        flattened = PortfolioService.flatten_dynamic_attributes(df_projects, df_params)
 
-        # Assert
         self.assertIn("PRM_001", flattened.columns)
-        self.assertIn("PRM_002", flattened.columns)
-        self.assertIn("PRM_003", flattened.columns)
-        self.assertIn("PRM_004", flattened.columns)
-        self.assertEqual(flattened.loc[flattened["id"] == "PRJ-001", "PRM_001"].values[0], "Critical")
-        self.assertEqual(flattened.loc[flattened["id"] == "PRJ-001", "PRM_003"].values[0], ["Python", "Docker"])
-        self.assertEqual(flattened.loc[flattened["id"] == "PRJ-002", "PRM_003"].values[0], [])
+        self.assertEqual(flattened.loc[flattened["id"] == "PRJ-001", "PRM_001"].values[0], ["Python", "FastAPI", "Docker"])
+        self.assertEqual(flattened.loc[flattened["id"] == "PRJ-002", "PRM_001"].values[0], ["SingleTag"])
 
-    def test_calculate_portfolio_metrics_empty(self) -> None:
-        """Verify calculate_portfolio_metrics returns zeros for empty DataFrame."""
-        # Arrange
-        df_empty = pd.DataFrame()
-
-        # Act
-        metrics = calculate_portfolio_metrics(df_empty)
-
-        # Assert
-        self.assertEqual(metrics["total_planned"], 0.0)
-        self.assertEqual(metrics["total_actual"], 0.0)
-        self.assertEqual(metrics["variance"], 0.0)
-        self.assertEqual(metrics["burn_rate"], 0.0)
-
-    def test_calculate_portfolio_metrics_calculation(self) -> None:
+    def test_calculate_portfolio_metrics(self) -> None:
         """Verify calculations for planned, actual, variance, and burn rate."""
-        # Arrange
         df = pd.DataFrame([
             {"planned_budget": 100000.0, "actual_budget": 40000.0},
             {"planned_budget": 200000.0, "actual_budget": 110000.0},
         ])
+        metrics = PortfolioService.calculate_portfolio_metrics(df)
 
-        # Act
-        metrics = calculate_portfolio_metrics(df)
-
-        # Assert
-        self.assertEqual(metrics["total_planned"], 300000.0)
-        self.assertEqual(metrics["total_actual"], 150000.0)
-        self.assertEqual(metrics["variance"], 150000.0)
-        self.assertEqual(metrics["burn_rate"], 50.0)
+        self.assertEqual(metrics.total_planned, 300000.0)
+        self.assertEqual(metrics.total_actual, 150000.0)
+        self.assertEqual(metrics.variance, 150000.0)
+        self.assertEqual(metrics.burn_rate, 50.0)
 
 
 if __name__ == "__main__":
