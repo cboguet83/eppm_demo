@@ -203,6 +203,35 @@ def render_planning_milestones(
                         )
                         st.toast(f"Updated Step: {t_name}", icon="✏️")
                         st.rerun()
+                elif action == "create_step_full":
+                    t_proj = str(gantt_event.get("project_id", "")).strip() or selected_id
+                    t_name = str(gantt_event.get("task_name", "")).strip()
+                    t_phase = str(gantt_event.get("phase", "")).strip() or "General"
+                    t_start = str(gantt_event.get("start_date", "")).strip()
+                    t_end = str(gantt_event.get("end_date", "")).strip()
+                    t_prog = int(gantt_event.get("progress_pct", 0))
+                    t_deps = gantt_event.get("dependencies", [])
+
+                    if t_name and t_start and t_end:
+                        new_step_id = milestone_repo.create_milestone(
+                            project_id=t_proj,
+                            task_name=t_name,
+                            phase=t_phase,
+                            start_date=t_start,
+                            end_date=t_end,
+                            progress_pct=t_prog,
+                        )
+                        if new_step_id and t_deps:
+                            for dep in t_deps:
+                                milestone_repo.add_dependency(
+                                    task_id=new_step_id,
+                                    predecessor_task_id=dep.get("predecessor_task_id"),
+                                    predecessor_project_id=dep.get("predecessor_project_id"),
+                                    link_type=dep.get("link_type", "FS"),
+                                    lag_days=dep.get("lag_days", 0),
+                                )
+                        st.toast(f"Created Step: {t_name} in Project {t_proj}", icon="➕")
+                        st.rerun()
                 elif action == "update_dates" and step_id:
                     new_start = str(gantt_event.get("start_date", "")).strip()
                     new_end = str(gantt_event.get("end_date", "")).strip()

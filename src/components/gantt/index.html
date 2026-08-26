@@ -796,6 +796,10 @@
       <span>🔗</span>
       <span id="ctx-view-pred-label">View Predecessors</span>
     </div>
+    <div class="context-menu-item" onclick="openAddStepModal()">
+      <span>➕</span>
+      <span>Add New Step</span>
+    </div>
     <div class="context-menu-item" onclick="openEditModal()">
       <span>✏️</span>
       <span>Edit Step &amp; Dependencies</span>
@@ -1116,6 +1120,9 @@
     // --------------------------------------------------------------------------
     // CONTEXT MENU
     // --------------------------------------------------------------------------
+    let modalMode = 'edit';
+    let addStepTargetProjectId = null;
+
     function showContextMenu(e, task) {
       e.preventDefault();
       e.stopPropagation();
@@ -1126,9 +1133,9 @@
       const violLabel = document.getElementById('ctx-violation-label');
       const viewPredBtn = document.getElementById('ctx-view-pred-btn');
       const viewPredLabel = document.getElementById('ctx-view-pred-label');
-      const deps = task.dependenciesList || [];
+      const deps = (task && task.dependenciesList) ? task.dependenciesList : [];
 
-      if (task.violations && task.violations.length > 0) {
+      if (task && task.violations && task.violations.length > 0) {
         violBtn.style.display = 'flex';
         violLabel.innerText = `⚠️ View ${task.violations.length} Constraint Issue(s)`;
       } else {
@@ -1143,8 +1150,41 @@
       }
 
       menu.style.display = 'block';
-      menu.style.left = `${Math.min(window.innerWidth - 230, e.clientX)}px`;
-      menu.style.top = `${Math.min(window.innerHeight - 200, e.clientY)}px`;
+
+      // Ensure menu is fully within viewport boundaries and not clipped at top/bottom/sides
+      const menuWidth = menu.offsetWidth || 230;
+      const menuHeight = menu.offsetHeight || 230;
+
+      let posX = e.clientX;
+      let posY = e.clientY;
+
+      if (posX + menuWidth > window.innerWidth - 10) {
+        posX = window.innerWidth - menuWidth - 10;
+      }
+      if (posX < 10) posX = 10;
+
+      if (posY + menuHeight > window.innerHeight - 10) {
+        posY = window.innerHeight - menuHeight - 10;
+      }
+      if (posY < 10) posY = 10;
+
+      menu.style.left = `${posX}px`;
+      menu.style.top = `${posY}px`;
+    }
+
+    function showProjectContextMenu(e, projectId) {
+      e.preventDefault();
+      e.stopPropagation();
+      selectedContextMenuTask = {
+        id: null,
+        project_id: projectId,
+        name: '',
+        phase: 'Phase 1 - FAI',
+        start: formatDate(new Date()),
+        end: formatDate(addDays(new Date(), 14)),
+        dependenciesList: []
+      };
+      showContextMenu(e, selectedContextMenuTask);
     }
 
     function hideContextMenu() {
@@ -1159,11 +1199,58 @@
     });
 
     // --------------------------------------------------------------------------
-    // IN-PLACE EDIT MODAL & MULTI-DEPENDENCIES BUILDER
+    // IN-PLACE EDIT & ADD MODAL & MULTI-DEPENDENCIES BUILDER
     // --------------------------------------------------------------------------
+    function openAddStepModal(targetProjectId = null) {
+      hideContextMenu();
+      modalMode = 'add';
+      addStepTargetProjectId = targetProjectId || (selectedContextMenuTask ? selectedContextMenuTask.project_id : currentProjectId);
+
+      const pId = addStepTargetProjectId || "General";
+      document.getElementById('modal-title-header').innerText = `➕ Add New Step (${pId})`;
+      document.getElementById('modal-task-name').value = '';
+      document.getElementById('modal-task-phase').value = selectedContextMenuTask && selectedContextMenuTask.phase ? selectedContextMenuTask.phase : 'Phase 1 - FAI';
+
+      let baseStart = '';
+      if (selectedContextMenuTask && selectedContextMenuTask.end) {
+        baseStart = selectedContextMenuTask.end;
+      } else if (tasksData && tasksData.length > 0) {
+        baseStart = tasksData[tasksData.length - 1].end;
+      } else {
+        baseStart = formatDate(new Date());
+      }
+
+      const sDateObj = parseDate(baseStart);
+      const eDateObj = addDays(sDateObj, 14);
+
+      document.getElementById('modal-start-date').value = baseStart;
+      document.getElementById('modal-end-date').value = formatDate(eDateObj);
+      document.getElementById('modal-end-date').min = baseStart;
+      document.getElementById('modal-progress').value = 0;
+
+      // Dependencies builder
+      const depList = document.getElementById('dep-rows-list');
+      depList.innerHTML = '';
+      if (selectedContextMenuTask && selectedContextMenuTask.id) {
+        addDependencyRow({
+          predecessor_task_id: selectedContextMenuTask.id,
+          predecessor_project_id: null,
+          link_type: 'FS',
+          lag_days: 0
+        });
+      }
+
+      document.getElementById('modal-backdrop').style.display = 'flex';
+    }
+
     function openEditModal() {
       hideContextMenu();
-      if (!selectedContextMenuTask) return;
+      if (!selectedContextMenuTask || !selectedContextMenuTask.id) {
+        openAddStepModal();
+        return;
+      }
+      modalMode = 'edit';
+      addStepTargetProjectId = selectedContextMenuTask.project_id || currentProjectId;
 
       const t = selectedContextMenuTask;
       document.getElementById('modal-title-header').innerText = `✏️ Edit: ${t.name}`;
@@ -1281,7 +1368,7 @@
       } else {
         // Current Project Internal Steps
         tasksData.forEach(item => {
-          if (selectedContextMenuTask && String(item.id) === String(selectedContextMenuTask.id)) {
+          if (selectedContextMenuTask && selectedContextMenuTask.id && String(item.id) === String(selectedContextMenuTask.id)) {
             return; // cannot be predecessor of itself
           }
           const opt = document.createElement('option');
@@ -1296,8 +1383,6 @@
     }
 
     function saveEditModal() {
-      if (!selectedContextMenuTask) return;
-
       const name = document.getElementById('modal-task-name').value.trim();
       const phase = document.getElementById('modal-task-phase').value.trim();
       const start = document.getElementById('modal-start-date').value;
@@ -1345,17 +1430,33 @@
 
       closeEditModal();
 
-      Streamlit.setComponentValue({
-        action: "update_task_full",
-        id: parseInt(selectedContextMenuTask.id, 10),
-        task_name: name,
-        phase: phase || "General",
-        start_date: start,
-        end_date: end,
-        progress_pct: Math.max(0, Math.min(100, prog)),
-        dependencies: dependencies,
-        nonce: Date.now() + "_" + Math.random()
-      });
+      if (modalMode === 'add') {
+        const pId = addStepTargetProjectId || (selectedContextMenuTask && selectedContextMenuTask.project_id) || currentProjectId;
+        Streamlit.setComponentValue({
+          action: "create_step_full",
+          project_id: pId,
+          task_name: name,
+          phase: phase || "General",
+          start_date: start,
+          end_date: end,
+          progress_pct: Math.max(0, Math.min(100, prog)),
+          dependencies: dependencies,
+          nonce: Date.now() + "_" + Math.random()
+        });
+      } else {
+        if (!selectedContextMenuTask || !selectedContextMenuTask.id) return;
+        Streamlit.setComponentValue({
+          action: "update_task_full",
+          id: parseInt(selectedContextMenuTask.id, 10),
+          task_name: name,
+          phase: phase || "General",
+          start_date: start,
+          end_date: end,
+          progress_pct: Math.max(0, Math.min(100, prog)),
+          dependencies: dependencies,
+          nonce: Date.now() + "_" + Math.random()
+        });
+      }
     }
 
     function markComplete() {
@@ -1689,7 +1790,9 @@
       frozenContainer.innerHTML = renderItems.map(item => {
         if (item.type === 'project_header') {
           return `
-            <div class="frozen-row project-group-row" id="frozen-row-proj-${item.project_id}" onclick="toggleProjectCollapse('${item.project_id}', event)">
+            <div class="frozen-row project-group-row" id="frozen-row-proj-${item.project_id}" 
+                 onclick="toggleProjectCollapse('${item.project_id}', event)"
+                 oncontextmenu="showProjectContextMenu(event, '${item.project_id}')">
               <span class="collapse-toggle-icon" title="${item.isCollapsed ? 'Click to expand tasks' : 'Click to collapse tasks'}">${item.isCollapsed ? '▶' : '▼'}</span>
               <span class="project-group-badge">📁</span>
               <span class="project-group-title" title="${item.project_name}">${item.project_name}</span>
@@ -1754,6 +1857,7 @@
         if (item.type === 'project_header') {
           rowEl.classList.add('project-group-row');
           rowEl.id = `timeline-row-proj-${item.project_id}`;
+          rowEl.oncontextmenu = (e) => showProjectContextMenu(e, item.project_id);
 
           if (item.start && item.end) {
             const pStartX = dateToX(parseDate(item.start));
