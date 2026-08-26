@@ -102,19 +102,31 @@ class TestServices(unittest.TestCase):
         self.assertEqual(SchemaService.get_next_available_group_order(self.temp_db_path), 3)
 
     def test_milestone_service_parse_csv(self) -> None:
-        """Verify parsing valid milestone CSV data."""
+        """Verify parsing valid step/milestone CSV data including predecessor_id and 0-duration milestones."""
         csv_data = io.StringIO(
-            "task_name,phase,start_date,end_date,progress_pct\n"
-            "Deploy API,Phase 1,2026-01-01,2026-01-15,100\n"
-            "Build UI,Phase 2,2026-01-16,2026-02-15,50\n"
+            "task_name,phase,start_date,end_date,progress_pct,predecessor_id\n"
+            "Deploy API,Phase 1,2026-01-01,2026-01-15,100,\n"
+            "Milestone Gate 1,Phase 1,2026-01-15,2026-01-15,100,1\n"
+            "Build UI,Phase 2,2026-01-16,2026-02-15,50,2\n"
         )
         parsed = MilestoneService.parse_csv(csv_data, "PRJ-999")
-        self.assertEqual(len(parsed), 2)
+        self.assertEqual(len(parsed), 3)
         self.assertEqual(parsed[0]["project_id"], "PRJ-999")
         self.assertEqual(parsed[0]["task_name"], "Deploy API")
-        self.assertEqual(parsed[0]["progress_pct"], 100)
+        self.assertIsNone(parsed[0]["predecessor_id"])
+        self.assertEqual(parsed[1]["start_date"], parsed[1]["end_date"])
+        self.assertEqual(parsed[1]["predecessor_id"], 1)
 
-    def test_milestone_service_parse_csv_invalid(self) -> None:
+    def test_milestone_service_parse_csv_invalid_dates(self) -> None:
+        """Verify error raised when end_date is before start_date."""
+        invalid_csv = io.StringIO(
+            "task_name,phase,start_date,end_date,progress_pct\n"
+            "Invalid Task,Phase 1,2026-02-15,2026-01-01,0\n"
+        )
+        with self.assertRaises(ValueError):
+            MilestoneService.parse_csv(invalid_csv, "PRJ-999")
+
+    def test_milestone_service_parse_csv_missing_cols(self) -> None:
         """Verify error raised on missing required columns."""
         invalid_csv = io.StringIO("phase,start_date\nPhase 1,2026-01-01\n")
         with self.assertRaises(ValueError):

@@ -95,7 +95,7 @@ def init_db(db_path: Optional[str] = None) -> None:
             )
         """)
 
-        # 5. Project Milestones Table
+        # 5. Project Steps / Milestones Table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS project_milestones (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -105,7 +105,9 @@ def init_db(db_path: Optional[str] = None) -> None:
                 start_date TEXT NOT NULL,
                 end_date TEXT NOT NULL,
                 progress_pct INTEGER DEFAULT 0,
-                FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE CASCADE
+                predecessor_id INTEGER,
+                FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE CASCADE,
+                FOREIGN KEY (predecessor_id) REFERENCES project_milestones (id) ON DELETE SET NULL
             )
         """)
 
@@ -116,6 +118,8 @@ def init_db(db_path: Optional[str] = None) -> None:
             cursor.execute("ALTER TABLE project_milestones ADD COLUMN phase TEXT DEFAULT 'General'")
         if "progress_pct" not in milestone_cols:
             cursor.execute("ALTER TABLE project_milestones ADD COLUMN progress_pct INTEGER DEFAULT 0")
+        if "predecessor_id" not in milestone_cols:
+            cursor.execute("ALTER TABLE project_milestones ADD COLUMN predecessor_id INTEGER")
 
         # Schema migrations for projects
         cursor.execute("PRAGMA table_info(projects)")

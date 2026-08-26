@@ -83,10 +83,14 @@ def render_portfolio_overview(
     status_filter = filter_col2.multiselect(
         "Filter by Status",
         options=all_statuses,
-        default=all_statuses,
+        default=[],
+        placeholder="All statuses",
     )
 
-    filtered_df = df_merged[df_merged["status"].isin(status_filter)]
+    filtered_df = df_merged.copy()
+    if status_filter:
+        filtered_df = filtered_df[filtered_df["status"].isin(status_filter)]
+
     if search_term.strip():
         term = search_term.lower()
         filtered_df = filtered_df[

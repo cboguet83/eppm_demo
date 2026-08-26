@@ -120,20 +120,35 @@ def seed_default_data_if_empty(db_path: Optional[str] = None) -> None:
         milestone_count = cursor.fetchone()[0]
 
         if milestone_count == 0:
-            logger.info("Seeding sample project milestones...")
-            sample_milestones = [
-                ("PRJ-001", "Architecture & Scoping", "Phase 1 - Inception", "2026-01-10", "2026-02-15", 100),
-                ("PRJ-001", "Core Microservices Dev", "Phase 2 - Build", "2026-02-16", "2026-06-30", 75),
-                ("PRJ-001", "Integration & UAT", "Phase 3 - Validation", "2026-07-01", "2026-09-15", 25),
-                ("PRJ-002", "Data Pipeline Ingestion", "Phase 1 - Data Eng", "2026-02-01", "2026-04-15", 100),
-                ("PRJ-002", "Model Training & Tuning", "Phase 2 - ML Dev", "2026-04-16", "2026-07-30", 65),
-                ("PRJ-003", "Audit Execution", "Phase 1 - Audit", "2026-02-11", "2026-04-20", 100),
-            ]
-            valid_milestones = [m for m in sample_milestones if m[0] in existing_pids]
-            if valid_milestones:
-                cursor.executemany(
-                    "INSERT INTO project_milestones (project_id, task_name, phase, start_date, end_date, progress_pct) VALUES (?, ?, ?, ?, ?, ?)",
-                    valid_milestones,
+            logger.info("Seeding sample project steps and milestones...")
+            if "PRJ-001" in existing_pids:
+                cursor.execute(
+                    "INSERT INTO project_milestones (id, project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id) VALUES (1, 'PRJ-001', 'Architecture & Scoping', 'Phase 1 - Inception', '2026-01-10', '2026-02-15', 100, NULL)"
+                )
+                cursor.execute(
+                    "INSERT INTO project_milestones (id, project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id) VALUES (2, 'PRJ-001', 'Architecture Sign-Off', 'Phase 1 - Inception', '2026-02-15', '2026-02-15', 100, 1)"
+                )
+                cursor.execute(
+                    "INSERT INTO project_milestones (id, project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id) VALUES (3, 'PRJ-001', 'Core Microservices Dev', 'Phase 2 - Build', '2026-02-16', '2026-06-30', 75, 2)"
+                )
+                cursor.execute(
+                    "INSERT INTO project_milestones (id, project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id) VALUES (4, 'PRJ-001', 'Integration & UAT', 'Phase 3 - Validation', '2026-07-01', '2026-09-15', 25, 3)"
+                )
+                cursor.execute(
+                    "INSERT INTO project_milestones (id, project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id) VALUES (5, 'PRJ-001', 'Go-Live Release', 'Phase 4 - Rollout', '2026-09-15', '2026-09-15', 0, 4)"
+                )
+
+            if "PRJ-002" in existing_pids:
+                cursor.execute(
+                    "INSERT INTO project_milestones (project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id) VALUES ('PRJ-002', 'Data Pipeline Ingestion', 'Phase 1 - Data Eng', '2026-02-01', '2026-04-15', 100, NULL)"
+                )
+                cursor.execute(
+                    "INSERT INTO project_milestones (project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id) VALUES ('PRJ-002', 'Model Training & Tuning', 'Phase 2 - ML Dev', '2026-04-16', '2026-07-30', 65, NULL)"
+                )
+
+            if "PRJ-003" in existing_pids:
+                cursor.execute(
+                    "INSERT INTO project_milestones (project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id) VALUES ('PRJ-003', 'Audit Execution', 'Phase 1 - Audit', '2026-02-11', '2026-04-20', 100, NULL)"
                 )
 
         conn.commit()
