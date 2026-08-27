@@ -4,18 +4,19 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
+from src.i18n import t
 from src.repositories.project_repo import ProjectRepository
 from src.services.portfolio_service import PortfolioService
 
 
 def render_budget_tracking(project_repo: ProjectRepository) -> None:
     """Renders the Budget Tracking screen with financial KPIs, variance analytics, and visual breakdown charts."""
-    st.header("💰 Budget Tracking & Financial Analytics")
+    st.header(f"💰 {t('portfolio.kpi_planned_budget', default='Budget Tracking & Financial Analytics')}")
 
     df_projects = project_repo.get_all_projects()
 
     if df_projects.empty:
-        st.info("No projects registered yet. Please create projects in 'Project Master Data'.")
+        st.info(t("master_data.dynamic_empty", default="No projects registered yet."))
         return
 
     # 1. Financial KPI Summary Cards
@@ -26,15 +27,15 @@ def render_budget_tracking(project_repo: ProjectRepository) -> None:
     burn_rate = metrics.burn_rate
 
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Portfolio Planned", f"${total_planned:,.2f}")
-    col2.metric("Portfolio Actual Spend", f"${total_actual:,.2f}")
+    col1.metric(t("portfolio.kpi_planned_budget", default="Portfolio Planned"), f"${total_planned:,.2f}")
+    col2.metric(t("portfolio.kpi_actual_spend", default="Portfolio Actual Spend"), f"${total_actual:,.2f}")
     col3.metric(
-        "Net Variance",
+        t("portfolio.kpi_variance", default="Net Variance"),
         f"${variance:,.2f}",
         delta=f"${variance:,.2f}",
         delta_color="normal" if variance >= 0 else "inverse",
     )
-    col4.metric("Portfolio Burn Rate", f"{burn_rate:.1f}%")
+    col4.metric(t("portfolio.kpi_burn_rate", default="Portfolio Burn Rate"), f"{burn_rate:.1f}%")
 
     if variance < 0:
         st.warning(f"⚠️ Portfolio is currently over budget by **${abs(variance):,.2f}**!")

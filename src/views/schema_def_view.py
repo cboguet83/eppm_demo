@@ -6,6 +6,7 @@ from typing import Optional
 import pandas as pd
 import streamlit as st
 
+from src.i18n import t
 from src.models.constants import (
     PARAM_TYPE_ENUM,
     PARAM_TYPE_MULTI_ENUM,
@@ -18,14 +19,13 @@ from src.services.schema_service import SchemaService
 
 def render_schema_definition(schema_repo: SchemaRepository) -> None:
     """Renders the Parameters Definition screen for schema groups, fields, options, and live tree."""
-    st.header("⚙️ Parameters Definition (Schema Builder)")
-    st.caption("Define custom attributes and taxonomies that dynamically render across all projects and portfolios.")
+    st.header(f"⚙️ {t('schema.title')}")
 
     tab_groups, tab_params, tab_options, tab_preview = st.tabs([
-        "📁 Schema Groups",
-        "🏷️ Parameters & Fields",
-        "🔘 Discrete Enum & Tags Options",
-        "👁️ Live Schema Tree",
+        t("schema.tab_groups"),
+        t("schema.tab_params"),
+        t("schema.tab_options"),
+        f"👁️ {t('schema.tab_tree', default='Live Schema Tree')}",
     ])
 
     groups = schema_repo.get_all_groups()
@@ -36,25 +36,25 @@ def render_schema_definition(schema_repo: SchemaRepository) -> None:
     # TAB 1: SCHEMA GROUPS
     # --------------------------------------------------------------------------
     with tab_groups:
-        st.subheader("Manage Schema Groups")
+        st.subheader(t("schema.grp_create_header"))
         col_left, col_right = st.columns(2)
 
         # Section A: Add New Group
         with col_left:
-            st.markdown("#### ➕ Add New Schema Group")
+            st.markdown(f"#### ➕ {t('schema.grp_create_header')}")
             next_avail_order = SchemaService.get_next_available_group_order()
             existing_orders = groups["display_order"].tolist() if not groups.empty else []
 
             with st.form("form_add_group"):
-                new_grp_name = st.text_input("Group Name *", placeholder="e.g. Risk & Compliance")
+                new_grp_name = st.text_input(t("schema.grp_name"), placeholder=t("schema.grp_name_placeholder"))
                 new_grp_order = st.number_input(
-                    "Display Order *",
+                    t("schema.grp_order"),
                     min_value=1,
                     value=next_avail_order,
                     step=1,
                     help=f"Next available display order is {next_avail_order}",
                 )
-                btn_add_grp = st.form_submit_button("➕ Add Schema Group", width="stretch")
+                btn_add_grp = st.form_submit_button(t("schema.btn_create_grp"), width="stretch")
 
                 if btn_add_grp:
                     clean_name = new_grp_name.strip()
@@ -68,14 +68,14 @@ def render_schema_definition(schema_repo: SchemaRepository) -> None:
                         )
                         try:
                             schema_repo.create_group(clean_name, next_avail_order)
-                            st.success(f"Group '{clean_name}' created with Display Order {next_avail_order}!")
+                            st.success(t("schema.msg_grp_created", name=clean_name))
                             st.rerun()
                         except sqlite3.IntegrityError as err:
                             st.error(f"Failed to create group: {err}")
                     else:
                         try:
                             schema_repo.create_group(clean_name, int_order)
-                            st.success(f"Group '{clean_name}' created successfully with Display Order {int_order}!")
+                            st.success(t("schema.msg_grp_created", name=clean_name))
                             st.rerun()
                         except sqlite3.IntegrityError:
                             st.error(f"A group named '{clean_name}' already exists.")
@@ -95,9 +95,9 @@ def render_schema_definition(schema_repo: SchemaRepository) -> None:
                 curr_grp = groups[groups["id"] == grp_id_to_edit].iloc[0]
 
                 with st.form("form_edit_group"):
-                    edit_grp_name = st.text_input("Group Name *", value=str(curr_grp["group_name"]))
+                    edit_grp_name = st.text_input(t("schema.grp_name"), value=str(curr_grp["group_name"]))
                     edit_grp_order = st.number_input(
-                        "Display Order *",
+                        t("schema.grp_order"),
                         min_value=1,
                         value=int(curr_grp["display_order"]),
                         step=1,
@@ -142,7 +142,7 @@ def render_schema_definition(schema_repo: SchemaRepository) -> None:
                 f"Confirm deletion of group '{del_grp_name}' (Assigned parameters will become ungrouped)",
                 key="chk_confirm_del_grp",
             )
-            if st.button("🗑️ Delete Selected Group", key="btn_del_grp", disabled=not confirm_del_grp):
+            if st.button(t("schema.btn_del_grp"), key="btn_del_grp", disabled=not confirm_del_grp):
                 schema_repo.delete_group(del_grp_id)
                 st.success(f"Group '{del_grp_name}' deleted successfully.")
                 st.rerun()
@@ -151,21 +151,21 @@ def render_schema_definition(schema_repo: SchemaRepository) -> None:
     # TAB 2: PARAMETERS & FIELDS
     # --------------------------------------------------------------------------
     with tab_params:
-        st.subheader("Manage Schema Parameters")
+        st.subheader(t("schema.param_create_header"))
         with st.form("form_add_param"):
             col1, col2 = st.columns(2)
             auto_id = SchemaService.generate_param_id()
             new_param_id = col1.text_input(
-                "Parameter ID *",
+                t("schema.param_id"),
                 value=auto_id,
                 disabled=True,
-                help="Auto-calculated unique identifier key",
+                help=t("schema.param_id_help"),
             )
-            new_param_name = col2.text_input("Parameter Label / Name *", placeholder="e.g. Tech Stack or Department")
+            new_param_name = col2.text_input(t("schema.param_name"), placeholder=t("schema.param_name_placeholder"))
 
             col3, col4 = st.columns(2)
             grp_options: list[Optional[int]] = [None]
-            grp_map: dict[Optional[int], str] = {None: "📌 (No Group / General)"}
+            grp_map: dict[Optional[int], str] = {None: t("schema.param_group_none")}
             if not groups.empty:
                 for _, g in groups.iterrows():
                     gid = int(g["id"])
@@ -173,12 +173,12 @@ def render_schema_definition(schema_repo: SchemaRepository) -> None:
                     grp_map[gid] = f"📁 {g['group_name']} (Order: {g['display_order']})"
 
             selected_gid = col3.selectbox(
-                "Assign to Group (Optional)",
+                t("schema.param_group_assign"),
                 options=grp_options,
                 format_func=lambda x: grp_map.get(x, "Unknown"),
             )
             selected_ptype = col4.selectbox(
-                "Parameter Data Type *",
+                t("schema.param_type"),
                 options=PARAM_TYPES,
                 help="TEXT, ENUM (Single choice), MULTI_ENUM (Multiple choices), TAGS (Tag pills), URL (Link)",
             )
@@ -186,11 +186,11 @@ def render_schema_definition(schema_repo: SchemaRepository) -> None:
             initial_opts = ""
             if selected_ptype in (PARAM_TYPE_ENUM, PARAM_TYPE_MULTI_ENUM, PARAM_TYPE_TAGS):
                 initial_opts = st.text_input(
-                    "Initial Option / Tag Values (comma-separated)",
+                    t("schema.param_initial_options"),
                     placeholder="Option 1, Option 2, Option 3",
                 )
 
-            btn_add_param = st.form_submit_button("➕ Add Parameter", width="stretch")
+            btn_add_param = st.form_submit_button(t("schema.btn_add_param"), width="stretch")
             if btn_add_param:
                 clean_pid = auto_id.strip() if auto_id else new_param_id.strip()
                 clean_pname = new_param_name.strip()
@@ -210,7 +210,7 @@ def render_schema_definition(schema_repo: SchemaRepository) -> None:
                             for idx, opt_val in enumerate(raw_opts, 1):
                                 schema_repo.add_option(clean_pid, opt_val, idx)
 
-                        st.success(f"Parameter '{clean_pid} - {clean_pname}' ({selected_ptype}) created successfully!")
+                        st.success(t("schema.msg_param_created", name=clean_pname, id=clean_pid))
                         st.rerun()
                     except sqlite3.IntegrityError:
                         st.error(f"Parameter ID '{clean_pid}' already exists.")
@@ -230,7 +230,7 @@ def render_schema_definition(schema_repo: SchemaRepository) -> None:
             else:
                 params_display["Group"] = None
 
-            params_display["Group"] = params_display["Group"].fillna("(No Group / General)")
+            params_display["Group"] = params_display["Group"].fillna(t("schema.param_group_none"))
             st.dataframe(
                 params_display[["param_id", "Group", "param_name", "param_type"]],
                 width="stretch",
@@ -238,7 +238,7 @@ def render_schema_definition(schema_repo: SchemaRepository) -> None:
             )
 
             del_param_id = st.selectbox("Select Parameter to Delete", options=params["param_id"].tolist())
-            if st.button("🗑️ Delete Selected Parameter", key="btn_del_param"):
+            if st.button(t("schema.btn_del_param"), key="btn_del_param"):
                 schema_repo.delete_parameter(del_param_id)
                 st.success(f"Parameter '{del_param_id}' deleted.")
                 st.rerun()
@@ -247,7 +247,7 @@ def render_schema_definition(schema_repo: SchemaRepository) -> None:
     # TAB 3: DISCRETE ENUM & TAGS OPTIONS
     # --------------------------------------------------------------------------
     with tab_options:
-        st.subheader("Manage Enum & Tags Option Values")
+        st.subheader(t("schema.opt_manage_header"))
         tag_or_enum_params = params[params["param_type"].isin([PARAM_TYPE_ENUM, PARAM_TYPE_MULTI_ENUM, PARAM_TYPE_TAGS])]
 
         if tag_or_enum_params.empty:
@@ -255,7 +255,7 @@ def render_schema_definition(schema_repo: SchemaRepository) -> None:
         else:
             p_map = dict(zip(tag_or_enum_params["param_id"], tag_or_enum_params["param_name"]))
             target_pid = st.selectbox(
-                "Select Parameter",
+                t("schema.opt_select_param"),
                 options=tag_or_enum_params["param_id"].tolist(),
                 format_func=lambda x: f"{x} - {p_map.get(x, '')} ({tag_or_enum_params[tag_or_enum_params['param_id'] == x]['param_type'].iloc[0]})",
             )
@@ -273,16 +273,16 @@ def render_schema_definition(schema_repo: SchemaRepository) -> None:
 
             with st.form("form_add_opt"):
                 col1, col2 = st.columns([3, 1])
-                opt_val = col1.text_input("New Option / Tag Value *", placeholder="e.g. Critical or Cloud Native")
-                opt_ord = col2.number_input("Display Order", min_value=0, value=len(current_opts) + 1, step=1)
-                btn_add_opt = st.form_submit_button("➕ Add Value")
+                opt_val = col1.text_input(t("schema.opt_new_val"), placeholder="e.g. Critical or Cloud Native")
+                opt_ord = col2.number_input(t("schema.opt_order"), min_value=0, value=len(current_opts) + 1, step=1)
+                btn_add_opt = st.form_submit_button(t("schema.btn_add_opt"))
 
                 if btn_add_opt:
                     if not opt_val.strip():
                         st.error("Value cannot be empty.")
                     else:
                         schema_repo.add_option(target_pid, opt_val.strip(), int(opt_ord))
-                        st.success(f"Option '{opt_val}' added!")
+                        st.success(t("schema.msg_opt_created", value=opt_val))
                         st.rerun()
 
             if not current_opts.empty:
@@ -329,7 +329,7 @@ def render_schema_definition(schema_repo: SchemaRepository) -> None:
             # Ungrouped parameters
             ungrouped_params = params[params["group_id"].isna() | (params["group_id"] == None)]  # noqa: E711
             if not ungrouped_params.empty:
-                st.markdown("### 📌 General Parameters (No Group Assigned)")
+                st.markdown(f"### 📌 {t('schema.param_group_none')}")
                 for _, p in ungrouped_params.iterrows():
                     pid = p["param_id"]
                     ptype = p["param_type"]

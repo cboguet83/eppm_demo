@@ -150,7 +150,59 @@ def init_db(db_path: Optional[str] = None) -> None:
                 WHERE predecessor_id IS NOT NULL
             """)
 
-        # Schema migrations for projects
+        # 7. Hierarchy Level Table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS hierarchy_level (
+                hierarchy_level_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                level INTEGER NOT NULL,
+                parent_hierarchy_level_id INTEGER,
+                manager_function_id INTEGER,
+                FOREIGN KEY (parent_hierarchy_level_id) REFERENCES hierarchy_level (hierarchy_level_id) ON DELETE SET NULL,
+                FOREIGN KEY (manager_function_id) REFERENCES function (function_id) ON DELETE SET NULL
+            )
+        """)
+
+        # 8. Function Type Table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS function_type (
+                function_type_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                function_type TEXT NOT NULL UNIQUE
+            )
+        """)
+
+        # 9. Function Table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS function (
+                function_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                hierarchy_level_id INTEGER NOT NULL,
+                function_type_id INTEGER,
+                manager_function_id INTEGER,
+                dual_manager_function_id INTEGER,
+                FOREIGN KEY (hierarchy_level_id) REFERENCES hierarchy_level (hierarchy_level_id) ON DELETE RESTRICT,
+                FOREIGN KEY (function_type_id) REFERENCES function_type (function_type_id) ON DELETE SET NULL,
+                FOREIGN KEY (manager_function_id) REFERENCES function (function_id) ON DELETE SET NULL,
+                FOREIGN KEY (dual_manager_function_id) REFERENCES function (function_id) ON DELETE SET NULL
+            )
+        """)
+
+        # 10. Employee Table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS employee (
+                employee_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                firstname TEXT NOT NULL,
+                lastname TEXT NOT NULL,
+                email TEXT NOT NULL UNIQUE,
+                mobile TEXT DEFAULT '',
+                sigle TEXT DEFAULT '',
+                employee_code TEXT NOT NULL UNIQUE,
+                function_id INTEGER,
+                FOREIGN KEY (function_id) REFERENCES function (function_id) ON DELETE SET NULL
+            )
+        """)
+
+        # 11. Schema migrations for projects and organization tables
         cursor.execute("PRAGMA table_info(projects)")
         proj_cols = [col[1] for col in cursor.fetchall()]
         if "dynamic_attributes" not in proj_cols:
@@ -159,6 +211,38 @@ def init_db(db_path: Optional[str] = None) -> None:
             cursor.execute("ALTER TABLE projects ADD COLUMN planned_budget REAL DEFAULT 0.0")
         if "actual_budget" not in proj_cols:
             cursor.execute("ALTER TABLE projects ADD COLUMN actual_budget REAL DEFAULT 0.0")
+
+        cursor.execute("PRAGMA table_info(function)")
+        func_cols = [col[1] for col in cursor.fetchall()]
+        if "function_type_id" not in func_cols:
+            cursor.execute("ALTER TABLE function ADD COLUMN function_type_id INTEGER REFERENCES function_type(function_type_id)")
+
+        cursor.execute("PRAGMA table_info(employee)")
+        emp_cols = [col[1] for col in cursor.fetchall()]
+        if "function_type_id" in emp_cols:
+            try:
+                cursor.execute("ALTER TABLE employee DROP COLUMN function_type_id")
+            except sqlite3.OperationalError:
+                # If DROP COLUMN is not supported in this SQLite build, recreate table
+                cursor.execute("""
+                    CREATE TABLE employee_new (
+                        employee_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        firstname TEXT NOT NULL,
+                        lastname TEXT NOT NULL,
+                        email TEXT NOT NULL UNIQUE,
+                        mobile TEXT DEFAULT '',
+                        sigle TEXT DEFAULT '',
+                        employee_code TEXT NOT NULL UNIQUE,
+                        function_id INTEGER,
+                        FOREIGN KEY (function_id) REFERENCES function (function_id) ON DELETE SET NULL
+                    )
+                """)
+                cursor.execute("""
+                    INSERT INTO employee_new (employee_id, firstname, lastname, email, mobile, sigle, employee_code, function_id)
+                    SELECT employee_id, firstname, lastname, email, mobile, sigle, employee_code, function_id FROM employee
+                """)
+                cursor.execute("DROP TABLE employee")
+                cursor.execute("ALTER TABLE employee_new RENAME TO employee")
 
         conn.commit()
         conn.execute("PRAGMA foreign_keys = ON")

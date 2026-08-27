@@ -1079,20 +1079,20 @@
     </div>
     <div class="context-menu-item" onclick="openAddStepModal()">
       <span>➕</span>
-      <span>Add New Step</span>
+      <span id="ctx-label-add-step">Add New Step</span>
     </div>
     <div class="context-menu-item" onclick="openEditModal()">
       <span>✏️</span>
-      <span>Edit Step &amp; Dependencies</span>
+      <span id="ctx-label-edit-step">Edit Step &amp; Dependencies</span>
     </div>
     <div class="context-menu-item" onclick="markComplete()">
       <span>✅</span>
-      <span>Mark 100% Complete</span>
+      <span id="ctx-label-complete-step">Mark 100% Complete</span>
     </div>
     <div class="context-menu-divider"></div>
     <div class="context-menu-item danger" onclick="deleteSelectedStep()">
       <span>🗑️</span>
-      <span>Delete Step</span>
+      <span id="ctx-label-delete-step">Delete Step</span>
     </div>
   </div>
 
@@ -1102,7 +1102,7 @@
     <div class="context-menu-divider" style="margin:8px 0;"></div>
     <div class="context-menu-item" onclick="openEditModalForDep()">
       <span>✏️</span>
-      <span>Edit Dependency</span>
+      <span id="ctx-label-edit-dep">Edit Dependency</span>
     </div>
   </div>
 
@@ -1147,15 +1147,15 @@
         <!-- Row 1: Step Name (flex:1.5), Phase/Category (flex:1), Description (flex:1.5) -->
         <div class="form-row" style="gap: 16px;">
           <div class="form-group" style="flex: 1.5;">
-            <label class="form-label" style="font-size: 13px;">Step / Task Name *</label>
+            <label class="form-label" id="modal-label-task-name" style="font-size: 13px;">Step / Task Name *</label>
             <input type="text" class="form-input" id="modal-task-name" placeholder="e.g. UAT Validation" style="font-size: 14px; padding: 10px 12px;" />
           </div>
           <div class="form-group" style="flex: 1;">
-            <label class="form-label" style="font-size: 13px;">Phase / Category</label>
+            <label class="form-label" id="modal-label-phase" style="font-size: 13px;">Phase / Category</label>
             <input type="text" class="form-input" id="modal-task-phase" placeholder="e.g. Phase 1 - Inception" style="font-size: 14px; padding: 10px 12px;" />
           </div>
           <div class="form-group" style="flex: 1.5;">
-            <label class="form-label" style="font-size: 13px;">Description <span style="font-weight:400;color:#64748b;">(Optional)</span></label>
+            <label class="form-label" id="modal-label-desc" style="font-size: 13px;">Description <span style="font-weight:400;color:#64748b;">(Optional)</span></label>
             <input type="text" class="form-input" id="modal-task-desc" placeholder="e.g. Detailed scope & deliverables" style="font-size: 14px; padding: 10px 12px;" />
           </div>
         </div>
@@ -1163,16 +1163,16 @@
         <!-- Row 2: Start Date, End Date, Progress Slider -->
         <div class="form-row" style="gap: 16px; align-items: flex-end;">
           <div class="form-group" style="flex: 1;">
-            <label class="form-label" style="font-size: 13px;">Start Date *</label>
+            <label class="form-label" id="modal-label-start" style="font-size: 13px;">Start Date *</label>
             <input type="date" class="form-input" id="modal-start-date" onchange="syncModalEndDate()" style="font-size: 14px; padding: 9px 12px;" />
           </div>
           <div class="form-group" style="flex: 1;">
-            <label class="form-label" style="font-size: 13px;">End Date *</label>
+            <label class="form-label" id="modal-label-end" style="font-size: 13px;">End Date *</label>
             <input type="date" class="form-input" id="modal-end-date" style="font-size: 14px; padding: 9px 12px;" />
           </div>
           <div class="form-group" style="flex: 1.2;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-              <label class="form-label" style="margin:0; font-size: 13px;">Progress</label>
+              <label class="form-label" id="modal-label-progress" style="margin:0; font-size: 13px;">Progress</label>
               <span id="modal-progress-badge" style="font-size:12px; font-weight:700; color:var(--primary); background:#eff6ff; padding:2px 10px; border-radius:12px; border:1px solid #bfdbfe;">0%</span>
             </div>
             <input type="range" class="form-range" id="modal-progress" min="0" max="100" step="5" value="0"
@@ -1183,8 +1183,8 @@
         <!-- Predecessors / Dependencies Builder -->
         <div class="form-group" style="flex: 1; display: flex; flex-direction: column; min-height: 320px; margin-top: 6px;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-            <label class="form-label" style="margin:0; font-size: 14px; font-weight: 700; color: #1e293b;">🔗 Predecessors &amp; Dependencies</label>
-            <button type="button" class="btn-add-dep" onclick="addDependencyRow()" style="padding: 7px 14px; font-size: 13px;">➕ Add Predecessor</button>
+            <label class="form-label" id="modal-label-deps" style="margin:0; font-size: 14px; font-weight: 700; color: #1e293b;">🔗 Predecessors &amp; Dependencies</label>
+            <button type="button" class="btn-add-dep" id="modal-btn-add-dep" onclick="addDependencyRow()" style="padding: 7px 14px; font-size: 13px;">➕ Add Predecessor</button>
           </div>
           <div class="dep-box" style="flex: 1; min-height: 280px; max-height: 480px; overflow-y: auto; padding: 14px;">
             <div id="dep-rows-list" style="display:flex; flex-direction:column; gap:10px;"></div>
@@ -1192,8 +1192,8 @@
         </div>
       </div>
       <div class="modal-footer" style="padding: 14px 24px;">
-        <button class="btn-cancel" onclick="closeEditModal()" style="padding: 9px 18px; font-size: 14px;">Cancel</button>
-        <button class="btn-save" onclick="saveEditModal()" style="padding: 9px 22px; font-size: 14px;">💾 Save Changes</button>
+        <button class="btn-cancel" id="modal-btn-cancel" onclick="closeEditModal()" style="padding: 9px 18px; font-size: 14px;">Cancel</button>
+        <button class="btn-save" id="modal-btn-save" onclick="saveEditModal()" style="padding: 9px 22px; font-size: 14px;">💾 Save Changes</button>
       </div>
     </div>
   </div>
@@ -1210,25 +1210,25 @@
         <div style="display:flex; gap:6px; align-items:center; margin-right:4px;">
           <label class="toggle-link-opt" title="Toggle visibility of internal dependencies within same project">
             <input type="checkbox" id="chk-internal-links" checked onchange="toggleLinkVisibility('internal', this.checked)">
-            <span>🔗 Internal Dependencies</span>
+            <span id="lbl-internal-links">🔗 Internal Dependencies</span>
           </label>
           <label class="toggle-link-opt" title="Toggle visibility of cross-project external dependencies">
             <input type="checkbox" id="chk-external-links" checked onchange="toggleLinkVisibility('external', this.checked)">
-            <span>🌐 External Dependencies</span>
+            <span id="lbl-external-links">🌐 External Dependencies</span>
           </label>
         </div>
 
         <div id="multi-project-tools" style="display:none; gap:6px; margin-right:4px;">
-          <button class="btn-mode" onclick="expandAllProjects()" title="Expand all project tasks">▼ Expand All</button>
-          <button class="btn-mode" onclick="collapseAllProjects()" title="Collapse all project tasks">▶ Collapse All</button>
+          <button class="btn-mode" id="btn-expand-all" onclick="expandAllProjects()" title="Expand all project tasks">▼ Expand All</button>
+          <button class="btn-mode" id="btn-collapse-all" onclick="collapseAllProjects()" title="Collapse all project tasks">▶ Collapse All</button>
         </div>
 
         <div class="view-modes">
-          <button class="btn-mode" onclick="setViewMode('Day', this)">Day</button>
-          <button class="btn-mode" onclick="setViewMode('Week', this)">Week</button>
-          <button class="btn-mode active" onclick="setViewMode('Month', this)">Month</button>
-          <button class="btn-mode" onclick="setViewMode('Quarter', this)">Quarter</button>
-          <button class="btn-mode" onclick="setViewMode('Year', this)">Year</button>
+          <button class="btn-mode" id="btn-mode-day" onclick="setViewMode('Day', this)">Day</button>
+          <button class="btn-mode" id="btn-mode-week" onclick="setViewMode('Week', this)">Week</button>
+          <button class="btn-mode active" id="btn-mode-month" onclick="setViewMode('Month', this)">Month</button>
+          <button class="btn-mode" id="btn-mode-quarter" onclick="setViewMode('Quarter', this)">Quarter</button>
+          <button class="btn-mode" id="btn-mode-year" onclick="setViewMode('Year', this)">Year</button>
         </div>
       </div>
     </div>
@@ -1314,6 +1314,100 @@
     let totalTimelineWidth = 0;
     let msPerPixel = 1;
     let selectedContextMenuTask = null;
+
+    // Localization Dictionary and Lookup Helper
+    let i18n = {
+      columns: { id: "ID", name: "Task / Step Name", desc: "Description", start: "Start", stop: "Stop", prog: "Prog", phase: "Phase" },
+      view_modes: { day: "Day", week: "Week", month: "Month", quarter: "Quarter", year: "Year" },
+      toggles: { internal_links: "🔗 Internal Dependencies", external_links: "🌐 External Dependencies", expand_all: "▼ Expand All", collapse_all: "▶ Collapse All" },
+      context_menu: { edit_step: "✏️ Edit Step Details", add_step_after: "➕ Add Next Step (Successor)", add_step_before: "➕ Add Previous Step (Predecessor)", mark_complete: "✅ Mark as 100% Complete", delete_step: "🗑️ Delete Step", edit_dep: "✏️ Edit Dependency", delete_dep: "🗑️ Delete Dependency", view_diagnostics: "⚠️ View Diagnostics" },
+      modal: { add_title: "➕ Add New Step ({project_id})", edit_title: "✏️ Edit: {name}", field_name: "Step / Task Name *", field_phase: "Phase / Category", field_desc: "Description", field_start: "Start Date *", field_end: "End Date *", field_progress: "Progress Percentage", dependencies_header: "🔗 Step Dependencies & Predecessors", btn_add_pred: "➕ Add Predecessor Link", cross_project_chk: "🌐 Cross-Project?", select_pred_placeholder: "-- Select Predecessor Step --", whole_project_option: "(leave blank for whole project)", link_type_fs: "FS (Fin➔St)", link_type_ff: "FF (Fin➔Fin)", link_type_ss: "SS (St➔St)", link_type_sf: "SF (St➔Fin)", lag_placeholder: "Lag (days)", btn_save: "💾 Save Changes", btn_cancel: "Cancel", optional: "Optional" },
+      diagnostics: { title: "⚠️ Constraint Violation Diagnostics", btn_fix: "✏️ Fix in Step Editor", btn_close: "Close" }
+    };
+
+    function getT(path, fallback) {
+      const parts = path.split('.');
+      let curr = i18n;
+      for (let p of parts) {
+        if (curr && curr[p] !== undefined) {
+          curr = curr[p];
+        } else {
+          return fallback !== undefined ? fallback : path;
+        }
+      }
+      return curr !== undefined ? curr : (fallback !== undefined ? fallback : path);
+    }
+
+    function updateLocalizedUI() {
+      // Toolbar toggles & multi-project
+      const elInt = document.getElementById('lbl-internal-links');
+      if (elInt) elInt.innerText = getT('toggles.internal_links', '🔗 Internal Dependencies');
+      const elExt = document.getElementById('lbl-external-links');
+      if (elExt) elExt.innerText = getT('toggles.external_links', '🌐 External Dependencies');
+
+      const elExp = document.getElementById('btn-expand-all');
+      if (elExp) elExp.innerText = getT('toggles.expand_all', '▼ Expand All');
+      const elCol = document.getElementById('btn-collapse-all');
+      if (elCol) elCol.innerText = getT('toggles.collapse_all', '▶ Collapse All');
+
+      // View mode buttons
+      const elDay = document.getElementById('btn-mode-day');
+      if (elDay) elDay.innerText = getT('view_modes.day', 'Day');
+      const elWeek = document.getElementById('btn-mode-week');
+      if (elWeek) elWeek.innerText = getT('view_modes.week', 'Week');
+      const elMonth = document.getElementById('btn-mode-month');
+      if (elMonth) elMonth.innerText = getT('view_modes.month', 'Month');
+      const elQuarter = document.getElementById('btn-mode-quarter');
+      if (elQuarter) elQuarter.innerText = getT('view_modes.quarter', 'Quarter');
+      const elYear = document.getElementById('btn-mode-year');
+      if (elYear) elYear.innerText = getT('view_modes.year', 'Year');
+
+      // Context menu items
+      const elAdd = document.getElementById('ctx-label-add-step');
+      if (elAdd) elAdd.innerText = getT('context_menu.add_step_after', 'Add New Step');
+      const elEdit = document.getElementById('ctx-label-edit-step');
+      if (elEdit) elEdit.innerText = getT('context_menu.edit_step', 'Edit Step & Dependencies');
+      const elDone = document.getElementById('ctx-label-complete-step');
+      if (elDone) elDone.innerText = getT('context_menu.mark_complete', 'Mark 100% Complete');
+      const elDel = document.getElementById('ctx-label-delete-step');
+      if (elDel) elDel.innerText = getT('context_menu.delete_step', 'Delete Step');
+      const elEditDep = document.getElementById('ctx-label-edit-dep');
+      if (elEditDep) elEditDep.innerText = getT('context_menu.edit_dep', 'Edit Dependency');
+
+      // Modal dialog labels & buttons
+      const elName = document.getElementById('modal-label-task-name');
+      if (elName) elName.innerText = getT('modal.field_name', 'Step / Task Name *');
+      const elPhase = document.getElementById('modal-label-phase');
+      if (elPhase) elPhase.innerText = getT('modal.field_phase', 'Phase / Category');
+      const elDesc = document.getElementById('modal-label-desc');
+      if (elDesc) elDesc.innerHTML = `${getT('modal.field_desc', 'Description')} <span style="font-weight:400;color:#64748b;">(${getT('modal.optional', 'Optional')})</span>`;
+      const elStart = document.getElementById('modal-label-start');
+      if (elStart) elStart.innerText = getT('modal.field_start', 'Start Date *');
+      const elEnd = document.getElementById('modal-label-end');
+      if (elEnd) elEnd.innerText = getT('modal.field_end', 'End Date *');
+      const elProg = document.getElementById('modal-label-progress');
+      if (elProg) elProg.innerText = getT('modal.field_progress', 'Progress');
+      const elDeps = document.getElementById('modal-label-deps');
+      if (elDeps) elDeps.innerText = getT('modal.dependencies_header', '🔗 Step Dependencies & Predecessors');
+
+      const elAddPred = document.getElementById('modal-btn-add-dep');
+      if (elAddPred) elAddPred.innerText = getT('modal.btn_add_pred', '➕ Add Predecessor');
+
+      const elSave = document.getElementById('modal-btn-save');
+      if (elSave) elSave.innerText = getT('modal.btn_save', '💾 Save Changes');
+      const elCancel = document.getElementById('modal-btn-cancel');
+      if (elCancel) elCancel.innerText = getT('modal.btn_cancel', 'Cancel');
+
+      // Diagnostics & Predecessors Modals
+      const diagHeader = document.querySelector('#diag-backdrop .modal-header span');
+      if (diagHeader) diagHeader.innerText = getT('diagnostics.title', '⚠️ Constraint Violation Diagnostics');
+      const diagClose = document.querySelector('#diag-backdrop .btn-cancel');
+      if (diagClose) diagClose.innerText = getT('diagnostics.btn_close', 'Close');
+      const diagFix = document.querySelector('#diag-backdrop .btn-save');
+      if (diagFix) diagFix.innerText = getT('diagnostics.btn_fix', '✏️ Fix in Step Editor');
+
+      renderFrozenHeader();
+    }
 
     // Left pane column widths & header sorting state
     let colWidths = {
@@ -1445,13 +1539,13 @@
       if (!headerEl) return;
 
       const cols = [
-        { key: 'id', title: 'ID', align: 'center' },
-        { key: 'name', title: 'Task / Step Name', align: 'left' },
-        { key: 'desc', title: 'Description', align: 'left' },
-        { key: 'start', title: 'Start', align: 'center' },
-        { key: 'stop', title: 'Stop', align: 'center' },
-        { key: 'prog', title: 'Prog', align: 'center' },
-        { key: 'phase', title: 'Phase', align: 'center' }
+        { key: 'id', title: getT('columns.id', 'ID'), align: 'center' },
+        { key: 'name', title: getT('columns.name', 'Task / Step Name'), align: 'left' },
+        { key: 'desc', title: getT('columns.desc', 'Description'), align: 'left' },
+        { key: 'start', title: getT('columns.start', 'Start'), align: 'center' },
+        { key: 'stop', title: getT('columns.stop', 'Stop'), align: 'center' },
+        { key: 'prog', title: getT('columns.prog', 'Prog'), align: 'center' },
+        { key: 'phase', title: getT('columns.phase', 'Phase'), align: 'center' }
       ];
 
       const totalW = getTotalFrozenWidth();
@@ -1753,8 +1847,10 @@
     let addStepTargetProjectId = null;
 
     function showContextMenu(e, task) {
-      e.preventDefault();
-      e.stopPropagation();
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
       selectedContextMenuTask = task;
 
       const menu = document.getElementById('context-menu');
@@ -1786,12 +1882,12 @@
       const menuWidth = menu.offsetWidth || 230;
       const menuHeight = menu.offsetHeight || 230;
 
-      let posX = e.clientX + 6;
-      let posY = e.clientY + 2;
+      let posX = e ? e.clientX + 6 : 100;
+      let posY = e ? e.clientY + 2 : 100;
 
       // Smart vertical positioning: flip above cursor if near bottom edge
       if (posY + menuHeight > window.innerHeight - 10) {
-        posY = e.clientY - menuHeight - 4;
+        posY = (e ? e.clientY : 100) - menuHeight - 4;
         if (posY < 10) {
           posY = Math.max(10, window.innerHeight - menuHeight - 10);
         }
@@ -1799,7 +1895,7 @@
 
       // Smart horizontal positioning: flip left if near right edge
       if (posX + menuWidth > window.innerWidth - 10) {
-        posX = e.clientX - menuWidth - 6;
+        posX = (e ? e.clientX : 100) - menuWidth - 6;
         if (posX < 10) {
           posX = Math.max(10, window.innerWidth - menuWidth - 10);
         }
@@ -1809,14 +1905,36 @@
       menu.style.top = `${posY}px`;
     }
 
+    function showContextMenuById(e, taskId) {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      const task = (tasksData || []).find(x => String(x.id) === String(taskId));
+      if (task) {
+        showContextMenu(e, task);
+      }
+    }
+
+    function openEditModalById(taskId) {
+      const task = (tasksData || []).find(x => String(x.id) === String(taskId));
+      if (task) {
+        selectedContextMenuTask = task;
+        openEditModal();
+      }
+    }
+
     function showProjectContextMenu(e, projectId) {
-      e.preventDefault();
-      e.stopPropagation();
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
       selectedContextMenuTask = {
         id: null,
         project_id: projectId,
         name: '',
         phase: 'Phase 1 - FAI',
+        description: '',
         start: formatDate(new Date()),
         end: formatDate(addDays(new Date(), 14)),
         dependenciesList: []
@@ -1847,7 +1965,8 @@
       addStepTargetProjectId = targetProjectId || (selectedContextMenuTask ? selectedContextMenuTask.project_id : currentProjectId);
 
       const pId = addStepTargetProjectId || "General";
-      document.getElementById('modal-title-header').innerText = `➕ Add New Step (${pId})`;
+      const tmpl = getT('modal.add_title', '➕ Add New Step ({project_id})');
+      document.getElementById('modal-title-header').innerText = tmpl.replace('{project_id}', pId);
       document.getElementById('modal-task-name').value = '';
       document.getElementById('modal-task-phase').value = selectedContextMenuTask && selectedContextMenuTask.phase ? selectedContextMenuTask.phase : 'Phase 1 - FAI';
       document.getElementById('modal-task-desc').value = '';
@@ -1893,7 +2012,8 @@
       addStepTargetProjectId = selectedContextMenuTask.project_id || currentProjectId;
 
       const t = selectedContextMenuTask;
-      document.getElementById('modal-title-header').innerText = `✏️ Edit: ${t.name}`;
+      const editTmpl = getT('modal.edit_title', '✏️ Edit: {name}');
+      document.getElementById('modal-title-header').innerText = editTmpl.replace('{name}', t.name || '');
       document.getElementById('modal-task-name').value = t.name || '';
       document.getElementById('modal-task-phase').value = t.phase || 'General';
       document.getElementById('modal-task-desc').value = t.description || '';
@@ -1937,7 +2057,7 @@
 
       rowDiv.innerHTML = `
         <label style="font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap;color:#475569;">
-          <input type="checkbox" class="dep-is-ext" ${isExt ? 'checked' : ''} onchange="toggleDepExt(this)" /> 🌐 Cross-Project?
+          <input type="checkbox" class="dep-is-ext" ${isExt ? 'checked' : ''} onchange="toggleDepExt(this)" /> ${getT('modal.cross_project_chk', '🌐 Cross-Project?')}
         </label>
         <select class="form-select dep-proj" style="width:200px;${isExt ? '' : 'display:none;'}" onchange="onDepProjChange(this)">
           ${otherProjects.map(p => `<option value="${p.id}" ${String(selectedExtProj) === String(p.id) ? 'selected' : ''}>${p.name}</option>`).join('')}
@@ -1946,12 +2066,12 @@
           <!-- Populated dynamically -->
         </select>
         <select class="form-select dep-type" style="width:95px;" title="Link Type">
-          <option value="FS" ${initialData.link_type === 'FS' ? 'selected' : ''}>FS (Fin➔St)</option>
-          <option value="FF" ${initialData.link_type === 'FF' ? 'selected' : ''}>FF (Fin➔Fin)</option>
-          <option value="SS" ${initialData.link_type === 'SS' ? 'selected' : ''}>SS (St➔St)</option>
-          <option value="SF" ${initialData.link_type === 'SF' ? 'selected' : ''}>SF (St➔Fin)</option>
+          <option value="FS" ${initialData.link_type === 'FS' ? 'selected' : ''}>${getT('modal.link_type_fs', 'FS (Fin➔St)')}</option>
+          <option value="FF" ${initialData.link_type === 'FF' ? 'selected' : ''}>${getT('modal.link_type_ff', 'FF (Fin➔Fin)')}</option>
+          <option value="SS" ${initialData.link_type === 'SS' ? 'selected' : ''}>${getT('modal.link_type_ss', 'SS (St➔St)')}</option>
+          <option value="SF" ${initialData.link_type === 'SF' ? 'selected' : ''}>${getT('modal.link_type_sf', 'SF (St➔Fin)')}</option>
         </select>
-        <input type="number" class="form-input dep-lag" style="width:85px;" title="Offset / Lag in calendar days" placeholder="Lag (days)" value="${initialData.lag_days || 0}" />
+        <input type="number" class="form-input dep-lag" style="width:85px;" title="Offset / Lag in calendar days" placeholder="${getT('modal.lag_placeholder', 'Lag (days)')}" value="${initialData.lag_days || 0}" />
         <button type="button" class="btn-remove-dep" onclick="this.parentElement.remove()" title="Remove dependency" style="padding:6px 10px;font-size:13px;">✕</button>
       `;
 
@@ -1989,7 +2109,7 @@
         targetSelect.title = "Step (leave blank to link the whole project)";
         const optWhole = document.createElement('option');
         optWhole.value = `PROJ:${selectedProj}`;
-        optWhole.innerText = `(leave blank for whole project)`;
+        optWhole.innerText = getT('modal.whole_project_option', '(leave blank for whole project)');
         if (initialData.predecessor_project_id && !initialData.predecessor_task_id) {
           optWhole.selected = true;
         }
@@ -2010,7 +2130,7 @@
         // Current Project Internal Steps
         const optPlaceholder = document.createElement('option');
         optPlaceholder.value = '';
-        optPlaceholder.innerText = '-- Select Predecessor Step --';
+        optPlaceholder.innerText = getT('modal.select_pred_placeholder', '-- Select Predecessor Step --');
         if (!initialData.predecessor_task_id) {
           optPlaceholder.selected = true;
         }
@@ -2637,11 +2757,12 @@
                  style="top: ${topPos}px; width: ${totalW}px; min-width: ${totalW}px;"
                  onmouseenter="highlightRow('${t.id}')" 
                  onmouseleave="unhighlightRow('${t.id}')"
-                 oncontextmenu="showContextMenu(event, ${JSON.stringify(t).replace(/"/g, '&quot;')})">
+                 ondblclick="openEditModalById('${t.id}')"
+                 oncontextmenu="showContextMenuById(event, '${t.id}')">
               <span class="task-id-cell" style="width:${colWidths.id}px; min-width:${colWidths.id}px; max-width:${colWidths.id}px;" title="Task ID #${t.id}">#${t.id}</span>
               <span class="task-title" style="width:${colWidths.name}px; min-width:${colWidths.name}px; max-width:${colWidths.name}px;" title="${t.name}">
                 <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1;">${t.name}</span>
-                ${hasViol ? `<span title="${t.violations.length} constraint violation(s)" style="font-size:12px;cursor:pointer;margin-left:4px;flex-shrink:0;" onclick="showContextMenu(event, ${JSON.stringify(t).replace(/"/g, '&quot;')})">⚠️</span>` : ''}
+                ${hasViol ? `<span title="${t.violations.length} constraint violation(s)" style="font-size:12px;cursor:pointer;margin-left:4px;flex-shrink:0;" onclick="showContextMenuById(event, '${t.id}')">⚠️</span>` : ''}
               </span>
               <span class="task-desc-cell" style="width:${colWidths.desc}px; min-width:${colWidths.desc}px; max-width:${colWidths.desc}px;" title="${t.description || ''}">${t.description || '-'}</span>
               <span class="task-date-cell" style="width:${colWidths.start}px; min-width:${colWidths.start}px; max-width:${colWidths.start}px;" title="Start Date: ${t.start || '-'}">${formatMmmYy(t.start)}</span>
@@ -2701,6 +2822,7 @@
             rowEl.id = `timeline-row-${t.id}`;
             rowEl.onmouseenter = () => highlightRow(t.id);
             rowEl.onmouseleave = () => unhighlightRow(t.id);
+            rowEl.ondblclick = () => openEditModalById(t.id);
 
             const sDate = parseDate(t.start);
             const eDate = parseDate(t.end);
@@ -2721,6 +2843,7 @@
                 <div class="milestone-text-label">${t.name}</div>
               `;
               mWrapper.oncontextmenu = (e) => showContextMenu(e, t);
+              mWrapper.ondblclick = () => openEditModalById(t.id);
               bindDragEvents(mWrapper, t, true);
               rowEl.appendChild(mWrapper);
             } else {
@@ -2738,6 +2861,7 @@
                 <div class="resize-handle right"></div>
               `;
               bWrapper.oncontextmenu = (e) => showContextMenu(e, t);
+              bWrapper.ondblclick = () => openEditModalById(t.id);
               bindDragEvents(bWrapper, t, false);
               rowEl.appendChild(bWrapper);
             }
@@ -3154,6 +3278,10 @@
     window.addEventListener("message", function(event) {
       if (event.data && event.data.type === "streamlit:render") {
         const args = event.data.args || {};
+        if (args.translations) {
+          i18n = Object.assign({}, i18n, args.translations);
+          updateLocalizedUI();
+        }
         if (args.tasks) {
           tasksData = args.tasks;
           allProjectsData = args.all_projects || [];

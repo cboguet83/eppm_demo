@@ -6,6 +6,7 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 
+from src.i18n import t
 from src.models.constants import (
     PARAM_TYPE_ENUM,
     PARAM_TYPE_MULTI_ENUM,
@@ -23,9 +24,9 @@ def render_project_master(
     schema_repo: SchemaRepository,
 ) -> None:
     """Renders the Project Master Data screen for creating, editing, and deleting projects."""
-    st.header("📋 Project Master Data")
+    st.header(f"📋 {t('master_data.title')}")
 
-    tab_create, tab_edit = st.tabs(["➕ Create New Project", "✏️ Edit / Delete Existing Project"])
+    tab_create, tab_edit = st.tabs([t("master_data.tab_create"), t("master_data.tab_edit")])
     groups = schema_repo.get_all_groups()
     params = schema_repo.get_all_parameters()
     options = schema_repo.get_all_options()
@@ -34,28 +35,28 @@ def render_project_master(
     # TAB 1: CREATE PROJECT
     # --------------------------------------------------------------------------
     with tab_create:
-        st.subheader("Create a New Project")
+        st.subheader(t("master_data.create_header"))
         auto_id = project_repo.generate_project_id()
         with st.form("form_create_project", clear_on_submit=True):
             col1, col2 = st.columns(2)
             new_id = col1.text_input(
-                "Project Code / ID *",
+                t("master_data.field_id"),
                 value=auto_id,
                 disabled=True,
-                help="Auto-calculated unique project code",
+                help=t("master_data.field_id_help"),
             )
-            new_name = col2.text_input("Project Title *", placeholder="e.g. Cloud Data Lake Platform")
+            new_name = col2.text_input(t("master_data.field_name"), placeholder=t("master_data.field_name_placeholder"))
 
             col3, col4, col5 = st.columns(3)
-            new_status = col3.selectbox("Status", options=STATUS_LIST, index=0)
-            new_planned = col4.number_input("Planned Budget ($)", min_value=0.0, value=150000.0, step=5000.0)
-            new_actual = col5.number_input("Actual Spend ($)", min_value=0.0, value=0.0, step=5000.0)
+            new_status = col3.selectbox(t("master_data.field_status"), options=STATUS_LIST, index=0)
+            new_planned = col4.number_input(t("master_data.field_planned"), min_value=0.0, value=150000.0, step=5000.0)
+            new_actual = col5.number_input(t("master_data.field_actual"), min_value=0.0, value=0.0, step=5000.0)
 
-            st.write("#### 🧩 Dynamic Schema Attributes")
+            st.write(f"#### {t('master_data.dynamic_section')}")
             dyn_values: dict[str, Any] = {}
 
             if params.empty:
-                st.caption("No dynamic schema parameters configured. Add parameters in 'Parameters Definition'.")
+                st.caption(t("master_data.dynamic_empty"))
             else:
                 # Render Grouped Parameters
                 if not groups.empty:
@@ -86,7 +87,7 @@ def render_project_master(
                 # Render Ungrouped Parameters
                 ungrouped_params = params[params["group_id"].isna() | (params["group_id"] == None)]  # noqa: E711
                 if not ungrouped_params.empty:
-                    with st.expander("📌 General Attributes (No Group Assigned)", expanded=True):
+                    with st.expander(f"📌 {t('schema.param_group_none')}", expanded=True):
                         for _, p in ungrouped_params.iterrows():
                             pid = str(p["param_id"])
                             pname = str(p["param_name"])
@@ -103,15 +104,15 @@ def render_project_master(
                                 p_opts = options[options["param_id"] == pid]["option_value"].tolist()
                                 dyn_values[pid] = st.multiselect(f"{pname} ({ptype})", options=p_opts, key=f"create_{pid}")
 
-            btn_submit = st.form_submit_button("💾 Save New Project", width="stretch")
+            btn_submit = st.form_submit_button(t("master_data.btn_save_new"), width="stretch")
             if btn_submit:
                 clean_id = auto_id.strip() if auto_id else new_id.strip()
                 clean_name = new_name.strip()
 
                 if not clean_id or not clean_name:
-                    st.error("Project Code and Project Title are required.")
+                    st.error(t("master_data.err_required_fields"))
                 elif project_repo.exists(clean_id):
-                    st.error(f"Project with Code '{clean_id}' already exists. Use a unique Code.")
+                    st.error(t("master_data.err_already_exists", id=clean_id))
                 else:
                     project_repo.create_project(
                         project_id=clean_id,
@@ -121,25 +122,25 @@ def render_project_master(
                         actual_budget=new_actual,
                         dynamic_attributes=dyn_values,
                     )
-                    st.success(f"Project '{clean_id} - {clean_name}' created successfully!")
+                    st.success(t("master_data.msg_created_success", id=clean_id, name=clean_name))
                     st.rerun()
 
     # --------------------------------------------------------------------------
     # TAB 2: EDIT / DELETE PROJECT
     # --------------------------------------------------------------------------
     with tab_edit:
-        st.subheader("Manage Existing Project")
+        st.subheader(t("master_data.edit_header"))
         df_existing = project_repo.get_all_projects()
 
         if df_existing.empty:
-            st.info("No projects available to edit.")
+            st.info(t("master_data.dynamic_empty", default="No projects available to edit."))
             return
 
         proj_options = df_existing["id"].tolist()
         proj_map = dict(zip(df_existing["id"], df_existing["name"]))
 
         selected_id = st.selectbox(
-            "Select Project",
+            t("master_data.select_project"),
             options=proj_options,
             format_func=lambda x: f"{x} - {proj_map.get(x, '')}",
         )
@@ -152,26 +153,26 @@ def render_project_master(
 
         with st.form("form_edit_project"):
             col_id, col1, col2 = st.columns([1, 2, 1])
-            col_id.text_input("Project Code / ID", value=selected_id, disabled=True)
-            edit_name = col1.text_input("Project Title *", value=str(curr_row["name"]))
+            col_id.text_input(t("master_data.field_id"), value=selected_id, disabled=True)
+            edit_name = col1.text_input(t("master_data.field_name"), value=str(curr_row["name"]))
             edit_status_idx = STATUS_LIST.index(curr_row["status"]) if curr_row["status"] in STATUS_LIST else 0
-            edit_status = col2.selectbox("Status", options=STATUS_LIST, index=edit_status_idx)
+            edit_status = col2.selectbox(t("master_data.field_status"), options=STATUS_LIST, index=edit_status_idx)
 
             col3, col4 = st.columns(2)
             edit_planned = col3.number_input(
-                "Planned Budget ($)",
+                t("master_data.field_planned"),
                 min_value=0.0,
                 value=float(curr_row["planned_budget"]),
                 step=5000.0,
             )
             edit_actual = col4.number_input(
-                "Actual Spend ($)",
+                t("master_data.field_actual"),
                 min_value=0.0,
                 value=float(curr_row["actual_budget"]),
                 step=5000.0,
             )
 
-            st.write("#### 🧩 Dynamic Schema Attributes")
+            st.write(f"#### {t('master_data.dynamic_section')}")
             edit_dyn_values: dict[str, Any] = {}
 
             if not params.empty:
@@ -228,7 +229,7 @@ def render_project_master(
                 # Ungrouped parameters
                 ungrouped_params = params[params["group_id"].isna() | (params["group_id"] == None)]  # noqa: E711
                 if not ungrouped_params.empty:
-                    with st.expander("📌 General Attributes (No Group Assigned)", expanded=True):
+                    with st.expander(f"📌 {t('schema.param_group_none')}", expanded=True):
                         for _, p in ungrouped_params.iterrows():
                             pid = str(p["param_id"])
                             pname = str(p["param_name"])
@@ -269,10 +270,10 @@ def render_project_master(
                                     key=f"edit_{pid}",
                                 )
 
-            btn_update = st.form_submit_button("💾 Update Project Details", width="stretch")
+            btn_update = st.form_submit_button(t("master_data.btn_update"), width="stretch")
             if btn_update:
                 if not edit_name.strip():
-                    st.error("Project Title is required.")
+                    st.error(t("master_data.err_required_fields"))
                 else:
                     project_repo.update_project(
                         project_id=selected_id,
@@ -282,14 +283,14 @@ def render_project_master(
                         actual_budget=edit_actual,
                         dynamic_attributes=edit_dyn_values,
                     )
-                    st.success(f"Project '{selected_id}' updated successfully!")
+                    st.success(t("master_data.msg_updated_success", id=selected_id))
                     st.rerun()
 
         st.divider()
         st.write("#### ⚠️ Danger Zone")
         col_del1, col_del2 = st.columns([3, 1])
-        confirm_del = col_del1.checkbox(f"Confirm deletion of project '{selected_id}' and all its milestones")
-        if col_del2.button("🗑️ Delete Project", type="secondary", disabled=not confirm_del):
+        confirm_del = col_del1.checkbox(f"{t('master_data.confirm_delete')}: '{selected_id}'")
+        if col_del2.button(t("master_data.btn_delete"), type="secondary", disabled=not confirm_del):
             project_repo.delete_project(selected_id)
-            st.success(f"Project '{selected_id}' deleted successfully.")
+            st.success(t("master_data.msg_deleted_success", id=selected_id))
             st.rerun()

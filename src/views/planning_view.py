@@ -2,7 +2,7 @@
 
 import datetime
 import os
-from typing import Optional
+from typing import Any, Optional
 
 import pandas as pd
 import plotly.express as px
@@ -10,6 +10,7 @@ import plotly.graph_objects as go
 import streamlit as st
 import streamlit.components.v1 as components
 
+from src.i18n import get_current_locale, get_section_catalog, t
 from src.repositories.milestone_repo import MilestoneRepository
 from src.repositories.project_repo import ProjectRepository
 from src.services.milestone_service import MilestoneService
@@ -28,12 +29,12 @@ def render_planning_milestones(
     milestone_repo: MilestoneRepository,
 ) -> None:
     """Renders the Planning & Step Loader screen with interactive drag & drop and Plotly timeline."""
-    st.header("📅 Planning & Step Loader")
+    st.header(f"📅 {t('planning.title')}")
 
     df_projects = project_repo.get_all_projects()
 
     if df_projects.empty:
-        st.info("No projects registered yet. Please create a project first in 'Project Master Data'.")
+        st.info(t("master_data.dynamic_empty", default="No projects registered yet."))
         return
 
     proj_map = dict(zip(df_projects["id"], df_projects["name"]))
@@ -41,7 +42,7 @@ def render_planning_milestones(
     # Top Control: Project Selection & Multi-Project View Toggle
     top_col1, top_col2 = st.columns([3, 2])
     enable_multi_project = top_col2.checkbox(
-        "🌐 Multi-Project Display",
+        t("planning.toggle_multi_project"),
         value=False,
         help="View all projects in a unified timeline with tasks grouped under their respective project.",
         key="chk_multi_project_display",
@@ -49,15 +50,17 @@ def render_planning_milestones(
 
     if enable_multi_project:
         all_proj_ids = df_projects["id"].tolist()
+        opt_all = f"🌐 {t('planning.filter_all_projects', default='All Projects')}"
+        opt_sel = f"🔍 {t('planning.filter_select_projects', default='Select Specific Projects')}"
         filter_mode = top_col1.radio(
-            "Filter Scope",
-            options=["🌐 All Projects", "🔍 Select Specific Projects"],
+            t("planning.filter_scope", default="Filter Scope"),
+            options=[opt_all, opt_sel],
             horizontal=True,
             key="rg_multi_filter_mode",
         )
-        if filter_mode == "🔍 Select Specific Projects":
+        if filter_mode == opt_sel:
             selected_projects = top_col1.multiselect(
-                "Select Projects to Display",
+                t("planning.select_multi_proj"),
                 options=all_proj_ids,
                 default=all_proj_ids[:10] if len(all_proj_ids) > 10 else all_proj_ids,
                 format_func=lambda x: f"{x} - {proj_map.get(x, '')}",
@@ -71,12 +74,12 @@ def render_planning_milestones(
 
         sub_df = df_projects[df_projects["id"].isin(selected_projects)]
         col1, col2, col3 = st.columns(3)
-        col1.metric("Selected Projects", f"{len(sub_df)} / {len(df_projects)}")
-        col2.metric("Total Planned Budget", f"${float(sub_df['planned_budget'].sum()):,.2f}" if not sub_df.empty else "$0.00")
-        col3.metric("Total Actual Spend", f"${float(sub_df['actual_budget'].sum()):,.2f}" if not sub_df.empty else "$0.00")
+        col1.metric(t("planning.selected_projects", default="Selected Projects"), f"{len(sub_df)} / {len(df_projects)}")
+        col2.metric(t("portfolio.kpi_planned_budget"), f"${float(sub_df['planned_budget'].sum()):,.2f}" if not sub_df.empty else "$0.00")
+        col3.metric(t("portfolio.kpi_actual_spend"), f"${float(sub_df['actual_budget'].sum()):,.2f}" if not sub_df.empty else "$0.00")
     else:
         selected_id = top_col1.selectbox(
-            "Select Project to View / Manage Schedule",
+            t("planning.select_single_proj"),
             options=df_projects["id"].tolist(),
             format_func=lambda x: f"{x} - {proj_map.get(x, '')}",
             key="sb_single_project_choice",
@@ -85,9 +88,9 @@ def render_planning_milestones(
 
         proj_info = df_projects[df_projects["id"] == selected_id].iloc[0]
         col1, col2, col3 = st.columns(3)
-        col1.metric("Status", str(proj_info["status"]))
-        col2.metric("Planned Budget", f"${float(proj_info['planned_budget']):,.2f}")
-        col3.metric("Actual Spend", f"${float(proj_info['actual_budget']):,.2f}")
+        col1.metric(t("master_data.field_status"), str(proj_info["status"]))
+        col2.metric(t("master_data.field_planned"), f"${float(proj_info['planned_budget']):,.2f}")
+        col3.metric(t("master_data.field_actual"), f"${float(proj_info['actual_budget']):,.2f}")
 
     st.divider()
 
@@ -95,9 +98,9 @@ def render_planning_milestones(
     # 1. TIMELINE VISUALIZATION (INTERACTIVE DRAG & DROP GANTT)
     # --------------------------------------------------------------------------
     if enable_multi_project:
-        st.subheader(f"🌐 Multi-Project Master Timeline ({len(selected_projects)} Projects)")
+        st.subheader(f"🌐 {t('planning.multi_project_title', default='Multi-Project Master Timeline')} ({len(selected_projects)} Projects)")
     else:
-        st.subheader(f"Timeline Schedule: {selected_id}")
+        st.subheader(t("planning.schedule_title", project_id=selected_id))
 
     # Fetch all project bounds for constraint evaluation in fast batch queries
     all_projects_list = [{"id": str(r["id"]), "name": f"{r['id']} - {r['name']}"} for _, r in df_projects.iterrows()]
@@ -112,7 +115,7 @@ def render_planning_milestones(
     raw_dependencies = milestone_repo.get_dependencies_for_projects(selected_projects)
 
     if combined_steps_df.empty:
-        st.info("No steps defined for the selected project(s) yet. Add steps below or upload a schedule CSV.")
+        st.info(t("planning.no_steps_defined"))
     else:
         steps_records = combined_steps_df.to_dict(orient="records")
         raw_tasks = [
@@ -165,13 +168,16 @@ def render_planning_milestones(
                 "custom_class": "bar-milestone" if row["start_date"] == row["end_date"] else "bar-step",
             })
 
-        # Render custom drag-and-drop component with multi-dependency metadata
-        widget_key = f"gantt_widget_{len(selected_projects)}_{selected_id}" if enable_multi_project else f"gantt_widget_{selected_id}"
+        # Render custom drag-and-drop component with multi-dependency metadata and i18n
+        cur_loc = get_current_locale()
+        gantt_translations = get_section_catalog("gantt", cur_loc)
+        widget_key = f"gantt_{len(selected_projects)}_{selected_id}_{cur_loc}" if enable_multi_project else f"gantt_{selected_id}_{cur_loc}"
         gantt_event = _interactive_gantt(
             tasks=gantt_tasks,
             all_projects=all_projects_list,
             project_id=selected_id,
             is_multi_project=enable_multi_project,
+            translations=gantt_translations,
             key=widget_key,
         )
 
@@ -204,7 +210,7 @@ def render_planning_milestones(
                             dependencies=t_deps,
                             description=t_desc,
                         )
-                        st.toast(f"Updated Step: {t_name}", icon="✏️")
+                        st.toast(t("planning.toast_step_updated", name=t_name), icon="✏️")
                         st.rerun()
                 elif action == "create_step_full":
                     t_proj = str(gantt_event.get("project_id", "")).strip() or selected_id
@@ -227,24 +233,24 @@ def render_planning_milestones(
                             dependencies=t_deps,
                             description=t_desc,
                         )
-                        st.toast(f"Created Step: {t_name} in Project {t_proj}", icon="➕")
+                        st.toast(t("planning.toast_step_created", name=t_name, project_id=t_proj), icon="➕")
                         st.rerun()
                 elif action == "update_dates" and step_id:
                     new_start = str(gantt_event.get("start_date", "")).strip()
                     new_end = str(gantt_event.get("end_date", "")).strip()
                     if new_start and new_end:
                         milestone_repo.update_dates(int(step_id), new_start, new_end)
-                        st.toast(f"Updated dates for Step #{step_id}: {new_start} → {new_end}", icon="📅")
+                        st.toast(t("planning.toast_dates_updated", id=step_id, start=new_start, end=new_end), icon="📅")
                         st.rerun()
                 elif action == "update_progress" and step_id:
                     new_prog = gantt_event.get("progress")
                     if new_prog is not None:
                         milestone_repo.update_progress(int(step_id), int(new_prog))
-                        st.toast(f"Updated progress for Step #{step_id}: {new_prog}%", icon="📊")
+                        st.toast(t("planning.toast_progress_updated", id=step_id, progress=new_prog), icon="📊")
                         st.rerun()
                 elif action == "delete_step" and step_id:
                     milestone_repo.delete_milestone(int(step_id))
-                    st.toast(f"Deleted Step #{step_id}", icon="🗑️")
+                    st.toast(t("planning.toast_step_deleted", id=step_id), icon="🗑️")
                     st.rerun()
 
     # --------------------------------------------------------------------------
@@ -254,7 +260,7 @@ def render_planning_milestones(
 
     if enable_multi_project:
         manage_project_id = st.selectbox(
-            "Select Target Project for CSV Bulk Loader",
+            t("planning.csv_target_project", default="Select Target Project for CSV Bulk Loader"),
             options=df_projects["id"].tolist(),
             format_func=lambda x: f"{x} - {proj_map.get(x, '')}",
             key="sb_manage_target_project",
@@ -264,29 +270,29 @@ def render_planning_milestones(
 
     df_steps = milestone_repo.get_milestones_by_project(manage_project_id)
 
-    with st.expander("📥 CSV Bulk Step Loader & Exporter", expanded=False):
-        st.subheader(f"CSV Bulk Step Loader & Exporter ({manage_project_id})")
+    with st.expander(t("planning.csv_section_title"), expanded=False):
+        st.subheader(f"{t('planning.csv_section_title')} ({manage_project_id})")
         col_exp, col_imp = st.columns(2)
         with col_exp:
-            st.write("##### Export Schedule Template")
+            st.write(f"##### {t('planning.csv_export_title', default='Export Schedule Template')}")
             template_csv = MilestoneService.get_csv_template()
             st.download_button(
-                label="📄 Download CSV Template",
+                label=t("planning.csv_download_template"),
                 data=template_csv,
                 file_name="steps_schedule_template.csv",
                 mime="text/csv",
             )
 
         with col_imp:
-            st.write("##### Bulk Import Steps")
-            uploaded_file = st.file_uploader("Upload Steps CSV", type=["csv"], key="uploader_steps")
+            st.write(f"##### {t('planning.csv_import_title', default='Bulk Import Steps')}")
+            uploaded_file = st.file_uploader(t("planning.csv_upload_label"), type=["csv"], key="uploader_steps")
             if uploaded_file is not None:
                 try:
                     steps_payload = MilestoneService.parse_csv(uploaded_file, manage_project_id)
                     st.dataframe(pd.DataFrame(steps_payload).head(), width="stretch")
-                    if st.button("🚀 Import and Save Steps"):
+                    if st.button(t("planning.btn_import_csv")):
                         count = milestone_repo.bulk_create_milestones(steps_payload)
-                        st.success(f"Successfully imported {count} steps to {manage_project_id}!")
+                        st.success(t("planning.csv_import_success", count=count, project_id=manage_project_id, default=f"Successfully imported {count} steps to {manage_project_id}!"))
                         st.rerun()
                 except ValueError as val_err:
                     st.error(str(val_err))
