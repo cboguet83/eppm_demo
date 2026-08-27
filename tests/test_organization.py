@@ -1,11 +1,12 @@
 """Unit tests for organizational structure models, repository, and service layers."""
 
 import os
+import sqlite3
 import tempfile
 import unittest
 
 from src.database.schema_init import init_db
-from src.models.organization import Employee, FunctionType, HierarchyLevel, OrgFunction
+from src.models.organization import Employee, FunctionType, OrgFunction, Team
 from src.repositories.organization_repo import OrganizationRepository
 from src.services.organization_service import OrganizationService
 
@@ -29,46 +30,6 @@ class TestOrganization(unittest.TestCase):
             except PermissionError:
                 pass
 
-    def test_hierarchy_level_crud(self) -> None:
-        """Verify Create, Read, Update, Delete operations for Hierarchy Levels."""
-        # 1. Create top level
-        l1_id = self.repo.create_hierarchy_level(HierarchyLevel(name="Executive Tier", level=1))
-        self.assertIsInstance(l1_id, int)
-        self.assertGreater(l1_id, 0)
-
-        # 2. Create child level
-        l2_id = self.repo.create_hierarchy_level(
-            HierarchyLevel(name="VP Tier", level=2, parent_hierarchy_level_id=l1_id)
-        )
-
-        # 3. Read
-        l1 = self.repo.get_hierarchy_level_by_id(l1_id)
-        self.assertIsNotNone(l1)
-        self.assertEqual(l1.name, "Executive Tier")
-        self.assertEqual(l1.level, 1)
-        self.assertIsNone(l1.parent_hierarchy_level_id)
-
-        l2 = self.repo.get_hierarchy_level_by_id(l2_id)
-        self.assertIsNotNone(l2)
-        self.assertEqual(l2.parent_hierarchy_level_id, l1_id)
-
-        # 4. Update
-        updated = self.repo.update_hierarchy_level(
-            HierarchyLevel(hierarchy_level_id=l1_id, name="C-Suite Tier", level=1)
-        )
-        self.assertTrue(updated)
-        l1_reloaded = self.repo.get_hierarchy_level_by_id(l1_id)
-        self.assertEqual(l1_reloaded.name, "C-Suite Tier")
-
-        # 5. List all
-        df_levels = self.repo.get_all_hierarchy_levels()
-        self.assertEqual(len(df_levels), 2)
-
-        # 6. Delete
-        deleted = self.repo.delete_hierarchy_level(l2_id)
-        self.assertTrue(deleted)
-        self.assertIsNone(self.repo.get_hierarchy_level_by_id(l2_id))
-
     def test_function_type_crud(self) -> None:
         """Verify Create, Read, Update, Delete operations for Function Types."""
         t1_id = self.repo.create_function_type(FunctionType(function_type="Core Engineering"))
@@ -90,23 +51,23 @@ class TestOrganization(unittest.TestCase):
         self.assertIsNone(self.repo.get_function_type_by_id(t1_id))
 
     def test_function_crud_with_types_and_managers(self) -> None:
-        """Verify Functions CRUD with function_type_id and primary/dual manager relationship mapping."""
-        hl_id = self.repo.create_hierarchy_level(HierarchyLevel(name="Management Tier", level=2))
+        """Verify Functions CRUD with hierarchy_level integer, has_reports boolean, and manager relations."""
         ft_exec = self.repo.create_function_type(FunctionType(function_type="Executive"))
         ft_tech = self.repo.create_function_type(FunctionType(function_type="Technical"))
 
-        # Create CEO function with function_type_id
+        # Create CEO function
         ceo_id = self.repo.create_function(
-            OrgFunction(name="Chief Executive Officer", hierarchy_level_id=hl_id, function_type_id=ft_exec)
+            OrgFunction(name="Chief Executive Officer", hierarchy_level=1, function_type_id=ft_exec, has_reports=True)
         )
 
-        # Create CTO with primary manager as CEO and function_type_id
+        # Create CTO with primary manager as CEO
         cto_id = self.repo.create_function(
             OrgFunction(
                 name="Chief Technology Officer",
-                hierarchy_level_id=hl_id,
+                hierarchy_level=2,
                 function_type_id=ft_tech,
                 manager_function_id=ceo_id,
+                has_reports=True,
             )
         )
 
@@ -114,16 +75,19 @@ class TestOrganization(unittest.TestCase):
         arch_id = self.repo.create_function(
             OrgFunction(
                 name="Principal Architect",
-                hierarchy_level_id=hl_id,
+                hierarchy_level=3,
                 function_type_id=ft_tech,
                 manager_function_id=cto_id,
                 dual_manager_function_id=ceo_id,
+                has_reports=False,
             )
         )
 
         arch = self.repo.get_function_by_id(arch_id)
         self.assertIsNotNone(arch)
         self.assertEqual(arch.name, "Principal Architect")
+        self.assertEqual(arch.hierarchy_level, 3)
+        self.assertFalse(arch.has_reports)
         self.assertEqual(arch.function_type_id, ft_tech)
         self.assertEqual(arch.manager_function_id, cto_id)
         self.assertEqual(arch.dual_manager_function_id, ceo_id)
@@ -133,15 +97,18 @@ class TestOrganization(unittest.TestCase):
             OrgFunction(
                 function_id=arch_id,
                 name="Chief Architect",
-                hierarchy_level_id=hl_id,
+                hierarchy_level=2,
                 function_type_id=ft_exec,
                 manager_function_id=cto_id,
                 dual_manager_function_id=None,
+                has_reports=True,
             )
         )
         self.assertTrue(updated)
         arch_mod = self.repo.get_function_by_id(arch_id)
         self.assertEqual(arch_mod.name, "Chief Architect")
+        self.assertEqual(arch_mod.hierarchy_level, 2)
+        self.assertTrue(arch_mod.has_reports)
         self.assertEqual(arch_mod.function_type_id, ft_exec)
         self.assertIsNone(arch_mod.dual_manager_function_id)
 
@@ -151,10 +118,9 @@ class TestOrganization(unittest.TestCase):
 
     def test_employee_crud_and_code_generation(self) -> None:
         """Verify Employee CRUD, auto-calculated employee codes, and email uniqueness."""
-        hl_id = self.repo.create_hierarchy_level(HierarchyLevel(name="Staff Tier", level=3))
         ft_id = self.repo.create_function_type(FunctionType(function_type="Full Time"))
         fn_id = self.repo.create_function(
-            OrgFunction(name="Senior Developer", hierarchy_level_id=hl_id, function_type_id=ft_id)
+            OrgFunction(name="Senior Developer", hierarchy_level=3, function_type_id=ft_id)
         )
 
         code_1 = self.repo.generate_next_employee_code()
@@ -210,22 +176,85 @@ class TestOrganization(unittest.TestCase):
         self.assertTrue(self.repo.delete_employee(e1_id))
         self.assertIsNone(self.repo.get_employee_by_id(e1_id))
 
+    def test_team_crud_and_service_enrichment(self) -> None:
+        """Verify Team CRUD operations and OrganizationService.enrich_teams."""
+        mgr_fn_id = self.repo.create_function(
+            OrgFunction(name="Department Manager", hierarchy_level=3, has_reports=True)
+        )
+        ldr_fn_id = self.repo.create_function(
+            OrgFunction(name="Scrum Master / Lead", hierarchy_level=4, has_reports=False)
+        )
+
+        # 1. Create team
+        t1_id = self.repo.create_team(
+            Team(
+                team_name="Cloud Platform Team",
+                manager_function_id=mgr_fn_id,
+                leader_function_id=ldr_fn_id,
+            )
+        )
+        self.assertIsInstance(t1_id, int)
+        self.assertGreater(t1_id, 0)
+
+        # 2. Read team
+        team = self.repo.get_team_by_id(t1_id)
+        self.assertIsNotNone(team)
+        self.assertEqual(team.team_name, "Cloud Platform Team")
+        self.assertEqual(team.manager_function_id, mgr_fn_id)
+        self.assertEqual(team.leader_function_id, ldr_fn_id)
+
+        # 3. Update team
+        updated = self.repo.update_team(
+            Team(
+                team_id=t1_id,
+                team_name="Core Cloud Team",
+                manager_function_id=mgr_fn_id,
+                leader_function_id=None,
+            )
+        )
+        self.assertTrue(updated)
+        team_mod = self.repo.get_team_by_id(t1_id)
+        self.assertEqual(team_mod.team_name, "Core Cloud Team")
+        self.assertIsNone(team_mod.leader_function_id)
+
+        # 4. List all teams
+        df_teams = self.repo.get_all_teams()
+        self.assertEqual(len(df_teams), 1)
+
+        # 5. Service enrichment
+        df_funcs = self.repo.get_all_functions()
+        enriched_teams = OrganizationService.enrich_teams(df_teams, df_funcs)
+        self.assertIn("manager_function_name", enriched_teams.columns)
+        self.assertIn("leader_function_name", enriched_teams.columns)
+        self.assertEqual(enriched_teams.iloc[0]["manager_function_name"], "Department Manager")
+        self.assertEqual(enriched_teams.iloc[0]["leader_function_name"], "—")
+
+        # 6. Delete team
+        self.assertTrue(self.repo.delete_team(t1_id))
+        self.assertIsNone(self.repo.get_team_by_id(t1_id))
+
     def test_organization_service_validation_and_enrichment(self) -> None:
-        """Verify OrganizationService email checking, field validators, and DataFrame enrichment."""
+        """Verify OrganizationService validation rules and DataFrame enrichment."""
         # Validation checks
         self.assertTrue(OrganizationService.is_valid_email("user@enterprise.com"))
         self.assertFalse(OrganizationService.is_valid_email("not-an-email"))
         self.assertFalse(OrganizationService.is_valid_email(""))
 
         with self.assertRaises(ValueError):
-            OrganizationService.validate_hierarchy_level("", 1)
-        with self.assertRaises(ValueError):
-            OrganizationService.validate_hierarchy_level("Valid", 0)
-
-        with self.assertRaises(ValueError):
             OrganizationService.validate_function("", 1)
         with self.assertRaises(ValueError):
             OrganizationService.validate_function("Valid", None)
+        with self.assertRaises(ValueError):
+            OrganizationService.validate_function("Valid", 0)
+        with self.assertRaises(ValueError):
+            OrganizationService.validate_function("Valid", 1, fte_percentage=-10)
+        with self.assertRaises(ValueError):
+            OrganizationService.validate_function("Valid", 1, fte_percentage=150)
+
+        with self.assertRaises(ValueError):
+            OrganizationService.validate_team("")
+        with self.assertRaises(ValueError):
+            OrganizationService.validate_team("   ")
 
         with self.assertRaises(ValueError):
             OrganizationService.validate_employee("", "Last", "valid@email.com", "EMP-001")
@@ -237,10 +266,9 @@ class TestOrganization(unittest.TestCase):
             OrganizationService.validate_employee("First", "Last", "valid@email.com", "")
 
         # Enrichment test
-        hl_id = self.repo.create_hierarchy_level(HierarchyLevel(name="Executive Tier", level=1))
         ft_id = self.repo.create_function_type(FunctionType(function_type="Full Time"))
         fn_id = self.repo.create_function(
-            OrgFunction(name="Director of Engineering", hierarchy_level_id=hl_id, function_type_id=ft_id)
+            OrgFunction(name="Director of Engineering", hierarchy_level=1, function_type_id=ft_id, fte_percentage=80, has_reports=True)
         )
         self.repo.create_employee(
             Employee(
@@ -256,10 +284,13 @@ class TestOrganization(unittest.TestCase):
         df_funcs = self.repo.get_all_functions()
         df_types = self.repo.get_all_function_types()
 
-        # Check function enrichment
-        enriched_funcs = OrganizationService.enrich_functions(df_funcs, self.repo.get_all_hierarchy_levels(), df_types)
+        # Check function enrichment and fte_percentage
+        enriched_funcs = OrganizationService.enrich_functions(df_funcs, df_types)
         self.assertIn("function_type_name", enriched_funcs.columns)
         self.assertEqual(enriched_funcs.iloc[0]["function_type_name"], "Full Time")
+        self.assertEqual(enriched_funcs.iloc[0]["fte_percentage"], 80)
+        self.assertEqual(enriched_funcs.iloc[0]["hierarchy_level"], 1)
+        self.assertTrue(bool(enriched_funcs.iloc[0]["has_reports"]))
 
         # Check employee enrichment inherits function_type_name
         enriched_emps = OrganizationService.enrich_employees(df_emps, df_funcs, df_types)
@@ -269,6 +300,30 @@ class TestOrganization(unittest.TestCase):
         self.assertEqual(enriched_emps.iloc[0]["full_name"], "SMITH Alice")
         self.assertEqual(enriched_emps.iloc[0]["function_name"], "Director of Engineering")
         self.assertEqual(enriched_emps.iloc[0]["function_type_name"], "Full Time")
+
+    def test_foreign_key_restrict_enforcement(self) -> None:
+        """Verify that ON DELETE RESTRICT blocks deletion of referenced entities."""
+        ft_id = self.repo.create_function_type(FunctionType(function_type="Core Type"))
+        fn_id = self.repo.create_function(
+            OrgFunction(name="Director", hierarchy_level=1, function_type_id=ft_id, has_reports=True)
+        )
+        self.repo.create_employee(
+            Employee(
+                firstname="Bob",
+                lastname="Marley",
+                email="bmarley@enterprise.com",
+                employee_code="EMP-999",
+                function_id=fn_id,
+            )
+        )
+
+        # Attempting to delete function referenced by employee must fail with IntegrityError
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.repo.delete_function(fn_id)
+
+        # Attempting to delete function type referenced by function must fail with IntegrityError
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.repo.delete_function_type(ft_id)
 
 
 if __name__ == "__main__":

@@ -97,7 +97,7 @@ class SchemaRepository:
             return cursor.rowcount > 0
 
     def delete_group(self, group_id: int) -> bool:
-        """Deletes a schema group. Child parameters are set to NULL (ungrouped).
+        """Deletes a schema group after unassigning parameters referencing it.
 
         Args:
             group_id: ID of the group to delete.
@@ -107,6 +107,7 @@ class SchemaRepository:
         """
         with get_db(self.db_path) as conn:
             cursor = conn.cursor()
+            cursor.execute("UPDATE schema_parameters SET group_id = NULL WHERE group_id = ?", (group_id,))
             cursor.execute("DELETE FROM schema_groups WHERE id = ?", (group_id,))
             conn.commit()
             return cursor.rowcount > 0
@@ -139,7 +140,7 @@ class SchemaRepository:
             return cursor.rowcount > 0
 
     def delete_parameter(self, param_id: str) -> bool:
-        """Deletes a parameter and cascades to its options.
+        """Deletes a parameter and its options.
 
         Args:
             param_id: Unique ID of the parameter.
@@ -147,9 +148,11 @@ class SchemaRepository:
         Returns:
             bool: True if deleted.
         """
+        clean_id = param_id.strip()
         with get_db(self.db_path) as conn:
             cursor = conn.cursor()
-            cursor.execute("DELETE FROM schema_parameters WHERE param_id = ?", (param_id,))
+            cursor.execute("DELETE FROM schema_param_options WHERE param_id = ?", (clean_id,))
+            cursor.execute("DELETE FROM schema_parameters WHERE param_id = ?", (clean_id,))
             conn.commit()
             return cursor.rowcount > 0
 

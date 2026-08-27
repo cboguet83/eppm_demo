@@ -153,7 +153,7 @@ class ProjectRepository:
             return cursor.rowcount > 0
 
     def delete_project(self, project_id: str) -> bool:
-        """Deletes a project and cascades deletion to its milestones.
+        """Deletes a project and cleans up its milestones and dependencies.
 
         Args:
             project_id: Project code to delete.
@@ -161,8 +161,20 @@ class ProjectRepository:
         Returns:
             bool: True if deleted.
         """
+        clean_id = project_id.strip()
         with get_db(self.db_path) as conn:
             cursor = conn.cursor()
-            cursor.execute("DELETE FROM projects WHERE id = ?", (project_id.strip(),))
+            cursor.execute(
+                """
+                DELETE FROM task_dependencies
+                WHERE predecessor_project_id = ?
+                   OR task_id IN (SELECT id FROM project_milestones WHERE project_id = ?)
+                   OR predecessor_task_id IN (SELECT id FROM project_milestones WHERE project_id = ?)
+                """,
+                (clean_id, clean_id, clean_id),
+            )
+            cursor.execute("UPDATE project_milestones SET predecessor_id = NULL WHERE project_id = ?", (clean_id,))
+            cursor.execute("DELETE FROM project_milestones WHERE project_id = ?", (clean_id,))
+            cursor.execute("DELETE FROM projects WHERE id = ?", (clean_id,))
             conn.commit()
             return cursor.rowcount > 0

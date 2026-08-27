@@ -21,7 +21,7 @@ from src.models.constants import (
     STATUS_ON_HOLD,
 )
 from src.models.milestone import Milestone
-from src.models.organization import Employee, FunctionType, HierarchyLevel, OrgFunction
+from src.models.organization import Employee, FunctionType, OrgFunction, Team
 from src.models.project import PortfolioMetrics, Project
 from src.models.schema import SchemaGroup, SchemaParameter, SchemaParamOption
 
@@ -50,8 +50,8 @@ __all__ = [
     "Project",
     "PortfolioMetrics",
     "Milestone",
-    "HierarchyLevel",
     "FunctionType",
     "OrgFunction",
+    "Team",
     "Employee",
 ]

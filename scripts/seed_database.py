@@ -11,8 +11,10 @@ import random
 import time
 from typing import Any, Optional
 
+from scripts.flush_database import flush_database
 from src.database.connection import get_db
 from src.database.schema_init import init_db
+from src.database.seeder import seed_default_data_if_empty
 from src.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -59,7 +61,7 @@ def seed_database(
     min_tasks_per_project: int = 0,
     max_tasks_per_project: int = 25,
     db_path: Optional[str] = None,
-    clean_first: bool = False,
+    clean_first: bool = True,
     random_seed: Optional[int] = 42,
 ) -> dict[str, int]:
     """Generates and seeds projects, tasks, and dependency links into SQLite.
@@ -69,7 +71,7 @@ def seed_database(
         min_tasks_per_project: Minimum tasks per project (>=0). Default 0.
         max_tasks_per_project: Maximum tasks per project (<=50). Default 25.
         db_path: Optional SQLite database path.
-        clean_first: If True, wipes existing projects before seeding.
+        clean_first: If True, wipes existing records and runs seeder.py before generating projects. Default True.
         random_seed: Random seed for reproducible generation.
 
     Returns:
@@ -84,8 +86,26 @@ def seed_database(
     init_db(db_path)
 
     if clean_first:
-        from scripts.flush_database import flush_database
-        flush_database(db_path)
+        flush_database(db_path, flush_all=True)
+
+    # Execute default data seeder (populates schema groups, parameters, organization hierarchy, functions, employees)
+    seed_default_data_if_empty(db_path)
+
+    # Clean default bootstrap sample projects (PRJ-001, PRJ-002, PRJ-003) so only generated projects are populated
+    with get_db(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            DELETE FROM task_dependencies 
+            WHERE predecessor_project_id IN ('PRJ-001', 'PRJ-002', 'PRJ-003')
+               OR task_id IN (SELECT id FROM project_milestones WHERE project_id IN ('PRJ-001', 'PRJ-002', 'PRJ-003'))
+               OR predecessor_task_id IN (SELECT id FROM project_milestones WHERE project_id IN ('PRJ-001', 'PRJ-002', 'PRJ-003'))
+            """
+        )
+        cursor.execute("UPDATE project_milestones SET predecessor_id = NULL WHERE project_id IN ('PRJ-001', 'PRJ-002', 'PRJ-003')")
+        cursor.execute("DELETE FROM project_milestones WHERE project_id IN ('PRJ-001', 'PRJ-002', 'PRJ-003')")
+        cursor.execute("DELETE FROM projects WHERE id IN ('PRJ-001', 'PRJ-002', 'PRJ-003')")
+        conn.commit()
 
     # 1. Build Projects Payload
     projects_data: list[tuple[str, str, str, float, float, str]] = []
@@ -328,7 +348,14 @@ def main() -> None:
     parser.add_argument(
         "--clean",
         action="store_true",
-        help="Flush existing project data before seeding.",
+        default=True,
+        help="Flush existing records and execute seeder.py before generating projects (default: True).",
+    )
+    parser.add_argument(
+        "--no-clean",
+        action="store_false",
+        dest="clean",
+        help="Do not flush existing records before seeding.",
     )
     parser.add_argument(
         "--seed",
@@ -340,7 +367,7 @@ def main() -> None:
     args = parser.parse_args()
 
     print("==================================================")
-    print(f"🚀 Seeding EPPM Database ({args.projects} projects, {args.min_tasks}-{args.max_tasks} tasks/project)...")
+    print(f"[*] Seeding EPPM Database ({args.projects} projects, {args.min_tasks}-{args.max_tasks} tasks/project)...")
     print("==================================================")
 
     res = seed_database(
@@ -353,10 +380,10 @@ def main() -> None:
     )
 
     print("--------------------------------------------------")
-    print("✅ Seeding Finished Successfully:")
-    print(f"   • Projects Created:     {res['projects_created']:,}")
-    print(f"   • Tasks Created:        {res['tasks_created']:,}")
-    print(f"   • Dependencies Created: {res['dependencies_created']:,}")
+    print("[+] Seeding Finished Successfully:")
+    print(f"   - Projects Created:     {res['projects_created']:,}")
+    print(f"   - Tasks Created:        {res['tasks_created']:,}")
+    print(f"   - Dependencies Created: {res['dependencies_created']:,}")
     print("--------------------------------------------------")
 
 

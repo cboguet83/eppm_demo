@@ -154,17 +154,6 @@ def seed_default_data_if_empty(db_path: Optional[str] = None) -> None:
                     "INSERT INTO project_milestones (project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id) VALUES ('PRJ-003', 'Audit Execution', 'Phase 1 - Audit', '2026-02-11', '2026-04-20', 100, NULL)"
                 )
 
-        # Check Organization Hierarchy Levels
-        cursor.execute("SELECT COUNT(*) FROM hierarchy_level")
-        hl_count = cursor.fetchone()[0]
-        if hl_count == 0:
-            logger.info("Seeding default hierarchy levels...")
-            cursor.execute("INSERT INTO hierarchy_level (hierarchy_level_id, name, level, parent_hierarchy_level_id, manager_function_id) VALUES (1, 'Direction Générale', 1, NULL, NULL)")
-            cursor.execute("INSERT INTO hierarchy_level (hierarchy_level_id, name, level, parent_hierarchy_level_id, manager_function_id) VALUES (2, 'Ressort', 2, 1, NULL)")
-            cursor.execute("INSERT INTO hierarchy_level (hierarchy_level_id, name, level, parent_hierarchy_level_id, manager_function_id) VALUES (3, 'Service', 3, 2, NULL)")
-            cursor.execute("INSERT INTO hierarchy_level (hierarchy_level_id, name, level, parent_hierarchy_level_id, manager_function_id) VALUES (4, 'Division', 4, 3, NULL)")
-            cursor.execute("INSERT INTO hierarchy_level (hierarchy_level_id, name, level, parent_hierarchy_level_id, manager_function_id) VALUES (5, 'Equipe', 5, 4, NULL)")
-
         # Check Function Types
         cursor.execute("SELECT COUNT(*) FROM function_type")
         ft_count = cursor.fetchone()[0]
@@ -185,57 +174,72 @@ def seed_default_data_if_empty(db_path: Optional[str] = None) -> None:
         func_count = cursor.fetchone()[0]
         if func_count == 0:
             logger.info("Seeding default job functions...")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id) VALUES (1, 'Directeur Général', 1, 1, NULL, NULL)")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id) VALUES (2, 'Directeur Ressort 1', 2, 2, 1, NULL)")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id) VALUES (3, 'Directeur Ressort 2', 2, 2, 1, NULL)")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_ma3nager_function_id) VALUES (4, 'Chef de Service QSE', 2, 3, 1, NULL)")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id) VALUES (5, 'Chef de Service A', 3, 3, 2, NULL)")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id) VALUES (6, 'Chef de Service B', 3, 3, 2, NULL)")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id) VALUES (7, 'Chef de Service C', 3, 3, 2, 2)")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id) VALUES (8, 'Chef de Service D', 3, 3, 2, NULL)")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id) VALUES (9, 'Chef de Service E', 3, 3, 2, NULL)")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id) VALUES (10, 'Chef de Division A_1', 4, 4, 5, NULL)")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id) VALUES (11, 'Chef de Division A_2', 4, 4, 5, NULL)")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id) VALUES (12, 'Chef de Division A_3', 4, 4, 5, NULL)")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id) VALUES (13, 'Chef de Division A_4', 4, 4, 5, NULL)")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id) VALUES (14, 'Chef de Division B_1', 4, 4, 6, NULL)")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id) VALUES (15, 'Chef de Division B_2', 4, 4, 6, NULL)")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id) VALUES (16, 'Chef de Division B_3', 4, 4, 6, NULL)")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id) VALUES (17, 'Chef de Projet A_1_A', 5, 5, 10, NULL)")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id) VALUES (18, 'Chef de Projet A_1_B', 5, 5, 10, NULL)")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id) VALUES (19, 'Chef de Projet A_1_C', 5, 5, 10, NULL)")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id) VALUES (20, 'Chef de Projet A_1_D', 5, 5, 10, NULL)")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id) VALUES (21, 'Chef de Projet A_1_E', 5, 5, 10, NULL)")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id) VALUES (22, 'Chef de Projet A_2_F', 5, 5, 10, NULL)")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id) VALUES (23, 'Chef de Projet A_2_G', 5, 5, 11, NULL)")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id) VALUES (24, 'Chef de Projet A_2_H', 5, 5, 11, NULL)")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id) VALUES (25, 'Chef de Projet A_2_J', 5, 5, 11, NULL)")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id) VALUES (26, 'Chef de Projet A_2_K', 5, 5, 11, NULL)")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id) VALUES (27, 'Chargé de Projet A_1_A1', 5, 6, 10, NULL)")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id) VALUES (28, 'Chargé de Projet A_1_A2', 5, 6, 10, NULL)")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id) VALUES (29, 'Chargé de Projet A_1_B1', 5, 6, 10, NULL)")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id) VALUES (30, 'Chargé de Projet A_1_B2', 5, 6, 10, NULL)")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id) VALUES (31, 'Chargé de Projet A_1_C', 5, 6, 10, NULL)")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id) VALUES (32, 'Chargé de Projet A_1_D', 5, 6, 10, NULL)")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id) VALUES (33, 'Chargé de Projet A_1_E', 5, 6, 10, NULL)")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id) VALUES (34, 'Chargé de Projet A_2_F', 5, 6, 11, NULL)")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id) VALUES (35, 'Chargé de Projet A_2_G', 5, 6, 12, NULL)")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id) VALUES (36, 'Chargé de Projet A_2_H', 5, 6, 12, NULL)")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id) VALUES (37, 'Chargé de Projet A_2_J', 5, 6, 12, NULL)")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id) VALUES (38, 'Chargé de Projet A_2_K', 5, 6, 12, NULL)")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id) VALUES (39, 'Chargé de Projet A_2_F', 5, 6, 12, NULL)")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id) VALUES (40, 'Chargé de Projet A_2_G', 5, 6, 12, NULL)")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id) VALUES (41, 'Chargé de Projet A_2_H', 5, 6, 12, NULL)")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id) VALUES (42, 'Chargé de Projet A_2_J', 5, 6, 12, NULL)")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id) VALUES (43, 'Chargé de Projet A_2_K', 5, 6, 12, NULL)")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id) VALUES (44, 'Ingénieur B_1_1', 5, 9, 14, NULL)")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id) VALUES (45, 'Ingénieur B_1_2', 5, 9, 14, NULL)")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id) VALUES (46, 'Ingénieur B_2_1', 5, 9, 15, NULL)")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id) VALUES (47, 'Assistant A_1_A', 5, 6, 10, NULL)")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id) VALUES (48, 'Assistant A_1_B', 5, 6, 10, NULL)")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id) VALUES (49, 'BIM Manager', 5, 8, 13, NULL)")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id) VALUES (50, 'BIM Assistant', 5, 7, 13, NULL)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (1, 'Directeur Général', 1, 1, NULL, NULL, 100, 1)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (2, 'Directeur Ressort 1', 2, 2, 1, NULL, 100, 1)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (3, 'Directeur Ressort 2', 2, 2, 1, NULL, 100, 1)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (4, 'Chef de Service QSE', 2, 3, 1, NULL, 100, 1)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (5, 'Chef de Service A', 3, 3, 2, NULL, 100, 1)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (6, 'Chef de Service B', 3, 3, 2, NULL, 100, 1)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (7, 'Chef de Service C', 3, 3, 2, NULL, 100, 1)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (8, 'Chef de Service D', 3, 3, 2, NULL, 100, 1)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (9, 'Chef de Service E', 3, 3, 2, NULL, 100, 1)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (10, 'Chef de Division A_1', 4, 4, 5, NULL, 100, 1)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (11, 'Chef de Division A_2', 4, 4, 5, NULL, 100, 1)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (12, 'Chef de Division A_3', 4, 4, 5, NULL, 100, 1)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (13, 'Chef de Division A_4', 4, 4, 5, NULL, 100, 1)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (14, 'Chef de Division B_1', 4, 4, 6, NULL, 100, 1)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (15, 'Chef de Division B_2', 4, 4, 6, NULL, 100, 1)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (16, 'Chef de Division B_3', 4, 4, 6, NULL, 100, 1)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (17, 'Chef de Projet A_1_A', 5, 5, 10, NULL, 100, 0)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (18, 'Chef de Projet A_1_B', 5, 5, 10, NULL, 100, 0)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (19, 'Chef de Projet A_1_C', 5, 5, 10, NULL, 100, 0)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (20, 'Chef de Projet A_1_D', 5, 5, 10, NULL, 100, 0)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (21, 'Chef de Projet A_1_E', 5, 5, 10, NULL, 100, 0)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (22, 'Chef de Projet A_2_F', 5, 5, 11, NULL, 100, 0)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (23, 'Chef de Projet A_2_G', 5, 5, 11, NULL, 100, 0)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (24, 'Chef de Projet A_2_H', 5, 5, 11, NULL, 100, 0)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (25, 'Chef de Projet A_2_J', 5, 5, 11, NULL, 100, 0)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (26, 'Chef de Projet A_2_K', 5, 5, 11, NULL, 100, 0)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (27, 'Chargé de Projet A_1_A1', 5, 6, 10, NULL, 100, 0)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (28, 'Chargé de Projet A_1_A2', 5, 6, 10, NULL, 100, 0)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (29, 'Chargé de Projet A_1_B1', 5, 6, 10, NULL, 100, 0)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (30, 'Chargé de Projet A_1_B2', 5, 6, 10, NULL, 100, 0)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (31, 'Chargé de Projet A_1_C', 5, 6, 10, NULL, 100, 0)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (32, 'Chargé de Projet A_1_D', 5, 6, 10, NULL, 100, 0)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (33, 'Chargé de Projet A_1_E', 5, 6, 10, NULL, 100, 0)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (34, 'Chargé de Projet A_2_F', 5, 6, 11, NULL, 100, 0)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (35, 'Chargé de Projet A_2_G', 5, 6, 11, NULL, 100, 0)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (36, 'Chargé de Projet A_2_H', 5, 6, 11, NULL, 100, 0)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (37, 'Chargé de Projet A_2_J', 5, 6, 11, NULL, 100, 0)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (38, 'Chargé de Projet A_2_K', 5, 6, 11, NULL, 100, 0)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (39, 'Chargé de Projet A_2_F', 5, 6, 11, NULL, 100, 0)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (40, 'Chargé de Projet A_2_G', 5, 6, 11, NULL, 100, 0)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (41, 'Chargé de Projet A_2_H', 5, 6, 11, NULL, 100, 0)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (42, 'Chargé de Projet A_2_J', 5, 6, 11, NULL, 100, 0)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (43, 'Chargé de Projet A_2_K', 5, 6, 11, NULL, 100, 0)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (44, 'Ingénieur B_1_1', 5, 9, 14, NULL, 100, 0)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (45, 'Ingénieur B_1_2', 5, 9, 14, NULL, 100, 0)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (46, 'Ingénieur B_2_1', 5, 9, 15, NULL, 100, 0)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (47, 'Assistant A_1_A', 5, 6, 10, NULL, 100, 0)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (48, 'Assistant A_1_B', 5, 6, 10, NULL, 100, 0)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (49, 'BIM Manager', 5, 8, 13, NULL, 100, 0)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (50, 'BIM Assistant', 5, 7, 13, NULL, 100, 0)")
           
+
+        # Check Teams
+        cursor.execute("SELECT COUNT(*) FROM team")
+        team_count = cursor.fetchone()[0]
+        if team_count == 0:
+            logger.info("Seeding default teams...")
+            sample_teams = [
+                (1, "Equipe Projets A", 10, 17),
+                (2, "Equipe Projets B", 10, 23),
+                (3, "Equipe BIM ", 13, None),
+            ]
+            cursor.executemany(
+                "INSERT INTO team (team_id, team_name, manager_function_id, leader_function_id) VALUES (?, ?, ?, ?)",
+                sample_teams,
+            )
 
         # Check Employees
         cursor.execute("SELECT COUNT(*) FROM employee")
@@ -243,11 +247,56 @@ def seed_default_data_if_empty(db_path: Optional[str] = None) -> None:
         if emp_count == 0:
             logger.info("Seeding default employees...")
             sample_employees = [
-                (1, "Louis", "Pasteur", "lpasteur@enterprise.com", "+352 621 123 456", "ABC_1", "1", 2),
-                (2, "Henri", "Poincaré", "hpoincare@enterprise.com", "+1-555-0102", "ABC_2", "2", 3),
-                (3, "Linus", "Torvalds", "ltorvalds@enterprise.com", "+1-555-0103", "ABC_3", "3", 4),
-                (4, "Marie", "Curie", "mcurie@enterprise.com", "+1-555-0104", "ABC_4", "4", 6),
-                (5, "Nikola", "Tesla", "ntesla@enterprise.com", "+1-555-0105", "ABC_5", "5", 7),
+                (1, "Alan", "Turing", "aturing@enterprise.com", "+352 621 100 001", "ATU", "1", 1),
+                (2, "Louis", "Pasteur", "lpasteur@enterprise.com", "+352 621 100 002", "LPA", "2", 2),
+                (3, "Henri", "Poincaré", "hpoincare@enterprise.com", "+352 621 100 003", "HPO", "3", 3),
+                (4, "Linus", "Torvalds", "ltorvalds@enterprise.com", "+352 621 100 004", "LTO", "4", 4),
+                (5, "Marie", "Curie", "mcurie@enterprise.com", "+352 621 100 005", "MCU", "5", 5),
+                (6, "Nikola", "Tesla", "ntesla@enterprise.com", "+352 621 100 006", "NTE", "6", 6),
+                (7, "Ada", "Lovelace", "alovelace@enterprise.com", "+352 621 100 007", "ALO", "7", 7),
+                (8, "Albert", "Einstein", "aeinstein@enterprise.com", "+352 621 100 008", "AEI", "8", 8),
+                (9, "Grace", "Hopper", "ghopper@enterprise.com", "+352 621 100 009", "GHO", "9", 9),
+                (10, "Claude", "Shannon", "cshannon@enterprise.com", "+352 621 100 010", "CSH", "10", 10),
+                (11, "Dennis", "Ritchie", "dritchie@enterprise.com", "+352 621 100 011", "DRI", "11", 11),
+                (12, "Ken", "Thompson", "kthompson@enterprise.com", "+352 621 100 012", "KTH", "12", 12),
+                (13, "Tim", "Berners-Lee", "tbernerslee@enterprise.com", "+352 621 100 013", "TBL", "13", 13),
+                (14, "Donald", "Knuth", "dknuth@enterprise.com", "+352 621 100 014", "DKN", "14", 14),
+                (15, "Richard", "Feynman", "rfeynman@enterprise.com", "+352 621 100 015", "RFE", "15", 15),
+                (16, "Niels", "Bohr", "nbohr@enterprise.com", "+352 621 100 016", "NBO", "16", 16),
+                (17, "Margaret", "Hamilton", "mhamilton@enterprise.com", "+352 621 100 017", "MHA", "17", 17),
+                (18, "John", "von Neumann", "jvonneumann@enterprise.com", "+352 621 100 018", "JVN", "18", 18),
+                (19, "Steve", "Wozniak", "swozniak@enterprise.com", "+352 621 100 019", "SWO", "19", 19),
+                (20, "Edsger", "Dijkstra", "edijkstra@enterprise.com", "+352 621 100 020", "EDI", "20", 20),
+                (21, "Barbara", "Liskov", "bliskov@enterprise.com", "+352 621 100 021", "BLI", "21", 21),
+                (22, "James", "Gosling", "jgosling@enterprise.com", "+352 621 100 022", "JGO", "22", 22),
+                (23, "Guido", "van Rossum", "gvanrossum@enterprise.com", "+352 621 100 023", "GVR", "23", 23),
+                (24, "Bjarne", "Stroustrup", "bstroustrup@enterprise.com", "+352 621 100 024", "BST", "24", 24),
+                (25, "Vint", "Cerf", "vcerf@enterprise.com", "+352 621 100 025", "VCE", "25", 25),
+                (26, "Werner", "Heisenberg", "wheisenberg@enterprise.com", "+352 621 100 026", "WHE", "26", 26),
+                (27, "Max", "Planck", "mplanck@enterprise.com", "+352 621 100 027", "MPL", "27", 27),
+                (28, "Erwin", "Schrödinger", "eschrodinger@enterprise.com", "+352 621 100 028", "ESC", "28", 28),
+                (29, "Paul", "Dirac", "pdirac@enterprise.com", "+352 621 100 029", "PDI", "29", 29),
+                (30, "Enrico", "Fermi", "efermi@enterprise.com", "+352 621 100 030", "EFE", "30", 30),
+                (31, "Katherine", "Johnson", "kjohnson@enterprise.com", "+352 621 100 031", "KJO", "31", 31),
+                (32, "Dorothy", "Vaughan", "dvaughan@enterprise.com", "+352 621 100 032", "DVA", "32", 32),
+                (33, "Mary", "Jackson", "mjackson@enterprise.com", "+352 621 100 033", "MJA", "33", 33),
+                (34, "Hedy", "Lamarr", "hlamarr@enterprise.com", "+352 621 100 034", "HLA", "34", 34),
+                (35, "Radia", "Perlman", "rperlman@enterprise.com", "+352 621 100 035", "RPE", "35", 35),
+                (36, "Leslie", "Lamport", "llamport@enterprise.com", "+352 621 100 036", "LLA", "36", 36),
+                (37, "Andrew", "Tanenbaum", "atanenbaum@enterprise.com", "+352 621 100 037", "ATA", "37", 37),
+                (38, "Brian", "Kernighan", "bkernighan@enterprise.com", "+352 621 100 038", "BKE", "38", 38),
+                (39, "Robert", "Noyce", "rnoyce@enterprise.com", "+352 621 100 039", "RNO", "39", 39),
+                (40, "Gordon", "Moore", "gmoore@enterprise.com", "+352 621 100 040", "GMO", "40", 40),
+                (41, "John", "McCarthy", "jmccarthy@enterprise.com", "+352 621 100 041", "JMC", "41", 41),
+                (42, "Marvin", "Minsky", "mminsky@enterprise.com", "+352 621 100 042", "MMI", "42", 42),
+                (43, "Seymour", "Cray", "scray@enterprise.com", "+352 621 100 043", "SCR", "43", 43),
+                (44, "Charles", "Babbage", "cbabbage@enterprise.com", "+352 621 100 044", "CBA", "44", 44),
+                (45, "Stephen", "Hawking", "shawking@enterprise.com", "+352 621 100 045", "SHA", "45", 45),
+                (46, "Carl", "Sagan", "csagan@enterprise.com", "+352 621 100 046", "CSA", "46", 46),
+                (47, "Rosalind", "Franklin", "rfranklin@enterprise.com", "+352 621 100 047", "RFR", "47", 47),
+                (48, "Lise", "Meitner", "lmeitner@enterprise.com", "+352 621 100 048", "LME", "48", 48),
+                (49, "Alexander", "Fleming", "afleming@enterprise.com", "+352 621 100 049", "AFL", "49", 49),
+                (50, "Robert", "Koch", "rkoch@enterprise.com", "+352 621 100 050", "RKO", "50", 50),
             ]
             cursor.executemany(
                 "INSERT INTO employee (employee_id, firstname, lastname, email, mobile, sigle, employee_code, function_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",

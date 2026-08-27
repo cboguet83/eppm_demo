@@ -73,10 +73,7 @@ def render_planning_milestones(
         selected_id = selected_projects[0]
 
         sub_df = df_projects[df_projects["id"].isin(selected_projects)]
-        col1, col2, col3 = st.columns(3)
-        col1.metric(t("planning.selected_projects", default="Selected Projects"), f"{len(sub_df)} / {len(df_projects)}")
-        col2.metric(t("portfolio.kpi_planned_budget"), f"${float(sub_df['planned_budget'].sum()):,.2f}" if not sub_df.empty else "$0.00")
-        col3.metric(t("portfolio.kpi_actual_spend"), f"${float(sub_df['actual_budget'].sum()):,.2f}" if not sub_df.empty else "$0.00")
+        st.metric(t("planning.selected_projects", default="Selected Projects"), f"{len(sub_df)} / {len(df_projects)}")
     else:
         selected_id = top_col1.selectbox(
             t("planning.select_single_proj"),
@@ -87,10 +84,7 @@ def render_planning_milestones(
         selected_projects = [selected_id]
 
         proj_info = df_projects[df_projects["id"] == selected_id].iloc[0]
-        col1, col2, col3 = st.columns(3)
-        col1.metric(t("master_data.field_status"), str(proj_info["status"]))
-        col2.metric(t("master_data.field_planned"), f"${float(proj_info['planned_budget']):,.2f}")
-        col3.metric(t("master_data.field_actual"), f"${float(proj_info['actual_budget']):,.2f}")
+        st.metric(t("master_data.field_status"), str(proj_info["status"]))
 
     st.divider()
 

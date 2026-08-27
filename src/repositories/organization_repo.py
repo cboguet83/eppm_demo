@@ -1,4 +1,4 @@
-"""Repository for organizational structure: hierarchy levels, functions, function types, and employees."""
+"""Repository for organizational structure: functions, function types, teams, and employees."""
 
 from typing import Optional
 
@@ -6,13 +6,13 @@ import pandas as pd
 
 from src.database.connection import get_db
 from src.logging_config import get_logger
-from src.models.organization import Employee, FunctionType, HierarchyLevel, OrgFunction
+from src.models.organization import Employee, FunctionType, OrgFunction, Team
 
 logger = get_logger(__name__)
 
 
 class OrganizationRepository:
-    """Encapsulates database operations for organizational hierarchy, functions, function types, and employees."""
+    """Encapsulates database operations for organizational functions, function types, teams, and employees."""
 
     def __init__(self, db_path: Optional[str] = None) -> None:
         """Initializes the OrganizationRepository.
@@ -23,116 +23,7 @@ class OrganizationRepository:
         self.db_path = db_path
 
     # =========================================================================
-    # 1. HIERARCHY LEVELS
-    # =========================================================================
-    def get_all_hierarchy_levels(self) -> pd.DataFrame:
-        """Retrieves all hierarchy levels ordered by level tier and name.
-
-        Returns:
-            pd.DataFrame: Table of hierarchy levels.
-        """
-        with get_db(self.db_path) as conn:
-            return pd.read_sql(
-                """
-                SELECT hierarchy_level_id, name, level, parent_hierarchy_level_id, manager_function_id
-                FROM hierarchy_level
-                ORDER BY level ASC, name ASC
-                """,
-                conn,
-            )
-
-    def get_hierarchy_level_by_id(self, level_id: int) -> Optional[HierarchyLevel]:
-        """Retrieves a single hierarchy level by ID.
-
-        Args:
-            level_id: Hierarchy level ID.
-
-        Returns:
-            Optional[HierarchyLevel]: HierarchyLevel dataclass if found, else None.
-        """
-        with get_db(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                SELECT hierarchy_level_id, name, level, parent_hierarchy_level_id, manager_function_id
-                FROM hierarchy_level
-                WHERE hierarchy_level_id = ?
-                """,
-                (level_id,),
-            )
-            row = cursor.fetchone()
-            if not row:
-                return None
-            return HierarchyLevel(
-                hierarchy_level_id=row[0],
-                name=row[1],
-                level=row[2],
-                parent_hierarchy_level_id=row[3],
-                manager_function_id=row[4],
-            )
-
-    def create_hierarchy_level(self, level: HierarchyLevel) -> int:
-        """Creates a new hierarchy level record.
-
-        Args:
-            level: HierarchyLevel dataclass instance.
-
-        Returns:
-            int: Newly created hierarchy_level_id.
-        """
-        with get_db(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                INSERT INTO hierarchy_level (name, level, parent_hierarchy_level_id, manager_function_id)
-                VALUES (?, ?, ?, ?)
-                """,
-                (level.name.strip(), level.level, level.parent_hierarchy_level_id, level.manager_function_id),
-            )
-            conn.commit()
-            return int(cursor.lastrowid)
-
-    def update_hierarchy_level(self, level: HierarchyLevel) -> bool:
-        """Updates an existing hierarchy level.
-
-        Args:
-            level: HierarchyLevel dataclass instance with hierarchy_level_id.
-
-        Returns:
-            bool: True if row updated, False otherwise.
-        """
-        if level.hierarchy_level_id is None:
-            return False
-        with get_db(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                UPDATE hierarchy_level
-                SET name = ?, level = ?, parent_hierarchy_level_id = ?, manager_function_id = ?
-                WHERE hierarchy_level_id = ?
-                """,
-                (level.name.strip(), level.level, level.parent_hierarchy_level_id, level.manager_function_id, level.hierarchy_level_id),
-            )
-            conn.commit()
-            return cursor.rowcount > 0
-
-    def delete_hierarchy_level(self, level_id: int) -> bool:
-        """Deletes a hierarchy level by ID.
-
-        Args:
-            level_id: Hierarchy level ID to delete.
-
-        Returns:
-            bool: True if deleted.
-        """
-        with get_db(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute("DELETE FROM hierarchy_level WHERE hierarchy_level_id = ?", (level_id,))
-            conn.commit()
-            return cursor.rowcount > 0
-
-    # =========================================================================
-    # 2. FUNCTION TYPES
+    # 1. FUNCTION TYPES
     # =========================================================================
     def get_all_function_types(self) -> pd.DataFrame:
         """Retrieves all function types ordered by name.
@@ -224,10 +115,10 @@ class OrganizationRepository:
             return cursor.rowcount > 0
 
     # =========================================================================
-    # 3. FUNCTIONS
+    # 2. FUNCTIONS
     # =========================================================================
     def get_all_functions(self) -> pd.DataFrame:
-        """Retrieves all job functions.
+        """Retrieves all job functions ordered by hierarchy level and name.
 
         Returns:
             pd.DataFrame: Table of functions.
@@ -235,9 +126,9 @@ class OrganizationRepository:
         with get_db(self.db_path) as conn:
             return pd.read_sql(
                 """
-                SELECT function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id
+                SELECT function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports
                 FROM function
-                ORDER BY name ASC
+                ORDER BY hierarchy_level ASC, name ASC
                 """,
                 conn,
             )
@@ -255,7 +146,7 @@ class OrganizationRepository:
             cursor = conn.cursor()
             cursor.execute(
                 """
-                SELECT function_id, name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id
+                SELECT function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports
                 FROM function
                 WHERE function_id = ?
                 """,
@@ -267,10 +158,12 @@ class OrganizationRepository:
             return OrgFunction(
                 function_id=row[0],
                 name=row[1],
-                hierarchy_level_id=row[2],
+                hierarchy_level=row[2],
                 function_type_id=row[3],
                 manager_function_id=row[4],
                 dual_manager_function_id=row[5],
+                fte_percentage=row[6] if len(row) > 6 and row[6] is not None else 100,
+                has_reports=bool(row[7]) if len(row) > 7 and row[7] is not None else False,
             )
 
     def create_function(self, func: OrgFunction) -> int:
@@ -286,10 +179,18 @@ class OrganizationRepository:
             cursor = conn.cursor()
             cursor.execute(
                 """
-                INSERT INTO function (name, hierarchy_level_id, function_type_id, manager_function_id, dual_manager_function_id)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO function (name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (func.name.strip(), func.hierarchy_level_id, func.function_type_id, func.manager_function_id, func.dual_manager_function_id),
+                (
+                    func.name.strip(),
+                    func.hierarchy_level,
+                    func.function_type_id,
+                    func.manager_function_id,
+                    func.dual_manager_function_id,
+                    func.fte_percentage if func.fte_percentage is not None else 100,
+                    1 if func.has_reports else 0,
+                ),
             )
             conn.commit()
             return int(cursor.lastrowid)
@@ -310,10 +211,19 @@ class OrganizationRepository:
             cursor.execute(
                 """
                 UPDATE function
-                SET name = ?, hierarchy_level_id = ?, function_type_id = ?, manager_function_id = ?, dual_manager_function_id = ?
+                SET name = ?, hierarchy_level = ?, function_type_id = ?, manager_function_id = ?, dual_manager_function_id = ?, fte_percentage = ?, has_reports = ?
                 WHERE function_id = ?
                 """,
-                (func.name.strip(), func.hierarchy_level_id, func.function_type_id, func.manager_function_id, func.dual_manager_function_id, func.function_id),
+                (
+                    func.name.strip(),
+                    func.hierarchy_level,
+                    func.function_type_id,
+                    func.manager_function_id,
+                    func.dual_manager_function_id,
+                    func.fte_percentage if func.fte_percentage is not None else 100,
+                    1 if func.has_reports else 0,
+                    func.function_id,
+                ),
             )
             conn.commit()
             return cursor.rowcount > 0
@@ -334,7 +244,115 @@ class OrganizationRepository:
             return cursor.rowcount > 0
 
     # =========================================================================
-    # 4. EMPLOYEES
+    # 4. TEAMS
+    # =========================================================================
+    def get_all_teams(self) -> pd.DataFrame:
+        """Retrieves all team records ordered by name.
+
+        Returns:
+            pd.DataFrame: Table of teams.
+        """
+        with get_db(self.db_path) as conn:
+            return pd.read_sql(
+                """
+                SELECT team_id, team_name, manager_function_id, leader_function_id
+                FROM team
+                ORDER BY team_name ASC
+                """,
+                conn,
+            )
+
+    def get_team_by_id(self, team_id: int) -> Optional[Team]:
+        """Retrieves a single team by ID.
+
+        Args:
+            team_id: Team ID.
+
+        Returns:
+            Optional[Team]: Team dataclass if found, else None.
+        """
+        with get_db(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT team_id, team_name, manager_function_id, leader_function_id
+                FROM team
+                WHERE team_id = ?
+                """,
+                (team_id,),
+            )
+            row = cursor.fetchone()
+            if not row:
+                return None
+            return Team(
+                team_id=row[0],
+                team_name=row[1],
+                manager_function_id=row[2],
+                leader_function_id=row[3],
+            )
+
+    def create_team(self, team: Team) -> int:
+        """Creates a new team record.
+
+        Args:
+            team: Team dataclass instance.
+
+        Returns:
+            int: Newly created team_id.
+        """
+        with get_db(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO team (team_name, manager_function_id, leader_function_id)
+                VALUES (?, ?, ?)
+                """,
+                (team.team_name.strip(), team.manager_function_id, team.leader_function_id),
+            )
+            conn.commit()
+            return int(cursor.lastrowid)
+
+    def update_team(self, team: Team) -> bool:
+        """Updates an existing team record.
+
+        Args:
+            team: Team dataclass instance with team_id.
+
+        Returns:
+            bool: True if updated.
+        """
+        if team.team_id is None:
+            return False
+        with get_db(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                UPDATE team
+                SET team_name = ?, manager_function_id = ?, leader_function_id = ?
+                WHERE team_id = ?
+                """,
+                (team.team_name.strip(), team.manager_function_id, team.leader_function_id, team.team_id),
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def delete_team(self, team_id: int) -> bool:
+        """Deletes a team record by ID.
+
+        Args:
+            team_id: Team ID to delete.
+
+        Returns:
+            bool: True if deleted.
+        """
+        with get_db(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM team WHERE team_id = ?", (team_id,))
+            conn.commit()
+            return cursor.rowcount > 0
+
+    # =========================================================================
+    # 5. EMPLOYEES
     # =========================================================================
     def get_all_employees(self) -> pd.DataFrame:
         """Retrieves all employee records ordered by lastname and firstname.

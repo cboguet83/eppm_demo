@@ -30,12 +30,12 @@ def render_portfolio_overview(
     metrics = PortfolioService.calculate_portfolio_metrics(df_projects)
     col1, col2, col3, col4, col5 = st.columns(5)
     col1.metric(t("portfolio.kpi_total_projects"), metrics.total_projects)
-    col2.metric(t("portfolio.kpi_planned_budget"), f"${metrics.total_planned:,.2f}")
-    col3.metric(t("portfolio.kpi_actual_spend"), f"${metrics.total_actual:,.2f}")
+    col2.metric(t("portfolio.kpi_planned_budget"), f"€{metrics.total_planned:,.2f}")
+    col3.metric(t("portfolio.kpi_actual_spend"), f"€{metrics.total_actual:,.2f}")
     col4.metric(
         t("portfolio.kpi_variance"),
-        f"${metrics.variance:,.2f}",
-        delta=f"${metrics.variance:,.2f}",
+        f"€{metrics.variance:,.2f}",
+        delta=f"€{metrics.variance:,.2f}",
         delta_color="normal" if metrics.variance >= 0 else "inverse",
     )
     col5.metric(t("portfolio.kpi_burn_rate"), f"{metrics.burn_rate:.1f}%")
@@ -50,8 +50,8 @@ def render_portfolio_overview(
         "id": st.column_config.TextColumn(t("portfolio.col_id"), help="Unique project identifier", width="small"),
         "name": st.column_config.TextColumn(t("portfolio.col_name"), width="medium"),
         "status": st.column_config.TextColumn(t("portfolio.col_status"), width="small"),
-        "planned_budget": st.column_config.NumberColumn(t("portfolio.col_planned"), format="$%.2f"),
-        "actual_budget": st.column_config.NumberColumn(t("portfolio.col_actual"), format="$%.2f"),
+        "planned_budget": st.column_config.NumberColumn(t("portfolio.col_planned"), format="€%.2f"),
+        "actual_budget": st.column_config.NumberColumn(t("portfolio.col_actual"), format="€%.2f"),
     }
 
     if not params.empty and "param_id" in params.columns:

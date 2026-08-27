@@ -521,7 +521,7 @@ class MilestoneRepository:
             return len(rows)
 
     def delete_milestone(self, milestone_id: int) -> bool:
-        """Deletes a step/milestone by ID.
+        """Deletes a step/milestone by ID, cleaning up any task dependencies first.
 
         Args:
             milestone_id: Milestone primary key ID.
@@ -531,6 +531,11 @@ class MilestoneRepository:
         """
         with get_db(self.db_path) as conn:
             cursor = conn.cursor()
+            cursor.execute(
+                "DELETE FROM task_dependencies WHERE task_id = ? OR predecessor_task_id = ?",
+                (milestone_id, milestone_id),
+            )
+            cursor.execute("UPDATE project_milestones SET predecessor_id = NULL WHERE predecessor_id = ?", (milestone_id,))
             cursor.execute("DELETE FROM project_milestones WHERE id = ?", (milestone_id,))
             conn.commit()
             return cursor.rowcount > 0

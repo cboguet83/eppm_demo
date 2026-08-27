@@ -1320,7 +1320,7 @@
       columns: { id: "ID", name: "Task / Step Name", desc: "Description", start: "Start", stop: "Stop", prog: "Prog", phase: "Phase" },
       view_modes: { day: "Day", week: "Week", month: "Month", quarter: "Quarter", year: "Year" },
       toggles: { internal_links: "🔗 Internal Dependencies", external_links: "🌐 External Dependencies", expand_all: "▼ Expand All", collapse_all: "▶ Collapse All" },
-      context_menu: { edit_step: "✏️ Edit Step Details", add_step_after: "➕ Add Next Step (Successor)", add_step_before: "➕ Add Previous Step (Predecessor)", mark_complete: "✅ Mark as 100% Complete", delete_step: "🗑️ Delete Step", edit_dep: "✏️ Edit Dependency", delete_dep: "🗑️ Delete Dependency", view_diagnostics: "⚠️ View Diagnostics" },
+      context_menu: { edit_step: "Edit Step Details", add_step_after: "Add Next Step (Successor)", add_step_before: "Add Previous Step (Predecessor)", mark_complete: "Mark as 100% Complete", delete_step: "Delete Step", edit_dep: "Edit Dependency", delete_dep: "Delete Dependency", view_diagnostics: "View Diagnostics" },
       modal: { add_title: "➕ Add New Step ({project_id})", edit_title: "✏️ Edit: {name}", field_name: "Step / Task Name *", field_phase: "Phase / Category", field_desc: "Description", field_start: "Start Date *", field_end: "End Date *", field_progress: "Progress Percentage", dependencies_header: "🔗 Step Dependencies & Predecessors", btn_add_pred: "➕ Add Predecessor Link", cross_project_chk: "🌐 Cross-Project?", select_pred_placeholder: "-- Select Predecessor Step --", whole_project_option: "(leave blank for whole project)", link_type_fs: "FS (Fin➔St)", link_type_ff: "FF (Fin➔Fin)", link_type_ss: "SS (St➔St)", link_type_sf: "SF (St➔Fin)", lag_placeholder: "Lag (days)", btn_save: "💾 Save Changes", btn_cancel: "Cancel", optional: "Optional" },
       diagnostics: { title: "⚠️ Constraint Violation Diagnostics", btn_fix: "✏️ Fix in Step Editor", btn_close: "Close" }
     };
@@ -1862,7 +1862,7 @@
 
       if (task && task.violations && task.violations.length > 0) {
         violBtn.style.display = 'flex';
-        violLabel.innerText = `⚠️ View ${task.violations.length} Constraint Issue(s)`;
+        violLabel.innerText = `View ${task.violations.length} Constraint Issue(s)`;
       } else {
         violBtn.style.display = 'none';
       }

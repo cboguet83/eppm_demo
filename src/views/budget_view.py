@@ -27,25 +27,25 @@ def render_budget_tracking(project_repo: ProjectRepository) -> None:
     burn_rate = metrics.burn_rate
 
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric(t("portfolio.kpi_planned_budget", default="Portfolio Planned"), f"${total_planned:,.2f}")
-    col2.metric(t("portfolio.kpi_actual_spend", default="Portfolio Actual Spend"), f"${total_actual:,.2f}")
+    col1.metric(t("portfolio.kpi_planned_budget", default="Portfolio Planned"), f"€{total_planned:,.2f}")
+    col2.metric(t("portfolio.kpi_actual_spend", default="Portfolio Actual Spend"), f"€{total_actual:,.2f}")
     col3.metric(
         t("portfolio.kpi_variance", default="Net Variance"),
-        f"${variance:,.2f}",
-        delta=f"${variance:,.2f}",
+        f"€{variance:,.2f}",
+        delta=f"€{variance:,.2f}",
         delta_color="normal" if variance >= 0 else "inverse",
     )
     col4.metric(t("portfolio.kpi_burn_rate", default="Portfolio Burn Rate"), f"{burn_rate:.1f}%")
 
     if variance < 0:
-        st.warning(f"⚠️ Portfolio is currently over budget by **${abs(variance):,.2f}**!")
+        st.warning(f"⚠️ Portfolio is currently over budget by **€{abs(variance):,.2f}**!")
     else:
-        st.success(f"✅ Portfolio financial health is on track with a budget surplus of **${variance:,.2f}**.")
+        st.success(f"✅ Portfolio financial health is on track with a budget surplus of **€{variance:,.2f}**.")
 
     st.divider()
 
     # 2. Planned vs Actual Grouped Bar Chart
-    st.subheader("Project-by-Project Planned vs Actual Spend")
+    st.subheader("Project-by-by-Project Planned vs Actual Spend")
     df_melt = df_projects.melt(
         id_vars=["id", "name"],
         value_vars=["planned_budget", "actual_budget"],
@@ -53,7 +53,7 @@ def render_budget_tracking(project_repo: ProjectRepository) -> None:
         value_name="Amount",
     )
     df_melt["Budget_Type"] = df_melt["Budget_Type"].map(
-        {"planned_budget": "Planned Budget ($)", "actual_budget": "Actual Spend ($)"}
+        {"planned_budget": "Planned Budget (€)", "actual_budget": "Actual Spend (€)"}
     )
     df_melt["Project_Label"] = df_melt["id"] + " - " + df_melt["name"]
 
@@ -66,13 +66,13 @@ def render_budget_tracking(project_repo: ProjectRepository) -> None:
         title="Planned Budget vs Actual Spend by Project",
         template="plotly_white",
         color_discrete_map={
-            "Planned Budget ($)": "#2563EB",
-            "Actual Spend ($)": "#F59E0B",
+            "Planned Budget (€)": "#2563EB",
+            "Actual Spend (€)": "#F59E0B",
         },
     )
     fig_bar.update_layout(
         xaxis_title="Project",
-        yaxis_title="Amount ($)",
+        yaxis_title="Amount (€)",
         legend_title="Type",
         height=380,
     )
@@ -92,14 +92,14 @@ def render_budget_tracking(project_repo: ProjectRepository) -> None:
             x="id",
             y="Variance",
             color="Variance_Color",
-            title="Variance ($) [Planned - Actual]",
+            title="Variance (€) [Planned - Actual]",
             template="plotly_white",
             color_discrete_map={
                 "Surplus (Under)": "#10B981",
                 "Deficit (Over)": "#EF4444",
             },
         )
-        fig_var.update_layout(height=350, xaxis_title="Project Code", yaxis_title="Variance ($)")
+        fig_var.update_layout(height=350, xaxis_title="Project Code", yaxis_title="Variance (€)")
         st.plotly_chart(fig_var, width="stretch")
 
     with col_s:
@@ -138,9 +138,9 @@ def render_budget_tracking(project_repo: ProjectRepository) -> None:
             "id": st.column_config.TextColumn("Project Code", width="small"),
             "name": st.column_config.TextColumn("Project Title", width="medium"),
             "status": st.column_config.TextColumn("Status", width="small"),
-            "planned_budget": st.column_config.NumberColumn("Planned ($)", format="$%.2f"),
-            "actual_budget": st.column_config.NumberColumn("Actual ($)", format="$%.2f"),
-            "variance": st.column_config.NumberColumn("Variance ($)", format="$%.2f"),
+            "planned_budget": st.column_config.NumberColumn("Planned (€)", format="€%.2f"),
+            "actual_budget": st.column_config.NumberColumn("Actual (€)", format="€%.2f"),
+            "variance": st.column_config.NumberColumn("Variance (€)", format="€%.2f"),
             "burn_rate_pct": st.column_config.NumberColumn("Burn Rate (%)", format="%.1f%%"),
             "health_status": st.column_config.TextColumn("Financial Health", width="small"),
         },

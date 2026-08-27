@@ -39,7 +39,7 @@ def init_db(db_path: Optional[str] = None) -> None:
                 group_id INTEGER,
                 param_name TEXT NOT NULL,
                 param_type TEXT NOT NULL,
-                FOREIGN KEY (group_id) REFERENCES schema_groups (id) ON DELETE SET NULL
+                FOREIGN KEY (group_id) REFERENCES schema_groups (id) ON DELETE RESTRICT
             )
         """)
 
@@ -54,7 +54,7 @@ def init_db(db_path: Optional[str] = None) -> None:
                     group_id INTEGER,
                     param_name TEXT NOT NULL,
                     param_type TEXT NOT NULL,
-                    FOREIGN KEY (group_id) REFERENCES schema_groups (id) ON DELETE SET NULL
+                    FOREIGN KEY (group_id) REFERENCES schema_groups (id) ON DELETE RESTRICT
                 )
             """)
             if "param_id" in param_cols:
@@ -79,7 +79,7 @@ def init_db(db_path: Optional[str] = None) -> None:
                 param_id TEXT NOT NULL,
                 option_value TEXT NOT NULL,
                 display_order INTEGER DEFAULT 0,
-                FOREIGN KEY (param_id) REFERENCES schema_parameters (param_id) ON DELETE CASCADE
+                FOREIGN KEY (param_id) REFERENCES schema_parameters (param_id) ON DELETE RESTRICT
             )
         """)
 
@@ -107,8 +107,8 @@ def init_db(db_path: Optional[str] = None) -> None:
                 progress_pct INTEGER DEFAULT 0,
                 description TEXT DEFAULT '',
                 predecessor_id INTEGER,
-                FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE CASCADE,
-                FOREIGN KEY (predecessor_id) REFERENCES project_milestones (id) ON DELETE SET NULL
+                FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE RESTRICT,
+                FOREIGN KEY (predecessor_id) REFERENCES project_milestones (id) ON DELETE RESTRICT
             )
         """)
 
@@ -133,9 +133,9 @@ def init_db(db_path: Optional[str] = None) -> None:
                 predecessor_project_id TEXT,
                 link_type TEXT DEFAULT 'FS',
                 lag_days INTEGER DEFAULT 0,
-                FOREIGN KEY (task_id) REFERENCES project_milestones (id) ON DELETE CASCADE,
-                FOREIGN KEY (predecessor_task_id) REFERENCES project_milestones (id) ON DELETE CASCADE,
-                FOREIGN KEY (predecessor_project_id) REFERENCES projects (id) ON DELETE CASCADE
+                FOREIGN KEY (task_id) REFERENCES project_milestones (id) ON DELETE RESTRICT,
+                FOREIGN KEY (predecessor_task_id) REFERENCES project_milestones (id) ON DELETE RESTRICT,
+                FOREIGN KEY (predecessor_project_id) REFERENCES projects (id) ON DELETE RESTRICT
             )
         """)
 
@@ -150,20 +150,7 @@ def init_db(db_path: Optional[str] = None) -> None:
                 WHERE predecessor_id IS NOT NULL
             """)
 
-        # 7. Hierarchy Level Table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS hierarchy_level (
-                hierarchy_level_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                level INTEGER NOT NULL,
-                parent_hierarchy_level_id INTEGER,
-                manager_function_id INTEGER,
-                FOREIGN KEY (parent_hierarchy_level_id) REFERENCES hierarchy_level (hierarchy_level_id) ON DELETE SET NULL,
-                FOREIGN KEY (manager_function_id) REFERENCES function (function_id) ON DELETE SET NULL
-            )
-        """)
-
-        # 8. Function Type Table
+        # 7. Function Type Table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS function_type (
                 function_type_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -171,19 +158,32 @@ def init_db(db_path: Optional[str] = None) -> None:
             )
         """)
 
-        # 9. Function Table
+        # 8. Function Table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS function (
                 function_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
-                hierarchy_level_id INTEGER NOT NULL,
+                hierarchy_level INTEGER NOT NULL,
                 function_type_id INTEGER,
                 manager_function_id INTEGER,
                 dual_manager_function_id INTEGER,
-                FOREIGN KEY (hierarchy_level_id) REFERENCES hierarchy_level (hierarchy_level_id) ON DELETE RESTRICT,
-                FOREIGN KEY (function_type_id) REFERENCES function_type (function_type_id) ON DELETE SET NULL,
-                FOREIGN KEY (manager_function_id) REFERENCES function (function_id) ON DELETE SET NULL,
-                FOREIGN KEY (dual_manager_function_id) REFERENCES function (function_id) ON DELETE SET NULL
+                fte_percentage INTEGER DEFAULT 100,
+                has_reports BOOLEAN DEFAULT 0,
+                FOREIGN KEY (function_type_id) REFERENCES function_type (function_type_id) ON DELETE RESTRICT,
+                FOREIGN KEY (manager_function_id) REFERENCES function (function_id) ON DELETE RESTRICT,
+                FOREIGN KEY (dual_manager_function_id) REFERENCES function (function_id) ON DELETE RESTRICT
+            )
+        """)
+
+        # 9. Team Table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS team (
+                team_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                team_name TEXT NOT NULL,
+                manager_function_id INTEGER,
+                leader_function_id INTEGER,
+                FOREIGN KEY (manager_function_id) REFERENCES function (function_id) ON DELETE RESTRICT,
+                FOREIGN KEY (leader_function_id) REFERENCES function (function_id) ON DELETE RESTRICT
             )
         """)
 
@@ -198,11 +198,11 @@ def init_db(db_path: Optional[str] = None) -> None:
                 sigle TEXT DEFAULT '',
                 employee_code TEXT NOT NULL UNIQUE,
                 function_id INTEGER,
-                FOREIGN KEY (function_id) REFERENCES function (function_id) ON DELETE SET NULL
+                FOREIGN KEY (function_id) REFERENCES function (function_id) ON DELETE RESTRICT
             )
         """)
 
-        # 11. Schema migrations for projects and organization tables
+        # 11. Schema migrations for projects, organization, and function tables
         cursor.execute("PRAGMA table_info(projects)")
         proj_cols = [col[1] for col in cursor.fetchall()]
         if "dynamic_attributes" not in proj_cols:
@@ -212,10 +212,48 @@ def init_db(db_path: Optional[str] = None) -> None:
         if "actual_budget" not in proj_cols:
             cursor.execute("ALTER TABLE projects ADD COLUMN actual_budget REAL DEFAULT 0.0")
 
+        # Cleanup legacy hierarchy_level table if present
+        cursor.execute("DROP TABLE IF EXISTS hierarchy_level")
+
         cursor.execute("PRAGMA table_info(function)")
         func_cols = [col[1] for col in cursor.fetchall()]
-        if "function_type_id" not in func_cols:
-            cursor.execute("ALTER TABLE function ADD COLUMN function_type_id INTEGER REFERENCES function_type(function_type_id)")
+        cursor.execute("PRAGMA foreign_key_list(function)")
+        fk_list = cursor.fetchall()
+        has_hl_fk = any(fk[2] == "hierarchy_level" for fk in fk_list)
+
+        if has_hl_fk or ("hierarchy_level_id" in func_cols and "hierarchy_level" not in func_cols):
+            cursor.execute("""
+                CREATE TABLE function_new (
+                    function_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    hierarchy_level INTEGER NOT NULL,
+                    function_type_id INTEGER,
+                    manager_function_id INTEGER,
+                    dual_manager_function_id INTEGER,
+                    fte_percentage INTEGER DEFAULT 100,
+                    has_reports BOOLEAN DEFAULT 0,
+                    FOREIGN KEY (function_type_id) REFERENCES function_type (function_type_id) ON DELETE RESTRICT,
+                    FOREIGN KEY (manager_function_id) REFERENCES function (function_id) ON DELETE RESTRICT,
+                    FOREIGN KEY (dual_manager_function_id) REFERENCES function (function_id) ON DELETE RESTRICT
+                )
+            """)
+            lvl_col = "hierarchy_level" if "hierarchy_level" in func_cols else "hierarchy_level_id"
+            ft_col = "function_type_id" if "function_type_id" in func_cols else "NULL"
+            fte_col = "fte_percentage" if "fte_percentage" in func_cols else "100"
+            rep_col = "has_reports" if "has_reports" in func_cols else "0"
+            cursor.execute(f"""
+                INSERT INTO function_new (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports)
+                SELECT function_id, name, {lvl_col}, {ft_col}, manager_function_id, dual_manager_function_id, {fte_col}, {rep_col} FROM function
+            """)
+            cursor.execute("DROP TABLE function")
+            cursor.execute("ALTER TABLE function_new RENAME TO function")
+        else:
+            if "function_type_id" not in func_cols:
+                cursor.execute("ALTER TABLE function ADD COLUMN function_type_id INTEGER REFERENCES function_type(function_type_id) ON DELETE RESTRICT")
+            if "fte_percentage" not in func_cols:
+                cursor.execute("ALTER TABLE function ADD COLUMN fte_percentage INTEGER DEFAULT 100")
+            if "has_reports" not in func_cols:
+                cursor.execute("ALTER TABLE function ADD COLUMN has_reports BOOLEAN DEFAULT 0")
 
         cursor.execute("PRAGMA table_info(employee)")
         emp_cols = [col[1] for col in cursor.fetchall()]
@@ -234,7 +272,7 @@ def init_db(db_path: Optional[str] = None) -> None:
                         sigle TEXT DEFAULT '',
                         employee_code TEXT NOT NULL UNIQUE,
                         function_id INTEGER,
-                        FOREIGN KEY (function_id) REFERENCES function (function_id) ON DELETE SET NULL
+                        FOREIGN KEY (function_id) REFERENCES function (function_id) ON DELETE RESTRICT
                     )
                 """)
                 cursor.execute("""

@@ -1,0 +1,1123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Teams Interactive Table</title>
+  <style>
+    :root {
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --border: #e2e8f0;
+      --border-dark: #cbd5e1;
+      --bg-header: #f8fafc;
+      --bg-hover: #f1f5f9;
+      --text: #0f172a;
+      --text-muted: #64748b;
+      --danger: #dc2626;
+      --danger-hover: #b91c1c;
+      --selected-row: #e0f2fe;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: transparent;
+      color: var(--text);
+      overflow-x: hidden;
+      overflow-y: auto;
+    }
+
+    .table-container {
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+      overflow: visible;
+      display: flex;
+      flex-direction: column;
+      margin-bottom: 8px;
+    }
+
+    .table-toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 14px;
+      background: #ffffff;
+      border-bottom: 1px solid var(--border);
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .toolbar-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1;
+      min-width: 260px;
+    }
+
+    .search-input-wrapper {
+      position: relative;
+      flex: 1;
+      max-width: 280px;
+    }
+
+    .search-input {
+      width: 100%;
+      padding: 6px 10px 6px 28px;
+      font-size: 12px;
+      border: 1px solid var(--border-dark);
+      border-radius: 6px;
+      outline: none;
+      transition: all 0.15s ease;
+      color: var(--text);
+    }
+
+    .search-input:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 11px;
+      color: var(--text-muted);
+      pointer-events: none;
+    }
+
+    .btn-reset-filters {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 5px 10px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #475569;
+      background: #f1f5f9;
+      border: 1px solid var(--border-dark);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.12s ease;
+    }
+
+    .btn-reset-filters:hover {
+      background: #e2e8f0;
+      color: #0f172a;
+    }
+
+    .toolbar-stats {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .stat-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 10px;
+      border-radius: 14px;
+      font-weight: 600;
+      font-size: 11px;
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      color: #334155;
+    }
+
+    .table-scroll-wrapper {
+      max-height: 480px;
+      overflow-y: auto;
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 12px;
+    }
+
+    thead th {
+      position: sticky;
+      top: 0;
+      background: var(--bg-header);
+      color: #334155;
+      font-weight: 600;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border-dark);
+      white-space: nowrap;
+      z-index: 10;
+      user-select: none;
+    }
+
+    thead th.sortable {
+      cursor: pointer;
+      transition: background 0.12s ease, color 0.12s ease;
+    }
+
+    thead th.sortable:hover {
+      background: #e2e8f0;
+      color: var(--text);
+    }
+
+    /* Filter Row */
+    .filter-row th {
+      top: 36px;
+      background: #f1f5f9;
+      padding: 4px 6px 6px 6px;
+      border-bottom: 2px solid var(--border-dark);
+      z-index: 9;
+    }
+
+    .col-filter-input {
+      width: 100%;
+      padding: 4px 6px;
+      font-size: 11px;
+      border: 1px solid var(--border-dark);
+      border-radius: 4px;
+      background: #ffffff;
+      color: var(--text);
+      outline: none;
+      transition: all 0.15s ease;
+    }
+
+    .col-filter-input:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
+    }
+
+    .col-filter-input.active {
+      border-color: var(--primary);
+      background: #f0fdf4;
+      font-weight: 600;
+    }
+
+    .excel-trigger {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      padding: 4px 6px;
+      font-size: 11px;
+      border: 1px solid var(--border-dark);
+      border-radius: 4px;
+      background: #ffffff;
+      color: var(--text);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .excel-trigger:hover {
+      border-color: var(--primary);
+      background: #f8fafc;
+    }
+
+    .excel-trigger.active {
+      border-color: var(--primary);
+      background: #eff6ff;
+      color: var(--primary);
+      font-weight: 600;
+    }
+
+    .excel-trigger-text {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 130px;
+    }
+
+    .excel-trigger-icon {
+      font-size: 8px;
+      color: #64748b;
+      margin-left: 4px;
+    }
+
+    tbody tr {
+      border-bottom: 1px solid var(--border);
+      transition: background 0.1s ease;
+      cursor: context-menu;
+    }
+
+    tbody tr:last-child {
+      border-bottom: none;
+    }
+
+    tbody tr:hover {
+      background: var(--bg-hover);
+    }
+
+    tbody tr.selected {
+      background: var(--selected-row) !important;
+      border-left: 3px solid var(--primary);
+    }
+
+    tbody td {
+      padding: 8px 12px;
+      vertical-align: middle;
+      color: var(--text);
+      white-space: nowrap;
+    }
+
+    .col-id {
+      font-weight: 600;
+      color: #64748b;
+      width: 70px;
+    }
+
+    .col-name {
+      font-weight: 600;
+      color: #1e293b;
+    }
+
+    .empty-state {
+      padding: 36px 16px;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+
+    /* Excel Filter Popup */
+    .excel-popup {
+      position: fixed;
+      display: none;
+      z-index: 10001;
+      width: 250px;
+      background: #ffffff;
+      border: 1px solid var(--border-dark);
+      border-radius: 8px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15), 0 4px 10px rgba(0, 0, 0, 0.05);
+      padding: 8px;
+      font-size: 12px;
+      animation: menuFadeIn 0.12s ease-out;
+    }
+
+    .excel-popup-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px 6px 8px 6px;
+      border-bottom: 1px solid #f1f5f9;
+      margin-bottom: 6px;
+    }
+
+    .excel-popup-title {
+      font-weight: 700;
+      font-size: 11px;
+      color: #475569;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .excel-popup-close {
+      background: none;
+      border: none;
+      font-size: 16px;
+      cursor: pointer;
+      color: #94a3b8;
+      padding: 0 4px;
+      line-height: 1;
+    }
+
+    .excel-popup-close:hover {
+      color: #1e293b;
+    }
+
+    .excel-popup-search-box {
+      width: 100%;
+      padding: 5px 8px;
+      font-size: 11px;
+      border: 1px solid var(--border-dark);
+      border-radius: 4px;
+      outline: none;
+      margin-bottom: 6px;
+      color: var(--text);
+    }
+
+    .excel-popup-search-box:focus {
+      border-color: var(--primary);
+    }
+
+    .excel-popup-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 2px 2px 6px 2px;
+      font-size: 11px;
+      border-bottom: 1px solid #f1f5f9;
+      margin-bottom: 4px;
+    }
+
+    .excel-link-action {
+      background: none;
+      border: none;
+      color: var(--primary);
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 11px;
+      padding: 2px 4px;
+    }
+
+    .excel-link-action:hover {
+      text-decoration: underline;
+    }
+
+    .excel-options-list {
+      max-height: 180px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: 2px 0;
+    }
+
+    .excel-opt-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 6px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.1s ease;
+      font-size: 11px;
+    }
+
+    .excel-opt-row:hover {
+      background: #f1f5f9;
+    }
+
+    .excel-opt-left {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      overflow: hidden;
+    }
+
+    .excel-opt-checkbox {
+      cursor: pointer;
+    }
+
+    .excel-opt-label {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 170px;
+      color: #1e293b;
+    }
+
+    .excel-opt-count {
+      font-size: 10px;
+      font-weight: 600;
+      color: #94a3b8;
+      background: #f8fafc;
+      padding: 1px 5px;
+      border-radius: 10px;
+      border: 1px solid #e2e8f0;
+    }
+
+    .excel-popup-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 6px;
+      padding-top: 8px;
+      border-top: 1px solid #f1f5f9;
+      margin-top: 6px;
+    }
+
+    .btn-popup-apply {
+      padding: 4px 10px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #ffffff;
+      background: var(--primary);
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .btn-popup-apply:hover {
+      background: var(--primary-hover);
+    }
+
+    .btn-popup-cancel {
+      padding: 4px 8px;
+      font-size: 11px;
+      font-weight: 500;
+      color: #64748b;
+      background: #f1f5f9;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .btn-popup-cancel:hover {
+      background: #e2e8f0;
+      color: #0f172a;
+    }
+
+    /* Context Menu */
+    .context-menu {
+      position: fixed;
+      display: none;
+      z-index: 10000;
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.12), 0 4px 10px rgba(0, 0, 0, 0.05);
+      padding: 4px;
+      min-width: 220px;
+      backdrop-filter: blur(8px);
+      animation: menuFadeIn 0.12s ease-out;
+    }
+
+    @keyframes menuFadeIn {
+      from {
+        opacity: 0;
+        transform: scale(0.96);
+      }
+      to {
+        opacity: 1;
+        transform: scale(1);
+      }
+    }
+
+    .context-menu-header {
+      padding: 6px 12px;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid #f1f5f9;
+      margin-bottom: 2px;
+      text-overflow: ellipsis;
+      overflow: hidden;
+      white-space: nowrap;
+      max-width: 260px;
+    }
+
+    .context-menu-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      font-size: 13px;
+      font-weight: 500;
+      color: #1e293b;
+      cursor: pointer;
+      border-radius: 6px;
+      transition: all 0.1s ease;
+    }
+
+    .context-menu-item:hover {
+      background: #eff6ff;
+      color: var(--primary);
+    }
+
+    .context-menu-item.danger:hover {
+      background: #fef2f2;
+      color: var(--danger);
+    }
+
+    .context-menu-divider {
+      height: 1px;
+      background: #e2e8f0;
+      margin: 4px 0;
+    }
+
+    .ctx-icon {
+      font-size: 14px;
+      width: 16px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="table-container" id="main-container">
+    <div class="table-toolbar">
+      <div class="toolbar-left">
+        <div class="search-input-wrapper">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="search-box" class="search-input" placeholder="Quick search..." oninput="onGlobalSearch(this.value)" />
+        </div>
+        <button type="button" id="btn-clear" class="btn-reset-filters" onclick="clearAllFilters()" style="display:none;">
+          <span>🔄</span> <span id="lbl-clear">Clear Filters</span>
+        </button>
+      </div>
+
+      <div class="toolbar-stats">
+        <span class="stat-pill" id="stat-count">0 Teams</span>
+      </div>
+    </div>
+
+    <div class="table-scroll-wrapper" id="scroll-wrapper">
+      <table id="teams-table">
+        <thead>
+          <tr>
+            <th class="sortable col-id" onclick="sortTable('team_id')">ID <span id="sort-team_id"></span></th>
+            <th class="sortable col-name" onclick="sortTable('team_name')"><span id="th-name">Team Name</span> <span id="sort-team_name"></span></th>
+            <th class="sortable" onclick="sortTable('manager_function_name')"><span id="th-mgr">Manager Function</span> <span id="sort-manager_function_name"></span></th>
+            <th class="sortable" onclick="sortTable('leader_function_name')"><span id="th-leader">Team Leader</span> <span id="sort-leader_function_name"></span></th>
+          </tr>
+          <tr class="filter-row">
+            <th><input type="text" class="col-filter-input" id="flt-id" placeholder="#" oninput="setColFilter('team_id', this.value)" /></th>
+            <th>
+              <div class="excel-trigger" id="trigger-flt-name" onclick="openExcelFilter('team_name', 'Team Name', event)">
+                <span class="excel-trigger-text" id="label-flt-name">All</span>
+                <span class="excel-trigger-icon">▼</span>
+              </div>
+            </th>
+            <th>
+              <div class="excel-trigger" id="trigger-flt-mgr" onclick="openExcelFilter('manager_function_name', 'Manager Function', event)">
+                <span class="excel-trigger-text" id="label-flt-mgr">All</span>
+                <span class="excel-trigger-icon">▼</span>
+              </div>
+            </th>
+            <th>
+              <div class="excel-trigger" id="trigger-flt-leader" onclick="openExcelFilter('leader_function_name', 'Team Leader', event)">
+                <span class="excel-trigger-text" id="label-flt-leader">All</span>
+                <span class="excel-trigger-icon">▼</span>
+              </div>
+            </th>
+          </tr>
+        </thead>
+        <tbody id="table-body">
+          <!-- Dynamically populated -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Excel Filter Floating Popup -->
+  <div class="excel-popup" id="excel-popup">
+    <div class="excel-popup-header">
+      <span class="excel-popup-title" id="excel-popup-title">Filter Options</span>
+      <button type="button" class="excel-popup-close" onclick="closeExcelPopup()">&times;</button>
+    </div>
+    <input type="text" class="excel-popup-search-box" id="excel-popup-search" placeholder="Search values..." oninput="onExcelPopupSearch(this.value)" />
+    <div class="excel-popup-actions">
+      <button type="button" class="excel-link-action" onclick="excelSelectAll(true)" id="lbl-select-all">Select All</button>
+      <button type="button" class="excel-link-action" onclick="excelSelectAll(false)" id="lbl-clear-opts">Clear</button>
+    </div>
+    <div class="excel-options-list" id="excel-options-list"></div>
+    <div class="excel-popup-footer">
+      <button type="button" class="btn-popup-cancel" onclick="closeExcelPopup()" id="lbl-popup-cancel">Cancel</button>
+      <button type="button" class="btn-popup-apply" onclick="applyExcelPopupFilter()" id="lbl-popup-apply">Apply</button>
+    </div>
+  </div>
+
+  <!-- Context Menu -->
+  <div class="context-menu" id="context-menu">
+    <div class="context-menu-header" id="ctx-header">Team Actions</div>
+    <div class="context-menu-item" onclick="triggerAction('add')">
+      <span class="ctx-icon">➕</span>
+      <span id="ctx-add-label">Add New Team</span>
+    </div>
+    <div class="context-menu-item" id="ctx-item-edit" onclick="triggerAction('edit')">
+      <span class="ctx-icon">✏️</span>
+      <span id="ctx-edit-label">Edit Team</span>
+    </div>
+    <div class="context-menu-divider" id="ctx-divider"></div>
+    <div class="context-menu-item danger" id="ctx-item-delete" onclick="triggerAction('delete')">
+      <span class="ctx-icon">🗑️</span>
+      <span id="ctx-delete-label">Delete Team</span>
+    </div>
+  </div>
+
+  <script>
+    const Streamlit = {
+      setComponentReady: function() {
+        window.parent.postMessage({ isStreamlitMessage: true, type: "streamlit:componentReady", apiVersion: 1 }, "*");
+      },
+      setFrameHeight: function(height) {
+        window.parent.postMessage({ isStreamlitMessage: true, type: "streamlit:setFrameHeight", height: height || document.body.scrollHeight + 10 }, "*");
+      },
+      setComponentValue: function(value) {
+        window.parent.postMessage({ isStreamlitMessage: true, type: "streamlit:setComponentValue", value: value }, "*");
+      }
+    };
+
+    let teamsData = [];
+    let filteredData = [];
+    let translations = {};
+    let selectedItem = null;
+    let currentSortCol = 'team_id';
+    let sortAsc = true;
+    let globalSearchQuery = '';
+    let colFilters = {};
+
+    let excelFilters = {
+      team_name: null,
+      manager_function_name: null,
+      leader_function_name: null
+    };
+
+    let activeExcelCol = null;
+    let pendingExcelSelection = new Set();
+    let currentPopupSearchQuery = '';
+
+    function escapeHtml(str) {
+      if (str === null || str === undefined) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function openExcelFilter(colKey, colLabel, event) {
+      event.preventDefault();
+      event.stopPropagation();
+      hideContextMenu();
+
+      activeExcelCol = colKey;
+      currentPopupSearchQuery = '';
+
+      const popup = document.getElementById('excel-popup');
+      const title = document.getElementById('excel-popup-title');
+      const searchBox = document.getElementById('excel-popup-search');
+
+      let displayName = colLabel;
+      if (colKey === 'team_name' && translations.col_team_name) displayName = translations.col_team_name;
+      if (colKey === 'manager_function_name' && translations.col_team_mgr) displayName = translations.col_team_mgr;
+      if (colKey === 'leader_function_name' && translations.col_team_leader) displayName = translations.col_team_leader;
+
+      title.innerText = `${translations.col_filter_ph ? translations.col_filter_ph.replace('...', '') : 'Filter'}: ${displayName}`;
+      searchBox.value = '';
+      searchBox.placeholder = translations.search_values || 'Search values...';
+
+      const distinctVals = Array.from(new Set(teamsData.map(d => {
+        const v = d[colKey];
+        return (v === null || v === undefined || v === '') ? '—' : String(v);
+      }))).sort((a, b) => a.localeCompare(b));
+
+      if (excelFilters[colKey] === null) {
+        pendingExcelSelection = new Set(distinctVals);
+      } else {
+        pendingExcelSelection = new Set(excelFilters[colKey]);
+      }
+
+      renderExcelOptionsList(distinctVals);
+
+      popup.style.display = 'block';
+
+      const triggerEl = event.currentTarget;
+      const rect = triggerEl.getBoundingClientRect();
+      const popupWidth = popup.offsetWidth || 250;
+      const popupHeight = popup.offsetHeight || 260;
+
+      let posX = rect.left;
+      let posY = rect.bottom + 4;
+
+      if (posX + popupWidth > window.innerWidth - 10) posX = window.innerWidth - popupWidth - 10;
+      if (posY + popupHeight > window.innerHeight - 10) posY = rect.top - popupHeight - 4;
+
+      popup.style.left = `${Math.max(10, posX)}px`;
+      popup.style.top = `${Math.max(10, posY)}px`;
+
+      searchBox.focus();
+    }
+
+    function renderExcelOptionsList(distinctVals) {
+      const listEl = document.getElementById('excel-options-list');
+      listEl.innerHTML = '';
+
+      const counts = {};
+      teamsData.forEach(d => {
+        const v = d[activeExcelCol];
+        const key = (v === null || v === undefined || v === '') ? '—' : String(v);
+        counts[key] = (counts[key] || 0) + 1;
+      });
+
+      distinctVals.forEach(val => {
+        const isBlank = val === '—';
+        const displayLabel = isBlank ? (translations.blanks || '(Blanks / None)') : val;
+
+        const isVisible = !currentPopupSearchQuery ||
+                          displayLabel.toLowerCase().includes(currentPopupSearchQuery) ||
+                          val.toLowerCase().includes(currentPopupSearchQuery);
+
+        const isChecked = pendingExcelSelection.has(val);
+
+        const row = document.createElement('label');
+        row.className = 'excel-opt-row';
+        row.style.display = isVisible ? 'flex' : 'none';
+        row.setAttribute('data-val', val);
+
+        row.innerHTML = `
+          <div class="excel-opt-left">
+            <input type="checkbox" class="excel-opt-checkbox" ${isChecked ? 'checked' : ''} />
+            <span class="excel-opt-label" title="${escapeHtml(displayLabel)}">${escapeHtml(displayLabel)}</span>
+          </div>
+          <span class="excel-opt-count">${counts[val] || 0}</span>
+        `;
+
+        const chk = row.querySelector('input');
+        chk.addEventListener('change', (e) => {
+          if (e.target.checked) pendingExcelSelection.add(val);
+          else pendingExcelSelection.delete(val);
+        });
+
+        listEl.appendChild(row);
+      });
+    }
+
+    function onExcelPopupSearch(val) {
+      currentPopupSearchQuery = val ? val.trim().toLowerCase() : '';
+      document.querySelectorAll('#excel-options-list .excel-opt-row').forEach(row => {
+        const labelText = row.querySelector('.excel-opt-label').innerText.toLowerCase();
+        row.style.display = (!currentPopupSearchQuery || labelText.includes(currentPopupSearchQuery)) ? 'flex' : 'none';
+      });
+    }
+
+    function excelSelectAll(checked) {
+      document.querySelectorAll('#excel-options-list .excel-opt-row').forEach(row => {
+        if (row.style.display !== 'none') {
+          const val = row.getAttribute('data-val');
+          row.querySelector('input').checked = checked;
+          if (checked) pendingExcelSelection.add(val);
+          else pendingExcelSelection.delete(val);
+        }
+      });
+    }
+
+    function applyExcelPopupFilter() {
+      if (!activeExcelCol) return;
+
+      const distinctVals = Array.from(new Set(teamsData.map(d => {
+        const v = d[activeExcelCol];
+        return (v === null || v === undefined || v === '') ? '—' : String(v);
+      })));
+
+      if (pendingExcelSelection.size === distinctVals.length || pendingExcelSelection.size === 0) {
+        excelFilters[activeExcelCol] = null;
+      } else {
+        excelFilters[activeExcelCol] = new Set(pendingExcelSelection);
+      }
+
+      updateExcelTriggerDisplay(activeExcelCol);
+      closeExcelPopup();
+      renderTable();
+    }
+
+    function closeExcelPopup() {
+      const popup = document.getElementById('excel-popup');
+      if (popup) popup.style.display = 'none';
+      activeExcelCol = null;
+    }
+
+    function updateExcelTriggerDisplay(colKey) {
+      const triggerId = colKey === 'team_name' ? 'trigger-flt-name' :
+                        colKey === 'manager_function_name' ? 'trigger-flt-mgr' : 'trigger-flt-leader';
+      const labelId = colKey === 'team_name' ? 'label-flt-name' :
+                      colKey === 'manager_function_name' ? 'label-flt-mgr' : 'label-flt-leader';
+
+      const triggerEl = document.getElementById(triggerId);
+      const labelEl = document.getElementById(labelId);
+      if (!triggerEl || !labelEl) return;
+
+      const sel = excelFilters[colKey];
+      if (!sel || sel.size === 0) {
+        triggerEl.classList.remove('active');
+        labelEl.innerText = translations.filter_all || 'All';
+      } else if (sel.size === 1) {
+        triggerEl.classList.add('active');
+        const firstVal = Array.from(sel)[0];
+        labelEl.innerText = firstVal === '—' ? (translations.blanks || 'None') : firstVal;
+      } else {
+        triggerEl.classList.add('active');
+        const tmpl = translations.selected_count || '{count} selected';
+        labelEl.innerText = tmpl.replace('{count}', sel.size);
+      }
+    }
+
+    function setColFilter(col, val) {
+      if (val && String(val).trim() !== '') {
+        colFilters[col] = String(val).trim().toLowerCase();
+      } else {
+        delete colFilters[col];
+      }
+      renderTable();
+    }
+
+    function onGlobalSearch(val) {
+      globalSearchQuery = val ? val.trim().toLowerCase() : '';
+      renderTable();
+    }
+
+    function clearAllFilters() {
+      globalSearchQuery = '';
+      colFilters = {};
+      excelFilters = {
+        team_name: null,
+        manager_function_name: null,
+        leader_function_name: null
+      };
+
+      document.getElementById('search-box').value = '';
+      document.querySelectorAll('.col-filter-input').forEach(i => { i.value = ''; i.classList.remove('active'); });
+      ['team_name', 'manager_function_name', 'leader_function_name'].forEach(updateExcelTriggerDisplay);
+
+      closeExcelPopup();
+      renderTable();
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById('table-body');
+      tbody.innerHTML = '';
+
+      const hasExcelActive = Object.values(excelFilters).some(s => s !== null);
+      const hasActiveFilters = globalSearchQuery !== '' || Object.keys(colFilters).length > 0 || hasExcelActive;
+      const clearBtn = document.getElementById('btn-clear');
+      if (clearBtn) clearBtn.style.display = hasActiveFilters ? 'inline-flex' : 'none';
+
+      const fltIdEl = document.getElementById('flt-id');
+      if (fltIdEl) fltIdEl.classList.toggle('active', Boolean(colFilters['team_id']));
+
+      filteredData = teamsData.filter(d => {
+        if (globalSearchQuery) {
+          const matchGlobal =
+            (d.team_name && String(d.team_name).toLowerCase().includes(globalSearchQuery)) ||
+            (d.manager_function_name && String(d.manager_function_name).toLowerCase().includes(globalSearchQuery)) ||
+            (d.leader_function_name && String(d.leader_function_name).toLowerCase().includes(globalSearchQuery)) ||
+            (d.team_id && String(d.team_id).includes(globalSearchQuery));
+          if (!matchGlobal) return false;
+        }
+
+        if (colFilters['team_id']) {
+          if (!String(d.team_id).includes(colFilters['team_id'])) return false;
+        }
+
+        for (const [colKey, selSet] of Object.entries(excelFilters)) {
+          if (selSet !== null) {
+            const rawVal = d[colKey];
+            const val = (rawVal === null || rawVal === undefined || rawVal === '') ? '—' : String(rawVal);
+            if (!selSet.has(val)) return false;
+          }
+        }
+
+        return true;
+      });
+
+      const statCount = document.getElementById('stat-count');
+      if (statCount) {
+        statCount.innerText = `${filteredData.length} / ${teamsData.length} ${translations.stat_teams || 'Teams'}`;
+      }
+
+      filteredData.sort((a, b) => {
+        let valA = a[currentSortCol];
+        let valB = b[currentSortCol];
+        if (valA === null || valA === undefined) valA = '';
+        if (valB === null || valB === undefined) valB = '';
+
+        if (typeof valA === 'string') {
+          return sortAsc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+        }
+        return sortAsc ? (valA > valB ? 1 : -1) : (valA < valB ? 1 : -1);
+      });
+
+      ['team_id', 'team_name', 'manager_function_name', 'leader_function_name'].forEach(col => {
+        const iconSpan = document.getElementById(`sort-${col}`);
+        if (iconSpan) iconSpan.innerText = (currentSortCol === col) ? (sortAsc ? ' ▲' : ' ▼') : '';
+      });
+
+      if (filteredData.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="4" class="empty-state">
+              ${escapeHtml(translations.no_teams || 'No teams registered matching the filters.')}
+            </td>
+          </tr>
+        `;
+      } else {
+        filteredData.forEach(d => {
+          const tr = document.createElement('tr');
+          tr.setAttribute('data-id', d.team_id);
+          if (selectedItem && selectedItem.team_id === d.team_id) {
+            tr.classList.add('selected');
+          }
+
+          tr.innerHTML = `
+            <td class="col-id">${d.team_id}</td>
+            <td class="col-name">${escapeHtml(d.team_name)}</td>
+            <td>${escapeHtml(d.manager_function_name || '—')}</td>
+            <td>${escapeHtml(d.leader_function_name || '—')}</td>
+          `;
+
+          tr.addEventListener('click', () => selectRow(d, tr));
+          tr.addEventListener('dblclick', () => {
+            selectRow(d, tr);
+            triggerAction('edit');
+          });
+          tr.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            closeExcelPopup();
+            selectRow(d, tr);
+            showContextMenu(e, d);
+          });
+
+          tbody.appendChild(tr);
+        });
+      }
+
+      updateAutoHeight();
+    }
+
+    function selectRow(item, trElement) {
+      selectedItem = item;
+      document.querySelectorAll('#table-body tr').forEach(r => r.classList.remove('selected'));
+      if (trElement) trElement.classList.add('selected');
+    }
+
+    function sortTable(col) {
+      if (currentSortCol === col) sortAsc = !sortAsc;
+      else { currentSortCol = col; sortAsc = true; }
+      renderTable();
+    }
+
+    function showContextMenu(e, item) {
+      const menu = document.getElementById('context-menu');
+      const header = document.getElementById('ctx-header');
+      const editItem = document.getElementById('ctx-item-edit');
+      const delItem = document.getElementById('ctx-item-delete');
+      const divider = document.getElementById('ctx-divider');
+
+      if (item) {
+        header.innerText = `Team: ${item.team_name || `ID ${item.team_id}`}`;
+        header.style.display = 'block';
+        editItem.style.display = 'flex';
+        delItem.style.display = 'flex';
+        divider.style.display = 'block';
+      } else {
+        header.style.display = 'none';
+        editItem.style.display = 'none';
+        delItem.style.display = 'none';
+        divider.style.display = 'none';
+      }
+
+      menu.style.display = 'block';
+
+      const menuWidth = menu.offsetWidth || 220;
+      const menuHeight = menu.offsetHeight || 160;
+
+      let posX = e.clientX + 4;
+      let posY = e.clientY + 4;
+
+      if (posX + menuWidth > window.innerWidth - 10) posX = window.innerWidth - menuWidth - 10;
+      if (posY + menuHeight > window.innerHeight - 10) posY = window.innerHeight - menuHeight - 10;
+
+      menu.style.left = `${Math.max(10, posX)}px`;
+      menu.style.top = `${Math.max(10, posY)}px`;
+    }
+
+    function hideContextMenu() {
+      const menu = document.getElementById('context-menu');
+      if (menu) menu.style.display = 'none';
+    }
+
+    function triggerAction(actionName) {
+      hideContextMenu();
+      if (actionName === 'add') {
+        Streamlit.setComponentValue({
+          action: 'add_team',
+          nonce: Date.now() + '_' + Math.random()
+        });
+      } else if (actionName === 'edit') {
+        if (!selectedItem) return;
+        Streamlit.setComponentValue({
+          action: 'edit_team',
+          team_id: selectedItem.team_id,
+          team_name: selectedItem.team_name,
+          nonce: Date.now() + '_' + Math.random()
+        });
+      } else if (actionName === 'delete') {
+        if (!selectedItem) return;
+        Streamlit.setComponentValue({
+          action: 'delete_team',
+          team_id: selectedItem.team_id,
+          team_name: selectedItem.team_name,
+          nonce: Date.now() + '_' + Math.random()
+        });
+      }
+    }
+
+    document.getElementById('main-container').addEventListener('contextmenu', (e) => {
+      if (e.target.closest('tbody tr')) return;
+      e.preventDefault();
+      closeExcelPopup();
+      selectedItem = null;
+      document.querySelectorAll('#table-body tr').forEach(r => r.classList.remove('selected'));
+      showContextMenu(e, null);
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('#context-menu')) hideContextMenu();
+      if (!e.target.closest('#excel-popup') && !e.target.closest('.excel-trigger')) closeExcelPopup();
+    });
+
+    function updateAutoHeight() {
+      const container = document.getElementById('main-container');
+      const measured = container ? container.scrollHeight + 40 : document.body.scrollHeight + 30;
+      const height = Math.min(550, Math.max(300, measured));
+      Streamlit.setFrameHeight(height);
+    }
+
+    function updateTranslations() {
+      if (translations.col_team_name) document.getElementById('th-name').innerText = translations.col_team_name;
+      if (translations.col_team_mgr) document.getElementById('th-mgr').innerText = translations.col_team_mgr;
+      if (translations.col_team_leader) document.getElementById('th-leader').innerText = translations.col_team_leader;
+
+      if (translations.action_add) document.getElementById('ctx-add-label').innerText = `${translations.action_add} Team`;
+      if (translations.action_edit) document.getElementById('ctx-edit-label').innerText = `${translations.action_edit} Team`;
+      if (translations.action_delete) document.getElementById('ctx-delete-label').innerText = `${translations.action_delete} Team`;
+
+      if (translations.filter_clear) document.getElementById('lbl-clear').innerText = translations.filter_clear;
+      if (translations.search_placeholder) document.getElementById('search-box').placeholder = translations.search_placeholder;
+
+      if (translations.select_all) document.getElementById('lbl-select-all').innerText = translations.select_all;
+      if (translations.clear) document.getElementById('lbl-clear-opts').innerText = translations.clear;
+      if (translations.apply) document.getElementById('lbl-popup-apply').innerText = translations.apply;
+      if (translations.btn_cancel) document.getElementById('lbl-popup-cancel').innerText = translations.btn_cancel;
+
+      ['team_name', 'manager_function_name', 'leader_function_name'].forEach(updateExcelTriggerDisplay);
+    }
+
+    window.addEventListener('message', function(event) {
+      if (event.data && event.data.type === 'streamlit:render') {
+        const args = event.data.args || {};
+        if (args.translations) {
+          translations = args.translations;
+          updateTranslations();
+        }
+        if (args.teams) {
+          teamsData = args.teams;
+          renderTable();
+        }
+      }
+    });
+
+    document.addEventListener('DOMContentLoaded', () => {
+      Streamlit.setFrameHeight(320);
+      Streamlit.setComponentReady();
+    });
+    Streamlit.setFrameHeight(320);
+    Streamlit.setComponentReady();
+  </script>
+</body>
+</html>
