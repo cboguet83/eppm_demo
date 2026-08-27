@@ -1,5 +1,6 @@
 """Business logic service for milestone schedule processing and CSV import/export."""
 
+import datetime
 import io
 from typing import Any, Optional
 
@@ -28,45 +29,76 @@ class MilestoneService:
         """Parses and validates an uploaded step/milestone CSV file.
 
         Args:
-            uploaded_file: Streamlit UploadedFile or file-like buffer.
-            project_id: Parent project code to attach to each milestone.
+            uploaded_file: Uploaded file object from Streamlit.
+            project_id: Project code to associate with imported milestones.
 
         Returns:
-            list[dict[str, Any]]: List of validated milestone dictionary payloads.
+            list[dict[str, Any]]: List of milestone records ready for database insertion.
 
         Raises:
-            ValueError: If required columns are missing or dates are invalid.
+            ValueError: If file is empty, missing required columns, or contains invalid dates.
         """
-        df = pd.read_csv(uploaded_file)
+        if uploaded_file is None:
+            raise ValueError("No file uploaded.")
+
+        try:
+            df = pd.read_csv(uploaded_file)
+        except Exception as e:
+            raise ValueError(f"Failed to read CSV file: {e}")
+
+        if df.empty:
+            raise ValueError("Uploaded CSV is empty.")
+
         required_cols = {"task_name", "start_date", "end_date"}
-        if not required_cols.issubset(set(df.columns)):
-            missing = required_cols - set(df.columns)
-            raise ValueError(f"CSV is missing required columns: {missing}")
+        missing_cols = required_cols - set(df.columns)
+        if missing_cols:
+            raise ValueError(f"Missing required columns in CSV: {', '.join(sorted(missing_cols))}")
 
-        results: list[dict[str, Any]] = []
+        records: list[dict[str, Any]] = []
         for idx, row in df.iterrows():
-            start_str = str(row["start_date"]).strip()
-            end_str = str(row["end_date"]).strip()
-            if start_str > end_str:
-                raise ValueError(f"Row {idx + 1}: End Date ({end_str}) must be greater than or equal to Start Date ({start_str}).")
+            row_num = idx + 2  # CSV 1-indexed plus header
+            task_name = str(row["task_name"]).strip()
+            if not task_name:
+                raise ValueError(f"Row {row_num}: 'task_name' cannot be empty.")
 
-            pred_val: Optional[int] = None
-            if "predecessor_id" in row and pd.notna(row["predecessor_id"]):
+            try:
+                start_date = pd.to_datetime(row["start_date"]).strftime("%Y-%m-%d")
+                end_date = pd.to_datetime(row["end_date"]).strftime("%Y-%m-%d")
+            except Exception as e:
+                raise ValueError(f"Row {row_num}: Invalid date format ({e}). Use YYYY-MM-DD.")
+
+            if start_date > end_date:
+                raise ValueError(
+                    f"Row {row_num}: Start date ({start_date}) cannot be after End date ({end_date})."
+                )
+
+            phase = str(row.get("phase", "General")).strip() or "General"
+
+            try:
+                progress = int(row.get("progress_pct", 0)) if pd.notna(row.get("progress_pct")) else 0
+                progress = max(0, min(100, progress))
+            except (ValueError, TypeError):
+                progress = 0
+
+            pred_val = row.get("predecessor_id")
+            predecessor_id = None
+            if pd.notna(pred_val) and str(pred_val).strip():
                 try:
-                    pred_val = int(row["predecessor_id"])
+                    predecessor_id = int(float(str(pred_val).strip()))
                 except (ValueError, TypeError):
-                    pred_val = None
+                    predecessor_id = None
 
-            results.append({
+            records.append({
                 "project_id": project_id,
-                "task_name": str(row["task_name"]).strip(),
-                "phase": str(row.get("phase", "General")).strip(),
-                "start_date": start_str,
-                "end_date": end_str,
-                "progress_pct": int(row.get("progress_pct", 0)),
-                "predecessor_id": pred_val,
+                "task_name": task_name,
+                "phase": phase,
+                "start_date": start_date,
+                "end_date": end_date,
+                "progress_pct": progress,
+                "predecessor_id": predecessor_id,
             })
-        return results
+
+        return records
 
     @staticmethod
     def evaluate_constraints(
@@ -74,9 +106,9 @@ class MilestoneService:
         dependencies: list[dict[str, Any]],
         project_bounds: Optional[dict[str, tuple[Optional[str], Optional[str]]]] = None,
     ) -> tuple[list[dict[str, Any]], dict[int, list[str]]]:
-        """Evaluates scheduling constraints across all dependencies.
+        """Evaluates scheduling constraints across multi-dependency links with high performance.
 
-        Rules:
+        Supports standard link types:
             FS: Successor Start >= Predecessor End + Lag Days
             FF: Successor End >= Predecessor End + Lag Days
             SS: Successor Start >= Predecessor Start + Lag Days
@@ -93,75 +125,109 @@ class MilestoneService:
                 - task_violations: dict mapping task_id -> list of violation explanation strings.
         """
         bounds = project_bounds or {}
-        tasks_by_id = {int(t["id"]): t for t in tasks if "id" in t}
+        tasks_by_id: dict[int, dict[str, Any]] = {}
+        parsed_dates: dict[int, tuple[datetime.date, datetime.date]] = {}
+        task_violations: dict[int, list[str]] = {}
+
+        for t in tasks:
+            if "id" not in t:
+                continue
+            tid = int(t["id"])
+            tasks_by_id[tid] = t
+            task_violations[tid] = []
+            try:
+                s_str = str(t.get("start_date", "")).split()[0]
+                e_str = str(t.get("end_date", "")).split()[0]
+                parsed_dates[tid] = (
+                    datetime.date.fromisoformat(s_str),
+                    datetime.date.fromisoformat(e_str),
+                )
+            except Exception:
+                pass
+
         evaluated_deps: list[dict[str, Any]] = []
-        task_violations: dict[int, list[str]] = {int(t["id"]): [] for t in tasks if "id" in t}
 
         for dep in dependencies:
             task_id = dep.get("task_id")
-            if task_id is None or int(task_id) not in tasks_by_id:
+            if task_id is None:
+                continue
+            task_id = int(task_id)
+            if task_id not in tasks_by_id or task_id not in parsed_dates:
                 continue
 
-            task_id = int(task_id)
             task = tasks_by_id[task_id]
+            s_start_dt, s_end_dt = parsed_dates[task_id]
+
             pred_task_id = dep.get("predecessor_task_id")
             pred_proj_id = dep.get("predecessor_project_id")
             link_type = str(dep.get("link_type", "FS")).upper()
             lag_days = int(dep.get("lag_days", 0))
 
-            p_start: Optional[str] = None
-            p_end: Optional[str] = None
+            p_start_str: Optional[str] = None
+            p_end_str: Optional[str] = None
+            p_start_dt: Optional[datetime.date] = None
+            p_end_dt: Optional[datetime.date] = None
             p_label: str = "Predecessor"
 
             if pred_task_id is not None and int(pred_task_id) in tasks_by_id:
-                pred_task = tasks_by_id[int(pred_task_id)]
-                p_start = pred_task.get("start_date")
-                p_end = pred_task.get("end_date")
+                pid = int(pred_task_id)
+                pred_task = tasks_by_id[pid]
+                p_start_str = str(pred_task.get("start_date", ""))
+                p_end_str = str(pred_task.get("end_date", ""))
+                if pid in parsed_dates:
+                    p_start_dt, p_end_dt = parsed_dates[pid]
                 p_label = str(pred_task.get("task_name", f"Step #{pred_task_id}"))
             elif pred_task_id is not None:
-                p_start = dep.get("pred_start_date")
-                p_end = dep.get("pred_end_date")
+                p_start_str = dep.get("pred_start_date")
+                p_end_str = dep.get("pred_end_date")
                 p_label = f"{dep.get('predecessor_project_name') or pred_proj_id or 'Ext'} > {dep.get('predecessor_task_name') or f'Step #{pred_task_id}'}"
+                if p_start_str and p_end_str:
+                    try:
+                        p_start_dt = datetime.date.fromisoformat(str(p_start_str).split()[0])
+                        p_end_dt = datetime.date.fromisoformat(str(p_end_str).split()[0])
+                    except Exception:
+                        pass
             elif pred_proj_id is not None:
                 p_b = bounds.get(str(pred_proj_id), (None, None))
-                p_start, p_end = p_b
+                p_start_str, p_end_str = p_b
                 p_label = f"Project [{dep.get('predecessor_project_name') or pred_proj_id}]"
+                if p_start_str and p_end_str:
+                    try:
+                        p_start_dt = datetime.date.fromisoformat(str(p_start_str).split()[0])
+                        p_end_dt = datetime.date.fromisoformat(str(p_end_str).split()[0])
+                    except Exception:
+                        pass
 
-            if not p_start or not p_end:
+            if not p_start_dt or not p_end_dt:
                 evaluated_deps.append({**dep, "is_violated": False, "violation_text": None})
                 continue
 
-            s_start_dt = pd.to_datetime(task["start_date"])
-            s_end_dt = pd.to_datetime(task["end_date"])
-            p_start_dt = pd.to_datetime(p_start)
-            p_end_dt = pd.to_datetime(p_end)
-
+            delta = datetime.timedelta(days=lag_days)
             is_violated = False
             message = ""
-            target_dt = None
 
             if link_type == "FS":
-                target_dt = p_end_dt + pd.Timedelta(days=lag_days)
+                target_dt = p_end_dt + delta
                 is_violated = s_start_dt < target_dt
-                req_str = target_dt.strftime("%Y-%m-%d")
+                req_str = target_dt.isoformat()
                 act_str = str(task["start_date"])
                 message = f"FS with '{p_label}' ({lag_days:+d}d offset): Start must be ≥ {req_str} (actual: {act_str})"
             elif link_type == "FF":
-                target_dt = p_end_dt + pd.Timedelta(days=lag_days)
+                target_dt = p_end_dt + delta
                 is_violated = s_end_dt < target_dt
-                req_str = target_dt.strftime("%Y-%m-%d")
+                req_str = target_dt.isoformat()
                 act_str = str(task["end_date"])
                 message = f"FF with '{p_label}' ({lag_days:+d}d offset): End must be ≥ {req_str} (actual: {act_str})"
             elif link_type == "SS":
-                target_dt = p_start_dt + pd.Timedelta(days=lag_days)
+                target_dt = p_start_dt + delta
                 is_violated = s_start_dt < target_dt
-                req_str = target_dt.strftime("%Y-%m-%d")
+                req_str = target_dt.isoformat()
                 act_str = str(task["start_date"])
                 message = f"SS with '{p_label}' ({lag_days:+d}d offset): Start must be ≥ {req_str} (actual: {act_str})"
             elif link_type == "SF":
-                target_dt = p_start_dt + pd.Timedelta(days=lag_days)
+                target_dt = p_start_dt + delta
                 is_violated = s_end_dt < target_dt
-                req_str = target_dt.strftime("%Y-%m-%d")
+                req_str = target_dt.isoformat()
                 act_str = str(task["end_date"])
                 message = f"SF with '{p_label}' ({lag_days:+d}d offset): End must be ≥ {req_str} (actual: {act_str})"
 
@@ -169,8 +235,8 @@ class MilestoneService:
                 **dep,
                 "is_violated": is_violated,
                 "violation_text": message if is_violated else None,
-                "pred_start": p_start,
-                "pred_end": p_end,
+                "pred_start": p_start_str,
+                "pred_end": p_end_str,
                 "pred_label": p_label,
             }
             evaluated_deps.append(eval_dict)

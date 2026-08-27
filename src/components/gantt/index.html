@@ -97,12 +97,17 @@
       box-shadow: 0 1px 2px rgba(37, 99, 235, 0.25);
     }
 
-    /* Main Gantt Split Container */
-    .gantt-main {
+    /* Main Gantt Split Container with Synchronized Virtual Scrolling */
+    .gantt-viewport {
       display: flex;
       width: 100%;
+      max-height: 660px;
+      overflow-y: auto;
+      overflow-x: hidden;
       position: relative;
       background: #ffffff;
+      border-radius: 0 0 12px 12px;
+      scroll-behavior: auto;
     }
 
     /* Left Frozen Column */
@@ -115,6 +120,7 @@
       border-right: 2px solid var(--border-dark);
       z-index: 20;
       box-shadow: 3px 0 8px rgba(0, 0, 0, 0.03);
+      position: relative;
     }
 
     .frozen-header {
@@ -130,6 +136,14 @@
       letter-spacing: 0.05em;
       color: #475569;
       justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 30;
+    }
+
+    .virtual-canvas {
+      position: relative;
+      width: 100%;
     }
 
     .frozen-row {
@@ -141,6 +155,10 @@
       gap: 8px;
       transition: background 0.15s ease;
       cursor: context-menu;
+      position: absolute;
+      left: 0;
+      right: 0;
+      box-sizing: border-box;
     }
 
     .frozen-row:hover, .frozen-row.highlight {
@@ -193,7 +211,9 @@
       height: var(--header-height);
       background: var(--bg-header);
       border-bottom: 1px solid var(--border);
-      position: relative;
+      position: sticky;
+      top: 0;
+      z-index: 30;
       display: flex;
       flex-direction: column;
     }
@@ -249,7 +269,10 @@
     .timeline-row {
       height: var(--row-height);
       border-bottom: 1px solid var(--border);
-      position: relative;
+      position: absolute;
+      left: 0;
+      right: 0;
+      box-sizing: border-box;
       transition: background 0.15s ease;
     }
 
@@ -916,15 +939,17 @@
       </div>
     </div>
 
-    <!-- Main Gantt View -->
-    <div class="gantt-main" id="gantt-wrapper">
+    <!-- Main Gantt Virtual Scroll Viewport -->
+    <div class="gantt-viewport" id="gantt-viewport" onscroll="handleVirtualScroll()">
       <!-- Frozen Left Column -->
       <div class="frozen-column">
         <div class="frozen-header">
           <span>Task / Step Name</span>
           <span style="font-size: 10px; color: #94a3b8;">Phase</span>
         </div>
-        <div id="frozen-rows-container"></div>
+        <div class="virtual-canvas" id="frozen-virtual-canvas">
+          <div id="frozen-rows-container"></div>
+        </div>
       </div>
 
       <!-- Right Scrollable Timeline -->
@@ -937,7 +962,7 @@
           </div>
 
           <!-- Timeline Rows & SVG Dependencies Grid -->
-          <div class="timeline-body" id="timeline-body-container">
+          <div class="timeline-body virtual-canvas" id="timeline-body-container">
             <svg class="grid-svg" id="grid-svg" xmlns="http://www.w3.org/2000/svg">
               <defs>
                 <!-- Normal Grey Arrow Marker -->
@@ -1678,6 +1703,14 @@
 
     let isMultiProject = false;
     const collapsedProjects = new Set();
+    let hasInitializedCollapse = false;
+    let masterRenderItems = [];
+    let allTaskPositions = {};
+    let allProjectPositions = {};
+
+    function handleVirtualScroll() {
+      renderVirtualWindow();
+    }
 
     function toggleProjectCollapse(projectId, event) {
       if (event) event.stopPropagation();
@@ -1726,13 +1759,11 @@
         multiTools.style.display = isMultiProject ? 'flex' : 'none';
       }
 
-      // Prepare render items list (Project Groups + Tasks)
-      let renderItems = [];
-      if (isMultiProject) {
-        // Group tasks by project
-        const groups = {};
-        const projOrder = [];
+      // Group tasks by project
+      const groups = {};
+      const projOrder = [];
 
+      if (isMultiProject) {
         tasksData.forEach(t => {
           const pId = t.project_id || currentProjectId || "General";
           const pName = t.project_name || pId;
@@ -1743,6 +1774,13 @@
           groups[pId].tasks.push(t);
         });
 
+        // Initialize default collapsed if multi-project with many projects
+        if (!hasInitializedCollapse && projOrder.length > 1) {
+          projOrder.forEach(pId => collapsedProjects.add(pId));
+          hasInitializedCollapse = true;
+        }
+
+        masterRenderItems = [];
         projOrder.forEach(pId => {
           const grp = groups[pId];
           let pMin = null, pMax = null;
@@ -1755,7 +1793,7 @@
 
           const isCollapsed = collapsedProjects.has(pId);
 
-          renderItems.push({
+          masterRenderItems.push({
             type: 'project_header',
             project_id: pId,
             project_name: grp.name,
@@ -1767,7 +1805,7 @@
 
           if (!isCollapsed) {
             grp.tasks.forEach(t => {
-              renderItems.push({
+              masterRenderItems.push({
                 type: 'task',
                 task: t,
                 isChild: true
@@ -1776,8 +1814,9 @@
           }
         });
       } else {
+        masterRenderItems = [];
         tasksData.forEach(t => {
-          renderItems.push({
+          masterRenderItems.push({
             type: 'task',
             task: t,
             isChild: false
@@ -1785,12 +1824,123 @@
         });
       }
 
-      // 2. Render Frozen Left Column Rows
-      const frozenContainer = document.getElementById('frozen-rows-container');
-      frozenContainer.innerHTML = renderItems.map(item => {
+      // Pre-compute all positions for instant virtual window calculations & link anchors
+      allTaskPositions = {};
+      allProjectPositions = {};
+
+      masterRenderItems.forEach((item, rowIndex) => {
         if (item.type === 'project_header') {
-          return `
+          if (item.start && item.end) {
+            const pStartX = dateToX(parseDate(item.start));
+            const pEndX = dateToX(parseDate(item.end));
+            const pWidth = Math.max(16, pEndX - pStartX);
+            allProjectPositions[item.project_id] = {
+              startX: pStartX,
+              endX: pEndX,
+              centerY: rowIndex * 46 + 23,
+              rowIdx: rowIndex,
+              isMilestone: false,
+              isProject: true,
+              name: item.project_name
+            };
+          }
+        } else {
+          const t = item.task;
+          const sDate = parseDate(t.start);
+          const eDate = parseDate(t.end);
+          const isMilestone = t.start === t.end;
+          const startX = dateToX(sDate);
+          const endX = isMilestone ? startX : Math.max(startX + 24, dateToX(eDate));
+
+          allTaskPositions[String(t.id)] = {
+            startX: startX,
+            endX: endX,
+            centerY: rowIndex * 46 + 23,
+            rowIdx: rowIndex,
+            isMilestone: isMilestone,
+            isProject: false,
+            name: t.name,
+            project_id: t.project_id || currentProjectId
+          };
+        }
+      });
+
+      const totalHeight = Math.max(46, masterRenderItems.length * 46);
+
+      // Set Virtual Canvases Total Heights for native scrolling
+      const frozenCanvas = document.getElementById('frozen-virtual-canvas');
+      if (frozenCanvas) frozenCanvas.style.height = `${totalHeight}px`;
+
+      const timelineCanvas = document.getElementById('timeline-body-container');
+      if (timelineCanvas) timelineCanvas.style.height = `${totalHeight}px`;
+
+      const gridSvg = document.getElementById('grid-svg');
+      if (gridSvg) {
+        gridSvg.setAttribute('width', totalTimelineWidth);
+        gridSvg.setAttribute('height', totalHeight);
+      }
+
+      // Draw Grid vertical ticks
+      const ticksGroup = document.getElementById('grid-ticks-group');
+      if (ticksGroup) {
+        ticksGroup.innerHTML = '';
+        let accX = 0;
+        bottomCells.forEach(c => {
+          accX += c.width;
+          const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          line.setAttribute('x1', accX);
+          line.setAttribute('y1', 0);
+          line.setAttribute('x2', accX);
+          line.setAttribute('y2', totalHeight);
+          line.setAttribute('stroke', '#e2e8f0');
+          line.setAttribute('stroke-width', '1');
+          ticksGroup.appendChild(line);
+        });
+      }
+
+      // Adjust Viewport & Frame Height
+      const vpHeight = Math.min(680, Math.max(260, totalHeight + 40));
+      const viewport = document.getElementById('gantt-viewport');
+      if (viewport) {
+        viewport.style.maxHeight = `${vpHeight}px`;
+        viewport.style.height = `${vpHeight}px`;
+      }
+      const frameH = Math.max(360, Math.min(840, vpHeight + 130));
+      Streamlit.setFrameHeight(frameH);
+
+      // Render the virtual window
+      renderVirtualWindow();
+    }
+
+    function renderVirtualWindow() {
+      const viewport = document.getElementById('gantt-viewport');
+      const scrollTop = viewport ? viewport.scrollTop : 0;
+      const viewportHeight = viewport ? (viewport.clientHeight || 640) : 640;
+
+      const totalItems = masterRenderItems.length;
+      if (totalItems === 0) {
+        document.getElementById('frozen-rows-container').innerHTML = '';
+        document.getElementById('timeline-rows-container').innerHTML = '';
+        document.getElementById('grid-links-group').innerHTML = '';
+        return;
+      }
+
+      // Calculate visible row range with 12-row overscan buffer for smooth scrolling
+      const startIndex = Math.max(0, Math.floor(scrollTop / 46) - 12);
+      const endIndex = Math.min(totalItems - 1, Math.ceil((scrollTop + viewportHeight) / 46) + 12);
+
+      // 1. Render Visible Frozen Left Column Rows
+      const frozenContainer = document.getElementById('frozen-rows-container');
+      let frozenHtml = '';
+
+      for (let i = startIndex; i <= endIndex; i++) {
+        const item = masterRenderItems[i];
+        const topPos = i * 46;
+
+        if (item.type === 'project_header') {
+          frozenHtml += `
             <div class="frozen-row project-group-row" id="frozen-row-proj-${item.project_id}" 
+                 style="top: ${topPos}px;"
                  onclick="toggleProjectCollapse('${item.project_id}', event)"
                  oncontextmenu="showProjectContextMenu(event, '${item.project_id}')">
               <span class="collapse-toggle-icon" title="${item.isCollapsed ? 'Click to expand tasks' : 'Click to collapse tasks'}">${item.isCollapsed ? '▶' : '▼'}</span>
@@ -1804,8 +1954,9 @@
           const isMilestone = t.start === t.end;
           const icon = isMilestone ? '🔷' : '⏱️';
           const hasViol = t.violations && t.violations.length > 0;
-          return `
+          frozenHtml += `
             <div class="frozen-row ${item.isChild ? 'child-task-row' : ''}" id="frozen-row-${t.id}" 
+                 style="top: ${topPos}px;"
                  onmouseenter="highlightRow('${t.id}')" 
                  onmouseleave="unhighlightRow('${t.id}')"
                  oncontextmenu="showContextMenu(event, ${JSON.stringify(t).replace(/"/g, '&quot;')})">
@@ -1816,43 +1967,20 @@
             </div>
           `;
         }
-      }).join('');
+      }
+      frozenContainer.innerHTML = frozenHtml;
 
-      // 3. Render Right Timeline Rows & Grid
+      // 2. Render Visible Right Timeline Rows
       const rowsContainer = document.getElementById('timeline-rows-container');
-      const ticksGroup = document.getElementById('grid-ticks-group');
-      const linksGroup = document.getElementById('grid-links-group');
-      const gridSvg = document.getElementById('grid-svg');
-
       rowsContainer.innerHTML = '';
-      ticksGroup.innerHTML = '';
-      linksGroup.innerHTML = '';
 
-      const totalHeight = renderItems.length * 46;
-      gridSvg.setAttribute('width', totalTimelineWidth);
-      gridSvg.setAttribute('height', totalHeight);
+      for (let i = startIndex; i <= endIndex; i++) {
+        const item = masterRenderItems[i];
+        const topPos = i * 46;
 
-      // Grid vertical ticks
-      let accX = 0;
-      bottomCells.forEach(c => {
-        accX += c.width;
-        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-        line.setAttribute('x1', accX);
-        line.setAttribute('y1', 0);
-        line.setAttribute('x2', accX);
-        line.setAttribute('y2', totalHeight);
-        line.setAttribute('stroke', '#e2e8f0');
-        line.setAttribute('stroke-width', '1');
-        ticksGroup.appendChild(line);
-      });
-
-      // Render Rows
-      const taskPositions = {};
-      const projectPositions = {};
-
-      renderItems.forEach((item, rowIndex) => {
         const rowEl = document.createElement('div');
         rowEl.className = 'timeline-row';
+        rowEl.style.top = `${topPos}px`;
 
         if (item.type === 'project_header') {
           rowEl.classList.add('project-group-row');
@@ -1863,16 +1991,6 @@
             const pStartX = dateToX(parseDate(item.start));
             const pEndX = dateToX(parseDate(item.end));
             const pWidth = Math.max(16, pEndX - pStartX);
-
-            projectPositions[item.project_id] = {
-              startX: pStartX,
-              endX: pEndX,
-              centerY: rowIndex * 46 + 23,
-              rowIdx: rowIndex,
-              isMilestone: false,
-              isProject: true,
-              name: item.project_name
-            };
 
             const pBar = document.createElement('div');
             pBar.className = 'project-summary-bar';
@@ -1888,7 +2006,7 @@
             rowEl.appendChild(pBar);
           }
           rowsContainer.appendChild(rowEl);
-          return;
+          continue;
         }
 
         const t = item.task;
@@ -1904,17 +2022,6 @@
         const endX = isMilestone ? startX : Math.max(startX + 24, dateToX(eDate));
         const barWidth = Math.max(20, endX - startX);
         const hasViol = t.violations && t.violations.length > 0;
-
-        taskPositions[String(t.id)] = {
-          startX: startX,
-          endX: endX,
-          centerY: rowIndex * 46 + 23,
-          rowIdx: rowIndex,
-          isMilestone: isMilestone,
-          isProject: false,
-          name: t.name,
-          project_id: t.project_id || currentProjectId
-        };
 
         if (isMilestone) {
           const mWrapper = document.createElement('div');
@@ -1948,13 +2055,16 @@
         }
 
         rowsContainer.appendChild(rowEl);
-      });
+      }
 
-      // 4. Render All Multi-Dependencies Links
+      // 3. Render Viewport-Culled Dependency Links
+      const linksGroup = document.getElementById('grid-links-group');
+      linksGroup.innerHTML = '';
+
       tasksData.forEach(t => {
         const deps = t.dependenciesList || [];
         const tProjId = t.project_id || currentProjectId;
-        const succ = taskPositions[String(t.id)] || (collapsedProjects.has(tProjId) ? projectPositions[tProjId] : null);
+        const succ = allTaskPositions[String(t.id)] || (collapsedProjects.has(tProjId) ? allProjectPositions[tProjId] : null);
         if (!succ) return;
 
         deps.forEach(dep => {
@@ -1966,18 +2076,25 @@
           const strokeW = isViolated ? '2.5' : '1.8';
 
           let pred = null;
-          if (pTaskId && taskPositions[pTaskId]) {
-            pred = taskPositions[pTaskId];
-          } else if (!pTaskId && pProjId && projectPositions[pProjId]) {
-            // Whole project link and this project is visible on timeline!
-            pred = projectPositions[pProjId];
-          } else if (pTaskId && !taskPositions[pTaskId] && pProjId && projectPositions[pProjId] && collapsedProjects.has(pProjId)) {
-            // Predecessor task's project is collapsed, connect to project summary bar
-            pred = projectPositions[pProjId];
+          if (pTaskId && allTaskPositions[pTaskId]) {
+            pred = allTaskPositions[pTaskId];
+          } else if (!pTaskId && pProjId && allProjectPositions[pProjId]) {
+            pred = allProjectPositions[pProjId];
+          } else if (pTaskId && !allTaskPositions[pTaskId] && pProjId && allProjectPositions[pProjId] && collapsedProjects.has(pProjId)) {
+            pred = allProjectPositions[pProjId];
           }
 
           if (pred) {
-            if (pred === succ) return; // avoid self-loop on collapsed group
+            if (pred === succ) return;
+
+            // Viewport Link Culling Check:
+            // Only draw if pred or succ is within buffer of visible window, or link crosses the visible window
+            const minRow = Math.min(pred.rowIdx, succ.rowIdx);
+            const maxRow = Math.max(pred.rowIdx, succ.rowIdx);
+            if (maxRow < startIndex - 3 || minRow > endIndex + 3) {
+              return; // Culled!
+            }
+
             const linkType = (dep.link_type || 'FS').toUpperCase();
 
             let pX, pY, sX, sY;
@@ -2030,7 +2147,11 @@
             }
             linksGroup.appendChild(path);
           } else if (pProjId || dep.pred_start_date) {
-            // External project / off-screen step dependency marker
+            // External project entry marker: only draw if succ is in visible window
+            if (succ.rowIdx < startIndex - 2 || succ.rowIdx > endIndex + 2) {
+              return;
+            }
+
             const sX = succ.isMilestone ? succ.startX - 9 : succ.startX;
             const sY = succ.centerY - 6;
             const inX = sX - 22;
@@ -2052,8 +2173,6 @@
           }
         });
       });
-
-      setTimeout(() => Streamlit.setFrameHeight(), 100);
     }
 
     function highlightRow(id) {
@@ -2183,6 +2302,56 @@
     });
 
     Streamlit.setComponentReady();
+
+    // Attach high-performance scrolling & wheel forwarding listeners
+    document.addEventListener('DOMContentLoaded', function() {
+      const viewport = document.getElementById('gantt-viewport');
+      const scroller = document.getElementById('timeline-scroller');
+
+      if (viewport) {
+        viewport.addEventListener('scroll', handleVirtualScroll, { passive: true });
+      }
+
+      if (scroller && viewport) {
+        scroller.addEventListener('wheel', function(e) {
+          if (Math.abs(e.deltaY) > 0) {
+            viewport.scrollTop += e.deltaY;
+            handleVirtualScroll();
+            if (Math.abs(e.deltaY) >= Math.abs(e.deltaX)) {
+              e.preventDefault();
+            }
+          }
+        }, { passive: false });
+      }
+
+      window.addEventListener('scroll', handleVirtualScroll, { passive: true });
+      window.addEventListener('resize', handleVirtualScroll, { passive: true });
+    });
+
+    // Also run listener setup immediately in case DOM is already loaded
+    (function() {
+      const viewport = document.getElementById('gantt-viewport');
+      const scroller = document.getElementById('timeline-scroller');
+
+      if (viewport) {
+        viewport.addEventListener('scroll', handleVirtualScroll, { passive: true });
+      }
+
+      if (scroller && viewport) {
+        scroller.addEventListener('wheel', function(e) {
+          if (Math.abs(e.deltaY) > 0) {
+            viewport.scrollTop += e.deltaY;
+            handleVirtualScroll();
+            if (Math.abs(e.deltaY) >= Math.abs(e.deltaX)) {
+              e.preventDefault();
+            }
+          }
+        }, { passive: false });
+      }
+
+      window.addEventListener('scroll', handleVirtualScroll, { passive: true });
+      window.addEventListener('resize', handleVirtualScroll, { passive: true });
+    })();
   </script>
 </body>
 </html>

@@ -49,14 +49,23 @@ def render_planning_milestones(
 
     if enable_multi_project:
         all_proj_ids = df_projects["id"].tolist()
-        selected_projects = top_col1.multiselect(
-            "Filter Projects in Timeline",
-            options=all_proj_ids,
-            default=all_proj_ids,
-            format_func=lambda x: f"{x} - {proj_map.get(x, '')}",
-            key="ms_multi_projects",
+        filter_mode = top_col1.radio(
+            "Filter Scope",
+            options=["🌐 All Projects", "🔍 Select Specific Projects"],
+            horizontal=True,
+            key="rg_multi_filter_mode",
         )
-        if not selected_projects:
+        if filter_mode == "🔍 Select Specific Projects":
+            selected_projects = top_col1.multiselect(
+                "Select Projects to Display",
+                options=all_proj_ids,
+                default=all_proj_ids[:10] if len(all_proj_ids) > 10 else all_proj_ids,
+                format_func=lambda x: f"{x} - {proj_map.get(x, '')}",
+                key="ms_multi_projects",
+            )
+            if not selected_projects:
+                selected_projects = all_proj_ids
+        else:
             selected_projects = all_proj_ids
         selected_id = selected_projects[0]
 
@@ -90,38 +99,22 @@ def render_planning_milestones(
     else:
         st.subheader(f"Timeline Schedule: {selected_id}")
 
-    # Fetch all dependencies and project bounds for constraint evaluation
-    all_projects_df = project_repo.get_all_projects()
-    all_projects_list = [{"id": str(r["id"]), "name": f"{r['id']} - {r['name']}"} for _, r in all_projects_df.iterrows()]
+    # Fetch all project bounds for constraint evaluation in fast batch queries
+    all_projects_list = [{"id": str(r["id"]), "name": f"{r['id']} - {r['name']}"} for _, r in df_projects.iterrows()]
+    project_bounds = milestone_repo.get_all_project_date_bounds()
 
-    project_bounds: dict[str, tuple[Optional[str], Optional[str]]] = {}
-    external_tasks_map: dict[str, list[dict[str, Any]]] = {}
-    for p_id in all_projects_df["id"]:
-        p_str = str(p_id)
-        project_bounds[p_str] = milestone_repo.get_project_date_bounds(p_str)
-        ext_df = milestone_repo.get_milestones_by_project(p_str)
-        external_tasks_map[p_str] = [
-            {"id": int(r["id"]), "task_name": str(r["task_name"]), "start_date": str(r["start_date"]), "end_date": str(r["end_date"])}
-            for _, r in ext_df.iterrows()
-        ]
-
-    # Gather tasks and dependencies for active project(s)
-    combined_steps_df = pd.DataFrame()
-    raw_dependencies: list[dict[str, Any]] = []
-
-    for p_id in selected_projects:
-        p_steps = milestone_repo.get_milestones_by_project(p_id)
-        if not p_steps.empty:
-            p_steps_copy = p_steps.copy()
-            p_steps_copy["project_id"] = p_id
-            p_steps_copy["project_name"] = f"{p_id} - {proj_map.get(p_id, '')}"
-            combined_steps_df = pd.concat([combined_steps_df, p_steps_copy], ignore_index=True)
-            p_deps = milestone_repo.get_dependencies_for_project(p_id)
-            raw_dependencies.extend(p_deps)
+    # Gather tasks and dependencies for active project(s) via batch queries
+    combined_steps_df = milestone_repo.get_milestones_for_projects(selected_projects)
+    if not combined_steps_df.empty:
+        combined_steps_df["project_name"] = combined_steps_df["project_id"].apply(
+            lambda pid: f"{pid} - {proj_map.get(pid, '')}"
+        )
+    raw_dependencies = milestone_repo.get_dependencies_for_projects(selected_projects)
 
     if combined_steps_df.empty:
         st.info("No steps defined for the selected project(s) yet. Add steps below or upload a schedule CSV.")
     else:
+        steps_records = combined_steps_df.to_dict(orient="records")
         raw_tasks = [
             {
                 "id": int(row["id"]),
@@ -133,18 +126,25 @@ def render_planning_milestones(
                 "project_id": str(row.get("project_id", selected_id)),
                 "project_name": str(row.get("project_name", "")),
             }
-            for _, row in combined_steps_df.iterrows()
+            for row in steps_records
         ]
 
         evaluated_deps, task_violations = MilestoneService.evaluate_constraints(
             raw_tasks, raw_dependencies, project_bounds
         )
 
-        # Build gantt tasks payload
+        # Index evaluated dependencies by task_id in O(N)
+        deps_by_task_id: dict[int, list[dict[str, Any]]] = {}
+        for d in evaluated_deps:
+            t_id = d.get("task_id")
+            if t_id is not None:
+                deps_by_task_id.setdefault(int(t_id), []).append(d)
+
+        # Build gantt tasks payload in fast O(N)
         gantt_tasks = []
-        for _, row in combined_steps_df.iterrows():
+        for row in steps_records:
             tid = int(row["id"])
-            task_deps = [d for d in evaluated_deps if int(d["task_id"]) == tid]
+            task_deps = deps_by_task_id.get(tid, [])
             first_pred = task_deps[0]["predecessor_task_id"] if task_deps and task_deps[0].get("predecessor_task_id") else None
             dep_str = str(int(first_pred)) if first_pred is not None else ""
 
@@ -164,11 +164,10 @@ def render_planning_milestones(
             })
 
         # Render custom drag-and-drop component with multi-dependency metadata
-        widget_key = f"gantt_widget_{'_'.join(selected_projects)}" if enable_multi_project else f"gantt_widget_{selected_id}"
+        widget_key = f"gantt_widget_{len(selected_projects)}_{selected_id}" if enable_multi_project else f"gantt_widget_{selected_id}"
         gantt_event = _interactive_gantt(
             tasks=gantt_tasks,
             all_projects=all_projects_list,
-            external_tasks=external_tasks_map,
             project_id=selected_id,
             is_multi_project=enable_multi_project,
             key=widget_key,
@@ -346,7 +345,7 @@ def render_planning_milestones(
 
         with st.expander("➕ Add a Predecessor Link", expanded=(len(cur_add_deps) == 0)):
             is_ext = st.checkbox("Link to an external project / task", key="chk_add_ext_pred")
-            all_proj_df = project_repo.get_all_projects()
+            all_proj_df = df_projects
             col_p1, col_p2, col_p3 = st.columns([2, 1, 1])
 
             builder_target: tuple[Optional[str], Optional[int], Optional[str]] = (None, None, None)
@@ -525,7 +524,7 @@ def render_planning_milestones(
             # Predecessor Builder for Edited Step
             with st.expander("➕ Add a Predecessor Link", expanded=(len(cur_edit_deps) == 0)):
                 is_edit_ext = st.checkbox("Link to an external project / task", key=f"chk_edit_ext_{edit_step_id}")
-                all_proj_df = project_repo.get_all_projects()
+                all_proj_df = df_projects
                 col_pe1, col_pe2, col_pe3 = st.columns([2, 1, 1])
                 edit_builder_target: tuple[Optional[str], Optional[int], Optional[str]] = (None, None, None)
 
