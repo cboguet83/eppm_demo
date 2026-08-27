@@ -35,9 +35,15 @@ def render_project_master(
     # --------------------------------------------------------------------------
     with tab_create:
         st.subheader("Create a New Project")
+        auto_id = project_repo.generate_project_id()
         with st.form("form_create_project", clear_on_submit=True):
             col1, col2 = st.columns(2)
-            new_id = col1.text_input("Project Code / ID *", placeholder="e.g. PRJ-006")
+            new_id = col1.text_input(
+                "Project Code / ID *",
+                value=auto_id,
+                disabled=True,
+                help="Auto-calculated unique project code",
+            )
             new_name = col2.text_input("Project Title *", placeholder="e.g. Cloud Data Lake Platform")
 
             col3, col4, col5 = st.columns(3)
@@ -99,7 +105,7 @@ def render_project_master(
 
             btn_submit = st.form_submit_button("💾 Save New Project", width="stretch")
             if btn_submit:
-                clean_id = new_id.strip()
+                clean_id = auto_id.strip() if auto_id else new_id.strip()
                 clean_name = new_name.strip()
 
                 if not clean_id or not clean_name:
@@ -145,7 +151,8 @@ def render_project_master(
             curr_dyn = {}
 
         with st.form("form_edit_project"):
-            col1, col2 = st.columns(2)
+            col_id, col1, col2 = st.columns([1, 2, 1])
+            col_id.text_input("Project Code / ID", value=selected_id, disabled=True)
             edit_name = col1.text_input("Project Title *", value=str(curr_row["name"]))
             edit_status_idx = STATUS_LIST.index(curr_row["status"]) if curr_row["status"] in STATUS_LIST else 0
             edit_status = col2.selectbox("Status", options=STATUS_LIST, index=edit_status_idx)

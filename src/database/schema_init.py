@@ -105,6 +105,7 @@ def init_db(db_path: Optional[str] = None) -> None:
                 start_date TEXT NOT NULL,
                 end_date TEXT NOT NULL,
                 progress_pct INTEGER DEFAULT 0,
+                description TEXT DEFAULT '',
                 predecessor_id INTEGER,
                 FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE CASCADE,
                 FOREIGN KEY (predecessor_id) REFERENCES project_milestones (id) ON DELETE SET NULL
@@ -118,6 +119,8 @@ def init_db(db_path: Optional[str] = None) -> None:
             cursor.execute("ALTER TABLE project_milestones ADD COLUMN phase TEXT DEFAULT 'General'")
         if "progress_pct" not in milestone_cols:
             cursor.execute("ALTER TABLE project_milestones ADD COLUMN progress_pct INTEGER DEFAULT 0")
+        if "description" not in milestone_cols:
+            cursor.execute("ALTER TABLE project_milestones ADD COLUMN description TEXT DEFAULT ''")
         if "predecessor_id" not in milestone_cols:
             cursor.execute("ALTER TABLE project_milestones ADD COLUMN predecessor_id INTEGER")
 

@@ -102,20 +102,24 @@ class TestServices(unittest.TestCase):
         self.assertEqual(SchemaService.get_next_available_group_order(self.temp_db_path), 3)
 
     def test_milestone_service_parse_csv(self) -> None:
-        """Verify parsing valid step/milestone CSV data including predecessor_id and 0-duration milestones."""
+        """Verify parsing valid step/milestone CSV data including description, predecessor_id and 0-duration milestones."""
         csv_data = io.StringIO(
-            "task_name,phase,start_date,end_date,progress_pct,predecessor_id\n"
-            "Deploy API,Phase 1,2026-01-01,2026-01-15,100,\n"
-            "Milestone Gate 1,Phase 1,2026-01-15,2026-01-15,100,1\n"
-            "Build UI,Phase 2,2026-01-16,2026-02-15,50,2\n"
+            "task_name,phase,start_date,end_date,progress_pct,description,predecessor_id\n"
+            "Deploy API,Phase 1,2026-01-01,2026-01-15,100,Backend service deploy,\n"
+            "Milestone Gate 1,Phase 1,2026-01-15,2026-01-15,100,Gate review signoff,1\n"
+            "Build UI,Phase 2,2026-01-16,2026-02-15,50,,2\n"
         )
         parsed = MilestoneService.parse_csv(csv_data, "PRJ-999")
         self.assertEqual(len(parsed), 3)
         self.assertEqual(parsed[0]["project_id"], "PRJ-999")
         self.assertEqual(parsed[0]["task_name"], "Deploy API")
+        self.assertEqual(parsed[0]["description"], "Backend service deploy")
         self.assertIsNone(parsed[0]["predecessor_id"])
         self.assertEqual(parsed[1]["start_date"], parsed[1]["end_date"])
+        self.assertEqual(parsed[1]["description"], "Gate review signoff")
         self.assertEqual(parsed[1]["predecessor_id"], 1)
+        self.assertEqual(parsed[2]["description"], "")
+        self.assertIn("description", MilestoneService.get_csv_template())
 
     def test_milestone_service_parse_csv_invalid_dates(self) -> None:
         """Verify error raised when end_date is before start_date."""

@@ -58,6 +58,22 @@ def run_app() -> None:
 
     st.set_page_config(page_title="PPM Studio Pro", page_icon="🏗️", layout="wide")
 
+    # Hide Streamlit Deploy button and default top decoration
+    st.markdown(
+        """
+        <style>
+        .stDeployButton, [data-testid="stDeployButton"], .stAppDeployButton, [data-testid="stDecoration"] {
+            display: none !important;
+            visibility: hidden !important;
+        }
+        #MainMenu { visibility: hidden; }
+        header [data-testid="stToolbar"] { visibility: hidden; }
+        footer { visibility: hidden; }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
     # Instantiate decoupled repositories
     schema_repo = SchemaRepository()
     project_repo = ProjectRepository()

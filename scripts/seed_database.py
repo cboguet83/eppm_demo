@@ -178,6 +178,7 @@ def seed_database(
                 cur_date = task_end + datetime.timedelta(days=random.randint(0, 5))
 
             prog_pct = random.choice([0, 0, 25, 50, 75, 100, 100])
+            desc = f"Scope & deliverables for {display_name}" if random.random() > 0.35 else ""
 
             milestones_data.append((
                 p_id,
@@ -186,6 +187,7 @@ def seed_database(
                 task_start.isoformat(),
                 task_end.isoformat(),
                 prog_pct,
+                desc,
             ))
 
             project_task_indices[p_id].append(global_task_counter)
@@ -261,8 +263,8 @@ def seed_database(
         # Batch insert project milestones
         cursor.executemany(
             """
-            INSERT INTO project_milestones (project_id, task_name, phase, start_date, end_date, progress_pct)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO project_milestones (project_id, task_name, phase, start_date, end_date, progress_pct, description)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             milestones_data,
         )

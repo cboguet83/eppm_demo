@@ -155,7 +155,12 @@ def render_schema_definition(schema_repo: SchemaRepository) -> None:
         with st.form("form_add_param"):
             col1, col2 = st.columns(2)
             auto_id = SchemaService.generate_param_id()
-            new_param_id = col1.text_input("Parameter ID *", value=auto_id, help="Unique identifier key")
+            new_param_id = col1.text_input(
+                "Parameter ID *",
+                value=auto_id,
+                disabled=True,
+                help="Auto-calculated unique identifier key",
+            )
             new_param_name = col2.text_input("Parameter Label / Name *", placeholder="e.g. Tech Stack or Department")
 
             col3, col4 = st.columns(2)
@@ -187,7 +192,7 @@ def render_schema_definition(schema_repo: SchemaRepository) -> None:
 
             btn_add_param = st.form_submit_button("➕ Add Parameter", width="stretch")
             if btn_add_param:
-                clean_pid = new_param_id.strip()
+                clean_pid = auto_id.strip() if auto_id else new_param_id.strip()
                 clean_pname = new_param_name.strip()
                 if not clean_pid or not clean_pname:
                     st.error("Parameter ID and Label are required.")

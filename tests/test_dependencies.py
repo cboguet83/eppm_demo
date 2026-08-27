@@ -311,6 +311,96 @@ class TestTaskDependencies(unittest.TestCase):
         self.assertEqual(len(violations.get(3, [])), 1)
         self.assertEqual(len(violations.get(4, [])), 1)
 
+    def test_create_milestone_without_and_with_dependencies(self) -> None:
+        """Verify creating steps with empty dependencies list or None works seamlessly."""
+        # 1. Create milestone with empty dependencies
+        step_id_1 = self.milestone_repo.create_milestone(
+            project_id="PRJ-ALPHA",
+            task_name="Standalone Step 1",
+            phase="Phase 1 - FAI",
+            start_date="2026-02-01",
+            end_date="2026-02-10",
+            progress_pct=25,
+            dependencies=[],
+        )
+        self.assertGreater(step_id_1, 0)
+        deps_1 = self.milestone_repo.get_task_dependencies(step_id_1)
+        self.assertEqual(len(deps_1), 0)
+
+        # 2. Create milestone with None dependencies
+        step_id_2 = self.milestone_repo.create_milestone(
+            project_id="PRJ-ALPHA",
+            task_name="Standalone Step 2",
+            phase="Phase 1 - FAI",
+            start_date="2026-02-11",
+            end_date="2026-02-20",
+            progress_pct=0,
+            dependencies=None,
+        )
+        self.assertGreater(step_id_2, 0)
+        deps_2 = self.milestone_repo.get_task_dependencies(step_id_2)
+        self.assertEqual(len(deps_2), 0)
+
+        # 3. Add single dependency via add_dependency
+        self.milestone_repo.add_dependency(
+            task_id=step_id_2,
+            predecessor_task_id=step_id_1,
+            link_type="FS",
+            lag_days=1,
+        )
+        deps_2_updated = self.milestone_repo.get_task_dependencies(step_id_2)
+        self.assertEqual(len(deps_2_updated), 1)
+        self.assertEqual(deps_2_updated[0]["predecessor_task_id"], step_id_1)
+        self.assertEqual(deps_2_updated[0]["link_type"], "FS")
+        self.assertEqual(deps_2_updated[0]["lag_days"], 1)
+
+    def test_generate_project_id_sequence(self) -> None:
+        """Verify sequential project ID generation (PRJ-001, PRJ-002, etc.)."""
+        # Initially we have PRJ-ALPHA and PRJ-BETA (no numerical PRJ-XXX)
+        next_id_1 = self.project_repo.generate_project_id()
+        self.assertEqual(next_id_1, "PRJ-001")
+
+        self.project_repo.create_project("PRJ-001", "Project 1", "Active", 10000.0, 0.0, {})
+        next_id_2 = self.project_repo.generate_project_id()
+        self.assertEqual(next_id_2, "PRJ-002")
+
+        self.project_repo.create_project("PRJ-009", "Project 9", "Active", 10000.0, 0.0, {})
+        next_id_3 = self.project_repo.generate_project_id()
+        self.assertEqual(next_id_3, "PRJ-010")
+
+    def test_milestone_description_crud(self) -> None:
+        """Verify creating, updating, and reading milestone description field."""
+        step_id = self.milestone_repo.create_milestone(
+            project_id="PRJ-ALPHA",
+            task_name="Analysis Task",
+            phase="Phase 1 - Inception",
+            start_date="2026-03-01",
+            end_date="2026-03-10",
+            progress_pct=10,
+            description="Detailed scoping document deliverables",
+        )
+        self.assertGreater(step_id, 0)
+
+        df = self.milestone_repo.get_milestones_by_project("PRJ-ALPHA")
+        row = df[df["id"] == step_id].iloc[0]
+        self.assertEqual(row["description"], "Detailed scoping document deliverables")
+
+        # Update description
+        self.milestone_repo.update_milestone(
+            milestone_id=step_id,
+            task_name="Analysis Task Updated",
+            phase="Phase 1 - Inception",
+            start_date="2026-03-01",
+            end_date="2026-03-12",
+            progress_pct=20,
+            description="Updated scope specifications",
+        )
+
+        df_updated = self.milestone_repo.get_milestones_by_project("PRJ-ALPHA")
+        row_updated = df_updated[df_updated["id"] == step_id].iloc[0]
+        self.assertEqual(row_updated["description"], "Updated scope specifications")
+
 
 if __name__ == "__main__":
     unittest.main()
+

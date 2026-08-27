@@ -48,6 +48,34 @@ class ProjectRepository:
             cursor.execute("SELECT 1 FROM projects WHERE id = ?", (project_id.strip(),))
             return cursor.fetchone() is not None
 
+    def generate_project_id(self) -> str:
+        """Generates the next sequential project ID (e.g. PRJ-001, PRJ-002).
+
+        Returns:
+            str: Next sequential project ID.
+        """
+        with get_db(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id FROM projects")
+            rows = cursor.fetchall()
+
+            max_num = 0
+            for (val,) in rows:
+                if isinstance(val, str) and val.startswith("PRJ-"):
+                    parts = val.split("-")
+                    if len(parts) >= 2 and parts[1].isdigit():
+                        try:
+                            max_num = max(max_num, int(parts[1]))
+                        except ValueError:
+                            pass
+
+            next_num = max_num + 1
+            candidate = f"PRJ-{next_num:03d}"
+            while self.exists(candidate):
+                next_num += 1
+                candidate = f"PRJ-{next_num:03d}"
+            return candidate
+
     def create_project(
         self,
         project_id: str,

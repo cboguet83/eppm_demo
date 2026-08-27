@@ -18,10 +18,10 @@ class MilestoneService:
             str: CSV text template with sample header and rows.
         """
         return (
-            "task_name,phase,start_date,end_date,progress_pct,predecessor_id\n"
-            "Architecture Scoping,Phase 1 - Inception,2026-06-01,2026-06-15,100,\n"
-            "Architecture Milestone,Phase 1 - Inception,2026-06-15,2026-06-15,100,1\n"
-            "Core Build,Phase 2 - Build,2026-06-16,2026-07-30,50,2\n"
+            "task_name,phase,start_date,end_date,progress_pct,description,predecessor_id\n"
+            "Architecture Scoping,Phase 1 - Inception,2026-06-01,2026-06-15,100,Define system blueprint,\n"
+            "Architecture Milestone,Phase 1 - Inception,2026-06-15,2026-06-15,100,Sign-off on specs,1\n"
+            "Core Build,Phase 2 - Build,2026-06-16,2026-07-30,50,Core API services,2\n"
         )
 
     @staticmethod
@@ -73,6 +73,7 @@ class MilestoneService:
                 )
 
             phase = str(row.get("phase", "General")).strip() or "General"
+            description = str(row.get("description", "")).strip() if pd.notna(row.get("description")) else ""
 
             try:
                 progress = int(row.get("progress_pct", 0)) if pd.notna(row.get("progress_pct")) else 0
@@ -95,6 +96,7 @@ class MilestoneService:
                 "start_date": start_date,
                 "end_date": end_date,
                 "progress_pct": progress,
+                "description": description,
                 "predecessor_id": predecessor_id,
             })
 

@@ -34,7 +34,7 @@ class MilestoneRepository:
             return pd.read_sql(
                 """
                 SELECT m.id, m.project_id, m.task_name, m.phase, m.start_date, m.end_date, 
-                       m.progress_pct, m.predecessor_id, p.task_name AS predecessor_name
+                       m.progress_pct, m.description, m.predecessor_id, p.task_name AS predecessor_name
                 FROM project_milestones m
                 LEFT JOIN project_milestones p ON m.predecessor_id = p.id
                 WHERE m.project_id = ?
@@ -147,6 +147,54 @@ class MilestoneRepository:
                     )
             conn.commit()
 
+    def add_dependency(
+        self,
+        task_id: int,
+        predecessor_task_id: Optional[int] = None,
+        predecessor_project_id: Optional[str] = None,
+        link_type: str = "FS",
+        lag_days: int = 0,
+    ) -> None:
+        """Adds a single dependency for a milestone/task.
+
+        Args:
+            task_id: Successor task ID.
+            predecessor_task_id: Predecessor task ID (internal or cross-project).
+            predecessor_project_id: Predecessor project ID (for project-level dependencies).
+            link_type: Dependency link type (FS, FF, SS, SF).
+            lag_days: Offset in calendar days.
+        """
+        p_task = None
+        if predecessor_task_id is not None:
+            try:
+                p_task = int(predecessor_task_id)
+                if p_task == task_id:
+                    return
+            except (ValueError, TypeError):
+                p_task = None
+
+        p_proj = str(predecessor_project_id).strip() if predecessor_project_id else None
+        l_type = str(link_type).upper().strip()
+        if l_type not in ("FS", "FF", "SS", "SF"):
+            l_type = "FS"
+        try:
+            lag = int(lag_days)
+        except (ValueError, TypeError):
+            lag = 0
+
+        if p_task is not None or p_proj is not None:
+            with get_db(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT INTO task_dependencies 
+                    (task_id, predecessor_task_id, predecessor_project_id, link_type, lag_days)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (task_id, p_task, p_proj, l_type, lag),
+                )
+                conn.commit()
+
     def get_project_date_bounds(self, project_id: str) -> tuple[Optional[str], Optional[str]]:
         """Calculates the overall earliest start date and latest end date of a project.
 
@@ -224,7 +272,7 @@ class MilestoneRepository:
             return pd.read_sql(
                 f"""
                 SELECT m.id, m.project_id, m.task_name, m.phase, m.start_date, m.end_date, 
-                       m.progress_pct, m.predecessor_id, p.task_name AS predecessor_name
+                       m.progress_pct, m.description, m.predecessor_id, p.task_name AS predecessor_name
                 FROM project_milestones m
                 LEFT JOIN project_milestones p ON m.predecessor_id = p.id
                 WHERE m.project_id IN ({placeholders})
@@ -280,6 +328,7 @@ class MilestoneRepository:
         progress_pct: int,
         predecessor_id: Optional[int] = None,
         dependencies: Optional[list[dict[str, Any]]] = None,
+        description: Optional[str] = None,
     ) -> int:
         """Creates a single project step or milestone.
 
@@ -292,17 +341,20 @@ class MilestoneRepository:
             progress_pct: Completion percentage.
             predecessor_id: Optional legacy single predecessor milestone ID.
             dependencies: Optional list of dependency dictionaries.
+            description: Optional detailed step description.
 
         Returns:
             int: Newly created milestone ID.
         """
+        clean_desc = description.strip() if description else ""
+
         with get_db(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
                 INSERT INTO project_milestones 
-                (project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id) 
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                (project_id, task_name, phase, start_date, end_date, progress_pct, description, predecessor_id) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     project_id.strip(),
@@ -311,6 +363,7 @@ class MilestoneRepository:
                     start_date.strip(),
                     end_date.strip(),
                     progress_pct,
+                    clean_desc,
                     predecessor_id,
                 ),
             )
@@ -337,6 +390,7 @@ class MilestoneRepository:
         progress_pct: int,
         predecessor_id: Optional[int] = None,
         dependencies: Optional[list[dict[str, Any]]] = None,
+        description: Optional[str] = None,
     ) -> bool:
         """Updates an existing project step or milestone.
 
@@ -349,18 +403,20 @@ class MilestoneRepository:
             progress_pct: Updated progress percentage.
             predecessor_id: Optional legacy single predecessor milestone ID.
             dependencies: Optional list of dependency dictionaries.
+            description: Optional detailed step description.
 
         Returns:
             bool: True if row was updated.
         """
         clean_pred = predecessor_id if predecessor_id != milestone_id else None
+        clean_desc = description.strip() if description is not None else ""
 
         with get_db(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
                 UPDATE project_milestones 
-                SET task_name = ?, phase = ?, start_date = ?, end_date = ?, progress_pct = ?, predecessor_id = ?
+                SET task_name = ?, phase = ?, start_date = ?, end_date = ?, progress_pct = ?, description = ?, predecessor_id = ?
                 WHERE id = ?
                 """,
                 (
@@ -369,6 +425,7 @@ class MilestoneRepository:
                     start_date.strip(),
                     end_date.strip(),
                     progress_pct,
+                    clean_desc,
                     clean_pred,
                     milestone_id,
                 ),
@@ -411,7 +468,7 @@ class MilestoneRepository:
 
         Args:
             milestone_id: Step ID.
-            progress_pct: Percentage from 0 to 100.
+            progress_pct: Progress integer 0-100.
 
         Returns:
             bool: True if updated.
@@ -429,7 +486,7 @@ class MilestoneRepository:
         """Bulk inserts step/milestone records in a single database transaction.
 
         Args:
-            rows: List of dictionary records with keys [project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id].
+            rows: List of dictionary records with keys [project_id, task_name, phase, start_date, end_date, progress_pct, description, predecessor_id].
 
         Returns:
             int: Number of successfully inserted records.
@@ -447,6 +504,7 @@ class MilestoneRepository:
                     r["start_date"],
                     r["end_date"],
                     int(r.get("progress_pct", 0)),
+                    str(r.get("description", "")),
                     r.get("predecessor_id"),
                 )
                 for r in rows
@@ -454,8 +512,8 @@ class MilestoneRepository:
             cursor.executemany(
                 """
                 INSERT INTO project_milestones 
-                (project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id) 
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                (project_id, task_name, phase, start_date, end_date, progress_pct, description, predecessor_id) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 params_list,
             )
