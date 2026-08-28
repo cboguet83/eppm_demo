@@ -53,8 +53,8 @@ class TestPPMStudio(unittest.TestCase):
             "schema_groups",
             "schema_parameters",
             "schema_param_options",
-            "projects",
-            "project_milestones",
+            "project",
+            "project_task",
         }
         self.assertTrue(expected_tables.issubset(tables))
 
@@ -69,9 +69,9 @@ class TestPPMStudio(unittest.TestCase):
             group_count = cursor.fetchone()[0]
             cursor.execute("SELECT COUNT(*) FROM schema_parameters")
             param_count = cursor.fetchone()[0]
-            cursor.execute("SELECT COUNT(*) FROM projects")
+            cursor.execute("SELECT COUNT(*) FROM project")
             project_count = cursor.fetchone()[0]
-            cursor.execute("SELECT COUNT(*) FROM project_milestones")
+            cursor.execute("SELECT COUNT(*) FROM project_task")
             milestone_count = cursor.fetchone()[0]
 
         self.assertGreaterEqual(group_count, 2)

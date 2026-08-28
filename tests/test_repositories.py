@@ -222,37 +222,44 @@ class TestRepositories(unittest.TestCase):
 
     def test_batch_milestone_queries(self) -> None:
         """Verify batch query methods across multiple projects."""
-        self.project_repo.create_project("PRJ-B1", "Batch 1", "Active", 0, 0, {})
-        self.project_repo.create_project("PRJ-B2", "Batch 2", "Active", 0, 0, {})
+        self.project_repo.create_project(1, "Batch 1", "Active", 0, 0, {})
+        self.project_repo.create_project(2, "Batch 2", "Active", 0, 0, {})
 
-        m1 = self.milestone_repo.create_milestone("PRJ-B1", "Task 1", "Phase 1", "2026-01-01", "2026-01-10", 50)
-        m2 = self.milestone_repo.create_milestone("PRJ-B1", "Task 2", "Phase 1", "2026-01-11", "2026-01-20", 0)
-        m3 = self.milestone_repo.create_milestone("PRJ-B2", "Task 3", "Phase 2", "2026-02-01", "2026-02-15", 10,
+        m1 = self.milestone_repo.create_milestone(1, "Task 1", "Phase 1", "2026-01-01", "2026-01-10", 50)
+        m2 = self.milestone_repo.create_milestone(1, "Task 2", "Phase 1", "2026-01-11", "2026-01-20", 0)
+        m3 = self.milestone_repo.create_milestone(2, "Task 3", "Phase 2", "2026-02-01", "2026-02-15", 10,
                                                   dependencies=[{"predecessor_task_id": m1, "link_type": "FS", "lag_days": 2}])
 
         # 1. Batch date bounds
         all_bounds = self.milestone_repo.get_all_project_date_bounds()
-        self.assertIn("PRJ-B1", all_bounds)
-        self.assertIn("PRJ-B2", all_bounds)
-        self.assertEqual(all_bounds["PRJ-B1"], ("2026-01-01", "2026-01-20"))
-        self.assertEqual(all_bounds["PRJ-B2"], ("2026-02-01", "2026-02-15"))
+        self.assertIn("1", all_bounds)
+        self.assertIn("2", all_bounds)
+        self.assertEqual(all_bounds["1"], ("2026-01-01", "2026-01-20"))
+        self.assertEqual(all_bounds["2"], ("2026-02-01", "2026-02-15"))
 
         # 2. Batch external tasks map
         ext_map = self.milestone_repo.get_all_external_tasks_map()
-        self.assertIn("PRJ-B1", ext_map)
-        self.assertEqual(len(ext_map["PRJ-B1"]), 2)
-        self.assertEqual(ext_map["PRJ-B1"][0]["task_name"], "Task 1")
+        self.assertIn("1", ext_map)
+        self.assertEqual(len(ext_map["1"]), 2)
+        self.assertEqual(ext_map["1"][0]["task_name"], "Task 1")
 
         # 3. Batch milestones for projects
-        batch_df = self.milestone_repo.get_milestones_for_projects(["PRJ-B1", "PRJ-B2"])
+        batch_df = self.milestone_repo.get_milestones_for_projects([1, 2])
         self.assertEqual(len(batch_df), 3)
 
         # 4. Batch dependencies for projects
-        batch_deps = self.milestone_repo.get_dependencies_for_projects(["PRJ-B1", "PRJ-B2"])
+        batch_deps = self.milestone_repo.get_dependencies_for_projects([1, 2])
         self.assertEqual(len(batch_deps), 1)
         self.assertEqual(batch_deps[0]["task_id"], m3)
         self.assertEqual(batch_deps[0]["predecessor_task_id"], m1)
 
+        # 5. Get all milestones across all projects
+        all_milestones = self.milestone_repo.get_all_milestones()
+        self.assertEqual(len(all_milestones), 3)
+        self.assertIn("project_name", all_milestones.columns)
+        self.assertEqual(all_milestones.iloc[0]["project_name"], "Batch 1")
+
 
 if __name__ == "__main__":
     unittest.main()
+

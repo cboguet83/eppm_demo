@@ -64,14 +64,6 @@
       flex-shrink: 0;
     }
 
-    .toolbar-hint {
-      font-size: 12px;
-      color: var(--text-muted);
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-
     .toggle-link-opt {
       display: inline-flex;
       align-items: center;
@@ -141,6 +133,7 @@
       position: relative;
       background: #ffffff;
       height: 100%;
+      min-height: 300px;
     }
 
     /* Fixed Header Row */
@@ -1106,6 +1099,10 @@
       <span>✏️</span>
       <span id="ctx-label-edit-step">Edit Step &amp; Dependencies</span>
     </div>
+    <div class="context-menu-item" onclick="triggerManageTaskTags()">
+      <span>🏷️</span>
+      <span id="ctx-label-task-tags">Manage Tags</span>
+    </div>
     <div class="context-menu-item" onclick="markComplete()">
       <span>✅</span>
       <span id="ctx-label-complete-step">Mark 100% Complete</span>
@@ -1236,11 +1233,6 @@
   <div class="gantt-card">
     <!-- Toolbar -->
     <div class="toolbar">
-      <div class="toolbar-hint">
-        <span>💡</span>
-        <span><b>Drag bar</b> to shift dates &bull; <b>Right-click</b> task or link for details &bull; <b>Grey
-            links</b>: Normal &bull; <b style="color:#ef4444;">Red links</b>: Violated</span>
-      </div>
       <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
         <!-- Dependency Visibility Toggles & Description Toggle -->
         <div style="display:flex; gap:6px; align-items:center; margin-right:4px;">
@@ -1416,6 +1408,8 @@
       if (elAdd) elAdd.innerText = getT('context_menu.add_step_after', 'Add New Step');
       const elEdit = document.getElementById('ctx-label-edit-step');
       if (elEdit) elEdit.innerText = getT('context_menu.edit_step', 'Edit Step & Dependencies');
+      const elTags = document.getElementById('ctx-label-task-tags');
+      if (elTags) elTags.innerText = getT('context_menu.manage_tags', 'Manage Tags');
       const elDone = document.getElementById('ctx-label-complete-step');
       if (elDone) elDone.innerText = getT('context_menu.mark_complete', 'Mark 100% Complete');
       const elDel = document.getElementById('ctx-label-delete-step');
@@ -1682,10 +1676,31 @@
     // --------------------------------------------------------------------------
     function showTooltip(e, html) {
       const tt = document.getElementById('gantt-tooltip');
+      if (!tt) return;
       tt.innerHTML = html;
       tt.style.display = 'block';
-      tt.style.left = `${e.clientX + 14}px`;
-      tt.style.top = `${e.clientY - 20}px`;
+      positionTooltip(e);
+    }
+
+    function positionTooltip(e) {
+      const tt = document.getElementById('gantt-tooltip');
+      if (!tt || tt.style.display === 'none') return;
+      const ttW = tt.offsetWidth || 260;
+      const ttH = tt.offsetHeight || 120;
+      let left = e.clientX + 16;
+      let top = e.clientY - 20;
+
+      if (left + ttW > window.innerWidth - 12) {
+        left = e.clientX - ttW - 16;
+      }
+      if (top + ttH > window.innerHeight - 12) {
+        top = window.innerHeight - ttH - 12;
+      }
+      if (top < 10) top = 10;
+      if (left < 10) left = 10;
+
+      tt.style.left = `${left}px`;
+      tt.style.top = `${top}px`;
     }
 
     function hideTooltip() {
@@ -1694,11 +1709,83 @@
     }
 
     function moveTooltip(e) {
-      const tt = document.getElementById('gantt-tooltip');
-      if (tt && tt.style.display !== 'none') {
-        tt.style.left = `${e.clientX + 14}px`;
-        tt.style.top = `${e.clientY - 20}px`;
+      positionTooltip(e);
+    }
+
+    function showTaskHoverTooltip(e, task) {
+      if (!task) return;
+      const pName = task.project_name || task.project_id || '';
+      const cleanPName = pName ? String(pName).replace(/^[A-Za-z0-9_-]+\s*-\s*/, '') : '';
+      const phase = task.phase || 'General';
+      const desc = task.description ? task.description.trim() : '';
+      const prog = task.progress !== undefined ? task.progress : 0;
+      const viols = task.violations || [];
+      const tags = task.tags || [];
+
+      let tagsHtml = '';
+      if (tags.length > 0) {
+        tagsHtml = `
+          <div style="margin-top:6px; border-top:1px solid #334155; padding-top:5px;">
+            <div style="font-size:10px; font-weight:700; color:#94a3b8; text-transform:uppercase; margin-bottom:3px; letter-spacing:0.03em;">🏷️ Associated Tags</div>
+            <div style="display:flex; flex-wrap:wrap; gap:4px;">
+              ${tags.map(tg => {
+                const label = tg.tag_name || tg.free_tag || tg.tag || '';
+                const grp = tg.tag_group_name ? `<span style="opacity:0.75; font-size:9px;">[${escapeHtml(tg.tag_group_name)}] </span>` : '';
+                return `<span style="background:rgba(59,130,246,0.25); border:1px solid #3b82f6; color:#bfdbfe; font-size:10.5px; font-weight:600; padding:1px 6px; border-radius:10px; display:inline-flex; align-items:center;">🏷️ ${grp}${escapeHtml(label)}</span>`;
+              }).join('')}
+            </div>
+          </div>
+        `;
+      } else {
+        tagsHtml = `
+          <div style="margin-top:5px; border-top:1px solid #334155; padding-top:4px; font-size:10.5px; color:#64748b; font-style:italic;">
+            🏷️ No tags attached
+          </div>
+        `;
       }
+
+      let violHtml = '';
+      if (viols.length > 0) {
+        violHtml = `
+          <div style="margin-top:6px; background:#450a0a; border:1px solid #ef4444; border-radius:4px; padding:4px 6px; color:#fca5a5; font-size:10.5px;">
+            <b>⚠️ Constraint Issue:</b><br>${viols.join('<br>')}
+          </div>
+        `;
+      }
+
+      const tooltipContent = `
+        <div style="font-family:inherit; min-width:190px; max-width:320px; text-align:left;">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:6px; margin-bottom:3px;">
+            <span style="font-weight:700; font-size:12.5px; color:#ffffff;">${escapeHtml(task.name)}</span>
+            <span style="font-size:10px; font-weight:700; background:#1e293b; color:#93c5fd; padding:1px 5px; border-radius:4px; border:1px solid #3b82f6;">#${task.id}</span>
+          </div>
+          ${isMultiProject && cleanPName ? `<div style="font-size:11px; color:#94a3b8; margin-bottom:3px;">📁 Project: <b>${escapeHtml(cleanPName)}</b></div>` : ''}
+          <div style="font-size:11px; color:#cbd5e1; display:flex; gap:8px; margin-bottom:2px;">
+            <span>📂 <b>${escapeHtml(phase)}</b></span>
+            <span>📊 <b>${prog}%</b></span>
+          </div>
+          <div style="font-size:11px; color:#cbd5e1; margin-bottom:2px;">
+            📅 <b>${formatMmmYy(task.start)}</b> ➔ <b>${formatMmmYy(task.end)}</b>
+          </div>
+          ${desc ? `<div style="font-size:10.5px; color:#94a3b8; margin-top:2px; font-style:italic;">↳ ${escapeHtml(desc)}</div>` : ''}
+          ${tagsHtml}
+          ${violHtml}
+        </div>
+      `;
+
+      showTooltip(e, tooltipContent);
+    }
+
+    function triggerManageTaskTags() {
+      hideContextMenu();
+      if (!selectedContextMenuTask || !selectedContextMenuTask.id) return;
+      Streamlit.setComponentValue({
+        action: "manage_task_tags",
+        task_id: parseInt(selectedContextMenuTask.id, 10),
+        task_name: selectedContextMenuTask.name || '',
+        project_id: selectedContextMenuTask.project_id || currentProjectId,
+        nonce: Date.now() + "_" + Math.random()
+      });
     }
 
     function formatLinkTypeLabel(lt) {
@@ -2273,6 +2360,19 @@
       }
     }
 
+    function triggerManageTaskTags() {
+      hideContextMenu();
+      if (!selectedContextMenuTask || !selectedContextMenuTask.id) return;
+
+      Streamlit.setComponentValue({
+        action: "manage_task_tags",
+        id: parseInt(selectedContextMenuTask.id, 10),
+        task_name: selectedContextMenuTask.name || '',
+        project_id: selectedContextMenuTask.project_id || currentProjectId || '',
+        nonce: Date.now() + "_" + Math.random()
+      });
+    }
+
     function markComplete() {
       hideContextMenu();
       if (!selectedContextMenuTask) return;
@@ -2592,11 +2692,13 @@
         const projectGroupsList = projOrder.map(pId => {
           const grp = groups[pId];
           let pMin = null, pMax = null;
+          let pHasViolations = false;
           grp.tasks.forEach(t => {
             const s = parseDate(t.start);
             const e = parseDate(t.end);
             if (!pMin || s < pMin) pMin = s;
             if (!pMax || e > pMax) pMax = e;
+            if (t.violations && t.violations.length > 0) pHasViolations = true;
           });
           return {
             id: pId,
@@ -2605,7 +2707,8 @@
             end: pMax ? formatDate(pMax) : '',
             tasks: grp.tasks,
             taskCount: grp.tasks.length,
-            isCollapsed: collapsedProjects.has(pId)
+            isCollapsed: collapsedProjects.has(pId),
+            hasViolations: pHasViolations
           };
         });
 
@@ -2645,7 +2748,8 @@
             start: grp.start || null,
             end: grp.end || null,
             taskCount: grp.taskCount,
-            isCollapsed: grp.isCollapsed
+            isCollapsed: grp.isCollapsed,
+            hasViolations: grp.hasViolations
           });
 
           if (!grp.isCollapsed) {
@@ -2780,7 +2884,7 @@
 
       // Sizing the layout container and Streamlit frame
       const layoutContainer = document.getElementById('gantt-layout');
-      const maxDisplayH = Math.min(650, Math.max(260, totalHeight + 56));
+      const maxDisplayH = Math.min(650, Math.max(300, totalHeight + 56));
       if (layoutContainer) {
         layoutContainer.style.height = `${maxDisplayH}px`;
       }
@@ -2842,16 +2946,23 @@
 
         if (item.type === 'project_header') {
           const nameColW = Math.max(60, colWidths.name - 24);
+          const cleanProjectName = item.project_name ? String(item.project_name).replace(/^[A-Za-z0-9_-]+\s*-\s*/, '') : '';
+          const hasViol = Boolean(item.hasViolations);
+          const badgeStyle = hasViol 
+            ? 'background:#fee2e2; color:#dc2626; border:1px solid #ef4444; font-weight:700;' 
+            : 'background:#e2e8f0; color:#475569; border:1px solid #cbd5e1;';
+          const badgeIcon = hasViol ? '⚠️ ' : '';
+
           frozenHtml += `
-            <div class="frozen-row project-group-row" id="frozen-row-proj-${item.project_id}" 
+            <div class="frozen-row project-group-row ${hasViol ? 'has-violations' : ''}" id="frozen-row-proj-${item.project_id}" 
                  style="top: ${topPos}px; width: ${totalW}px; min-width: ${totalW}px;"
                  onclick="toggleProjectCollapse('${item.project_id}', event)"
                  oncontextmenu="showProjectContextMenu(event, '${item.project_id}')">
-              <span class="task-id-cell" style="width:${colWidths.id}px; min-width:${colWidths.id}px; max-width:${colWidths.id}px; font-weight:700; color:#475569;" title="Project ID: ${item.project_id}">${item.project_id}</span>
+              <span class="task-id-cell" style="width:${colWidths.id}px; min-width:${colWidths.id}px; max-width:${colWidths.id}px; font-weight:700; color:#475569;" title="Project">📁</span>
               <span class="collapse-toggle-icon" title="${item.isCollapsed ? 'Click to expand tasks' : 'Click to collapse tasks'}">${item.isCollapsed ? '▶' : '▼'}</span>
               <div class="project-group-title-wrapper" style="width:${nameColW}px; min-width:${nameColW}px; max-width:${nameColW}px; display:flex; align-items:center; gap:6px; overflow:hidden;">
-                <span class="project-group-title" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1;" title="${escapeHtml(item.project_name)}">${escapeHtml(item.project_name)}</span>
-                <span class="project-group-count" style="font-size:10px; padding:1px 6px; background:#e2e8f0; color:#475569; border-radius:10px; flex-shrink:0;">${item.taskCount}</span>
+                <span class="project-group-title" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1;" title="${escapeHtml(cleanProjectName)}">${escapeHtml(cleanProjectName)}</span>
+                <span class="project-group-count" style="font-size:10px; padding:1px 6px; border-radius:10px; flex-shrink:0; ${badgeStyle}" title="${hasViol ? 'Constraint violations in this project' : ''}">${badgeIcon}${item.taskCount}</span>
               </div>
               <span class="task-date-cell" style="width:${colWidths.start}px; min-width:${colWidths.start}px; max-width:${colWidths.start}px; font-weight:600; color:#334155;" title="Start: ${item.start || '-'}">${formatMmmYy(item.start)}</span>
               <span class="task-date-cell" style="width:${colWidths.stop}px; min-width:${colWidths.stop}px; max-width:${colWidths.stop}px; font-weight:600; color:#334155;" title="Stop: ${item.end || '-'}">${formatMmmYy(item.end)}</span>
@@ -2908,16 +3019,17 @@
               const pStartX = dateToX(parseDate(item.start));
               const pEndX = dateToX(parseDate(item.end));
               const pWidth = Math.max(16, pEndX - pStartX);
+              const cleanProjectName = item.project_name ? String(item.project_name).replace(/^[A-Za-z0-9_-]+\s*-\s*/, '') : '';
 
               const pBar = document.createElement('div');
               pBar.className = 'project-summary-bar';
               pBar.style.left = `${pStartX}px`;
               pBar.style.width = `${pWidth}px`;
-              pBar.title = `Project [${item.project_id}]: ${formatMmmYy(item.start)} → ${formatMmmYy(item.end)}`;
+              pBar.title = `Project: ${cleanProjectName} (${formatMmmYy(item.start)} → ${formatMmmYy(item.end)})`;
 
               const pLabel = document.createElement('div');
               pLabel.className = 'project-summary-label';
-              pLabel.innerText = `${item.project_id} (${item.taskCount} tasks)`;
+              pLabel.innerText = `${cleanProjectName} (${item.taskCount} tasks)`;
               pBar.appendChild(pLabel);
 
               rowEl.appendChild(pBar);
@@ -2947,11 +3059,14 @@
               mWrapper.className = 'milestone-diamond-wrapper';
               mWrapper.style.left = `${startX}px`;
               mWrapper.innerHTML = `
-                ${hasViol ? `<div class="violation-warning-badge" onmouseenter="showTooltip(event, '<b>⚠️ Constraint Violation:</b><br>${t.violations.join('<br>')}')" onmouseleave="hideTooltip()">⚠️</div>` : ''}
+                ${hasViol ? `<div class="violation-warning-badge">⚠️</div>` : ''}
                 <div class="milestone-diamond-shape" title="${escapeHtml(t.name)}"></div>
               `;
               mWrapper.oncontextmenu = (e) => showContextMenu(e, t);
               mWrapper.ondblclick = () => openEditModalById(t.id);
+              mWrapper.onmouseenter = (e) => showTaskHoverTooltip(e, t);
+              mWrapper.onmousemove = (e) => moveTooltip(e);
+              mWrapper.onmouseleave = () => hideTooltip();
               bindDragEvents(mWrapper, t, true);
               rowEl.appendChild(mWrapper);
             } else {
@@ -2960,7 +3075,7 @@
               bWrapper.style.left = `${startX}px`;
               bWrapper.style.width = `${barWidth}px`;
               bWrapper.innerHTML = `
-                ${hasViol ? `<div class="violation-warning-badge" onmouseenter="showTooltip(event, '<b>⚠️ Constraint Violation:</b><br>${t.violations.join('<br>')}')" onmouseleave="hideTooltip()">⚠️</div>` : ''}
+                ${hasViol ? `<div class="violation-warning-badge">⚠️</div>` : ''}
                 <div class="resize-handle left"></div>
                 <div class="gantt-bar-task" title="${escapeHtml(t.name)} (${t.progress || 0}%)">
                   <div class="bar-progress" style="width: ${t.progress || 0}%;"></div>
@@ -2969,6 +3084,9 @@
               `;
               bWrapper.oncontextmenu = (e) => showContextMenu(e, t);
               bWrapper.ondblclick = () => openEditModalById(t.id);
+              bWrapper.onmouseenter = (e) => showTaskHoverTooltip(e, t);
+              bWrapper.onmousemove = (e) => moveTooltip(e);
+              bWrapper.onmouseleave = () => hideTooltip();
               bindDragEvents(bWrapper, t, false);
               rowEl.appendChild(bWrapper);
             }

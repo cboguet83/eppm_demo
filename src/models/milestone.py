@@ -9,7 +9,7 @@ class Milestone:
     """Represents a project step or milestone deliverable.
 
     Attributes:
-        project_id: Reference to parent project ID code.
+        project_id: Reference to parent project ID (integer primary key).
         task_name: Description of the task, step, or milestone deliverable.
         start_date: Start date string in ISO format (YYYY-MM-DD).
         end_date: End date string in ISO format (YYYY-MM-DD).
@@ -19,7 +19,7 @@ class Milestone:
         id: Optional unique numeric step ID.
     """
 
-    project_id: str
+    project_id: int
     task_name: str
     start_date: str
     end_date: str

@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Project Tags Interactive Table</title>
+  <style>
+    :root {
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --border: #e2e8f0;
+      --border-dark: #cbd5e1;
+      --bg-header: #f8fafc;
+      --bg-hover: #f1f5f9;
+      --text: #0f172a;
+      --text-muted: #64748b;
+      --danger: #dc2626;
+      --danger-hover: #b91c1c;
+      --selected-row: #e0f2fe;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: transparent;
+      color: var(--text);
+      overflow-x: hidden;
+      overflow-y: auto;
+    }
+
+    .table-container {
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+      overflow: visible;
+      display: flex;
+      flex-direction: column;
+      margin-bottom: 8px;
+    }
+
+    .table-toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 14px;
+      background: #ffffff;
+      border-bottom: 1px solid var(--border);
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .toolbar-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1;
+      min-width: 260px;
+    }
+
+    .search-input-wrapper {
+      position: relative;
+      flex: 1;
+      max-width: 280px;
+    }
+
+    .search-input {
+      width: 100%;
+      padding: 6px 10px 6px 28px;
+      font-size: 12px;
+      border: 1px solid var(--border-dark);
+      border-radius: 6px;
+      outline: none;
+      transition: all 0.15s ease;
+      color: var(--text);
+    }
+
+    .search-input:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+    }
+
+    .search-icon {
+      position: absolute;
+      left: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 11px;
+      color: var(--text-muted);
+      pointer-events: none;
+    }
+
+    .btn-reset-filters {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 5px 10px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #475569;
+      background: #f1f5f9;
+      border: 1px solid var(--border-dark);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.12s ease;
+    }
+
+    .btn-reset-filters:hover {
+      background: #e2e8f0;
+      color: #0f172a;
+    }
+
+    .toolbar-stats {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .stat-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 10px;
+      border-radius: 14px;
+      font-weight: 600;
+      font-size: 11px;
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      color: #334155;
+    }
+
+    .btn-add-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #ffffff;
+      background: var(--primary);
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+
+    .btn-add-primary:hover {
+      background: var(--primary-hover);
+    }
+
+    .table-scroll-wrapper {
+      max-height: 480px;
+      overflow-y: auto;
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 12px;
+    }
+
+    thead th {
+      position: sticky;
+      top: 0;
+      background: var(--bg-header);
+      color: #334155;
+      font-weight: 600;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border-dark);
+      white-space: nowrap;
+      z-index: 10;
+      user-select: none;
+    }
+
+    thead th.sortable {
+      cursor: pointer;
+      transition: background 0.12s ease, color 0.12s ease;
+    }
+
+    thead th.sortable:hover {
+      background: #e2e8f0;
+      color: var(--text);
+    }
+
+    .filter-row th {
+      top: 36px;
+      background: #f1f5f9;
+      padding: 4px 6px 6px 6px;
+      border-bottom: 2px solid var(--border-dark);
+      z-index: 9;
+    }
+
+    .col-filter-input {
+      width: 100%;
+      padding: 4px 6px;
+      font-size: 11px;
+      border: 1px solid var(--border-dark);
+      border-radius: 4px;
+      background: #ffffff;
+      color: var(--text);
+      outline: none;
+      transition: all 0.15s ease;
+    }
+
+    .col-filter-input:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
+    }
+
+    .col-filter-input.active {
+      border-color: var(--primary);
+      background: #f0fdf4;
+      font-weight: 600;
+    }
+
+    tbody tr {
+      border-bottom: 1px solid var(--border);
+      transition: background 0.1s ease;
+      cursor: pointer;
+    }
+
+    tbody tr:hover {
+      background: var(--bg-hover);
+    }
+
+    tbody tr.selected {
+      background: var(--selected-row) !important;
+    }
+
+    tbody td {
+      padding: 8px 12px;
+      color: var(--text);
+      white-space: nowrap;
+    }
+
+    .tag-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      background: #eff6ff;
+      color: #1e40af;
+      border: 1px solid #bfdbfe;
+    }
+
+    .free-tag-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      background: #fef3c7;
+      color: #92400e;
+      border: 1px solid #fde68a;
+    }
+
+    .group-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      background: #f8fafc;
+      color: #475569;
+      border: 1px solid #cbd5e1;
+    }
+
+    .empty-state {
+      padding: 40px;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+
+    /* Context Menu */
+    .context-menu {
+      position: fixed;
+      display: none;
+      background: #ffffff;
+      border: 1px solid var(--border-dark);
+      border-radius: 8px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+      z-index: 1000;
+      min-width: 200px;
+      padding: 4px 0;
+      font-size: 12px;
+    }
+
+    .context-menu-header {
+      padding: 6px 12px 4px 12px;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      font-weight: 700;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .context-menu-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      color: var(--text);
+      cursor: pointer;
+      transition: background 0.1s ease;
+    }
+
+    .context-menu-item:hover {
+      background: var(--bg-hover);
+    }
+
+    .context-menu-item.danger {
+      color: var(--danger);
+    }
+
+    .context-menu-item.danger:hover {
+      background: #fef2f2;
+    }
+
+    .context-menu-divider {
+      height: 1px;
+      background: var(--border);
+      margin: 4px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="table-container" id="main-container">
+    <div class="table-toolbar">
+      <div class="toolbar-left">
+        <div class="search-input-wrapper">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="search-box" class="search-input" placeholder="Search project tags..." oninput="handleGlobalSearch()" />
+        </div>
+        <button class="btn-reset-filters" id="btn-reset" onclick="resetAllFilters()">
+          <span>↺</span> <span id="lbl-clear">Clear Filters</span>
+        </button>
+      </div>
+      <div class="toolbar-stats">
+        <div class="stat-pill">
+          <span id="stat-count">0</span> <span id="lbl-stat-tags">Assignments</span>
+        </div>
+        <button class="btn-add-primary" onclick="triggerAction('add')">
+          <span>➕</span> <span id="lbl-add-btn">Assign Tag</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="table-scroll-wrapper">
+      <table id="project-tags-table">
+        <thead>
+          <tr>
+            <th class="sortable" style="width: 80px;" onclick="handleSort('id')">
+              ID <span id="sort-id">↕</span>
+            </th>
+            <th class="sortable" onclick="handleSort('project_name')">
+              <span id="th-proj">Project</span> <span id="sort-project_name">↕</span>
+            </th>
+            <th class="sortable" onclick="handleSort('tag_name')">
+              <span id="th-tag">Dictionary Tag</span> <span id="sort-tag_name">↕</span>
+            </th>
+            <th class="sortable" onclick="handleSort('tag_group_name')">
+              <span id="th-group">Tag Group</span> <span id="sort-tag_group_name">↕</span>
+            </th>
+            <th class="sortable" onclick="handleSort('free_tag')">
+              <span id="th-free">Free Tag</span> <span id="sort-free_tag">↕</span>
+            </th>
+          </tr>
+          <tr class="filter-row">
+            <th>
+              <input type="text" id="filter-id" class="col-filter-input" placeholder="ID..." oninput="handleColFilter('id')" />
+            </th>
+            <th>
+              <input type="text" id="filter-proj" class="col-filter-input" placeholder="Filter project..." oninput="handleColFilter('project_name')" />
+            </th>
+            <th>
+              <input type="text" id="filter-tag" class="col-filter-input" placeholder="Filter tag..." oninput="handleColFilter('tag_name')" />
+            </th>
+            <th>
+              <input type="text" id="filter-group" class="col-filter-input" placeholder="Filter group..." oninput="handleColFilter('tag_group_name')" />
+            </th>
+            <th>
+              <input type="text" id="filter-free" class="col-filter-input" placeholder="Filter free tag..." oninput="handleColFilter('free_tag')" />
+            </th>
+          </tr>
+        </thead>
+        <tbody id="table-body"></tbody>
+      </table>
+      <div id="empty-state" class="empty-state" style="display: none;">No project tag assignments found.</div>
+    </div>
+  </div>
+
+  <!-- Context Menu -->
+  <div id="context-menu" class="context-menu">
+    <div class="context-menu-header" id="ctx-header">Project Tag Actions</div>
+    <div class="context-menu-item" onclick="triggerAction('add')">
+      <span>➕</span> <span id="ctx-add-label">Assign New Tag</span>
+    </div>
+    <div class="context-menu-divider" id="ctx-divider"></div>
+    <div class="context-menu-item" id="ctx-edit" onclick="triggerAction('edit')">
+      <span>✏️</span> <span id="ctx-edit-label">Edit Tag Assignment</span>
+    </div>
+    <div class="context-menu-item danger" id="ctx-delete" onclick="triggerAction('delete')">
+      <span>🗑️</span> <span id="ctx-delete-label">Delete Tag Assignment</span>
+    </div>
+  </div>
+
+  <script>
+    let projectTagsData = [];
+    let filteredData = [];
+    let selectedItem = null;
+    let currentSort = { column: 'id', asc: false };
+    let colFilters = { id: '', project_name: '', tag_name: '', tag_group_name: '', free_tag: '' };
+    let globalSearchQuery = '';
+    let translations = {};
+
+    function StreamlitSend(obj) {
+      if (window.parent) {
+        window.parent.postMessage({
+          isStreamlitMessage: true,
+          type: "streamlit:setComponentValue",
+          value: obj
+        }, "*");
+      }
+    }
+
+    const Streamlit = {
+      setComponentReady: function() {
+        if (window.parent) {
+          window.parent.postMessage({
+            isStreamlitMessage: true,
+            type: "streamlit:componentReady",
+            apiVersion: 1
+          }, "*");
+        }
+      },
+      setFrameHeight: function(height) {
+        if (window.parent) {
+          window.parent.postMessage({
+            isStreamlitMessage: true,
+            type: "streamlit:setFrameHeight",
+            height: height
+          }, "*");
+        }
+      },
+      setComponentValue: function(val) {
+        StreamlitSend(val);
+      }
+    };
+
+    function renderTable() {
+      applyFiltersAndSort();
+      const tbody = document.getElementById('table-body');
+      const emptyState = document.getElementById('empty-state');
+      tbody.innerHTML = '';
+
+      document.getElementById('stat-count').innerText = filteredData.length;
+
+      if (filteredData.length === 0) {
+        emptyState.style.display = 'block';
+      } else {
+        emptyState.style.display = 'none';
+        filteredData.forEach(item => {
+          const tr = document.createElement('tr');
+          tr.dataset.id = item.id;
+          if (selectedItem && selectedItem.id === item.id) {
+            tr.classList.add('selected');
+          }
+
+          const dictTagHtml = item.tag_name ? `<span class="tag-badge">🏷️ ${escapeHtml(item.tag_name)}</span>` : '<span style="color: #94a3b8;">—</span>';
+          const freeTagHtml = item.free_tag ? `<span class="free-tag-badge">✏️ ${escapeHtml(item.free_tag)}</span>` : '<span style="color: #94a3b8;">—</span>';
+          const groupHtml = item.tag_group_name ? `<span class="group-badge">📁 ${escapeHtml(item.tag_group_name)}</span>` : '<span style="color: #94a3b8;">—</span>';
+          const projName = item.project_name ? `${escapeHtml(item.project_name)} (#${item.project_id})` : `Project #${item.project_id}`;
+
+          tr.innerHTML = `
+            <td style="font-weight: 600; color: #64748b;">#${item.id}</td>
+            <td style="font-weight: 600; color: var(--text);">📂 ${projName}</td>
+            <td>${dictTagHtml}</td>
+            <td>${groupHtml}</td>
+            <td>${freeTagHtml}</td>
+          `;
+
+          tr.addEventListener('click', () => {
+            selectRow(item, tr);
+          });
+
+          tr.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            selectRow(item, tr);
+            showContextMenu(e, item);
+          });
+
+          tbody.appendChild(tr);
+        });
+      }
+
+      updateAutoHeight();
+    }
+
+    function selectRow(item, trElem) {
+      selectedItem = item;
+      document.querySelectorAll('#table-body tr').forEach(r => r.classList.remove('selected'));
+      if (trElem) trElem.classList.add('selected');
+    }
+
+    function applyFiltersAndSort() {
+      filteredData = projectTagsData.filter(item => {
+        if (globalSearchQuery) {
+          const q = globalSearchQuery.toLowerCase();
+          const match = (String(item.id).toLowerCase().includes(q)) ||
+                        (String(item.project_name || '').toLowerCase().includes(q)) ||
+                        (String(item.tag_name || '').toLowerCase().includes(q)) ||
+                        (String(item.tag_group_name || '').toLowerCase().includes(q)) ||
+                        (String(item.free_tag || '').toLowerCase().includes(q));
+          if (!match) return false;
+        }
+
+        if (colFilters.id && !String(item.id).toLowerCase().includes(colFilters.id.toLowerCase())) return false;
+        if (colFilters.project_name && !String(item.project_name || '').toLowerCase().includes(colFilters.project_name.toLowerCase())) return false;
+        if (colFilters.tag_name && !String(item.tag_name || '').toLowerCase().includes(colFilters.tag_name.toLowerCase())) return false;
+        if (colFilters.tag_group_name && !String(item.tag_group_name || '').toLowerCase().includes(colFilters.tag_group_name.toLowerCase())) return false;
+        if (colFilters.free_tag && !String(item.free_tag || '').toLowerCase().includes(colFilters.free_tag.toLowerCase())) return false;
+
+        return true;
+      });
+
+      if (currentSort.column) {
+        filteredData.sort((a, b) => {
+          let valA = a[currentSort.column];
+          let valB = b[currentSort.column];
+
+          if (typeof valA === 'string') valA = valA.toLowerCase();
+          if (typeof valB === 'string') valB = valB.toLowerCase();
+
+          if (valA < valB) return currentSort.asc ? -1 : 1;
+          if (valA > valB) return currentSort.asc ? 1 : -1;
+          return 0;
+        });
+      }
+
+      updateSortIcons();
+    }
+
+    function handleSort(col) {
+      if (currentSort.column === col) {
+        currentSort.asc = !currentSort.asc;
+      } else {
+        currentSort.column = col;
+        currentSort.asc = true;
+      }
+      renderTable();
+    }
+
+    function updateSortIcons() {
+      ['id', 'project_name', 'tag_name', 'tag_group_name', 'free_tag'].forEach(c => {
+        const span = document.getElementById(`sort-${c}`);
+        if (!span) return;
+        if (currentSort.column === c) {
+          span.innerText = currentSort.asc ? '▲' : '▼';
+          span.style.color = 'var(--primary)';
+        } else {
+          span.innerText = '↕';
+          span.style.color = '#94a3b8';
+        }
+      });
+    }
+
+    function handleGlobalSearch() {
+      globalSearchQuery = document.getElementById('search-box').value.trim();
+      renderTable();
+    }
+
+    function handleColFilter(col) {
+      let inputId = 'filter-proj';
+      if (col === 'id') inputId = 'filter-id';
+      else if (col === 'tag_name') inputId = 'filter-tag';
+      else if (col === 'tag_group_name') inputId = 'filter-group';
+      else if (col === 'free_tag') inputId = 'filter-free';
+
+      const input = document.getElementById(inputId);
+      colFilters[col] = input ? input.value.trim() : '';
+      if (input) {
+        if (colFilters[col]) input.classList.add('active');
+        else input.classList.remove('active');
+      }
+      renderTable();
+    }
+
+    function resetAllFilters() {
+      globalSearchQuery = '';
+      colFilters = { id: '', project_name: '', tag_name: '', tag_group_name: '', free_tag: '' };
+      document.getElementById('search-box').value = '';
+      ['filter-id', 'filter-proj', 'filter-tag', 'filter-group', 'filter-free'].forEach(id => {
+        const elem = document.getElementById(id);
+        if (elem) { elem.value = ''; elem.classList.remove('active'); }
+      });
+      renderTable();
+    }
+
+    function showContextMenu(e, item) {
+      const menu = document.getElementById('context-menu');
+      const editItem = document.getElementById('ctx-edit');
+      const deleteItem = document.getElementById('ctx-delete');
+      const divider = document.getElementById('ctx-divider');
+
+      if (item) {
+        editItem.style.display = 'flex';
+        deleteItem.style.display = 'flex';
+        divider.style.display = 'block';
+        document.getElementById('ctx-header').innerText = `Assignment: #${item.id}`;
+      } else {
+        editItem.style.display = 'none';
+        deleteItem.style.display = 'none';
+        divider.style.display = 'none';
+        document.getElementById('ctx-header').innerText = 'Project Tag Actions';
+      }
+
+      menu.style.display = 'block';
+
+      const menuWidth = 220;
+      const menuHeight = 160;
+      let posX = e.clientX + 4;
+      let posY = e.clientY + 4;
+
+      if (posX + menuWidth > window.innerWidth - 10) posX = window.innerWidth - menuWidth - 10;
+      if (posY + menuHeight > window.innerHeight - 10) posY = window.innerHeight - menuHeight - 10;
+
+      menu.style.left = `${Math.max(10, posX)}px`;
+      menu.style.top = `${Math.max(10, posY)}px`;
+    }
+
+    function hideContextMenu() {
+      const menu = document.getElementById('context-menu');
+      if (menu) menu.style.display = 'none';
+    }
+
+    function triggerAction(actionName) {
+      hideContextMenu();
+      if (actionName === 'add') {
+        Streamlit.setComponentValue({
+          action: 'add_project_tag',
+          nonce: Date.now() + '_' + Math.random()
+        });
+      } else if (actionName === 'edit') {
+        if (!selectedItem) return;
+        Streamlit.setComponentValue({
+          action: 'edit_project_tag',
+          pt_id: selectedItem.id,
+          project_id: selectedItem.project_id,
+          tag_id: selectedItem.tag_id,
+          free_tag: selectedItem.free_tag,
+          nonce: Date.now() + '_' + Math.random()
+        });
+      } else if (actionName === 'delete') {
+        if (!selectedItem) return;
+        Streamlit.setComponentValue({
+          action: 'delete_project_tag',
+          pt_id: selectedItem.id,
+          tag_label: selectedItem.tag_name || selectedItem.free_tag || `ID ${selectedItem.id}`,
+          nonce: Date.now() + '_' + Math.random()
+        });
+      }
+    }
+
+    document.getElementById('main-container').addEventListener('contextmenu', (e) => {
+      if (e.target.closest('tbody tr')) return;
+      e.preventDefault();
+      selectedItem = null;
+      document.querySelectorAll('#table-body tr').forEach(r => r.classList.remove('selected'));
+      showContextMenu(e, null);
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('#context-menu')) hideContextMenu();
+    });
+
+    function updateAutoHeight() {
+      const container = document.getElementById('main-container');
+      const measured = container ? container.scrollHeight + 40 : document.body.scrollHeight + 30;
+      const height = Math.min(550, Math.max(280, measured));
+      Streamlit.setFrameHeight(height);
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function updateTranslations() {
+      if (translations.col_project) document.getElementById('th-proj').innerText = translations.col_project;
+      if (translations.col_tag) document.getElementById('th-tag').innerText = translations.col_tag;
+      if (translations.col_group_name) document.getElementById('th-group').innerText = translations.col_group_name;
+      if (translations.col_free_tag) document.getElementById('th-free').innerText = translations.col_free_tag;
+      if (translations.action_add) {
+        document.getElementById('lbl-add-btn').innerText = `${translations.action_add} Project Tag`;
+        document.getElementById('ctx-add-label').innerText = `${translations.action_add} Project Tag`;
+      }
+      if (translations.action_edit) document.getElementById('ctx-edit-label').innerText = `${translations.action_edit} Project Tag`;
+      if (translations.action_delete) document.getElementById('ctx-delete-label').innerText = `${translations.action_delete} Project Tag`;
+      if (translations.filter_clear) document.getElementById('lbl-clear').innerText = translations.filter_clear;
+      if (translations.stat_project_tags) document.getElementById('lbl-stat-tags').innerText = translations.stat_project_tags;
+    }
+
+    window.addEventListener('message', function(event) {
+      if (event.data && event.data.type === 'streamlit:render') {
+        const args = event.data.args || {};
+        if (args.translations) {
+          translations = args.translations;
+          updateTranslations();
+        }
+        if (args.project_tags) {
+          projectTagsData = args.project_tags;
+          renderTable();
+        }
+      }
+    });
+
+    document.addEventListener('DOMContentLoaded', () => {
+      Streamlit.setFrameHeight(300);
+      Streamlit.setComponentReady();
+    });
+    Streamlit.setFrameHeight(300);
+    Streamlit.setComponentReady();
+  </script>
+</body>
+</html>

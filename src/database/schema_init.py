@@ -83,10 +83,10 @@ def init_db(db_path: Optional[str] = None) -> None:
             )
         """)
 
-        # 4. Project Master Table
+        # 4. Project Master Table (INTEGER PRIMARY KEY)
         cursor.execute("""
-            CREATE TABLE IF NOT EXISTS projects (
-                id TEXT PRIMARY KEY,
+            CREATE TABLE IF NOT EXISTS project (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
                 status TEXT DEFAULT 'Draft',
                 planned_budget REAL DEFAULT 0.0,
@@ -95,11 +95,41 @@ def init_db(db_path: Optional[str] = None) -> None:
             )
         """)
 
-        # 5. Project Steps / Milestones Table
+        # Migration: Migrate legacy 'projects' table to 'project' if it exists
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='projects'")
+        if cursor.fetchone():
+            logger.info("Migrating legacy 'projects' table to 'project' with INTEGER PRIMARY KEY...")
+            cursor.execute("SELECT id, name, status, planned_budget, actual_budget, dynamic_attributes FROM projects")
+            legacy_projects = cursor.fetchall()
+            for r in legacy_projects:
+                raw_id, p_name, p_status, p_plan, p_act, p_dyn = r
+                p_id_int = None
+                if isinstance(raw_id, int):
+                    p_id_int = raw_id
+                elif isinstance(raw_id, str):
+                    if raw_id.isdigit():
+                        p_id_int = int(raw_id)
+                    elif raw_id.startswith("PRJ-"):
+                        part = raw_id.split("-")[-1]
+                        if part.isdigit():
+                            p_id_int = int(part)
+                if p_id_int is not None:
+                    cursor.execute(
+                        "INSERT OR IGNORE INTO project (id, name, status, planned_budget, actual_budget, dynamic_attributes) VALUES (?, ?, ?, ?, ?, ?)",
+                        (p_id_int, p_name, p_status, p_plan, p_act, p_dyn),
+                    )
+                else:
+                    cursor.execute(
+                        "INSERT INTO project (name, status, planned_budget, actual_budget, dynamic_attributes) VALUES (?, ?, ?, ?, ?)",
+                        (p_name, p_status, p_plan, p_act, p_dyn),
+                    )
+            cursor.execute("DROP TABLE projects")
+
+        # 5. Project Tasks Table (renamed from project_milestones, INTEGER PRIMARY KEY)
         cursor.execute("""
-            CREATE TABLE IF NOT EXISTS project_milestones (
+            CREATE TABLE IF NOT EXISTS project_task (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                project_id TEXT NOT NULL,
+                project_id INTEGER NOT NULL,
                 task_name TEXT NOT NULL,
                 phase TEXT DEFAULT 'General',
                 start_date TEXT NOT NULL,
@@ -107,46 +137,118 @@ def init_db(db_path: Optional[str] = None) -> None:
                 progress_pct INTEGER DEFAULT 0,
                 description TEXT DEFAULT '',
                 predecessor_id INTEGER,
-                FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE RESTRICT,
-                FOREIGN KEY (predecessor_id) REFERENCES project_milestones (id) ON DELETE RESTRICT
+                FOREIGN KEY (project_id) REFERENCES project (id) ON DELETE RESTRICT,
+                FOREIGN KEY (predecessor_id) REFERENCES project_task (id) ON DELETE RESTRICT
             )
         """)
 
-        # Schema migrations for project_milestones
-        cursor.execute("PRAGMA table_info(project_milestones)")
-        milestone_cols = [col[1] for col in cursor.fetchall()]
-        if "phase" not in milestone_cols:
-            cursor.execute("ALTER TABLE project_milestones ADD COLUMN phase TEXT DEFAULT 'General'")
-        if "progress_pct" not in milestone_cols:
-            cursor.execute("ALTER TABLE project_milestones ADD COLUMN progress_pct INTEGER DEFAULT 0")
-        if "description" not in milestone_cols:
-            cursor.execute("ALTER TABLE project_milestones ADD COLUMN description TEXT DEFAULT ''")
-        if "predecessor_id" not in milestone_cols:
-            cursor.execute("ALTER TABLE project_milestones ADD COLUMN predecessor_id INTEGER")
+        # Migration: Migrate legacy 'project_milestones' table to 'project_task' if it exists
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='project_milestones'")
+        if cursor.fetchone():
+            logger.info("Migrating legacy 'project_milestones' table to 'project_task'...")
+            cursor.execute("PRAGMA table_info(project_milestones)")
+            m_cols = [c[1] for c in cursor.fetchall()]
+            has_desc = "description" in m_cols
+            has_pred = "predecessor_id" in m_cols
+            has_phase = "phase" in m_cols
+            has_prog = "progress_pct" in m_cols
+
+            cursor.execute("SELECT * FROM project_milestones")
+            legacy_milestones = cursor.fetchall()
+            for r in legacy_milestones:
+                row_dict = dict(zip(m_cols, r))
+                m_id = row_dict.get("id")
+                raw_pid = row_dict.get("project_id")
+                pid_int = 1
+                if isinstance(raw_pid, int):
+                    pid_int = raw_pid
+                elif isinstance(raw_pid, str):
+                    if raw_pid.isdigit():
+                        pid_int = int(raw_pid)
+                    elif raw_pid.startswith("PRJ-"):
+                        part = raw_pid.split("-")[-1]
+                        if part.isdigit():
+                            pid_int = int(part)
+                t_name = row_dict.get("task_name", "")
+                t_phase = row_dict.get("phase", "General") if has_phase else "General"
+                t_start = row_dict.get("start_date", "")
+                t_end = row_dict.get("end_date", "")
+                t_prog = row_dict.get("progress_pct", 0) if has_prog else 0
+                t_desc = row_dict.get("description", "") if has_desc else ""
+                t_pred = row_dict.get("predecessor_id") if has_pred else None
+
+                cursor.execute(
+                    """
+                    INSERT OR REPLACE INTO project_task 
+                    (id, project_id, task_name, phase, start_date, end_date, progress_pct, description, predecessor_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (m_id, pid_int, t_name, t_phase, t_start, t_end, t_prog, t_desc, t_pred),
+                )
+            cursor.execute("DROP TABLE project_milestones")
 
         # 6. Task Dependencies Table (Multi-predecessors, external project/tasks, link types, lag offsets)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS task_dependencies (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                task_id INTEGER NOT NULL,
-                predecessor_task_id INTEGER,
-                predecessor_project_id TEXT,
-                link_type TEXT DEFAULT 'FS',
-                lag_days INTEGER DEFAULT 0,
-                FOREIGN KEY (task_id) REFERENCES project_milestones (id) ON DELETE RESTRICT,
-                FOREIGN KEY (predecessor_task_id) REFERENCES project_milestones (id) ON DELETE RESTRICT,
-                FOREIGN KEY (predecessor_project_id) REFERENCES projects (id) ON DELETE RESTRICT
-            )
-        """)
+        cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='task_dependencies'")
+        dep_table_row = cursor.fetchone()
+        if dep_table_row and dep_table_row[0] and ("REFERENCES projects" in dep_table_row[0] or "REFERENCES project_milestones" in dep_table_row[0]):
+            logger.info("Migrating task_dependencies schema to reference project and project_task...")
+            cursor.execute("""
+                CREATE TABLE task_dependencies_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    task_id INTEGER NOT NULL,
+                    predecessor_task_id INTEGER,
+                    predecessor_project_id INTEGER,
+                    link_type TEXT DEFAULT 'FS',
+                    lag_days INTEGER DEFAULT 0,
+                    FOREIGN KEY (task_id) REFERENCES project_task (id) ON DELETE RESTRICT,
+                    FOREIGN KEY (predecessor_task_id) REFERENCES project_task (id) ON DELETE RESTRICT,
+                    FOREIGN KEY (predecessor_project_id) REFERENCES project (id) ON DELETE RESTRICT
+                )
+            """)
+            cursor.execute("SELECT id, task_id, predecessor_task_id, predecessor_project_id, link_type, lag_days FROM task_dependencies")
+            old_deps = cursor.fetchall()
+            for dep in old_deps:
+                d_id, t_id, pred_t_id, pred_p_id, lt, lag = dep
+                int_pred_pid = None
+                if pred_p_id is not None:
+                    if isinstance(pred_p_id, int):
+                        int_pred_pid = pred_p_id
+                    elif isinstance(pred_p_id, str):
+                        if pred_p_id.isdigit():
+                            int_pred_pid = int(pred_p_id)
+                        elif pred_p_id.startswith("PRJ-"):
+                            part = pred_p_id.split("-")[-1]
+                            if part.isdigit():
+                                int_pred_pid = int(part)
+                cursor.execute(
+                    "INSERT INTO task_dependencies_new (id, task_id, predecessor_task_id, predecessor_project_id, link_type, lag_days) VALUES (?, ?, ?, ?, ?, ?)",
+                    (d_id, t_id, pred_t_id, int_pred_pid, lt, lag),
+                )
+            cursor.execute("DROP TABLE task_dependencies")
+            cursor.execute("ALTER TABLE task_dependencies_new RENAME TO task_dependencies")
+        else:
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS task_dependencies (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    task_id INTEGER NOT NULL,
+                    predecessor_task_id INTEGER,
+                    predecessor_project_id INTEGER,
+                    link_type TEXT DEFAULT 'FS',
+                    lag_days INTEGER DEFAULT 0,
+                    FOREIGN KEY (task_id) REFERENCES project_task (id) ON DELETE RESTRICT,
+                    FOREIGN KEY (predecessor_task_id) REFERENCES project_task (id) ON DELETE RESTRICT,
+                    FOREIGN KEY (predecessor_project_id) REFERENCES project (id) ON DELETE RESTRICT
+                )
+            """)
 
-        # Migration from legacy project_milestones.predecessor_id into task_dependencies if empty
+        # Migration from legacy predecessor_id into task_dependencies if empty
         cursor.execute("SELECT COUNT(*) FROM task_dependencies")
         dep_count = cursor.fetchone()[0]
         if dep_count == 0:
             cursor.execute("""
                 INSERT INTO task_dependencies (task_id, predecessor_task_id, link_type, lag_days)
                 SELECT id, predecessor_id, 'FS', 0
-                FROM project_milestones
+                FROM project_task
                 WHERE predecessor_id IS NOT NULL
             """)
 
@@ -202,15 +304,57 @@ def init_db(db_path: Optional[str] = None) -> None:
             )
         """)
 
-        # 11. Schema migrations for projects, organization, and function tables
-        cursor.execute("PRAGMA table_info(projects)")
+        # 11. Tag Group Table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS tag_group (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tag_group_name TEXT NOT NULL
+            )
+        """)
+
+        # 12. Tag Dictionary Table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS tag_dictionnary (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tag TEXT NOT NULL,
+                tag_group_id INTEGER,
+                FOREIGN KEY (tag_group_id) REFERENCES tag_group (id) ON DELETE RESTRICT
+            )
+        """)
+
+        # 13. Task Tag Table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS task_tag (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tag_id INTEGER,
+                task_id INTEGER NOT NULL,
+                free_tag TEXT,
+                FOREIGN KEY (tag_id) REFERENCES tag_dictionnary (id) ON DELETE CASCADE,
+                FOREIGN KEY (task_id) REFERENCES project_task (id) ON DELETE CASCADE
+            )
+        """)
+
+        # 14. Project Tag Table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS project_tag (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tag_id INTEGER,
+                project_id INTEGER NOT NULL,
+                free_tag TEXT,
+                FOREIGN KEY (tag_id) REFERENCES tag_dictionnary (id) ON DELETE CASCADE,
+                FOREIGN KEY (project_id) REFERENCES project (id) ON DELETE CASCADE
+            )
+        """)
+
+        # 11. Schema migrations for project, organization, and function tables
+        cursor.execute("PRAGMA table_info(project)")
         proj_cols = [col[1] for col in cursor.fetchall()]
         if "dynamic_attributes" not in proj_cols:
-            cursor.execute("ALTER TABLE projects ADD COLUMN dynamic_attributes TEXT")
+            cursor.execute("ALTER TABLE project ADD COLUMN dynamic_attributes TEXT")
         if "planned_budget" not in proj_cols:
-            cursor.execute("ALTER TABLE projects ADD COLUMN planned_budget REAL DEFAULT 0.0")
+            cursor.execute("ALTER TABLE project ADD COLUMN planned_budget REAL DEFAULT 0.0")
         if "actual_budget" not in proj_cols:
-            cursor.execute("ALTER TABLE projects ADD COLUMN actual_budget REAL DEFAULT 0.0")
+            cursor.execute("ALTER TABLE project ADD COLUMN actual_budget REAL DEFAULT 0.0")
 
         # Cleanup legacy hierarchy_level table if present
         cursor.execute("DROP TABLE IF EXISTS hierarchy_level")

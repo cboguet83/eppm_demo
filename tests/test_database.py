@@ -35,8 +35,8 @@ class TestDatabaseLayer(unittest.TestCase):
             "schema_groups",
             "schema_parameters",
             "schema_param_options",
-            "projects",
-            "project_milestones",
+            "project",
+            "project_task",
         }
         self.assertTrue(expected.issubset(tables))
 
@@ -51,9 +51,9 @@ class TestDatabaseLayer(unittest.TestCase):
             groups_count = cursor.fetchone()[0]
             cursor.execute("SELECT COUNT(*) FROM schema_parameters")
             params_count = cursor.fetchone()[0]
-            cursor.execute("SELECT COUNT(*) FROM projects")
+            cursor.execute("SELECT COUNT(*) FROM project")
             projects_count = cursor.fetchone()[0]
-            cursor.execute("SELECT COUNT(*) FROM project_milestones")
+            cursor.execute("SELECT COUNT(*) FROM project_task")
             milestones_count = cursor.fetchone()[0]
 
         self.assertGreaterEqual(groups_count, 2)
@@ -69,7 +69,7 @@ class TestDatabaseLayer(unittest.TestCase):
 
         with get_db(self.temp_db_path) as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT COUNT(*) FROM projects")
+            cursor.execute("SELECT COUNT(*) FROM project")
             count = cursor.fetchone()[0]
 
         self.assertEqual(count, 3)

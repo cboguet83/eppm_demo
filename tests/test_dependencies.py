@@ -24,8 +24,8 @@ class TestTaskDependencies(unittest.TestCase):
         self.project_repo = ProjectRepository(self.db_path)
         self.milestone_repo = MilestoneRepository(self.db_path)
 
-        self.project_repo.create_project("PRJ-ALPHA", "Alpha Core", "Active", 100000.0, 50000.0, {})
-        self.project_repo.create_project("PRJ-BETA", "Beta Subsystem", "Active", 80000.0, 20000.0, {})
+        self.project_repo.create_project(1, "Alpha Core", "Active", 100000.0, 50000.0, {})
+        self.project_repo.create_project(2, "Beta Subsystem", "Active", 80000.0, 20000.0, {})
 
     def tearDown(self) -> None:
         """Clean up temporary database files."""
@@ -222,11 +222,11 @@ class TestTaskDependencies(unittest.TestCase):
     # --------------------------------------------------------------------------
     def test_repository_dependencies_lifecycle(self) -> None:
         """Verify creating, querying, updating, and cascading deletions in task_dependencies table."""
-        # Create steps
-        s1 = self.milestone_repo.create_milestone("PRJ-ALPHA", "Step 1", "Phase 1", "2026-01-01", "2026-01-10", 100)
-        s2 = self.milestone_repo.create_milestone("PRJ-ALPHA", "Step 2", "Phase 1", "2026-01-11", "2026-01-20", 50)
+        # Create steps in project 1
+        s1 = self.milestone_repo.create_milestone(1, "Step 1", "Phase 1", "2026-01-01", "2026-01-10", 100)
+        s2 = self.milestone_repo.create_milestone(1, "Step 2", "Phase 1", "2026-01-11", "2026-01-20", 50)
         s3 = self.milestone_repo.create_milestone(
-            "PRJ-ALPHA",
+            1,
             "Step 3",
             "Phase 2",
             "2026-01-21",
@@ -235,7 +235,7 @@ class TestTaskDependencies(unittest.TestCase):
             dependencies=[
                 {"predecessor_task_id": s1, "predecessor_project_id": None, "link_type": "FS", "lag_days": 0},
                 {"predecessor_task_id": s2, "predecessor_project_id": None, "link_type": "SS", "lag_days": 2},
-                {"predecessor_task_id": None, "predecessor_project_id": "PRJ-BETA", "link_type": "FF", "lag_days": 5},
+                {"predecessor_task_id": None, "predecessor_project_id": 2, "link_type": "FF", "lag_days": 5},
             ],
         )
 
@@ -268,11 +268,11 @@ class TestTaskDependencies(unittest.TestCase):
         deps_after_pred_delete = self.milestone_repo.get_task_dependencies(s3)
         self.assertEqual(len(deps_after_pred_delete), 0)
 
-        # Delete project PRJ-ALPHA and verify project-wide dependency cleanup
-        self.milestone_repo.save_task_dependencies(s3, [{"predecessor_task_id": None, "predecessor_project_id": "PRJ-BETA", "link_type": "FS", "lag_days": 0}])
+        # Delete project 1 and verify project-wide dependency cleanup
+        self.milestone_repo.save_task_dependencies(s3, [{"predecessor_task_id": None, "predecessor_project_id": 2, "link_type": "FS", "lag_days": 0}])
         self.assertEqual(len(self.milestone_repo.get_task_dependencies(s3)), 1)
-        self.project_repo.delete_project("PRJ-ALPHA")
-        self.assertEqual(len(self.milestone_repo.get_dependencies_for_project("PRJ-ALPHA")), 0)
+        self.project_repo.delete_project(1)
+        self.assertEqual(len(self.milestone_repo.get_dependencies_for_project(1)), 0)
 
     # --------------------------------------------------------------------------
     # 8. MULTI-PROJECT COMBINED CONSTRAINT EVALUATION
@@ -315,7 +315,7 @@ class TestTaskDependencies(unittest.TestCase):
         """Verify creating steps with empty dependencies list or None works seamlessly."""
         # 1. Create milestone with empty dependencies
         step_id_1 = self.milestone_repo.create_milestone(
-            project_id="PRJ-ALPHA",
+            project_id=1,
             task_name="Standalone Step 1",
             phase="Phase 1 - FAI",
             start_date="2026-02-01",
@@ -329,7 +329,7 @@ class TestTaskDependencies(unittest.TestCase):
 
         # 2. Create milestone with None dependencies
         step_id_2 = self.milestone_repo.create_milestone(
-            project_id="PRJ-ALPHA",
+            project_id=1,
             task_name="Standalone Step 2",
             phase="Phase 1 - FAI",
             start_date="2026-02-11",
@@ -355,23 +355,23 @@ class TestTaskDependencies(unittest.TestCase):
         self.assertEqual(deps_2_updated[0]["lag_days"], 1)
 
     def test_generate_project_id_sequence(self) -> None:
-        """Verify sequential project ID generation (PRJ-001, PRJ-002, etc.)."""
-        # Initially we have PRJ-ALPHA and PRJ-BETA (no numerical PRJ-XXX)
+        """Verify sequential project ID generation (1, 2, 3, etc.)."""
+        # Initially we have project 1 and 2
         next_id_1 = self.project_repo.generate_project_id()
-        self.assertEqual(next_id_1, "PRJ-001")
+        self.assertEqual(next_id_1, 3)
 
-        self.project_repo.create_project("PRJ-001", "Project 1", "Active", 10000.0, 0.0, {})
+        self.project_repo.create_project(3, "Project 3", "Active", 10000.0, 0.0, {})
         next_id_2 = self.project_repo.generate_project_id()
-        self.assertEqual(next_id_2, "PRJ-002")
+        self.assertEqual(next_id_2, 4)
 
-        self.project_repo.create_project("PRJ-009", "Project 9", "Active", 10000.0, 0.0, {})
+        self.project_repo.create_project(9, "Project 9", "Active", 10000.0, 0.0, {})
         next_id_3 = self.project_repo.generate_project_id()
-        self.assertEqual(next_id_3, "PRJ-010")
+        self.assertEqual(next_id_3, 10)
 
     def test_milestone_description_crud(self) -> None:
         """Verify creating, updating, and reading milestone description field."""
         step_id = self.milestone_repo.create_milestone(
-            project_id="PRJ-ALPHA",
+            project_id=1,
             task_name="Analysis Task",
             phase="Phase 1 - Inception",
             start_date="2026-03-01",
@@ -381,7 +381,7 @@ class TestTaskDependencies(unittest.TestCase):
         )
         self.assertGreater(step_id, 0)
 
-        df = self.milestone_repo.get_milestones_by_project("PRJ-ALPHA")
+        df = self.milestone_repo.get_milestones_by_project(1)
         row = df[df["id"] == step_id].iloc[0]
         self.assertEqual(row["description"], "Detailed scoping document deliverables")
 
@@ -396,7 +396,7 @@ class TestTaskDependencies(unittest.TestCase):
             description="Updated scope specifications",
         )
 
-        df_updated = self.milestone_repo.get_milestones_by_project("PRJ-ALPHA")
+        df_updated = self.milestone_repo.get_milestones_by_project(1)
         row_updated = df_updated[df_updated["id"] == step_id].iloc[0]
         self.assertEqual(row_updated["description"], "Updated scope specifications")
 

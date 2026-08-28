@@ -48,7 +48,7 @@ class TestSeedAndFlush(unittest.TestCase):
         # Verify projects in database
         df_projects = self.project_repo.get_all_projects()
         self.assertEqual(len(df_projects), 15)
-        self.assertTrue(all(p_id.startswith("PRJ-") for p_id in df_projects["id"]))
+        self.assertTrue(all(isinstance(p_id, int) for p_id in df_projects["id"]))
 
         # Verify tasks per project
         for p_id in df_projects["id"]:
@@ -95,7 +95,7 @@ class TestSeedAndFlush(unittest.TestCase):
         self.assertEqual(len(self.project_repo.get_all_projects()), 0)
         with get_db(self.db_path) as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT COUNT(*) FROM project_milestones")
+            cursor.execute("SELECT COUNT(*) FROM project_task")
             self.assertEqual(cursor.fetchone()[0], 0)
             cursor.execute("SELECT COUNT(*) FROM task_dependencies")
             self.assertEqual(cursor.fetchone()[0], 0)

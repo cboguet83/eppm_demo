@@ -41,8 +41,9 @@ class TestIntegration(unittest.TestCase):
         self.schema_repo.add_option("PRM_CLD", "Azure", 2)
 
         # 2. Add new project using the dynamic parameter
+        new_pid = 101
         self.project_repo.create_project(
-            project_id="PRJ-INT-1",
+            project_id=new_pid,
             name="Cloud Migration",
             status="In Progress",
             planned_budget=100000.0,
@@ -52,7 +53,7 @@ class TestIntegration(unittest.TestCase):
 
         # 3. Add milestones
         self.milestone_repo.create_milestone(
-            project_id="PRJ-INT-1",
+            project_id=new_pid,
             task_name="Assessment",
             phase="Phase 1",
             start_date="2026-01-01",
@@ -68,14 +69,14 @@ class TestIntegration(unittest.TestCase):
 
         self.assertIn("PRM_CLD", df_flattened.columns)
         self.assertEqual(
-            df_flattened.loc[df_flattened["id"] == "PRJ-INT-1", "PRM_CLD"].values[0],
+            df_flattened.loc[df_flattened["id"] == new_pid, "PRM_CLD"].values[0],
             "GCP",
         )
         self.assertGreaterEqual(metrics.total_projects, 4)
 
         # 5. Clean up project
-        self.project_repo.delete_project("PRJ-INT-1")
-        self.assertFalse(self.project_repo.exists("PRJ-INT-1"))
+        self.project_repo.delete_project(new_pid)
+        self.assertFalse(self.project_repo.exists(new_pid))
 
 
 if __name__ == "__main__":

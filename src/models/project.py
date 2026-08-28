@@ -1,7 +1,7 @@
 """Project domain models and portfolio metrics data structures."""
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Optional
 
 
 @dataclass
@@ -9,7 +9,7 @@ class Project:
     """Represents an enterprise project record.
 
     Attributes:
-        id: Unique project identifier code (e.g. 'PRJ-001').
+        id: Unique project identifier (integer primary key).
         name: Project title or name.
         status: Project lifecycle status ('Draft', 'In Progress', etc.).
         planned_budget: Approved planned expenditure in USD.
@@ -17,8 +17,8 @@ class Project:
         dynamic_attributes: Key-value dictionary of dynamic schema values.
     """
 
-    id: str
-    name: str
+    id: Optional[int] = None
+    name: str = ""
     status: str = "Draft"
     planned_budget: float = 0.0
     actual_budget: float = 0.0

@@ -39,9 +39,9 @@ def render_project_master(
         auto_id = project_repo.generate_project_id()
         with st.form("form_create_project", clear_on_submit=True):
             col1, col2 = st.columns(2)
-            new_id = col1.text_input(
+            col1.text_input(
                 t("master_data.field_id"),
-                value=auto_id,
+                value=str(auto_id),
                 disabled=True,
                 help=t("master_data.field_id_help"),
             )
@@ -106,23 +106,22 @@ def render_project_master(
 
             btn_submit = st.form_submit_button(t("master_data.btn_save_new"), width="stretch")
             if btn_submit:
-                clean_id = auto_id.strip() if auto_id else new_id.strip()
                 clean_name = new_name.strip()
 
-                if not clean_id or not clean_name:
+                if not clean_name:
                     st.error(t("master_data.err_required_fields"))
-                elif project_repo.exists(clean_id):
-                    st.error(t("master_data.err_already_exists", id=clean_id))
+                elif project_repo.exists(auto_id):
+                    st.error(t("master_data.err_already_exists", id=str(auto_id)))
                 else:
-                    project_repo.create_project(
-                        project_id=clean_id,
+                    new_proj_id = project_repo.create_project(
+                        project_id=auto_id,
                         name=clean_name,
                         status=new_status,
                         planned_budget=new_planned,
                         actual_budget=new_actual,
                         dynamic_attributes=dyn_values,
                     )
-                    st.success(t("master_data.msg_created_success", id=clean_id, name=clean_name))
+                    st.success(t("master_data.msg_created_success", id=str(new_proj_id), name=clean_name))
                     st.rerun()
 
     # --------------------------------------------------------------------------

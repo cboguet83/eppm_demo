@@ -24,6 +24,7 @@ from src.models.milestone import Milestone
 from src.models.organization import Employee, FunctionType, OrgFunction, Team
 from src.models.project import PortfolioMetrics, Project
 from src.models.schema import SchemaGroup, SchemaParameter, SchemaParamOption
+from src.models.tag import ProjectTag, TagDictionary, TagGroup, TaskTag
 
 __all__ = [
     "PAGE_PORTFOLIO",
@@ -54,4 +55,8 @@ __all__ = [
     "OrgFunction",
     "Team",
     "Employee",
+    "TagGroup",
+    "TagDictionary",
+    "ProjectTag",
+    "TaskTag",
 ]

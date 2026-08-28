@@ -2,7 +2,7 @@
 
 import datetime
 import os
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 import pandas as pd
 import plotly.express as px
@@ -11,8 +11,10 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 from src.i18n import get_current_locale, get_section_catalog, t
+from src.models.tag import ProjectTag, TaskTag
 from src.repositories.milestone_repo import MilestoneRepository
 from src.repositories.project_repo import ProjectRepository
+from src.repositories.tag_repo import TagRepository
 from src.services.milestone_service import MilestoneService
 
 # Declare Frappe Gantt Custom Component
@@ -24,11 +26,156 @@ _COMPONENT_PATH = os.path.join(
 _interactive_gantt = components.declare_component("interactive_gantt", path=_COMPONENT_PATH)
 
 
+@st.dialog(t("planning.dialog_project_tags_title", default="🏷️ Manage Project Tags"))
+def _manage_project_tags_dialog(project_id: int, project_name: str, tag_repo: TagRepository) -> None:
+    """Modal dialog for attaching, editing, and deleting tags on a project."""
+    st.markdown(f"#### 📁 {project_name} `[#{project_id}]`")
+
+    # 1. Existing Tags on Project
+    df_current_tags = tag_repo.get_project_tags_by_project(project_id)
+    st.markdown(f"##### {t('planning.current_tags', default='Current Assigned Tags')}")
+    if df_current_tags.empty:
+        st.info(t("planning.no_tags_assigned", default="No tags currently attached to this project."))
+    else:
+        for _, row in df_current_tags.iterrows():
+            pt_id = int(row["id"])
+            t_name = row.get("tag_name")
+            g_name = row.get("tag_group_name")
+            f_name = row.get("free_tag")
+            display_label = f"🏷️ {t_name}" if pd.notna(t_name) and str(t_name).strip() else f"🏷️ {f_name}"
+            if pd.notna(g_name) and str(g_name).strip():
+                display_label = f"[{g_name}] {display_label}"
+
+            c_tag, c_del = st.columns([4, 1])
+            c_tag.markdown(f"**{display_label}**")
+            if c_del.button("🗑️", key=f"btn_del_pt_{pt_id}", help="Remove tag from project"):
+                tag_repo.delete_project_tag(pt_id)
+                st.toast(t("planning.toast_tag_removed", default="Tag removed!"), icon="🗑️")
+                st.rerun()
+
+    st.divider()
+    # 2. Attach New Tag
+    st.markdown(f"##### ➕ {t('planning.attach_new_tag', default='Attach New Tag')}")
+    df_tags = tag_repo.get_all_tags()
+    tag_options = [(None, t("planning.select_dict_tag_placeholder", default="-- Select from Tag Dictionary (Optional) --"))] + [
+        (int(r["id"]), f"{r['tag']} ({r['tag_group_name']})" if pd.notna(r.get("tag_group_name")) else str(r["tag"]))
+        for _, r in df_tags.iterrows()
+    ]
+    selected_tag_tuple = st.selectbox(
+        t("planning.select_dict_tag", default="Dictionary Tag"),
+        options=tag_options,
+        format_func=lambda x: x[1],
+        key="sb_attach_proj_tag",
+    )
+    selected_tag_id = selected_tag_tuple[0] if selected_tag_tuple else None
+
+    free_tag_input = st.text_input(
+        t("planning.free_tag_optional", default="Custom / Free Tag (Optional)"),
+        placeholder="e.g. Q3-Priority, Pilot-Launch",
+        key="ti_attach_proj_free_tag",
+    )
+
+    col_btn_save, col_btn_close = st.columns([3, 1])
+    with col_btn_save:
+        if st.button(t("planning.btn_attach_tag", default="Attach Tag"), type="primary", key="btn_confirm_attach_proj_tag"):
+            if selected_tag_id is None and not free_tag_input.strip():
+                st.error(t("planning.tag_required_error", default="Please select a dictionary tag or enter a custom tag."))
+            else:
+                tag_repo.create_project_tag(
+                    ProjectTag(
+                        project_id=project_id,
+                        tag_id=selected_tag_id,
+                        free_tag=free_tag_input.strip() if free_tag_input.strip() else None,
+                    )
+                )
+                st.toast(t("planning.toast_tag_attached", default="Tag attached to project!"), icon="🏷️")
+                st.rerun()
+
+    with col_btn_close:
+        if st.button(t("planning.btn_close_dialog", default="Close"), key="btn_close_proj_dialog"):
+            st.rerun()
+
+
+@st.dialog(t("planning.dialog_task_tags_title", default="🏷️ Manage Task Tags"))
+def _manage_task_tags_dialog(task_id: int, task_name: str, tag_repo: TagRepository) -> None:
+    """Modal dialog for adding, editing, and deleting tags on a task."""
+    st.markdown(f"#### 📋 {task_name} `[Task #{task_id}]`")
+
+    # 1. Existing Task Tags
+    df_current_tags = tag_repo.get_task_tags_by_task(task_id)
+    st.markdown(f"##### {t('planning.current_tags', default='Current Assigned Tags')}")
+    if df_current_tags.empty:
+        st.info(t("planning.no_task_tags_assigned", default="No tags currently attached to this task."))
+    else:
+        for _, row in df_current_tags.iterrows():
+            tt_id = int(row["id"])
+            t_name = row.get("tag_name")
+            g_name = row.get("tag_group_name")
+            f_name = row.get("free_tag")
+            display_label = f"🏷️ {t_name}" if pd.notna(t_name) and str(t_name).strip() else f"🏷️ {f_name}"
+            if pd.notna(g_name) and str(g_name).strip():
+                display_label = f"[{g_name}] {display_label}"
+
+            c_tag, c_del = st.columns([4, 1])
+            c_tag.markdown(f"**{display_label}**")
+            if c_del.button("🗑️", key=f"btn_del_tt_{tt_id}", help="Remove tag from task"):
+                tag_repo.delete_task_tag(tt_id)
+                st.toast(t("planning.toast_task_tag_removed", default="Task tag removed!"), icon="🗑️")
+                st.rerun()
+
+    st.divider()
+    # 2. Attach New Tag to Task
+    st.markdown(f"##### ➕ {t('planning.attach_new_task_tag', default='Attach New Tag to Task')}")
+    df_tags = tag_repo.get_all_tags()
+    tag_options = [(None, t("planning.select_dict_tag_placeholder", default="-- Select from Tag Dictionary (Optional) --"))] + [
+        (int(r["id"]), f"{r['tag']} ({r['tag_group_name']})" if pd.notna(r.get("tag_group_name")) else str(r["tag"]))
+        for _, r in df_tags.iterrows()
+    ]
+    selected_tag_tuple = st.selectbox(
+        t("planning.select_dict_tag", default="Dictionary Tag"),
+        options=tag_options,
+        format_func=lambda x: x[1],
+        key="sb_attach_task_tag",
+    )
+    selected_tag_id = selected_tag_tuple[0] if selected_tag_tuple else None
+
+    free_tag_input = st.text_input(
+        t("planning.free_tag_optional", default="Custom / Free Tag (Optional)"),
+        placeholder="e.g. Critical-Path, Security-Review",
+        key="ti_attach_task_free_tag",
+    )
+
+    col_btn_save, col_btn_close = st.columns([3, 1])
+    with col_btn_save:
+        if st.button(t("planning.btn_attach_tag", default="Attach Tag"), type="primary", key="btn_confirm_attach_task_tag"):
+            if selected_tag_id is None and not free_tag_input.strip():
+                st.error(t("planning.tag_required_error", default="Please select a dictionary tag or enter a custom tag."))
+            else:
+                tag_repo.create_task_tag(
+                    TaskTag(
+                        task_id=task_id,
+                        tag_id=selected_tag_id,
+                        free_tag=free_tag_input.strip() if free_tag_input.strip() else None,
+                    )
+                )
+                st.toast(t("planning.toast_task_tag_attached", default="Tag attached to task!"), icon="🏷️")
+                st.rerun()
+
+    with col_btn_close:
+        if st.button(t("planning.btn_close_dialog", default="Close"), key="btn_close_task_dialog"):
+            st.session_state["modal_manage_task_tag"] = None
+            st.rerun()
+
+
 def render_planning_milestones(
     project_repo: ProjectRepository,
     milestone_repo: MilestoneRepository,
+    tag_repo: Optional[TagRepository] = None,
 ) -> None:
     """Renders the Planning & Step Loader screen with interactive drag & drop and Plotly timeline."""
+    if tag_repo is None:
+        tag_repo = TagRepository(project_repo.db_path)
+
     st.markdown(
         """
         <style>
@@ -57,64 +204,149 @@ def render_planning_milestones(
 
     proj_map = dict(zip(df_projects["id"], df_projects["name"]))
 
-    # Top Control: Project Selection & Multi-Project View Toggle
-    top_col1, top_col2 = st.columns([3, 2])
-    enable_multi_project = top_col2.checkbox(
-        t("planning.toggle_multi_project"),
-        value=False,
-        help="View all projects in a unified timeline with tasks grouped under their respective project.",
-        key="chk_multi_project_display",
-    )
+    # --------------------------------------------------------------------------
+    # TOP CONTROL: Project Tag Filter & Scope Selection (2 Radio Buttons)
+    # --------------------------------------------------------------------------
+    df_all_proj_tags = tag_repo.get_all_project_tags()
+    available_tags_set: set[str] = set()
+    if not df_all_proj_tags.empty:
+        for _, r in df_all_proj_tags.iterrows():
+            t_name = r.get("tag_name")
+            f_name = r.get("free_tag")
+            if pd.notna(t_name) and str(t_name).strip():
+                available_tags_set.add(str(t_name).strip())
+            if pd.notna(f_name) and str(f_name).strip():
+                available_tags_set.add(str(f_name).strip())
+
+    available_tags_list = sorted(list(available_tags_set))
+
+    top_filter_col, top_scope_col = st.columns([3, 3])
+
+    with top_filter_col:
+        selected_tag_filters = st.multiselect(
+            f"🏷️ {t('planning.filter_by_tags', default='Filter Projects by Tag')}",
+            options=available_tags_list,
+            default=[],
+            help="Filter project list to projects assigned any of the chosen tags.",
+            key="ms_planning_tag_filter",
+        )
+
+    # Filter projects based on tag selection if any
+    if selected_tag_filters and not df_all_proj_tags.empty:
+        matching_proj_ids = set()
+        for _, r in df_all_proj_tags.iterrows():
+            t_name = str(r.get("tag_name", "")).strip()
+            f_name = str(r.get("free_tag", "")).strip()
+            if (t_name and t_name in selected_tag_filters) or (f_name and f_name in selected_tag_filters):
+                matching_proj_ids.add(int(r["project_id"]))
+
+        df_filtered_projects = df_projects[df_projects["id"].isin(matching_proj_ids)]
+        if df_filtered_projects.empty:
+            st.warning(t("planning.no_projects_matching_tags", default="No projects match the selected tag filter."))
+        else:
+            df_projects = df_filtered_projects
+
+    if df_projects.empty:
+        st.info(t("planning.no_projects_available", default="No projects available with the current filter."))
+        return
+
+    SCOPE_SINGLE = f"1. {t('planning.scope_single_project', default='Single Project')}"
+    SCOPE_MULTI = f"2. {t('planning.scope_specific_projects', default='Select Specific Projects')}"
+
+    with top_scope_col:
+        selected_scope = st.radio(
+            t("planning.filter_scope", default="Filter Scope"),
+            options=[SCOPE_SINGLE, SCOPE_MULTI],
+            horizontal=True,
+            key="rg_planning_filter_scope",
+        )
+
+    enable_multi_project = (selected_scope == SCOPE_MULTI)
+    all_proj_ids = df_projects["id"].tolist()
 
     if enable_multi_project:
-        all_proj_ids = df_projects["id"].tolist()
-        opt_all = f"🌐 {t('planning.filter_all_projects', default='All Projects')}"
-        opt_sel = f"🔍 {t('planning.filter_select_projects', default='Select Specific Projects')}"
-        filter_mode = top_col1.radio(
-            t("planning.filter_scope", default="Filter Scope"),
-            options=[opt_all, opt_sel],
-            horizontal=True,
-            key="rg_multi_filter_mode",
+        multi_header_label = f"🔍 {t('planning.select_multi_proj', default='Select Projects to Display in Multi-Gantt')} ({len(df_projects)} projects found)"
+        selected_projects = st.multiselect(
+            multi_header_label,
+            options=all_proj_ids,
+            default=all_proj_ids[:10] if len(all_proj_ids) > 10 else all_proj_ids,
+            format_func=lambda x: f"{x} - {proj_map.get(x, '')}",
+            key="ms_multi_projects",
         )
-        if filter_mode == opt_sel:
-            selected_projects = top_col1.multiselect(
-                t("planning.select_multi_proj"),
-                options=all_proj_ids,
-                default=all_proj_ids[:10] if len(all_proj_ids) > 10 else all_proj_ids,
-                format_func=lambda x: f"{x} - {proj_map.get(x, '')}",
-                key="ms_multi_projects",
-            )
-            if not selected_projects:
-                selected_projects = all_proj_ids
-        else:
+        if not selected_projects:
             selected_projects = all_proj_ids
         selected_id = selected_projects[0]
     else:
-        selected_id = top_col1.selectbox(
-            t("planning.select_single_proj"),
-            options=df_projects["id"].tolist(),
-            format_func=lambda x: f"{x} - {proj_map.get(x, '')}",
-            key="sb_single_project_choice",
-        )
+        ctrl_col1, ctrl_col2 = st.columns([3, 3])
+        with ctrl_col1:
+            selected_id = st.selectbox(
+                t("planning.select_single_proj"),
+                options=df_projects["id"].tolist(),
+                format_func=lambda x: f"{x} - {proj_map.get(x, '')}",
+                key="sb_single_project_choice",
+            )
         selected_projects = [selected_id]
 
     # --------------------------------------------------------------------------
-    # 1. TIMELINE VISUALIZATION (INTERACTIVE DRAG & DROP GANTT)
+    # 1. TIMELINE VISUALIZATION & SINGLE PROJECT HEADER
     # --------------------------------------------------------------------------
-    if enable_multi_project:
-        st.subheader(f"📅 {t('planning.multi_project_title', default='Multi-Project Master Timeline')} ({len(selected_projects)} Projects)")
-    else:
-        st.subheader(f"📅 {t('planning.schedule_title', project_id=selected_id)}")
+    if not enable_multi_project:
+        # Single Project View: Project Name & Associated Tag Pills with Add/Remove capability
+        selected_project_name = proj_map.get(selected_id, f"Project #{selected_id}")
+        df_current_proj_tags = tag_repo.get_project_tags_by_project(selected_id)
+
+        hdr_card_col1, hdr_card_col2 = st.columns([4, 1])
+        with hdr_card_col1:
+            st.markdown(
+                f"""
+                <div style="display:flex; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:4px;">
+                    <h3 style="margin:0; font-size:1.35rem; font-weight:700; color:#0f172a;">
+                        📁 {selected_project_name}
+                    </h3>
+                    <span style="font-size:0.8rem; font-weight:700; color:#64748b; background:#f1f5f9; padding:2px 8px; border-radius:12px; border:1px solid #cbd5e1;">
+                        #{selected_id}
+                    </span>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            if not df_current_proj_tags.empty:
+                tag_badges_html = []
+                for _, pt_row in df_current_proj_tags.iterrows():
+                    tg_label = pt_row.get("tag_name")
+                    tg_grp = pt_row.get("tag_group_name")
+                    free_lbl = pt_row.get("free_tag")
+                    lbl = tg_label if pd.notna(tg_label) and str(tg_label).strip() else free_lbl
+                    grp_txt = f"[{tg_grp}] " if pd.notna(tg_grp) and str(tg_grp).strip() else ""
+                    tag_badges_html.append(
+                        f"""<span style="background:rgba(37,99,235,0.1); border:1px solid #3b82f6; color:#1d4ed8; font-size:11.5px; font-weight:600; padding:2px 8px; border-radius:12px; display:inline-flex; align-items:center;">🏷️ {grp_txt}{lbl}</span>"""
+                    )
+                st.markdown(
+                    f"""<div style="display:flex; align-items:center; flex-wrap:wrap; gap:6px; margin-bottom:6px;">{" ".join(tag_badges_html)}</div>""",
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.caption(f"🏷️ {t('planning.no_project_tags_assigned', default='No tags associated with this project.')}")
+
+        with hdr_card_col2:
+            if st.button(f"🏷️ {t('planning.btn_manage_project_tags', default='Manage Tags')}", key="btn_open_proj_tag_modal"):
+                _manage_project_tags_dialog(int(selected_id), proj_map.get(selected_id, f"Project #{selected_id}"), tag_repo)
+
+    # Modal Dialog triggers from Gantt component context menu
+    task_modal_info = st.session_state.pop("modal_manage_task_tag", None)
+    if task_modal_info and isinstance(task_modal_info, dict):
+        _manage_task_tags_dialog(int(task_modal_info["task_id"]), str(task_modal_info["task_name"]), tag_repo)
 
     # Fetch all project bounds for constraint evaluation in fast batch queries
-    all_projects_list = [{"id": str(r["id"]), "name": f"{r['id']} - {r['name']}"} for _, r in df_projects.iterrows()]
+    all_projects_list = [{"id": str(r["id"]), "name": f"{r['name']}"} for _, r in df_projects.iterrows()]
     project_bounds = milestone_repo.get_all_project_date_bounds()
 
     # Gather tasks and dependencies for active project(s) via batch queries
     combined_steps_df = milestone_repo.get_milestones_for_projects(selected_projects)
     if not combined_steps_df.empty:
+        # In multi-project view, display strictly the clean project name without ID prefix
         combined_steps_df["project_name"] = combined_steps_df["project_id"].apply(
-            lambda pid: f"{pid} - {proj_map.get(pid, '')}"
+            lambda pid: proj_map.get(pid, str(pid))
         )
     raw_dependencies = milestone_repo.get_dependencies_for_projects(selected_projects)
 
@@ -141,6 +373,10 @@ def render_planning_milestones(
             raw_tasks, raw_dependencies, project_bounds
         )
 
+        # Batch load tags for all tasks
+        all_task_ids = [int(row["id"]) for row in steps_records]
+        task_tags_map = tag_repo.get_task_tags_by_task_ids(all_task_ids)
+
         # Index evaluated dependencies by task_id in O(N)
         deps_by_task_id: dict[int, list[dict[str, Any]]] = {}
         for d in evaluated_deps:
@@ -166,6 +402,7 @@ def render_planning_milestones(
                 "dependencies": dep_str,
                 "dependenciesList": task_deps,
                 "violations": task_violations.get(tid, []),
+                "tags": task_tags_map.get(tid, []),
                 "phase": str(row.get("phase", "General")),
                 "project_id": str(row["project_id"]),
                 "project_name": str(row["project_name"]),
@@ -195,7 +432,14 @@ def render_planning_milestones(
                 action = gantt_event.get("action")
                 step_id = gantt_event.get("id")
 
-                if action == "update_task_full" and step_id:
+                if action == "manage_task_tags" and step_id:
+                    st.session_state["modal_manage_task_tag"] = {
+                        "task_id": int(step_id),
+                        "task_name": str(gantt_event.get("task_name", "")),
+                        "project_id": str(gantt_event.get("project_id", "")),
+                    }
+                    st.rerun()
+                elif action == "update_task_full" and step_id:
                     t_name = str(gantt_event.get("task_name", "")).strip()
                     t_phase = str(gantt_event.get("phase", "General")).strip()
                     t_start = str(gantt_event.get("start_date", "")).strip()
@@ -302,5 +546,3 @@ def render_planning_milestones(
                     st.error(str(val_err))
                 except Exception as e:
                     st.error(f"Error parsing CSV: {e}")
-
-

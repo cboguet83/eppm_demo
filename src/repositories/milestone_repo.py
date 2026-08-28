@@ -1,17 +1,18 @@
-"""Repository for Project Steps, Milestones, and Schedules."""
+"""Repository for Project Steps, Tasks, and Schedules."""
 
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 import pandas as pd
 
 from src.database.connection import get_db
 from src.logging_config import get_logger
+from src.repositories.project_repo import parse_project_id
 
 logger = get_logger(__name__)
 
 
 class MilestoneRepository:
-    """Encapsulates all database operations for project steps and milestones."""
+    """Encapsulates all database operations for project steps and tasks."""
 
     def __init__(self, db_path: Optional[str] = None) -> None:
         """Initializes the MilestoneRepository with an optional database path.
@@ -21,38 +22,59 @@ class MilestoneRepository:
         """
         self.db_path = db_path
 
-    def get_milestones_by_project(self, project_id: str) -> pd.DataFrame:
-        """Loads all steps/milestones for a specific project sorted by start date.
+    def get_milestones_by_project(self, project_id: Union[int, str]) -> pd.DataFrame:
+        """Loads all steps/tasks for a specific project sorted by start date.
 
         Args:
-            project_id: Project code.
+            project_id: Project integer ID or string.
 
         Returns:
-            pd.DataFrame: DataFrame of milestone records.
+            pd.DataFrame: DataFrame of milestone/task records.
         """
+        int_id = parse_project_id(project_id)
         with get_db(self.db_path) as conn:
             return pd.read_sql(
                 """
                 SELECT m.id, m.project_id, m.task_name, m.phase, m.start_date, m.end_date, 
                        m.progress_pct, m.description, m.predecessor_id, p.task_name AS predecessor_name
-                FROM project_milestones m
-                LEFT JOIN project_milestones p ON m.predecessor_id = p.id
+                FROM project_task m
+                LEFT JOIN project_task p ON m.predecessor_id = p.id
                 WHERE m.project_id = ?
                 ORDER BY m.start_date, m.id
                 """,
                 conn,
-                params=(project_id.strip(),),
+                params=(int_id,),
             )
 
-    def get_dependencies_for_project(self, project_id: str) -> list[dict[str, Any]]:
+    def get_all_milestones(self) -> pd.DataFrame:
+        """Loads all steps/tasks across all projects enriched with project names.
+
+        Returns:
+            pd.DataFrame: DataFrame containing id, project_id, task_name, phase, start_date,
+                end_date, progress_pct, description, predecessor_id, and project_name.
+        """
+        with get_db(self.db_path) as conn:
+            return pd.read_sql(
+                """
+                SELECT m.id, m.project_id, m.task_name, m.phase, m.start_date, m.end_date,
+                       m.progress_pct, m.description, m.predecessor_id, p.name AS project_name
+                FROM project_task m
+                LEFT JOIN project p ON m.project_id = p.id
+                ORDER BY m.project_id, m.start_date, m.id
+                """,
+                conn,
+            )
+
+    def get_dependencies_for_project(self, project_id: Union[int, str]) -> list[dict[str, Any]]:
         """Retrieves all dependency records for steps in a project.
 
         Args:
-            project_id: Project code.
+            project_id: Project integer ID or string.
 
         Returns:
             list[dict[str, Any]]: List of dependency dicts.
         """
+        int_id = parse_project_id(project_id)
         with get_db(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
@@ -66,12 +88,12 @@ class MilestoneRepository:
                        p_proj.name AS predecessor_project_name,
                        s_task.task_name AS task_name
                 FROM task_dependencies d
-                JOIN project_milestones s_task ON d.task_id = s_task.id
-                LEFT JOIN project_milestones p_task ON d.predecessor_task_id = p_task.id
-                LEFT JOIN projects p_proj ON d.predecessor_project_id = p_proj.id
+                JOIN project_task s_task ON d.task_id = s_task.id
+                LEFT JOIN project_task p_task ON d.predecessor_task_id = p_task.id
+                LEFT JOIN project p_proj ON d.predecessor_project_id = p_proj.id
                 WHERE s_task.project_id = ?
                 """,
-                (project_id.strip(),),
+                (int_id,),
             )
             cols = [col[0] for col in cursor.description]
             return [dict(zip(cols, row)) for row in cursor.fetchall()]
@@ -80,7 +102,7 @@ class MilestoneRepository:
         """Retrieves all predecessor dependencies for a specific task.
 
         Args:
-            task_id: Milestone primary key ID.
+            task_id: Milestone/task primary key ID.
 
         Returns:
             list[dict[str, Any]]: List of dependency dictionaries.
@@ -97,8 +119,8 @@ class MilestoneRepository:
                        p_task.project_id AS pred_task_project_id,
                        p_proj.name AS predecessor_project_name
                 FROM task_dependencies d
-                LEFT JOIN project_milestones p_task ON d.predecessor_task_id = p_task.id
-                LEFT JOIN projects p_proj ON d.predecessor_project_id = p_proj.id
+                LEFT JOIN project_task p_task ON d.predecessor_task_id = p_task.id
+                LEFT JOIN project p_proj ON d.predecessor_project_id = p_proj.id
                 WHERE d.task_id = ?
                 """,
                 (task_id,),
@@ -110,7 +132,7 @@ class MilestoneRepository:
         """Replaces all dependencies for a task with a new set of dependencies.
 
         Args:
-            task_id: Milestone primary key ID.
+            task_id: Milestone/task primary key ID.
             dependencies: List of dependency dicts with keys [predecessor_task_id, predecessor_project_id, link_type, lag_days].
         """
         with get_db(self.db_path) as conn:
@@ -126,8 +148,8 @@ class MilestoneRepository:
                     except (ValueError, TypeError):
                         p_task = None
 
-                p_proj = dep.get("predecessor_project_id")
-                p_proj = str(p_proj).strip() if p_proj else None
+                p_proj_raw = dep.get("predecessor_project_id")
+                p_proj = parse_project_id(p_proj_raw) if p_proj_raw is not None and str(p_proj_raw).strip() != "" else None
                 l_type = str(dep.get("link_type", "FS")).upper().strip()
                 if l_type not in ("FS", "FF", "SS", "SF"):
                     l_type = "FS"
@@ -151,7 +173,7 @@ class MilestoneRepository:
         self,
         task_id: int,
         predecessor_task_id: Optional[int] = None,
-        predecessor_project_id: Optional[str] = None,
+        predecessor_project_id: Optional[Union[int, str]] = None,
         link_type: str = "FS",
         lag_days: int = 0,
     ) -> None:
@@ -173,7 +195,7 @@ class MilestoneRepository:
             except (ValueError, TypeError):
                 p_task = None
 
-        p_proj = str(predecessor_project_id).strip() if predecessor_project_id else None
+        p_proj = parse_project_id(predecessor_project_id) if predecessor_project_id is not None and str(predecessor_project_id).strip() != "" else None
         l_type = str(link_type).upper().strip()
         if l_type not in ("FS", "FF", "SS", "SF"):
             l_type = "FS"
@@ -195,20 +217,21 @@ class MilestoneRepository:
                 )
                 conn.commit()
 
-    def get_project_date_bounds(self, project_id: str) -> tuple[Optional[str], Optional[str]]:
+    def get_project_date_bounds(self, project_id: Union[int, str]) -> tuple[Optional[str], Optional[str]]:
         """Calculates the overall earliest start date and latest end date of a project.
 
         Args:
-            project_id: Project code.
+            project_id: Project integer ID or string.
 
         Returns:
             tuple[Optional[str], Optional[str]]: (min_start_date, max_end_date).
         """
+        int_id = parse_project_id(project_id)
         with get_db(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT MIN(start_date), MAX(end_date) FROM project_milestones WHERE project_id = ?",
-                (project_id.strip(),),
+                "SELECT MIN(start_date), MAX(end_date) FROM project_task WHERE project_id = ?",
+                (int_id,),
             )
             row = cursor.fetchone()
             if row and row[0] and row[1]:
@@ -219,13 +242,13 @@ class MilestoneRepository:
         """Calculates earliest start and latest end dates for all projects in one query.
 
         Returns:
-            dict[str, tuple[Optional[str], Optional[str]]]: Map of project_id to (min_start, max_end).
+            dict[str, tuple[Optional[str], Optional[str]]]: Map of project_id string to (min_start, max_end).
         """
         bounds: dict[str, tuple[Optional[str], Optional[str]]] = {}
         with get_db(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT project_id, MIN(start_date), MAX(end_date) FROM project_milestones GROUP BY project_id"
+                "SELECT project_id, MIN(start_date), MAX(end_date) FROM project_task GROUP BY project_id"
             )
             for row in cursor.fetchall():
                 bounds[str(row[0])] = (str(row[1]) if row[1] else None, str(row[2]) if row[2] else None)
@@ -235,13 +258,13 @@ class MilestoneRepository:
         """Retrieves all tasks grouped by project ID for external link mapping in one query.
 
         Returns:
-            dict[str, list[dict[str, Any]]]: Map of project_id to list of step summaries.
+            dict[str, list[dict[str, Any]]]: Map of project_id string to list of step summaries.
         """
         ext_map: dict[str, list[dict[str, Any]]] = {}
         with get_db(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT id, project_id, task_name, start_date, end_date FROM project_milestones ORDER BY project_id, start_date"
+                "SELECT id, project_id, task_name, start_date, end_date FROM project_task ORDER BY project_id, start_date"
             )
             for row in cursor.fetchall():
                 p_id = str(row[1])
@@ -255,38 +278,39 @@ class MilestoneRepository:
                 })
         return ext_map
 
-    def get_milestones_for_projects(self, project_ids: list[str]) -> pd.DataFrame:
-        """Loads all steps/milestones for multiple projects sorted by project and start date.
+    def get_milestones_for_projects(self, project_ids: list[Union[int, str]]) -> pd.DataFrame:
+        """Loads all steps/tasks for multiple projects sorted by project and start date.
 
         Args:
-            project_ids: List of project codes.
+            project_ids: List of project IDs.
 
         Returns:
-            pd.DataFrame: DataFrame of milestone records.
+            pd.DataFrame: DataFrame of task/milestone records.
         """
         if not project_ids:
             return pd.DataFrame()
 
-        placeholders = ",".join(["?"] * len(project_ids))
+        int_ids = [parse_project_id(p) for p in project_ids]
+        placeholders = ",".join(["?"] * len(int_ids))
         with get_db(self.db_path) as conn:
             return pd.read_sql(
                 f"""
                 SELECT m.id, m.project_id, m.task_name, m.phase, m.start_date, m.end_date, 
                        m.progress_pct, m.description, m.predecessor_id, p.task_name AS predecessor_name
-                FROM project_milestones m
-                LEFT JOIN project_milestones p ON m.predecessor_id = p.id
+                FROM project_task m
+                LEFT JOIN project_task p ON m.predecessor_id = p.id
                 WHERE m.project_id IN ({placeholders})
                 ORDER BY m.project_id, m.start_date, m.id
                 """,
                 conn,
-                params=[p.strip() for p in project_ids],
+                params=int_ids,
             )
 
-    def get_dependencies_for_projects(self, project_ids: list[str]) -> list[dict[str, Any]]:
+    def get_dependencies_for_projects(self, project_ids: list[Union[int, str]]) -> list[dict[str, Any]]:
         """Retrieves all dependency records for steps in a list of projects in a single query.
 
         Args:
-            project_ids: List of project codes.
+            project_ids: List of project IDs.
 
         Returns:
             list[dict[str, Any]]: List of dependency dicts.
@@ -294,7 +318,8 @@ class MilestoneRepository:
         if not project_ids:
             return []
 
-        placeholders = ",".join(["?"] * len(project_ids))
+        int_ids = [parse_project_id(p) for p in project_ids]
+        placeholders = ",".join(["?"] * len(int_ids))
         with get_db(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
@@ -308,19 +333,19 @@ class MilestoneRepository:
                        p_proj.name AS predecessor_project_name,
                        s_task.task_name AS task_name
                 FROM task_dependencies d
-                JOIN project_milestones s_task ON d.task_id = s_task.id
-                LEFT JOIN project_milestones p_task ON d.predecessor_task_id = p_task.id
-                LEFT JOIN projects p_proj ON d.predecessor_project_id = p_proj.id
+                JOIN project_task s_task ON d.task_id = s_task.id
+                LEFT JOIN project_task p_task ON d.predecessor_task_id = p_task.id
+                LEFT JOIN project p_proj ON d.predecessor_project_id = p_proj.id
                 WHERE s_task.project_id IN ({placeholders})
                 """,
-                [p.strip() for p in project_ids],
+                int_ids,
             )
             cols = [col[0] for col in cursor.description]
             return [dict(zip(cols, row)) for row in cursor.fetchall()]
 
     def create_milestone(
         self,
-        project_id: str,
+        project_id: Union[int, str],
         task_name: str,
         phase: str,
         start_date: str,
@@ -330,10 +355,10 @@ class MilestoneRepository:
         dependencies: Optional[list[dict[str, Any]]] = None,
         description: Optional[str] = None,
     ) -> int:
-        """Creates a single project step or milestone.
+        """Creates a single project step or task.
 
         Args:
-            project_id: Parent project code.
+            project_id: Parent project ID.
             task_name: Task or deliverable label.
             phase: Phase category name.
             start_date: ISO date string.
@@ -344,20 +369,21 @@ class MilestoneRepository:
             description: Optional detailed step description.
 
         Returns:
-            int: Newly created milestone ID.
+            int: Newly created step ID.
         """
+        int_pid = parse_project_id(project_id)
         clean_desc = description.strip() if description else ""
 
         with get_db(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
-                INSERT INTO project_milestones 
+                INSERT INTO project_task 
                 (project_id, task_name, phase, start_date, end_date, progress_pct, description, predecessor_id) 
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    project_id.strip(),
+                    int_pid,
                     task_name.strip(),
                     phase.strip() if phase.strip() else "General",
                     start_date.strip(),
@@ -392,7 +418,7 @@ class MilestoneRepository:
         dependencies: Optional[list[dict[str, Any]]] = None,
         description: Optional[str] = None,
     ) -> bool:
-        """Updates an existing project step or milestone.
+        """Updates an existing project step or task.
 
         Args:
             milestone_id: ID of the step to update.
@@ -415,7 +441,7 @@ class MilestoneRepository:
             cursor = conn.cursor()
             cursor.execute(
                 """
-                UPDATE project_milestones 
+                UPDATE project_task 
                 SET task_name = ?, phase = ?, start_date = ?, end_date = ?, progress_pct = ?, description = ?, predecessor_id = ?
                 WHERE id = ?
                 """,
@@ -444,7 +470,7 @@ class MilestoneRepository:
         return updated
 
     def update_dates(self, milestone_id: int, start_date: str, end_date: str) -> bool:
-        """Updates only the start and end dates of a step (e.g. via drag and drop).
+        """Updates only the start and end dates of a step.
 
         Args:
             milestone_id: Step ID.
@@ -457,7 +483,7 @@ class MilestoneRepository:
         with get_db(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "UPDATE project_milestones SET start_date = ?, end_date = ? WHERE id = ?",
+                "UPDATE project_task SET start_date = ?, end_date = ? WHERE id = ?",
                 (start_date.strip(), end_date.strip(), milestone_id),
             )
             conn.commit()
@@ -476,14 +502,14 @@ class MilestoneRepository:
         with get_db(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "UPDATE project_milestones SET progress_pct = ? WHERE id = ?",
+                "UPDATE project_task SET progress_pct = ? WHERE id = ?",
                 (max(0, min(100, progress_pct)), milestone_id),
             )
             conn.commit()
             return cursor.rowcount > 0
 
     def bulk_create_milestones(self, rows: list[dict[str, Any]]) -> int:
-        """Bulk inserts step/milestone records in a single database transaction.
+        """Bulk inserts step/task records in a single database transaction.
 
         Args:
             rows: List of dictionary records with keys [project_id, task_name, phase, start_date, end_date, progress_pct, description, predecessor_id].
@@ -498,7 +524,7 @@ class MilestoneRepository:
             cursor = conn.cursor()
             params_list = [
                 (
-                    r["project_id"],
+                    parse_project_id(r["project_id"]),
                     r["task_name"],
                     r.get("phase", "General"),
                     r["start_date"],
@@ -511,7 +537,7 @@ class MilestoneRepository:
             ]
             cursor.executemany(
                 """
-                INSERT INTO project_milestones 
+                INSERT INTO project_task 
                 (project_id, task_name, phase, start_date, end_date, progress_pct, description, predecessor_id) 
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
@@ -521,10 +547,10 @@ class MilestoneRepository:
             return len(rows)
 
     def delete_milestone(self, milestone_id: int) -> bool:
-        """Deletes a step/milestone by ID, cleaning up any task dependencies first.
+        """Deletes a step/task by ID, cleaning up any task dependencies first.
 
         Args:
-            milestone_id: Milestone primary key ID.
+            milestone_id: Task primary key ID.
 
         Returns:
             bool: True if deleted.
@@ -535,7 +561,7 @@ class MilestoneRepository:
                 "DELETE FROM task_dependencies WHERE task_id = ? OR predecessor_task_id = ?",
                 (milestone_id, milestone_id),
             )
-            cursor.execute("UPDATE project_milestones SET predecessor_id = NULL WHERE predecessor_id = ?", (milestone_id,))
-            cursor.execute("DELETE FROM project_milestones WHERE id = ?", (milestone_id,))
+            cursor.execute("UPDATE project_task SET predecessor_id = NULL WHERE predecessor_id = ?", (milestone_id,))
+            cursor.execute("DELETE FROM project_task WHERE id = ?", (milestone_id,))
             conn.commit()
             return cursor.rowcount > 0

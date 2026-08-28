@@ -117,29 +117,29 @@ def seed_database(
     # Execute default data seeder (populates schema groups, parameters, organization hierarchy, functions, employees)
     seed_default_data_if_empty(db_path)
 
-    # Clean default bootstrap sample projects (PRJ-001, PRJ-002, PRJ-003) so only generated projects are populated
+    # Clean default bootstrap sample projects (1, 2, 3) so only generated projects are populated
     with get_db(db_path) as conn:
         cursor = conn.cursor()
         cursor.execute(
             """
             DELETE FROM task_dependencies 
-            WHERE predecessor_project_id IN ('PRJ-001', 'PRJ-002', 'PRJ-003')
-               OR task_id IN (SELECT id FROM project_milestones WHERE project_id IN ('PRJ-001', 'PRJ-002', 'PRJ-003'))
-               OR predecessor_task_id IN (SELECT id FROM project_milestones WHERE project_id IN ('PRJ-001', 'PRJ-002', 'PRJ-003'))
+            WHERE predecessor_project_id IN (1, 2, 3)
+               OR task_id IN (SELECT id FROM project_task WHERE project_id IN (1, 2, 3))
+               OR predecessor_task_id IN (SELECT id FROM project_task WHERE project_id IN (1, 2, 3))
             """
         )
-        cursor.execute("UPDATE project_milestones SET predecessor_id = NULL WHERE project_id IN ('PRJ-001', 'PRJ-002', 'PRJ-003')")
-        cursor.execute("DELETE FROM project_milestones WHERE project_id IN ('PRJ-001', 'PRJ-002', 'PRJ-003')")
-        cursor.execute("DELETE FROM projects WHERE id IN ('PRJ-001', 'PRJ-002', 'PRJ-003')")
+        cursor.execute("UPDATE project_task SET predecessor_id = NULL WHERE project_id IN (1, 2, 3)")
+        cursor.execute("DELETE FROM project_task WHERE project_id IN (1, 2, 3)")
+        cursor.execute("DELETE FROM project WHERE id IN (1, 2, 3)")
         conn.commit()
 
     # 1. Build Projects Payload
-    projects_data: list[tuple[str, str, str, float, float, str]] = []
-    project_ids: list[str] = []
+    projects_data: list[tuple[int, str, str, float, float, str]] = []
+    project_ids: list[int] = []
     base_start_date = datetime.date(2025, 6, 1)
 
     for i in range(1, num_projects + 1):
-        p_id = f"PRJ-{i:04d}"
+        p_id = i
         project_ids.append(p_id)
 
         theme = random.choice(PROJECT_THEMES)
@@ -175,13 +175,13 @@ def seed_database(
 
     # 2. Build Tasks / Milestones Payload
     # Structure: [(project_id, task_name, phase, start_date, end_date, progress_pct, description)]
-    milestones_data: list[tuple[str, str, str, str, str, int, str]] = []
-    project_task_indices: dict[str, list[int]] = {p_id: [] for p_id in project_ids}
-    project_task_id_by_code: dict[str, dict[str, int]] = {p_id: {} for p_id in project_ids}
+    milestones_data: list[tuple[int, str, str, str, str, int, str]] = []
+    project_task_indices: dict[int, list[int]] = {p_id: [] for p_id in project_ids}
+    project_task_id_by_code: dict[int, dict[str, int]] = {p_id: {} for p_id in project_ids}
     global_task_counter = 0
 
     # Store planned task dates for dependency validation
-    task_date_map: dict[int, tuple[datetime.date, datetime.date, str]] = {}
+    task_date_map: dict[int, tuple[datetime.date, datetime.date, int]] = {}
 
     standard_tasks_type2 = [tmpl for tmpl in TASK_TEMPLATES if tmpl[0] != "N/A"]
 
@@ -410,16 +410,16 @@ def seed_database(
         # Batch insert projects
         cursor.executemany(
             """
-            INSERT OR REPLACE INTO projects (id, name, status, planned_budget, actual_budget, dynamic_attributes)
+            INSERT OR REPLACE INTO project (id, name, status, planned_budget, actual_budget, dynamic_attributes)
             VALUES (?, ?, ?, ?, ?, ?)
             """,
             projects_data,
         )
 
-        # Batch insert project milestones
+        # Batch insert project tasks
         cursor.executemany(
             """
-            INSERT INTO project_milestones (project_id, task_name, phase, start_date, end_date, progress_pct, description)
+            INSERT INTO project_task (project_id, task_name, phase, start_date, end_date, progress_pct, description)
             VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             milestones_data,

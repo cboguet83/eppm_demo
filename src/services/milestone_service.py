@@ -2,7 +2,7 @@
 
 import datetime
 import io
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 import pandas as pd
 
@@ -25,12 +25,12 @@ class MilestoneService:
         )
 
     @staticmethod
-    def parse_csv(uploaded_file: Any, project_id: str) -> list[dict[str, Any]]:
+    def parse_csv(uploaded_file: Any, project_id: Union[int, str]) -> list[dict[str, Any]]:
         """Parses and validates an uploaded step/milestone CSV file.
 
         Args:
             uploaded_file: Uploaded file object from Streamlit.
-            project_id: Project code to associate with imported milestones.
+            project_id: Project ID to associate with imported milestones.
 
         Returns:
             list[dict[str, Any]]: List of milestone records ready for database insertion.

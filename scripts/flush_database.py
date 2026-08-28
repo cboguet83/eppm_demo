@@ -42,18 +42,22 @@ def flush_database(db_path: Optional[str] = None, flush_all: bool = False) -> di
         cursor.execute("SELECT COUNT(*) FROM task_dependencies")
         counts["dependencies_deleted"] = int(cursor.fetchone()[0])
 
-        cursor.execute("SELECT COUNT(*) FROM project_milestones")
+        cursor.execute("SELECT COUNT(*) FROM project_task")
         counts["tasks_deleted"] = int(cursor.fetchone()[0])
 
-        cursor.execute("SELECT COUNT(*) FROM projects")
+        cursor.execute("SELECT COUNT(*) FROM project")
         counts["projects_deleted"] = int(cursor.fetchone()[0])
 
         # Execute table flushes
+        cursor.execute("DELETE FROM task_tag")
+        cursor.execute("DELETE FROM project_tag")
         cursor.execute("DELETE FROM task_dependencies")
-        cursor.execute("DELETE FROM project_milestones")
-        cursor.execute("DELETE FROM projects")
+        cursor.execute("DELETE FROM project_task")
+        cursor.execute("DELETE FROM project")
 
         if flush_all:
+            cursor.execute("DELETE FROM tag_dictionnary")
+            cursor.execute("DELETE FROM tag_group")
             cursor.execute("DELETE FROM employee")
             cursor.execute("DELETE FROM team")
             cursor.execute("DELETE FROM function")
@@ -65,7 +69,8 @@ def flush_database(db_path: Optional[str] = None, flush_all: bool = False) -> di
         # Reset autoincrement sequence counters
         cursor.execute(
             "DELETE FROM sqlite_sequence WHERE name IN ("
-            "'project_milestones', 'task_dependencies', 'employee', 'team', 'function', "
+            "'project', 'project_task', 'task_dependencies', 'task_tag', 'project_tag', "
+            "'tag_dictionnary', 'tag_group', 'employee', 'team', 'function', "
             "'function_type', 'schema_param_options', 'schema_groups')"
         )
 

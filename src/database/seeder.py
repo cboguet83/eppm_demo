@@ -58,12 +58,12 @@ def seed_default_data_if_empty(db_path: Optional[str] = None) -> None:
                 cursor.execute("INSERT INTO schema_param_options (param_id, option_value, display_order) VALUES ('PRM_003', ?, ?)", (opt, idx))
 
         # Check Projects
-        cursor.execute("SELECT id FROM projects")
+        cursor.execute("SELECT id FROM project")
         existing_pids = {row[0] for row in cursor.fetchall()}
 
         sample_projects = [
             (
-                "PRJ-001",
+                1,
                 "NextGen ERP Modernization",
                 STATUS_IN_PROGRESS,
                 450000.0,
@@ -78,7 +78,7 @@ def seed_default_data_if_empty(db_path: Optional[str] = None) -> None:
                 }),
             ),
             (
-                "PRJ-002",
+                2,
                 "Customer 360 AI Analytics",
                 STATUS_IN_PROGRESS,
                 280000.0,
@@ -93,7 +93,7 @@ def seed_default_data_if_empty(db_path: Optional[str] = None) -> None:
                 }),
             ),
             (
-                "PRJ-003",
+                3,
                 "Global Supply Chain Audit",
                 STATUS_COMPLETED,
                 150000.0,
@@ -112,46 +112,57 @@ def seed_default_data_if_empty(db_path: Optional[str] = None) -> None:
         if not existing_pids:
             logger.info("Seeding sample projects...")
             cursor.executemany(
-                "INSERT INTO projects (id, name, status, planned_budget, actual_budget, dynamic_attributes) VALUES (?, ?, ?, ?, ?, ?)",
+                "INSERT INTO project (id, name, status, planned_budget, actual_budget, dynamic_attributes) VALUES (?, ?, ?, ?, ?, ?)",
                 sample_projects,
             )
-            cursor.execute("SELECT id FROM projects")
+            cursor.execute("SELECT id FROM project")
             existing_pids = {row[0] for row in cursor.fetchall()}
 
-        # Check Milestones
-        cursor.execute("SELECT COUNT(*) FROM project_milestones")
+        # Check Tasks / Milestones
+        cursor.execute("SELECT COUNT(*) FROM project_task")
         milestone_count = cursor.fetchone()[0]
 
         if milestone_count == 0:
-            logger.info("Seeding sample project steps and milestones...")
-            if "PRJ-001" in existing_pids:
+            logger.info("Seeding sample project steps and tasks...")
+            if 1 in existing_pids or "PRJ-001" in existing_pids:
+                p1_id = 1 if 1 in existing_pids else "PRJ-001"
                 cursor.execute(
-                    "INSERT INTO project_milestones (id, project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id) VALUES (1, 'PRJ-001', 'Architecture & Scoping', 'Phase 1 - Inception', '2026-01-10', '2026-02-15', 100, NULL)"
+                    "INSERT INTO project_task (id, project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id) VALUES (1, ?, 'Architecture & Scoping', 'Phase 1 - Inception', '2026-01-10', '2026-02-15', 100, NULL)",
+                    (p1_id,),
                 )
                 cursor.execute(
-                    "INSERT INTO project_milestones (id, project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id) VALUES (2, 'PRJ-001', 'Architecture Sign-Off', 'Phase 1 - Inception', '2026-02-15', '2026-02-15', 100, 1)"
+                    "INSERT INTO project_task (id, project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id) VALUES (2, ?, 'Architecture Sign-Off', 'Phase 1 - Inception', '2026-02-15', '2026-02-15', 100, 1)",
+                    (p1_id,),
                 )
                 cursor.execute(
-                    "INSERT INTO project_milestones (id, project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id) VALUES (3, 'PRJ-001', 'Core Microservices Dev', 'Phase 2 - Build', '2026-02-16', '2026-06-30', 75, 2)"
+                    "INSERT INTO project_task (id, project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id) VALUES (3, ?, 'Core Microservices Dev', 'Phase 2 - Build', '2026-02-16', '2026-06-30', 75, 2)",
+                    (p1_id,),
                 )
                 cursor.execute(
-                    "INSERT INTO project_milestones (id, project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id) VALUES (4, 'PRJ-001', 'Integration & UAT', 'Phase 3 - Validation', '2026-07-01', '2026-09-15', 25, 3)"
+                    "INSERT INTO project_task (id, project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id) VALUES (4, ?, 'Integration & UAT', 'Phase 3 - Validation', '2026-07-01', '2026-09-15', 25, 3)",
+                    (p1_id,),
                 )
                 cursor.execute(
-                    "INSERT INTO project_milestones (id, project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id) VALUES (5, 'PRJ-001', 'Go-Live Release', 'Phase 4 - Rollout', '2026-09-15', '2026-09-15', 0, 4)"
-                )
-
-            if "PRJ-002" in existing_pids:
-                cursor.execute(
-                    "INSERT INTO project_milestones (project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id) VALUES ('PRJ-002', 'Data Pipeline Ingestion', 'Phase 1 - Data Eng', '2026-02-01', '2026-04-15', 100, NULL)"
-                )
-                cursor.execute(
-                    "INSERT INTO project_milestones (project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id) VALUES ('PRJ-002', 'Model Training & Tuning', 'Phase 2 - ML Dev', '2026-04-16', '2026-07-30', 65, NULL)"
+                    "INSERT INTO project_task (id, project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id) VALUES (5, ?, 'Go-Live Release', 'Phase 4 - Rollout', '2026-09-15', '2026-09-15', 0, 4)",
+                    (p1_id,),
                 )
 
-            if "PRJ-003" in existing_pids:
+            if 2 in existing_pids or "PRJ-002" in existing_pids:
+                p2_id = 2 if 2 in existing_pids else "PRJ-002"
                 cursor.execute(
-                    "INSERT INTO project_milestones (project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id) VALUES ('PRJ-003', 'Audit Execution', 'Phase 1 - Audit', '2026-02-11', '2026-04-20', 100, NULL)"
+                    "INSERT INTO project_task (project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id) VALUES (?, 'Data Pipeline Ingestion', 'Phase 1 - Data Eng', '2026-02-01', '2026-04-15', 100, NULL)",
+                    (p2_id,),
+                )
+                cursor.execute(
+                    "INSERT INTO project_task (project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id) VALUES (?, 'Model Training & Tuning', 'Phase 2 - ML Dev', '2026-04-16', '2026-07-30', 65, NULL)",
+                    (p2_id,),
+                )
+
+            if 3 in existing_pids or "PRJ-003" in existing_pids:
+                p3_id = 3 if 3 in existing_pids else "PRJ-003"
+                cursor.execute(
+                    "INSERT INTO project_task (project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id) VALUES (?, 'Audit Execution', 'Phase 1 - Audit', '2026-02-11', '2026-04-20', 100, NULL)",
+                    (p3_id,),
                 )
 
         # Check Function Types
@@ -301,6 +312,29 @@ def seed_default_data_if_empty(db_path: Optional[str] = None) -> None:
             cursor.executemany(
                 "INSERT INTO employee (employee_id, firstname, lastname, email, mobile, sigle, employee_code, function_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 sample_employees,
+            )
+
+        # Check Tag Groups & Tag Dictionary
+        cursor.execute("SELECT COUNT(*) FROM tag_group")
+        tag_group_count = cursor.fetchone()[0]
+
+        if tag_group_count == 0:
+            logger.info("Seeding default tag groups and tag dictionary...")
+            cursor.execute("INSERT INTO tag_group (id, tag_group_name) VALUES (1, 'Strategic Focus')")
+            cursor.execute("INSERT INTO tag_group (id, tag_group_name) VALUES (2, 'Architecture & Tech')")
+            cursor.execute("INSERT INTO tag_group (id, tag_group_name) VALUES (3, 'Delivery & Risk')")
+
+            sample_tags = [
+                (1, "Mission Critical", 1),
+                (2, "Regulatory Compliance", 1),
+                (3, "Cloud Native", 2),
+                (4, "AI/ML Integration", 2),
+                (5, "High Complexity", 3),
+                (6, "Security Audit Required", 3),
+            ]
+            cursor.executemany(
+                "INSERT INTO tag_dictionnary (id, tag, tag_group_id) VALUES (?, ?, ?)",
+                sample_tags,
             )
 
         conn.commit()
