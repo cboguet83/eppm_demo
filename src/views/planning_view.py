@@ -48,7 +48,10 @@ def _manage_project_tags_dialog(project_id: int, project_name: str, tag_repo: Ta
                 display_label = f"[{g_name}] {display_label}"
 
             c_tag, c_del = st.columns([4, 1])
-            c_tag.markdown(f"**{display_label}**")
+            c_tag.markdown(
+                f'<span style="background-color:#FDE8EC; color:#C41039; border:1px solid #C41039; padding:3px 10px; border-radius:12px; font-weight:600; font-size:12px; display:inline-block; margin-top:4px;">{escape_html(display_label) if "escape_html" in globals() else display_label}</span>',
+                unsafe_allow_html=True,
+            )
             if c_del.button("🗑️", key=f"btn_del_pt_{pt_id}", help="Remove tag from project"):
                 tag_repo.delete_project_tag(pt_id)
                 st.toast(t("planning.toast_tag_removed", default="Tag removed!"), icon="🗑️")
@@ -181,8 +184,11 @@ def render_planning_milestones(
         """
         <style>
         .block-container {
-            padding-top: 1.2rem !important;
-            padding-bottom: 1rem !important;
+            padding-top: 0.6rem !important;
+            padding-bottom: 0.8rem !important;
+            padding-left: 1rem !important;
+            padding-right: 1rem !important;
+            max-width: 100% !important;
         }
         h1, h2, h3 {
             margin-top: 0 !important;
@@ -278,6 +284,17 @@ def render_planning_milestones(
 
     # Fetch all project bounds and project tags for constraint evaluation and tooltips
     proj_tags_map = tag_repo.get_project_tags_by_project_ids([int(p) for p in selected_projects if str(p).isdigit()])
+    
+    if len(selected_projects) == 1:
+        s_id = int(selected_projects[0]) if str(selected_projects[0]).isdigit() else selected_projects[0]
+        s_tags = proj_tags_map.get(s_id, [])
+        if s_tags:
+            tag_badges_html = "".join([
+                f'<span style="background-color:#FDE8EC; color:#C41039; border:1px solid #C41039; padding:2px 8px; border-radius:10px; font-size:11.5px; font-weight:600; margin-right:5px; display:inline-block; margin-bottom:4px;">🏷️ {("[" + str(tg.get("tag_group_name")) + "] ") if tg.get("tag_group_name") else ""}{tg.get("tag_name") or tg.get("free_tag") or tg.get("tag")}</span>'
+                for tg in s_tags
+            ])
+            st.markdown(f'<div style="margin-top:-6px; margin-bottom:6px;">{tag_badges_html}</div>', unsafe_allow_html=True)
+
     all_projects_list = [
         {
             "id": str(r["id"]),
