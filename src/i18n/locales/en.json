@@ -158,6 +158,7 @@
       "internal_links": "🔗 Internal Dependencies",
       "external_links": "🌐 External Dependencies",
       "show_description": "📄 Description",
+      "show_hover": "💬 Tooltips",
       "expand_all": "▼ Expand All",
       "collapse_all": "▶ Collapse All"
     },
@@ -166,11 +167,13 @@
       "add_step_after": "Add Next Step (Successor)",
       "add_step_before": "Add Previous Step (Predecessor)",
       "manage_tags": "Manage Tags",
+      "edit_project": "Edit Project Details",
       "mark_complete": "Mark as 100% Complete",
       "delete_step": "Delete Step",
       "edit_dep": "Edit Dependency",
       "delete_dep": "Delete Dependency",
-      "view_diagnostics": "View Diagnostics"
+      "view_diagnostics": "View Diagnostics",
+      "view_project_diagnostics": "View Project Violations"
     },
     "modal": {
       "add_title": "➕ Add New Step ({project_id})",

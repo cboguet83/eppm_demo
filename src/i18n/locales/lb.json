@@ -158,6 +158,7 @@
       "internal_links": "🔗 Intern Ofhängegkeeten",
       "external_links": "🌐 Extern Ofhängegkeeten",
       "show_description": "📄 Beschreiwung",
+      "show_hover": "💬 Tooltips",
       "expand_all": "▼ Alles Opklappen",
       "collapse_all": "▶ Alles Zouklappen"
     },
@@ -166,11 +167,13 @@
       "add_step_after": "Nächste Schrëtt bäisetzen (Nofollger)",
       "add_step_before": "Virdrun Schrëtt bäisetzen (Virgänger)",
       "manage_tags": "Tags verwalten",
+      "edit_project": "Projet Detailer änneren",
       "mark_complete": "Als 100% fäerdeg markéieren",
       "delete_step": "Schrëtt läschen",
       "edit_dep": "Ofhängegkeet änneren",
       "delete_dep": "Ofhängegkeet läschen",
-      "view_diagnostics": "Diagnostik weisen"
+      "view_diagnostics": "Diagnostik weisen",
+      "view_project_diagnostics": "Projetverletzungen uweisen"
     },
     "modal": {
       "add_title": "➕ Neie Schrëtt bäisetzen ({project_id})",

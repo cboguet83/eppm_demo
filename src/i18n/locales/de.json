@@ -158,6 +158,7 @@
       "internal_links": "🔗 Interne Abhängigkeiten",
       "external_links": "🌐 Externe Abhängigkeiten",
       "show_description": "📄 Beschreibung",
+      "show_hover": "💬 Tooltips",
       "expand_all": "▼ Alle aufklappen",
       "collapse_all": "▶ Alle zuklappen"
     },
@@ -166,11 +167,13 @@
       "add_step_after": "Nächsten Schritt hinzufügen (Nachfolger)",
       "add_step_before": "Vorherigen Schritt hinzufügen (Vorgänger)",
       "manage_tags": "Tags verwalten",
+      "edit_project": "Projektdetails bearbeiten",
       "mark_complete": "Als 100% abgeschlossen markieren",
       "delete_step": "Schritt löschen",
       "edit_dep": "Abhängigkeit bearbeiten",
       "delete_dep": "Abhängigkeit löschen",
-      "view_diagnostics": "Diagnose anzeigen"
+      "view_diagnostics": "Diagnose anzeigen",
+      "view_project_diagnostics": "Projektverletzungen anzeigen"
     },
     "modal": {
       "add_title": "➕ Neuen Schritt hinzufügen ({project_id})",

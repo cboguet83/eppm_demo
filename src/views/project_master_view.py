@@ -137,10 +137,21 @@ def render_project_master(
 
         proj_options = df_existing["id"].tolist()
         proj_map = dict(zip(df_existing["id"], df_existing["name"]))
+        target_pid = st.session_state.pop("target_edit_project_id", None)
+        default_idx = 0
+        if target_pid is not None:
+            for idx, p_opt in enumerate(proj_options):
+                if str(p_opt) == str(target_pid):
+                    default_idx = idx
+                    break
+        elif "sb_edit_project_id" in st.session_state and st.session_state["sb_edit_project_id"] in proj_options:
+            default_idx = proj_options.index(st.session_state["sb_edit_project_id"])
 
         selected_id = st.selectbox(
             t("master_data.select_project"),
             options=proj_options,
+            index=default_idx,
+            key="sb_edit_project_id",
             format_func=lambda x: f"{x} - {proj_map.get(x, '')}",
         )
 

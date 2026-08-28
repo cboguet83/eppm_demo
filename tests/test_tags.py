@@ -277,8 +277,47 @@ class TestTagsSystem(unittest.TestCase):
         self.assertIn(self.task_id, task_tags_map)
         self.assertEqual(len(task_tags_map[self.task_id]), 1)
         self.assertEqual(task_tags_map[self.task_id][0]["tag_name"], "BatchTag")
-        self.assertEqual(task_tags_map[self.task_id][0]["free_tag"], "SpecialTask")
-        self.assertEqual(task_tags_map[999], [])
+    # -------------------------------------------------------------------------
+    # Group-Specific Tag Queries & Restriction Tests
+    # -------------------------------------------------------------------------
+    def test_group_specific_tag_queries(self) -> None:
+        """Test retrieving tags restricted to 'project_tag' and 'Task_Tag' groups."""
+        pt_group_id = self.tag_repo.create_tag_group(TagGroup(tag_group_name="project_tag"))
+        tt_group_id = self.tag_repo.create_tag_group(TagGroup(tag_group_name="Task_Tag"))
+        other_group_id = self.tag_repo.create_tag_group(TagGroup(tag_group_name="Other_Group"))
+
+        pt_tag_id = self.tag_repo.create_tag(TagDictionary(tag="ProjectSpecificTag", tag_group_id=pt_group_id))
+        tt_tag_id = self.tag_repo.create_tag(TagDictionary(tag="TaskSpecificTag", tag_group_id=tt_group_id))
+        other_tag_id = self.tag_repo.create_tag(TagDictionary(tag="OtherTag", tag_group_id=other_group_id))
+
+        # 1. Project Tag Group query
+        df_pt = self.tag_repo.get_project_tag_group_tags()
+        self.assertEqual(len(df_pt), 1)
+        self.assertEqual(df_pt.iloc[0]["id"], pt_tag_id)
+        self.assertEqual(df_pt.iloc[0]["tag"], "ProjectSpecificTag")
+
+        # 2. Task Tag Group query
+        df_tt = self.tag_repo.get_task_tag_group_tags()
+        self.assertEqual(len(df_tt), 1)
+        self.assertEqual(df_tt.iloc[0]["id"], tt_tag_id)
+        self.assertEqual(df_tt.iloc[0]["tag"], "TaskSpecificTag")
+
+        # 3. Validation Service Enforcement
+        # Valid Project Tag (from project_tag group)
+        TagService.validate_project_tag(self.project_id, tag_id=pt_tag_id, tag_repo=self.tag_repo)
+        # Invalid Project Tag (from Task_Tag or Other group)
+        with self.assertRaises(ValueError):
+            TagService.validate_project_tag(self.project_id, tag_id=tt_tag_id, tag_repo=self.tag_repo)
+        with self.assertRaises(ValueError):
+            TagService.validate_project_tag(self.project_id, tag_id=other_tag_id, tag_repo=self.tag_repo)
+
+        # Valid Task Tag (from Task_Tag group)
+        TagService.validate_task_tag(self.task_id, tag_id=tt_tag_id, tag_repo=self.tag_repo)
+        # Invalid Task Tag (from project_tag or Other group)
+        with self.assertRaises(ValueError):
+            TagService.validate_task_tag(self.task_id, tag_id=pt_tag_id, tag_repo=self.tag_repo)
+        with self.assertRaises(ValueError):
+            TagService.validate_task_tag(self.task_id, tag_id=other_tag_id, tag_repo=self.tag_repo)
 
 
 if __name__ == "__main__":

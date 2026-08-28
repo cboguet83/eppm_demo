@@ -1044,6 +1044,8 @@ def render_settings_view(
 
     df_groups = tag_repo.get_all_tag_groups()
     df_tags = tag_repo.get_all_tags()
+    df_proj_dict_tags = tag_repo.get_project_tag_group_tags()
+    df_task_dict_tags = tag_repo.get_task_tag_group_tags()
     df_proj_tags = tag_repo.get_all_project_tags()
     df_task_tags = tag_repo.get_all_task_tags()
     df_projects = project_repo.get_all_projects()
@@ -1479,7 +1481,7 @@ def render_settings_view(
                 st.session_state["_last_proj_tag_table_nonce"] = nonce
                 action = proj_tag_table_event.get("action")
                 if action == "add_project_tag":
-                    _open_add_project_tag_dialog(tag_repo, df_projects, df_tags)
+                    _open_add_project_tag_dialog(tag_repo, df_projects, df_proj_dict_tags)
                 elif action == "edit_project_tag":
                     pt_id = proj_tag_table_event.get("pt_id")
                     p_id = proj_tag_table_event.get("project_id")
@@ -1493,7 +1495,7 @@ def render_settings_view(
                             int(t_id) if t_id is not None else None,
                             str(f_tag) if f_tag else None,
                             df_projects,
-                            df_tags,
+                            df_proj_dict_tags,
                         )
                 elif action == "delete_project_tag":
                     pt_id = proj_tag_table_event.get("pt_id")
@@ -1547,7 +1549,7 @@ def render_settings_view(
                 st.session_state["_last_task_tag_table_nonce"] = nonce
                 action = task_tag_table_event.get("action")
                 if action == "add_task_tag":
-                    _open_add_task_tag_dialog(tag_repo, df_tasks, df_tags)
+                    _open_add_task_tag_dialog(tag_repo, df_tasks, df_task_dict_tags)
                 elif action == "edit_task_tag":
                     tt_id = task_tag_table_event.get("tt_id")
                     t_id = task_tag_table_event.get("task_id")
@@ -1561,7 +1563,7 @@ def render_settings_view(
                             int(tag_id) if tag_id is not None else None,
                             str(f_tag) if f_tag else None,
                             df_tasks,
-                            df_tags,
+                            df_task_dict_tags,
                         )
                 elif action == "delete_task_tag":
                     tt_id = task_tag_table_event.get("tt_id")

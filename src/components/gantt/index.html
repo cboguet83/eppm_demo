@@ -778,7 +778,7 @@
       border: 1px solid #cbd5e1;
       border-radius: 8px;
       box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
-      z-index: 3500;
+      z-index: 6000;
       min-width: 220px;
       padding: 6px 0;
       box-sizing: border-box;
@@ -1114,6 +1114,22 @@
     </div>
   </div>
 
+  <!-- Project Context Menu (Displayed when right-clicking a project row) -->
+  <div class="context-menu" id="project-context-menu" style="display:none; min-width:210px;">
+    <div class="context-menu-item warning" id="ctx-proj-violation-btn" onclick="openProjectDiagModal()" style="display:none;">
+      <span>⚠️</span>
+      <span id="ctx-proj-violation-label">View Project Violations</span>
+    </div>
+    <div class="context-menu-item" onclick="triggerManageProjectTagsFromMenu()">
+      <span>🏷️</span>
+      <span id="ctx-label-project-tags">Manage Tags</span>
+    </div>
+    <div class="context-menu-item" onclick="triggerEditProjectFromMenu()">
+      <span>📁</span>
+      <span id="ctx-label-edit-project">Edit Project Details</span>
+    </div>
+  </div>
+
   <!-- Dependency Details Right-Click Context Menu -->
   <div class="context-menu dep-context-menu" id="dep-context-menu" style="display:none; width:320px; padding:12px;">
     <div id="dep-ctx-content"></div>
@@ -1250,6 +1266,10 @@
             <input type="checkbox" id="chk-show-desc" checked onchange="toggleDescriptionVisibility(this.checked)">
             <span id="lbl-show-desc">📄 Description</span>
           </label>
+          <label class="toggle-link-opt" title="Toggle visibility of hover tooltip popup">
+            <input type="checkbox" id="chk-show-hover" checked onchange="toggleHoverVisibility(this.checked)">
+            <span id="lbl-show-hover">💬 Tooltips</span>
+          </label>
         </div>
 
         <div id="multi-project-tools" style="display:none; gap:6px; margin-right:4px;">
@@ -1262,9 +1282,13 @@
         <div class="view-modes">
           <button class="btn-mode" id="btn-mode-day" onclick="setViewMode('Day', this)">Day</button>
           <button class="btn-mode" id="btn-mode-week" onclick="setViewMode('Week', this)">Week</button>
-          <button class="btn-mode active" id="btn-mode-month" onclick="setViewMode('Month', this)">Month</button>
-          <button class="btn-mode" id="btn-mode-quarter" onclick="setViewMode('Quarter', this)">Quarter</button>
+          <button class="btn-mode" id="btn-mode-month" onclick="setViewMode('Month', this)">Month</button>
+          <button class="btn-mode active" id="btn-mode-quarter" onclick="setViewMode('Quarter', this)">Quarter</button>
           <button class="btn-mode" id="btn-mode-year" onclick="setViewMode('Year', this)">Year</button>
+        </div>
+
+        <div id="badge-projects-count" style="font-size:12px; font-weight:700; color:#1e40af; background:#eff6ff; border:1px solid #bfdbfe; padding:4px 10px; border-radius:6px; display:inline-flex; align-items:center; gap:4px;">
+          📁 <span id="badge-projects-count-text">0 Projects</span>
         </div>
       </div>
     </div>
@@ -1344,10 +1368,11 @@
     };
 
     let tasksData = [];
-    let allProjectsData = []; // list of { id, name }
+    let allProjectsData = []; // list of { id, name, tags }
     let externalTasksData = {}; // project_id -> list of { id, task_name, start_date, end_date }
     let currentProjectId = "";
-    let currentMode = "Month";
+    let currentMode = "Quarter";
+    let showHoverOverlay = true;
     let timelineStart = null;
     let timelineEnd = null;
     let totalTimelineWidth = 0;
@@ -1358,7 +1383,7 @@
     let i18n = {
       columns: { id: "ID", name: "Task / Step Name", start: "Start", stop: "Stop", prog: "Prog" },
       view_modes: { day: "Day", week: "Week", month: "Month", quarter: "Quarter", year: "Year" },
-      toggles: { internal_links: "🔗 Internal Dependencies", external_links: "🌐 External Dependencies", show_description: "📄 Description", expand_all: "▼ Expand All", collapse_all: "▶ Collapse All" },
+      toggles: { internal_links: "🔗 Internal Dependencies", external_links: "🌐 External Dependencies", show_description: "📄 Description", show_hover: "💬 Tooltips", expand_all: "▼ Expand All", collapse_all: "▶ Collapse All" },
       context_menu: { edit_step: "Edit Step Details", add_step_after: "Add Next Step (Successor)", add_step_before: "Add Previous Step (Predecessor)", mark_complete: "Mark as 100% Complete", delete_step: "Delete Step", edit_dep: "Edit Dependency", delete_dep: "Delete Dependency", view_diagnostics: "View Diagnostics" },
       modal: { add_title: "➕ Add New Step ({project_id})", edit_title: "✏️ Edit: {name}", field_name: "Step / Task Name *", field_phase: "Phase / Category", field_desc: "Description", field_start: "Start Date *", field_end: "End Date *", field_progress: "Progress Percentage", dependencies_header: "🔗 Step Dependencies & Predecessors", btn_add_pred: "➕ Add Predecessor Link", cross_project_chk: "🌐 Cross-Project?", select_pred_placeholder: "-- Select Predecessor Step --", whole_project_option: "(leave blank for whole project)", link_type_fs: "FS (Fin➔St)", link_type_ff: "FF (Fin➔Fin)", link_type_ss: "SS (St➔St)", link_type_sf: "SF (St➔Fin)", lag_placeholder: "Lag (days)", btn_save: "💾 Save Changes", btn_cancel: "Cancel", optional: "Optional" },
       diagnostics: { title: "⚠️ Constraint Violation Diagnostics", btn_fix: "✏️ Fix in Step Editor", btn_close: "Close" }
@@ -1385,6 +1410,8 @@
       if (elExt) elExt.innerText = getT('toggles.external_links', '🌐 External Dependencies');
       const elShowDesc = document.getElementById('lbl-show-desc');
       if (elShowDesc) elShowDesc.innerText = getT('toggles.show_description', '📄 Description');
+      const elShowHover = document.getElementById('lbl-show-hover');
+      if (elShowHover) elShowHover.innerText = getT('toggles.show_hover', '💬 Tooltips');
 
       const elExp = document.getElementById('btn-expand-all');
       if (elExp) elExp.innerText = getT('toggles.expand_all', '▼ Expand All');
@@ -1416,6 +1443,10 @@
       if (elDel) elDel.innerText = getT('context_menu.delete_step', 'Delete Step');
       const elEditDep = document.getElementById('ctx-label-edit-dep');
       if (elEditDep) elEditDep.innerText = getT('context_menu.edit_dep', 'Edit Dependency');
+      const elProjTags = document.getElementById('ctx-label-project-tags');
+      if (elProjTags) elProjTags.innerText = getT('context_menu.manage_tags', 'Manage Tags');
+      const elEditProj = document.getElementById('ctx-label-edit-project');
+      if (elEditProj) elEditProj.innerText = getT('context_menu.edit_project', 'Edit Project Details');
 
       // Modal dialog labels & buttons
       const elName = document.getElementById('modal-label-task-name');
@@ -1530,32 +1561,13 @@
     }
 
     function sortTasksList(taskList) {
-      if (!currentSort.column || currentSort.direction === 'none') {
-        return taskList.slice();
-      }
-      const factor = currentSort.direction === 'asc' ? 1 : -1;
-      const col = currentSort.column;
-
       return taskList.slice().sort((a, b) => {
-        let valA, valB;
-        if (col === 'id') {
-          valA = parseInt(a.id, 10) || 0;
-          valB = parseInt(b.id, 10) || 0;
-          return (valA - valB) * factor;
-        } else if (col === 'name') {
-          valA = (a.name || '').toLowerCase();
-          valB = (b.name || '').toLowerCase();
-          return valA.localeCompare(valB) * factor;
-        } else if (col === 'start') {
-          valA = parseDate(a.start).getTime();
-          valB = parseDate(b.start).getTime();
-          return (valA - valB) * factor;
-        } else if (col === 'stop') {
-          valA = parseDate(a.end).getTime();
-          valB = parseDate(b.end).getTime();
-          return (valA - valB) * factor;
+        const timeA = a.start ? parseDate(a.start).getTime() : 0;
+        const timeB = b.start ? parseDate(b.start).getTime() : 0;
+        if (timeA !== timeB) {
+          return timeA - timeB;
         }
-        return 0;
+        return (parseInt(a.id, 10) || 0) - (parseInt(b.id, 10) || 0);
       });
     }
 
@@ -1712,8 +1724,78 @@
       positionTooltip(e);
     }
 
+    function toggleHoverVisibility(checked) {
+      showHoverOverlay = Boolean(checked);
+      if (!showHoverOverlay) {
+        hideTooltip();
+      }
+    }
+
+    function showProjectHoverTooltip(e, projectId) {
+      if (!showHoverOverlay || !projectId) return;
+      const item = masterRenderItems.find(x => x.type === 'project_header' && String(x.project_id) === String(projectId));
+      if (!item) return;
+
+      const pId = item.project_id;
+      const pName = item.project_name || `Project #${pId}`;
+      const cleanPName = String(pName).replace(/^[A-Za-z0-9_-]+\s*-\s*/, '');
+      const taskCount = item.taskCount !== undefined ? item.taskCount : 0;
+      const viols = Boolean(item.hasViolations);
+
+      const pMeta = (allProjectsData || []).find(p => String(p.id) === String(pId));
+      const tags = (pMeta && pMeta.tags) ? pMeta.tags : (item.tags || []);
+
+      let tagsHtml = '';
+      if (tags && tags.length > 0) {
+        tagsHtml = `
+          <div style="margin-top:6px; border-top:1px solid #334155; padding-top:5px;">
+            <div style="font-size:10px; font-weight:700; color:#94a3b8; text-transform:uppercase; margin-bottom:3px; letter-spacing:0.03em;">🏷️ Associated Tags</div>
+            <div style="display:flex; flex-wrap:wrap; gap:4px;">
+              ${tags.map(tg => {
+                const label = tg.tag_name || tg.free_tag || tg.tag || '';
+                const grp = tg.tag_group_name ? `<span style="opacity:0.75; font-size:9px;">[${escapeHtml(tg.tag_group_name)}] </span>` : '';
+                return `<span style="background:rgba(59,130,246,0.25); border:1px solid #3b82f6; color:#bfdbfe; font-size:10.5px; font-weight:600; padding:1px 6px; border-radius:10px; display:inline-flex; align-items:center;">🏷️ ${grp}${escapeHtml(label)}</span>`;
+              }).join('')}
+            </div>
+          </div>
+        `;
+      } else {
+        tagsHtml = `
+          <div style="margin-top:5px; border-top:1px solid #334155; padding-top:4px; font-size:10.5px; color:#64748b; font-style:italic;">
+            🏷️ No tags attached
+          </div>
+        `;
+      }
+
+      let dateStr = '-';
+      if (item.start && item.end) {
+        dateStr = `📅 <b>${formatMmmYy(item.start)}</b> ➔ <b>${formatMmmYy(item.end)}</b>`;
+      } else if (item.start) {
+        dateStr = `📅 <b>${formatMmmYy(item.start)}</b>`;
+      }
+
+      const tooltipContent = `
+        <div style="font-family:inherit; min-width:200px; max-width:320px; text-align:left;">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:6px; margin-bottom:4px; border-bottom:1px solid #334155; padding-bottom:4px;">
+            <span style="font-weight:700; font-size:13px; color:#ffffff;">📁 ${escapeHtml(cleanPName)}</span>
+            <span style="font-size:10px; font-weight:700; background:#1e293b; color:#93c5fd; padding:1px 5px; border-radius:4px; border:1px solid #3b82f6;">#${pId}</span>
+          </div>
+          <div style="font-size:11px; color:#cbd5e1; display:flex; gap:8px; margin-bottom:3px;">
+            <span>📋 Tasks: <b>${taskCount}</b></span>
+            ${viols ? `<span style="color:#fca5a5; font-weight:700;">⚠️ Constraint Violations</span>` : `<span style="color:#86efac; font-weight:600;">✅ Schedule OK</span>`}
+          </div>
+          <div style="font-size:11px; color:#cbd5e1; margin-bottom:2px;">
+            ${dateStr}
+          </div>
+          ${tagsHtml}
+        </div>
+      `;
+
+      showTooltip(e, tooltipContent);
+    }
+
     function showTaskHoverTooltip(e, task) {
-      if (!task) return;
+      if (!showHoverOverlay || !task) return;
       const pName = task.project_name || task.project_id || '';
       const cleanPName = pName ? String(pName).replace(/^[A-Za-z0-9_-]+\s*-\s*/, '') : '';
       const phase = task.phase || 'General';
@@ -1803,6 +1885,8 @@
       e.preventDefault();
       e.stopPropagation();
       hideContextMenu();
+      hideProjectContextMenu();
+      hideTooltip();
 
       selectedDependencyInfo = depInfo;
       const menu = document.getElementById('dep-context-menu');
@@ -1810,36 +1894,39 @@
       if (!menu || !content) return;
 
       const isViol = depInfo.isViolated;
+      const isExt = Boolean(depInfo.isExternal || (depInfo.predProject && depInfo.succProject && depInfo.predProject !== depInfo.succProject));
+
       const statusBadge = isViol
-        ? `<span style="background:#fee2e2; color:#b91c1c; padding:2px 6px; border-radius:4px; font-weight:700; font-size:10px;">⚠️ VIOLATED</span>`
-        : `<span style="background:#dcfce7; color:#15803d; padding:2px 6px; border-radius:4px; font-weight:700; font-size:10px;">✅ SATISFIED</span>`;
+        ? `<span style="background:#fee2e2; color:#b91c1c; padding:2px 6px; border-radius:4px; font-weight:700; font-size:10px; border:1px solid #fecaca;">⚠️ VIOLATED</span>`
+        : `<span style="background:#dcfce7; color:#15803d; padding:2px 6px; border-radius:4px; font-weight:700; font-size:10px; border:1px solid #bbf7d0;">✅ SATISFIED</span>`;
+
+      // Distinct styling: Purple theme for External, Blue/Cyan theme for Internal
+      const cardBg = isExt ? '#faf5ff' : '#f0f9ff';
+      const cardBorder = isExt ? '#e9d5ff' : '#bae6fd';
+      const cardLeftBorder = isExt ? '#9333ea' : '#0284c7';
+      const predBg = isExt ? '#f3e8ff' : '#e0f2fe';
+      const predBorder = isExt ? '#7e22ce' : '#0369a1';
+      const typeBadgeBg = isExt ? '#f3e8ff' : '#e0f2fe';
+      const typeBadgeCol = isExt ? '#6b21a8' : '#0369a1';
 
       content.innerHTML = `
         <div style="font-family: inherit; font-size: 12px; line-height: 1.4; color: #1e293b;">
           <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #e2e8f0; padding-bottom:6px; margin-bottom:8px;">
-            <span style="font-weight:700; color:#0f172a; font-size:13px;">🔗 Dependency Details</span>
+            <span style="font-weight:700; color:#0f172a; font-size:13px;">🔗 Predecessor Details</span>
             ${statusBadge}
           </div>
           
-          <div style="margin-bottom:6px; background:#f8fafc; border-left:3px solid #3b82f6; padding:5px 8px; border-radius:0 4px 4px 0;">
+          <div style="margin-bottom:6px; background:${predBg}; border-left:3px solid ${predBorder}; padding:6px 8px; border-radius:0 4px 4px 0;">
             <div style="font-size:10px; text-transform:uppercase; color:#64748b; font-weight:700;">Predecessor</div>
-            <div style="font-weight:600; color:#0f172a;">${depInfo.predName} ${depInfo.predId ? '<span style="color:#64748b;">(#' + depInfo.predId + ')</span>' : ''}</div>
-            <div style="font-size:11px; color:#475569;">📁 Project: <b>${depInfo.predProject}</b></div>
-            <div style="font-size:11px; color:#475569;">📅 Dates: <b>${depInfo.predDates}</b></div>
+            <div style="font-weight:700; color:#0f172a; font-size:12.5px;">${escapeHtml(depInfo.predName)} ${depInfo.predId ? '<span style="color:#64748b; font-weight:600;">(#' + depInfo.predId + ')</span>' : ''}</div>
+            <div style="font-size:11px; color:#334155; margin-top:2px;">📁 Project: <b>${escapeHtml(depInfo.predProject)}</b></div>
+            <div style="font-size:11px; color:#334155;">📅 Dates: <b>${depInfo.predDates}</b></div>
           </div>
 
-          <div style="margin-bottom:6px; background:#f8fafc; border-left:3px solid #0284c7; padding:5px 8px; border-radius:0 4px 4px 0;">
-            <div style="font-size:10px; text-transform:uppercase; color:#64748b; font-weight:700;">Successor</div>
-            <div style="font-weight:600; color:#0f172a;">${depInfo.succName} <span style="color:#64748b;">(#${depInfo.succId})</span></div>
-            <div style="font-size:11px; color:#475569;">📁 Project: <b>${depInfo.succProject}</b></div>
-            <div style="font-size:11px; color:#475569;">📅 Dates: <b>${depInfo.succDates}</b></div>
-          </div>
-
-          <div style="background:#f1f5f9; border:1px solid #e2e8f0; border-radius:4px; padding:6px; font-size:11px;">
-            <div><b>Link Type:</b> ${depInfo.linkTypeLabel}</div>
-            <div><b>Lag:</b> ${depInfo.lagStr}</div>
-            <div><b>Scope:</b> ${depInfo.scopeLabel}</div>
-            ${isViol && depInfo.violationReason ? `<div style="color:#b91c1c; font-weight:600; margin-top:4px; border-top:1px dashed #fca5a5; padding-top:4px;">⚠️ ${depInfo.violationReason}</div>` : ''}
+          <div style="background:${cardBg}; border:1px solid ${cardBorder}; border-left:4px solid ${cardLeftBorder}; border-radius:4px; padding:6px 8px; font-size:11px;">
+            <div><b>Link Type:</b> <span style="font-weight:600; padding:1px 6px; border-radius:4px; background:${typeBadgeBg}; color:${typeBadgeCol};">${escapeHtml(depInfo.linkTypeLabel)}</span></div>
+            <div style="margin-top:3px;"><b>Lag / Offset:</b> ${escapeHtml(depInfo.lagStr)}</div>
+            ${isViol && depInfo.violationReason ? `<div style="color:#b91c1c; font-weight:600; margin-top:4px; border-top:1px dashed #fca5a5; padding-top:4px;">⚠️ ${escapeHtml(depInfo.violationReason)}</div>` : ''}
           </div>
         </div>
       `;
@@ -1848,14 +1935,12 @@
       menu.style.maxHeight = `${Math.max(180, window.innerHeight - 20)}px`;
       menu.style.overflowY = 'auto';
 
-      // Measure exact rendered dimensions
-      const menuWidth = menu.offsetWidth || 320;
-      const menuHeight = menu.offsetHeight || 320;
+      const menuWidth = menu.offsetWidth || 300;
+      const menuHeight = menu.offsetHeight || 200;
 
       let posX = e.clientX + 6;
       let posY = e.clientY + 2;
 
-      // Smart vertical positioning: flip above cursor if near bottom edge
       if (posY + menuHeight > window.innerHeight - 10) {
         posY = e.clientY - menuHeight - 4;
         if (posY < 10) {
@@ -1863,7 +1948,6 @@
         }
       }
 
-      // Smart horizontal positioning: flip left if near right edge
       if (posX + menuWidth > window.innerWidth - 10) {
         posX = e.clientX - menuWidth - 6;
         if (posX < 10) {
@@ -1892,20 +1976,106 @@
 
     function openDiagModal() {
       hideContextMenu();
+      hideProjectContextMenu();
+      hideDepContextMenu();
+      hideTooltip();
       if (!selectedContextMenuTask) return;
 
       const t = selectedContextMenuTask;
+      const diagTitle = document.querySelector('#diag-backdrop .modal-header span');
+      if (diagTitle) {
+        diagTitle.innerHTML = `⚠️ Constraint Diagnostics: <b>${escapeHtml(t.name)}</b>`;
+      }
       const diagBody = document.getElementById('diag-body');
       const viols = t.violations || [];
 
       if (viols.length === 0) {
-        diagBody.innerHTML = "<div style='color:#16a34a;'>All dependency constraints are currently satisfied!</div>";
+        diagBody.innerHTML = "<div style='color:#16a34a; font-weight:600;'>All dependency constraints are currently satisfied!</div>";
       } else {
         diagBody.innerHTML = viols.map(v => `
-          <div class="violation-card" style="margin-bottom:8px;">
-            <b>⚠️ Constraint Issue:</b><br>${v}
+          <div class="violation-card" style="margin-bottom:8px; background:#fff1f2; border:1px solid #fecdd3; border-left:4px solid #ef4444; border-radius:6px; padding:8px 10px;">
+            <b style="color:#991b1b;">⚠️ Constraint Issue:</b><br>${escapeHtml(v)}
           </div>
         `).join('');
+      }
+
+      const fixBtn = document.querySelector('#diag-backdrop .modal-footer .btn-save');
+      if (fixBtn) {
+        fixBtn.style.display = 'inline-block';
+        fixBtn.onclick = function () {
+          closeDiagModal();
+          openEditModal();
+        };
+      }
+
+      document.getElementById('diag-backdrop').style.display = 'flex';
+    }
+
+    function openProjectDiagModal(projectId) {
+      hideContextMenu();
+      hideProjectContextMenu();
+      hideDepContextMenu();
+      hideTooltip();
+
+      const targetPId = projectId || selectedContextMenuProjectId;
+      if (!targetPId) return;
+
+      const projTasks = tasksData.filter(t => String(t.project_id || currentProjectId) === String(targetPId));
+      const violsList = [];
+      projTasks.forEach(t => {
+        if (t.violations && t.violations.length > 0) {
+          t.violations.forEach(v => {
+            violsList.push({
+              taskId: t.id,
+              taskName: t.name,
+              violation: v
+            });
+          });
+        }
+      });
+
+      const pMeta = (allProjectsData || []).find(p => String(p.id) === String(targetPId));
+      const pName = pMeta ? pMeta.name : `Project #${targetPId}`;
+      const cleanPName = String(pName).replace(/^[A-Za-z0-9_-]+\s*-\s*/, '');
+
+      const diagTitle = document.querySelector('#diag-backdrop .modal-header span');
+      if (diagTitle) {
+        diagTitle.innerHTML = `⚠️ Constraint Violations: <b>${escapeHtml(cleanPName)}</b>`;
+      }
+
+      const diagBody = document.getElementById('diag-body');
+      if (violsList.length === 0) {
+        diagBody.innerHTML = "<div style='color:#16a34a; font-weight:600; padding:12px 0;'>✅ All dependency constraints in this project are satisfied!</div>";
+      } else {
+        diagBody.innerHTML = `
+          <div style="font-size:12px; color:#64748b; margin-bottom:8px;">
+            Found <b>${violsList.length}</b> constraint violation(s) across <b>${escapeHtml(cleanPName)}</b>:
+          </div>
+          ${violsList.map((item) => `
+            <div class="violation-card" style="margin-bottom:10px; background:#fff1f2; border:1px solid #fecdd3; border-left:4px solid #ef4444; border-radius:6px; padding:8px 10px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                <span style="font-weight:700; color:#0f172a; font-size:12px;">📋 Step: ${escapeHtml(item.taskName)} <span style="color:#64748b;">(#${item.taskId})</span></span>
+                <button class="btn-mode" onclick="closeDiagModal(); openEditModalById('${item.taskId}');" style="font-size:11px; padding:2px 8px; background:#ffffff; border:1px solid #cbd5e1; border-radius:4px; cursor:pointer;">✏️ Fix</button>
+              </div>
+              <div style="color:#991b1b; font-size:11px; line-height:1.4;">
+                ${escapeHtml(item.violation)}
+              </div>
+            </div>
+          `).join('')}
+        `;
+      }
+
+      const fixBtn = document.querySelector('#diag-backdrop .modal-footer .btn-save');
+      if (fixBtn) {
+        if (violsList.length > 0) {
+          fixBtn.style.display = 'inline-block';
+          fixBtn.onclick = function () {
+            closeDiagModal();
+            openEditModalById(violsList[0].taskId);
+          };
+        } else {
+          fixBtn.style.display = 'none';
+        }
       }
 
       document.getElementById('diag-backdrop').style.display = 'flex';
@@ -1937,20 +2107,27 @@
           const ltypeName = ltypeNames[dep.link_type] || dep.link_type || 'FS';
           const lagStr = (dep.lag_days && dep.lag_days !== 0) ? `${dep.lag_days > 0 ? '+' : ''}${dep.lag_days} days offset` : '0 days offset';
           const isViolated = Boolean(dep.is_violated);
+          const isExt = Boolean(dep.is_external || (dep.predecessor_project_id && String(dep.predecessor_project_id) !== String(t.project_id || currentProjectId)));
           const predLabel = dep.pred_label || dep.predecessor_task_name || (dep.predecessor_project_id ? `Project [${dep.predecessor_project_name || dep.predecessor_project_id}]` : `Step #${dep.predecessor_task_id}`);
 
+          const bg = isExt ? '#faf5ff' : '#f0f9ff';
+          const borderCol = isViolated ? '#fca5a5' : (isExt ? '#e9d5ff' : '#bae6fd');
+          const leftBorderCol = isViolated ? '#ef4444' : (isExt ? '#9333ea' : '#0284c7');
+          const typeBadgeBg = isExt ? '#f3e8ff' : '#e0f2fe';
+          const typeBadgeCol = isExt ? '#6b21a8' : '#0369a1';
+
           return `
-            <div style="background:#f8fafc;border:1px solid ${isViolated ? '#fca5a5' : '#cbd5e1'};border-left:4px solid ${isViolated ? '#ef4444' : '#2563eb'};border-radius:6px;padding:10px 12px;margin-bottom:10px;">
+            <div style="background:${bg};border:1px solid ${borderCol};border-left:4px solid ${leftBorderCol};border-radius:6px;padding:10px 12px;margin-bottom:10px;">
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-                <span style="font-weight:700;font-size:13px;color:#0f172a;">${i + 1}. ${predLabel}</span>
-                <span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:#e2e8f0;color:#334155;">${ltypeName}</span>
+                <span style="font-weight:700;font-size:13px;color:#0f172a;">${i + 1}. ${escapeHtml(predLabel)}</span>
+                <span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:${typeBadgeBg};color:${typeBadgeCol};">${escapeHtml(ltypeName)}</span>
               </div>
               <div style="font-size:12px;color:#475569;margin-bottom:2px;">
                 <b>Dates:</b> ${dep.pred_start || 'N/A'} &rarr; ${dep.pred_end || 'N/A'} &bull; <b>Offset:</b> ${lagStr}
               </div>
               ${isViolated ? `
                 <div style="color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;padding:6px 8px;border-radius:4px;font-size:11px;margin-top:6px;">
-                  <b>⚠️ Constraint Violated:</b><br>${dep.violation_text}
+                  <b>⚠️ Constraint Violated:</b><br>${escapeHtml(dep.violation_text)}
                 </div>
               ` : `
                 <div style="color:#15803d;background:#f0fdf4;border:1px solid #bbf7d0;padding:4px 8px;border-radius:4px;font-size:11px;margin-top:6px;">
@@ -1980,6 +2157,9 @@
         e.preventDefault();
         e.stopPropagation();
       }
+      hideProjectContextMenu();
+      hideDepContextMenu();
+      hideTooltip();
       selectedContextMenuTask = task;
 
       const menu = document.getElementById('context-menu');
@@ -2053,22 +2233,70 @@
       }
     }
 
+    let selectedContextMenuProjectId = null;
+
     function showProjectContextMenu(e, projectId) {
       if (e) {
         e.preventDefault();
         e.stopPropagation();
       }
-      selectedContextMenuTask = {
-        id: null,
-        project_id: projectId,
-        name: '',
-        phase: 'Phase 1 - FAI',
-        description: '',
-        start: formatDate(new Date()),
-        end: formatDate(addDays(new Date(), 14)),
-        dependenciesList: []
-      };
-      showContextMenu(e, selectedContextMenuTask);
+      hideContextMenu();
+      hideDepContextMenu();
+      hideTooltip();
+
+      selectedContextMenuProjectId = projectId;
+      const menu = document.getElementById('project-context-menu');
+      if (!menu) return;
+
+      // Check for project violations
+      const violBtn = document.getElementById('ctx-proj-violation-btn');
+      const violLabel = document.getElementById('ctx-proj-violation-label');
+      const projTasks = tasksData.filter(t => String(t.project_id || currentProjectId) === String(projectId));
+      let totalViols = 0;
+      projTasks.forEach(t => {
+        if (t.violations && t.violations.length > 0) totalViols += t.violations.length;
+      });
+
+      if (violBtn && violLabel) {
+        if (totalViols > 0) {
+          violBtn.style.display = 'flex';
+          violLabel.innerText = `View ${totalViols} Constraint Issue(s)`;
+        } else {
+          violBtn.style.display = 'none';
+        }
+      }
+
+      menu.style.display = 'block';
+      menu.style.maxHeight = `${Math.max(120, window.innerHeight - 20)}px`;
+      menu.style.overflowY = 'auto';
+
+      const menuWidth = menu.offsetWidth || 210;
+      const menuHeight = menu.offsetHeight || 110;
+
+      let posX = e ? e.clientX + 6 : 100;
+      let posY = e ? e.clientY + 2 : 100;
+
+      if (posY + menuHeight > window.innerHeight - 10) {
+        posY = (e ? e.clientY : 100) - menuHeight - 4;
+        if (posY < 10) {
+          posY = Math.max(10, window.innerHeight - menuHeight - 10);
+        }
+      }
+
+      if (posX + menuWidth > window.innerWidth - 10) {
+        posX = (e ? e.clientX : 100) - menuWidth - 6;
+        if (posX < 10) {
+          posX = Math.max(10, window.innerWidth - menuWidth - 10);
+        }
+      }
+
+      menu.style.left = `${posX}px`;
+      menu.style.top = `${posY}px`;
+    }
+
+    function hideProjectContextMenu() {
+      const menu = document.getElementById('project-context-menu');
+      if (menu) menu.style.display = 'none';
     }
 
     function hideContextMenu() {
@@ -2079,6 +2307,9 @@
     document.addEventListener('click', (e) => {
       if (!e.target.closest('#context-menu')) {
         hideContextMenu();
+      }
+      if (!e.target.closest('#project-context-menu')) {
+        hideProjectContextMenu();
       }
       if (!e.target.closest('#dep-context-menu')) {
         hideDepContextMenu();
@@ -2184,14 +2415,24 @@
       const otherProjects = (allProjectsData || []).filter(p => String(p.id) !== String(currentProjectId));
       const selectedExtProj = initialData.predecessor_project_id || (otherProjects[0] ? otherProjects[0].id : '');
 
+      rowDiv.style.background = isExt ? '#faf5ff' : '#f0f9ff';
+      rowDiv.style.border = isExt ? '1px solid #e9d5ff' : '1px solid #bae6fd';
+      rowDiv.style.borderLeft = isExt ? '4px solid #9333ea' : '4px solid #0284c7';
+      rowDiv.style.borderRadius = '6px';
+      rowDiv.style.padding = '6px 8px';
+      rowDiv.style.display = 'flex';
+      rowDiv.style.alignItems = 'center';
+      rowDiv.style.gap = '8px';
+      rowDiv.style.transition = 'all 0.15s ease';
+
       rowDiv.innerHTML = `
         <label style="font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap;color:#475569;">
           <input type="checkbox" class="dep-is-ext" ${isExt ? 'checked' : ''} onchange="toggleDepExt(this)" /> ${getT('modal.cross_project_chk', '🌐 Cross-Project?')}
         </label>
-        <select class="form-select dep-proj" style="width:200px;${isExt ? '' : 'display:none;'}" onchange="onDepProjChange(this)">
+        <select class="form-select dep-proj" style="width:190px;${isExt ? '' : 'display:none;'}" onchange="onDepProjChange(this)">
           ${otherProjects.map(p => `<option value="${p.id}" ${String(selectedExtProj) === String(p.id) ? 'selected' : ''}>${p.name}</option>`).join('')}
         </select>
-        <select class="form-select dep-target" style="flex:1;min-width:260px;">
+        <select class="form-select dep-target" style="flex:1;min-width:240px;">
           <!-- Populated dynamically -->
         </select>
         <select class="form-select dep-type" style="width:95px;" title="Link Type">
@@ -2213,8 +2454,14 @@
       const projSelect = row.querySelector('.dep-proj');
       if (chk.checked) {
         projSelect.style.display = 'block';
+        row.style.background = '#faf5ff';
+        row.style.border = '1px solid #e9d5ff';
+        row.style.borderLeft = '4px solid #9333ea';
       } else {
         projSelect.style.display = 'none';
+        row.style.background = '#f0f9ff';
+        row.style.border = '1px solid #bae6fd';
+        row.style.borderLeft = '4px solid #0284c7';
       }
       populateDepTargets(row);
     }
@@ -2373,6 +2620,28 @@
       });
     }
 
+    function triggerManageProjectTagsFromMenu() {
+      hideProjectContextMenu();
+      if (!selectedContextMenuProjectId) return;
+
+      Streamlit.setComponentValue({
+        action: "manage_project_tags",
+        project_id: selectedContextMenuProjectId,
+        nonce: Date.now() + "_" + Math.random()
+      });
+    }
+
+    function triggerEditProjectFromMenu() {
+      hideProjectContextMenu();
+      if (!selectedContextMenuProjectId) return;
+
+      Streamlit.setComponentValue({
+        action: "edit_project_details",
+        project_id: selectedContextMenuProjectId,
+        nonce: Date.now() + "_" + Math.random()
+      });
+    }
+
     function markComplete() {
       hideContextMenu();
       if (!selectedContextMenuTask) return;
@@ -2505,7 +2774,7 @@
         totalTimelineWidth = weekCount * colWidth;
 
       } else if (currentMode === 'Quarter') {
-        const colWidth = 140 / 3;
+        const colWidth = 28;
         let qCount = 0;
         let curYear = null;
         let yearStartIdx = 0;
@@ -2599,6 +2868,18 @@
     let showInternalLinks = true;
     let showExternalLinks = true;
     let showDescriptions = true;
+
+    function setViewMode(mode, btn) {
+      currentMode = mode;
+      document.querySelectorAll('.view-modes .btn-mode').forEach(b => b.classList.remove('active'));
+      if (btn) {
+        btn.classList.add('active');
+      } else {
+        const targetBtn = document.getElementById(`btn-mode-${mode.toLowerCase()}`);
+        if (targetBtn) targetBtn.classList.add('active');
+      }
+      renderTimeline();
+    }
 
     function toggleLinkVisibility(type, checked) {
       if (type === 'internal') {
@@ -2700,6 +2981,8 @@
             if (!pMax || e > pMax) pMax = e;
             if (t.violations && t.violations.length > 0) pHasViolations = true;
           });
+          const pMeta = (allProjectsData || []).find(p => String(p.id) === String(pId));
+          const pTags = pMeta && pMeta.tags ? pMeta.tags : [];
           return {
             id: pId,
             name: grp.name,
@@ -2708,7 +2991,8 @@
             tasks: grp.tasks,
             taskCount: grp.tasks.length,
             isCollapsed: collapsedProjects.has(pId),
-            hasViolations: pHasViolations
+            hasViolations: pHasViolations,
+            tags: pTags
           };
         });
 
@@ -2749,7 +3033,8 @@
             end: grp.end || null,
             taskCount: grp.taskCount,
             isCollapsed: grp.isCollapsed,
-            hasViolations: grp.hasViolations
+            hasViolations: grp.hasViolations,
+            tags: grp.tags || []
           });
 
           if (!grp.isCollapsed) {
@@ -2764,6 +3049,19 @@
             });
           }
         });
+
+        // Update projects count badge with strictly the filtered projects count
+        const distinctProjects = new Set();
+        tasksData.forEach(t => {
+          const pId = t.project_id || currentProjectId;
+          if (pId) distinctProjects.add(String(pId));
+        });
+        const totalProjCount = distinctProjects.size || projectGroupsList.length || 0;
+        const badgeEl = document.getElementById('badge-projects-count-text');
+        if (badgeEl) {
+          const pUnit = totalProjCount === 1 ? 'Project' : 'Projects';
+          badgeEl.innerText = `${totalProjCount} ${pUnit}`;
+        }
       } else {
         masterRenderItems = [];
         const sortedTasks = sortTasksList(tasksData);
@@ -2774,6 +3072,11 @@
             isChild: false
           });
         });
+
+        const badgeEl = document.getElementById('badge-projects-count-text');
+        if (badgeEl) {
+          badgeEl.innerText = '1 Project';
+        }
       }
 
       // Pre-compute all positions for instant virtual window calculations & link anchors
@@ -2955,17 +3258,16 @@
 
           frozenHtml += `
             <div class="frozen-row project-group-row ${hasViol ? 'has-violations' : ''}" id="frozen-row-proj-${item.project_id}" 
-                 style="top: ${topPos}px; width: ${totalW}px; min-width: ${totalW}px;"
-                 onclick="toggleProjectCollapse('${item.project_id}', event)"
+                 style="top: ${topPos}px; width: ${totalW}px; min-width: ${totalW}px; cursor:default;"
                  oncontextmenu="showProjectContextMenu(event, '${item.project_id}')">
-              <span class="task-id-cell" style="width:${colWidths.id}px; min-width:${colWidths.id}px; max-width:${colWidths.id}px; font-weight:700; color:#475569;" title="Project">📁</span>
-              <span class="collapse-toggle-icon" title="${item.isCollapsed ? 'Click to expand tasks' : 'Click to collapse tasks'}">${item.isCollapsed ? '▶' : '▼'}</span>
+              <span class="task-id-cell" style="width:${colWidths.id}px; min-width:${colWidths.id}px; max-width:${colWidths.id}px; font-weight:700; color:#475569;">📁</span>
+              <span class="collapse-toggle-icon" onclick="toggleProjectCollapse('${item.project_id}', event)" style="cursor:pointer;" title="${item.isCollapsed ? 'Click to expand tasks' : 'Click to collapse tasks'}">${item.isCollapsed ? '▶' : '▼'}</span>
               <div class="project-group-title-wrapper" style="width:${nameColW}px; min-width:${nameColW}px; max-width:${nameColW}px; display:flex; align-items:center; gap:6px; overflow:hidden;">
-                <span class="project-group-title" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1;" title="${escapeHtml(cleanProjectName)}">${escapeHtml(cleanProjectName)}</span>
-                <span class="project-group-count" style="font-size:10px; padding:1px 6px; border-radius:10px; flex-shrink:0; ${badgeStyle}" title="${hasViol ? 'Constraint violations in this project' : ''}">${badgeIcon}${item.taskCount}</span>
+                <span class="project-group-title" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1;">${escapeHtml(cleanProjectName)}</span>
+                <span class="project-group-count" style="font-size:10px; padding:1px 6px; border-radius:10px; flex-shrink:0; cursor:${hasViol ? 'pointer' : 'default'}; ${badgeStyle}" ${hasViol ? `onclick="event.stopPropagation(); openProjectDiagModal('${item.project_id}');"` : ''}>${badgeIcon}${item.taskCount}</span>
               </div>
-              <span class="task-date-cell" style="width:${colWidths.start}px; min-width:${colWidths.start}px; max-width:${colWidths.start}px; font-weight:600; color:#334155;" title="Start: ${item.start || '-'}">${formatMmmYy(item.start)}</span>
-              <span class="task-date-cell" style="width:${colWidths.stop}px; min-width:${colWidths.stop}px; max-width:${colWidths.stop}px; font-weight:600; color:#334155;" title="Stop: ${item.end || '-'}">${formatMmmYy(item.end)}</span>
+              <span class="task-date-cell" style="width:${colWidths.start}px; min-width:${colWidths.start}px; max-width:${colWidths.start}px; font-weight:600; color:#334155;">${formatMmmYy(item.start)}</span>
+              <span class="task-date-cell" style="width:${colWidths.stop}px; min-width:${colWidths.stop}px; max-width:${colWidths.stop}px; font-weight:600; color:#334155;">${formatMmmYy(item.end)}</span>
             </div>
           `;
         } else if (item.task) {
@@ -2979,16 +3281,16 @@
                  onmouseleave="unhighlightRow('${t.id}')"
                  ondblclick="openEditModalById('${t.id}')"
                  oncontextmenu="showContextMenuById(event, '${t.id}')">
-              <span class="task-id-cell" style="width:${colWidths.id}px; min-width:${colWidths.id}px; max-width:${colWidths.id}px;" title="Task ID #${t.id}">#${t.id}</span>
+              <span class="task-id-cell" style="width:${colWidths.id}px; min-width:${colWidths.id}px; max-width:${colWidths.id}px;">#${t.id}</span>
               <div class="task-name-col" style="width:${colWidths.name}px; min-width:${colWidths.name}px; max-width:${colWidths.name}px;">
-                <span class="task-title" style="width:100%;" title="${escapeHtml(t.name)}">
+                <span class="task-title" style="width:100%;">
                   <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1;">${escapeHtml(t.name)}</span>
-                  ${hasViol ? `<span title="${t.violations.length} constraint violation(s)" style="font-size:12px;cursor:pointer;margin-left:4px;flex-shrink:0;" onclick="showContextMenuById(event, '${t.id}')">⚠️</span>` : ''}
+                  ${hasViol ? `<span style="font-size:12px;cursor:pointer;margin-left:4px;flex-shrink:0;" onclick="showContextMenuById(event, '${t.id}')">⚠️</span>` : ''}
                 </span>
-                ${hasDesc ? `<span class="task-sub-desc" title="${escapeHtml(t.description)}">↳ ${escapeHtml(t.description)}</span>` : ''}
+                ${hasDesc ? `<span class="task-sub-desc">↳ ${escapeHtml(t.description)}</span>` : ''}
               </div>
-              <span class="task-date-cell" style="width:${colWidths.start}px; min-width:${colWidths.start}px; max-width:${colWidths.start}px;" title="Start Date: ${t.start || '-'}">${formatMmmYy(t.start)}</span>
-              <span class="task-date-cell" style="width:${colWidths.stop}px; min-width:${colWidths.stop}px; max-width:${colWidths.stop}px;" title="Stop Date: ${t.end || '-'}">${formatMmmYy(t.end)}</span>
+              <span class="task-date-cell" style="width:${colWidths.start}px; min-width:${colWidths.start}px; max-width:${colWidths.start}px;">${formatMmmYy(t.start)}</span>
+              <span class="task-date-cell" style="width:${colWidths.stop}px; min-width:${colWidths.stop}px; max-width:${colWidths.stop}px;">${formatMmmYy(t.end)}</span>
             </div>
           `;
         }
@@ -3013,6 +3315,9 @@
           if (item.type === 'project_header') {
             rowEl.classList.add('project-group-row');
             rowEl.id = `timeline-row-proj-${item.project_id}`;
+            rowEl.onmouseenter = (e) => showProjectHoverTooltip(e, item.project_id);
+            rowEl.onmousemove = (e) => moveTooltip(e);
+            rowEl.onmouseleave = () => hideTooltip();
             rowEl.oncontextmenu = (e) => showProjectContextMenu(e, item.project_id);
 
             if (item.start && item.end) {
@@ -3025,7 +3330,6 @@
               pBar.className = 'project-summary-bar';
               pBar.style.left = `${pStartX}px`;
               pBar.style.width = `${pWidth}px`;
-              pBar.title = `Project: ${cleanProjectName} (${formatMmmYy(item.start)} → ${formatMmmYy(item.end)})`;
 
               const pLabel = document.createElement('div');
               pLabel.className = 'project-summary-label';

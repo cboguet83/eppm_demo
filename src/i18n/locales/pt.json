@@ -158,6 +158,7 @@
       "internal_links": "🔗 Dependências Internas",
       "external_links": "🌐 Dependências Externas",
       "show_description": "📄 Descrição",
+      "show_hover": "💬 Dicas de contexto",
       "expand_all": "▼ Expandir Tudo",
       "collapse_all": "▶ Recolher Tudo"
     },
@@ -166,11 +167,13 @@
       "add_step_after": "Adicionar Próxima Etapa (Sucessor)",
       "add_step_before": "Adicionar Etapa Anterior (Predecessor)",
       "manage_tags": "Gerenciar Tags",
+      "edit_project": "Editar Detalhes do Projeto",
       "mark_complete": "Marcar como 100% Concluído",
       "delete_step": "Excluir Etapa",
       "edit_dep": "Editar Dependência",
       "delete_dep": "Excluir Dependência",
-      "view_diagnostics": "Ver Diagnósticos"
+      "view_diagnostics": "Ver Diagnósticos",
+      "view_project_diagnostics": "Ver Violações do Projeto"
     },
     "modal": {
       "add_title": "➕ Adicionar Nova Etapa ({project_id})",

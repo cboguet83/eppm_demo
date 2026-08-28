@@ -169,6 +169,69 @@ class TagRepository:
                 conn,
             )
 
+    def get_tags_by_group_name(self, group_name: str) -> pd.DataFrame:
+        """Retrieves dictionary tags belonging to tag groups matching the given group name.
+
+        Matching is case-insensitive and normalizes spaces/underscores (e.g. 'project_tag', 'Project Tag').
+
+        Args:
+            group_name: Target tag group name identifier.
+
+        Returns:
+            pd.DataFrame: DataFrame containing id, tag, tag_group_id, and tag_group_name.
+        """
+        norm_name = group_name.strip().lower().replace("_", "").replace(" ", "")
+        with get_db(self.db_path) as conn:
+            return pd.read_sql(
+                """
+                SELECT 
+                    td.id,
+                    td.tag,
+                    td.tag_group_id,
+                    tg.tag_group_name
+                FROM tag_dictionnary td
+                JOIN tag_group tg ON td.tag_group_id = tg.id
+                WHERE LOWER(REPLACE(REPLACE(tg.tag_group_name, '_', ''), ' ', '')) = ?
+                   OR LOWER(REPLACE(REPLACE(tg.tag_group_name, '_', ''), ' ', '')) = (? || 's')
+                ORDER BY td.tag ASC
+                """,
+                conn,
+                params=(norm_name, norm_name),
+            )
+
+    def get_project_tag_group_tags(self) -> pd.DataFrame:
+        """Retrieves dictionary tags belonging to the 'project_tag' group."""
+        return self.get_tags_by_group_name("project_tag")
+
+    def get_task_tag_group_tags(self) -> pd.DataFrame:
+        """Retrieves dictionary tags belonging to the 'Task_Tag' group."""
+        return self.get_tags_by_group_name("Task_Tag")
+
+    def get_tag_group_for_tag(self, tag_id: int) -> Optional[TagGroup]:
+        """Retrieves the TagGroup associated with a specific dictionary tag.
+
+        Args:
+            tag_id: Unique dictionary tag ID.
+
+        Returns:
+            Optional[TagGroup]: TagGroup dataclass if found, else None.
+        """
+        with get_db(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT tg.id, tg.tag_group_name
+                FROM tag_group tg
+                JOIN tag_dictionnary td ON td.tag_group_id = tg.id
+                WHERE td.id = ?
+                """,
+                (tag_id,),
+            )
+            row = cursor.fetchone()
+            if not row:
+                return None
+            return TagGroup(id=row[0], tag_group_name=row[1])
+
     def get_tag_by_id(self, tag_id: int) -> Optional[TagDictionary]:
         """Retrieves a single tag by ID.
 

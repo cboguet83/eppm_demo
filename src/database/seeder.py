@@ -314,27 +314,37 @@ def seed_default_data_if_empty(db_path: Optional[str] = None) -> None:
                 sample_employees,
             )
 
-        # Check Tag Groups & Tag Dictionary
-        cursor.execute("SELECT COUNT(*) FROM tag_group")
-        tag_group_count = cursor.fetchone()[0]
+        # Check and ensure project_tag and Task_Tag groups exist
+        cursor.execute("SELECT id, tag_group_name FROM tag_group")
+        existing_groups = {row[1].lower().replace("_", "").replace(" ", ""): row[0] for row in cursor.fetchall()}
 
-        if tag_group_count == 0:
-            logger.info("Seeding default tag groups and tag dictionary...")
-            cursor.execute("INSERT INTO tag_group (id, tag_group_name) VALUES (1, 'Strategic Focus')")
-            cursor.execute("INSERT INTO tag_group (id, tag_group_name) VALUES (2, 'Architecture & Tech')")
-            cursor.execute("INSERT INTO tag_group (id, tag_group_name) VALUES (3, 'Delivery & Risk')")
-
-            sample_tags = [
-                (1, "Mission Critical", 1),
-                (2, "Regulatory Compliance", 1),
-                (3, "Cloud Native", 2),
-                (4, "AI/ML Integration", 2),
-                (5, "High Complexity", 3),
-                (6, "Security Audit Required", 3),
-            ]
+        if "projecttag" not in existing_groups and "projecttags" not in existing_groups:
+            logger.info("Seeding project_tag group and sample project dictionary tags...")
+            cursor.execute("INSERT INTO tag_group (tag_group_name) VALUES ('project_tag')")
+            pt_gid = cursor.lastrowid
             cursor.executemany(
-                "INSERT INTO tag_dictionnary (id, tag, tag_group_id) VALUES (?, ?, ?)",
-                sample_tags,
+                "INSERT INTO tag_dictionnary (tag, tag_group_id) VALUES (?, ?)",
+                [
+                    ("Mission Critical", pt_gid),
+                    ("Regulatory Compliance", pt_gid),
+                    ("Strategic Initiative", pt_gid),
+                    ("Pilot Project", pt_gid),
+                ],
+            )
+
+        if "tasktag" not in existing_groups and "tasktags" not in existing_groups:
+            logger.info("Seeding Task_Tag group and sample task dictionary tags...")
+            cursor.execute("INSERT INTO tag_group (tag_group_name) VALUES ('Task_Tag')")
+            tt_gid = cursor.lastrowid
+            cursor.executemany(
+                "INSERT INTO tag_dictionnary (tag, tag_group_id) VALUES (?, ?)",
+                [
+                    ("Milestone Event", tt_gid),
+                    ("Critical Path", tt_gid),
+                    ("Security Review", tt_gid),
+                    ("High Complexity", tt_gid),
+                    ("External Dependency", tt_gid),
+                ],
             )
 
         conn.commit()

@@ -186,10 +186,14 @@ def run_app() -> None:
     }
 
     page_keys = [PAGE_PORTFOLIO, PAGE_PROJECT_MASTER, PAGE_SCHEMA_DEF, PAGE_PLANNING, PAGE_SETTINGS]
+    if "nav_redirect" in st.session_state and st.session_state["nav_redirect"]:
+        st.session_state["app_sidebar_nav"] = st.session_state.pop("nav_redirect")
+
     page = st.sidebar.radio(
         t("app.sidebar_nav", default="Navigation"),
         page_keys,
         format_func=lambda k: nav_map.get(k, k),
+        key="app_sidebar_nav",
     )
 
     if page == PAGE_PORTFOLIO:
