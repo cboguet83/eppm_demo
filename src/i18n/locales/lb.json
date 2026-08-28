@@ -117,6 +117,7 @@
     "columns": {
       "id": "ID",
       "name": "Aufgab / Schrëtt Numm",
+      "project": "Projet",
       "desc": "Beschreiwung",
       "start": "Ufank",
       "stop": "Enn",
@@ -133,8 +134,9 @@
     "toggles": {
       "internal_links": "🔗 Intern Ofhängegkeeten",
       "external_links": "🌐 Extern Ofhängegkeeten",
-      "expand_all": "▼ All opklappen",
-      "collapse_all": "▶ All zouklappen"
+      "show_description": "📄 Beschreiwung",
+      "expand_all": "▼ Alles Opklappen",
+      "collapse_all": "▶ Alles Zouklappen"
     },
     "context_menu": {
       "edit_step": "Schrëtt Detailer änneren",

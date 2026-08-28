@@ -1,7 +1,7 @@
 {
   "app": {
     "title": "Enterprise PPM Platform",
-    "caption": "Next-Gen Project Portfolio Management & Multi-Dependency Planning",
+    "caption": "Project Portfolio Management",
     "sidebar_nav": "Navigation",
     "language_selector": "🌐 Language",
     "badge_sqlite": "SQLite Backed",
@@ -16,7 +16,7 @@
     "settings": "Organization & Settings"
   },
   "portfolio": {
-    "title": "Portfolio Analytics & Dynamic Overview",
+    "title": "Portfolio Overview",
     "kpi_total_projects": "Total Projects",
     "kpi_planned_budget": "Total Planned Budget",
     "kpi_actual_spend": "Total Actual Spend",
@@ -117,6 +117,7 @@
     "columns": {
       "id": "ID",
       "name": "Task / Step Name",
+      "project": "Project",
       "desc": "Description",
       "start": "Start",
       "stop": "Stop",
@@ -133,6 +134,7 @@
     "toggles": {
       "internal_links": "🔗 Internal Dependencies",
       "external_links": "🌐 External Dependencies",
+      "show_description": "📄 Description",
       "expand_all": "▼ Expand All",
       "collapse_all": "▶ Collapse All"
     },

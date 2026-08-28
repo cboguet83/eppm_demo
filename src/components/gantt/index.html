@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -17,7 +18,7 @@
       --text-muted: #64748b;
       --row-height: 46px;
       --header-height: 56px;
-      --left-col-width: 540px;
+      --left-col-width: 425px;
       --link-normal: #94a3b8;
       --link-violated: #ef4444;
     }
@@ -29,7 +30,8 @@
       user-select: none;
     }
 
-    html, body {
+    html,
+    body {
       margin: 0;
       padding: 0;
       overflow: hidden;
@@ -228,7 +230,8 @@
       transition: background 0.15s ease;
     }
 
-    .col-resizer:hover, .col-resizer.resizing {
+    .col-resizer:hover,
+    .col-resizer.resizing {
       background: var(--primary);
     }
 
@@ -330,7 +333,8 @@
       flex-shrink: 0;
     }
 
-    .gantt-splitter:hover, .gantt-splitter.dragging {
+    .gantt-splitter:hover,
+    .gantt-splitter.dragging {
       background: var(--primary);
       border-color: var(--primary);
     }
@@ -409,7 +413,8 @@
       box-sizing: border-box;
     }
 
-    .frozen-row:hover, .frozen-row.highlight {
+    .frozen-row:hover,
+    .frozen-row.highlight {
       background: var(--row-hover);
     }
 
@@ -425,29 +430,24 @@
       align-items: center;
     }
 
-    .task-desc-cell {
-      font-size: 11px;
+    .task-name-col {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      overflow: hidden;
+      flex-shrink: 0;
+      min-width: 0;
+    }
+
+    .task-sub-desc {
+      font-size: 10.5px;
       font-weight: 400;
       color: #64748b;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      flex-shrink: 0;
-    }
-
-    .task-phase-tag {
-      font-size: 10px;
-      padding: 2px 6px;
-      background: #e0f2fe;
-      color: #0369a1;
-      border-radius: 10px;
-      font-weight: 600;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      text-align: center;
-      flex-shrink: 0;
-      box-sizing: border-box;
+      line-height: 1.25;
+      padding-left: 12px;
     }
 
     .grid-svg {
@@ -484,7 +484,8 @@
       transition: background 0.15s ease;
     }
 
-    .timeline-row:hover, .timeline-row.highlight {
+    .timeline-row:hover,
+    .timeline-row.highlight {
       background: var(--row-hover);
     }
 
@@ -567,11 +568,12 @@
       border-radius: 3px;
       display: flex;
       align-items: center;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.18);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
       z-index: 4;
     }
 
-    .project-summary-bar::before, .project-summary-bar::after {
+    .project-summary-bar::before,
+    .project-summary-bar::after {
       content: '';
       position: absolute;
       bottom: -6px;
@@ -657,7 +659,7 @@
       font-size: 11px;
       font-weight: 600;
       color: #ffffff;
-      text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -673,13 +675,21 @@
       cursor: help;
       z-index: 30;
       animation: pulse 1.5s infinite;
-      filter: drop-shadow(0 1px 2px rgba(0,0,0,0.2));
+      filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
     }
 
     @keyframes pulse {
-      0% { transform: scale(1); }
-      50% { transform: scale(1.2); }
-      100% { transform: scale(1); }
+      0% {
+        transform: scale(1);
+      }
+
+      50% {
+        transform: scale(1.2);
+      }
+
+      100% {
+        transform: scale(1);
+      }
     }
 
     /* Resize Handles */
@@ -694,7 +704,8 @@
       transition: opacity 0.15s ease;
     }
 
-    .resize-handle:hover, .gantt-bar-wrapper:hover .resize-handle {
+    .resize-handle:hover,
+    .gantt-bar-wrapper:hover .resize-handle {
       opacity: 1;
       background: rgba(255, 255, 255, 0.3);
     }
@@ -761,7 +772,7 @@
       line-height: 1.4;
       pointer-events: none;
       z-index: 4000;
-      box-shadow: 0 6px 16px rgba(0,0,0,0.3);
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
       border: 1px solid #334155;
       max-width: 340px;
     }
@@ -838,55 +849,61 @@
       justify-content: center;
       z-index: 3000;
       backdrop-filter: blur(2px);
+      overflow-y: auto;
+      padding: 12px;
+      box-sizing: border-box;
     }
 
     .modal-dialog {
       background: #ffffff;
-      border-radius: 10px;
-      width: 580px;
+      border-radius: 8px;
+      width: 540px;
       max-width: 95vw;
-      max-height: 90vh;
-      box-shadow: 0 20px 35px rgba(0, 0, 0, 0.2);
+      max-height: 94vh;
+      box-shadow: 0 15px 35px rgba(0, 0, 0, 0.25);
       border: 1px solid #e2e8f0;
-      overflow-y: auto;
+      overflow: hidden;
       display: flex;
       flex-direction: column;
     }
 
     .modal-dialog-xl {
-      width: 1160px !important;
+      width: 860px !important;
       max-width: 95vw !important;
-      min-height: 720px !important;
-      height: 82vh !important;
-      max-height: 92vh !important;
+      max-height: 94vh !important;
+      height: auto !important;
+      min-height: 0 !important;
     }
 
     .modal-header {
-      padding: 14px 18px;
+      padding: 10px 18px;
       background: #f8fafc;
       border-bottom: 1px solid #e2e8f0;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      font-size: 15px;
+      font-size: 14px;
       font-weight: 700;
       color: #1e293b;
       position: sticky;
       top: 0;
       z-index: 10;
+      flex-shrink: 0;
     }
 
     .modal-body {
-      padding: 18px;
+      padding: 14px 18px;
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 10px;
+      overflow-y: auto;
+      max-height: calc(94vh - 105px);
     }
 
     .form-group {
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      gap: 3px;
     }
 
     .form-row {
@@ -904,7 +921,8 @@
       color: #475569;
     }
 
-    .form-input, .form-select {
+    .form-input,
+    .form-select {
       padding: 8px 10px;
       border: 1px solid #cbd5e1;
       border-radius: 6px;
@@ -915,7 +933,8 @@
       background: #ffffff;
     }
 
-    .form-input:focus, .form-select:focus {
+    .form-input:focus,
+    .form-select:focus {
       border-color: var(--primary);
       box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
     }
@@ -1052,6 +1071,7 @@
       max-height: 400px;
       overflow-y: auto;
     }
+
     .violation-card {
       background: #fef2f2;
       border: 1px solid #fecaca;
@@ -1064,6 +1084,7 @@
     }
   </style>
 </head>
+
 <body>
   <div id="gantt-tooltip"></div>
 
@@ -1111,7 +1132,8 @@
     <div class="modal-dialog" style="width: 540px;">
       <div class="modal-header">
         <span id="view-pred-title" style="color:#2563eb;font-weight:700;">🔗 Predecessors for Step</span>
-        <button onclick="closeViewPredecessorsModal()" style="background:none;border:none;font-size:18px;cursor:pointer;color:#64748b;">&times;</button>
+        <button onclick="closeViewPredecessorsModal()"
+          style="background:none;border:none;font-size:18px;cursor:pointer;color:#64748b;">&times;</button>
       </div>
       <div class="modal-body" id="view-pred-body" style="max-height: 420px; overflow-y: auto;"></div>
       <div class="modal-footer">
@@ -1126,7 +1148,8 @@
     <div class="modal-dialog" style="width: 500px;">
       <div class="modal-header">
         <span style="color:#dc2626;font-weight:700;">⚠️ Constraint Violation Diagnostics</span>
-        <button onclick="closeDiagModal()" style="background:none;border:none;font-size:18px;cursor:pointer;color:#64748b;">&times;</button>
+        <button onclick="closeDiagModal()"
+          style="background:none;border:none;font-size:18px;cursor:pointer;color:#64748b;">&times;</button>
       </div>
       <div class="modal-body" id="diag-body"></div>
       <div class="modal-footer">
@@ -1139,61 +1162,73 @@
   <!-- Edit Task Modal Dialog -->
   <div class="modal-backdrop" id="modal-backdrop">
     <div class="modal-dialog modal-dialog-xl">
-      <div class="modal-header" style="padding: 16px 24px;">
-        <span id="modal-title-header" style="font-size:16px;">✏️ Edit Step Details</span>
-        <button onclick="closeEditModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#64748b;">&times;</button>
+      <div class="modal-header" style="padding: 10px 18px;">
+        <span id="modal-title-header" style="font-size:14px; font-weight:700;">✏️ Edit Step Details</span>
+        <button onclick="closeEditModal()"
+          style="background:none;border:none;font-size:18px;cursor:pointer;color:#64748b;">&times;</button>
       </div>
-      <div class="modal-body" style="padding: 24px 28px; gap: 16px;">
+      <div class="modal-body" style="padding: 14px 18px; gap: 10px;">
         <!-- Row 1: Step Name (flex:1.5), Phase/Category (flex:1), Description (flex:1.5) -->
-        <div class="form-row" style="gap: 16px;">
+        <div class="form-row" style="gap: 10px;">
           <div class="form-group" style="flex: 1.5;">
-            <label class="form-label" id="modal-label-task-name" style="font-size: 13px;">Step / Task Name *</label>
-            <input type="text" class="form-input" id="modal-task-name" placeholder="e.g. UAT Validation" style="font-size: 14px; padding: 10px 12px;" />
+            <label class="form-label" id="modal-label-task-name" style="font-size: 12px;">Step / Task Name *</label>
+            <input type="text" class="form-input" id="modal-task-name" placeholder="e.g. UAT Validation"
+              style="font-size: 13px; padding: 6px 10px;" />
           </div>
           <div class="form-group" style="flex: 1;">
-            <label class="form-label" id="modal-label-phase" style="font-size: 13px;">Phase / Category</label>
-            <input type="text" class="form-input" id="modal-task-phase" placeholder="e.g. Phase 1 - Inception" style="font-size: 14px; padding: 10px 12px;" />
+            <label class="form-label" id="modal-label-phase" style="font-size: 12px;">Phase / Category</label>
+            <input type="text" class="form-input" id="modal-task-phase" placeholder="e.g. Phase 1 - Inception"
+              style="font-size: 13px; padding: 6px 10px;" />
           </div>
           <div class="form-group" style="flex: 1.5;">
-            <label class="form-label" id="modal-label-desc" style="font-size: 13px;">Description <span style="font-weight:400;color:#64748b;">(Optional)</span></label>
-            <input type="text" class="form-input" id="modal-task-desc" placeholder="e.g. Detailed scope & deliverables" style="font-size: 14px; padding: 10px 12px;" />
+            <label class="form-label" id="modal-label-desc" style="font-size: 12px;">Description <span
+                style="font-weight:400;color:#64748b;">(Optional)</span></label>
+            <input type="text" class="form-input" id="modal-task-desc" placeholder="e.g. Detailed scope & deliverables"
+              style="font-size: 13px; padding: 6px 10px;" />
           </div>
         </div>
 
         <!-- Row 2: Start Date, End Date, Progress Slider -->
-        <div class="form-row" style="gap: 16px; align-items: flex-end;">
+        <div class="form-row" style="gap: 10px; align-items: flex-end;">
           <div class="form-group" style="flex: 1;">
-            <label class="form-label" id="modal-label-start" style="font-size: 13px;">Start Date *</label>
-            <input type="date" class="form-input" id="modal-start-date" onchange="syncModalEndDate()" style="font-size: 14px; padding: 9px 12px;" />
+            <label class="form-label" id="modal-label-start" style="font-size: 12px;">Start Date *</label>
+            <input type="date" class="form-input" id="modal-start-date" onchange="syncModalEndDate()"
+              style="font-size: 13px; padding: 6px 10px;" />
           </div>
           <div class="form-group" style="flex: 1;">
-            <label class="form-label" id="modal-label-end" style="font-size: 13px;">End Date *</label>
-            <input type="date" class="form-input" id="modal-end-date" style="font-size: 14px; padding: 9px 12px;" />
+            <label class="form-label" id="modal-label-end" style="font-size: 12px;">End Date *</label>
+            <input type="date" class="form-input" id="modal-end-date" style="font-size: 13px; padding: 6px 10px;" />
           </div>
           <div class="form-group" style="flex: 1.2;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-              <label class="form-label" id="modal-label-progress" style="margin:0; font-size: 13px;">Progress</label>
-              <span id="modal-progress-badge" style="font-size:12px; font-weight:700; color:var(--primary); background:#eff6ff; padding:2px 10px; border-radius:12px; border:1px solid #bfdbfe;">0%</span>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;">
+              <label class="form-label" id="modal-label-progress" style="margin:0; font-size: 12px;">Progress</label>
+              <span id="modal-progress-badge"
+                style="font-size:11px; font-weight:700; color:var(--primary); background:#eff6ff; padding:1px 8px; border-radius:10px; border:1px solid #bfdbfe;">0%</span>
             </div>
             <input type="range" class="form-range" id="modal-progress" min="0" max="100" step="5" value="0"
-                   oninput="updateModalProgressDisplay(this.value)" />
+              oninput="updateModalProgressDisplay(this.value)" style="margin: 4px 0;" />
           </div>
         </div>
 
         <!-- Predecessors / Dependencies Builder -->
-        <div class="form-group" style="flex: 1; display: flex; flex-direction: column; min-height: 320px; margin-top: 6px;">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-            <label class="form-label" id="modal-label-deps" style="margin:0; font-size: 14px; font-weight: 700; color: #1e293b;">🔗 Predecessors &amp; Dependencies</label>
-            <button type="button" class="btn-add-dep" id="modal-btn-add-dep" onclick="addDependencyRow()" style="padding: 7px 14px; font-size: 13px;">➕ Add Predecessor</button>
+        <div class="form-group" style="display: flex; flex-direction: column; margin-top: 2px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <label class="form-label" id="modal-label-deps"
+              style="margin:0; font-size: 12px; font-weight: 700; color: #1e293b;">🔗 Predecessors &amp;
+              Dependencies</label>
+            <button type="button" class="btn-add-dep" id="modal-btn-add-dep" onclick="addDependencyRow()"
+              style="padding: 4px 10px; font-size: 12px;">➕ Add Predecessor</button>
           </div>
-          <div class="dep-box" style="flex: 1; min-height: 280px; max-height: 480px; overflow-y: auto; padding: 14px;">
-            <div id="dep-rows-list" style="display:flex; flex-direction:column; gap:10px;"></div>
+          <div class="dep-box" style="max-height: 140px; min-height: 50px; overflow-y: auto; padding: 6px 10px;">
+            <div id="dep-rows-list" style="display:flex; flex-direction:column; gap:6px;"></div>
           </div>
         </div>
       </div>
-      <div class="modal-footer" style="padding: 14px 24px;">
-        <button class="btn-cancel" id="modal-btn-cancel" onclick="closeEditModal()" style="padding: 9px 18px; font-size: 14px;">Cancel</button>
-        <button class="btn-save" id="modal-btn-save" onclick="saveEditModal()" style="padding: 9px 22px; font-size: 14px;">💾 Save Changes</button>
+      <div class="modal-footer" style="padding: 10px 18px;">
+        <button class="btn-cancel" id="modal-btn-cancel" onclick="closeEditModal()"
+          style="padding: 6px 14px; font-size: 13px;">Cancel</button>
+        <button class="btn-save" id="modal-btn-save" onclick="saveEditModal()"
+          style="padding: 6px 18px; font-size: 13px;">💾 Save Changes</button>
       </div>
     </div>
   </div>
@@ -1203,24 +1238,33 @@
     <div class="toolbar">
       <div class="toolbar-hint">
         <span>💡</span>
-        <span><b>Drag bar</b> to shift dates &bull; <b>Right-click</b> task or link for details &bull; <b>Grey links</b>: Normal &bull; <b style="color:#ef4444;">Red links</b>: Violated</span>
+        <span><b>Drag bar</b> to shift dates &bull; <b>Right-click</b> task or link for details &bull; <b>Grey
+            links</b>: Normal &bull; <b style="color:#ef4444;">Red links</b>: Violated</span>
       </div>
       <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-        <!-- Dependency Visibility Toggles -->
+        <!-- Dependency Visibility Toggles & Description Toggle -->
         <div style="display:flex; gap:6px; align-items:center; margin-right:4px;">
           <label class="toggle-link-opt" title="Toggle visibility of internal dependencies within same project">
-            <input type="checkbox" id="chk-internal-links" checked onchange="toggleLinkVisibility('internal', this.checked)">
+            <input type="checkbox" id="chk-internal-links" checked
+              onchange="toggleLinkVisibility('internal', this.checked)">
             <span id="lbl-internal-links">🔗 Internal Dependencies</span>
           </label>
           <label class="toggle-link-opt" title="Toggle visibility of cross-project external dependencies">
-            <input type="checkbox" id="chk-external-links" checked onchange="toggleLinkVisibility('external', this.checked)">
+            <input type="checkbox" id="chk-external-links" checked
+              onchange="toggleLinkVisibility('external', this.checked)">
             <span id="lbl-external-links">🌐 External Dependencies</span>
+          </label>
+          <label class="toggle-link-opt" title="Toggle visibility of descriptions under task names">
+            <input type="checkbox" id="chk-show-desc" checked onchange="toggleDescriptionVisibility(this.checked)">
+            <span id="lbl-show-desc">📄 Description</span>
           </label>
         </div>
 
         <div id="multi-project-tools" style="display:none; gap:6px; margin-right:4px;">
-          <button class="btn-mode" id="btn-expand-all" onclick="expandAllProjects()" title="Expand all project tasks">▼ Expand All</button>
-          <button class="btn-mode" id="btn-collapse-all" onclick="collapseAllProjects()" title="Collapse all project tasks">▶ Collapse All</button>
+          <button class="btn-mode" id="btn-expand-all" onclick="expandAllProjects()" title="Expand all project tasks">▼
+            Expand All</button>
+          <button class="btn-mode" id="btn-collapse-all" onclick="collapseAllProjects()"
+            title="Collapse all project tasks">▶ Collapse All</button>
         </div>
 
         <div class="view-modes">
@@ -1272,15 +1316,18 @@
             <svg class="grid-svg" id="grid-svg" xmlns="http://www.w3.org/2000/svg">
               <defs>
                 <!-- Normal Grey Arrow Marker -->
-                <marker id="arrow-normal" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <marker id="arrow-normal" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6"
+                  orient="auto-start-reverse">
                   <path d="M 0 1 L 10 5 L 0 9 z" fill="#94a3b8" />
                 </marker>
                 <!-- Violated Red Arrow Marker -->
-                <marker id="arrow-violated" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <marker id="arrow-violated" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="6" markerHeight="6"
+                  orient="auto-start-reverse">
                   <path d="M 0 1 L 10 5 L 0 9 z" fill="#ef4444" />
                 </marker>
               </defs>
               <g id="grid-ticks-group"></g>
+              <g id="grid-today-group"></g>
               <g id="grid-links-group"></g>
             </svg>
             <div id="timeline-rows-container"></div>
@@ -1293,13 +1340,13 @@
   <script>
     // Streamlit Communication Bridge
     const Streamlit = {
-      setComponentReady: function() {
+      setComponentReady: function () {
         window.parent.postMessage({ isStreamlitMessage: true, type: "streamlit:componentReady", apiVersion: 1 }, "*");
       },
-      setFrameHeight: function(height) {
+      setFrameHeight: function (height) {
         window.parent.postMessage({ isStreamlitMessage: true, type: "streamlit:setFrameHeight", height: height || document.body.scrollHeight + 10 }, "*");
       },
-      setComponentValue: function(value) {
+      setComponentValue: function (value) {
         window.parent.postMessage({ isStreamlitMessage: true, type: "streamlit:setComponentValue", value: value }, "*");
       }
     };
@@ -1317,9 +1364,9 @@
 
     // Localization Dictionary and Lookup Helper
     let i18n = {
-      columns: { id: "ID", name: "Task / Step Name", desc: "Description", start: "Start", stop: "Stop", prog: "Prog", phase: "Phase" },
+      columns: { id: "ID", name: "Task / Step Name", start: "Start", stop: "Stop", prog: "Prog" },
       view_modes: { day: "Day", week: "Week", month: "Month", quarter: "Quarter", year: "Year" },
-      toggles: { internal_links: "🔗 Internal Dependencies", external_links: "🌐 External Dependencies", expand_all: "▼ Expand All", collapse_all: "▶ Collapse All" },
+      toggles: { internal_links: "🔗 Internal Dependencies", external_links: "🌐 External Dependencies", show_description: "📄 Description", expand_all: "▼ Expand All", collapse_all: "▶ Collapse All" },
       context_menu: { edit_step: "Edit Step Details", add_step_after: "Add Next Step (Successor)", add_step_before: "Add Previous Step (Predecessor)", mark_complete: "Mark as 100% Complete", delete_step: "Delete Step", edit_dep: "Edit Dependency", delete_dep: "Delete Dependency", view_diagnostics: "View Diagnostics" },
       modal: { add_title: "➕ Add New Step ({project_id})", edit_title: "✏️ Edit: {name}", field_name: "Step / Task Name *", field_phase: "Phase / Category", field_desc: "Description", field_start: "Start Date *", field_end: "End Date *", field_progress: "Progress Percentage", dependencies_header: "🔗 Step Dependencies & Predecessors", btn_add_pred: "➕ Add Predecessor Link", cross_project_chk: "🌐 Cross-Project?", select_pred_placeholder: "-- Select Predecessor Step --", whole_project_option: "(leave blank for whole project)", link_type_fs: "FS (Fin➔St)", link_type_ff: "FF (Fin➔Fin)", link_type_ss: "SS (St➔St)", link_type_sf: "SF (St➔Fin)", lag_placeholder: "Lag (days)", btn_save: "💾 Save Changes", btn_cancel: "Cancel", optional: "Optional" },
       diagnostics: { title: "⚠️ Constraint Violation Diagnostics", btn_fix: "✏️ Fix in Step Editor", btn_close: "Close" }
@@ -1344,6 +1391,8 @@
       if (elInt) elInt.innerText = getT('toggles.internal_links', '🔗 Internal Dependencies');
       const elExt = document.getElementById('lbl-external-links');
       if (elExt) elExt.innerText = getT('toggles.external_links', '🌐 External Dependencies');
+      const elShowDesc = document.getElementById('lbl-show-desc');
+      if (elShowDesc) elShowDesc.innerText = getT('toggles.show_description', '📄 Description');
 
       const elExp = document.getElementById('btn-expand-all');
       if (elExp) elExp.innerText = getT('toggles.expand_all', '▼ Expand All');
@@ -1411,13 +1460,10 @@
 
     // Left pane column widths & header sorting state
     let colWidths = {
-      id: 44,
-      name: 160,
-      desc: 130,
-      start: 72,
-      stop: 72,
-      prog: 52,
-      phase: 80
+      id: 34,
+      name: 240,
+      start: 60,
+      stop: 50
     };
 
     let currentSort = {
@@ -1429,12 +1475,9 @@
       return (
         colWidths.id +
         colWidths.name +
-        colWidths.desc +
         colWidths.start +
         colWidths.stop +
-        colWidths.prog +
-        colWidths.phase +
-        (6 * 6) + // 6 gaps of 6px
+        (3 * 6) + // 3 gaps of 6px between 4 columns
         20 // 20px padding (10px left + 10px right)
       );
     }
@@ -1452,7 +1495,7 @@
 
       function onMouseMove(moveEvent) {
         const deltaX = moveEvent.clientX - startX;
-        const minW = colKey === 'id' ? 32 : (colKey === 'name' ? 70 : (colKey === 'desc' ? 50 : 40));
+        const minW = colKey === 'id' ? 28 : (colKey === 'name' ? 80 : 36);
         colWidths[colKey] = Math.max(minW, startWidth + deltaX);
         updateColumnWidths();
       }
@@ -1509,10 +1552,6 @@
           valA = (a.name || '').toLowerCase();
           valB = (b.name || '').toLowerCase();
           return valA.localeCompare(valB) * factor;
-        } else if (col === 'desc') {
-          valA = (a.description || '').toLowerCase();
-          valB = (b.description || '').toLowerCase();
-          return valA.localeCompare(valB) * factor;
         } else if (col === 'start') {
           valA = parseDate(a.start).getTime();
           valB = parseDate(b.start).getTime();
@@ -1521,14 +1560,6 @@
           valA = parseDate(a.end).getTime();
           valB = parseDate(b.end).getTime();
           return (valA - valB) * factor;
-        } else if (col === 'prog') {
-          valA = parseInt(a.progress, 10) || 0;
-          valB = parseInt(b.progress, 10) || 0;
-          return (valA - valB) * factor;
-        } else if (col === 'phase') {
-          valA = (a.phase || '').toLowerCase();
-          valB = (b.phase || '').toLowerCase();
-          return valA.localeCompare(valB) * factor;
         }
         return 0;
       });
@@ -1538,14 +1569,15 @@
       const headerEl = document.getElementById('frozen-header');
       if (!headerEl) return;
 
+      const nameColTitle = isMultiProject
+        ? getT('columns.project', 'Project')
+        : getT('columns.name', 'Task / Step Name');
+
       const cols = [
         { key: 'id', title: getT('columns.id', 'ID'), align: 'center' },
-        { key: 'name', title: getT('columns.name', 'Task / Step Name'), align: 'left' },
-        { key: 'desc', title: getT('columns.desc', 'Description'), align: 'left' },
+        { key: 'name', title: nameColTitle, align: 'left' },
         { key: 'start', title: getT('columns.start', 'Start'), align: 'center' },
-        { key: 'stop', title: getT('columns.stop', 'Stop'), align: 'center' },
-        { key: 'prog', title: getT('columns.prog', 'Prog'), align: 'center' },
-        { key: 'phase', title: getT('columns.phase', 'Phase'), align: 'center' }
+        { key: 'stop', title: getT('columns.stop', 'Stop'), align: 'center' }
       ];
 
       const totalW = getTotalFrozenWidth();
@@ -1571,6 +1603,16 @@
       });
 
       headerEl.innerHTML = html;
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
     }
 
     // Helper Date Utilities
@@ -1681,7 +1723,7 @@
       if (!menu || !content) return;
 
       const isViol = depInfo.isViolated;
-      const statusBadge = isViol 
+      const statusBadge = isViol
         ? `<span style="background:#fee2e2; color:#b91c1c; padding:2px 6px; border-radius:4px; font-weight:700; font-size:10px;">⚠️ VIOLATED</span>`
         : `<span style="background:#dcfce7; color:#15803d; padding:2px 6px; border-radius:4px; font-weight:700; font-size:10px;">✅ SATISFIED</span>`;
 
@@ -2363,7 +2405,7 @@
         totalTimelineWidth = weekCount * colWidth;
 
       } else if (currentMode === 'Quarter') {
-        const colWidth = 140;
+        const colWidth = 140 / 3;
         let qCount = 0;
         let curYear = null;
         let yearStartIdx = 0;
@@ -2396,7 +2438,7 @@
         totalTimelineWidth = qCount * colWidth;
 
       } else if (currentMode === 'Year') {
-        const colWidth = 200;
+        const colWidth = 80;
         let yCount = 0;
         cur = new Date(cur.getFullYear(), 0, 1);
 
@@ -2411,7 +2453,7 @@
         totalTimelineWidth = yCount * colWidth;
 
       } else {
-        const colWidth = 90;
+        const colWidth = 45;
         let mCount = 0;
         let curYear = null;
         let yearStartIdx = 0;
@@ -2429,7 +2471,7 @@
             yearStartIdx = mCount;
           }
 
-          const mLabel = formatMmmYy(cur);
+          const mLabel = MONTH_NAMES[cur.getMonth()];
           bottomCells.push({
             label: mLabel,
             width: colWidth
@@ -2456,6 +2498,7 @@
     let allProjectPositions = {};
     let showInternalLinks = true;
     let showExternalLinks = true;
+    let showDescriptions = true;
 
     function toggleLinkVisibility(type, checked) {
       if (type === 'internal') {
@@ -2463,6 +2506,11 @@
       } else if (type === 'external') {
         showExternalLinks = Boolean(checked);
       }
+      renderVirtualWindow();
+    }
+
+    function toggleDescriptionVisibility(checked) {
+      showDescriptions = Boolean(checked);
       renderVirtualWindow();
     }
 
@@ -2540,8 +2588,8 @@
           hasInitializedCollapse = true;
         }
 
-        masterRenderItems = [];
-        projOrder.forEach(pId => {
+        // Build list of project summaries
+        const projectGroupsList = projOrder.map(pId => {
           const grp = groups[pId];
           let pMin = null, pMax = null;
           grp.tasks.forEach(t => {
@@ -2550,20 +2598,57 @@
             if (!pMin || s < pMin) pMin = s;
             if (!pMax || e > pMax) pMax = e;
           });
+          return {
+            id: pId,
+            name: grp.name,
+            start: pMin ? formatDate(pMin) : '',
+            end: pMax ? formatDate(pMax) : '',
+            tasks: grp.tasks,
+            taskCount: grp.tasks.length,
+            isCollapsed: collapsedProjects.has(pId)
+          };
+        });
 
-          const isCollapsed = collapsedProjects.has(pId);
+        // Sort project groups at the project level when sorting is active
+        if (currentSort.column && currentSort.direction !== 'none') {
+          const factor = currentSort.direction === 'asc' ? 1 : -1;
+          const col = currentSort.column;
+          projectGroupsList.sort((a, b) => {
+            if (col === 'id') {
+              const numA = parseInt(a.id, 10);
+              const numB = parseInt(b.id, 10);
+              if (!isNaN(numA) && !isNaN(numB)) {
+                return (numA - numB) * factor;
+              }
+              return String(a.id).localeCompare(String(b.id)) * factor;
+            } else if (col === 'name') {
+              return String(a.name || '').localeCompare(String(b.name || '')) * factor;
+            } else if (col === 'start') {
+              const dateA = a.start ? parseDate(a.start).getTime() : 0;
+              const dateB = b.start ? parseDate(b.start).getTime() : 0;
+              return (dateA - dateB) * factor;
+            } else if (col === 'stop') {
+              const dateA = a.end ? parseDate(a.end).getTime() : 0;
+              const dateB = b.end ? parseDate(b.end).getTime() : 0;
+              return (dateA - dateB) * factor;
+            }
+            return 0;
+          });
+        }
 
+        masterRenderItems = [];
+        projectGroupsList.forEach(grp => {
           masterRenderItems.push({
             type: 'project_header',
-            project_id: pId,
+            project_id: grp.id,
             project_name: grp.name,
-            start: pMin ? formatDate(pMin) : null,
-            end: pMax ? formatDate(pMax) : null,
-            taskCount: grp.tasks.length,
-            isCollapsed: isCollapsed
+            start: grp.start || null,
+            end: grp.end || null,
+            taskCount: grp.taskCount,
+            isCollapsed: grp.isCollapsed
           });
 
-          if (!isCollapsed) {
+          if (!grp.isCollapsed) {
             // Sort ONLY within this project! Project boundaries are strictly maintained.
             const sortedGroupTasks = sortTasksList(grp.tasks);
             sortedGroupTasks.forEach(t => {
@@ -2670,6 +2755,36 @@
         });
       }
 
+      // Draw Today Green Dotted Line
+      const todayGroup = document.getElementById('grid-today-group');
+      if (todayGroup) {
+        todayGroup.innerHTML = '';
+        const todayDate = new Date();
+        if (timelineStart && timelineEnd && todayDate >= timelineStart && todayDate <= timelineEnd) {
+          const todayX = dateToX(todayDate);
+          if (todayX >= 0 && todayX <= totalTimelineWidth) {
+            const todayLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            todayLine.setAttribute('x1', todayX);
+            todayLine.setAttribute('y1', 0);
+            todayLine.setAttribute('x2', todayX);
+            todayLine.setAttribute('y2', totalHeight);
+            todayLine.setAttribute('stroke', '#10b981'); // Emerald green
+            todayLine.setAttribute('stroke-width', '2');
+            todayLine.setAttribute('stroke-dasharray', '4 4'); // Green dotted line
+            todayGroup.appendChild(todayLine);
+
+            const todayBadge = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            todayBadge.setAttribute('x', todayX + 4);
+            todayBadge.setAttribute('y', 14);
+            todayBadge.setAttribute('fill', '#059669');
+            todayBadge.setAttribute('font-size', '10px');
+            todayBadge.setAttribute('font-weight', '700');
+            todayBadge.textContent = 'Today';
+            todayGroup.appendChild(todayBadge);
+          }
+        }
+      }
+
       // Sizing the layout container and Streamlit frame
       const layoutContainer = document.getElementById('gantt-layout');
       const maxDisplayH = Math.min(650, Math.max(260, totalHeight + 56));
@@ -2741,17 +2856,18 @@
                  oncontextmenu="showProjectContextMenu(event, '${item.project_id}')">
               <span class="task-id-cell" style="width:${colWidths.id}px; min-width:${colWidths.id}px; max-width:${colWidths.id}px; font-weight:700; color:#475569;" title="Project ID: ${item.project_id}">${item.project_id}</span>
               <span class="collapse-toggle-icon" title="${item.isCollapsed ? 'Click to expand tasks' : 'Click to collapse tasks'}">${item.isCollapsed ? '▶' : '▼'}</span>
-              <span class="project-group-title" style="width:${nameColW}px; min-width:${nameColW}px; max-width:${nameColW}px;" title="${item.project_name}">${item.project_name}</span>
-              <span class="task-desc-cell" style="width:${colWidths.desc}px; min-width:${colWidths.desc}px; max-width:${colWidths.desc}px;">-</span>
+              <div class="project-group-title-wrapper" style="width:${nameColW}px; min-width:${nameColW}px; max-width:${nameColW}px; display:flex; align-items:center; gap:6px; overflow:hidden;">
+                <span class="project-group-title" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1;" title="${escapeHtml(item.project_name)}">${escapeHtml(item.project_name)}</span>
+                <span class="project-group-count" style="font-size:10px; padding:1px 6px; background:#e2e8f0; color:#475569; border-radius:10px; flex-shrink:0;">${item.taskCount}</span>
+              </div>
               <span class="task-date-cell" style="width:${colWidths.start}px; min-width:${colWidths.start}px; max-width:${colWidths.start}px; font-weight:600; color:#334155;" title="Start: ${item.start || '-'}">${formatMmmYy(item.start)}</span>
               <span class="task-date-cell" style="width:${colWidths.stop}px; min-width:${colWidths.stop}px; max-width:${colWidths.stop}px; font-weight:600; color:#334155;" title="Stop: ${item.end || '-'}">${formatMmmYy(item.end)}</span>
-              <span class="task-prog-cell" style="width:${colWidths.prog}px; min-width:${colWidths.prog}px; max-width:${colWidths.prog}px; font-weight:600; color:#334155;">-</span>
-              <span class="project-group-count" style="width:${colWidths.phase}px; min-width:${colWidths.phase}px; max-width:${colWidths.phase}px;">${item.taskCount} task${item.taskCount !== 1 ? 's' : ''}</span>
             </div>
           `;
         } else if (item.task) {
           const t = item.task;
           const hasViol = t.violations && t.violations.length > 0;
+          const hasDesc = Boolean(showDescriptions && t.description && t.description.trim());
           frozenHtml += `
             <div class="frozen-row ${item.isChild ? 'child-task-row' : ''}" id="frozen-row-${t.id}" 
                  style="top: ${topPos}px; width: ${totalW}px; min-width: ${totalW}px;"
@@ -2760,15 +2876,15 @@
                  ondblclick="openEditModalById('${t.id}')"
                  oncontextmenu="showContextMenuById(event, '${t.id}')">
               <span class="task-id-cell" style="width:${colWidths.id}px; min-width:${colWidths.id}px; max-width:${colWidths.id}px;" title="Task ID #${t.id}">#${t.id}</span>
-              <span class="task-title" style="width:${colWidths.name}px; min-width:${colWidths.name}px; max-width:${colWidths.name}px;" title="${t.name}">
-                <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1;">${t.name}</span>
-                ${hasViol ? `<span title="${t.violations.length} constraint violation(s)" style="font-size:12px;cursor:pointer;margin-left:4px;flex-shrink:0;" onclick="showContextMenuById(event, '${t.id}')">⚠️</span>` : ''}
-              </span>
-              <span class="task-desc-cell" style="width:${colWidths.desc}px; min-width:${colWidths.desc}px; max-width:${colWidths.desc}px;" title="${t.description || ''}">${t.description || '-'}</span>
+              <div class="task-name-col" style="width:${colWidths.name}px; min-width:${colWidths.name}px; max-width:${colWidths.name}px;">
+                <span class="task-title" style="width:100%;" title="${escapeHtml(t.name)}">
+                  <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1;">${escapeHtml(t.name)}</span>
+                  ${hasViol ? `<span title="${t.violations.length} constraint violation(s)" style="font-size:12px;cursor:pointer;margin-left:4px;flex-shrink:0;" onclick="showContextMenuById(event, '${t.id}')">⚠️</span>` : ''}
+                </span>
+                ${hasDesc ? `<span class="task-sub-desc" title="${escapeHtml(t.description)}">↳ ${escapeHtml(t.description)}</span>` : ''}
+              </div>
               <span class="task-date-cell" style="width:${colWidths.start}px; min-width:${colWidths.start}px; max-width:${colWidths.start}px;" title="Start Date: ${t.start || '-'}">${formatMmmYy(t.start)}</span>
               <span class="task-date-cell" style="width:${colWidths.stop}px; min-width:${colWidths.stop}px; max-width:${colWidths.stop}px;" title="Stop Date: ${t.end || '-'}">${formatMmmYy(t.end)}</span>
-              <span class="task-prog-cell" style="width:${colWidths.prog}px; min-width:${colWidths.prog}px; max-width:${colWidths.prog}px;" title="Progress: ${t.progress || 0}%">${t.progress || 0}%</span>
-              <span class="task-phase-tag" style="width:${colWidths.phase}px; min-width:${colWidths.phase}px; max-width:${colWidths.phase}px;" title="${t.phase}">${t.phase}</span>
             </div>
           `;
         }
@@ -2839,8 +2955,7 @@
               mWrapper.style.left = `${startX}px`;
               mWrapper.innerHTML = `
                 ${hasViol ? `<div class="violation-warning-badge" onmouseenter="showTooltip(event, '<b>⚠️ Constraint Violation:</b><br>${t.violations.join('<br>')}')" onmouseleave="hideTooltip()">⚠️</div>` : ''}
-                <div class="milestone-diamond-shape"></div>
-                <div class="milestone-text-label">${t.name}</div>
+                <div class="milestone-diamond-shape" title="${escapeHtml(t.name)}"></div>
               `;
               mWrapper.oncontextmenu = (e) => showContextMenu(e, t);
               mWrapper.ondblclick = () => openEditModalById(t.id);
@@ -2854,9 +2969,8 @@
               bWrapper.innerHTML = `
                 ${hasViol ? `<div class="violation-warning-badge" onmouseenter="showTooltip(event, '<b>⚠️ Constraint Violation:</b><br>${t.violations.join('<br>')}')" onmouseleave="hideTooltip()">⚠️</div>` : ''}
                 <div class="resize-handle left"></div>
-                <div class="gantt-bar-task">
+                <div class="gantt-bar-task" title="${escapeHtml(t.name)} (${t.progress || 0}%)">
                   <div class="bar-progress" style="width: ${t.progress || 0}%;"></div>
-                  <div class="bar-label">${t.name} (${t.progress || 0}%)</div>
                 </div>
                 <div class="resize-handle right"></div>
               `;
@@ -3275,7 +3389,7 @@
     }
 
     // Listen for data from Streamlit
-    window.addEventListener("message", function(event) {
+    window.addEventListener("message", function (event) {
       if (event.data && event.data.type === "streamlit:render") {
         const args = event.data.args || {};
         if (args.translations) {
@@ -3307,7 +3421,7 @@
       let startX = 0;
       let startWidth = 0;
 
-      splitter.addEventListener('mousedown', function(e) {
+      splitter.addEventListener('mousedown', function (e) {
         e.preventDefault();
         e.stopPropagation();
         isDragging = true;
@@ -3318,7 +3432,7 @@
         document.body.style.userSelect = 'none';
       });
 
-      window.addEventListener('mousemove', function(e) {
+      window.addEventListener('mousemove', function (e) {
         if (!isDragging) return;
         const deltaX = e.clientX - startX;
         const vpWidth = layoutContainer.getBoundingClientRect().width || 1000;
@@ -3333,7 +3447,7 @@
         adjustCanvasBottomGaps();
       });
 
-      window.addEventListener('mouseup', function() {
+      window.addEventListener('mouseup', function () {
         if (isDragging) {
           isDragging = false;
           splitter.classList.remove('dragging');
@@ -3354,7 +3468,7 @@
       initSplitter();
 
       if (scroller) {
-        scroller.onscroll = function() {
+        scroller.onscroll = function () {
           if (frozenBody) {
             frozenBody.scrollTop = scroller.scrollTop;
           }
@@ -3366,13 +3480,13 @@
       }
 
       if (frozenBody) {
-        frozenBody.onscroll = function() {
+        frozenBody.onscroll = function () {
           if (frozenHeaderWrapper) {
             frozenHeaderWrapper.scrollLeft = frozenBody.scrollLeft;
           }
         };
 
-        frozenBody.onwheel = function(e) {
+        frozenBody.onwheel = function (e) {
           if (scroller && Math.abs(e.deltaY) > 0) {
             scroller.scrollTop += e.deltaY;
             if (Math.abs(e.deltaY) >= Math.abs(e.deltaX)) {
@@ -3386,10 +3500,11 @@
     document.addEventListener('DOMContentLoaded', setupScrollAndWheelListeners);
     setupScrollAndWheelListeners();
 
-    window.addEventListener('resize', function() {
+    window.addEventListener('resize', function () {
       adjustCanvasBottomGaps();
       renderVirtualWindow();
     }, { passive: true });
   </script>
 </body>
+
 </html>

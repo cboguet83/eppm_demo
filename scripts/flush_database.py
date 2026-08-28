@@ -4,8 +4,12 @@ Removes all project records, milestones/steps, and task dependencies from the SQ
 """
 
 import argparse
+import os
 import sys
 from typing import Optional
+
+# Ensure project root is in sys.path when running script directly
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.database.connection import get_db
 from src.logging_config import get_logger

@@ -117,10 +117,11 @@
     "columns": {
       "id": "ID",
       "name": "Nome da Tarefa / Etapa",
+      "project": "Projeto",
       "desc": "Descrição",
       "start": "Início",
       "stop": "Fim",
-      "prog": "Prog",
+      "prog": "Progresso",
       "phase": "Fase"
     },
     "view_modes": {
@@ -133,6 +134,7 @@
     "toggles": {
       "internal_links": "🔗 Dependências Internas",
       "external_links": "🌐 Dependências Externas",
+      "show_description": "📄 Descrição",
       "expand_all": "▼ Expandir Tudo",
       "collapse_all": "▶ Recolher Tudo"
     },

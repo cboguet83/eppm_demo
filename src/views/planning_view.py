@@ -29,7 +29,25 @@ def render_planning_milestones(
     milestone_repo: MilestoneRepository,
 ) -> None:
     """Renders the Planning & Step Loader screen with interactive drag & drop and Plotly timeline."""
-    st.header(f"📅 {t('planning.title')}")
+    st.markdown(
+        """
+        <style>
+        .block-container {
+            padding-top: 1.2rem !important;
+            padding-bottom: 1rem !important;
+        }
+        h1, h2, h3 {
+            margin-top: 0 !important;
+            margin-bottom: 0.25rem !important;
+            padding-top: 0 !important;
+        }
+        div[data-testid="stVerticalBlock"] > div {
+            margin-bottom: 0.25rem !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
     df_projects = project_repo.get_all_projects()
 
@@ -71,9 +89,6 @@ def render_planning_milestones(
         else:
             selected_projects = all_proj_ids
         selected_id = selected_projects[0]
-
-        sub_df = df_projects[df_projects["id"].isin(selected_projects)]
-        st.metric(t("planning.selected_projects", default="Selected Projects"), f"{len(sub_df)} / {len(df_projects)}")
     else:
         selected_id = top_col1.selectbox(
             t("planning.select_single_proj"),
@@ -83,18 +98,13 @@ def render_planning_milestones(
         )
         selected_projects = [selected_id]
 
-        proj_info = df_projects[df_projects["id"] == selected_id].iloc[0]
-        st.metric(t("master_data.field_status"), str(proj_info["status"]))
-
-    st.divider()
-
     # --------------------------------------------------------------------------
     # 1. TIMELINE VISUALIZATION (INTERACTIVE DRAG & DROP GANTT)
     # --------------------------------------------------------------------------
     if enable_multi_project:
-        st.subheader(f"🌐 {t('planning.multi_project_title', default='Multi-Project Master Timeline')} ({len(selected_projects)} Projects)")
+        st.subheader(f"📅 {t('planning.multi_project_title', default='Multi-Project Master Timeline')} ({len(selected_projects)} Projects)")
     else:
-        st.subheader(t("planning.schedule_title", project_id=selected_id))
+        st.subheader(f"📅 {t('planning.schedule_title', project_id=selected_id)}")
 
     # Fetch all project bounds for constraint evaluation in fast batch queries
     all_projects_list = [{"id": str(r["id"]), "name": f"{r['id']} - {r['name']}"} for _, r in df_projects.iterrows()]

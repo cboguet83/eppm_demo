@@ -117,6 +117,7 @@
     "columns": {
       "id": "ID",
       "name": "Aufgaben- / Schrittname",
+      "project": "Projekt",
       "desc": "Beschreibung",
       "start": "Start",
       "stop": "Ende",
@@ -133,6 +134,7 @@
     "toggles": {
       "internal_links": "🔗 Interne Abhängigkeiten",
       "external_links": "🌐 Externe Abhängigkeiten",
+      "show_description": "📄 Beschreibung",
       "expand_all": "▼ Alle aufklappen",
       "collapse_all": "▶ Alle zuklappen"
     },

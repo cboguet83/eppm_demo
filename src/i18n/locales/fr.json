@@ -117,6 +117,7 @@
     "columns": {
       "id": "ID",
       "name": "Nom de la Tâche / Étape",
+      "project": "Projet",
       "desc": "Description",
       "start": "Début",
       "stop": "Fin",
@@ -133,6 +134,7 @@
     "toggles": {
       "internal_links": "🔗 Dépendances Internes",
       "external_links": "🌐 Dépendances Externes",
+      "show_description": "📄 Description",
       "expand_all": "▼ Tout Déplier",
       "collapse_all": "▶ Tout Replier"
     },

@@ -6,6 +6,7 @@ Main entry point and UI routing controller for Streamlit.
 import importlib
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 import src.i18n.translator as _i18n_module
 import src.models.constants as _constants_module
@@ -102,9 +103,14 @@ def run_app() -> None:
     init_db()
     seed_default_data_if_empty()
 
-    st.set_page_config(page_title=t("app.title", default="PPM Studio Pro"), page_icon="🏗️", layout="wide")
+    st.set_page_config(
+        page_title=t("app.title", default="PPM Studio Pro"),
+        page_icon="🏗️",
+        layout="wide",
+        initial_sidebar_state="expanded",
+    )
 
-    # Hide Streamlit Deploy button and default top decoration
+    # Clean Streamlit UI elements without breaking sidebar controls
     st.markdown(
         """
         <style>
@@ -113,8 +119,23 @@ def run_app() -> None:
             visibility: hidden !important;
         }
         #MainMenu { visibility: hidden; }
-        header [data-testid="stToolbar"] { visibility: hidden; }
         footer { visibility: hidden; }
+
+        /* Reduce top whitespace across all views */
+        .block-container {
+            padding-top: 1.5rem !important;
+        }
+
+        /* Ensure native Streamlit sidebar collapse/expand controls are always accessible */
+        [data-testid="stSidebarCollapsedControl"],
+        [data-testid="collapsedControl"],
+        [data-testid="stSidebarCollapseButton"] {
+            visibility: visible !important;
+            display: flex !important;
+            opacity: 1 !important;
+            z-index: 1000 !important;
+            pointer-events: auto !important;
+        }
         </style>
         """,
         unsafe_allow_html=True,
