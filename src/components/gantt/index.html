@@ -1093,7 +1093,7 @@
     </div>
     <div class="context-menu-item" onclick="openAddStepModal()">
       <span>➕</span>
-      <span id="ctx-label-add-step">Add New Step</span>
+      <span id="ctx-label-add-step">Add Step</span>
     </div>
     <div class="context-menu-item" onclick="openEditModal()">
       <span>✏️</span>
@@ -1432,7 +1432,7 @@
 
       // Context menu items
       const elAdd = document.getElementById('ctx-label-add-step');
-      if (elAdd) elAdd.innerText = getT('context_menu.add_step_after', 'Add New Step');
+      if (elAdd) elAdd.innerText = getT('context_menu.add_step', getT('context_menu.add_step_after', 'Add Step'));
       const elEdit = document.getElementById('ctx-label-edit-step');
       if (elEdit) elEdit.innerText = getT('context_menu.edit_step', 'Edit Step & Dependencies');
       const elTags = document.getElementById('ctx-label-task-tags');
@@ -2406,14 +2406,22 @@
       document.getElementById('modal-backdrop').style.display = 'none';
     }
 
+    function getActiveModalProjectId() {
+      if (modalMode === 'add') {
+        return String(addStepTargetProjectId || (selectedContextMenuTask && selectedContextMenuTask.project_id) || currentProjectId || '');
+      }
+      return String((selectedContextMenuTask && selectedContextMenuTask.project_id) || currentProjectId || '');
+    }
+
     function addDependencyRow(initialData = {}) {
       const depList = document.getElementById('dep-rows-list');
       const rowDiv = document.createElement('div');
       rowDiv.className = 'dep-row';
 
-      const isExt = Boolean(initialData.predecessor_project_id && String(initialData.predecessor_project_id) !== String(currentProjectId));
-      const otherProjects = (allProjectsData || []).filter(p => String(p.id) !== String(currentProjectId));
-      const selectedExtProj = initialData.predecessor_project_id || (otherProjects[0] ? otherProjects[0].id : '');
+      const activeProjId = getActiveModalProjectId();
+      const isExt = Boolean(initialData.predecessor_project_id && String(initialData.predecessor_project_id) !== String(activeProjId));
+      const otherProjects = (allProjectsData || []).filter(p => String(p.id) !== String(activeProjId));
+      const selectedExtProj = initialData.predecessor_project_id || (otherProjects[0] ? String(otherProjects[0].id) : '');
 
       rowDiv.style.background = isExt ? '#faf5ff' : '#f0f9ff';
       rowDiv.style.border = isExt ? '1px solid #e9d5ff' : '1px solid #bae6fd';
@@ -2430,7 +2438,10 @@
           <input type="checkbox" class="dep-is-ext" ${isExt ? 'checked' : ''} onchange="toggleDepExt(this)" /> ${getT('modal.cross_project_chk', '🌐 Cross-Project?')}
         </label>
         <select class="form-select dep-proj" style="width:190px;${isExt ? '' : 'display:none;'}" onchange="onDepProjChange(this)">
-          ${otherProjects.map(p => `<option value="${p.id}" ${String(selectedExtProj) === String(p.id) ? 'selected' : ''}>${p.name}</option>`).join('')}
+          ${otherProjects.map(p => {
+            const cleanPName = String(p.name || p.id).replace(/^[A-Za-z0-9_-]+\s*-\s*/, '');
+            return `<option value="${p.id}" ${String(selectedExtProj) === String(p.id) ? 'selected' : ''}>${escapeHtml(cleanPName)}</option>`;
+          }).join('')}
         </select>
         <select class="form-select dep-target" style="flex:1;min-width:240px;">
           <!-- Populated dynamically -->
@@ -2463,26 +2474,29 @@
         row.style.border = '1px solid #bae6fd';
         row.style.borderLeft = '4px solid #0284c7';
       }
-      populateDepTargets(row);
+      populateDepTargets(row, {});
     }
 
     function onDepProjChange(sel) {
       const row = sel.closest('.dep-row');
-      populateDepTargets(row);
+      populateDepTargets(row, {});
     }
 
     function populateDepTargets(rowDiv, initialData = {}) {
+      const activeProjId = getActiveModalProjectId();
       const chk = rowDiv.querySelector('.dep-is-ext');
       const targetSelect = rowDiv.querySelector('.dep-target');
       const projSelect = rowDiv.querySelector('.dep-proj');
-      const otherProjects = (allProjectsData || []).filter(p => String(p.id) !== String(currentProjectId));
+      const otherProjects = (allProjectsData || []).filter(p => String(p.id) !== String(activeProjId));
 
       targetSelect.innerHTML = '';
 
-      if (chk.checked) {
+      if (chk && chk.checked) {
         // External Project
-        const selectedProj = projSelect.value || (otherProjects[0] ? otherProjects[0].id : "");
+        const selectedProj = String(projSelect.value || (otherProjects[0] ? otherProjects[0].id : ''));
         targetSelect.title = "Step (leave blank to link the whole project)";
+        
+        // Option 1: Whole project link
         const optWhole = document.createElement('option');
         optWhole.value = `PROJ:${selectedProj}`;
         optWhole.innerText = getT('modal.whole_project_option', '(leave blank for whole project)');
@@ -2491,19 +2505,34 @@
         }
         targetSelect.appendChild(optWhole);
 
-        // Populate steps in external project if available
-        const extTasks = externalTasksData[selectedProj] || [];
+        // Options 2..N: Steps in external project
+        let extTasks = [];
+        if (externalTasksData && externalTasksData[selectedProj]) {
+          extTasks = externalTasksData[selectedProj];
+        } else {
+          extTasks = (tasksData || []).filter(t => String(t.project_id || currentProjectId) === String(selectedProj)).map(t => ({
+            id: t.id,
+            task_name: t.name || t.task_name,
+            start_date: t.start || t.start_date,
+            end_date: t.end || t.end_date,
+          }));
+        }
+
         extTasks.forEach(item => {
+          if (selectedContextMenuTask && selectedContextMenuTask.id && String(item.id) === String(selectedContextMenuTask.id)) {
+            return; // cannot link to itself
+          }
           const opt = document.createElement('option');
           opt.value = `TASK:${item.id}`;
-          opt.innerText = `Step: ${item.task_name}`;
+          const tName = item.task_name || item.name || `Task #${item.id}`;
+          opt.innerText = `Step: ${tName} (#${item.id})`;
           if (String(initialData.predecessor_task_id) === String(item.id)) {
             opt.selected = true;
           }
           targetSelect.appendChild(opt);
         });
       } else {
-        // Current Project Internal Steps
+        // Current Project Internal Steps (Strictly activeProjId)
         const optPlaceholder = document.createElement('option');
         optPlaceholder.value = '';
         optPlaceholder.innerText = getT('modal.select_pred_placeholder', '-- Select Predecessor Step --');
@@ -2512,13 +2541,27 @@
         }
         targetSelect.appendChild(optPlaceholder);
 
-        tasksData.forEach(item => {
+        let internalTasks = [];
+        if (externalTasksData && externalTasksData[activeProjId]) {
+          internalTasks = externalTasksData[activeProjId];
+        } else {
+          internalTasks = (tasksData || []).filter(item => {
+            const itemProjId = String(item.project_id || currentProjectId || '');
+            return itemProjId === String(activeProjId);
+          }).map(t => ({
+            id: t.id,
+            task_name: t.name || t.task_name
+          }));
+        }
+
+        internalTasks.forEach(item => {
           if (selectedContextMenuTask && selectedContextMenuTask.id && String(item.id) === String(selectedContextMenuTask.id)) {
             return; // cannot be predecessor of itself
           }
           const opt = document.createElement('option');
           opt.value = `TASK:${item.id}`;
-          opt.innerText = `Step: ${item.name} (#${item.id})`;
+          const tName = item.task_name || item.name || `Task #${item.id}`;
+          opt.innerText = `Step: ${tName} (#${item.id})`;
           if (String(initialData.predecessor_task_id) === String(item.id)) {
             opt.selected = true;
           }

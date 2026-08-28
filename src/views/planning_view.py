@@ -359,10 +359,12 @@ def render_planning_milestones(
         # Render custom drag-and-drop component with multi-dependency metadata and i18n
         cur_loc = get_current_locale()
         gantt_translations = get_section_catalog("gantt", cur_loc)
+        all_ext_tasks = milestone_repo.get_all_external_tasks_map()
         widget_key = f"gantt_{len(selected_projects)}_{selected_id}_{cur_loc}"
         gantt_event = _interactive_gantt(
             tasks=gantt_tasks,
             all_projects=all_projects_list,
+            external_tasks=all_ext_tasks,
             project_id=selected_id,
             is_multi_project=True,
             translations=gantt_translations,

@@ -164,7 +164,8 @@
     },
     "context_menu": {
       "edit_step": "Modifier l'Étape",
-      "add_step_after": "Ajouter l'Étape Suivante (Successeur)",
+      "add_step_after": "Ajouter une Étape",
+      "add_step": "Ajouter une Étape",
       "add_step_before": "Ajouter l'Étape Précédente (Prédécesseur)",
       "manage_tags": "Gérer les Tags",
       "edit_project": "Modifier les Détails du Projet",

@@ -164,7 +164,8 @@
     },
     "context_menu": {
       "edit_step": "Schrëtt Detailer änneren",
-      "add_step_after": "Nächste Schrëtt bäisetzen (Nofollger)",
+      "add_step_after": "Schrëtt bäisetzen",
+      "add_step": "Schrëtt bäisetzen",
       "add_step_before": "Virdrun Schrëtt bäisetzen (Virgänger)",
       "manage_tags": "Tags verwalten",
       "edit_project": "Projet Detailer änneren",

@@ -164,7 +164,8 @@
     },
     "context_menu": {
       "edit_step": "Edit Step Details",
-      "add_step_after": "Add Next Step (Successor)",
+      "add_step_after": "Add Step",
+      "add_step": "Add Step",
       "add_step_before": "Add Previous Step (Predecessor)",
       "manage_tags": "Manage Tags",
       "edit_project": "Edit Project Details",

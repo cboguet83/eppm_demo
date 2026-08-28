@@ -164,7 +164,8 @@
     },
     "context_menu": {
       "edit_step": "Schrittdetails bearbeiten",
-      "add_step_after": "Nächsten Schritt hinzufügen (Nachfolger)",
+      "add_step_after": "Schritt hinzufügen",
+      "add_step": "Schritt hinzufügen",
       "add_step_before": "Vorherigen Schritt hinzufügen (Vorgänger)",
       "manage_tags": "Tags verwalten",
       "edit_project": "Projektdetails bearbeiten",
