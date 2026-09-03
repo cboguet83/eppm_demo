@@ -1,3 +1,9 @@
 [client]
 showDeployButton = false
 toolbarMode = "minimal"
+
+[theme]
+primaryColor = "#C41039"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F8FAFC"
+textColor = "#0F172A"

@@ -1379,6 +1379,13 @@
     let msPerPixel = 1;
     let selectedContextMenuTask = null;
 
+    // High-performance Dependency & Task Indexing Maps
+    let tasksByIdMap = new Map();
+    let taskIncomingDeps = new Map();
+    let taskOutgoingDeps = new Map();
+    let projIncomingDeps = new Map();
+    let projOutgoingDeps = new Map();
+
     // Localization Dictionary and Lookup Helper
     let i18n = {
       columns: { id: "ID", name: "Task / Step Name", start: "Start", stop: "Stop", prog: "Prog" },
@@ -2967,6 +2974,79 @@
       renderTimeline();
     }
 
+    // Build fast O(1) dependency and task indexes for virtual viewport rendering
+    function buildDependencyIndex() {
+      tasksByIdMap.clear();
+      taskIncomingDeps.clear();
+      taskOutgoingDeps.clear();
+      projIncomingDeps.clear();
+      projOutgoingDeps.clear();
+
+      for (let i = 0; i < tasksData.length; i++) {
+        const t = tasksData[i];
+        tasksByIdMap.set(String(t.id), t);
+      }
+
+      for (let tIdx = 0; tIdx < tasksData.length; tIdx++) {
+        const t = tasksData[tIdx];
+        const deps = t.dependenciesList;
+        if (!deps || deps.length === 0) continue;
+
+        const succId = String(t.id);
+        const succProjId = t.project_id ? String(t.project_id) : (currentProjectId ? String(currentProjectId) : null);
+
+        for (let dIdx = 0; dIdx < deps.length; dIdx++) {
+          const dep = deps[dIdx];
+          const entry = {
+            succTask: t,
+            dep: dep,
+            key: `${dep.predecessor_task_id || dep.predecessor_project_id || 'ext'}->${succId}:${dIdx}`
+          };
+
+          // Index by successor task ID (where dep finishes)
+          let inList = taskIncomingDeps.get(succId);
+          if (!inList) {
+            inList = [];
+            taskIncomingDeps.set(succId, inList);
+          }
+          inList.push(entry);
+
+          // Index by successor project ID (if project is collapsed)
+          if (succProjId) {
+            let pInList = projIncomingDeps.get(succProjId);
+            if (!pInList) {
+              pInList = [];
+              projIncomingDeps.set(succProjId, pInList);
+            }
+            pInList.push(entry);
+          }
+
+          // Index by predecessor task ID (where dep starts)
+          if (dep.predecessor_task_id) {
+            const predId = String(dep.predecessor_task_id);
+            let outList = taskOutgoingDeps.get(predId);
+            if (!outList) {
+              outList = [];
+              taskOutgoingDeps.set(predId, outList);
+            }
+            outList.push(entry);
+          }
+
+          // Index by predecessor project ID (where dep starts)
+          const pProjId = dep.predecessor_project_id || dep.pred_task_project_id;
+          if (pProjId) {
+            const predProjStr = String(pProjId);
+            let pOutList = projOutgoingDeps.get(predProjStr);
+            if (!pOutList) {
+              pOutList = [];
+              projOutgoingDeps.set(predProjStr, pOutList);
+            }
+            pOutList.push(entry);
+          }
+        }
+      }
+    }
+
     function renderTimeline() {
       computeTimelineBounds();
       const { topCells, bottomCells } = buildHeaderStructure();
@@ -3162,6 +3242,9 @@
           };
         }
       });
+
+      // Build dependency fast-lookup indexes
+      buildDependencyIndex();
 
       const totalHeight = Math.max(46, masterRenderItems.length * 46);
 
@@ -3448,127 +3531,208 @@
       if (linksGroup) {
         linksGroup.innerHTML = '';
 
-        tasksData.forEach(t => {
-          const deps = t.dependenciesList || [];
+        // Collect candidate dependency links starting and/or finishing on displayed items
+        const candidateEntries = new Map();
+
+        for (let i = startIndex; i <= endIndex; i++) {
+          const item = masterRenderItems[i];
+          if (!item) continue;
+
+          if (item.task) {
+            const tid = String(item.task.id);
+            // Dependencies finishing on this displayed task (incoming)
+            const inDeps = taskIncomingDeps.get(tid);
+            if (inDeps) {
+              for (let k = 0; k < inDeps.length; k++) {
+                candidateEntries.set(inDeps[k].key, inDeps[k]);
+              }
+            }
+            // Dependencies starting on this displayed task (outgoing)
+            const outDeps = taskOutgoingDeps.get(tid);
+            if (outDeps) {
+              for (let k = 0; k < outDeps.length; k++) {
+                candidateEntries.set(outDeps[k].key, outDeps[k]);
+              }
+            }
+          } else if (item.type === 'project_header') {
+            const pid = String(item.project_id);
+            // Dependencies finishing on this displayed project
+            const inDeps = projIncomingDeps.get(pid);
+            if (inDeps) {
+              for (let k = 0; k < inDeps.length; k++) {
+                candidateEntries.set(inDeps[k].key, inDeps[k]);
+              }
+            }
+            // Dependencies starting from this displayed project
+            const outDeps = projOutgoingDeps.get(pid);
+            if (outDeps) {
+              for (let k = 0; k < outDeps.length; k++) {
+                candidateEntries.set(outDeps[k].key, outDeps[k]);
+              }
+            }
+          }
+        }
+
+        candidateEntries.forEach(entry => {
+          const t = entry.succTask;
+          const dep = entry.dep;
           const tProjId = t.project_id || currentProjectId;
           const isSuccCollapsed = collapsedProjects.has(tProjId);
           const succ = allTaskPositions[String(t.id)] || (isSuccCollapsed ? allProjectPositions[tProjId] : null);
           if (!succ) return;
 
-          deps.forEach(dep => {
-            const pTaskId = dep.predecessor_task_id ? String(dep.predecessor_task_id) : null;
-            const pProjId = dep.predecessor_project_id ? String(dep.predecessor_project_id) : null;
-            const pTaskProjId = dep.pred_task_project_id ? String(dep.pred_task_project_id) : null;
+          const pTaskId = dep.predecessor_task_id ? String(dep.predecessor_task_id) : null;
+          const pProjId = dep.predecessor_project_id ? String(dep.predecessor_project_id) : null;
+          const pTaskProjId = dep.pred_task_project_id ? String(dep.pred_task_project_id) : null;
 
-            // Check if predecessor task is in another project
-            let isCrossProjectTask = false;
-            if (pTaskId && allTaskPositions[pTaskId]) {
-              const pTask = allTaskPositions[pTaskId];
-              if (pTask.project_id && String(pTask.project_id) !== String(tProjId)) {
-                isCrossProjectTask = true;
-              }
+          // Check if predecessor task is in another project
+          let isCrossProjectTask = false;
+          if (pTaskId && allTaskPositions[pTaskId]) {
+            const pTask = allTaskPositions[pTaskId];
+            if (pTask.project_id && String(pTask.project_id) !== String(tProjId)) {
+              isCrossProjectTask = true;
+            }
+          }
+
+          // Determine if link is external across projects
+          const isExternal = Boolean(
+            (pProjId && String(pProjId) !== String(tProjId)) ||
+            (pTaskProjId && String(pTaskProjId) !== String(tProjId)) ||
+            isCrossProjectTask ||
+            dep.is_external
+          );
+
+          // Filter options for Internal and External links
+          if (!isExternal && !showInternalLinks) return;
+          if (isExternal && !showExternalLinks) return;
+
+          // When project is collapsed, link ONLY appears if it is an external link
+          if (isSuccCollapsed && !isExternal) return;
+
+          const isViolated = Boolean(dep.is_violated);
+          const linkColor = isViolated ? '#ef4444' : '#94a3b8';
+          const markerUrl = isViolated ? 'url(#arrow-violated)' : 'url(#arrow-normal)';
+          const strokeW = isViolated ? '2.5' : '1.8';
+          const linkType = (dep.link_type || 'FS').trim().toUpperCase();
+
+          let pred = null;
+          if (pTaskId && allTaskPositions[pTaskId]) {
+            pred = allTaskPositions[pTaskId];
+          } else if (!pTaskId && pProjId && allProjectPositions[pProjId]) {
+            pred = allProjectPositions[pProjId];
+          } else if (pTaskId && !allTaskPositions[pTaskId] && pProjId && allProjectPositions[pProjId] && collapsedProjects.has(pProjId)) {
+            pred = allProjectPositions[pProjId];
+          }
+
+          // If predecessor is a project summary bar, only show if it is an external link
+          if (pred && pred.isProject && !isExternal) return;
+
+          const pTaskObj = pTaskId ? tasksByIdMap.get(String(pTaskId)) : null;
+          let predName = dep.pred_task_name || (pTaskObj ? pTaskObj.name : null);
+          if (!predName) {
+            if (pTaskId) predName = `Task #${pTaskId}`;
+            else if (pProjId) predName = `Project ${pProjId}`;
+            else if (pred && pred.name) predName = pred.name;
+            else predName = 'Predecessor';
+          }
+
+          let predDates = '-';
+          if (pTaskObj) {
+            predDates = `${formatMmmYy(pTaskObj.start)} ➔ ${formatMmmYy(pTaskObj.end)}`;
+          } else if (dep.pred_start_date && dep.pred_end_date) {
+            predDates = `${formatMmmYy(dep.pred_start_date)} ➔ ${formatMmmYy(dep.pred_end_date)}`;
+          } else if (pred && pred.isProject && pred.start && pred.end) {
+            predDates = `${formatMmmYy(pred.start)} ➔ ${formatMmmYy(pred.end)}`;
+          }
+
+          const predProject = dep.pred_task_project_name || dep.pred_project_name || pProjId || (pTaskObj ? pTaskObj.project_name || pTaskObj.project_id : (pred && pred.project_id ? pred.project_id : tProjId));
+
+          const depInfo = {
+            predName: predName,
+            predId: pTaskId || (pred && !pred.isProject ? pred.id : null),
+            predProject: predProject,
+            predDates: predDates,
+            succName: t.name,
+            succId: t.id,
+            succProject: t.project_name || tProjId,
+            succDates: `${formatMmmYy(t.start)} ➔ ${formatMmmYy(t.end)}`,
+            linkType: linkType,
+            linkTypeLabel: formatLinkTypeLabel(linkType),
+            lagStr: dep.lag_days !== undefined ? (dep.lag_days >= 0 ? '+' + dep.lag_days : dep.lag_days) + ' day(s)' : '0 days',
+            scopeLabel: isExternal ? '🌐 External Cross-Project Dependency' : '🔗 Internal Project Dependency',
+            isViolated: isViolated,
+            violationReason: dep.violation_reason || (isViolated ? 'Constraint violated based on predecessor and successor schedules' : '')
+          };
+
+          // Link Type logic:
+          // SS and SF must start from the start of the predecessor
+          // FF and SF must end to the end of the destination bar
+          const predStartsAtStart = (linkType === 'SS' || linkType === 'SF');
+          const succEndsAtEnd = (linkType === 'FF' || linkType === 'SF');
+
+          if (pred) {
+            if (pred === succ) return;
+
+            // Viewport Link Culling Check
+            const minRow = Math.min(pred.rowIdx, succ.rowIdx);
+            const maxRow = Math.max(pred.rowIdx, succ.rowIdx);
+            if (maxRow < startIndex - 3 || minRow > endIndex + 3) {
+              return; // Culled
             }
 
-            // Determine if link is external across projects
-            const isExternal = Boolean(
-              (pProjId && String(pProjId) !== String(tProjId)) ||
-              (pTaskProjId && String(pTaskProjId) !== String(tProjId)) ||
-              isCrossProjectTask ||
-              dep.is_external
-            );
-
-            // Filter options for Internal and External links
-            if (!isExternal && !showInternalLinks) return;
-            if (isExternal && !showExternalLinks) return;
-
-            // When project is collapsed, link ONLY appears if it is an external link
-            if (isSuccCollapsed && !isExternal) return;
-
-            const isViolated = Boolean(dep.is_violated);
-            const linkColor = isViolated ? '#ef4444' : '#94a3b8';
-            const markerUrl = isViolated ? 'url(#arrow-violated)' : 'url(#arrow-normal)';
-            const strokeW = isViolated ? '2.5' : '1.8';
-            const linkType = (dep.link_type || 'FS').toUpperCase();
-
-            let pred = null;
-            if (pTaskId && allTaskPositions[pTaskId]) {
-              pred = allTaskPositions[pTaskId];
-            } else if (!pTaskId && pProjId && allProjectPositions[pProjId]) {
-              pred = allProjectPositions[pProjId];
-            } else if (pTaskId && !allTaskPositions[pTaskId] && pProjId && allProjectPositions[pProjId] && collapsedProjects.has(pProjId)) {
-              pred = allProjectPositions[pProjId];
+            // Predecessor link anchor & exit offset
+            let pX;
+            if (pred.isMilestone) {
+              pX = predStartsAtStart ? (pred.startX - 9) : (pred.startX + 9);
+            } else {
+              pX = predStartsAtStart ? pred.startX : pred.endX;
             }
+            const pY = pred.centerY;
 
-            // If predecessor is a project summary bar, only show if it is an external link
-            if (pred && pred.isProject && !isExternal) return;
-
-            const pTaskObj = pTaskId ? tasksData.find(x => String(x.id) === String(pTaskId)) : null;
-            let predName = dep.pred_task_name || (pTaskObj ? pTaskObj.name : null);
-            if (!predName) {
-              if (pTaskId) predName = `Task #${pTaskId}`;
-              else if (pProjId) predName = `Project ${pProjId}`;
-              else if (pred && pred.name) predName = pred.name;
-              else predName = 'Predecessor';
+            // Successor link anchor & approach offset
+            let sX;
+            if (succ.isMilestone) {
+              sX = succEndsAtEnd ? (succ.startX + 9) : (succ.startX - 9);
+            } else {
+              sX = succEndsAtEnd ? succ.endX : succ.startX;
             }
+            const sY = succ.centerY;
 
-            let predDates = '-';
-            if (pTaskObj) {
-              predDates = `${formatMmmYy(pTaskObj.start)} ➔ ${formatMmmYy(pTaskObj.end)}`;
-            } else if (dep.pred_start_date && dep.pred_end_date) {
-              predDates = `${formatMmmYy(dep.pred_start_date)} ➔ ${formatMmmYy(dep.pred_end_date)}`;
-            } else if (pred && pred.isProject && pred.start && pred.end) {
-              predDates = `${formatMmmYy(pred.start)} ➔ ${formatMmmYy(pred.end)}`;
-            }
+            const pRow = pred.rowIdx;
+            const sRow = succ.rowIdx;
 
-            const predProject = dep.pred_task_project_name || dep.pred_project_name || pProjId || (pTaskObj ? pTaskObj.project_name || pTaskObj.project_id : (pred && pred.project_id ? pred.project_id : tProjId));
+            const exitOffset = predStartsAtStart ? -14 : 14;
+            const approachOffset = succEndsAtEnd ? 14 : -14;
+            const exitX = pX + exitOffset;
+            const approachX = sX + approachOffset;
 
-            const depInfo = {
-              predName: predName,
-              predId: pTaskId || (pred && !pred.isProject ? pred.id : null),
-              predProject: predProject,
-              predDates: predDates,
-              succName: t.name,
-              succId: t.id,
-              succProject: t.project_name || tProjId,
-              succDates: `${formatMmmYy(t.start)} ➔ ${formatMmmYy(t.end)}`,
-              linkType: linkType,
-              linkTypeLabel: formatLinkTypeLabel(linkType),
-              lagStr: dep.lag_days !== undefined ? (dep.lag_days >= 0 ? '+' + dep.lag_days : dep.lag_days) + ' day(s)' : '0 days',
-              scopeLabel: isExternal ? '🌐 External Cross-Project Dependency' : '🔗 Internal Project Dependency',
-              isViolated: isViolated,
-              violationReason: dep.violation_reason || (isViolated ? 'Constraint violated based on predecessor and successor schedules' : '')
-            };
+            let pathD = '';
 
-            if (pred) {
-              if (pred === succ) return;
-
-              // Viewport Link Culling Check
-              const minRow = Math.min(pred.rowIdx, succ.rowIdx);
-              const maxRow = Math.max(pred.rowIdx, succ.rowIdx);
-              if (maxRow < startIndex - 3 || minRow > endIndex + 3) {
-                return; // Culled
-              }
-
-              // Predecessor link systematically starts on the RIGHT of its bar
-              const pX = pred.isMilestone ? (pred.startX + 9) : pred.endX;
-              const pY = pred.centerY;
-
-              // Successor link systematically stops on the LEFT of its bar
-              const sX = succ.isMilestone ? (succ.startX - 9) : succ.startX;
-              const sY = succ.centerY;
-
-              const pRow = pred.rowIdx;
-              const sRow = succ.rowIdx;
-
-              const exitOffset = 14;
-              const approachOffset = 14;
-              const exitX = pX + exitOffset;
-              const approachX = sX - approachOffset;
-
-              let pathD = '';
-
+            if (linkType === 'SS') {
+              // Start-to-Start: pred exits left, succ enters left
               if (sRow === pRow) {
-                // Predecessor and Successor are in the same row
+                const gutterY = (pRow + 1) * 46;
+                pathD = `M ${pX} ${pY} H ${exitX} V ${gutterY} H ${approachX} V ${sY} H ${sX}`;
+              } else {
+                const leftX = Math.min(exitX, approachX);
+                pathD = `M ${pX} ${pY} H ${leftX} V ${sY} H ${sX}`;
+              }
+            } else if (linkType === 'FF') {
+              // Finish-to-Finish: pred exits right, succ enters right
+              if (sRow === pRow) {
+                const gutterY = (pRow + 1) * 46;
+                pathD = `M ${pX} ${pY} H ${exitX} V ${gutterY} H ${approachX} V ${sY} H ${sX}`;
+              } else {
+                const rightX = Math.max(exitX, approachX);
+                pathD = `M ${pX} ${pY} H ${rightX} V ${sY} H ${sX}`;
+              }
+            } else if (linkType === 'SF') {
+              // Start-to-Finish: pred exits left, succ enters right
+              const gutterY = (sRow > pRow) ? (pRow + 1) * 46 : (sRow < pRow ? pRow * 46 : (pRow + 1) * 46);
+              pathD = `M ${pX} ${pY} H ${exitX} V ${gutterY} H ${approachX} V ${sY} H ${sX}`;
+            } else {
+              // Default: FS (Finish-to-Start): pred exits right, succ enters left
+              if (sRow === pRow) {
                 if (sX >= pX + 8) {
                   // Direct forward connection in same row
                   pathD = `M ${pX} ${pY} H ${sX}`;
@@ -3597,140 +3761,145 @@
                 const gutterY = pRow * 46;
                 pathD = `M ${pX} ${pY} H ${exitX} V ${gutterY} H ${approachX} V ${sY} H ${sX}`;
               }
-
-              const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-              path.setAttribute('d', pathD);
-              path.setAttribute('stroke', linkColor);
-              path.setAttribute('stroke-width', strokeW);
-              path.setAttribute('fill', 'none');
-              path.setAttribute('marker-end', markerUrl);
-              path.setAttribute('opacity', isViolated ? '1' : '0.75');
-              if (isViolated) {
-                path.setAttribute('stroke-dasharray', '4 2');
-              }
-
-              // Interactive hit path for right-click & click targeting (wide transparent stroke)
-              const hitPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-              hitPath.setAttribute('d', pathD);
-              hitPath.setAttribute('stroke', '#000000');
-              hitPath.setAttribute('stroke-opacity', '0.001');
-              hitPath.setAttribute('stroke-width', '18');
-              hitPath.setAttribute('fill', 'none');
-              hitPath.setAttribute('pointer-events', 'stroke');
-              hitPath.style.cursor = 'pointer';
-
-              const origStrokeW = strokeW;
-              const origColor = linkColor;
-
-              function onLinkEnter() {
-                path.setAttribute('stroke-width', '3.2');
-                path.setAttribute('stroke', isViolated ? '#dc2626' : '#2563eb');
-                path.setAttribute('opacity', '1');
-              }
-
-              function onLinkLeave() {
-                path.setAttribute('stroke-width', origStrokeW);
-                path.setAttribute('stroke', origColor);
-                path.setAttribute('opacity', isViolated ? '1' : '0.75');
-              }
-
-              function onLinkContextMenu(e) {
-                if (e) {
-                  e.preventDefault();
-                  e.stopPropagation();
-                }
-                showDependencyContextMenu(e, depInfo);
-              }
-
-              hitPath.addEventListener('mouseenter', onLinkEnter);
-              hitPath.addEventListener('mouseleave', onLinkLeave);
-              hitPath.addEventListener('contextmenu', onLinkContextMenu);
-              hitPath.addEventListener('click', onLinkContextMenu);
-
-              path.setAttribute('pointer-events', 'stroke');
-              path.style.cursor = 'pointer';
-              path.addEventListener('mouseenter', onLinkEnter);
-              path.addEventListener('mouseleave', onLinkLeave);
-              path.addEventListener('contextmenu', onLinkContextMenu);
-              path.addEventListener('click', onLinkContextMenu);
-
-              linksGroup.appendChild(path);
-              linksGroup.appendChild(hitPath);
-            } else if (isExternal && (pProjId || dep.pred_start_date)) {
-              // External project entry marker: only draw if succ is in visible window and external links enabled
-              if (!showExternalLinks) return;
-              if (succ.rowIdx < startIndex - 2 || succ.rowIdx > endIndex + 2) {
-                return;
-              }
-
-              const sX = succ.isMilestone ? succ.startX - 9 : succ.startX;
-              const sY = succ.centerY;
-              const inX = sX - 22;
-
-              const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-              path.setAttribute('d', `M ${inX} ${sY} H ${sX}`);
-              path.setAttribute('stroke', linkColor);
-              path.setAttribute('stroke-width', strokeW);
-              path.setAttribute('fill', 'none');
-              path.setAttribute('marker-end', markerUrl);
-              path.setAttribute('pointer-events', 'stroke');
-              path.style.cursor = 'pointer';
-
-              const hitPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-              hitPath.setAttribute('d', `M ${inX} ${sY} H ${sX}`);
-              hitPath.setAttribute('stroke', '#000000');
-              hitPath.setAttribute('stroke-opacity', '0.001');
-              hitPath.setAttribute('stroke-width', '18');
-              hitPath.setAttribute('fill', 'none');
-              hitPath.setAttribute('pointer-events', 'stroke');
-              hitPath.style.cursor = 'pointer';
-
-              const origStrokeW = strokeW;
-              const origColor = linkColor;
-
-              function onStubEnter() {
-                path.setAttribute('stroke-width', '3.2');
-                path.setAttribute('stroke', isViolated ? '#dc2626' : '#2563eb');
-              }
-              function onStubLeave() {
-                path.setAttribute('stroke-width', origStrokeW);
-                path.setAttribute('stroke', origColor);
-              }
-              function onStubContextMenu(e) {
-                if (e) {
-                  e.preventDefault();
-                  e.stopPropagation();
-                }
-                showDependencyContextMenu(e, depInfo);
-              }
-
-              hitPath.addEventListener('mouseenter', onStubEnter);
-              hitPath.addEventListener('mouseleave', onStubLeave);
-              hitPath.addEventListener('contextmenu', onStubContextMenu);
-              hitPath.addEventListener('click', onStubContextMenu);
-
-              path.addEventListener('mouseenter', onStubEnter);
-              path.addEventListener('mouseleave', onStubLeave);
-              path.addEventListener('contextmenu', onStubContextMenu);
-              path.addEventListener('click', onStubContextMenu);
-
-              linksGroup.appendChild(path);
-              linksGroup.appendChild(hitPath);
-
-              const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-              dot.setAttribute('cx', inX);
-              dot.setAttribute('cy', sY);
-              dot.setAttribute('r', '4');
-              dot.setAttribute('fill', linkColor);
-              dot.setAttribute('pointer-events', 'all');
-              dot.style.cursor = 'pointer';
-              dot.addEventListener('mouseenter', onStubEnter);
-              dot.addEventListener('mouseleave', onStubLeave);
-              dot.addEventListener('contextmenu', onStubContextMenu);
-              dot.addEventListener('click', onStubContextMenu);
-              linksGroup.appendChild(dot);
             }
-          });
+
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('d', pathD);
+            path.setAttribute('stroke', linkColor);
+            path.setAttribute('stroke-width', strokeW);
+            path.setAttribute('fill', 'none');
+            path.setAttribute('marker-end', markerUrl);
+            path.setAttribute('opacity', isViolated ? '1' : '0.75');
+            if (isViolated) {
+              path.setAttribute('stroke-dasharray', '4 2');
+            }
+
+            // Interactive hit path for right-click & click targeting (wide transparent stroke)
+            const hitPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            hitPath.setAttribute('d', pathD);
+            hitPath.setAttribute('stroke', '#000000');
+            hitPath.setAttribute('stroke-opacity', '0.001');
+            hitPath.setAttribute('stroke-width', '18');
+            hitPath.setAttribute('fill', 'none');
+            hitPath.setAttribute('pointer-events', 'stroke');
+            hitPath.style.cursor = 'pointer';
+
+            const origStrokeW = strokeW;
+            const origColor = linkColor;
+
+            function onLinkEnter() {
+              path.setAttribute('stroke-width', '3.2');
+              path.setAttribute('stroke', isViolated ? '#dc2626' : '#2563eb');
+              path.setAttribute('opacity', '1');
+            }
+
+            function onLinkLeave() {
+              path.setAttribute('stroke-width', origStrokeW);
+              path.setAttribute('stroke', origColor);
+              path.setAttribute('opacity', isViolated ? '1' : '0.75');
+            }
+
+            function onLinkContextMenu(e) {
+              if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+              }
+              showDependencyContextMenu(e, depInfo);
+            }
+
+            hitPath.addEventListener('mouseenter', onLinkEnter);
+            hitPath.addEventListener('mouseleave', onLinkLeave);
+            hitPath.addEventListener('contextmenu', onLinkContextMenu);
+            hitPath.addEventListener('click', onLinkContextMenu);
+
+            path.setAttribute('pointer-events', 'stroke');
+            path.style.cursor = 'pointer';
+            path.addEventListener('mouseenter', onLinkEnter);
+            path.addEventListener('mouseleave', onLinkLeave);
+            path.addEventListener('contextmenu', onLinkContextMenu);
+            path.addEventListener('click', onLinkContextMenu);
+
+            linksGroup.appendChild(path);
+            linksGroup.appendChild(hitPath);
+          } else if (isExternal && (pProjId || dep.pred_start_date)) {
+            // External project entry marker: only draw if succ is in visible window and external links enabled
+            if (!showExternalLinks) return;
+            if (succ.rowIdx < startIndex - 2 || succ.rowIdx > endIndex + 2) {
+              return;
+            }
+
+            let sX;
+            if (succ.isMilestone) {
+              sX = succEndsAtEnd ? (succ.startX + 9) : (succ.startX - 9);
+            } else {
+              sX = succEndsAtEnd ? succ.endX : succ.startX;
+            }
+            const sY = succ.centerY;
+            const inX = succEndsAtEnd ? (sX + 22) : (sX - 22);
+
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('d', `M ${inX} ${sY} H ${sX}`);
+            path.setAttribute('stroke', linkColor);
+            path.setAttribute('stroke-width', strokeW);
+            path.setAttribute('fill', 'none');
+            path.setAttribute('marker-end', markerUrl);
+            path.setAttribute('pointer-events', 'stroke');
+            path.style.cursor = 'pointer';
+
+            const hitPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            hitPath.setAttribute('d', `M ${inX} ${sY} H ${sX}`);
+            hitPath.setAttribute('stroke', '#000000');
+            hitPath.setAttribute('stroke-opacity', '0.001');
+            hitPath.setAttribute('stroke-width', '18');
+            hitPath.setAttribute('fill', 'none');
+            hitPath.setAttribute('pointer-events', 'stroke');
+            hitPath.style.cursor = 'pointer';
+
+            const origStrokeW = strokeW;
+            const origColor = linkColor;
+
+            function onStubEnter() {
+              path.setAttribute('stroke-width', '3.2');
+              path.setAttribute('stroke', isViolated ? '#dc2626' : '#2563eb');
+            }
+            function onStubLeave() {
+              path.setAttribute('stroke-width', origStrokeW);
+              path.setAttribute('stroke', origColor);
+            }
+            function onStubContextMenu(e) {
+              if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+              }
+              showDependencyContextMenu(e, depInfo);
+            }
+
+            hitPath.addEventListener('mouseenter', onStubEnter);
+            hitPath.addEventListener('mouseleave', onStubLeave);
+            hitPath.addEventListener('contextmenu', onStubContextMenu);
+            hitPath.addEventListener('click', onStubContextMenu);
+
+            path.addEventListener('mouseenter', onStubEnter);
+            path.addEventListener('mouseleave', onStubLeave);
+            path.addEventListener('contextmenu', onStubContextMenu);
+            path.addEventListener('click', onStubContextMenu);
+
+            linksGroup.appendChild(path);
+            linksGroup.appendChild(hitPath);
+
+            const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            dot.setAttribute('cx', inX);
+            dot.setAttribute('cy', sY);
+            dot.setAttribute('r', '4');
+            dot.setAttribute('fill', linkColor);
+            dot.setAttribute('pointer-events', 'all');
+            dot.style.cursor = 'pointer';
+            dot.addEventListener('mouseenter', onStubEnter);
+            dot.addEventListener('mouseleave', onStubLeave);
+            dot.addEventListener('contextmenu', onStubContextMenu);
+            dot.addEventListener('click', onStubContextMenu);
+            linksGroup.appendChild(dot);
+          }
         });
       }
     }

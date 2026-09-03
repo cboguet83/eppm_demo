@@ -198,6 +198,38 @@ def render_planning_milestones(
         div[data-testid="stVerticalBlock"] > div {
             margin-bottom: 0.25rem !important;
         }
+        /* Robust styling for multiselect selected item chips */
+        div[data-baseweb="tag"],
+        span[data-baseweb="tag"],
+        [data-testid="stMultiSelect"] div[data-baseweb="tag"],
+        [data-testid="stMultiSelect"] span[data-baseweb="tag"],
+        [data-testid="stMultiSelectTag"],
+        [data-baseweb="tag"] {
+            background-color: #FDE8EC !important;
+            background: #FDE8EC !important;
+            border: 1px solid #C41039 !important;
+            border-radius: 6px !important;
+        }
+        div[data-baseweb="tag"] *,
+        span[data-baseweb="tag"] *,
+        [data-testid="stMultiSelect"] div[data-baseweb="tag"] *,
+        [data-testid="stMultiSelect"] span[data-baseweb="tag"] *,
+        [data-testid="stMultiSelectTag"] * {
+            color: #C41039 !important;
+            fill: #C41039 !important;
+        }
+        div[data-baseweb="tag"] span,
+        span[data-baseweb="tag"] span,
+        [data-testid="stMultiSelect"] [data-baseweb="tag"] span {
+            color: #C41039 !important;
+            font-weight: 600 !important;
+        }
+        div[data-baseweb="tag"] svg,
+        span[data-baseweb="tag"] svg,
+        [data-baseweb="tag"] svg path {
+            fill: #C41039 !important;
+            color: #C41039 !important;
+        }
         </style>
         """,
         unsafe_allow_html=True,
