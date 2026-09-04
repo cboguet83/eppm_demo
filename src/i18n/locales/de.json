@@ -215,7 +215,12 @@
       "overallocated": "Überlastet",
       "no_pools": "Keine Ressourcen-Pools konfiguriert",
       "max_demand": "Max. Auslastung",
-      "capacity": "Kapazität"
+      "capacity": "Kapazität",
+      "show_total": "Gesamtzuteilungen",
+      "show_selected": "Ausgewählte Projekte",
+      "filter_consuming_projects": "Nach verbrauchenden Projekten filtern",
+      "clear_filter": "Ressourcen-Pool-Filter löschen",
+      "active_filter": "Filter aktiv"
     },
     "modal": {
       "add_title": "➕ Neuen Schritt hinzufügen ({project_id})",

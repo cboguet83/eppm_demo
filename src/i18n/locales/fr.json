@@ -215,7 +215,12 @@
       "overallocated": "Suraloué",
       "no_pools": "Aucun pool de ressources configuré",
       "max_demand": "Demande Max",
-      "capacity": "Capacité"
+      "capacity": "Capacité",
+      "show_total": "Affectations Totales",
+      "show_selected": "Projets Sélectionnés",
+      "filter_consuming_projects": "Filtrer sur les projets consommateurs",
+      "clear_filter": "Effacer le filtre du pool de ressources",
+      "active_filter": "Filtre actif"
     },
     "modal": {
       "add_title": "➕ Ajouter une Nouvelle Étape ({project_id})",

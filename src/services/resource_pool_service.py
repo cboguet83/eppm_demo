@@ -467,10 +467,10 @@ class ResourcePoolService:
         if d_end < d_start:
             d_end = d_start
 
-        # Cap span to 365 days max for memory safety
+        # Cap span to 25 years max for memory and boundary safety
         curr = d_start
         delta = datetime.timedelta(days=1)
-        max_days = 366
+        max_days = 365 * 25
         count = 0
         while curr <= d_end and count < max_days:
             k = curr.isoformat()
@@ -523,3 +523,95 @@ class ResourcePoolService:
             intervals.append(f"{start_d} to {prev_d} (+{max_excess:.2f} FTE)")
 
         return intervals
+
+    @classmethod
+    def calculate_pool_scope_daily_usage(
+        cls,
+        assignments: List[Dict[str, Any]],
+        project_ids: List[Union[int, str]],
+    ) -> Dict[str, float]:
+        """Calculates deduplicated daily usage for a pool restricted to a given list of project IDs.
+
+        Args:
+            assignments: List of assignment dicts with project_id, task_id, start_date, end_date, fte_assigned.
+            project_ids: Filter list of project IDs.
+
+        Returns:
+            Dict[str, float]: Deduplicated daily usage mapping date_str -> fte.
+        """
+        pids_set = {int(p) for p in project_ids if str(p).isdigit()}
+        if not pids_set:
+            return {}
+
+        project_level_usage: Dict[int, Dict[str, float]] = {}
+        task_level_usage: Dict[int, Dict[str, float]] = {}
+
+        for a in assignments:
+            p_id = int(a["project_id"])
+            if p_id not in pids_set:
+                continue
+            t_id = a.get("task_id")
+            s_date = a["start_date"]
+            e_date = a["end_date"]
+            fte_val = float(a["fte_assigned"])
+
+            if t_id is None:
+                p_map = project_level_usage.setdefault(p_id, {})
+                cls._accumulate_daily_usage(p_map, s_date, e_date, fte_val)
+            else:
+                t_map = task_level_usage.setdefault(p_id, {})
+                cls._accumulate_daily_usage(t_map, s_date, e_date, fte_val)
+
+        all_pids = set(project_level_usage.keys()).union(set(task_level_usage.keys()))
+        all_dates: Set[str] = set()
+        for p_id in all_pids:
+            all_dates.update(project_level_usage.get(p_id, {}).keys())
+            all_dates.update(task_level_usage.get(p_id, {}).keys())
+
+        daily_usage: Dict[str, float] = {}
+        for d_str in sorted(all_dates):
+            day_total = 0.0
+            for p_id in all_pids:
+                f_proj = project_level_usage.get(p_id, {}).get(d_str, 0.0)
+                f_task = task_level_usage.get(p_id, {}).get(d_str, 0.0)
+                day_total += max(f_proj, f_task)
+            daily_usage[d_str] = round(day_total, 3)
+
+        return daily_usage
+
+    @staticmethod
+    def get_projects_consuming_pool_in_period(
+        assignments: List[Dict[str, Any]],
+        start_date: str,
+        end_date: str,
+    ) -> List[int]:
+        """Identifies all project IDs that consume a pool during a specified date range.
+
+        Args:
+            assignments: List of pool assignment records.
+            start_date: Period start date (YYYY-MM-DD).
+            end_date: Period end date (YYYY-MM-DD).
+
+        Returns:
+            List[int]: Unique sorted list of project IDs consuming the pool in that period.
+        """
+        matching_pids: Set[int] = set()
+        s_date = str(start_date).strip()[:10]
+        e_date = str(end_date).strip()[:10]
+        if not s_date or not e_date:
+            return []
+
+        for a in assignments:
+            a_start = str(a.get("start_date", "")).strip()[:10]
+            a_end = str(a.get("end_date", "")).strip()[:10]
+            if not a_start or not a_end:
+                continue
+            if float(a.get("fte_assigned", 0.0)) <= 0:
+                continue
+            p_id = int(a["project_id"])
+            # Overlap condition: a_start <= e_date and a_end >= s_date
+            if a_start <= e_date and a_end >= s_date:
+                matching_pids.add(p_id)
+
+        return sorted(list(matching_pids))
+

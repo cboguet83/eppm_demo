@@ -815,6 +815,103 @@ class TestResourcePools(unittest.TestCase):
         self.assertEqual(q1_max, 2.5)
         self.assertTrue(q1_max > detail.total_capacity_fte)
 
+    def test_calculate_pool_scope_daily_usage_and_filter_period(self) -> None:
+        """Verify scope daily usage calculation and period project filtering."""
+        assignments = [
+            {
+                "project_id": 101,
+                "start_date": "2026-05-01",
+                "end_date": "2026-05-15",
+                "fte_assigned": 2.0,
+            },
+            {
+                "project_id": 102,
+                "start_date": "2026-05-10",
+                "end_date": "2026-05-20",
+                "fte_assigned": 1.5,
+            },
+            {
+                "project_id": 103,
+                "start_date": "2026-06-01",
+                "end_date": "2026-06-10",
+                "fte_assigned": 3.0,
+            },
+        ]
+
+        # Test calculate_pool_scope_daily_usage for project 101
+        scope_usage_101 = ResourcePoolService.calculate_pool_scope_daily_usage(assignments, [101])
+        self.assertEqual(scope_usage_101.get("2026-05-05"), 2.0)
+        self.assertNotIn("2026-05-18", scope_usage_101)
+        self.assertNotIn("2026-06-05", scope_usage_101)
+
+        # Test calculate_pool_scope_daily_usage for projects 101 and 102
+        scope_usage_both = ResourcePoolService.calculate_pool_scope_daily_usage(assignments, [101, 102])
+        self.assertEqual(scope_usage_both.get("2026-05-12"), 3.5)
+        self.assertEqual(scope_usage_both.get("2026-05-05"), 2.0)
+        self.assertEqual(scope_usage_both.get("2026-05-18"), 1.5)
+        self.assertNotIn("2026-06-05", scope_usage_both)
+
+        # Test get_projects_consuming_pool_in_period
+        # Slot May 2026: projects 101 and 102 overlap
+        pids_may = ResourcePoolService.get_projects_consuming_pool_in_period(assignments, "2026-05-01", "2026-05-31")
+        self.assertEqual(sorted(pids_may), [101, 102])
+
+        # Slot June 2026: only project 103 overlaps
+        pids_june = ResourcePoolService.get_projects_consuming_pool_in_period(assignments, "2026-06-01", "2026-06-30")
+        self.assertEqual(sorted(pids_june), [103])
+
+        # Slot July 2026: no project
+        pids_july = ResourcePoolService.get_projects_consuming_pool_in_period(assignments, "2026-07-01", "2026-07-31")
+        self.assertEqual(pids_july, [])
+
+        # Test timestamp strings with HH:MM:SS and zero-FTE filtering
+        assignments_ts = [
+            {
+                "project_id": 201,
+                "start_date": "2026-09-01 00:00:00",
+                "end_date": "2026-09-30 23:59:59",
+                "fte_assigned": 1.0,
+            },
+            {
+                "project_id": 202,
+                "start_date": "2026-09-30 00:00:00",
+                "end_date": "2026-10-15 00:00:00",
+                "fte_assigned": 2.0,
+            },
+            {
+                "project_id": 203,
+                "start_date": "2026-09-05",
+                "end_date": "2026-09-20",
+                "fte_assigned": 0.0,  # zero fte should be ignored
+            },
+        ]
+        # September period: 201 and 202 overlap on 2026-09-30, 203 has 0 FTE
+        pids_sep = ResourcePoolService.get_projects_consuming_pool_in_period(assignments_ts, "2026-09-01", "2026-09-30")
+        self.assertEqual(sorted(pids_sep), [201, 202])
+
+        # Boundary test on single day
+        pids_single_day = ResourcePoolService.get_projects_consuming_pool_in_period(assignments_ts, "2026-09-30", "2026-09-30")
+        self.assertEqual(sorted(pids_single_day), [201, 202])
+
+    def test_multi_year_assignment_daily_usage(self) -> None:
+        """Verify that multi-year assignments continue to accumulate daily usage beyond 366 days."""
+        daily_map: dict[str, float] = {}
+        # Multi-year assignment spanning 2026 to 2034 (e.g. Project 6 / Project 9)
+        ResourcePoolService._accumulate_daily_usage(
+            daily_map=daily_map,
+            start_str="2026-02-18",
+            end_str="2034-08-18",
+            fte=0.3,
+        )
+        # Check day 1, day 365, day 400 (Q2 2027), and later years
+        self.assertIn("2026-02-18", daily_map)
+        self.assertIn("2027-02-18", daily_map)
+        self.assertIn("2027-04-01", daily_map)
+        self.assertIn("2027-06-30", daily_map)
+        self.assertIn("2034-08-18", daily_map)
+        self.assertEqual(daily_map["2027-04-01"], 0.3)
+        self.assertEqual(daily_map["2027-06-30"], 0.3)
+
 
 if __name__ == "__main__":
     unittest.main()

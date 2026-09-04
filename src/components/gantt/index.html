@@ -1165,13 +1165,66 @@
       display: flex;
       position: relative;
       background: #ffffff;
-      overflow: hidden;
-      max-height: 240px;
+      overflow-y: auto;
+      max-height: 380px;
       transition: max-height 0.2s ease;
     }
 
     .resource-grid-main.collapsed {
       display: none;
+    }
+
+    /* Options & Checkboxes in Header */
+    .resource-panel-options {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-left: auto;
+      margin-right: 16px;
+    }
+
+    .resource-option-checkbox {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11.5px;
+      font-weight: 600;
+      color: #475569;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .resource-option-checkbox input {
+      cursor: pointer;
+      accent-color: #2563eb;
+      margin: 0;
+    }
+
+    .resource-active-filter-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      background: #eff6ff;
+      color: #1d4ed8;
+      border: 1px solid #93c5fd;
+      padding: 2px 8px;
+      border-radius: 9999px;
+      cursor: pointer;
+      margin-left: 8px;
+      font-weight: 500;
+      transition: all 0.15s ease;
+    }
+
+    .resource-active-filter-pill:hover {
+      background: #dbeafe;
+      border-color: #60a5fa;
+    }
+
+    .resource-active-filter-pill .pill-remove {
+      font-weight: 700;
+      color: #ef4444;
+      margin-left: 2px;
     }
 
     /* Left Pane */
@@ -1185,10 +1238,11 @@
       background: #ffffff;
       border-right: 1px solid var(--border);
       box-sizing: border-box;
+      position: relative;
     }
 
     .resource-left-header {
-      height: 28px;
+      height: 56px;
       display: flex;
       align-items: center;
       padding: 0 10px;
@@ -1199,6 +1253,10 @@
       text-transform: uppercase;
       letter-spacing: 0.04em;
       color: #64748b;
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      box-sizing: border-box;
     }
 
     .r-hdr-name {
@@ -1215,7 +1273,7 @@
     }
 
     .resource-left-row {
-      height: 38px;
+      height: 34px;
       display: flex;
       align-items: center;
       padding: 0 10px;
@@ -1229,6 +1287,20 @@
       background: #f8fafc;
     }
 
+    .resource-left-row.sub-row {
+      background: #fafbfc;
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    .resource-left-row.sub-row:hover {
+      background: #f1f5f9;
+    }
+
+    .resource-left-row.active-filter-row {
+      background: #eff6ff !important;
+      border-left: 3px solid #2563eb;
+    }
+
     .resource-pool-name {
       flex: 1;
       font-weight: 600;
@@ -1239,6 +1311,57 @@
       display: flex;
       align-items: center;
       gap: 5px;
+    }
+
+    .r-name-text {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .r-badge {
+      display: inline-block;
+      font-size: 9.5px;
+      font-weight: 700;
+      padding: 1px 5px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      margin-left: 4px;
+      flex-shrink: 0;
+    }
+
+    .total-badge {
+      background: #f1f5f9;
+      color: #475569;
+      border: 1px solid #cbd5e1;
+    }
+
+    .scope-badge {
+      background: #eff6ff;
+      color: #2563eb;
+      border: 1px solid #bfdbfe;
+    }
+
+    .active-filter-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 9.5px;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 9999px;
+      background: #dbeafe;
+      color: #1d4ed8;
+      border: 1px solid #93c5fd;
+      margin-left: 6px;
+      flex-shrink: 0;
+      animation: pulseFilterBadge 2s infinite ease-in-out;
+    }
+
+    @keyframes pulseFilterBadge {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.85; transform: scale(1.02); }
     }
 
     .resource-pool-cap {
@@ -1256,6 +1379,12 @@
       background: #f1f5f9;
       color: #334155;
       border: 1px solid #cbd5e1;
+    }
+
+    .cap-badge.scope-cap-badge {
+      background: #eff6ff;
+      color: #2563eb;
+      border-color: #bfdbfe;
     }
 
     .resource-splitter-spacer {
@@ -1282,11 +1411,25 @@
     }
 
     .resource-right-header {
-      height: 28px;
+      height: 56px;
       display: flex;
-      align-items: center;
+      flex-direction: column;
       background: #f1f5f9;
       border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 5;
+    }
+
+    .resource-header-tier-top {
+      height: 28px;
+      display: flex;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .resource-header-tier-bottom {
+      height: 28px;
+      display: flex;
     }
 
     .resource-header-cell {
@@ -1303,8 +1446,30 @@
       white-space: nowrap;
     }
 
+    .resource-today-line {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 0px;
+      border-left: 2px dashed #10b981;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .column-hover-overlay {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      background: rgba(37, 99, 235, 0.035);
+      border-left: 1px dashed rgba(37, 99, 235, 0.22);
+      border-right: 1px dashed rgba(37, 99, 235, 0.22);
+      pointer-events: none;
+      display: none;
+      z-index: 1;
+    }
+
     .resource-right-row {
-      height: 38px;
+      height: 34px;
       display: flex;
       align-items: center;
       border-bottom: 1px solid var(--border);
@@ -1313,6 +1478,14 @@
     }
 
     .resource-right-row:hover {
+      background: rgba(37, 99, 235, 0.03);
+    }
+
+    .resource-right-row.sub-row {
+      background: #fafbfc;
+    }
+
+    .resource-right-row.sub-row:hover {
       background: rgba(37, 99, 235, 0.03);
     }
 
@@ -1342,6 +1515,11 @@
       font-weight: 600;
     }
 
+    .resource-demand-cell.cell-normal.cell-scope {
+      color: #0284c7;
+      background: #f0f9ff;
+    }
+
     .resource-demand-cell.cell-normal:hover {
       background: #dbeafe;
       color: #1d4ed8;
@@ -1358,6 +1536,25 @@
       background: #fecaca;
       color: #991b1b;
       box-shadow: inset 0 0 0 1.5px #ef4444;
+    }
+
+    .resource-demand-cell.cell-active-filter {
+      outline: 2px solid #2563eb !important;
+      outline-offset: -2px;
+      background-color: #dbeafe !important;
+      box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.4), inset 0 0 8px rgba(37, 99, 235, 0.2) !important;
+      font-weight: 800 !important;
+      position: relative;
+      z-index: 4;
+    }
+
+    .resource-demand-cell.cell-active-filter::after {
+      content: "🔍";
+      position: absolute;
+      top: 1px;
+      right: 2px;
+      font-size: 8px;
+      line-height: 1;
     }
   </style>
 </head>
@@ -1431,6 +1628,23 @@
       <span id="ctx-label-edit-dep">Edit Dependency</span>
     </div>
   </div>
+
+  <!-- Resource Pool Cell Context Menu -->
+  <div class="context-menu" id="resource-cell-context-menu" style="display:none; min-width:260px;">
+    <div id="ctx-res-header" style="padding:7px 12px; font-size:11px; font-weight:700; color:#334155; border-bottom:1px solid #e2e8f0; background:#f8fafc;">
+      🏊 Resource Filter
+    </div>
+    <div class="context-menu-item" onclick="triggerFilterResourcePool(true)">
+      <span style="font-size:14px;">🔍</span>
+      <span id="ctx-res-filter-clear">Filter on consuming projects</span>
+    </div>
+    <div class="context-menu-divider" id="ctx-res-divider" style="display:none;"></div>
+    <div class="context-menu-item danger" id="ctx-res-clear-btn" onclick="triggerClearResourcePoolFilter()" style="display:none;">
+      <span style="font-size:14px;">✖</span>
+      <span id="ctx-res-clear-label">Clear Resource Pool Filter</span>
+    </div>
+  </div>
+
 
   <!-- View Predecessors Modal Dialog -->
   <div class="modal-backdrop" id="view-pred-backdrop">
@@ -1639,6 +1853,7 @@
               <g id="grid-links-group"></g>
             </svg>
             <div id="timeline-rows-container"></div>
+            <div class="column-hover-overlay" id="column-hover-overlay-gantt"></div>
           </div>
         </div>
       </div>
@@ -1653,6 +1868,17 @@
           <span>🏊</span>
           <span class="resource-panel-heading" id="lbl-resource-panel-title">Resource Pools & Capacity Usage</span>
           <span class="resource-count-badge" id="resource-count-badge">0 Pools</span>
+          <span class="resource-active-filter-pill" id="resource-active-filter-pill" style="display:none;" onclick="triggerClearResourcePoolFilter()" title="Click to clear active filter"></span>
+        </div>
+        <div class="resource-panel-options">
+          <label class="resource-option-checkbox">
+            <input type="checkbox" id="chk-show-total-demand" checked onchange="onToggleResourceRows()">
+            <span id="lbl-show-total">Total Assignments</span>
+          </label>
+          <label class="resource-option-checkbox">
+            <input type="checkbox" id="chk-show-selected-demand" checked onchange="onToggleResourceRows()">
+            <span id="lbl-show-selected">Selected Projects</span>
+          </label>
         </div>
         <div class="resource-panel-legend">
           <span class="legend-item"><span class="legend-box normal"></span> <span id="lbl-within-cap">Within Capacity</span></span>
@@ -1677,7 +1903,12 @@
         <!-- Right Pane: Timeline period demand cells -->
         <div class="resource-right-pane-scroller" id="resource-right-pane-scroller">
           <div class="resource-right-pane-inner" id="resource-right-pane-inner">
-            <div class="resource-right-header" id="resource-right-header"></div>
+            <div class="resource-right-header" id="resource-right-header">
+              <div class="resource-header-tier-top" id="resource-header-tier-top"></div>
+              <div class="resource-header-tier-bottom" id="resource-header-tier-bottom"></div>
+            </div>
+            <div class="resource-today-line" id="resource-today-line" style="display:none;"></div>
+            <div class="column-hover-overlay" id="column-hover-overlay-resource"></div>
             <div class="resource-right-body" id="resource-right-body"></div>
           </div>
         </div>
@@ -1704,6 +1935,12 @@
     let externalTasksData = {}; // project_id -> list of { id, task_name, start_date, end_date }
     let resourcePoolsData = [];
     let isResourceGridCollapsed = false;
+    let showTotalRows = true;
+    let showSelectedRows = true;
+    let activeResourceFilter = null;
+    let selectedResourceCellCtx = null;
+    let lastRenderedTopCells = [];
+    let lastRenderedBottomCells = [];
     let currentProjectId = "";
     let currentMode = "Quarter";
     let showHoverOverlay = true;
@@ -1726,7 +1963,19 @@
       view_modes: { day: "Day", week: "Week", month: "Month", quarter: "Quarter", year: "Year" },
       toggles: { internal_links: "🔗 Internal Dependencies", external_links: "🌐 External Dependencies", show_description: "📄 Description", show_hover: "💬 Tooltips", expand_all: "▼ Expand All", collapse_all: "▶ Collapse All" },
       context_menu: { edit_step: "Edit Step Details", add_step_after: "Add Next Step (Successor)", add_step_before: "Add Previous Step (Predecessor)", mark_complete: "Mark as 100% Complete", delete_step: "Delete Step", edit_dep: "Edit Dependency", delete_dep: "Delete Dependency", view_diagnostics: "View Diagnostics" },
-      resource_grid: { title: "Resource Pools & Capacity Usage", within_capacity: "Within Capacity", overallocated: "Overallocated", no_pools: "No resource pools configured", max_demand: "Max Demand", capacity: "Capacity" },
+      resource_grid: {
+        title: "Resource Pools & Capacity Usage",
+        within_capacity: "Within Capacity",
+        overallocated: "Overallocated",
+        no_pools: "No resource pools configured",
+        max_demand: "Max Demand",
+        capacity: "Capacity",
+        show_total: "Total Assignments",
+        show_selected: "Selected Projects",
+        filter_consuming_projects: "Filter on consuming projects",
+        clear_filter: "Clear Resource Pool Filter",
+        active_filter: "Filter Active"
+      },
       modal: { add_title: "➕ Add New Step ({project_id})", edit_title: "✏️ Edit: {name}", field_name: "Step / Task Name *", field_phase: "Phase / Category", field_desc: "Description", field_start: "Start Date *", field_end: "End Date *", field_progress: "Progress Percentage", dependencies_header: "🔗 Step Dependencies & Predecessors", btn_add_pred: "➕ Add Predecessor Link", cross_project_chk: "🌐 Cross-Project?", select_pred_placeholder: "-- Select Predecessor Step --", whole_project_option: "(leave blank for whole project)", link_type_fs: "FS (Fin➔St)", link_type_ff: "FF (Fin➔Fin)", link_type_ss: "SS (St➔St)", link_type_sf: "SF (St➔Fin)", lag_placeholder: "Lag (days)", btn_save: "💾 Save Changes", btn_cancel: "Cancel", optional: "Optional" },
       diagnostics: { title: "⚠️ Constraint Violation Diagnostics", btn_fix: "✏️ Fix in Step Editor", btn_close: "Close" }
     };
@@ -1797,6 +2046,14 @@
       if (elWithin) elWithin.innerText = getT('resource_grid.within_capacity', 'Within Capacity');
       const elOver = document.getElementById('lbl-overallocated');
       if (elOver) elOver.innerText = getT('resource_grid.overallocated', 'Overallocated');
+      const elShowTotal = document.getElementById('lbl-show-total');
+      if (elShowTotal) elShowTotal.innerText = getT('resource_grid.show_total', 'Total Assignments');
+      const elShowSelected = document.getElementById('lbl-show-selected');
+      if (elShowSelected) elShowSelected.innerText = getT('resource_grid.show_selected', 'Selected Projects');
+      const elCtxFilter = document.getElementById('ctx-res-filter-clear');
+      if (elCtxFilter) elCtxFilter.innerText = getT('resource_grid.filter_consuming_projects', 'Filter on consuming projects');
+      const elCtxClearBtn = document.getElementById('ctx-res-clear-label');
+      if (elCtxClearBtn) elCtxClearBtn.innerText = getT('resource_grid.clear_filter', 'Clear Resource Pool Filter');
 
       // Modal dialog labels & buttons
       const elName = document.getElementById('modal-label-task-name');
@@ -2026,6 +2283,11 @@
       return Math.round((t - startT) / msPerPixel);
     }
 
+    function endDateToX(date) {
+      // The end date is inclusive: the bar covers through the entire end date (up to next day midnight)
+      return dateToX(addDays(date, 1));
+    }
+
     function setViewMode(mode, btn) {
       currentMode = mode;
       document.querySelectorAll('.btn-mode').forEach(b => b.classList.remove('active'));
@@ -2238,7 +2500,7 @@
             <span>📊 <b>${prog}%</b></span>
           </div>
           <div style="font-size:11px; color:#cbd5e1; margin-bottom:2px;">
-            📅 <b>${formatMmmYy(task.start)}</b> ➔ <b>${formatMmmYy(task.end)}</b>
+            ${task.start === task.end ? `📅 <b>${task.start}</b>` : `📅 <b>${task.start}</b> ➔ <b>${task.end}</b>`}
           </div>
           ${desc ? `<div style="font-size:10.5px; color:#94a3b8; margin-top:2px; font-style:italic;">↳ ${escapeHtml(desc)}</div>` : ''}
           ${tagsHtml}
@@ -2686,6 +2948,11 @@
       menu.style.top = `${posY}px`;
     }
 
+    function hideResourceCellContextMenu() {
+      const menu = document.getElementById('resource-cell-context-menu');
+      if (menu) menu.style.display = 'none';
+    }
+
     function hideProjectContextMenu() {
       const menu = document.getElementById('project-context-menu');
       if (menu) menu.style.display = 'none';
@@ -2705,6 +2972,9 @@
       }
       if (!e.target.closest('#dep-context-menu')) {
         hideDepContextMenu();
+      }
+      if (!e.target.closest('#resource-cell-context-menu')) {
+        hideResourceCellContextMenu();
       }
     });
 
@@ -3142,8 +3412,9 @@
       tasksData.forEach(t => {
         const s = parseDate(t.start);
         const e = parseDate(t.end);
+        const effectiveEnd = (t.start === t.end) ? e : addDays(e, 1);
         if (!minDate || s < minDate) minDate = s;
-        if (!maxDate || e > maxDate) maxDate = e;
+        if (!maxDate || effectiveEnd > maxDate) maxDate = effectiveEnd;
       });
 
       if (currentMode === 'Day') {
@@ -3355,8 +3626,6 @@
     // --------------------------------------------------------------------------
     // RESOURCE POOLS CAPACITY & DEMAND GRID LOGIC
     // --------------------------------------------------------------------------
-    let lastRenderedBottomCells = [];
-
     function toggleResourceGrid() {
       isResourceGridCollapsed = !isResourceGridCollapsed;
       const mainEl = document.getElementById('resource-grid-main');
@@ -3374,10 +3643,10 @@
       updateComponentFrameHeight();
     }
 
-    function getMaxDemandForPeriod(pool, startStr, endStr) {
-      if (!pool || !pool.daily_usage) return 0;
+    function getMaxDemandForPeriod(dailyUsage, startStr, endStr) {
+      if (!dailyUsage) return 0;
       let maxVal = 0;
-      for (const [dStr, fte] of Object.entries(pool.daily_usage)) {
+      for (const [dStr, fte] of Object.entries(dailyUsage)) {
         if (dStr >= startStr && dStr <= endStr) {
           if (fte > maxVal) {
             maxVal = fte;
@@ -3387,30 +3656,35 @@
       return maxVal;
     }
 
-    function showResourceCellTooltip(e, poolName, startStr, endStr, maxDemand, capacity) {
+    function showResourceCellTooltip(e, poolName, startStr, endStr, demand, capacity, scopeType) {
       if (!showHoverOverlay) return;
-      const isOver = maxDemand > (capacity + 0.001);
-      const diff = Math.abs(maxDemand - capacity);
+      const isOver = demand > (capacity + 0.001);
+      const diff = Math.abs(demand - capacity);
       let statusHtml = '';
       if (isOver) {
         statusHtml = `<span style="color:#ef4444; font-weight:700;">⚠️ ${getT('resource_grid.overallocated', 'Overallocated')} (+${diff.toFixed(2)} FTE excess)</span>`;
-      } else if (maxDemand > 0) {
+      } else if (demand > 0) {
         statusHtml = `<span style="color:#10b981; font-weight:600;">✅ ${getT('resource_grid.within_capacity', 'Within Capacity')} (${diff.toFixed(2)} FTE available)</span>`;
       } else {
         statusHtml = `<span style="color:#94a3b8;">No Active Allocation</span>`;
       }
 
+      const scopeLabel = scopeType === 'selected' 
+        ? `<span style="color:#2563eb; font-size:10.5px; font-weight:700; background:#eff6ff; padding:1px 6px; border-radius:4px; border:1px solid #bfdbfe;">${getT('resource_grid.show_selected', 'Selected Projects')}</span>`
+        : `<span style="color:#475569; font-size:10.5px; font-weight:700; background:#f1f5f9; padding:1px 6px; border-radius:4px; border:1px solid #cbd5e1;">${getT('resource_grid.show_total', 'Total Assignments')}</span>`;
+
       const html = `
-        <div style="font-size:12px; line-height:1.45; min-width:220px;">
-          <div style="font-weight:700; color:#0f172a; margin-bottom:5px; border-bottom:1px solid #e2e8f0; padding-bottom:4px; display:flex; align-items:center; gap:5px;">
-            <span>🏊</span> <span>${escapeHtml(poolName)}</span>
+        <div style="font-size:12px; line-height:1.45; min-width:240px;">
+          <div style="font-weight:700; color:#0f172a; margin-bottom:5px; border-bottom:1px solid #e2e8f0; padding-bottom:4px; display:flex; align-items:center; justify-content:space-between; gap:6px;">
+            <span>🏊 ${escapeHtml(poolName)}</span>
+            ${scopeLabel}
           </div>
           <div style="color:#64748b; font-size:11px; margin-bottom:5px;">
             📅 <b>Period:</b> ${startStr} → ${endStr}
           </div>
           <div style="display:flex; justify-content:space-between; margin-bottom:3px;">
             <span style="color:#475569;">${getT('resource_grid.max_demand', 'Max Demand')}:</span>
-            <strong style="color:${isOver ? '#dc2626' : (maxDemand > 0 ? '#2563eb' : '#64748b')};">${maxDemand.toFixed(2)} FTE</strong>
+            <strong style="color:${isOver ? '#dc2626' : (demand > 0 ? '#2563eb' : '#64748b')};">${demand.toFixed(2)} FTE</strong>
           </div>
           <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
             <span style="color:#475569;">${getT('resource_grid.capacity', 'Capacity')}:</span>
@@ -3419,12 +3693,133 @@
           <div style="margin-top:4px; border-top:1px solid #e2e8f0; padding-top:4px;">
             ${statusHtml}
           </div>
+          <div style="margin-top:6px; font-size:10px; color:#94a3b8; font-style:italic; border-top:1px dashed #f1f5f9; padding-top:3px;">
+            Right-click cell to filter on consuming projects
+          </div>
         </div>
       `;
       showTooltip(e, html);
     }
 
-    function renderResourceGrid(bottomCells) {
+    function handleCellContextMenu(e, el) {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const poolId = parseInt(el.dataset.poolId, 10);
+      const poolName = el.dataset.poolName || '';
+      const startStr = el.dataset.startDate || '';
+      const endStr = el.dataset.endDate || '';
+      const periodLabel = el.dataset.periodLabel || '';
+
+      openResourceCellContextMenu(e, poolId, poolName, startStr, endStr, periodLabel);
+    }
+
+    function handleCellMouseEnter(e, el) {
+      const poolName = el.dataset.poolName || '';
+      const startStr = el.dataset.startDate || '';
+      const endStr = el.dataset.endDate || '';
+      const demand = parseFloat(el.dataset.demand || '0');
+      const capacity = parseFloat(el.dataset.capacity || '0');
+      const scopeType = el.dataset.scope || 'total';
+
+      showResourceCellTooltip(e, poolName, startStr, endStr, demand, capacity, scopeType);
+    }
+
+    function openResourceCellContextMenu(e, poolId, poolName, startStr, endStr, periodLabel) {
+      e.preventDefault();
+      e.stopPropagation();
+
+      hideContextMenu();
+      hideProjectContextMenu();
+      hideDepContextMenu();
+      hideTooltip();
+
+      selectedResourceCellCtx = {
+        pool_id: poolId,
+        pool_name: poolName,
+        start_date: startStr,
+        end_date: endStr,
+        period_label: periodLabel
+      };
+
+      const menu = document.getElementById('resource-cell-context-menu');
+      if (!menu) return;
+
+      const headerEl = document.getElementById('ctx-res-header');
+      if (headerEl) {
+        headerEl.innerHTML = `🏊 <b>${escapeHtml(poolName)}</b> (${periodLabel}: ${startStr} → ${endStr})`;
+      }
+
+      const clearDivider = document.getElementById('ctx-res-divider');
+      const clearBtn = document.getElementById('ctx-res-clear-btn');
+      if (activeResourceFilter) {
+        if (clearDivider) clearDivider.style.display = 'block';
+        if (clearBtn) clearBtn.style.display = 'flex';
+      } else {
+        if (clearDivider) clearDivider.style.display = 'none';
+        if (clearBtn) clearBtn.style.display = 'none';
+      }
+
+      menu.style.display = 'block';
+
+      const menuWidth = menu.offsetWidth || 280;
+      const menuHeight = menu.offsetHeight || 130;
+
+      let posX = e.clientX + 6;
+      let posY = e.clientY + 2;
+
+      if (posY + menuHeight > window.innerHeight - 10) {
+        posY = e.clientY - menuHeight - 4;
+        if (posY < 10) posY = Math.max(10, window.innerHeight - menuHeight - 10);
+      }
+
+      if (posX + menuWidth > window.innerWidth - 10) {
+        posX = e.clientX - menuWidth - 6;
+        if (posX < 10) posX = Math.max(10, window.innerWidth - menuWidth - 10);
+      }
+
+      menu.style.left = `${posX}px`;
+      menu.style.top = `${posY}px`;
+    }
+
+    function triggerFilterResourcePool(clearOther) {
+      hideResourceCellContextMenu();
+      if (!selectedResourceCellCtx) return;
+      Streamlit.setComponentValue({
+        action: "filter_by_resource_pool",
+        pool_id: selectedResourceCellCtx.pool_id,
+        pool_name: selectedResourceCellCtx.pool_name,
+        start_date: selectedResourceCellCtx.start_date,
+        end_date: selectedResourceCellCtx.end_date,
+        clear_other_filters: clearOther,
+        nonce: Date.now() + "_" + Math.random()
+      });
+    }
+
+    function triggerClearResourcePoolFilter() {
+      hideResourceCellContextMenu();
+      Streamlit.setComponentValue({
+        action: "clear_resource_pool_filter",
+        nonce: Date.now() + "_" + Math.random()
+      });
+    }
+
+    function onToggleResourceRows() {
+      const chkTotal = document.getElementById('chk-show-total-demand');
+      const chkSelected = document.getElementById('chk-show-selected-demand');
+      showTotalRows = chkTotal ? chkTotal.checked : true;
+      showSelectedRows = chkSelected ? chkSelected.checked : true;
+
+      renderResourceGrid();
+      updateComponentFrameHeight();
+    }
+
+    function renderResourceGrid(topCells, bottomCells) {
+      if (topCells) {
+        lastRenderedTopCells = topCells;
+      } else {
+        topCells = lastRenderedTopCells;
+      }
       if (bottomCells) {
         lastRenderedBottomCells = bottomCells;
       } else {
@@ -3432,10 +3827,16 @@
       }
       if (!bottomCells || bottomCells.length === 0) return;
 
+      // Assign startX to bottomCells for fast and precise column hover detection
+      let curColX = 0;
+      for (const c of bottomCells) {
+        c.startX = curColX;
+        curColX += c.width;
+      }
+
       const container = document.getElementById('resource-grid-container');
       const badgeCount = document.getElementById('resource-count-badge');
       const leftBody = document.getElementById('resource-left-body');
-      const rightHeader = document.getElementById('resource-right-header');
       const rightBody = document.getElementById('resource-right-body');
       const rightInner = document.getElementById('resource-right-pane-inner');
 
@@ -3446,15 +3847,54 @@
         badgeCount.innerText = `${pools.length} ${pools.length === 1 ? 'Pool' : 'Pools'}`;
       }
 
+      // Active filter pill in header
+      const filterPill = document.getElementById('resource-active-filter-pill');
+      if (filterPill) {
+        if (activeResourceFilter) {
+          const pName = activeResourceFilter.pool_name || `Pool #${activeResourceFilter.pool_id}`;
+          const fMode = activeResourceFilter.clear_other_filters ? ' (Cleared other)' : '';
+          filterPill.innerHTML = `🔍 <b>${escapeHtml(pName)}</b> (${activeResourceFilter.start_date} → ${activeResourceFilter.end_date})${fMode} <span class="pill-remove" title="Clear filter">✖</span>`;
+          filterPill.style.display = 'inline-flex';
+        } else {
+          filterPill.style.display = 'none';
+        }
+      }
+
       rightInner.style.width = `${totalTimelineWidth}px`;
 
-      // Render right mini-header matching timeline columns
-      if (rightHeader) {
-        rightHeader.innerHTML = bottomCells.map(c => `
-          <div class="resource-header-cell" style="width: ${c.width}px;" title="${c.label}">${c.label}</div>
+      // 1. Render 2-tier header matching the Gantt timeline structure
+      const resTopHeader = document.getElementById('resource-header-tier-top');
+      if (resTopHeader && topCells) {
+        resTopHeader.innerHTML = topCells.map(c => `
+          <div class="header-cell top" style="width: ${c.width}px;" title="${escapeHtml(c.label)}">${escapeHtml(c.label)}</div>
         `).join('');
       }
 
+      const resBottomHeader = document.getElementById('resource-header-tier-bottom');
+      if (resBottomHeader && bottomCells) {
+        resBottomHeader.innerHTML = bottomCells.map(c => `
+          <div class="header-cell ${c.isCurrent ? 'current-day' : ''}" style="width: ${c.width}px;" title="${escapeHtml(c.label)}">${escapeHtml(c.label)}</div>
+        `).join('');
+      }
+
+      // 2. Render Today dashed line on resource pool grid
+      const resTodayLine = document.getElementById('resource-today-line');
+      if (resTodayLine) {
+        const todayDate = new Date();
+        if (timelineStart && timelineEnd && todayDate >= timelineStart && todayDate <= timelineEnd) {
+          const todayX = dateToX(todayDate);
+          if (todayX >= 0 && todayX <= totalTimelineWidth) {
+            resTodayLine.style.left = `${todayX}px`;
+            resTodayLine.style.display = 'block';
+          } else {
+            resTodayLine.style.display = 'none';
+          }
+        } else {
+          resTodayLine.style.display = 'none';
+        }
+      }
+
+      // Empty states
       if (pools.length === 0) {
         leftBody.innerHTML = `
           <div style="padding:14px 10px; color:#94a3b8; font-size:12px; font-style:italic;">
@@ -3469,46 +3909,142 @@
         return;
       }
 
-      // Render Left rows (Pool name + Capacity badge)
-      leftBody.innerHTML = pools.map(p => `
-        <div class="resource-left-row" title="${escapeHtml(p.name)}">
-          <div class="resource-pool-name">
-            <span style="font-size:13px;">🏊</span>
-            <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(p.name)}</span>
+      if (!showTotalRows && !showSelectedRows) {
+        leftBody.innerHTML = `
+          <div style="padding:14px 10px; color:#94a3b8; font-size:12px; font-style:italic;">
+            No row view selected (enable Total or Selected Projects above)
           </div>
-          <div class="resource-pool-cap">
-            <span class="cap-badge">${Number(p.capacity || 0).toFixed(1)} FTE</span>
+        `;
+        rightBody.innerHTML = `
+          <div style="height:38px; display:flex; align-items:center; padding-left:14px; color:#cbd5e1; font-size:12px; font-style:italic;">
+            —
           </div>
-        </div>
-      `).join('');
+        `;
+        return;
+      }
 
-      // Render Right rows (Demand cells matching column periods)
-      rightBody.innerHTML = pools.map(p => {
+      // 3. Render Left rows & Right rows (Total + Selected Projects)
+      let leftHtml = '';
+      let rightHtml = '';
+
+      pools.forEach(p => {
         const poolCap = Number(p.capacity || 0);
-        const cellsHtml = bottomCells.map(c => {
-          const startStr = formatDate(c.startDate);
-          const endStr = formatDate(c.endDate);
-          const maxD = getMaxDemandForPeriod(p, startStr, endStr);
-          const isOver = maxD > (poolCap + 0.001);
-          let cellCls = 'cell-empty';
-          let displayTxt = '—';
-          if (maxD > 0) {
-            cellCls = isOver ? 'cell-overallocated' : 'cell-normal';
-            displayTxt = maxD.toFixed(1);
-          }
-          return `
-            <div class="resource-demand-cell ${cellCls}"
-                 style="width: ${c.width}px;"
-                 onmouseenter="showResourceCellTooltip(event, '${escapeHtml(p.name)}', '${startStr}', '${endStr}', ${maxD}, ${poolCap})"
-                 onmousemove="moveTooltip(event)"
-                 onmouseleave="hideTooltip()">
-              ${displayTxt}
+        const isFilterActiveOnPool = activeResourceFilter && Number(activeResourceFilter.pool_id) === Number(p.id);
+
+        // Row 1: Total Demand
+        if (showTotalRows) {
+          leftHtml += `
+            <div class="resource-left-row ${isFilterActiveOnPool ? 'active-filter-row' : ''}" data-row-id="pool-${p.id}-total" title="${escapeHtml(p.name)} - ${getT('resource_grid.show_total', 'Total Assignments')}">
+              <div class="resource-pool-name">
+                <span style="font-size:12px;">🏊</span>
+                <span class="r-name-text">${escapeHtml(p.name)}</span>
+                <span class="r-badge total-badge">${getT('resource_grid.show_total', 'Total')}</span>
+                ${isFilterActiveOnPool ? `<span class="active-filter-badge" title="${getT('resource_grid.active_filter', 'Filter Active')}">🔍 ${getT('resource_grid.active_filter', 'Filter Active')}</span>` : ''}
+              </div>
+              <div class="resource-pool-cap">
+                <span class="cap-badge" title="${getT('resource_grid.capacity', 'Capacity')}">${poolCap.toFixed(1)} FTE</span>
+              </div>
             </div>
           `;
-        }).join('');
 
-        return `<div class="resource-right-row" style="width: ${totalTimelineWidth}px;">${cellsHtml}</div>`;
-      }).join('');
+          const totalCellsHtml = bottomCells.map(c => {
+            const startStr = formatDate(c.startDate);
+            const endStr = formatDate(c.endDate);
+            const maxD = getMaxDemandForPeriod(p.daily_usage, startStr, endStr);
+            const isOver = maxD > (poolCap + 0.001);
+            const isCellFiltered = isFilterActiveOnPool && (startStr <= activeResourceFilter.end_date && endStr >= activeResourceFilter.start_date);
+
+            let cellCls = 'cell-empty';
+            let displayTxt = '—';
+            if (maxD > 0) {
+              cellCls = isOver ? 'cell-overallocated' : 'cell-normal';
+              displayTxt = maxD.toFixed(1);
+            }
+            if (isCellFiltered) {
+              cellCls += ' cell-active-filter';
+            }
+
+            return `
+              <div class="resource-demand-cell ${cellCls}"
+                   style="width: ${c.width}px;"
+                   data-pool-id="${p.id}"
+                   data-pool-name="${escapeHtml(p.name)}"
+                   data-start-date="${startStr}"
+                   data-end-date="${endStr}"
+                   data-period-label="${escapeHtml(c.label)}"
+                   data-demand="${maxD}"
+                   data-capacity="${poolCap}"
+                   data-scope="total"
+                   onmouseenter="handleCellMouseEnter(event, this)"
+                   onmousemove="moveTooltip(event)"
+                   onmouseleave="hideTooltip()"
+                   oncontextmenu="handleCellContextMenu(event, this)">
+                ${displayTxt}
+              </div>
+            `;
+          }).join('');
+
+          rightHtml += `<div class="resource-right-row ${isFilterActiveOnPool ? 'active-filter-row' : ''}" style="width: ${totalTimelineWidth}px;">${totalCellsHtml}</div>`;
+        }
+
+        // Row 2: Selected Projects Demand
+        if (showSelectedRows) {
+          leftHtml += `
+            <div class="resource-left-row sub-row ${isFilterActiveOnPool ? 'active-filter-row' : ''}" data-row-id="pool-${p.id}-selected" title="${escapeHtml(p.name)} - ${getT('resource_grid.show_selected', 'Selected Projects')}">
+              <div class="resource-pool-name" style="padding-left: 14px;">
+                <span style="font-size:11px; opacity:0.6;">↳</span>
+                <span class="r-name-text" style="color:#64748b; font-weight:500;">${getT('resource_grid.show_selected', 'Selected Projects')}</span>
+                <span class="r-badge scope-badge">Selected</span>
+              </div>
+              <div class="resource-pool-cap">
+                <span class="cap-badge scope-cap-badge" title="${getT('resource_grid.capacity', 'Capacity')}">${poolCap.toFixed(1)} FTE</span>
+              </div>
+            </div>
+          `;
+
+          const selectedCellsHtml = bottomCells.map(c => {
+            const startStr = formatDate(c.startDate);
+            const endStr = formatDate(c.endDate);
+            const scopeD = getMaxDemandForPeriod(p.selected_projects_daily_usage, startStr, endStr);
+            const isOver = scopeD > (poolCap + 0.001);
+            const isCellFiltered = isFilterActiveOnPool && (startStr <= activeResourceFilter.end_date && endStr >= activeResourceFilter.start_date);
+
+            let cellCls = 'cell-empty';
+            let displayTxt = '—';
+            if (scopeD > 0) {
+              cellCls = isOver ? 'cell-overallocated' : 'cell-normal cell-scope';
+              displayTxt = scopeD.toFixed(1);
+            }
+            if (isCellFiltered) {
+              cellCls += ' cell-active-filter';
+            }
+
+            return `
+              <div class="resource-demand-cell ${cellCls}"
+                   style="width: ${c.width}px;"
+                   data-pool-id="${p.id}"
+                   data-pool-name="${escapeHtml(p.name)}"
+                   data-start-date="${startStr}"
+                   data-end-date="${endStr}"
+                   data-period-label="${escapeHtml(c.label)}"
+                   data-demand="${scopeD}"
+                   data-capacity="${poolCap}"
+                   data-scope="selected"
+                   onmouseenter="handleCellMouseEnter(event, this)"
+                   onmousemove="moveTooltip(event)"
+                   onmouseleave="hideTooltip()"
+                   oncontextmenu="handleCellContextMenu(event, this)">
+                ${displayTxt}
+              </div>
+            `;
+          }).join('');
+
+          rightHtml += `<div class="resource-right-row sub-row ${isFilterActiveOnPool ? 'active-filter-row' : ''}" style="width: ${totalTimelineWidth}px;">${selectedCellsHtml}</div>`;
+        }
+      });
+
+      leftBody.innerHTML = leftHtml;
+      rightBody.innerHTML = rightHtml;
     }
 
     function updateComponentFrameHeight() {
@@ -3523,12 +4059,72 @@
 
       let resH = 34; // Header bar
       if (!isResourceGridCollapsed) {
-        const poolRowsH = Math.max(1, pools.length) * 38 + 28;
-        resH += Math.min(240, poolRowsH);
+        let activeRowCount = 0;
+        if (showTotalRows) activeRowCount += pools.length;
+        if (showSelectedRows) activeRowCount += pools.length;
+        const poolRowsH = Math.max(1, activeRowCount) * 34 + 56; // 56px for 2-tier header
+        resH += Math.min(360, poolRowsH);
       }
 
       const totalFrameH = maxGanttH + resH + 85;
       Streamlit.setFrameHeight(totalFrameH);
+    }
+
+    // Synchronized column hover overlay logic across Gantt and Resource Grid
+    function onTimelineColumnHover(e, container) {
+      if (!lastRenderedBottomCells || lastRenderedBottomCells.length === 0) return;
+      const rect = container.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+
+      let matchedCell = null;
+      for (const c of lastRenderedBottomCells) {
+        if (mouseX >= c.startX && mouseX < (c.startX + c.width)) {
+          matchedCell = c;
+          break;
+        }
+      }
+
+      const gOverlay = document.getElementById('column-hover-overlay-gantt');
+      const rOverlay = document.getElementById('column-hover-overlay-resource');
+
+      if (matchedCell) {
+        const leftPx = `${matchedCell.startX}px`;
+        const widthPx = `${matchedCell.width}px`;
+        if (gOverlay) {
+          gOverlay.style.left = leftPx;
+          gOverlay.style.width = widthPx;
+          gOverlay.style.display = 'block';
+        }
+        if (rOverlay) {
+          rOverlay.style.left = leftPx;
+          rOverlay.style.width = widthPx;
+          rOverlay.style.display = 'block';
+        }
+      } else {
+        hideColumnHoverOverlay();
+      }
+    }
+
+    function hideColumnHoverOverlay() {
+      const gOverlay = document.getElementById('column-hover-overlay-gantt');
+      const rOverlay = document.getElementById('column-hover-overlay-resource');
+      if (gOverlay) gOverlay.style.display = 'none';
+      if (rOverlay) rOverlay.style.display = 'none';
+    }
+
+    function initTimelineHoverListeners() {
+      const tlCanvas = document.getElementById('timeline-canvas');
+      if (tlCanvas && !tlCanvas.dataset.hoverBound) {
+        tlCanvas.dataset.hoverBound = 'true';
+        tlCanvas.addEventListener('mousemove', (e) => onTimelineColumnHover(e, tlCanvas));
+        tlCanvas.addEventListener('mouseleave', hideColumnHoverOverlay);
+      }
+      const resInner = document.getElementById('resource-right-pane-inner');
+      if (resInner && !resInner.dataset.hoverBound) {
+        resInner.dataset.hoverBound = 'true';
+        resInner.addEventListener('mousemove', (e) => onTimelineColumnHover(e, resInner));
+        resInner.addEventListener('mouseleave', hideColumnHoverOverlay);
+      }
     }
 
     let isMultiProject = false;
@@ -3832,7 +4428,7 @@
         if (item.type === 'project_header') {
           if (item.start && item.end) {
             const pStartX = dateToX(parseDate(item.start));
-            const pEndX = dateToX(parseDate(item.end));
+            const pEndX = Math.max(pStartX + 16, endDateToX(parseDate(item.end)));
             const pWidth = Math.max(16, pEndX - pStartX);
             allProjectPositions[item.project_id] = {
               startX: pStartX,
@@ -3850,7 +4446,7 @@
           const eDate = parseDate(t.end);
           const isMilestone = t.start === t.end;
           const startX = dateToX(sDate);
-          const endX = isMilestone ? startX : Math.max(startX + 24, dateToX(eDate));
+          const endX = isMilestone ? startX : Math.max(startX + 24, endDateToX(eDate));
 
           allTaskPositions[String(t.id)] = {
             startX: startX,
@@ -3934,8 +4530,9 @@
       }
 
       // Render Resource Demand Grid & Update Frame Sizing
-      renderResourceGrid(bottomCells);
+      renderResourceGrid(topCells, bottomCells);
       updateComponentFrameHeight();
+      initTimelineHoverListeners();
 
       adjustCanvasBottomGaps();
       renderVirtualWindow();
@@ -4032,8 +4629,8 @@
                 </span>
                 ${hasDesc ? `<span class="task-sub-desc">↳ ${escapeHtml(t.description)}</span>` : ''}
               </div>
-              <span class="task-date-cell" style="width:${colWidths.start}px; min-width:${colWidths.start}px; max-width:${colWidths.start}px;">${formatMmmYy(t.start)}</span>
-              <span class="task-date-cell" style="width:${colWidths.stop}px; min-width:${colWidths.stop}px; max-width:${colWidths.stop}px;">${formatMmmYy(t.end)}</span>
+              <span class="task-date-cell" title="${t.start}" style="width:${colWidths.start}px; min-width:${colWidths.start}px; max-width:${colWidths.start}px;">${formatMmmYy(t.start)}</span>
+              <span class="task-date-cell" title="${t.end}" style="width:${colWidths.stop}px; min-width:${colWidths.stop}px; max-width:${colWidths.stop}px;">${formatMmmYy(t.end)}</span>
             </div>
           `;
         }
@@ -4065,7 +4662,7 @@
 
             if (item.start && item.end) {
               const pStartX = dateToX(parseDate(item.start));
-              const pEndX = dateToX(parseDate(item.end));
+              const pEndX = Math.max(pStartX + 16, endDateToX(parseDate(item.end)));
               const pWidth = Math.max(16, pEndX - pStartX);
               const cleanProjectName = item.project_name ? String(item.project_name).replace(/^[A-Za-z0-9_-]+\s*-\s*/, '') : '';
 
@@ -4073,11 +4670,7 @@
               pBar.className = 'project-summary-bar';
               pBar.style.left = `${pStartX}px`;
               pBar.style.width = `${pWidth}px`;
-
-              const pLabel = document.createElement('div');
-              pLabel.className = 'project-summary-label';
-              pLabel.innerText = `${cleanProjectName} (${item.taskCount} tasks)`;
-              pBar.appendChild(pLabel);
+              pBar.title = `${cleanProjectName} (${item.taskCount} tasks)`;
 
               rowEl.appendChild(pBar);
             }
@@ -4097,7 +4690,7 @@
             const isMilestone = t.start === t.end;
 
             const startX = dateToX(sDate);
-            const endX = isMilestone ? startX : Math.max(startX + 24, dateToX(eDate));
+            const endX = isMilestone ? startX : Math.max(startX + 24, endDateToX(eDate));
             const barWidth = Math.max(20, endX - startX);
             const hasViol = t.violations && t.violations.length > 0;
 
@@ -4581,7 +5174,7 @@
           const newStartX = dateToX(newStart);
           element.style.left = `${newStartX}px`;
           if (!isMilestone && !isBodyMove) {
-            const newEndX = dateToX(newEnd);
+            const newEndX = endDateToX(newEnd);
             element.style.width = `${Math.max(20, newEndX - newStartX)}px`;
           }
         }
@@ -4642,6 +5235,9 @@
         }
         if (args.resource_pools) {
           resourcePoolsData = args.resource_pools;
+        }
+        if (args.active_resource_filter !== undefined) {
+          activeResourceFilter = args.active_resource_filter || null;
         }
         if (args.tasks) {
           tasksData = args.tasks;

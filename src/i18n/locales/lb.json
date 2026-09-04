@@ -215,7 +215,12 @@
       "overallocated": "Iwwerallokéiert",
       "no_pools": "Keng Ressource-Pools konfiguréiert",
       "max_demand": "Max. Nofro",
-      "capacity": "Kapazitéit"
+      "capacity": "Kapazitéit",
+      "show_total": "Gesamtallokatiounen",
+      "show_selected": "Ausgewielte Projeten",
+      "filter_consuming_projects": "No verbrauchende Projeten filteren",
+      "clear_filter": "Ressourcen-Pool-Filter läschen",
+      "active_filter": "Filter aktiv"
     },
     "modal": {
       "add_title": "➕ Neie Schrëtt bäisetzen ({project_id})",

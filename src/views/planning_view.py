@@ -1,6 +1,7 @@
 """Screen 4: Planning & Step Loader View (Interactive Drag & Drop Gantt and Plotly Roadmap)."""
 
 import datetime
+import html
 import os
 from typing import Any, Optional, Union
 
@@ -523,6 +524,232 @@ def _manage_task_resource_pools_dialog(
             st.rerun()
 
 
+def _handle_filter_by_resource_pool(
+    gantt_event: dict[str, Any],
+    pool_details_cache: dict[int, Any],
+    org_repo: OrganizationRepository,
+    pool_repo: ResourcePoolRepository,
+    milestone_repo: MilestoneRepository,
+    selected_projects: list[Any],
+    all_proj_ids: list[int],
+    master_proj_ids: Optional[list[int]] = None,
+) -> None:
+    """Handles resource pool context menu filter event.
+
+    Queues session state modifications via pending state keys to avoid StreamlitAPIException
+    from modifying widget state after widget instantiation.
+
+    Args:
+        gantt_event: Event dictionary from Gantt component.
+        pool_details_cache: Cache of pool details.
+        org_repo: Organization repository.
+        pool_repo: Resource pool repository.
+        milestone_repo: Milestone repository.
+        selected_projects: Currently selected project IDs.
+        all_proj_ids: All available project IDs under current filter.
+        master_proj_ids: Complete list of all project IDs in the database.
+    """
+    pool_id = int(gantt_event.get("pool_id", 0))
+    start_date = str(gantt_event.get("start_date", "")).strip()[:10]
+    end_date = str(gantt_event.get("end_date", "")).strip()[:10]
+    clear_other = bool(gantt_event.get("clear_other_filters", True))
+    pool_name = str(gantt_event.get("pool_name", ""))
+
+    p_cap = pool_details_cache.get(pool_id)
+    if not p_cap:
+        p_cap = ResourcePoolService.calculate_pool_capacity(
+            pool_id, org_repo, pool_repo, milestone_repo
+        )
+    matching_pids = ResourcePoolService.get_projects_consuming_pool_in_period(
+        p_cap.assignments, start_date, end_date
+    )
+    ref_proj_ids = master_proj_ids if (clear_other and master_proj_ids) else all_proj_ids
+
+    if clear_other:
+        target_pids = matching_pids
+    else:
+        current_pids = [int(p) for p in selected_projects if str(p).isdigit()]
+        intersected = [p for p in current_pids if p in matching_pids]
+        target_pids = intersected if intersected else matching_pids
+
+    valid_target_pids = [p for p in target_pids if p in ref_proj_ids]
+
+    st.session_state["active_resource_pool_filter"] = {
+        "pool_id": pool_id,
+        "pool_name": pool_name or p_cap.pool_name,
+        "start_date": start_date,
+        "end_date": end_date,
+        "clear_other_filters": clear_other,
+        "project_ids": valid_target_pids,
+        "count": len(valid_target_pids),
+    }
+
+    # Queue state updates to be applied before widgets are instantiated on rerun
+    st.session_state["pending_resource_pool_filter"] = {
+        "clear_other": clear_other,
+        "target_pids": valid_target_pids,
+    }
+
+    if valid_target_pids:
+        st.toast(f"Filtered to {len(valid_target_pids)} projects consuming {pool_name}", icon="🔍")
+    else:
+        st.toast(f"No projects consuming {pool_name} in {start_date} → {end_date}", icon="⚠️")
+    st.rerun()
+
+
+def _handle_clear_resource_pool_filter(all_proj_ids: list[int]) -> None:
+    """Clears the active resource pool filter and resets project selection.
+
+    Args:
+        all_proj_ids: List of all project IDs.
+    """
+    st.session_state.pop("active_resource_pool_filter", None)
+    st.session_state["pending_clear_resource_pool_filter"] = True
+    st.toast("Resource pool filter cleared", icon="✖")
+def _render_filtered_active_allocations(
+    active_rf: dict[str, Any],
+    pool_details_cache: dict[int, Any],
+    org_repo: OrganizationRepository,
+    pool_repo: ResourcePoolRepository,
+    milestone_repo: MilestoneRepository,
+) -> None:
+    """Renders the Active Allocations on Projects & Tasks table below the resource pools table.
+
+    Displays active allocations overlapping the filtered period, differentiating
+    project-level and task-level assignments, without the action column.
+
+    Args:
+        active_rf: Active resource pool filter dictionary from session state.
+        pool_details_cache: Cache mapping pool IDs to PoolCapacityDetail instances.
+        org_repo: Organization repository instance.
+        pool_repo: Resource pool repository instance.
+        milestone_repo: Milestone repository instance.
+    """
+    f_pool_id = int(active_rf.get("pool_id", 0))
+    f_pool_name = str(active_rf.get("pool_name", "Pool"))
+    f_start = str(active_rf.get("start_date", ""))[:10]
+    f_end = str(active_rf.get("end_date", ""))[:10]
+
+    p_cap = pool_details_cache.get(f_pool_id)
+    if not p_cap:
+        p_cap = ResourcePoolService.calculate_pool_capacity(
+            f_pool_id, org_repo, pool_repo, milestone_repo
+        )
+
+    # Filter assignments active during the filtered period
+    pool_active_assignments: list[dict[str, Any]] = []
+    for a in p_cap.assignments:
+        a_start = str(a.get("start_date", ""))[:10]
+        a_end = str(a.get("end_date", ""))[:10]
+        fte_val = float(a.get("fte_assigned", 0.0))
+        if fte_val > 0 and a_start <= f_end and a_end >= f_start:
+            pool_active_assignments.append(dict(a, pool_name=f_pool_name))
+
+    st.markdown("---")
+    st.write(
+        f"#### 📁 / 📋 {t('settings.assignments_section_title', default='Active Allocations on Projects & Tasks')} "
+        f"— <span style='color:#2563EB;'>{html.escape(f_pool_name)}</span>",
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        f"Showing active resource assignments overlapping `{f_start} → {f_end}`. "
+        "Project-level allocations apply across the whole project, whereas task-level allocations apply to specific steps."
+    )
+
+    if not pool_active_assignments:
+        st.info(f"No active allocations found for {f_pool_name} in `{f_start} → {f_end}`.")
+        return
+
+    table_rows: list[str] = []
+    total_active_fte = 0.0
+
+    for a in pool_active_assignments:
+        p_id = a["project_id"]
+        p_name = html.escape(str(a.get("project_name", f"Project #{p_id}")))
+        t_id = a.get("task_id")
+        t_name = html.escape(str(a.get("task_name", "—")))
+        fte = float(a.get("fte_assigned", 0.0))
+        total_active_fte += fte
+        s_date = a.get("start_date", "")
+        e_date = a.get("end_date", "")
+        is_custom = bool(a.get("is_custom_period", False))
+        notes = html.escape(str(a.get("notes", "")))
+        pool_badge_name = html.escape(str(a.get("pool_name", f_pool_name)))
+
+        proj_badge = (
+            f'<span style="color:#0369A1; font-weight:700;">'
+            f'📁 {p_name} [#{p_id}]</span>'
+        )
+
+        if t_id:
+            task_badge = (
+                f'<span style="color:#2563EB; font-weight:600;">'
+                f'📋 {t_name} [#{t_id}]</span>'
+            )
+        else:
+            task_badge = (
+                f'<span style="color:#64748B; font-style:italic; background:#F1F5F9; '
+                f'padding:2px 7px; border-radius:3px; border:1px dashed #CBD5E1;">'
+                f'— Project Level</span>'
+            )
+
+        period_badge = (
+            f'<span style="font-size:12px; color:#334155;">{s_date} → {e_date}</span> '
+            f'<span style="font-size:10px; background:#E2E8F0; color:#475569; padding:1px 5px; border-radius:3px;">'
+            f'{"Custom" if is_custom else "Full Project"}</span>'
+        )
+
+        pool_badge = (
+            f'<span style="background:#EFF6FF; color:#1D4ED8; font-weight:600; '
+            f'padding:2px 8px; border-radius:4px; border:1px solid #BFDBFE;">'
+            f'🏊 {pool_badge_name}</span>'
+        )
+
+        table_rows.append(
+            f'<tr style="border-bottom:1px solid #E2E8F0;">'
+            f'<td style="padding:8px 10px; font-weight:600; color:#475569;">#{a["id"]}</td>'
+            f'<td style="padding:8px 10px;">{pool_badge}</td>'
+            f'<td style="padding:8px 10px;">{proj_badge}</td>'
+            f'<td style="padding:8px 10px;">{task_badge}</td>'
+            f'<td style="padding:8px 10px;"><span style="font-weight:700; color:#0F172A; background:#F1F5F9; padding:2px 7px; border-radius:4px;">{fte:.2f} FTE</span></td>'
+            f'<td style="padding:8px 10px;">{period_badge}</td>'
+            f'<td style="padding:8px 10px; color:#64748B; font-size:12px;">{notes or "—"}</td>'
+            f'</tr>'
+        )
+
+    header_html = (
+        f'<tr style="background:#F8FAFC; border-bottom:2px solid #CBD5E1; color:#475569; font-weight:700; font-size:12px; text-transform:uppercase;">'
+        f'<th style="padding:8px 10px; text-align:left;">ID</th>'
+        f'<th style="padding:8px 10px; text-align:left;">{t("settings.col_pool", default="Resource Pool")}</th>'
+        f'<th style="padding:8px 10px; text-align:left;">{t("settings.col_project", default="Project")}</th>'
+        f'<th style="padding:8px 10px; text-align:left;">{t("settings.col_task", default="Task / Step")}</th>'
+        f'<th style="padding:8px 10px; text-align:left;">{t("master_data.field_fte", default="Assigned FTE")}</th>'
+        f'<th style="padding:8px 10px; text-align:left;">{t("master_data.field_period", default="Effective Period")}</th>'
+        f'<th style="padding:8px 10px; text-align:left;">{t("master_data.field_notes", default="Notes")}</th>'
+        f'</tr>'
+    )
+
+    footer_html = (
+        f'<tr style="background:#F1F5F9; font-weight:700; border-top:2px solid #CBD5E1; color:#0F172A;">'
+        f'<td colspan="4" style="padding:8px 10px; text-align:right;">Total Active Allocation:</td>'
+        f'<td style="padding:8px 10px;"><span style="background:#2563EB; color:#FFFFFF; padding:2px 8px; border-radius:4px; font-weight:700;">{total_active_fte:.2f} FTE</span></td>'
+        f'<td colspan="2" style="padding:8px 10px; color:#64748B; font-size:11.5px; font-weight:400;">Filtered Period: {f_start} → {f_end}</td>'
+        f'</tr>'
+    )
+
+    full_table_html = (
+        f'<div style="overflow-x:auto; border:1px solid #E2E8F0; border-radius:6px; margin-bottom:12px;">'
+        f'<table style="width:100%; border-collapse:collapse; font-size:12.5px; text-align:left; background:#FFFFFF;">'
+        f'<thead>{header_html}</thead>'
+        f'<tbody>{"".join(table_rows)}</tbody>'
+        f'<tfoot>{footer_html}</tfoot>'
+        f'</table>'
+        f'</div>'
+    )
+
+    st.markdown(full_table_html, unsafe_allow_html=True)
+
+
 def render_planning_milestones(
     project_repo: ProjectRepository,
     milestone_repo: MilestoneRepository,
@@ -599,6 +826,7 @@ def render_planning_milestones(
         st.info(t("master_data.dynamic_empty", default="No projects registered yet."))
         return
 
+    master_proj_ids = [int(p) for p in df_projects["id"].tolist()]
     proj_map = dict(zip(df_projects["id"], df_projects["name"]))
 
     # --------------------------------------------------------------------------
@@ -617,7 +845,7 @@ def render_planning_milestones(
 
     available_tags_list = sorted(list(available_tags_set))
 
-    # Check for external navigation focus (e.g. from Resource Pools table jump)
+    # 1. Check for external navigation focus (e.g. from Resource Pools table jump)
     target_pid = st.session_state.pop("target_planning_project_id", None)
     if target_pid is not None:
         try:
@@ -627,13 +855,44 @@ def render_planning_milestones(
         except (ValueError, TypeError):
             pass
 
+    # 2. Check for pending resource pool filter clears (must be applied BEFORE widgets instantiate)
+    if st.session_state.pop("pending_clear_resource_pool_filter", False):
+        st.session_state.pop("active_resource_pool_filter", None)
+        st.session_state["ms_multi_projects"] = master_proj_ids[:10] if len(master_proj_ids) > 10 else master_proj_ids
+
+    # 3. Check for pending resource pool filter updates (must be applied BEFORE widgets instantiate)
+    pending_rf = st.session_state.pop("pending_resource_pool_filter", None)
+    if pending_rf is not None:
+        if pending_rf.get("clear_other"):
+            st.session_state["ms_planning_tag_filter"] = []
+        if "target_pids" in pending_rf:
+            st.session_state["ms_multi_projects"] = pending_rf["target_pids"]
+
+    # Top Active Resource Pool Filter Banner
+    active_rf = st.session_state.get("active_resource_pool_filter")
+    if active_rf:
+        f_pool_name = active_rf.get("pool_name", "Pool")
+        f_start = active_rf.get("start_date", "")
+        f_end = active_rf.get("end_date", "")
+        f_count = active_rf.get("count", 0)
+        f_mode = " (Cleared other filters)" if active_rf.get("clear_other_filters") else " (Refined with existing)"
+
+        b_info, b_btn = st.columns([5, 1])
+        with b_info:
+            st.info(
+                f"🔍 **Active Filter from Resource Pool**: Showing {f_count} projects consuming "
+                f"**{f_pool_name}** during `{f_start} → {f_end}`{f_mode}."
+            )
+        with b_btn:
+            if st.button("✖ Clear Filter", key="btn_clear_pool_filter_top", type="secondary"):
+                _handle_clear_resource_pool_filter(master_proj_ids)
+
     top_filter_col, top_sel_col = st.columns([2, 3])
 
     with top_filter_col:
         selected_tag_filters = st.multiselect(
             f"🏷️ {t('planning.filter_by_tags', default='Filter Projects by Tag')}",
             options=available_tags_list,
-            default=[],
             help="Filter project list to projects assigned any of the chosen tags.",
             key="ms_planning_tag_filter",
         )
@@ -659,17 +918,41 @@ def render_planning_milestones(
 
     all_proj_ids = df_projects["id"].tolist()
 
+    if active_rf and "project_ids" in active_rf:
+        rf_pids = [p for p in active_rf["project_ids"] if p in all_proj_ids]
+        st.session_state["ms_multi_projects"] = rf_pids
+    elif "ms_multi_projects" in st.session_state:
+        st.session_state["ms_multi_projects"] = [
+            p for p in st.session_state["ms_multi_projects"] if p in all_proj_ids
+        ]
+    else:
+        st.session_state["ms_multi_projects"] = all_proj_ids[:10] if len(all_proj_ids) > 10 else all_proj_ids
+
     with top_sel_col:
         multi_header_label = f"🔍 {t('planning.select_multi_proj', default='Select Projects to Display in Multi-Gantt')} ({len(df_projects)} projects found)"
         selected_projects = st.multiselect(
             multi_header_label,
             options=all_proj_ids,
-            default=all_proj_ids[:10] if len(all_proj_ids) > 10 else all_proj_ids,
             format_func=lambda x: f"{x} - {proj_map.get(x, '')}",
             key="ms_multi_projects",
         )
         if not selected_projects:
-            selected_projects = all_proj_ids
+            if not active_rf:
+                selected_projects = all_proj_ids
+            else:
+                selected_projects = []
+
+    if not selected_projects:
+        if active_rf:
+            st.warning(
+                f"No projects consume **{active_rf.get('pool_name')}** during `{active_rf.get('start_date')} → {active_rf.get('end_date')}`. "
+                "Click 'Clear Filter' above to reset."
+            )
+            if st.button("✖ Clear Filter", key="btn_clear_empty_rf_filter"):
+                _handle_clear_resource_pool_filter(master_proj_ids)
+        else:
+            st.info(t("planning.no_projects_available", default="No projects available with the current filter."))
+        return
 
     selected_id = selected_projects[0]
 
@@ -831,49 +1114,8 @@ def render_planning_milestones(
                 "custom_class": "bar-milestone" if row["start_date"] == row["end_date"] else "bar-step",
             })
 
-        # Quick Actions: Manage Project Pools & Task Pools without right-click
-        qa_col1, qa_col2 = st.columns(2)
-        with qa_col1:
-            with st.expander(f"🏊 {t('planning.quick_project_pools', default='Quick Action: Assign Resource Pools to Project')}", expanded=False):
-                quick_proj_choices = [
-                    (int(r["id"]), f"{r['name']} (#{r['id']})")
-                    for _, r in df_projects.iterrows()
-                ]
-                sel_quick_proj = st.selectbox(
-                    t("planning.select_project_to_assign_pools", default="Select Project to Assign Pools"),
-                    options=quick_proj_choices,
-                    format_func=lambda x: x[1],
-                    key="sb_quick_project_pool",
-                )
-                if st.button(t("planning.btn_open_project_pool_mgr", default="Open Project Pool Allocator"), key="btn_open_quick_proj_pool_mgr", type="primary"):
-                    if sel_quick_proj:
-                        st.session_state["modal_manage_project_pool"] = int(sel_quick_proj[0])
-                        st.rerun()
-
-        with qa_col2:
-            with st.expander(f"🏊 {t('planning.quick_task_pools', default='Quick Action: Assign Resource Pools to Task')}", expanded=False):
-                quick_task_choices = [
-                    (int(r["id"]), f"{r['task_name']} (#{r['id']}) - {r.get('project_name', '')}")
-                    for r in steps_records
-                ]
-                sel_quick_task = st.selectbox(
-                    t("planning.select_task_to_assign_pools", default="Select Task to Assign Pools"),
-                    options=quick_task_choices,
-                    format_func=lambda x: x[1],
-                    key="sb_quick_task_pool",
-                )
-                if st.button(t("planning.btn_open_pool_mgr", default="Open Task Pool Allocator"), key="btn_open_quick_pool_mgr", type="primary"):
-                    if sel_quick_task:
-                        target_tid = sel_quick_task[0]
-                        target_rec = next((r for r in steps_records if int(r["id"]) == target_tid), None)
-                        st.session_state["modal_manage_task_pool"] = {
-                            "task_id": target_tid,
-                            "task_name": target_rec["task_name"] if target_rec else f"Task #{target_tid}",
-                            "project_id": target_rec["project_id"] if target_rec else selected_id,
-                        }
-                        st.rerun()
-
         # Build resource pools payload for the demand & capacity grid below the Gantt
+        scope_pids = [int(p) for p in selected_projects if str(p).isdigit()]
         df_all_pools = pool_repo.get_all_pools()
         resource_pools_payload: list[dict[str, Any]] = []
         if not df_all_pools.empty:
@@ -885,6 +1127,9 @@ def render_planning_milestones(
                         p_id, org_repo, pool_repo, milestone_repo
                     )
                 p_cap = pool_details_cache[p_id]
+                scope_usage = ResourcePoolService.calculate_pool_scope_daily_usage(
+                    p_cap.assignments, scope_pids
+                )
                 resource_pools_payload.append({
                     "id": p_id,
                     "name": p_name,
@@ -892,13 +1137,24 @@ def render_planning_milestones(
                     "peak_demand": float(p_cap.peak_assigned_fte),
                     "is_overassigned": bool(p_cap.is_overassigned),
                     "daily_usage": p_cap.daily_usage,
+                    "selected_projects_daily_usage": scope_usage,
+                    "assignments": [
+                        {
+                            "project_id": int(a["project_id"]),
+                            "start_date": str(a.get("start_date", "")),
+                            "end_date": str(a.get("end_date", "")),
+                        }
+                        for a in p_cap.assignments
+                    ],
                 })
 
         # Render custom drag-and-drop component with multi-dependency metadata and i18n
         cur_loc = get_current_locale()
         gantt_translations = get_section_catalog("gantt", cur_loc)
         all_ext_tasks = milestone_repo.get_all_external_tasks_map()
-        widget_key = f"gantt_{len(selected_projects)}_{selected_id}_{cur_loc}"
+        cur_rf = st.session_state.get("active_resource_pool_filter")
+        rf_key = f"{cur_rf.get('pool_id')}_{cur_rf.get('start_date')}_{cur_rf.get('clear_other_filters')}" if cur_rf else "none"
+        widget_key = f"gantt_{len(selected_projects)}_{selected_id}_{cur_loc}_{rf_key}"
         gantt_event = _interactive_gantt(
             tasks=gantt_tasks,
             all_projects=all_projects_list,
@@ -907,12 +1163,15 @@ def render_planning_milestones(
             is_multi_project=True,
             translations=gantt_translations,
             resource_pools=resource_pools_payload,
+            active_resource_filter=st.session_state.get("active_resource_pool_filter"),
             key=widget_key,
         )
 
         # Handle bi-directional Drag & Drop changes from JS (deduplicated via nonce)
         if gantt_event and isinstance(gantt_event, dict):
             nonce = gantt_event.get("nonce")
+            if not nonce:
+                nonce = str(hash(frozenset(str(k) + str(v) for k, v in gantt_event.items())))
             last_nonce = st.session_state.get("last_gantt_nonce")
 
             if nonce and nonce != last_nonce:
@@ -920,7 +1179,20 @@ def render_planning_milestones(
                 action = gantt_event.get("action")
                 step_id = gantt_event.get("id")
 
-                if action == "manage_project_tags":
+                if action == "filter_by_resource_pool":
+                    _handle_filter_by_resource_pool(
+                        gantt_event=gantt_event,
+                        pool_details_cache=pool_details_cache,
+                        org_repo=org_repo,
+                        pool_repo=pool_repo,
+                        milestone_repo=milestone_repo,
+                        selected_projects=selected_projects,
+                        all_proj_ids=all_proj_ids,
+                        master_proj_ids=master_proj_ids,
+                    )
+                elif action == "clear_resource_pool_filter":
+                    _handle_clear_resource_pool_filter(master_proj_ids)
+                elif action == "manage_project_tags":
                     p_id = gantt_event.get("project_id")
                     if p_id:
                         st.session_state["modal_manage_project_tag"] = int(p_id)
@@ -1013,6 +1285,19 @@ def render_planning_milestones(
                     milestone_repo.delete_milestone(int(step_id))
                     st.toast(t("planning.toast_step_deleted", id=step_id), icon="🗑️")
                     st.rerun()
+
+    # --------------------------------------------------------------------------
+    # ACTIVE ALLOCATIONS ON PROJECTS & TASKS (Shown when a Resource Pool filter is active)
+    # --------------------------------------------------------------------------
+    active_rf = st.session_state.get("active_resource_pool_filter")
+    if active_rf and pool_repo is not None:
+        _render_filtered_active_allocations(
+            active_rf=active_rf,
+            pool_details_cache=pool_details_cache,
+            org_repo=org_repo,
+            pool_repo=pool_repo,
+            milestone_repo=milestone_repo,
+        )
 
     # --------------------------------------------------------------------------
     # 2. CSV BULK STEP LOADER & EXPORTER
