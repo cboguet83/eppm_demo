@@ -332,11 +332,11 @@
       border-color: var(--primary);
     }
 
-    /* Right Timeline Body Scroller (Contains the ONLY vertical scrollbar) */
+    /* Right Timeline Body Scroller (Vertical scrollbar appears only when content overflows) */
     .timeline-body-scroller {
       flex: 1;
       overflow-x: auto;
-      overflow-y: scroll;
+      overflow-y: auto;
       position: relative;
       background: #ffffff;
       min-width: 0;
@@ -1556,6 +1556,43 @@
       font-size: 8px;
       line-height: 1;
     }
+
+    /* Reserved Vertical Scrollbar Spacers for pixel-perfect alignment across Gantt & Resource Pool */
+    .gantt-header-scrollbar-spacer {
+      width: 0px;
+      flex-shrink: 0;
+      background: var(--bg-header);
+      border-bottom: 1px solid var(--border);
+      border-left: 1px solid var(--border);
+      box-sizing: border-box;
+      display: none;
+    }
+
+    .gantt-body-scrollbar-spacer {
+      width: 0px;
+      flex-shrink: 0;
+      background: #f8fafc;
+      border-left: 1px solid var(--border);
+      box-sizing: border-box;
+      display: none;
+    }
+
+    .resource-scrollbar-spacer {
+      width: 0px;
+      flex-shrink: 0;
+      background: #ffffff;
+      border-left: 1px solid var(--border);
+      box-sizing: border-box;
+      display: none;
+      position: relative;
+    }
+
+    .resource-scrollbar-spacer-header {
+      height: 56px;
+      background: #f1f5f9;
+      border-bottom: 1px solid var(--border);
+      box-sizing: border-box;
+    }
   </style>
 </head>
 
@@ -1818,6 +1855,9 @@
             <div class="header-tier-bottom" id="header-tier-bottom"></div>
           </div>
         </div>
+
+        <!-- Vertical Scrollbar Reserved Space for Header -->
+        <div class="gantt-header-scrollbar-spacer" id="gantt-header-scrollbar-spacer"></div>
       </div>
 
       <!-- Synchronized Body Row -->
@@ -1832,7 +1872,7 @@
         <!-- Resizable Splitter Handle -->
         <div class="gantt-splitter" id="gantt-splitter" title="Drag left/right to resize columns"></div>
 
-        <!-- Right Timeline Body Scroller (Contains the SINGLE master vertical scrollbar) -->
+        <!-- Right Timeline Body Scroller -->
         <div class="timeline-body-scroller" id="timeline-body-scroller">
           <div class="timeline-body-inner" id="timeline-canvas">
             <svg class="grid-svg" id="grid-svg" xmlns="http://www.w3.org/2000/svg">
@@ -1856,6 +1896,9 @@
             <div class="column-hover-overlay" id="column-hover-overlay-gantt"></div>
           </div>
         </div>
+
+        <!-- Vertical Scrollbar Reserved Space for Body (when Resource Grid has scrollbar and Gantt does not) -->
+        <div class="gantt-body-scrollbar-spacer" id="gantt-body-scrollbar-spacer"></div>
       </div>
     </div>
 
@@ -1911,6 +1954,11 @@
             <div class="column-hover-overlay" id="column-hover-overlay-resource"></div>
             <div class="resource-right-body" id="resource-right-body"></div>
           </div>
+        </div>
+
+        <!-- Vertical Scrollbar Reserved Space for Resource Grid (when Gantt has scrollbar and Resource Grid does not) -->
+        <div class="resource-scrollbar-spacer" id="resource-scrollbar-spacer">
+          <div class="resource-scrollbar-spacer-header"></div>
         </div>
       </div>
     </div>
@@ -3913,6 +3961,7 @@
             —
           </div>
         `;
+        adjustVerticalScrollbarGaps();
         return;
       }
 
@@ -3927,6 +3976,7 @@
             —
           </div>
         `;
+        adjustVerticalScrollbarGaps();
         return;
       }
 
@@ -4052,6 +4102,7 @@
 
       leftBody.innerHTML = leftHtml;
       rightBody.innerHTML = rightHtml;
+      adjustVerticalScrollbarGaps();
     }
 
     function updateComponentFrameHeight() {
@@ -4545,6 +4596,76 @@
       renderVirtualWindow();
     }
 
+    let cachedSystemScrollbarW = null;
+    function getSystemScrollbarWidth() {
+      if (cachedSystemScrollbarW !== null) return cachedSystemScrollbarW;
+      try {
+        const outer = document.createElement('div');
+        outer.style.visibility = 'hidden';
+        outer.style.overflow = 'scroll';
+        outer.style.msOverflowStyle = 'scrollbar';
+        outer.style.width = '50px';
+        outer.style.height = '50px';
+        outer.style.position = 'absolute';
+        outer.style.top = '-9999px';
+        document.body.appendChild(outer);
+        cachedSystemScrollbarW = outer.offsetWidth - outer.clientWidth;
+        document.body.removeChild(outer);
+      } catch (err) {
+        cachedSystemScrollbarW = 17;
+      }
+      return cachedSystemScrollbarW || 0;
+    }
+
+    function adjustVerticalScrollbarGaps() {
+      const scroller = document.getElementById('timeline-body-scroller');
+      const resMain = document.getElementById('resource-grid-main');
+      const ganttHdrSpacer = document.getElementById('gantt-header-scrollbar-spacer');
+      const ganttBodySpacer = document.getElementById('gantt-body-scrollbar-spacer');
+      const resSpacer = document.getElementById('resource-scrollbar-spacer');
+
+      if (!scroller || !ganttHdrSpacer || !ganttBodySpacer || !resSpacer) return;
+
+      const sysW = getSystemScrollbarWidth();
+
+      // 1. Detect if Gantt scroller has a vertical scrollbar
+      let ganttVScrollW = 0;
+      if (scroller.scrollHeight > scroller.clientHeight + 1) {
+        const measured = scroller.offsetWidth - scroller.clientWidth;
+        ganttVScrollW = measured > 0 ? measured : sysW;
+      }
+
+      // 2. Detect if Resource Grid has a vertical scrollbar
+      let resVScrollW = 0;
+      if (!isResourceGridCollapsed && resMain && resMain.scrollHeight > resMain.clientHeight + 1) {
+        const measured = resMain.offsetWidth - resMain.clientWidth;
+        resVScrollW = measured > 0 ? measured : sysW;
+      }
+
+      // 3. Target vertical scrollbar reservation is the maximum between both
+      const maxVScrollW = Math.max(ganttVScrollW, resVScrollW);
+
+      // 4. Gantt Header Spacer: Reserves full maxVScrollW so header timeline width matches
+      const targetHdrW = maxVScrollW > 0 ? `${maxVScrollW}px` : '0px';
+      const targetHdrDisplay = maxVScrollW > 0 ? 'block' : 'none';
+      if (ganttHdrSpacer.style.width !== targetHdrW) ganttHdrSpacer.style.width = targetHdrW;
+      if (ganttHdrSpacer.style.display !== targetHdrDisplay) ganttHdrSpacer.style.display = targetHdrDisplay;
+
+      // 5. Gantt Body Spacer: Active when Resource Grid has vertical scrollbar but Gantt does not
+      const ganttExtra = Math.max(0, maxVScrollW - ganttVScrollW);
+      const targetBodyW = ganttExtra > 0 ? `${ganttExtra}px` : '0px';
+      const targetBodyDisplay = ganttExtra > 0 ? 'block' : 'none';
+      if (ganttBodySpacer.style.width !== targetBodyW) ganttBodySpacer.style.width = targetBodyW;
+      if (ganttBodySpacer.style.display !== targetBodyDisplay) ganttBodySpacer.style.display = targetBodyDisplay;
+
+      // 6. Resource Grid Spacer: Active when Gantt has vertical scrollbar but Resource Grid does not
+      const resExtra = Math.max(0, maxVScrollW - resVScrollW);
+      const targetResW = (resExtra > 0 && !isResourceGridCollapsed) ? `${resExtra}px` : '0px';
+      const targetResDisplay = (resExtra > 0 && !isResourceGridCollapsed) ? 'block' : 'none';
+      if (resSpacer.style.width !== targetResW) resSpacer.style.width = targetResW;
+      if (resSpacer.style.display !== targetResDisplay) resSpacer.style.display = targetResDisplay;
+    }
+
     function adjustCanvasBottomGaps() {
       const scroller = document.getElementById('timeline-body-scroller');
       const frozenBody = document.getElementById('frozen-body');
@@ -4561,6 +4682,8 @@
 
       frozenCanvas.style.height = `${totalHeight + leftCanvasExtra}px`;
       timelineCanvas.style.height = `${totalHeight + rightCanvasExtra}px`;
+
+      adjustVerticalScrollbarGaps();
     }
 
     function renderVirtualWindow(customScrollTop) {
@@ -5330,10 +5453,10 @@
           if (frozenBody) {
             frozenBody.scrollTop = scroller.scrollTop;
           }
-          if (timelineHeaderWrapper) {
+          if (timelineHeaderWrapper && timelineHeaderWrapper.scrollLeft !== scroller.scrollLeft) {
             timelineHeaderWrapper.scrollLeft = scroller.scrollLeft;
           }
-          if (resourceRightScroller) {
+          if (resourceRightScroller && resourceRightScroller.scrollLeft !== scroller.scrollLeft) {
             resourceRightScroller.scrollLeft = scroller.scrollLeft;
           }
           renderVirtualWindow(scroller.scrollTop);
@@ -5342,10 +5465,10 @@
 
       if (resourceRightScroller) {
         resourceRightScroller.onscroll = function () {
-          if (scroller) {
+          if (scroller && scroller.scrollLeft !== resourceRightScroller.scrollLeft) {
             scroller.scrollLeft = resourceRightScroller.scrollLeft;
           }
-          if (timelineHeaderWrapper) {
+          if (timelineHeaderWrapper && timelineHeaderWrapper.scrollLeft !== resourceRightScroller.scrollLeft) {
             timelineHeaderWrapper.scrollLeft = resourceRightScroller.scrollLeft;
           }
         };
@@ -5372,8 +5495,12 @@
       }
     }
 
-    document.addEventListener('DOMContentLoaded', setupScrollAndWheelListeners);
+    document.addEventListener('DOMContentLoaded', function () {
+      setupScrollAndWheelListeners();
+      adjustCanvasBottomGaps();
+    });
     setupScrollAndWheelListeners();
+    adjustCanvasBottomGaps();
 
     window.addEventListener('resize', function () {
       adjustCanvasBottomGaps();
