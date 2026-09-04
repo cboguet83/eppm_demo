@@ -208,6 +208,14 @@
       "manage_project_pools": "Assign Resource Pools",
       "manage_task_pools": "Assign Resource Pools"
     },
+    "resource_grid": {
+      "title": "Resource Pools & Capacity Usage",
+      "within_capacity": "Within Capacity",
+      "overallocated": "Overallocated",
+      "no_pools": "No resource pools configured",
+      "max_demand": "Max Demand",
+      "capacity": "Capacity"
+    },
     "modal": {
       "add_title": "➕ Add New Step ({project_id})",
       "edit_title": "✏️ Edit: {name}",

@@ -209,6 +209,14 @@
       "manage_project_pools": "Ressourcenpools zuweisen",
       "manage_task_pools": "Ressourcenpools zuweisen"
     },
+    "resource_grid": {
+      "title": "Ressourcen-Pools & Kapazitätsauslastung",
+      "within_capacity": "Im Rahmen der Kapazität",
+      "overallocated": "Überlastet",
+      "no_pools": "Keine Ressourcen-Pools konfiguriert",
+      "max_demand": "Max. Auslastung",
+      "capacity": "Kapazität"
+    },
     "modal": {
       "add_title": "➕ Neuen Schritt hinzufügen ({project_id})",
       "edit_title": "✏️ Bearbeiten: {name}",

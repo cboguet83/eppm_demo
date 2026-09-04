@@ -873,6 +873,27 @@ def render_planning_milestones(
                         }
                         st.rerun()
 
+        # Build resource pools payload for the demand & capacity grid below the Gantt
+        df_all_pools = pool_repo.get_all_pools()
+        resource_pools_payload: list[dict[str, Any]] = []
+        if not df_all_pools.empty:
+            for _, p_row in df_all_pools.iterrows():
+                p_id = int(p_row["id"])
+                p_name = str(p_row["name"])
+                if p_id not in pool_details_cache:
+                    pool_details_cache[p_id] = ResourcePoolService.calculate_pool_capacity(
+                        p_id, org_repo, pool_repo, milestone_repo
+                    )
+                p_cap = pool_details_cache[p_id]
+                resource_pools_payload.append({
+                    "id": p_id,
+                    "name": p_name,
+                    "capacity": float(p_cap.total_capacity_fte),
+                    "peak_demand": float(p_cap.peak_assigned_fte),
+                    "is_overassigned": bool(p_cap.is_overassigned),
+                    "daily_usage": p_cap.daily_usage,
+                })
+
         # Render custom drag-and-drop component with multi-dependency metadata and i18n
         cur_loc = get_current_locale()
         gantt_translations = get_section_catalog("gantt", cur_loc)
@@ -885,6 +906,7 @@ def render_planning_milestones(
             project_id=selected_id,
             is_multi_project=True,
             translations=gantt_translations,
+            resource_pools=resource_pools_payload,
             key=widget_key,
         )
 

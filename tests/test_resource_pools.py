@@ -726,7 +726,97 @@ class TestResourcePools(unittest.TestCase):
         if today_iso < "2026-06-01" or today_iso > "2026-06-30":
             self.assertNotIn(today_iso, detail.daily_usage)
 
+    def test_resource_grid_payload_and_max_demand_period_calculation(self) -> None:
+        """Verify that daily_usage accurately provides period max demand for the resource grid."""
+        f_id = self.org_repo.create_function(
+            OrgFunction(name="Cloud Architect", hierarchy_level=2, fte_percentage=200)
+        )
+        p_id = self.pool_repo.create_pool(ResourcePool(name="Cloud Arch Pool"))
+        self.pool_repo.create_mapping(
+            PoolMapping(pool_id=p_id, target_type="function", target_id=f_id, allocation_pct=100.0)
+        )
+
+        self.project_repo.create_project(
+            project_id=81,
+            name="Cloud Migration Project",
+            status="In Progress",
+            planned_budget=120000.0,
+            actual_budget=0.0,
+            dynamic_attributes={},
+        )
+        t_id_jan = self.milestone_repo.create_milestone(
+            project_id=81,
+            task_name="Cloud Strategy",
+            phase="Analysis",
+            start_date="2026-01-10",
+            end_date="2026-01-20",
+            progress_pct=10,
+        )
+        t_id_feb = self.milestone_repo.create_milestone(
+            project_id=81,
+            task_name="Cloud Rollout",
+            phase="Execution",
+            start_date="2026-02-01",
+            end_date="2026-02-15",
+            progress_pct=0,
+        )
+
+        # Jan assignment: 1.5 FTE (<= 2.0 capacity)
+        self.pool_repo.create_assignment(
+            PoolAssignment(
+                pool_id=p_id,
+                project_id=81,
+                task_id=t_id_jan,
+                fte_assigned=1.5,
+            )
+        )
+        # Feb assignment: 2.5 FTE (> 2.0 capacity -> overallocated)
+        self.pool_repo.create_assignment(
+            PoolAssignment(
+                pool_id=p_id,
+                project_id=81,
+                task_id=t_id_feb,
+                fte_assigned=2.5,
+            )
+        )
+
+        detail = ResourcePoolService.calculate_pool_capacity(
+            pool_id=p_id,
+            org_repo=self.org_repo,
+            pool_repo=self.pool_repo,
+            milestone_repo=self.milestone_repo,
+        )
+
+        self.assertEqual(detail.total_capacity_fte, 2.0)
+
+        # Helper to simulate JS getMaxDemandForPeriod
+        def get_max_demand(start_str: str, end_str: str) -> float:
+            return max(
+                (fte for d, fte in detail.daily_usage.items() if start_str <= d <= end_str),
+                default=0.0,
+            )
+
+        # January Month Cell (2026-01-01 -> 2026-01-31): max demand 1.5, not overallocated
+        jan_max = get_max_demand("2026-01-01", "2026-01-31")
+        self.assertEqual(jan_max, 1.5)
+        self.assertFalse(jan_max > detail.total_capacity_fte)
+
+        # February Month Cell (2026-02-01 -> 2026-02-28): max demand 2.5, overallocated (highlighted in red)
+        feb_max = get_max_demand("2026-02-01", "2026-02-28")
+        self.assertEqual(feb_max, 2.5)
+        self.assertTrue(feb_max > detail.total_capacity_fte)
+
+        # March Month Cell (2026-03-01 -> 2026-03-31): max demand 0.0, empty cell
+        mar_max = get_max_demand("2026-03-01", "2026-03-31")
+        self.assertEqual(mar_max, 0.0)
+
+        # Quarter 1 Cell (2026-01-01 -> 2026-03-31): covers Feb spike, max demand is 2.5, overallocated
+        q1_max = get_max_demand("2026-01-01", "2026-03-31")
+        self.assertEqual(q1_max, 2.5)
+        self.assertTrue(q1_max > detail.total_capacity_fte)
+
 
 if __name__ == "__main__":
     unittest.main()
+
 

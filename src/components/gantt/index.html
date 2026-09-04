@@ -1075,6 +1075,290 @@
       color: #991b1b;
       line-height: 1.4;
     }
+
+    /* Resource Pools Usage & Demand Grid */
+    .resource-grid-container {
+      background: #ffffff;
+      border-top: 2px solid var(--border-dark);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      z-index: 20;
+    }
+
+    .resource-panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 14px;
+      background: #f8fafc;
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+      user-select: none;
+    }
+
+    .resource-panel-title {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 700;
+      color: #0f172a;
+    }
+
+    .resource-panel-toggle {
+      cursor: pointer;
+      font-size: 10px;
+      color: #64748b;
+      padding: 2px 5px;
+      border-radius: 4px;
+      transition: all 0.15s ease;
+    }
+
+    .resource-panel-toggle:hover {
+      background: #e2e8f0;
+      color: #0f172a;
+    }
+
+    .resource-count-badge {
+      font-size: 11px;
+      font-weight: 600;
+      background: #e0f2fe;
+      color: #0369a1;
+      border: 1px solid #bae6fd;
+      padding: 1px 7px;
+      border-radius: 10px;
+      margin-left: 4px;
+    }
+
+    .resource-panel-legend {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      font-size: 11px;
+      color: #475569;
+    }
+
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .legend-box {
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+      display: inline-block;
+    }
+
+    .legend-box.normal {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+    }
+
+    .legend-box.over {
+      background: #fee2e2;
+      border: 1px solid #f87171;
+    }
+
+    .resource-grid-main {
+      display: flex;
+      position: relative;
+      background: #ffffff;
+      overflow: hidden;
+      max-height: 240px;
+      transition: max-height 0.2s ease;
+    }
+
+    .resource-grid-main.collapsed {
+      display: none;
+    }
+
+    /* Left Pane */
+    .resource-left-pane {
+      width: var(--left-col-width);
+      min-width: 200px;
+      max-width: 80vw;
+      flex-shrink: 0;
+      overflow-x: hidden;
+      overflow-y: hidden;
+      background: #ffffff;
+      border-right: 1px solid var(--border);
+      box-sizing: border-box;
+    }
+
+    .resource-left-header {
+      height: 28px;
+      display: flex;
+      align-items: center;
+      padding: 0 10px;
+      background: #f1f5f9;
+      border-bottom: 1px solid var(--border);
+      font-size: 10.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #64748b;
+    }
+
+    .r-hdr-name {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .r-hdr-cap {
+      width: 80px;
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    .resource-left-row {
+      height: 38px;
+      display: flex;
+      align-items: center;
+      padding: 0 10px;
+      border-bottom: 1px solid var(--border);
+      box-sizing: border-box;
+      font-size: 12px;
+      transition: background 0.15s ease;
+    }
+
+    .resource-left-row:hover {
+      background: #f8fafc;
+    }
+
+    .resource-pool-name {
+      flex: 1;
+      font-weight: 600;
+      color: #1e293b;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .resource-pool-cap {
+      width: 80px;
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    .cap-badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 6px;
+      background: #f1f5f9;
+      color: #334155;
+      border: 1px solid #cbd5e1;
+    }
+
+    .resource-splitter-spacer {
+      width: 6px;
+      min-width: 6px;
+      max-width: 6px;
+      background: #f8fafc;
+      border-right: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    /* Right Pane */
+    .resource-right-pane-scroller {
+      flex: 1;
+      overflow-x: auto;
+      overflow-y: hidden;
+      position: relative;
+      background: #ffffff;
+      min-width: 0;
+    }
+
+    .resource-right-pane-inner {
+      position: relative;
+    }
+
+    .resource-right-header {
+      height: 28px;
+      display: flex;
+      align-items: center;
+      background: #f1f5f9;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .resource-header-cell {
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: 600;
+      color: #64748b;
+      border-right: 1px solid var(--border);
+      box-sizing: border-box;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+
+    .resource-right-row {
+      height: 38px;
+      display: flex;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      box-sizing: border-box;
+      transition: background 0.15s ease;
+    }
+
+    .resource-right-row:hover {
+      background: rgba(37, 99, 235, 0.03);
+    }
+
+    .resource-demand-cell {
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11.5px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+      border-right: 1px solid var(--border);
+      box-sizing: border-box;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      position: relative;
+      user-select: none;
+    }
+
+    .resource-demand-cell.cell-empty {
+      color: #cbd5e1;
+      background: transparent;
+    }
+
+    .resource-demand-cell.cell-normal {
+      color: #2563eb;
+      background: #f0f7ff;
+      font-weight: 600;
+    }
+
+    .resource-demand-cell.cell-normal:hover {
+      background: #dbeafe;
+      color: #1d4ed8;
+    }
+
+    .resource-demand-cell.cell-overallocated {
+      color: #b91c1c;
+      background: #fee2e2;
+      font-weight: 700;
+      box-shadow: inset 0 0 0 1px #f87171;
+    }
+
+    .resource-demand-cell.cell-overallocated:hover {
+      background: #fecaca;
+      color: #991b1b;
+      box-shadow: inset 0 0 0 1.5px #ef4444;
+    }
   </style>
 </head>
 
@@ -1359,6 +1643,46 @@
         </div>
       </div>
     </div>
+
+    <!-- Synchronized Resource Pools Demand & Capacity Grid -->
+    <div class="resource-grid-container" id="resource-grid-container">
+      <!-- Resource Section Header Bar -->
+      <div class="resource-panel-header" id="resource-panel-header">
+        <div class="resource-panel-title">
+          <span class="resource-panel-toggle" id="btn-toggle-resource-grid" onclick="toggleResourceGrid()">▼</span>
+          <span>🏊</span>
+          <span class="resource-panel-heading" id="lbl-resource-panel-title">Resource Pools & Capacity Usage</span>
+          <span class="resource-count-badge" id="resource-count-badge">0 Pools</span>
+        </div>
+        <div class="resource-panel-legend">
+          <span class="legend-item"><span class="legend-box normal"></span> <span id="lbl-within-cap">Within Capacity</span></span>
+          <span class="legend-item"><span class="legend-box over"></span> <span id="lbl-overallocated">Overallocated</span></span>
+        </div>
+      </div>
+
+      <!-- Resource Grid Content (Left & Right synchronized panes) -->
+      <div class="resource-grid-main" id="resource-grid-main">
+        <!-- Left Pane: Resource Pool names and capacities -->
+        <div class="resource-left-pane" id="resource-left-pane">
+          <div class="resource-left-header" id="resource-left-header">
+            <div class="r-hdr-name">Resource Pool</div>
+            <div class="r-hdr-cap">Capacity</div>
+          </div>
+          <div class="resource-left-body" id="resource-left-body"></div>
+        </div>
+
+        <!-- Splitter spacer matching the 6px vertical splitter -->
+        <div class="resource-splitter-spacer" id="resource-splitter-spacer"></div>
+
+        <!-- Right Pane: Timeline period demand cells -->
+        <div class="resource-right-pane-scroller" id="resource-right-pane-scroller">
+          <div class="resource-right-pane-inner" id="resource-right-pane-inner">
+            <div class="resource-right-header" id="resource-right-header"></div>
+            <div class="resource-right-body" id="resource-right-body"></div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -1378,6 +1702,8 @@
     let tasksData = [];
     let allProjectsData = []; // list of { id, name, tags }
     let externalTasksData = {}; // project_id -> list of { id, task_name, start_date, end_date }
+    let resourcePoolsData = [];
+    let isResourceGridCollapsed = false;
     let currentProjectId = "";
     let currentMode = "Quarter";
     let showHoverOverlay = true;
@@ -1400,6 +1726,7 @@
       view_modes: { day: "Day", week: "Week", month: "Month", quarter: "Quarter", year: "Year" },
       toggles: { internal_links: "🔗 Internal Dependencies", external_links: "🌐 External Dependencies", show_description: "📄 Description", show_hover: "💬 Tooltips", expand_all: "▼ Expand All", collapse_all: "▶ Collapse All" },
       context_menu: { edit_step: "Edit Step Details", add_step_after: "Add Next Step (Successor)", add_step_before: "Add Previous Step (Predecessor)", mark_complete: "Mark as 100% Complete", delete_step: "Delete Step", edit_dep: "Edit Dependency", delete_dep: "Delete Dependency", view_diagnostics: "View Diagnostics" },
+      resource_grid: { title: "Resource Pools & Capacity Usage", within_capacity: "Within Capacity", overallocated: "Overallocated", no_pools: "No resource pools configured", max_demand: "Max Demand", capacity: "Capacity" },
       modal: { add_title: "➕ Add New Step ({project_id})", edit_title: "✏️ Edit: {name}", field_name: "Step / Task Name *", field_phase: "Phase / Category", field_desc: "Description", field_start: "Start Date *", field_end: "End Date *", field_progress: "Progress Percentage", dependencies_header: "🔗 Step Dependencies & Predecessors", btn_add_pred: "➕ Add Predecessor Link", cross_project_chk: "🌐 Cross-Project?", select_pred_placeholder: "-- Select Predecessor Step --", whole_project_option: "(leave blank for whole project)", link_type_fs: "FS (Fin➔St)", link_type_ff: "FF (Fin➔Fin)", link_type_ss: "SS (St➔St)", link_type_sf: "SF (St➔Fin)", lag_placeholder: "Lag (days)", btn_save: "💾 Save Changes", btn_cancel: "Cancel", optional: "Optional" },
       diagnostics: { title: "⚠️ Constraint Violation Diagnostics", btn_fix: "✏️ Fix in Step Editor", btn_close: "Close" }
     };
@@ -1462,6 +1789,14 @@
       if (elProjTags) elProjTags.innerText = getT('context_menu.manage_tags', 'Manage Tags');
       const elEditProj = document.getElementById('ctx-label-edit-project');
       if (elEditProj) elEditProj.innerText = getT('context_menu.edit_project', 'Edit Project Details');
+
+      // Resource grid labels
+      const elResTitle = document.getElementById('lbl-resource-panel-title');
+      if (elResTitle) elResTitle.innerText = getT('resource_grid.title', 'Resource Pools & Capacity Usage');
+      const elWithin = document.getElementById('lbl-within-cap');
+      if (elWithin) elWithin.innerText = getT('resource_grid.within_capacity', 'Within Capacity');
+      const elOver = document.getElementById('lbl-overallocated');
+      if (elOver) elOver.innerText = getT('resource_grid.overallocated', 'Overallocated');
 
       // Modal dialog labels & buttons
       const elName = document.getElementById('modal-label-task-name');
@@ -2854,10 +3189,14 @@
             monthStartIdx = dayCount;
           }
 
+          const dayStart = new Date(cur);
+          const dayEnd = new Date(cur);
           bottomCells.push({
             label: String(cur.getDate()),
             width: colWidth,
-            isCurrent: formatDate(cur) === formatDate(new Date())
+            isCurrent: formatDate(cur) === formatDate(new Date()),
+            startDate: dayStart,
+            endDate: dayEnd
           });
 
           cur = addDays(cur, 1);
@@ -2885,9 +3224,13 @@
             monthStartIdx = weekCount;
           }
 
+          const wStart = new Date(cur);
+          const wEnd = addDays(cur, 6);
           bottomCells.push({
             label: `W${Math.ceil(cur.getDate() / 7)}`,
-            width: colWidth
+            width: colWidth,
+            startDate: wStart,
+            endDate: wEnd
           });
 
           cur = addDays(cur, 7);
@@ -2918,9 +3261,13 @@
           }
 
           const qNum = Math.floor(cur.getMonth() / 3) + 1;
+          const qStart = new Date(cur);
+          const qEnd = new Date(cur.getFullYear(), cur.getMonth() + 3, 0);
           bottomCells.push({
             label: `Q${qNum}`,
-            width: colWidth
+            width: colWidth,
+            startDate: qStart,
+            endDate: qEnd
           });
 
           cur.setMonth(cur.getMonth() + 3);
@@ -2939,8 +3286,25 @@
         while (cur < timelineEnd) {
           const yLabel = String(cur.getFullYear());
           topCells.push({ label: yLabel, width: colWidth });
-          bottomCells.push({ label: 'H1', width: colWidth / 2 });
-          bottomCells.push({ label: 'H2', width: colWidth / 2 });
+
+          const h1Start = new Date(cur.getFullYear(), 0, 1);
+          const h1End = new Date(cur.getFullYear(), 6, 0);
+          bottomCells.push({
+            label: 'H1',
+            width: colWidth / 2,
+            startDate: h1Start,
+            endDate: h1End
+          });
+
+          const h2Start = new Date(cur.getFullYear(), 6, 1);
+          const h2End = new Date(cur.getFullYear() + 1, 0, 0);
+          bottomCells.push({
+            label: 'H2',
+            width: colWidth / 2,
+            startDate: h2Start,
+            endDate: h2End
+          });
+
           cur.setFullYear(cur.getFullYear() + 1);
           yCount++;
         }
@@ -2966,9 +3330,13 @@
           }
 
           const mLabel = MONTH_NAMES[cur.getMonth()];
+          const mStart = new Date(cur);
+          const mEnd = new Date(cur.getFullYear(), cur.getMonth() + 1, 0);
           bottomCells.push({
             label: mLabel,
-            width: colWidth
+            width: colWidth,
+            startDate: mStart,
+            endDate: mEnd
           });
 
           cur.setMonth(cur.getMonth() + 1);
@@ -2982,6 +3350,185 @@
 
       msPerPixel = (timelineEnd.getTime() - timelineStart.getTime()) / totalTimelineWidth;
       return { topCells, bottomCells };
+    }
+
+    // --------------------------------------------------------------------------
+    // RESOURCE POOLS CAPACITY & DEMAND GRID LOGIC
+    // --------------------------------------------------------------------------
+    let lastRenderedBottomCells = [];
+
+    function toggleResourceGrid() {
+      isResourceGridCollapsed = !isResourceGridCollapsed;
+      const mainEl = document.getElementById('resource-grid-main');
+      const btnToggle = document.getElementById('btn-toggle-resource-grid');
+      if (mainEl) {
+        if (isResourceGridCollapsed) {
+          mainEl.classList.add('collapsed');
+          if (btnToggle) btnToggle.innerText = '▶';
+        } else {
+          mainEl.classList.remove('collapsed');
+          if (btnToggle) btnToggle.innerText = '▼';
+        }
+      }
+      adjustCanvasBottomGaps();
+      updateComponentFrameHeight();
+    }
+
+    function getMaxDemandForPeriod(pool, startStr, endStr) {
+      if (!pool || !pool.daily_usage) return 0;
+      let maxVal = 0;
+      for (const [dStr, fte] of Object.entries(pool.daily_usage)) {
+        if (dStr >= startStr && dStr <= endStr) {
+          if (fte > maxVal) {
+            maxVal = fte;
+          }
+        }
+      }
+      return maxVal;
+    }
+
+    function showResourceCellTooltip(e, poolName, startStr, endStr, maxDemand, capacity) {
+      if (!showHoverOverlay) return;
+      const isOver = maxDemand > (capacity + 0.001);
+      const diff = Math.abs(maxDemand - capacity);
+      let statusHtml = '';
+      if (isOver) {
+        statusHtml = `<span style="color:#ef4444; font-weight:700;">⚠️ ${getT('resource_grid.overallocated', 'Overallocated')} (+${diff.toFixed(2)} FTE excess)</span>`;
+      } else if (maxDemand > 0) {
+        statusHtml = `<span style="color:#10b981; font-weight:600;">✅ ${getT('resource_grid.within_capacity', 'Within Capacity')} (${diff.toFixed(2)} FTE available)</span>`;
+      } else {
+        statusHtml = `<span style="color:#94a3b8;">No Active Allocation</span>`;
+      }
+
+      const html = `
+        <div style="font-size:12px; line-height:1.45; min-width:220px;">
+          <div style="font-weight:700; color:#0f172a; margin-bottom:5px; border-bottom:1px solid #e2e8f0; padding-bottom:4px; display:flex; align-items:center; gap:5px;">
+            <span>🏊</span> <span>${escapeHtml(poolName)}</span>
+          </div>
+          <div style="color:#64748b; font-size:11px; margin-bottom:5px;">
+            📅 <b>Period:</b> ${startStr} → ${endStr}
+          </div>
+          <div style="display:flex; justify-content:space-between; margin-bottom:3px;">
+            <span style="color:#475569;">${getT('resource_grid.max_demand', 'Max Demand')}:</span>
+            <strong style="color:${isOver ? '#dc2626' : (maxDemand > 0 ? '#2563eb' : '#64748b')};">${maxDemand.toFixed(2)} FTE</strong>
+          </div>
+          <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+            <span style="color:#475569;">${getT('resource_grid.capacity', 'Capacity')}:</span>
+            <strong>${capacity.toFixed(2)} FTE</strong>
+          </div>
+          <div style="margin-top:4px; border-top:1px solid #e2e8f0; padding-top:4px;">
+            ${statusHtml}
+          </div>
+        </div>
+      `;
+      showTooltip(e, html);
+    }
+
+    function renderResourceGrid(bottomCells) {
+      if (bottomCells) {
+        lastRenderedBottomCells = bottomCells;
+      } else {
+        bottomCells = lastRenderedBottomCells;
+      }
+      if (!bottomCells || bottomCells.length === 0) return;
+
+      const container = document.getElementById('resource-grid-container');
+      const badgeCount = document.getElementById('resource-count-badge');
+      const leftBody = document.getElementById('resource-left-body');
+      const rightHeader = document.getElementById('resource-right-header');
+      const rightBody = document.getElementById('resource-right-body');
+      const rightInner = document.getElementById('resource-right-pane-inner');
+
+      if (!container || !leftBody || !rightBody || !rightInner) return;
+
+      const pools = resourcePoolsData || [];
+      if (badgeCount) {
+        badgeCount.innerText = `${pools.length} ${pools.length === 1 ? 'Pool' : 'Pools'}`;
+      }
+
+      rightInner.style.width = `${totalTimelineWidth}px`;
+
+      // Render right mini-header matching timeline columns
+      if (rightHeader) {
+        rightHeader.innerHTML = bottomCells.map(c => `
+          <div class="resource-header-cell" style="width: ${c.width}px;" title="${c.label}">${c.label}</div>
+        `).join('');
+      }
+
+      if (pools.length === 0) {
+        leftBody.innerHTML = `
+          <div style="padding:14px 10px; color:#94a3b8; font-size:12px; font-style:italic;">
+            ${getT('resource_grid.no_pools', 'No resource pools configured')}
+          </div>
+        `;
+        rightBody.innerHTML = `
+          <div style="height:38px; display:flex; align-items:center; padding-left:14px; color:#cbd5e1; font-size:12px; font-style:italic;">
+            —
+          </div>
+        `;
+        return;
+      }
+
+      // Render Left rows (Pool name + Capacity badge)
+      leftBody.innerHTML = pools.map(p => `
+        <div class="resource-left-row" title="${escapeHtml(p.name)}">
+          <div class="resource-pool-name">
+            <span style="font-size:13px;">🏊</span>
+            <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(p.name)}</span>
+          </div>
+          <div class="resource-pool-cap">
+            <span class="cap-badge">${Number(p.capacity || 0).toFixed(1)} FTE</span>
+          </div>
+        </div>
+      `).join('');
+
+      // Render Right rows (Demand cells matching column periods)
+      rightBody.innerHTML = pools.map(p => {
+        const poolCap = Number(p.capacity || 0);
+        const cellsHtml = bottomCells.map(c => {
+          const startStr = formatDate(c.startDate);
+          const endStr = formatDate(c.endDate);
+          const maxD = getMaxDemandForPeriod(p, startStr, endStr);
+          const isOver = maxD > (poolCap + 0.001);
+          let cellCls = 'cell-empty';
+          let displayTxt = '—';
+          if (maxD > 0) {
+            cellCls = isOver ? 'cell-overallocated' : 'cell-normal';
+            displayTxt = maxD.toFixed(1);
+          }
+          return `
+            <div class="resource-demand-cell ${cellCls}"
+                 style="width: ${c.width}px;"
+                 onmouseenter="showResourceCellTooltip(event, '${escapeHtml(p.name)}', '${startStr}', '${endStr}', ${maxD}, ${poolCap})"
+                 onmousemove="moveTooltip(event)"
+                 onmouseleave="hideTooltip()">
+              ${displayTxt}
+            </div>
+          `;
+        }).join('');
+
+        return `<div class="resource-right-row" style="width: ${totalTimelineWidth}px;">${cellsHtml}</div>`;
+      }).join('');
+    }
+
+    function updateComponentFrameHeight() {
+      const layoutContainer = document.getElementById('gantt-layout');
+      const pools = resourcePoolsData || [];
+
+      const totalTaskHeight = Math.max(46, masterRenderItems.length * 46);
+      const maxGanttH = Math.min(550, Math.max(260, totalTaskHeight + 56));
+      if (layoutContainer) {
+        layoutContainer.style.height = `${maxGanttH}px`;
+      }
+
+      let resH = 34; // Header bar
+      if (!isResourceGridCollapsed) {
+        const poolRowsH = Math.max(1, pools.length) * 38 + 28;
+        resH += Math.min(240, poolRowsH);
+      }
+
+      const totalFrameH = maxGanttH + resH + 85;
+      Streamlit.setFrameHeight(totalFrameH);
     }
 
     let isMultiProject = false;
@@ -3386,14 +3933,9 @@
         }
       }
 
-      // Sizing the layout container and Streamlit frame
-      const layoutContainer = document.getElementById('gantt-layout');
-      const maxDisplayH = Math.min(650, Math.max(300, totalHeight + 56));
-      if (layoutContainer) {
-        layoutContainer.style.height = `${maxDisplayH}px`;
-      }
-      const frameH = maxDisplayH + 65;
-      Streamlit.setFrameHeight(frameH);
+      // Render Resource Demand Grid & Update Frame Sizing
+      renderResourceGrid(bottomCells);
+      updateComponentFrameHeight();
 
       adjustCanvasBottomGaps();
       renderVirtualWindow();
@@ -4098,6 +4640,9 @@
           i18n = Object.assign({}, i18n, args.translations);
           updateLocalizedUI();
         }
+        if (args.resource_pools) {
+          resourcePoolsData = args.resource_pools;
+        }
         if (args.tasks) {
           tasksData = args.tasks;
           allProjectsData = args.all_projects || [];
@@ -4117,6 +4662,7 @@
       const frozenHeaderWrapper = document.getElementById('frozen-header-wrapper');
       const frozenBody = document.getElementById('frozen-body');
       const layoutContainer = document.getElementById('gantt-layout');
+      const resourceLeftPane = document.getElementById('resource-left-pane');
       if (!splitter || !frozenHeaderWrapper || !frozenBody || !layoutContainer) return;
 
       let isDragging = false;
@@ -4145,6 +4691,11 @@
         frozenBody.style.width = `${newWidth}px`;
         frozenBody.style.minWidth = `${newWidth}px`;
         frozenBody.style.maxWidth = `${newWidth}px`;
+        if (resourceLeftPane) {
+          resourceLeftPane.style.width = `${newWidth}px`;
+          resourceLeftPane.style.minWidth = `${newWidth}px`;
+          resourceLeftPane.style.maxWidth = `${newWidth}px`;
+        }
         document.documentElement.style.setProperty('--left-col-width', `${newWidth}px`);
         adjustCanvasBottomGaps();
       });
@@ -4166,6 +4717,8 @@
       const frozenBody = document.getElementById('frozen-body');
       const frozenHeaderWrapper = document.getElementById('frozen-header-wrapper');
       const timelineHeaderWrapper = document.getElementById('timeline-header-wrapper');
+      const resourceRightScroller = document.getElementById('resource-right-pane-scroller');
+      const resourceLeftPane = document.getElementById('resource-left-pane');
 
       initSplitter();
 
@@ -4177,7 +4730,21 @@
           if (timelineHeaderWrapper) {
             timelineHeaderWrapper.scrollLeft = scroller.scrollLeft;
           }
+          if (resourceRightScroller) {
+            resourceRightScroller.scrollLeft = scroller.scrollLeft;
+          }
           renderVirtualWindow(scroller.scrollTop);
+        };
+      }
+
+      if (resourceRightScroller) {
+        resourceRightScroller.onscroll = function () {
+          if (scroller) {
+            scroller.scrollLeft = resourceRightScroller.scrollLeft;
+          }
+          if (timelineHeaderWrapper) {
+            timelineHeaderWrapper.scrollLeft = resourceRightScroller.scrollLeft;
+          }
         };
       }
 
@@ -4185,6 +4752,9 @@
         frozenBody.onscroll = function () {
           if (frozenHeaderWrapper) {
             frozenHeaderWrapper.scrollLeft = frozenBody.scrollLeft;
+          }
+          if (resourceLeftPane) {
+            resourceLeftPane.scrollLeft = frozenBody.scrollLeft;
           }
         };
 

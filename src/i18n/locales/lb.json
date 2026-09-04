@@ -209,6 +209,14 @@
       "manage_project_pools": "Ressourcenpools zouuerdnen",
       "manage_task_pools": "Ressourcenpools zouuerdnen"
     },
+    "resource_grid": {
+      "title": "Ressource-Pools & Kapazitéitsnotzung",
+      "within_capacity": "Bannent der Kapazitéit",
+      "overallocated": "Iwwerallokéiert",
+      "no_pools": "Keng Ressource-Pools konfiguréiert",
+      "max_demand": "Max. Nofro",
+      "capacity": "Kapazitéit"
+    },
     "modal": {
       "add_title": "➕ Neie Schrëtt bäisetzen ({project_id})",
       "edit_title": "✏️ Änneren: {name}",

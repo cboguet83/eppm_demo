@@ -209,6 +209,14 @@
       "manage_project_pools": "Atribuir Pools de Recursos",
       "manage_task_pools": "Atribuir Pools de Recursos"
     },
+    "resource_grid": {
+      "title": "Pools de Recursos & Utilização de Capacidade",
+      "within_capacity": "Dentro da Capacidade",
+      "overallocated": "Superalocado",
+      "no_pools": "Nenhum pool de recursos configurado",
+      "max_demand": "Demanda Máxima",
+      "capacity": "Capacidade"
+    },
     "modal": {
       "add_title": "➕ Adicionar Nova Etapa ({project_id})",
       "edit_title": "✏️ Editar: {name}",
