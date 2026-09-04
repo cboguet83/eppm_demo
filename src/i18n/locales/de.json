@@ -439,6 +439,7 @@
     "marker_within_cap": "Normaler Bedarf",
     "marker_over_cap": "Überlasteter Bedarf",
     "pool_capacity_line": "Pool-Kapazitätsgrenze",
-    "daily_demand_chart": "Zeitachse Tägliche Kapazität vs. Zugewiesener Bedarf"
+    "daily_demand_chart": "Zeitachse Tägliche Kapazität vs. Zugewiesener Bedarf",
+    "btn_jump_to_planning": "In Planung öffnen"
   }
 }

@@ -439,6 +439,7 @@
     "marker_within_cap": "Demanda Normal",
     "marker_over_cap": "Demanda com Sobrecarga",
     "pool_capacity_line": "Limite de Capacidade do Pool",
-    "daily_demand_chart": "Linha do Tempo: Capacidade Diária vs. Demanda Atribuída"
+    "daily_demand_chart": "Linha do Tempo: Capacidade Diária vs. Demanda Atribuída",
+    "btn_jump_to_planning": "Abrir no Planejamento"
   }
 }

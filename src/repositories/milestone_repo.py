@@ -238,20 +238,27 @@ class MilestoneRepository:
                 return str(row[0]), str(row[1])
             return None, None
 
-    def get_all_project_date_bounds(self) -> dict[str, tuple[Optional[str], Optional[str]]]:
+    def get_all_project_date_bounds(self) -> dict[Any, tuple[Optional[str], Optional[str]]]:
         """Calculates earliest start and latest end dates for all projects in one query.
 
         Returns:
-            dict[str, tuple[Optional[str], Optional[str]]]: Map of project_id string to (min_start, max_end).
+            dict[Any, tuple[Optional[str], Optional[str]]]: Map of project_id (both int and str) to (min_start, max_end).
         """
-        bounds: dict[str, tuple[Optional[str], Optional[str]]] = {}
+        bounds: dict[Any, tuple[Optional[str], Optional[str]]] = {}
         with get_db(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
                 "SELECT project_id, MIN(start_date), MAX(end_date) FROM project_task GROUP BY project_id"
             )
             for row in cursor.fetchall():
-                bounds[str(row[0])] = (str(row[1]) if row[1] else None, str(row[2]) if row[2] else None)
+                s_val = str(row[1]) if row[1] else None
+                e_val = str(row[2]) if row[2] else None
+                p_str = str(row[0])
+                bounds[p_str] = (s_val, e_val)
+                try:
+                    bounds[int(p_str)] = (s_val, e_val)
+                except (ValueError, TypeError):
+                    pass
         return bounds
 
     def get_all_external_tasks_map(self) -> dict[str, list[dict[str, Any]]]:

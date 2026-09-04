@@ -190,7 +190,8 @@ def _manage_project_resource_pools_dialog(
 
     # Fetch project date bounds
     proj_bounds = milestone_repo.get_all_project_date_bounds()
-    p_start_str, p_end_str = proj_bounds.get(project_id, (None, None))
+    p_bound = proj_bounds.get(project_id) or proj_bounds.get(str(project_id)) or (None, None)
+    p_start_str, p_end_str = p_bound
     if p_start_str and p_end_str:
         st.caption(f"📅 **Project Timeline:** `{p_start_str}` ➔ `{p_end_str}`")
 
@@ -615,6 +616,16 @@ def render_planning_milestones(
                 available_tags_set.add(str(f_name).strip())
 
     available_tags_list = sorted(list(available_tags_set))
+
+    # Check for external navigation focus (e.g. from Resource Pools table jump)
+    target_pid = st.session_state.pop("target_planning_project_id", None)
+    if target_pid is not None:
+        try:
+            target_pid_int = int(target_pid)
+            st.session_state["ms_planning_tag_filter"] = []
+            st.session_state["ms_multi_projects"] = [target_pid_int]
+        except (ValueError, TypeError):
+            pass
 
     top_filter_col, top_sel_col = st.columns([2, 3])
 

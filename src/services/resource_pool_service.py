@@ -241,9 +241,10 @@ class ResourcePoolService:
 
                 if not eff_start or not eff_end:
                     # Fallback to project date bounds
-                    if p_id in proj_bounds:
-                        eff_start = eff_start or proj_bounds[p_id][0]
-                        eff_end = eff_end or proj_bounds[p_id][1]
+                    b_tuple = proj_bounds.get(p_id) or proj_bounds.get(str(p_id))
+                    if b_tuple and b_tuple[0] and b_tuple[1]:
+                        eff_start = eff_start or b_tuple[0]
+                        eff_end = eff_end or b_tuple[1]
                     else:
                         today_str = datetime.date.today().isoformat()
                         eff_start = eff_start or today_str

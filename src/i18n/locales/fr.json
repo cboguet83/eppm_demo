@@ -439,6 +439,7 @@
     "marker_within_cap": "Demande Normale",
     "marker_over_cap": "Demande Sur-assignée",
     "pool_capacity_line": "Limite de Capacité du Pool",
-    "daily_demand_chart": "Chronologie Capacité Journalière vs Demande Assignée"
+    "daily_demand_chart": "Chronologie Capacité Journalière vs Demande Assignée",
+    "btn_jump_to_planning": "Ouvrir dans Planning"
   }
 }

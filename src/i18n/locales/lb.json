@@ -439,6 +439,7 @@
     "marker_within_cap": "Normale Bedarf",
     "marker_over_cap": "Iwwerbuchte Bedarf",
     "pool_capacity_line": "Pool-Kapazitéitsgrenz",
-    "daily_demand_chart": "Zäitlinn Deeglech Kapazitéit vs. Zougewisenen Bedarf"
+    "daily_demand_chart": "Zäitlinn Deeglech Kapazitéit vs. Zougewisenen Bedarf",
+    "btn_jump_to_planning": "A Planung opmaachen"
   }
 }

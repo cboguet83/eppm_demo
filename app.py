@@ -227,6 +227,32 @@ def run_app() -> None:
     }
 
     page_keys = [PAGE_PORTFOLIO, PAGE_PROJECT_MASTER, PAGE_SCHEMA_DEF, PAGE_PLANNING, PAGE_SETTINGS]
+
+    # Deep-link routing via URL query parameters (e.g. ?nav=planning&project_id=123)
+    if "nav" in st.query_params:
+        target_nav = st.query_params.get("nav")
+        target_proj_id = st.query_params.get("project_id")
+        target_task_id = st.query_params.get("task_id")
+
+        if target_nav in ("planning", PAGE_PLANNING):
+            st.session_state["app_sidebar_nav"] = PAGE_PLANNING
+            if target_proj_id:
+                try:
+                    p_id_int = int(target_proj_id)
+                    st.session_state["target_planning_project_id"] = p_id_int
+                    st.session_state["ms_multi_projects"] = [p_id_int]
+                except (ValueError, TypeError):
+                    pass
+            if target_task_id:
+                try:
+                    st.session_state["target_planning_task_id"] = int(target_task_id)
+                except (ValueError, TypeError):
+                    pass
+        elif target_nav in page_keys:
+            st.session_state["app_sidebar_nav"] = target_nav
+
+        st.query_params.clear()
+
     if "nav_redirect" in st.session_state and st.session_state["nav_redirect"]:
         st.session_state["app_sidebar_nav"] = st.session_state.pop("nav_redirect")
 

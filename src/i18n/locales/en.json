@@ -438,6 +438,7 @@
     "marker_within_cap": "Normal Daily Demand",
     "marker_over_cap": "Overassigned Daily Demand",
     "pool_capacity_line": "Pool Capacity Limit",
-    "daily_demand_chart": "Daily Capacity vs. Assigned Demand Timeline"
+    "daily_demand_chart": "Daily Capacity vs. Assigned Demand Timeline",
+    "btn_jump_to_planning": "Open in Planning"
   }
 }

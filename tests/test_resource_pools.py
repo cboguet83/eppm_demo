@@ -652,6 +652,80 @@ class TestResourcePools(unittest.TestCase):
         cap_trace = next(tr for tr in fig.data if tr.name == t("settings.pool_capacity_line"))
         self.assertIn(None, list(cap_trace.x))
 
+    def test_project_level_assignment_inherits_project_bounds_not_today(self) -> None:
+        """Verify project-level assignment without custom dates inherits project bounds, not today."""
+        import datetime
+
+        self.project_repo.create_project(
+            project_id=80,
+            name="Timeline Initiative",
+            status="In Progress",
+            planned_budget=75000.0,
+            actual_budget=0.0,
+            dynamic_attributes={},
+        )
+        # Create a task defining project bounds from 2026-06-01 to 2026-06-30
+        self.milestone_repo.create_milestone(
+            project_id=80,
+            task_name="Core Milestone",
+            phase="Phase 1",
+            start_date="2026-06-01",
+            end_date="2026-06-30",
+            progress_pct=0,
+        )
+
+        # Verify get_all_project_date_bounds returns both int and str keys
+        bounds = self.milestone_repo.get_all_project_date_bounds()
+        self.assertIn(80, bounds)
+        self.assertIn("80", bounds)
+        self.assertEqual(bounds[80], ("2026-06-01", "2026-06-30"))
+        self.assertEqual(bounds["80"], ("2026-06-01", "2026-06-30"))
+
+        f_id = self.org_repo.create_function(
+            OrgFunction(name="Consultant", hierarchy_level=1, fte_percentage=100)
+        )
+        p_id = self.pool_repo.create_pool(ResourcePool(name="Consulting Pool"))
+        self.pool_repo.create_mapping(
+            PoolMapping(pool_id=p_id, target_type="function", target_id=f_id, allocation_pct=100.0)
+        )
+
+        # Project level assignment with NO custom dates (default full duration)
+        self.pool_repo.create_assignment(
+            PoolAssignment(
+                pool_id=p_id,
+                project_id=80,
+                task_id=None,
+                fte_assigned=1.0,
+                start_date=None,
+                end_date=None,
+                notes="Advisory",
+            )
+        )
+
+        detail = ResourcePoolService.calculate_pool_capacity(
+            pool_id=p_id,
+            org_repo=self.org_repo,
+            pool_repo=self.pool_repo,
+            milestone_repo=self.milestone_repo,
+        )
+
+        self.assertEqual(len(detail.assignments), 1)
+        assign = detail.assignments[0]
+        # Must resolve to project bounds, not today!
+        self.assertEqual(assign["start_date"], "2026-06-01")
+        self.assertEqual(assign["end_date"], "2026-06-30")
+
+        # Daily usage must contain 2026-06-01 and 2026-06-30
+        self.assertIn("2026-06-01", detail.daily_usage)
+        self.assertIn("2026-06-30", detail.daily_usage)
+        self.assertEqual(detail.daily_usage["2026-06-01"], 1.0)
+        self.assertEqual(detail.daily_usage["2026-06-30"], 1.0)
+
+        # Today should NOT be in daily_usage (unless today happens to be in June 2026)
+        today_iso = datetime.date.today().isoformat()
+        if today_iso < "2026-06-01" or today_iso > "2026-06-30":
+            self.assertNotIn(today_iso, detail.daily_usage)
+
 
 if __name__ == "__main__":
     unittest.main()

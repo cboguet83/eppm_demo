@@ -10,6 +10,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 from src.i18n import t
+from src.models.constants import PAGE_PLANNING
 from src.models.organization import Employee, FunctionType, OrgFunction, Team
 from src.models.resource_pool import PoolAssignment, PoolCapacityDetail, PoolMapping, ResourcePool
 from src.models.tag import ProjectTag, TagDictionary, TagGroup, TaskTag
@@ -755,6 +756,121 @@ def _build_pool_timeline_figure(current_detail: PoolCapacityDetail) -> Optional[
         hovermode="closest",
     )
     return fig
+
+
+def _render_pool_assignments_table(
+    assignments: list[dict[str, Any]],
+    selected_pool_id: int,
+    pool_repo: ResourcePoolRepository,
+) -> None:
+    """Render active pool allocations table with clickable hyperlinks to Planning view.
+
+    Args:
+        assignments: List of pool assignment dictionaries.
+        selected_pool_id: ID of currently selected resource pool.
+        pool_repo: Repository for resource pool database operations.
+    """
+    if not assignments:
+        st.info(t("settings.no_assignments_for_pool", default="This pool is not currently assigned to any project or task."))
+        return
+
+    table_rows: list[str] = []
+    for a in assignments:
+        p_id = a["project_id"]
+        p_name = a["project_name"]
+        t_id = a["task_id"]
+        t_name = a["task_name"]
+        fte = a["fte_assigned"]
+        s_date = a["start_date"]
+        e_date = a["end_date"]
+        is_custom = a.get("is_custom_period", False)
+        notes = a.get("notes", "")
+
+        proj_link = (
+            f'<a href="?nav=planning&project_id={p_id}" target="_self" '
+            f'style="color:#0284C7; font-weight:700; text-decoration:underline;" '
+            f'title="Open {p_name} in Planning & Milestones">📁 {p_name} [#{p_id}]</a>'
+        )
+
+        if t_id:
+            task_link = (
+                f'<a href="?nav=planning&project_id={p_id}&task_id={t_id}" target="_self" '
+                f'style="color:#0284C7; text-decoration:underline;" '
+                f'title="Open Task #{t_id} in Planning">📋 {t_name} [#{t_id}]</a>'
+            )
+        else:
+            task_link = '<span style="color:#64748B; font-style:italic;">— Project Level</span>'
+
+        period_badge = (
+            f'<span style="font-size:12px; color:#334155;">{s_date} → {e_date}</span> '
+            f'<span style="font-size:10.5px; background:#E2E8F0; color:#475569; padding:1px 5px; border-radius:3px;">'
+            f'{"Custom" if is_custom else "Full Project"}</span>'
+        )
+
+        jump_btn = (
+            f'<a href="?nav=planning&project_id={p_id}{f"&task_id={t_id}" if t_id else ""}" target="_self" '
+            f'style="background:#0284C7; color:#FFFFFF; padding:4px 8px; border-radius:4px; font-size:11.5px; '
+            f'font-weight:600; text-decoration:none; display:inline-block; white-space:nowrap;">'
+            f'📅 Open ➔</a>'
+        )
+
+        table_rows.append(
+            f'<tr style="border-bottom:1px solid #E2E8F0;">'
+            f'<td style="padding:8px 10px; font-weight:600; color:#475569;">#{a["id"]}</td>'
+            f'<td style="padding:8px 10px;">{proj_link}</td>'
+            f'<td style="padding:8px 10px;">{task_link}</td>'
+            f'<td style="padding:8px 10px;"><span style="font-weight:700; color:#0F172A; background:#F1F5F9; padding:2px 7px; border-radius:4px;">{fte:.2f} FTE</span></td>'
+            f'<td style="padding:8px 10px;">{period_badge}</td>'
+            f'<td style="padding:8px 10px; color:#64748B; font-size:12px;">{notes or "—"}</td>'
+            f'<td style="padding:8px 10px; text-align:center;">{jump_btn}</td>'
+            f'</tr>'
+        )
+
+    header_html = (
+        f'<tr style="background:#F8FAFC; border-bottom:2px solid #CBD5E1; color:#475569; font-weight:700; font-size:12px; text-transform:uppercase;">'
+        f'<th style="padding:8px 10px; text-align:left;">ID</th>'
+        f'<th style="padding:8px 10px; text-align:left;">{t("settings.col_project", default="Project")}</th>'
+        f'<th style="padding:8px 10px; text-align:left;">{t("settings.col_task", default="Task / Step")}</th>'
+        f'<th style="padding:8px 10px; text-align:left;">{t("master_data.field_fte", default="Assigned FTE")}</th>'
+        f'<th style="padding:8px 10px; text-align:left;">{t("master_data.field_period", default="Effective Period")}</th>'
+        f'<th style="padding:8px 10px; text-align:left;">{t("master_data.field_notes", default="Notes")}</th>'
+        f'<th style="padding:8px 10px; text-align:center;">{t("settings.col_action", default="Action")}</th>'
+        f'</tr>'
+    )
+
+    full_table_html = (
+        f'<div style="overflow-x:auto; border:1px solid #E2E8F0; border-radius:6px; margin-bottom:12px;">'
+        f'<table style="width:100%; border-collapse:collapse; font-size:12.5px; text-align:left; background:#FFFFFF;">'
+        f'<thead>{header_html}</thead>'
+        f'<tbody>{"".join(table_rows)}</tbody>'
+        f'</table>'
+        f'</div>'
+    )
+
+    c_tbl, c_del_assign = st.columns([5, 1])
+    with c_tbl:
+        st.markdown(full_table_html, unsafe_allow_html=True)
+    with c_del_assign:
+        del_a_id = st.selectbox(
+            "Unassign ID",
+            options=[a["id"] for a in assignments],
+            key=f"sb_del_assign_{selected_pool_id}",
+            label_visibility="collapsed",
+        )
+        if st.button(t("settings.btn_unassign", default="🗑️ Unassign"), key=f"btn_unassign_{selected_pool_id}", use_container_width=True):
+            pool_repo.delete_assignment(del_a_id)
+            st.toast(f"Assignment #{del_a_id} removed.", icon="🗑️")
+            st.rerun()
+
+        if st.button("📅 " + t("settings.btn_jump_to_planning", default="Open in Planning"), key=f"btn_jump_{selected_pool_id}", use_container_width=True):
+            chosen = next((a for a in assignments if a["id"] == del_a_id), None)
+            if chosen:
+                st.session_state["target_planning_project_id"] = int(chosen["project_id"])
+                st.session_state["ms_multi_projects"] = [int(chosen["project_id"])]
+                if chosen.get("task_id"):
+                    st.session_state["target_planning_task_id"] = int(chosen["task_id"])
+                st.session_state["nav_redirect"] = PAGE_PLANNING
+                st.rerun()
 
 
 
@@ -2138,32 +2254,6 @@ def render_settings_view(
 
                 # Sub-section 3: Assignments on Projects & Tasks
                 st.write(f"#### 📁 / 📋 {t('settings.assignments_section_title', default='Active Allocations on Projects & Tasks')}")
-                if not current_detail.assignments:
-                    st.info(t("settings.no_assignments_for_pool", default="This pool is not currently assigned to any project or task."))
-                else:
-                    assign_rows = []
-                    for a in current_detail.assignments:
-                        assign_rows.append({
-                            "Assignment ID": a["id"],
-                            "Project": f"{a['project_name']} [#{a['project_id']}]",
-                            "Task / Step": a["task_name"] if a["task_id"] else "— Project Level",
-                            "Assigned FTE": f"{a['fte_assigned']:.2f} FTE",
-                            "Effective Period": f"{a['start_date']} → {a['end_date']}" + (" (Custom)" if a.get("is_custom_period") else " (Full Period)"),
-                            "Notes": a.get("notes", ""),
-                        })
-                    c_tbl, c_del_assign = st.columns([5, 1])
-                    with c_tbl:
-                        st.dataframe(pd.DataFrame(assign_rows), use_container_width=True, hide_index=True)
-                    with c_del_assign:
-                        del_a_id = st.selectbox(
-                            "Unassign ID",
-                            options=[a["id"] for a in current_detail.assignments],
-                            key=f"sb_del_assign_{selected_pool_id}",
-                            label_visibility="collapsed",
-                        )
-                        if st.button(t("settings.btn_unassign", default="🗑️ Unassign"), key=f"btn_unassign_{selected_pool_id}"):
-                            pool_repo.delete_assignment(del_a_id)
-                            st.toast(f"Assignment #{del_a_id} removed.", icon="🗑️")
-                            st.rerun()
+                _render_pool_assignments_table(current_detail.assignments, selected_pool_id, pool_repo)
 
 
