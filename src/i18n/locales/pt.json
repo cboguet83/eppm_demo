@@ -61,7 +61,16 @@
     "msg_updated_success": "Projeto '{id}' atualizado com sucesso!",
     "msg_deleted_success": "Projeto '{id}' excluído com sucesso.",
     "err_required_fields": "Código e Título do projeto são obrigatórios.",
-    "err_already_exists": "Um projeto com o código '{id}' já existe."
+    "err_already_exists": "Um projeto com o código '{id}' já existe.",
+    "pool_allocations_title": "🏊 Alocações de Pools de Recursos",
+    "field_fte": "FTE Atribuído *",
+    "assignment_period_mode": "Modo de Período de Atribuição",
+    "period_full_task": "Duração Total da Tarefa (Padrão)",
+    "period_custom_range": "Período Específico Personalizado",
+    "custom_start_date": "Data de Início",
+    "custom_end_date": "Data de Fim",
+    "field_assignment_notes": "Notas / Propósito da Alocação",
+    "date_range_error": "A data de término não pode ser anterior à data de início."
   },
   "schema": {
     "title": "Esquema Dinâmico & Definição de Parâmetros",
@@ -134,7 +143,29 @@
     "no_project_tags_assigned": "Nenhuma tag associada a este projeto.",
     "scope_single_project": "Projeto Único",
     "scope_specific_projects": "Selecionar Projetos Específicos",
-    "btn_close_dialog": "Fechar"
+    "btn_close_dialog": "Fechar",
+    "dialog_task_pools_title": "🏊 Gerenciar Pools de Recursos da Tarefa",
+    "current_pools": "Pools de Recursos Atualmente Atribuídos",
+    "no_pools_assigned_task": "Nenhum pool de recursos está atualmente atribuído a esta tarefa.",
+    "btn_unassign_pool": "Remover atribuição de pool",
+    "toast_pool_unassigned": "Atribuição de pool removida!",
+    "assign_new_pool": "Atribuir Pool de Recursos",
+    "no_pools_exist": "Nenhum pool de recursos configurado. Crie pools em Configurações > Pools de Recursos.",
+    "select_resource_pool": "Selecionar Pool de Recursos *",
+    "btn_confirm_assign_pool": "Atribuir Pool à Tarefa",
+    "pool_required_error": "Por favor, selecione um pool de recursos.",
+    "toast_pool_assigned": "Pool de recursos atribuído à tarefa!",
+    "quick_task_pools": "Ação Rápida: Atribuir Pools de Recursos à Tarefa",
+    "select_task_to_assign_pools": "Selecionar Tarefa",
+    "btn_open_pool_mgr": "Abrir Alocador de Pool",
+    "dialog_project_pools_title": "🏊 Gerenciar Pools de Recursos do Projeto",
+    "no_pools_assigned_project": "Nenhum pool de recursos está atualmente atribuído a este projeto.",
+    "btn_confirm_assign_pool_proj": "Atribuir Pool ao Projeto",
+    "toast_pool_assigned_proj": "Pool de recursos atribuído ao projeto!",
+    "toast_pool_unassigned_proj": "Atribuição de pool do projeto removida!",
+    "quick_project_pools": "Ação Rápida: Atribuir Pools de Recursos ao Projeto",
+    "select_project_to_assign_pools": "Selecionar Projeto",
+    "btn_open_project_pool_mgr": "Abrir Alocador de Pool do Projeto"
   },
   "gantt": {
     "columns": {
@@ -174,7 +205,9 @@
       "edit_dep": "Editar Dependência",
       "delete_dep": "Excluir Dependência",
       "view_diagnostics": "Ver Diagnósticos",
-      "view_project_diagnostics": "Ver Violações do Projeto"
+      "view_project_diagnostics": "Ver Violações do Projeto",
+      "manage_project_pools": "Atribuir Pools de Recursos",
+      "manage_task_pools": "Atribuir Pools de Recursos"
     },
     "modal": {
       "add_title": "➕ Adicionar Nova Etapa ({project_id})",
@@ -383,6 +416,29 @@
     "stat_tag_groups": "Grupos",
     "stat_tags": "Tags",
     "stat_project_tags": "Tags de Projetos",
-    "stat_task_tags": "Tags de Tarefas"
+    "stat_task_tags": "Tags de Tarefas",
+    "tab_resource_pools": "Pools de Recursos",
+    "pools_title": "🏊 Gestão de Pools de Recursos & Capacidade",
+    "stat_pools": "Pools de Recursos",
+    "stat_total_capacity": "Capacidade Total do Pool (FTE)",
+    "stat_peak_assigned": "Pico Atribuído (FTE)",
+    "stat_overassigned_pools": "Pools com Sobrecarga",
+    "dialog_add_pool": "➕ Criar Pool de Recursos",
+    "dialog_edit_pool": "✏️ Editar Pool de Recursos",
+    "field_pool_name": "Nome do Pool de Recursos *",
+    "field_pool_desc": "Descrição / Escopo",
+    "col_pool_name": "Pool de Recursos",
+    "col_capacity_fte": "Capacidade (FTE)",
+    "col_peak_assigned_fte": "Demanda Diária Máxima (FTE)",
+    "col_status": "Status Diário",
+    "col_mappings_count": "Unidades Mapeadas",
+    "col_assignments_count": "Alocações",
+    "team_members_header": "Funções Membro da Equipe (Componentes de Capacidade)",
+    "demand_within_cap": "Demanda Diária (≤ Capacidade)",
+    "demand_over_cap": "Demanda Diária (> Capacidade)",
+    "marker_within_cap": "Demanda Normal",
+    "marker_over_cap": "Demanda com Sobrecarga",
+    "pool_capacity_line": "Limite de Capacidade do Pool",
+    "daily_demand_chart": "Linha do Tempo: Capacidade Diária vs. Demanda Atribuída"
   }
 }

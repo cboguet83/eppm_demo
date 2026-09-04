@@ -61,7 +61,16 @@
     "msg_updated_success": "Projet '{id}' mis à jour avec succès !",
     "msg_deleted_success": "Projet '{id}' supprimé avec succès.",
     "err_required_fields": "Le code et le titre du projet sont obligatoires.",
-    "err_already_exists": "Un projet avec le code '{id}' existe déjà."
+    "err_already_exists": "Un projet avec le code '{id}' existe déjà.",
+    "pool_allocations_title": "🏊 Allocations de Pools de Ressources",
+    "field_fte": "ETP Attribué *",
+    "assignment_period_mode": "Mode de Période d'Assignation",
+    "period_full_task": "Durée Complète de la Tâche (Par défaut)",
+    "period_custom_range": "Période Personnalisée Spécifique",
+    "custom_start_date": "Date de Début",
+    "custom_end_date": "Date de Fin",
+    "field_assignment_notes": "Notes / Objet de l'allocation",
+    "date_range_error": "La date de fin ne peut pas être antérieure à la date de début."
   },
   "schema": {
     "title": "Schéma Dynamique & Définition des Paramètres",
@@ -134,7 +143,29 @@
     "no_project_tags_assigned": "Aucun tag associé à ce projet.",
     "scope_single_project": "Projet Unique",
     "scope_specific_projects": "Sélectionner des Projets Spécifiques",
-    "btn_close_dialog": "Fermer"
+    "btn_close_dialog": "Fermer",
+    "dialog_task_pools_title": "🏊 Gérer les Pools de Ressources de la Tâche",
+    "current_pools": "Pools de Ressources Actuellement Assignés",
+    "no_pools_assigned_task": "Aucun pool de ressources n'est actuellement assigné à cette tâche.",
+    "btn_unassign_pool": "Supprimer l'assignation de pool",
+    "toast_pool_unassigned": "Assignation de pool supprimée !",
+    "assign_new_pool": "Assigner un Pool de Ressources",
+    "no_pools_exist": "Aucun pool de ressources configuré. Créez des pools dans Paramètres > Pools de Ressources.",
+    "select_resource_pool": "Sélectionner le Pool de Ressources *",
+    "btn_confirm_assign_pool": "Assigner le Pool à la Tâche",
+    "pool_required_error": "Veuillez sélectionner un pool de ressources.",
+    "toast_pool_assigned": "Pool de ressources assigné à la tâche !",
+    "quick_task_pools": "Action Rapide : Assigner des Pools de Ressources à la Tâche",
+    "select_task_to_assign_pools": "Sélectionner la Tâche",
+    "btn_open_pool_mgr": "Ouvrir l'Allocateur de Pool",
+    "dialog_project_pools_title": "🏊 Gérer les Pools de Ressources du Projet",
+    "no_pools_assigned_project": "Aucun pool de ressources n'est actuellement assigné à ce projet.",
+    "btn_confirm_assign_pool_proj": "Assigner le Pool au Projet",
+    "toast_pool_assigned_proj": "Pool de ressources assigné au projet !",
+    "toast_pool_unassigned_proj": "Assignation de pool du projet supprimée !",
+    "quick_project_pools": "Action Rapide : Assigner des Pools de Ressources au Projet",
+    "select_project_to_assign_pools": "Sélectionner le Projet",
+    "btn_open_project_pool_mgr": "Ouvrir l'Allocateur de Pool Projet"
   },
   "gantt": {
     "columns": {
@@ -174,7 +205,9 @@
       "edit_dep": "Modifier la Dépendance",
       "delete_dep": "Supprimer la Dépendance",
       "view_diagnostics": "Voir les Diagnostics",
-      "view_project_diagnostics": "Voir les Violations du Projet"
+      "view_project_diagnostics": "Voir les Violations du Projet",
+      "manage_project_pools": "Assigner des Pools de Ressources",
+      "manage_task_pools": "Assigner des Pools de Ressources"
     },
     "modal": {
       "add_title": "➕ Ajouter une Nouvelle Étape ({project_id})",
@@ -383,6 +416,29 @@
     "stat_tag_groups": "Groupes",
     "stat_tags": "Étiquettes",
     "stat_project_tags": "Étiquettes Projets",
-    "stat_task_tags": "Étiquettes Tâches"
+    "stat_task_tags": "Étiquettes Tâches",
+    "tab_resource_pools": "Pools de Ressources",
+    "pools_title": "🏊 Gestion des Pools de Ressources & Capacité",
+    "stat_pools": "Pools de Ressources",
+    "stat_total_capacity": "Capacité Totale (ETP)",
+    "stat_peak_assigned": "Pic Assigné (ETP)",
+    "stat_overassigned_pools": "Pools Sur-assignés",
+    "dialog_add_pool": "➕ Créer un Pool de Ressources",
+    "dialog_edit_pool": "✏️ Modifier le Pool de Ressources",
+    "field_pool_name": "Nom du Pool de Ressources *",
+    "field_pool_desc": "Description / Périmètre",
+    "col_pool_name": "Pool de Ressources",
+    "col_capacity_fte": "Capacité (ETP)",
+    "col_peak_assigned_fte": "Pic de Demande Journalière (ETP)",
+    "col_status": "Statut Journalier",
+    "col_mappings_count": "Unités Mappées",
+    "col_assignments_count": "Allocations",
+    "team_members_header": "Fonctions Membres de l'Équipe (Composantes de Capacité)",
+    "demand_within_cap": "Demande Journalière (≤ Capacité)",
+    "demand_over_cap": "Demande Journalière (> Capacité)",
+    "marker_within_cap": "Demande Normale",
+    "marker_over_cap": "Demande Sur-assignée",
+    "pool_capacity_line": "Limite de Capacité du Pool",
+    "daily_demand_chart": "Chronologie Capacité Journalière vs Demande Assignée"
   }
 }

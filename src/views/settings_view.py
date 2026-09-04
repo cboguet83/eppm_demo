@@ -1,21 +1,27 @@
 """Screen 5: Organization Structure & Settings Management View with Contextual Menus and Dialogs."""
 
+import datetime
 import os
 from typing import Optional
 
 import pandas as pd
+import plotly.graph_objects as go
 import streamlit as st
 import streamlit.components.v1 as components
 
 from src.i18n import t
 from src.models.organization import Employee, FunctionType, OrgFunction, Team
+from src.models.resource_pool import PoolAssignment, PoolCapacityDetail, PoolMapping, ResourcePool
 from src.models.tag import ProjectTag, TagDictionary, TagGroup, TaskTag
 from src.repositories.milestone_repo import MilestoneRepository
 from src.repositories.organization_repo import OrganizationRepository
 from src.repositories.project_repo import ProjectRepository
+from src.repositories.resource_pool_repo import ResourcePoolRepository
 from src.repositories.tag_repo import TagRepository
 from src.services.organization_service import OrganizationService
+from src.services.resource_pool_service import ResourcePoolService
 from src.services.tag_service import TagService
+
 
 # Declare Interactive Table Custom Components
 _COMPONENTS_DIR = os.path.join(
@@ -248,6 +254,7 @@ def _open_delete_function_dialog(
 def _open_add_team_dialog(
     org_repo: OrganizationRepository,
     df_funcs: pd.DataFrame,
+    pool_repo: Optional[ResourcePoolRepository] = None,
 ) -> None:
     """Modal dialog to create a new team."""
     new_name = st.text_input(t("settings.field_team_name", default="Team Name *"), placeholder="e.g. Equipe BIM")
@@ -266,6 +273,14 @@ def _open_add_team_dialog(
         format_func=lambda x: func_map.get(x, "— None") if x is not None else "— None",
     )
 
+    member_opts = df_funcs["function_id"].tolist() if not df_funcs.empty else []
+    new_members = st.multiselect(
+        t("settings.field_team_members", default="Team Member Functions"),
+        options=member_opts,
+        format_func=lambda x: func_map.get(x, f"Function #{x}"),
+        help="Select functions belonging to this team.",
+    )
+
     col_save, col_cancel = st.columns(2)
     if col_save.button(t("settings.btn_save", default="💾 Save Team"), type="primary", use_container_width=True):
         try:
@@ -277,6 +292,8 @@ def _open_add_team_dialog(
                     leader_function_id=new_leader,
                 )
             )
+            if pool_repo and new_members:
+                pool_repo.set_team_functions(new_tid, new_members)
             st.toast(t("settings.msg_team_created", name=new_name, default=f"Team '{new_name}' created (ID: {new_tid})!"), icon="✅")
             st.rerun()
         except ValueError as val_err:
@@ -293,6 +310,7 @@ def _open_edit_team_dialog(
     org_repo: OrganizationRepository,
     team_id: int,
     df_funcs: pd.DataFrame,
+    pool_repo: Optional[ResourcePoolRepository] = None,
 ) -> None:
     """Modal dialog to edit an existing team."""
     team_obj = org_repo.get_team_by_id(team_id)
@@ -320,6 +338,16 @@ def _open_edit_team_dialog(
         format_func=lambda x: func_map.get(x, "— None") if x is not None else "— None",
     )
 
+    current_members = pool_repo.get_team_functions(team_id) if pool_repo else []
+    member_opts = df_funcs["function_id"].tolist() if not df_funcs.empty else []
+    edit_members = st.multiselect(
+        t("settings.field_team_members", default="Team Member Functions"),
+        options=member_opts,
+        default=[fid for fid in current_members if fid in member_opts],
+        format_func=lambda x: func_map.get(x, f"Function #{x}"),
+        help="Select functions belonging to this team.",
+    )
+
     col_save, col_cancel = st.columns(2)
     if col_save.button(t("settings.btn_save_changes", default="💾 Save Changes"), type="primary", use_container_width=True):
         try:
@@ -332,6 +360,8 @@ def _open_edit_team_dialog(
                     leader_function_id=edit_leader,
                 )
             )
+            if pool_repo:
+                pool_repo.set_team_functions(team_id, edit_members)
             st.toast(t("settings.msg_team_updated", default="Team updated successfully!"), icon="✏️")
             st.rerun()
         except ValueError as val_err:
@@ -361,6 +391,371 @@ def _open_delete_team_dialog(
 
     if col_cancel.button(t("settings.btn_cancel", default="Cancel"), use_container_width=True):
         st.rerun()
+
+
+# =============================================================================
+# RESOURCE POOL DIALOGS
+# =============================================================================
+@st.dialog(t("settings.dialog_add_pool", default="➕ Create Resource Pool"))
+def _open_add_pool_dialog(pool_repo: ResourcePoolRepository) -> None:
+    """Modal dialog to create a new resource pool."""
+    new_name = st.text_input(t("settings.field_pool_name", default="Resource Pool Name *"), placeholder="e.g. Core Engineering Pool")
+    new_desc = st.text_area(t("settings.field_pool_desc", default="Description"), placeholder="Purpose and specialty of this pool...")
+
+    col_save, col_cancel = st.columns(2)
+    if col_save.button(t("settings.btn_save", default="💾 Save Pool"), type="primary", use_container_width=True):
+        try:
+            ResourcePoolService.validate_pool_name(new_name)
+            p_id = pool_repo.create_pool(ResourcePool(name=new_name.strip(), description=new_desc.strip()))
+            st.toast(f"Resource Pool '{new_name}' created (ID: {p_id})!", icon="✅")
+            st.rerun()
+        except ValueError as val_err:
+            st.error(str(val_err))
+        except Exception as e:
+            st.error(f"Error creating pool: {e}")
+
+    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), use_container_width=True):
+        st.rerun()
+
+
+@st.dialog(t("settings.dialog_edit_pool", default="✏️ Edit Resource Pool"))
+def _open_edit_pool_dialog(pool_repo: ResourcePoolRepository, pool_id: int) -> None:
+    """Modal dialog to edit an existing resource pool."""
+    pool = pool_repo.get_pool_by_id(pool_id)
+    if not pool:
+        st.error("Resource pool not found.")
+        return
+
+    edit_name = st.text_input(t("settings.field_pool_name", default="Resource Pool Name *"), value=pool.name)
+    edit_desc = st.text_area(t("settings.field_pool_desc", default="Description"), value=pool.description)
+
+    col_save, col_cancel = st.columns(2)
+    if col_save.button(t("settings.btn_save_changes", default="💾 Save Changes"), type="primary", use_container_width=True):
+        try:
+            ResourcePoolService.validate_pool_name(edit_name)
+            pool_repo.update_pool(ResourcePool(id=pool_id, name=edit_name.strip(), description=edit_desc.strip()))
+            st.toast("Resource Pool updated successfully!", icon="✏️")
+            st.rerun()
+        except ValueError as val_err:
+            st.error(str(val_err))
+        except Exception as e:
+            st.error(f"Error updating pool: {e}")
+
+    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), use_container_width=True):
+        st.rerun()
+
+
+@st.dialog(t("settings.delete_confirm_title", default="🗑️ Confirm Deletion"))
+def _open_delete_pool_dialog(pool_repo: ResourcePoolRepository, pool_id: int, pool_name: str) -> None:
+    """Modal dialog to confirm deletion of a resource pool."""
+    st.warning(f"⚠️ Are you sure you want to delete Resource Pool **{pool_name}** (ID: #{pool_id})?")
+    st.caption("All mappings and project/task assignments linked to this pool will also be deleted.")
+
+    col_confirm, col_cancel = st.columns(2)
+    if col_confirm.button(t("settings.btn_confirm_delete", default="🗑️ Yes, Delete"), type="primary", use_container_width=True):
+        pool_repo.delete_pool(pool_id)
+        st.toast(f"Resource Pool '{pool_name}' deleted.", icon="🗑️")
+        st.rerun()
+
+    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), use_container_width=True):
+        st.rerun()
+
+
+@st.dialog(t("settings.dialog_add_mapping", default="➕ Map Team or Function to Pool"))
+def _open_add_pool_mapping_dialog(
+    pool_repo: ResourcePoolRepository,
+    pool_id: int,
+    df_teams: pd.DataFrame,
+    df_funcs: pd.DataFrame,
+) -> None:
+    """Modal dialog to map a team or function to a resource pool with partial allocation."""
+    map_type = st.radio(
+        t("settings.mapping_target_type", default="Mapping Target Type"),
+        options=["team", "function"],
+        format_func=lambda x: "🛡️ Team" if x == "team" else "💼 Job Function",
+        horizontal=True,
+    )
+
+    if map_type == "team":
+        if df_teams.empty:
+            st.warning("No teams available.")
+            return
+        team_map = dict(zip(df_teams["team_id"], df_teams["team_name"]))
+        target_id = st.selectbox(
+            t("settings.select_team", default="Select Team"),
+            options=df_teams["team_id"].tolist(),
+            format_func=lambda tid: f"{team_map.get(tid, f'Team #{tid}')} [#{tid}]",
+        )
+    else:
+        if df_funcs.empty:
+            st.warning("No functions available.")
+            return
+        func_map = dict(zip(df_funcs["function_id"], df_funcs["name"]))
+        target_id = st.selectbox(
+            t("settings.select_func", default="Select Job Function"),
+            options=df_funcs["function_id"].tolist(),
+            format_func=lambda fid: f"{func_map.get(fid, f'Function #{fid}')} [#{fid}]",
+        )
+
+    alloc_pct = st.slider(
+        t("settings.field_allocation_pct", default="Pool Allocation Percentage (%)"),
+        min_value=0.0,
+        max_value=100.0,
+        value=100.0,
+        step=5.0,
+        help="Percentage of this team or function's capacity allocated to this pool (0% to 100%).",
+    )
+
+    col_save, col_cancel = st.columns(2)
+    if col_save.button(t("settings.btn_save_mapping", default="💾 Save Mapping"), type="primary", use_container_width=True):
+        try:
+            ResourcePoolService.validate_allocation_pct(float(alloc_pct))
+            pool_repo.create_mapping(
+                PoolMapping(
+                    pool_id=pool_id,
+                    target_type=map_type,
+                    target_id=int(target_id),
+                    allocation_pct=float(alloc_pct),
+                )
+            )
+            st.toast("Mapping added / updated successfully!", icon="✅")
+            st.rerun()
+        except ValueError as val_err:
+            st.error(str(val_err))
+        except Exception as e:
+            st.error(f"Error saving mapping: {e}")
+
+    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), use_container_width=True):
+        st.rerun()
+
+
+def _append_block_capacity_coords(
+    block: list[str],
+    cap: float,
+    cap_x: list[Optional[str]],
+    cap_y: list[Optional[float]],
+) -> None:
+    """Append capacity limit coordinates for a contiguous date block.
+
+    Args:
+        block: List of contiguous ISO-formatted date strings.
+        cap: Total pool capacity FTE.
+        cap_x: Target list of X coordinate dates.
+        cap_y: Target list of Y coordinate capacity values.
+    """
+    if len(block) == 1:
+        d_val = datetime.date.fromisoformat(block[0])
+        s_dt = (d_val - datetime.timedelta(hours=6)).strftime("%Y-%m-%d %H:%M:%S")
+        e_dt = (d_val + datetime.timedelta(hours=6)).strftime("%Y-%m-%d %H:%M:%S")
+        cap_x.extend([s_dt, e_dt, None])
+        cap_y.extend([cap, cap, None])
+    else:
+        cap_x.extend([block[0], block[-1], None])
+        cap_y.extend([cap, cap, None])
+
+
+def _append_block_demand_coords(
+    block: list[str],
+    daily_points: dict[str, float],
+    cap: float,
+    blue_x: list[Optional[str]],
+    blue_y: list[Optional[float]],
+    red_x: list[Optional[str]],
+    red_y: list[Optional[float]],
+) -> None:
+    """Append demand line segments for a contiguous date block colored by capacity threshold.
+
+    Args:
+        block: List of contiguous ISO-formatted date strings.
+        daily_points: Map of ISO date strings to assigned FTE demand.
+        cap: Pool capacity limit in FTE.
+        blue_x: Target list for within-capacity X coordinates.
+        blue_y: Target list for within-capacity Y coordinates.
+        red_x: Target list for over-capacity X coordinates.
+        red_y: Target list for over-capacity Y coordinates.
+    """
+    if len(block) < 2:
+        return
+
+    for i in range(len(block) - 1):
+        d1_str = block[i]
+        d2_str = block[i + 1]
+        v1 = daily_points[d1_str]
+        v2 = daily_points[d2_str]
+
+        is_v1_over = v1 > (cap + 1e-4)
+        is_v2_over = v2 > (cap + 1e-4)
+
+        if not is_v1_over and not is_v2_over:
+            blue_x.extend([d1_str, d2_str, None])
+            blue_y.extend([v1, v2, None])
+        elif is_v1_over and is_v2_over:
+            red_x.extend([d1_str, d2_str, None])
+            red_y.extend([v1, v2, None])
+        else:
+            d1_dt = datetime.datetime.combine(datetime.date.fromisoformat(d1_str), datetime.time(12, 0))
+            d2_dt = datetime.datetime.combine(datetime.date.fromisoformat(d2_str), datetime.time(12, 0))
+            denom = v2 - v1
+            ratio = (cap - v1) / denom if abs(denom) > 1e-6 else 0.5
+            ratio = max(0.01, min(0.99, ratio))
+            cross_dt = d1_dt + ratio * (d2_dt - d1_dt)
+            cross_str = cross_dt.strftime("%Y-%m-%d %H:%M:%S")
+
+            if not is_v1_over and is_v2_over:
+                blue_x.extend([d1_str, cross_str, None])
+                blue_y.extend([v1, cap, None])
+                red_x.extend([cross_str, d2_str, None])
+                red_y.extend([cap, v2, None])
+            else:
+                red_x.extend([d1_str, cross_str, None])
+                red_y.extend([v1, cap, None])
+                blue_x.extend([cross_str, d2_str, None])
+                blue_y.extend([cap, v2, None])
+
+
+def _build_pool_timeline_figure(current_detail: PoolCapacityDetail) -> Optional[go.Figure]:
+    """Construct Plotly timeline chart for pool daily demand vs capacity.
+
+    Renders daily assigned demand in red when exceeding capacity and blue when
+    within capacity. Strict line continuity prevents rendering any lines over
+    periods not covered by active assignments.
+
+    Args:
+        current_detail: Detailed pool capacity and assignment information.
+
+    Returns:
+        Plotly Figure object, or None if no daily usage points exist.
+    """
+    daily_points = current_detail.daily_usage
+    if not daily_points and current_detail.assignments:
+        daily_points = {}
+        for a in current_detail.assignments:
+            ResourcePoolService._accumulate_daily_usage(
+                daily_points, a["start_date"], a["end_date"], a["fte_assigned"]
+            )
+
+    if not daily_points:
+        return None
+
+    cap = float(current_detail.total_capacity_fte)
+    sorted_dates = sorted(daily_points.keys())
+
+    # 1. Group active dates into contiguous consecutive-day blocks
+    blocks: list[list[str]] = []
+    current_block: list[str] = []
+
+    for d_str in sorted_dates:
+        if not current_block:
+            current_block.append(d_str)
+            continue
+        prev_dt = datetime.date.fromisoformat(current_block[-1])
+        curr_dt = datetime.date.fromisoformat(d_str)
+        if (curr_dt - prev_dt).days == 1:
+            current_block.append(d_str)
+        else:
+            blocks.append(current_block)
+            current_block = [d_str]
+
+    if current_block:
+        blocks.append(current_block)
+
+    # 2. Build segmented coordinates
+    blue_x: list[Optional[str]] = []
+    blue_y: list[Optional[float]] = []
+    red_x: list[Optional[str]] = []
+    red_y: list[Optional[float]] = []
+    cap_x: list[Optional[str]] = []
+    cap_y: list[Optional[float]] = []
+
+    for blk in blocks:
+        _append_block_capacity_coords(blk, cap, cap_x, cap_y)
+        _append_block_demand_coords(blk, daily_points, cap, blue_x, blue_y, red_x, red_y)
+
+    # 3. Build discrete daily markers
+    blue_m_x: list[str] = []
+    blue_m_y: list[float] = []
+    blue_m_text: list[str] = []
+    red_m_x: list[str] = []
+    red_m_y: list[float] = []
+    red_m_text: list[str] = []
+
+    for d in sorted_dates:
+        val = daily_points[d]
+        if val > (cap + 1e-4):
+            red_m_x.append(d)
+            red_m_y.append(val)
+            red_m_text.append(f"📅 <b>{d}</b><br>Demand: <b>{val:.2f} FTE</b><br>⚠️ Exceeds capacity by +{val - cap:.2f} FTE")
+        else:
+            blue_m_x.append(d)
+            blue_m_y.append(val)
+            blue_m_text.append(f"📅 <b>{d}</b><br>Demand: <b>{val:.2f} FTE</b><br>✅ Within capacity limit ({cap:.2f} FTE)")
+
+    fig = go.Figure()
+
+    if blue_x:
+        fig.add_trace(go.Scatter(
+            x=blue_x,
+            y=blue_y,
+            mode="lines",
+            name=t("settings.demand_within_cap", default="Daily Demand (≤ Capacity)"),
+            line=dict(color="#2563EB", width=3),
+            hoverinfo="skip",
+        ))
+
+    if red_x:
+        fig.add_trace(go.Scatter(
+            x=red_x,
+            y=red_y,
+            mode="lines",
+            name=t("settings.demand_over_cap", default="Daily Demand (> Capacity)"),
+            line=dict(color="#C41039", width=3),
+            hoverinfo="skip",
+        ))
+
+    if blue_m_x:
+        fig.add_trace(go.Scatter(
+            x=blue_m_x,
+            y=blue_m_y,
+            mode="markers",
+            name=t("settings.marker_within_cap", default="Demand (≤ Capacity)"),
+            marker=dict(color="#2563EB", size=7, line=dict(color="#FFFFFF", width=1)),
+            hovertext=blue_m_text,
+            hoverinfo="text",
+            showlegend=not bool(blue_x),
+        ))
+
+    if red_m_x:
+        fig.add_trace(go.Scatter(
+            x=red_m_x,
+            y=red_m_y,
+            mode="markers",
+            name=t("settings.marker_over_cap", default="Demand (> Capacity)"),
+            marker=dict(color="#C41039", size=9, symbol="diamond", line=dict(color="#FFFFFF", width=1.5)),
+            hovertext=red_m_text,
+            hoverinfo="text",
+            showlegend=not bool(red_x),
+        ))
+
+    if cap_x:
+        fig.add_trace(go.Scatter(
+            x=cap_x,
+            y=cap_y,
+            mode="lines",
+            name=t("settings.pool_capacity_line", default="Pool Capacity Limit"),
+            line=dict(color="#10B981", width=2.5, dash="dash"),
+            hoverinfo="skip",
+        ))
+
+    fig.update_layout(
+        height=260,
+        margin=dict(l=20, r=20, t=25, b=20),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        xaxis=dict(title=""),
+        yaxis=dict(title="FTE"),
+        hovermode="closest",
+    )
+    return fig
+
 
 
 
@@ -1009,6 +1404,7 @@ def render_settings_view(
     tag_repo: Optional[TagRepository] = None,
     project_repo: Optional[ProjectRepository] = None,
     milestone_repo: Optional[MilestoneRepository] = None,
+    pool_repo: Optional[ResourcePoolRepository] = None,
 ) -> None:
     """Renders the Organization & Settings screen with tabbed contextual management."""
     st.header(f"⚙️ {t('settings.title', default='Organization Structure & Settings')}")
@@ -1016,6 +1412,7 @@ def render_settings_view(
     tag_repo = tag_repo or TagRepository(org_repo.db_path)
     project_repo = project_repo or ProjectRepository(org_repo.db_path)
     milestone_repo = milestone_repo or MilestoneRepository(org_repo.db_path)
+    pool_repo = pool_repo or ResourcePoolRepository(org_repo.db_path)
 
     (
         tab_funcs,
@@ -1026,6 +1423,7 @@ def render_settings_view(
         tab_tag_dict,
         tab_proj_tags,
         tab_task_tags,
+        tab_pools,
     ) = st.tabs([
         f"💼 {t('settings.tab_functions', default='Functions')}",
         f"🏷️ {t('settings.tab_types', default='Function Types')}",
@@ -1035,7 +1433,9 @@ def render_settings_view(
         f"📚 {t('settings.tab_tag_dict', default='Tag Dictionary')}",
         f"📌 {t('settings.tab_proj_tags', default='Project Tags')}",
         f"📋 {t('settings.tab_task_tags', default='Task Tags')}",
+        f"🏊 {t('settings.tab_resource_pools', default='Resource Pools')}",
     ])
+
 
     df_types = org_repo.get_all_function_types()
     df_funcs = org_repo.get_all_functions()
@@ -1243,11 +1643,11 @@ def render_settings_view(
                 st.session_state["_last_team_table_nonce"] = nonce
                 action = team_table_event.get("action")
                 if action == "add_team":
-                    _open_add_team_dialog(org_repo, df_funcs)
+                    _open_add_team_dialog(org_repo, df_funcs, pool_repo)
                 elif action == "edit_team":
                     tm_id = team_table_event.get("team_id")
                     if tm_id is not None:
-                        _open_edit_team_dialog(org_repo, int(tm_id), df_funcs)
+                        _open_edit_team_dialog(org_repo, int(tm_id), df_funcs, pool_repo)
                 elif action == "delete_team":
                     tm_id = team_table_event.get("team_id")
                     tm_name = team_table_event.get("team_name", f"ID {tm_id}")
@@ -1570,4 +1970,200 @@ def render_settings_view(
                     t_label = task_tag_table_event.get("tag_label", f"ID {tt_id}")
                     if tt_id is not None:
                         _open_delete_task_tag_dialog(tag_repo, int(tt_id), str(t_label))
+
+    # =========================================================================
+    # TAB 9: RESOURCE POOLS
+    # =========================================================================
+    with tab_pools:
+        all_pool_details = ResourcePoolService.get_portfolio_pools_summary(org_repo, pool_repo, milestone_repo)
+        total_pools = len(all_pool_details)
+        total_portfolio_capacity = sum(p.total_capacity_fte for p in all_pool_details)
+        peak_portfolio_assigned = sum(p.peak_assigned_fte for p in all_pool_details)
+        overassigned_pools_count = sum(1 for p in all_pool_details if p.is_overassigned)
+
+        st.subheader(
+            f"🏊 {t('settings.pools_title', default='Resource Pools Management')} "
+            f"({total_pools} {t('settings.stat_pools', default='Pools')} • {total_portfolio_capacity:.2f} {t('settings.stat_capacity', default='FTE Capacity')})"
+        )
+
+        # 1. Summary KPI Metrics Cards
+        kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+        kpi1.metric(t("settings.kpi_total_pools", default="Total Pools"), total_pools)
+        kpi2.metric(t("settings.kpi_total_capacity", default="Total Pool Capacity"), f"{total_portfolio_capacity:.2f} FTE")
+        kpi3.metric(t("settings.kpi_peak_demand", default="Peak Active Demand"), f"{peak_portfolio_assigned:.2f} FTE")
+        if overassigned_pools_count > 0:
+            kpi4.metric(
+                t("settings.kpi_overassigned_pools", default="Overassigned Pools"),
+                f"{overassigned_pools_count} ⚠️",
+                delta=f"+{overassigned_pools_count} Alert",
+                delta_color="inverse",
+            )
+        else:
+            kpi4.metric(t("settings.kpi_overassigned_pools", default="Overassigned Pools"), "0 ✅")
+
+        st.divider()
+
+        # 2. Pool Selection & Action Toolbar
+        col_sel, col_add_btn = st.columns([4, 1])
+        with col_add_btn:
+            if st.button(t("settings.btn_create_pool", default="➕ Create Pool"), type="primary", use_container_width=True):
+                _open_add_pool_dialog(pool_repo)
+
+        df_all_pools = pool_repo.get_all_pools()
+        if df_all_pools.empty:
+            st.info(t("settings.no_pools_registered", default="No resource pools registered yet. Click 'Create Pool' to add one."))
+        else:
+            pool_id_map = {int(p.pool_id): p for p in all_pool_details}
+            pool_options = df_all_pools["id"].tolist()
+
+            with col_sel:
+                selected_pool_id = st.selectbox(
+                    t("settings.select_pool_to_inspect", default="🔍 Select Resource Pool to Inspect & Configure"),
+                    options=pool_options,
+                    format_func=lambda pid: (
+                        f"🏊 #{pid} - {pool_id_map[pid].pool_name} "
+                        f"({pool_id_map[pid].total_capacity_fte:.2f} FTE Capacity "
+                        f"{'| ⚠️ OVERASSIGNED' if pool_id_map[pid].is_overassigned else '| ✅ OK'})"
+                        if pid in pool_id_map else f"Pool #{pid}"
+                    ),
+                    key="sb_selected_resource_pool",
+                )
+
+            current_detail = pool_id_map.get(selected_pool_id)
+            if current_detail:
+                # Pool Details & Action Row
+                c_info, c_actions = st.columns([4, 1])
+                with c_info:
+                    st.markdown(f"### 🏊 **{current_detail.pool_name}** `[Pool #{current_detail.pool_id}]`")
+                    pool_obj = pool_repo.get_pool_by_id(selected_pool_id)
+                    if pool_obj and pool_obj.description:
+                        st.caption(f"📝 {pool_obj.description}")
+                with c_actions:
+                    c_edit, c_del = st.columns(2)
+                    if c_edit.button("✏️", key=f"btn_edit_pool_{selected_pool_id}", help="Edit pool details"):
+                        _open_edit_pool_dialog(pool_repo, selected_pool_id)
+                    if c_del.button("🗑️", key=f"btn_del_pool_{selected_pool_id}", help="Delete pool"):
+                        _open_delete_pool_dialog(pool_repo, selected_pool_id, current_detail.pool_name)
+
+                # Overassignment Alert Banner if overassigned
+                if current_detail.is_overassigned:
+                    st.error(
+                        f"🚨 **DAILY OVERASSIGNMENT ALERT**: Peak daily demand of **{current_detail.peak_assigned_fte:.2f} FTE** "
+                        f"exceeds calculated pool capacity of **{current_detail.total_capacity_fte:.2f} FTE** "
+                        f"by **+{current_detail.peak_excess_fte:.2f} FTE**!\n\n"
+                        f"📅 **Overassigned Period(s)**: {', '.join(current_detail.overassignment_intervals) if current_detail.overassignment_intervals else 'Active overlapping assignments'}"
+                    )
+                else:
+                    st.success(
+                        f"✅ **CAPACITY NORMAL**: Total pool capacity is **{current_detail.total_capacity_fte:.2f} FTE**. "
+                        f"Peak active daily demand is **{current_detail.peak_assigned_fte:.2f} FTE**."
+                    )
+
+                # Daily Demand Timeline Plotly Chart
+                if current_detail.assignments:
+                    st.write(f"##### 📈 {t('settings.daily_demand_chart', default='Daily Capacity vs. Assigned Demand Timeline')}")
+                    chart_fig = _build_pool_timeline_figure(current_detail)
+                    if chart_fig is not None:
+                        st.plotly_chart(chart_fig, use_container_width=True)
+
+                st.divider()
+
+                # Sub-section 1: Mapped Teams & Functions
+                st.write(f"#### 🛡️ / 💼 {t('settings.mapped_teams_funcs', default='Mapped Teams & Functions')} (0% - 100%)")
+                df_pool_maps = pool_repo.get_mappings_by_pool(selected_pool_id)
+                col_m_add, _ = st.columns([2, 3])
+                with col_m_add:
+                    if st.button(t("settings.btn_add_mapping", default="➕ Map Team or Function"), key=f"btn_add_map_{selected_pool_id}"):
+                        _open_add_pool_mapping_dialog(pool_repo, selected_pool_id, df_teams, df_funcs)
+
+                if df_pool_maps.empty:
+                    st.info(t("settings.no_mappings_in_pool", default="No teams or functions mapped to this pool yet. Click 'Map Team or Function' above."))
+                else:
+                    team_lookup = dict(zip(df_teams["team_id"], df_teams["team_name"])) if not df_teams.empty else {}
+                    func_lookup = dict(zip(df_funcs["function_id"], df_funcs["name"])) if not df_funcs.empty else {}
+
+                    for _, m_row in df_pool_maps.iterrows():
+                        m_id = int(m_row["id"])
+                        m_type = str(m_row["target_type"]).lower()
+                        m_tid = int(m_row["target_id"])
+                        m_pct = float(m_row["allocation_pct"])
+
+                        target_label = team_lookup.get(m_tid, f"Team #{m_tid}") if m_type == "team" else func_lookup.get(m_tid, f"Function #{m_tid}")
+                        icon = "🛡️ Team:" if m_type == "team" else "💼 Function:"
+
+                        mc1, mc2, mc3 = st.columns([3, 2, 1])
+                        mc1.markdown(f"**{icon}** `{target_label}` `[#{m_tid}]`")
+                        new_pct = mc2.number_input(
+                            f"Allocation % (#{m_id})",
+                            min_value=0.0,
+                            max_value=100.0,
+                            value=m_pct,
+                            step=5.0,
+                            key=f"num_alloc_pct_{m_id}",
+                            label_visibility="collapsed",
+                        )
+                        if abs(new_pct - m_pct) > 0.01:
+                            pool_repo.update_mapping(m_id, float(new_pct))
+                            st.rerun()
+
+                        if mc3.button("🗑️", key=f"btn_del_map_{m_id}", help="Remove mapping from pool"):
+                            pool_repo.delete_mapping(m_id)
+                            st.toast("Mapping removed from pool.", icon="🗑️")
+                            st.rerun()
+
+                st.divider()
+
+                # Sub-section 2: Deduplicated Contributing Functions Breakdown
+                st.write(f"#### 🔍 {t('settings.dedup_breakdown_title', default='Deduplicated Contributing Functions Breakdown')}")
+                st.caption(t("settings.dedup_caption", default="Shows unique functions contributing to pool capacity. Functions mapped both directly and via a team are considered strictly once."))
+
+                if not current_detail.contributing_functions:
+                    st.caption("No contributing functions found.")
+                else:
+                    dedup_table_data = []
+                    for cf in current_detail.contributing_functions:
+                        status_str = "✅ Considered Once (Direct Override)" if cf.is_deduplicated else "Standard"
+                        dedup_table_data.append({
+                            "Function ID": cf.function_id,
+                            "Function Title": cf.function_name,
+                            "Nominal FTE": f"{cf.nominal_fte:.2f}",
+                            "Effective %": f"{cf.effective_allocation_pct:.1f}%",
+                            "Effective FTE": f"{cf.effective_fte:.2f}",
+                            "Source": f"{cf.source_type.title()} ({cf.source_name})",
+                            "Deduplication Rule": status_str,
+                        })
+                    st.dataframe(pd.DataFrame(dedup_table_data), use_container_width=True, hide_index=True)
+
+                st.divider()
+
+                # Sub-section 3: Assignments on Projects & Tasks
+                st.write(f"#### 📁 / 📋 {t('settings.assignments_section_title', default='Active Allocations on Projects & Tasks')}")
+                if not current_detail.assignments:
+                    st.info(t("settings.no_assignments_for_pool", default="This pool is not currently assigned to any project or task."))
+                else:
+                    assign_rows = []
+                    for a in current_detail.assignments:
+                        assign_rows.append({
+                            "Assignment ID": a["id"],
+                            "Project": f"{a['project_name']} [#{a['project_id']}]",
+                            "Task / Step": a["task_name"] if a["task_id"] else "— Project Level",
+                            "Assigned FTE": f"{a['fte_assigned']:.2f} FTE",
+                            "Effective Period": f"{a['start_date']} → {a['end_date']}" + (" (Custom)" if a.get("is_custom_period") else " (Full Period)"),
+                            "Notes": a.get("notes", ""),
+                        })
+                    c_tbl, c_del_assign = st.columns([5, 1])
+                    with c_tbl:
+                        st.dataframe(pd.DataFrame(assign_rows), use_container_width=True, hide_index=True)
+                    with c_del_assign:
+                        del_a_id = st.selectbox(
+                            "Unassign ID",
+                            options=[a["id"] for a in current_detail.assignments],
+                            key=f"sb_del_assign_{selected_pool_id}",
+                            label_visibility="collapsed",
+                        )
+                        if st.button(t("settings.btn_unassign", default="🗑️ Unassign"), key=f"btn_unassign_{selected_pool_id}"):
+                            pool_repo.delete_assignment(del_a_id)
+                            st.toast(f"Assignment #{del_a_id} removed.", icon="🗑️")
+                            st.rerun()
+
 

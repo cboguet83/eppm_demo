@@ -1,7 +1,6 @@
-"""Screen 2: Project Master Data View."""
-
+import datetime
 import json
-from typing import Any
+from typing import Any, Optional
 
 import pandas as pd
 import streamlit as st
@@ -15,16 +14,28 @@ from src.models.constants import (
     PARAM_TYPE_URL,
     STATUS_LIST,
 )
+from src.models.resource_pool import PoolAssignment
+from src.repositories.milestone_repo import MilestoneRepository
+from src.repositories.organization_repo import OrganizationRepository
 from src.repositories.project_repo import ProjectRepository
+from src.repositories.resource_pool_repo import ResourcePoolRepository
 from src.repositories.schema_repo import SchemaRepository
+from src.services.resource_pool_service import ResourcePoolService
 
 
 def render_project_master(
     project_repo: ProjectRepository,
     schema_repo: SchemaRepository,
+    pool_repo: Optional[ResourcePoolRepository] = None,
+    milestone_repo: Optional[MilestoneRepository] = None,
 ) -> None:
     """Renders the Project Master Data screen for creating, editing, and deleting projects."""
     st.header(f"📋 {t('master_data.title')}")
+
+    pool_repo = pool_repo or ResourcePoolRepository(project_repo.db_path)
+    milestone_repo = milestone_repo or MilestoneRepository(project_repo.db_path)
+    org_repo = OrganizationRepository(project_repo.db_path)
+
 
     tab_create, tab_edit = st.tabs([t("master_data.tab_create"), t("master_data.tab_edit")])
     groups = schema_repo.get_all_groups()
@@ -295,6 +306,98 @@ def render_project_master(
                     )
                     st.success(t("master_data.msg_updated_success", id=selected_id))
                     st.rerun()
+
+        st.divider()
+
+        # Resource Pool Allocations Section
+        st.write("#### 🏊 Resource Pool Allocations")
+        df_proj_assign = pool_repo.get_assignments(project_id=selected_id)
+        if df_proj_assign.empty:
+            st.info("No resource pools currently assigned to this project.")
+        else:
+            proj_assign_rows = []
+            for _, r_a in df_proj_assign.iterrows():
+                a_pid = int(r_a["pool_id"])
+                p_status = ResourcePoolService.calculate_project_pool_status(
+                    selected_id, a_pid, org_repo, pool_repo, milestone_repo
+                )
+                status_label = (
+                    f"⚠️ OVERASSIGNED (+{p_status['excess_fte']:.2f} FTE)"
+                    if p_status["is_overassigned"]
+                    else "✅ OK"
+                )
+                period_str = f"{r_a['effective_start_date'] or '—'} → {r_a['effective_end_date'] or '—'}"
+                if pd.notna(r_a.get("custom_start_date")):
+                    period_str += " (Custom Period)"
+                else:
+                    period_str += " (Full Period)"
+
+                proj_assign_rows.append({
+                    "ID": int(r_a["id"]),
+                    "Pool Name": str(r_a["pool_name"]),
+                    "Target Scope": str(r_a["task_name"]) if pd.notna(r_a.get("task_name")) else "Project Level",
+                    "Assigned FTE": f"{float(r_a['fte_assigned']):.2f} FTE",
+                    "Period": period_str,
+                    "Daily Status": status_label,
+                    "Notes": str(r_a.get("notes") or ""),
+                })
+
+            c_tbl, c_del = st.columns([5, 1])
+            with c_tbl:
+                st.dataframe(pd.DataFrame(proj_assign_rows), use_container_width=True, hide_index=True)
+            with c_del:
+                del_a_opts = df_proj_assign["id"].tolist()
+                del_aid = st.selectbox("Unassign", options=del_a_opts, key=f"sb_del_proj_assign_{selected_id}", label_visibility="collapsed")
+                if st.button("🗑️ Unassign", key=f"btn_unassign_proj_{selected_id}"):
+                    pool_repo.delete_assignment(del_aid)
+                    st.toast(f"Assignment #{del_aid} removed.", icon="🗑️")
+                    st.rerun()
+
+        # Add Assignment Expander
+        df_all_pools = pool_repo.get_all_pools()
+        if not df_all_pools.empty:
+            with st.expander("➕ Assign Resource Pool to Project", expanded=False):
+                with st.form(f"form_assign_pool_proj_{selected_id}"):
+                    pool_map = dict(zip(df_all_pools["id"], df_all_pools["name"]))
+                    sel_pool_id = st.selectbox(
+                        "Select Resource Pool",
+                        options=df_all_pools["id"].tolist(),
+                        format_func=lambda x: f"🏊 #{x} - {pool_map.get(x, '')}",
+                    )
+                    sel_fte = st.number_input("Assigned FTE", min_value=0.1, max_value=100.0, value=1.0, step=0.5)
+
+                    period_mode = st.radio(
+                        "Assignment Period Mode",
+                        options=["full", "custom"],
+                        format_func=lambda x: "Full Project Period (Default)" if x == "full" else "Custom Date Range",
+                        horizontal=True,
+                    )
+
+                    c_d1, c_d2 = st.columns(2)
+                    c_start_val: Optional[str] = None
+                    c_end_val: Optional[str] = None
+                    if period_mode == "custom":
+                        d_start = c_d1.date_input("Start Date", value=datetime.date.today())
+                        d_end = c_d2.date_input("End Date", value=datetime.date.today() + datetime.timedelta(days=30))
+                        c_start_val = d_start.isoformat()
+                        c_end_val = d_end.isoformat()
+
+                    assign_notes = st.text_input("Notes / Role Description (Optional)")
+
+                    if st.form_submit_button("💾 Save Allocation"):
+                        pool_repo.create_assignment(
+                            PoolAssignment(
+                                pool_id=int(sel_pool_id),
+                                project_id=selected_id,
+                                task_id=None,
+                                fte_assigned=float(sel_fte),
+                                start_date=c_start_val,
+                                end_date=c_end_val,
+                                notes=assign_notes.strip(),
+                            )
+                        )
+                        st.toast("Resource pool assigned to project!", icon="✅")
+                        st.rerun()
 
         st.divider()
         st.write("#### ⚠️ Danger Zone")

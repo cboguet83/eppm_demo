@@ -346,7 +346,67 @@ def init_db(db_path: Optional[str] = None) -> None:
             )
         """)
 
-        # 11. Schema migrations for project, organization, and function tables
+        # 15. Team Function Membership Table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS team_function (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                team_id INTEGER NOT NULL,
+                function_id INTEGER NOT NULL,
+                FOREIGN KEY (team_id) REFERENCES team (team_id) ON DELETE CASCADE,
+                FOREIGN KEY (function_id) REFERENCES function (function_id) ON DELETE CASCADE,
+                UNIQUE(team_id, function_id)
+            )
+        """)
+
+        # 16. Resource Pools Table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS resource_pool (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                description TEXT DEFAULT '',
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # 17. Resource Pool Mappings Table (Teams & Functions with partial 0-100% allocation)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS resource_pool_mapping (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                pool_id INTEGER NOT NULL,
+                target_type TEXT NOT NULL CHECK(target_type IN ('team', 'function')),
+                target_id INTEGER NOT NULL,
+                allocation_pct REAL NOT NULL DEFAULT 100.0 CHECK(allocation_pct >= 0.0 AND allocation_pct <= 100.0),
+                FOREIGN KEY (pool_id) REFERENCES resource_pool (id) ON DELETE CASCADE,
+                UNIQUE(pool_id, target_type, target_id)
+            )
+        """)
+
+        # 18. Resource Pool Assignments Table (Task or Project with FTE & optional custom period)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS resource_pool_assignment (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                pool_id INTEGER NOT NULL,
+                project_id INTEGER NOT NULL,
+                task_id INTEGER,
+                fte_assigned REAL NOT NULL CHECK(fte_assigned >= 0.0),
+                start_date TEXT,
+                end_date TEXT,
+                notes TEXT DEFAULT '',
+                FOREIGN KEY (pool_id) REFERENCES resource_pool (id) ON DELETE CASCADE,
+                FOREIGN KEY (project_id) REFERENCES project (id) ON DELETE CASCADE,
+                FOREIGN KEY (task_id) REFERENCES project_task (id) ON DELETE CASCADE
+            )
+        """)
+
+        # Migration check for resource_pool_assignment start_date / end_date
+        cursor.execute("PRAGMA table_info(resource_pool_assignment)")
+        rpa_cols = [c[1] for c in cursor.fetchall()]
+        if "start_date" not in rpa_cols and len(rpa_cols) > 0:
+            cursor.execute("ALTER TABLE resource_pool_assignment ADD COLUMN start_date TEXT")
+        if "end_date" not in rpa_cols and len(rpa_cols) > 0:
+            cursor.execute("ALTER TABLE resource_pool_assignment ADD COLUMN end_date TEXT")
+
+        # 19. Schema migrations for project, organization, and function tables
         cursor.execute("PRAGMA table_info(project)")
         proj_cols = [col[1] for col in cursor.fetchall()]
         if "dynamic_attributes" not in proj_cols:

@@ -61,7 +61,16 @@
     "msg_updated_success": "Projekt '{id}' erfolgreich aktualisiert!",
     "msg_deleted_success": "Projekt '{id}' erfolgreich gelöscht.",
     "err_required_fields": "Projektcode und Projekttitel sind erforderlich.",
-    "err_already_exists": "Ein Projekt mit dem Code '{id}' existiert bereits."
+    "err_already_exists": "Ein Projekt mit dem Code '{id}' existiert bereits.",
+    "pool_allocations_title": "🏊 Ressourcenpool-Zuweisungen",
+    "field_fte": "Zugewiesene VZÄ *",
+    "assignment_period_mode": "Zuweisungszeitraum-Modus",
+    "period_full_task": "Gesamte Aufgabendauer (Standard)",
+    "period_custom_range": "Benutzerdefinierter spezifischer Zeitraum",
+    "custom_start_date": "Startdatum",
+    "custom_end_date": "Enddatum",
+    "field_assignment_notes": "Notizen / Zweck der Zuweisung",
+    "date_range_error": "Das Enddatum darf nicht vor dem Startdatum liegen."
   },
   "schema": {
     "title": "Dynamisches Schema & Parameterdefinition",
@@ -134,7 +143,29 @@
     "no_project_tags_assigned": "Keine Tags mit diesem Projekt verknüpft.",
     "scope_single_project": "Einzelnes Projekt",
     "scope_specific_projects": "Bestimmte Projekte auswählen",
-    "btn_close_dialog": "Schließen"
+    "btn_close_dialog": "Schließen",
+    "dialog_task_pools_title": "🏊 Aufgaben-Ressourcenpools verwalten",
+    "current_pools": "Aktuell zugewiesene Ressourcenpools",
+    "no_pools_assigned_task": "Dieser Aufgabe sind derzeit keine Ressourcenpools zugewiesen.",
+    "btn_unassign_pool": "Pool-Zuweisung entfernen",
+    "toast_pool_unassigned": "Pool-Zuweisung entfernt!",
+    "assign_new_pool": "Ressourcenpool zuweisen",
+    "no_pools_exist": "Keine Ressourcenpools konfiguriert. Erstellen Sie Pools in Einstellungen > Ressourcenpools.",
+    "select_resource_pool": "Ressourcenpool auswählen *",
+    "btn_confirm_assign_pool": "Pool der Aufgabe zuweisen",
+    "pool_required_error": "Bitte wählen Sie einen Ressourcenpool aus.",
+    "toast_pool_assigned": "Ressourcenpool der Aufgabe zugewiesen!",
+    "quick_task_pools": "Schnellaktion: Ressourcenpools zuweisen",
+    "select_task_to_assign_pools": "Aufgabe auswählen",
+    "btn_open_pool_mgr": "Pool-Zuweiser öffnen",
+    "dialog_project_pools_title": "🏊 Projekt-Ressourcenpools verwalten",
+    "no_pools_assigned_project": "Diesem Projekt sind derzeit keine Ressourcenpools zugewiesen.",
+    "btn_confirm_assign_pool_proj": "Pool dem Projekt zuweisen",
+    "toast_pool_assigned_proj": "Ressourcenpool dem Projekt zugewiesen!",
+    "toast_pool_unassigned_proj": "Projekt-Poolzuweisung entfernt!",
+    "quick_project_pools": "Schnellaktion: Ressourcenpools dem Projekt zuweisen",
+    "select_project_to_assign_pools": "Projekt auswählen",
+    "btn_open_project_pool_mgr": "Projekt-Poolzuweiser öffnen"
   },
   "gantt": {
     "columns": {
@@ -174,7 +205,9 @@
       "edit_dep": "Abhängigkeit bearbeiten",
       "delete_dep": "Abhängigkeit löschen",
       "view_diagnostics": "Diagnose anzeigen",
-      "view_project_diagnostics": "Projektverletzungen anzeigen"
+      "view_project_diagnostics": "Projektverletzungen anzeigen",
+      "manage_project_pools": "Ressourcenpools zuweisen",
+      "manage_task_pools": "Ressourcenpools zuweisen"
     },
     "modal": {
       "add_title": "➕ Neuen Schritt hinzufügen ({project_id})",
@@ -383,6 +416,29 @@
     "stat_tag_groups": "Tag-Gruppen",
     "stat_tags": "Tags",
     "stat_project_tags": "Projekt-Tags",
-    "stat_task_tags": "Aufgaben-Tags"
+    "stat_task_tags": "Aufgaben-Tags",
+    "tab_resource_pools": "Ressourcenpools",
+    "pools_title": "🏊 Ressourcenpool-Verwaltung & Kapazität",
+    "stat_pools": "Ressourcenpools",
+    "stat_total_capacity": "Gesamte Poolkapazität (VZÄ)",
+    "stat_peak_assigned": "Spitzenbedarf (VZÄ)",
+    "stat_overassigned_pools": "Überlastete Pools",
+    "dialog_add_pool": "➕ Ressourcenpool erstellen",
+    "dialog_edit_pool": "✏️ Ressourcenpool bearbeiten",
+    "field_pool_name": "Ressourcenpool-Name *",
+    "field_pool_desc": "Beschreibung / Geltungsbereich",
+    "col_pool_name": "Ressourcenpool",
+    "col_capacity_fte": "Kapazität (VZÄ)",
+    "col_peak_assigned_fte": "Täglicher Spitzenbedarf (VZÄ)",
+    "col_status": "Täglicher Status",
+    "col_mappings_count": "Zugeordnete Einheiten",
+    "col_assignments_count": "Zuweisungen",
+    "team_members_header": "Teammitglieder-Funktionen (Kapazitätskomponenten)",
+    "demand_within_cap": "Täglicher Bedarf (≤ Kapazität)",
+    "demand_over_cap": "Täglicher Bedarf (> Kapazität)",
+    "marker_within_cap": "Normaler Bedarf",
+    "marker_over_cap": "Überlasteter Bedarf",
+    "pool_capacity_line": "Pool-Kapazitätsgrenze",
+    "daily_demand_chart": "Zeitachse Tägliche Kapazität vs. Zugewiesener Bedarf"
   }
 }

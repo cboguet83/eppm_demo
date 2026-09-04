@@ -1103,6 +1103,10 @@
       <span>🏷️</span>
       <span id="ctx-label-task-tags">Manage Tags</span>
     </div>
+    <div class="context-menu-item" onclick="triggerManageTaskPools()">
+      <span>🏊</span>
+      <span id="ctx-label-task-pools">Assign Resource Pools</span>
+    </div>
     <div class="context-menu-item" onclick="markComplete()">
       <span>✅</span>
       <span id="ctx-label-complete-step">Mark 100% Complete</span>
@@ -1123,6 +1127,10 @@
     <div class="context-menu-item" onclick="triggerManageProjectTagsFromMenu()">
       <span>🏷️</span>
       <span id="ctx-label-project-tags">Manage Tags</span>
+    </div>
+    <div class="context-menu-item" onclick="triggerManageProjectPoolsFromMenu()">
+      <span>🏊</span>
+      <span id="ctx-label-project-pools">Assign Resource Pools</span>
     </div>
     <div class="context-menu-item" onclick="triggerEditProjectFromMenu()">
       <span>📁</span>
@@ -1795,6 +1803,20 @@
             ${dateStr}
           </div>
           ${tagsHtml}
+          ${(() => {
+            const pPools = (pMeta && pMeta.pools) ? pMeta.pools : [];
+            if (!pPools || pPools.length === 0) return '';
+            return `
+              <div style="margin-top:6px; border-top:1px solid #334155; padding-top:5px;">
+                <div style="font-size:10px; font-weight:700; color:#38bdf8; text-transform:uppercase; margin-bottom:3px; letter-spacing:0.03em;">🏊 Project Resource Pools</div>
+                <div style="display:flex; flex-wrap:wrap; gap:4px;">
+                  ${pPools.map(pl => {
+                    return `<span style="background:rgba(2,132,199,0.2); border:1px solid #0284c7; color:#7dd3fc; font-size:10.5px; font-weight:600; padding:1px 6px; border-radius:10px; display:inline-flex; align-items:center;">🏊 ${escapeHtml(pl.pool_name || 'Pool')} (${Number(pl.fte).toFixed(2)} FTE)</span>`;
+                  }).join('')}
+                </div>
+              </div>
+            `;
+          })()}
         </div>
       `;
 
@@ -1836,8 +1858,35 @@
       let violHtml = '';
       if (viols.length > 0) {
         violHtml = `
-          <div style="margin-top:6px; background:#450a0a; border:1px solid #ef4444; border-radius:4px; padding:4px 6px; color:#fca5a5; font-size:10.5px;">
+          <div style="margin-top:6px; background:#450a0a; border:1px solid #ef4444; border-radius:4px; padding:4px 6px; color:#fca5b3; font-size:10.5px;">
             <b>⚠️ Constraint Issue:</b><br>${viols.join('<br>')}
+          </div>
+        `;
+      }
+
+      const pools = task.pools || [];
+      let poolsHtml = '';
+      if (pools.length > 0) {
+        poolsHtml = `
+          <div style="margin-top:6px; border-top:1px solid #334155; padding-top:5px;">
+            <div style="font-size:10px; font-weight:700; color:#38bdf8; text-transform:uppercase; margin-bottom:3px; letter-spacing:0.03em;">🏊 Assigned Resource Pools</div>
+            <div style="display:flex; flex-direction:column; gap:3px;">
+              ${pools.map(p => {
+                const isOver = Boolean(p.is_overassigned);
+                const bgStyle = isOver
+                  ? 'background:rgba(220,38,38,0.25); border:1px solid #ef4444; color:#fca5a5;'
+                  : 'background:rgba(14,165,233,0.15); border:1px solid #0284c7; color:#bae6fd;';
+                const badgeIcon = isOver ? '⚠️ ' : '🏊 ';
+                const capText = p.pool_capacity ? ` (Overassigned! Cap: ${Number(p.pool_capacity).toFixed(2)} FTE)` : ' (Overassigned!)';
+                const extraInfo = isOver ? capText : '';
+                return `
+                  <div style="${bgStyle} font-size:10.5px; font-weight:600; padding:2px 6px; border-radius:4px; display:flex; justify-content:space-between; align-items:center;">
+                    <span>${badgeIcon}${escapeHtml(p.pool_name || 'Pool')}</span>
+                    <span style="color:#ffffff; font-weight:700;">${p.fte} FTE${extraInfo}</span>
+                  </div>
+                `;
+              }).join('')}
+            </div>
           </div>
         `;
       }
@@ -1858,6 +1907,7 @@
           </div>
           ${desc ? `<div style="font-size:10.5px; color:#94a3b8; margin-top:2px; font-style:italic;">↳ ${escapeHtml(desc)}</div>` : ''}
           ${tagsHtml}
+          ${poolsHtml}
           ${violHtml}
         </div>
       `;
@@ -2670,12 +2720,37 @@
       });
     }
 
+    function triggerManageTaskPools() {
+      hideContextMenu();
+      if (!selectedContextMenuTask || !selectedContextMenuTask.id) return;
+
+      Streamlit.setComponentValue({
+        action: "manage_task_pools",
+        id: parseInt(selectedContextMenuTask.id, 10),
+        task_name: selectedContextMenuTask.name || '',
+        project_id: selectedContextMenuTask.project_id || currentProjectId || '',
+        nonce: Date.now() + "_" + Math.random()
+      });
+    }
+
+
     function triggerManageProjectTagsFromMenu() {
       hideProjectContextMenu();
       if (!selectedContextMenuProjectId) return;
 
       Streamlit.setComponentValue({
         action: "manage_project_tags",
+        project_id: selectedContextMenuProjectId,
+        nonce: Date.now() + "_" + Math.random()
+      });
+    }
+
+    function triggerManageProjectPoolsFromMenu() {
+      hideProjectContextMenu();
+      if (!selectedContextMenuProjectId) return;
+
+      Streamlit.setComponentValue({
+        action: "manage_project_pools",
         project_id: selectedContextMenuProjectId,
         nonce: Date.now() + "_" + Math.random()
       });

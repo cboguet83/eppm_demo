@@ -61,7 +61,16 @@
     "msg_updated_success": "Projet '{id}' erfollegräich aktualiséiert!",
     "msg_deleted_success": "Projet '{id}' erfollegräich geläscht.",
     "err_required_fields": "Projet Code a Projet Titel sinn erfuerderlech.",
-    "err_already_exists": "E Projet mam Code '{id}' existéiert scho."
+    "err_already_exists": "E Projet mam Code '{id}' existéiert scho.",
+    "pool_allocations_title": "🏊 Ressourcenpool Allocatiounen",
+    "field_fte": "Zougewisen VZÄ *",
+    "assignment_period_mode": "Zouuerdnungsperiod Modus",
+    "period_full_task": "Ganz Taskdauer (Standard)",
+    "period_custom_range": "Spezifesch personaliséiert Period",
+    "custom_start_date": "Startdatum",
+    "custom_end_date": "Enddatum",
+    "field_assignment_notes": "Notizen / Allocatiounszweck",
+    "date_range_error": "Den Enddatum däerf net virum Startdatum leien."
   },
   "schema": {
     "title": "Dynamescht Schema & Parameter Definitioun",
@@ -134,7 +143,29 @@
     "no_project_tags_assigned": "Keng Tags mat dësem Projet verbonnen.",
     "scope_single_project": "Eenzelne Projet",
     "scope_specific_projects": "Bestëmmt Projete wielen",
-    "btn_close_dialog": "Zoumaachen"
+    "btn_close_dialog": "Zoumaachen",
+    "dialog_task_pools_title": "🏊 Task Ressourcenpools geréieren",
+    "current_pools": "Aktuell zougewisen Ressourcenpools",
+    "no_pools_assigned_task": "Dëser Task si momentan keng Ressourcenpools zougewisen.",
+    "btn_unassign_pool": "Pool-Allocatioun läschen",
+    "toast_pool_unassigned": "Pool-Allocatioun geläscht!",
+    "assign_new_pool": "Ressourcenpool zouuerdnen",
+    "no_pools_exist": "Keng Ressourcenpools konfiguréiert. Erstellt Pools an Astellungen > Ressourcenpools.",
+    "select_resource_pool": "Ressourcenpool auswielen *",
+    "btn_confirm_assign_pool": "Pool der Task zouuerdnen",
+    "pool_required_error": "Wielt w.e.g. e Ressourcenpool aus.",
+    "toast_pool_assigned": "Ressourcenpool der Task zougewisen!",
+    "quick_task_pools": "Schnellaktioun: Ressourcenpools zouuerdnen",
+    "select_task_to_assign_pools": "Task auswielen",
+    "btn_open_pool_mgr": "Pool-Allocateur opmaachen",
+    "dialog_project_pools_title": "🏊 Projet Ressourcenpools geréieren",
+    "no_pools_assigned_project": "Dësem Projet si momentan keng Ressourcenpools zougewisen.",
+    "btn_confirm_assign_pool_proj": "Pool dem Projet zouuerdnen",
+    "toast_pool_assigned_proj": "Ressourcenpool dem Projet zougewisen!",
+    "toast_pool_unassigned_proj": "Projet-Poolallocatioun geläscht!",
+    "quick_project_pools": "Schnellaktioun: Ressourcenpools dem Projet zouuerdnen",
+    "select_project_to_assign_pools": "Projet auswielen",
+    "btn_open_project_pool_mgr": "Projet-Poolallocateur opmaachen"
   },
   "gantt": {
     "columns": {
@@ -174,7 +205,9 @@
       "edit_dep": "Ofhängegkeet änneren",
       "delete_dep": "Ofhängegkeet läschen",
       "view_diagnostics": "Diagnostik weisen",
-      "view_project_diagnostics": "Projetverletzungen uweisen"
+      "view_project_diagnostics": "Projetverletzungen uweisen",
+      "manage_project_pools": "Ressourcenpools zouuerdnen",
+      "manage_task_pools": "Ressourcenpools zouuerdnen"
     },
     "modal": {
       "add_title": "➕ Neie Schrëtt bäisetzen ({project_id})",
@@ -383,6 +416,29 @@
     "stat_tag_groups": "Tag Gruppen",
     "stat_tags": "Tags",
     "stat_project_tags": "Projet Tags",
-    "stat_task_tags": "Task Tags"
+    "stat_task_tags": "Task Tags",
+    "tab_resource_pools": "Ressourcenpools",
+    "pools_title": "🏊 Ressourcenpool Gestioun & Kapazitéit",
+    "stat_pools": "Ressourcenpools",
+    "stat_total_capacity": "Total Poolkapazitéit (VZÄ)",
+    "stat_peak_assigned": "Spëtzebedarf (VZÄ)",
+    "stat_overassigned_pools": "Iwwerbucht Pools",
+    "dialog_add_pool": "➕ Ressourcenpool erstellen",
+    "dialog_edit_pool": "✏️ Ressourcenpool änneren",
+    "field_pool_name": "Ressourcenpool Numm *",
+    "field_pool_desc": "Beschreiwung / Ëmfang",
+    "col_pool_name": "Ressourcenpool",
+    "col_capacity_fte": "Kapazitéit (VZÄ)",
+    "col_peak_assigned_fte": "Deegleche Spëtzebedarf (VZÄ)",
+    "col_status": "Deegleche Status",
+    "col_mappings_count": "Gemappten Eenheeten",
+    "col_assignments_count": "Allocatiounen",
+    "team_members_header": "Teammember-Fonctiounen (Kapazitéitskomponenten)",
+    "demand_within_cap": "Deegleche Bedarf (≤ Kapazitéit)",
+    "demand_over_cap": "Deegleche Bedarf (> Kapazitéit)",
+    "marker_within_cap": "Normale Bedarf",
+    "marker_over_cap": "Iwwerbuchte Bedarf",
+    "pool_capacity_line": "Pool-Kapazitéitsgrenz",
+    "daily_demand_chart": "Zäitlinn Deeglech Kapazitéit vs. Zougewisenen Bedarf"
   }
 }

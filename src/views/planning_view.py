@@ -12,11 +12,15 @@ import streamlit.components.v1 as components
 
 from src.i18n import get_current_locale, get_section_catalog, t
 from src.models.constants import PAGE_PROJECT_MASTER
+from src.models.resource_pool import PoolAssignment
 from src.models.tag import ProjectTag, TaskTag
 from src.repositories.milestone_repo import MilestoneRepository
+from src.repositories.organization_repo import OrganizationRepository
 from src.repositories.project_repo import ProjectRepository
+from src.repositories.resource_pool_repo import ResourcePoolRepository
 from src.repositories.tag_repo import TagRepository
 from src.services.milestone_service import MilestoneService
+from src.services.resource_pool_service import ResourcePoolService
 
 # Declare Frappe Gantt Custom Component
 _COMPONENT_PATH = os.path.join(
@@ -171,14 +175,367 @@ def _manage_task_tags_dialog(task_id: int, task_name: str, tag_repo: TagReposito
             st.rerun()
 
 
+@st.dialog(t("planning.dialog_project_pools_title", default="🏊 Manage Project Resource Pools"))
+def _manage_project_resource_pools_dialog(
+    project_id: int,
+    project_name: str,
+    pool_repo: ResourcePoolRepository,
+    milestone_repo: MilestoneRepository,
+    org_repo: Optional[OrganizationRepository] = None,
+) -> None:
+    """Modal dialog for viewing, allocating, and unassigning resource pools at project level."""
+    if org_repo is None:
+        org_repo = OrganizationRepository(pool_repo.db_path)
+    st.markdown(f"#### 📁 {project_name} `[Project #{project_id}]`")
+
+    # Fetch project date bounds
+    proj_bounds = milestone_repo.get_all_project_date_bounds()
+    p_start_str, p_end_str = proj_bounds.get(project_id, (None, None))
+    if p_start_str and p_end_str:
+        st.caption(f"📅 **Project Timeline:** `{p_start_str}` ➔ `{p_end_str}`")
+
+    # 1. Existing Project-Level Pool Assignments
+    df_current_assigns = pool_repo.get_assignments(project_id=project_id, only_project_level=True)
+    st.markdown(f"##### {t('planning.current_pools', default='Current Assigned Resource Pools')}")
+
+    if df_current_assigns.empty:
+        st.info(t("planning.no_pools_assigned_project", default="No resource pools currently assigned to this project."))
+    else:
+        for _, row in df_current_assigns.iterrows():
+            assign_id = int(row["id"])
+            p_id = int(row["pool_id"])
+            p_name = str(row["pool_name"])
+            fte_val = float(row["fte_assigned"])
+            c_start = row.get("custom_start_date")
+            c_end = row.get("custom_end_date")
+
+            # Check capacity and daily overassignment status
+            cap_detail = ResourcePoolService.calculate_pool_capacity(p_id, org_repo, pool_repo, milestone_repo)
+            p_status = ResourcePoolService.calculate_project_pool_status(project_id, p_id, org_repo, pool_repo, milestone_repo)
+
+            if p_status["is_overassigned"]:
+                status_html = f'<span style="background-color:#FDE8EC; color:#C41039; border:1px solid #C41039; padding:2px 7px; border-radius:10px; font-weight:700; font-size:11px;">⚠️ Overassigned (Peak: {p_status["project_peak_assigned_fte"]:.2f} / Cap: {cap_detail.total_capacity_fte:.2f} FTE)</span>'
+            else:
+                status_html = f'<span style="background-color:#ECFDF5; color:#047857; border:1px solid #10B981; padding:2px 7px; border-radius:10px; font-weight:700; font-size:11px;">✅ OK (Peak: {p_status["project_peak_assigned_fte"]:.2f} / Cap: {cap_detail.total_capacity_fte:.2f} FTE)</span>'
+
+            if pd.notna(c_start) and pd.notna(c_end) and str(c_start).strip() and str(c_end).strip():
+                period_str = f"📅 {c_start} to {c_end} *(Custom Period)*"
+            else:
+                period_str = f"📅 Full Project Duration ({p_start_str or 'Start'} to {p_end_str or 'End'})"
+
+            c_info, c_del = st.columns([5, 1])
+            with c_info:
+                st.markdown(
+                    f'<div style="background:#F8FAFC; border:1px solid #E2E8F0; border-left:4px solid #0284C7; padding:8px 10px; border-radius:6px; margin-bottom:6px;">'
+                    f'<div style="display:flex; justify-content:space-between; align-items:center;">'
+                    f'<b style="color:#0F172A; font-size:13px;">🏊 {p_name}</b>'
+                    f'<span style="font-weight:700; color:#0284C7; font-size:12px;">{fte_val:.2f} FTE</span>'
+                    f'</div>'
+                    f'<div style="font-size:11.5px; color:#475569; margin-top:3px;">{period_str}</div>'
+                    f'<div style="margin-top:4px;">{status_html}</div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+            with c_del:
+                if st.button("🗑️", key=f"btn_del_assign_proj_{assign_id}", help=t("planning.btn_unassign_pool", default="Remove pool assignment")):
+                    pool_repo.delete_assignment(assign_id)
+                    st.toast(t("planning.toast_pool_unassigned_proj", default="Project pool assignment removed!"), icon="🗑️")
+                    st.rerun()
+
+    st.divider()
+
+    # 2. Assign a Resource Pool to Project
+    st.markdown(f"##### ➕ {t('planning.assign_new_pool', default='Assign Resource Pool')}")
+    df_all_pools = pool_repo.get_all_pools()
+    if df_all_pools.empty:
+        st.warning(t("planning.no_pools_exist", default="No resource pools configured. Create pools in Settings > Resource Pools."))
+        return
+
+    pool_choices = []
+    for _, pr in df_all_pools.iterrows():
+        pid = int(pr["id"])
+        pcap = ResourcePoolService.calculate_pool_capacity(pid, org_repo, pool_repo, milestone_repo)
+        pool_choices.append((pid, f"🏊 {pr['name']} (Cap: {pcap.total_capacity_fte:.2f} FTE)"))
+
+    sel_pool_tuple = st.selectbox(
+        t("planning.select_resource_pool", default="Select Resource Pool *"),
+        options=pool_choices,
+        format_func=lambda x: x[1],
+        key="sb_assign_proj_pool",
+    )
+    sel_pool_id = sel_pool_tuple[0] if sel_pool_tuple else None
+
+    c_fte, c_mode = st.columns([1, 2])
+    with c_fte:
+        fte_input = st.number_input(
+            t("master_data.field_fte", default="Assigned FTE *"),
+            min_value=0.1,
+            max_value=100.0,
+            value=1.0,
+            step=0.1,
+            key="ni_assign_proj_fte",
+        )
+    with c_mode:
+        period_mode = st.radio(
+            t("master_data.assignment_period_mode", default="Assignment Period Mode"),
+            options=["full", "custom"],
+            format_func=lambda m: (
+                t("master_data.period_full_project", default="Full Project Duration (Default)")
+                if m == "full"
+                else t("master_data.period_custom_range", default="Custom Specific Period")
+            ),
+            key="rb_assign_proj_period_mode",
+            horizontal=True,
+        )
+
+    custom_start_str = None
+    custom_end_str = None
+    if period_mode == "custom":
+        default_s = (
+            datetime.datetime.strptime(p_start_str, "%Y-%m-%d").date()
+            if p_start_str
+            else datetime.date.today()
+        )
+        default_e = (
+            datetime.datetime.strptime(p_end_str, "%Y-%m-%d").date()
+            if p_end_str
+            else (default_s + datetime.timedelta(days=30))
+        )
+        col_s, col_e = st.columns(2)
+        with col_s:
+            custom_s_val = st.date_input(t("master_data.custom_start_date", default="Start Date"), value=default_s, key="di_assign_proj_s")
+        with col_e:
+            custom_e_val = st.date_input(t("master_data.custom_end_date", default="End Date"), value=default_e, key="di_assign_proj_e")
+
+        if custom_s_val and custom_e_val:
+            if custom_e_val < custom_s_val:
+                st.error(t("master_data.date_range_error", default="End Date cannot be before Start Date."))
+            else:
+                custom_start_str = custom_s_val.strftime("%Y-%m-%d")
+                custom_end_str = custom_e_val.strftime("%Y-%m-%d")
+
+    notes_input = st.text_input(
+        t("master_data.field_assignment_notes", default="Notes / Allocation Purpose"),
+        placeholder="e.g. Core architectural oversight, PMO support",
+        key="ti_assign_proj_notes",
+    )
+
+    col_btn_save, col_btn_close = st.columns([3, 1])
+    with col_btn_save:
+        if st.button(t("planning.btn_confirm_assign_pool_proj", default="Assign Pool to Project"), type="primary", key="btn_confirm_assign_proj_pool"):
+            if sel_pool_id is None:
+                st.error(t("planning.pool_required_error", default="Please select a resource pool."))
+            elif period_mode == "custom" and (not custom_start_str or not custom_end_str):
+                st.error(t("master_data.date_range_error", default="End Date cannot be before Start Date."))
+            else:
+                new_assignment = PoolAssignment(
+                    pool_id=sel_pool_id,
+                    project_id=project_id,
+                    task_id=None,
+                    fte_assigned=float(fte_input),
+                    start_date=custom_start_str,
+                    end_date=custom_end_str,
+                    notes=notes_input.strip(),
+                )
+                pool_repo.create_assignment(new_assignment)
+                st.toast(t("planning.toast_pool_assigned_proj", default="Resource pool assigned to project!"), icon="🏊")
+                st.session_state["modal_manage_project_pool"] = None
+                st.rerun()
+
+    with col_btn_close:
+        if st.button(t("planning.btn_close_dialog", default="Close"), key="btn_close_proj_pool_dialog"):
+            st.session_state["modal_manage_project_pool"] = None
+            st.rerun()
+
+
+@st.dialog(t("planning.dialog_task_pools_title", default="🏊 Manage Task Resource Pools"))
+def _manage_task_resource_pools_dialog(
+    task_id: int,
+    task_name: str,
+    project_id: Union[int, str],
+    pool_repo: ResourcePoolRepository,
+    milestone_repo: MilestoneRepository,
+    org_repo: Optional[OrganizationRepository] = None,
+) -> None:
+    """Modal dialog for viewing, assigning, and removing resource pools on a task."""
+    if org_repo is None:
+        org_repo = OrganizationRepository(pool_repo.db_path)
+    st.markdown(f"#### 📋 {task_name} `[Task #{task_id}]` (Project #{project_id})")
+
+    # Fetch task dates for reference and defaults
+    step_info = milestone_repo.get_milestone_by_id(task_id)
+    task_start_str = step_info.get("start_date") if step_info else None
+    task_end_str = step_info.get("end_date") if step_info else None
+    if task_start_str and task_end_str:
+        st.caption(f"📅 **Task Schedule:** `{task_start_str}` ➔ `{task_end_str}`")
+
+    # 1. Existing Pool Assignments on this task
+    df_current_assigns = pool_repo.get_assignments(task_id=task_id)
+    st.markdown(f"##### {t('planning.current_pools', default='Current Assigned Resource Pools')}")
+
+    if df_current_assigns.empty:
+        st.info(t("planning.no_pools_assigned_task", default="No resource pools currently assigned to this task."))
+    else:
+        for _, row in df_current_assigns.iterrows():
+            assign_id = int(row["id"])
+            p_id = int(row["pool_id"])
+            p_name = str(row["pool_name"])
+            fte_val = float(row["fte_assigned"])
+            c_start = row.get("custom_start_date")
+            c_end = row.get("custom_end_date")
+
+            # Check capacity and daily overassignment status
+            cap_detail = ResourcePoolService.calculate_pool_capacity(p_id, org_repo, pool_repo, milestone_repo)
+            if cap_detail.is_overassigned:
+                status_html = f'<span style="background-color:#FDE8EC; color:#C41039; border:1px solid #C41039; padding:2px 7px; border-radius:10px; font-weight:700; font-size:11px;">⚠️ Overassigned (Peak: {cap_detail.peak_assigned_fte:.2f} / Cap: {cap_detail.total_capacity_fte:.2f} FTE)</span>'
+            else:
+                status_html = f'<span style="background-color:#ECFDF5; color:#047857; border:1px solid #10B981; padding:2px 7px; border-radius:10px; font-weight:700; font-size:11px;">✅ OK (Peak: {cap_detail.peak_assigned_fte:.2f} / Cap: {cap_detail.total_capacity_fte:.2f} FTE)</span>'
+
+            if pd.notna(c_start) and pd.notna(c_end) and str(c_start).strip() and str(c_end).strip():
+                period_str = f"📅 {c_start} to {c_end} *(Custom Period)*"
+            else:
+                period_str = f"📅 Full Task Duration ({task_start_str or 'Start'} to {task_end_str or 'End'})"
+
+            c_info, c_del = st.columns([5, 1])
+            with c_info:
+                st.markdown(
+                    f'<div style="background:#F8FAFC; border:1px solid #E2E8F0; border-left:4px solid #0284C7; padding:8px 10px; border-radius:6px; margin-bottom:6px;">'
+                    f'<div style="display:flex; justify-content:space-between; align-items:center;">'
+                    f'<b style="color:#0F172A; font-size:13px;">🏊 {p_name}</b>'
+                    f'<span style="font-weight:700; color:#0284C7; font-size:12px;">{fte_val:.2f} FTE</span>'
+                    f'</div>'
+                    f'<div style="font-size:11.5px; color:#475569; margin-top:3px;">{period_str}</div>'
+                    f'<div style="margin-top:4px;">{status_html}</div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+            with c_del:
+                if st.button("🗑️", key=f"btn_del_assign_task_{assign_id}", help=t("planning.btn_unassign_pool", default="Remove pool assignment")):
+                    pool_repo.delete_assignment(assign_id)
+                    st.toast(t("planning.toast_pool_unassigned", default="Pool assignment removed!"), icon="🗑️")
+                    st.rerun()
+
+    st.divider()
+
+    # 2. Assign a Resource Pool
+    st.markdown(f"##### ➕ {t('planning.assign_new_pool', default='Assign Resource Pool')}")
+    df_all_pools = pool_repo.get_all_pools()
+    if df_all_pools.empty:
+        st.warning(t("planning.no_pools_exist", default="No resource pools configured. Create pools in Settings > Resource Pools."))
+        return
+
+    pool_choices = []
+    for _, pr in df_all_pools.iterrows():
+        pid = int(pr["id"])
+        pcap = ResourcePoolService.calculate_pool_capacity(pid, org_repo, pool_repo, milestone_repo)
+        pool_choices.append((pid, f"🏊 {pr['name']} (Cap: {pcap.total_capacity_fte:.2f} FTE)"))
+
+    sel_pool_tuple = st.selectbox(
+        t("planning.select_resource_pool", default="Select Resource Pool *"),
+        options=pool_choices,
+        format_func=lambda x: x[1],
+        key="sb_assign_task_pool",
+    )
+    sel_pool_id = sel_pool_tuple[0] if sel_pool_tuple else None
+
+    c_fte, c_mode = st.columns([1, 2])
+    with c_fte:
+        fte_input = st.number_input(
+            t("master_data.field_fte", default="Assigned FTE *"),
+            min_value=0.1,
+            max_value=100.0,
+            value=1.0,
+            step=0.1,
+            key="ni_assign_task_fte",
+        )
+    with c_mode:
+        period_mode = st.radio(
+            t("master_data.assignment_period_mode", default="Assignment Period Mode"),
+            options=["full", "custom"],
+            format_func=lambda m: (
+                t("master_data.period_full_task", default="Full Task Duration (Default)")
+                if m == "full"
+                else t("master_data.period_custom_range", default="Custom Specific Period")
+            ),
+            key="rb_assign_task_period_mode",
+            horizontal=True,
+        )
+
+    custom_start_str = None
+    custom_end_str = None
+    if period_mode == "custom":
+        default_s = (
+            datetime.datetime.strptime(task_start_str, "%Y-%m-%d").date()
+            if task_start_str
+            else datetime.date.today()
+        )
+        default_e = (
+            datetime.datetime.strptime(task_end_str, "%Y-%m-%d").date()
+            if task_end_str
+            else (default_s + datetime.timedelta(days=14))
+        )
+        col_s, col_e = st.columns(2)
+        with col_s:
+            custom_s_val = st.date_input(t("master_data.custom_start_date", default="Start Date"), value=default_s, key="di_assign_task_s")
+        with col_e:
+            custom_e_val = st.date_input(t("master_data.custom_end_date", default="End Date"), value=default_e, key="di_assign_task_e")
+
+        if custom_s_val and custom_e_val:
+            if custom_e_val < custom_s_val:
+                st.error(t("master_data.date_range_error", default="End Date cannot be before Start Date."))
+            else:
+                custom_start_str = custom_s_val.strftime("%Y-%m-%d")
+                custom_end_str = custom_e_val.strftime("%Y-%m-%d")
+
+    notes_input = st.text_input(
+        t("master_data.field_assignment_notes", default="Notes / Allocation Purpose"),
+        placeholder="e.g. Lead drafting, Structural analysis",
+        key="ti_assign_task_notes",
+    )
+
+    col_btn_save, col_btn_close = st.columns([3, 1])
+    with col_btn_save:
+        if st.button(t("planning.btn_confirm_assign_pool", default="Assign Pool to Task"), type="primary", key="btn_confirm_assign_task_pool"):
+            if sel_pool_id is None:
+                st.error(t("planning.pool_required_error", default="Please select a resource pool."))
+            elif period_mode == "custom" and (not custom_start_str or not custom_end_str):
+                st.error(t("master_data.date_range_error", default="End Date cannot be before Start Date."))
+            else:
+                parsed_proj_id = int(project_id) if str(project_id).isdigit() else None
+                new_assignment = PoolAssignment(
+                    pool_id=sel_pool_id,
+                    project_id=parsed_proj_id,
+                    task_id=task_id,
+                    fte_assigned=float(fte_input),
+                    start_date=custom_start_str,
+                    end_date=custom_end_str,
+                    notes=notes_input.strip(),
+                )
+                pool_repo.create_assignment(new_assignment)
+                st.toast(t("planning.toast_pool_assigned", default="Resource pool assigned to task!"), icon="🏊")
+                st.session_state["modal_manage_task_pool"] = None
+                st.rerun()
+
+    with col_btn_close:
+        if st.button(t("planning.btn_close_dialog", default="Close"), key="btn_close_task_pool_dialog"):
+            st.session_state["modal_manage_task_pool"] = None
+            st.rerun()
+
+
 def render_planning_milestones(
     project_repo: ProjectRepository,
     milestone_repo: MilestoneRepository,
     tag_repo: Optional[TagRepository] = None,
+    pool_repo: Optional[ResourcePoolRepository] = None,
+    org_repo: Optional[OrganizationRepository] = None,
 ) -> None:
     """Renders the Planning & Step Loader screen with interactive drag & drop and Plotly timeline."""
     if tag_repo is None:
         tag_repo = TagRepository(project_repo.db_path)
+    if pool_repo is None:
+        pool_repo = ResourcePoolRepository(project_repo.db_path)
+    if org_repo is None:
+        org_repo = OrganizationRepository(project_repo.db_path)
 
     st.markdown(
         """
@@ -314,8 +671,30 @@ def render_planning_milestones(
     if task_modal_info and isinstance(task_modal_info, dict):
         _manage_task_tags_dialog(int(task_modal_info["task_id"]), str(task_modal_info["task_name"]), tag_repo)
 
-    # Fetch all project bounds and project tags for constraint evaluation and tooltips
+    task_pool_modal_info = st.session_state.pop("modal_manage_task_pool", None)
+    if task_pool_modal_info and isinstance(task_pool_modal_info, dict):
+        _manage_task_resource_pools_dialog(
+            task_id=int(task_pool_modal_info["task_id"]),
+            task_name=str(task_pool_modal_info.get("task_name", f"Task #{task_pool_modal_info['task_id']}")),
+            project_id=task_pool_modal_info.get("project_id", selected_id),
+            pool_repo=pool_repo,
+            milestone_repo=milestone_repo,
+            org_repo=org_repo,
+        )
+
+    proj_pool_modal_id = st.session_state.pop("modal_manage_project_pool", None)
+    if proj_pool_modal_id:
+        _manage_project_resource_pools_dialog(
+            int(proj_pool_modal_id),
+            proj_map.get(int(proj_pool_modal_id), f"Project #{proj_pool_modal_id}"),
+            pool_repo,
+            milestone_repo,
+            org_repo,
+        )
+
+    # Fetch all project bounds, project tags, and project pool assignments for constraint evaluation and tooltips
     proj_tags_map = tag_repo.get_project_tags_by_project_ids([int(p) for p in selected_projects if str(p).isdigit()])
+    proj_pools_map = pool_repo.get_project_assignments_map([int(r["id"]) for _, r in df_projects.iterrows()])
     
     if len(selected_projects) == 1:
         s_id = int(selected_projects[0]) if str(selected_projects[0]).isdigit() else selected_projects[0]
@@ -332,6 +711,7 @@ def render_planning_milestones(
             "id": str(r["id"]),
             "name": f"{r['name']}",
             "tags": proj_tags_map.get(int(r["id"]), []),
+            "pools": proj_pools_map.get(int(r["id"]), []),
         }
         for _, r in df_projects.iterrows()
     ]
@@ -369,9 +749,43 @@ def render_planning_milestones(
             raw_tasks, raw_dependencies, project_bounds
         )
 
-        # Batch load tags for all tasks
+        # Batch load tags and resource pool assignments for all tasks
         all_task_ids = [int(row["id"]) for row in steps_records]
         task_tags_map = tag_repo.get_task_tags_by_task_ids(all_task_ids)
+        task_pools_map = pool_repo.get_task_assignments_map(all_task_ids)
+
+        # Precompute pool details for pools in task_pools_map
+        all_task_pool_ids = {p["pool_id"] for plist in task_pools_map.values() for p in plist}
+        pool_details_cache: dict[int, Any] = {
+            pid: ResourcePoolService.calculate_pool_capacity(pid, org_repo, pool_repo, milestone_repo)
+            for pid in all_task_pool_ids
+        }
+
+        # For each task, enrich pool objects with is_overassigned on that specific task and capacity
+        enriched_task_pools_map: dict[int, list[dict[str, Any]]] = {}
+        for tid, plist in task_pools_map.items():
+            t_row = next((r for r in steps_records if int(r["id"]) == tid), None)
+            t_start = str(t_row["start_date"]) if t_row else None
+            t_end = str(t_row["end_date"]) if t_row else None
+            enriched_list = []
+            for p in plist:
+                p_copy = dict(p)
+                p_det = pool_details_cache.get(p["pool_id"])
+                is_over = False
+                if p_det:
+                    p_copy["pool_capacity"] = p_det.total_capacity_fte
+                    if float(p["fte"]) > (p_det.total_capacity_fte + 1e-4):
+                        is_over = True
+                    eff_s = str(p.get("start_date")) if pd.notna(p.get("start_date")) and str(p.get("start_date")).strip() else t_start
+                    eff_e = str(p.get("end_date")) if pd.notna(p.get("end_date")) and str(p.get("end_date")).strip() else t_end
+                    if not is_over and p_det.is_overassigned and eff_s and eff_e:
+                        for ov in p_det.daily_overassignments:
+                            if eff_s <= ov.date <= eff_e:
+                                is_over = True
+                                break
+                p_copy["is_overassigned"] = is_over
+                enriched_list.append(p_copy)
+            enriched_task_pools_map[tid] = enriched_list
 
         # Index evaluated dependencies by task_id in O(N)
         deps_by_task_id: dict[int, list[dict[str, Any]]] = {}
@@ -399,11 +813,54 @@ def render_planning_milestones(
                 "dependenciesList": task_deps,
                 "violations": task_violations.get(tid, []),
                 "tags": task_tags_map.get(tid, []),
+                "pools": enriched_task_pools_map.get(tid, []),
                 "phase": str(row.get("phase", "General")),
                 "project_id": str(row["project_id"]),
                 "project_name": str(row["project_name"]),
                 "custom_class": "bar-milestone" if row["start_date"] == row["end_date"] else "bar-step",
             })
+
+        # Quick Actions: Manage Project Pools & Task Pools without right-click
+        qa_col1, qa_col2 = st.columns(2)
+        with qa_col1:
+            with st.expander(f"🏊 {t('planning.quick_project_pools', default='Quick Action: Assign Resource Pools to Project')}", expanded=False):
+                quick_proj_choices = [
+                    (int(r["id"]), f"{r['name']} (#{r['id']})")
+                    for _, r in df_projects.iterrows()
+                ]
+                sel_quick_proj = st.selectbox(
+                    t("planning.select_project_to_assign_pools", default="Select Project to Assign Pools"),
+                    options=quick_proj_choices,
+                    format_func=lambda x: x[1],
+                    key="sb_quick_project_pool",
+                )
+                if st.button(t("planning.btn_open_project_pool_mgr", default="Open Project Pool Allocator"), key="btn_open_quick_proj_pool_mgr", type="primary"):
+                    if sel_quick_proj:
+                        st.session_state["modal_manage_project_pool"] = int(sel_quick_proj[0])
+                        st.rerun()
+
+        with qa_col2:
+            with st.expander(f"🏊 {t('planning.quick_task_pools', default='Quick Action: Assign Resource Pools to Task')}", expanded=False):
+                quick_task_choices = [
+                    (int(r["id"]), f"{r['task_name']} (#{r['id']}) - {r.get('project_name', '')}")
+                    for r in steps_records
+                ]
+                sel_quick_task = st.selectbox(
+                    t("planning.select_task_to_assign_pools", default="Select Task to Assign Pools"),
+                    options=quick_task_choices,
+                    format_func=lambda x: x[1],
+                    key="sb_quick_task_pool",
+                )
+                if st.button(t("planning.btn_open_pool_mgr", default="Open Task Pool Allocator"), key="btn_open_quick_pool_mgr", type="primary"):
+                    if sel_quick_task:
+                        target_tid = sel_quick_task[0]
+                        target_rec = next((r for r in steps_records if int(r["id"]) == target_tid), None)
+                        st.session_state["modal_manage_task_pool"] = {
+                            "task_id": target_tid,
+                            "task_name": target_rec["task_name"] if target_rec else f"Task #{target_tid}",
+                            "project_id": target_rec["project_id"] if target_rec else selected_id,
+                        }
+                        st.rerun()
 
         # Render custom drag-and-drop component with multi-dependency metadata and i18n
         cur_loc = get_current_locale()
@@ -435,6 +892,11 @@ def render_planning_milestones(
                     if p_id:
                         st.session_state["modal_manage_project_tag"] = int(p_id)
                         st.rerun()
+                elif action == "manage_project_pools":
+                    p_id = gantt_event.get("project_id")
+                    if p_id:
+                        st.session_state["modal_manage_project_pool"] = int(p_id)
+                        st.rerun()
                 elif action == "edit_project_details":
                     p_id = gantt_event.get("project_id")
                     if p_id:
@@ -448,6 +910,15 @@ def render_planning_milestones(
                         "project_id": str(gantt_event.get("project_id", "")),
                     }
                     st.rerun()
+                elif action == "manage_task_pools":
+                    t_id = gantt_event.get("task_id") or step_id
+                    if t_id:
+                        st.session_state["modal_manage_task_pool"] = {
+                            "task_id": int(t_id),
+                            "task_name": str(gantt_event.get("task_name", "")),
+                            "project_id": str(gantt_event.get("project_id", selected_id)),
+                        }
+                        st.rerun()
                 elif action == "update_task_full" and step_id:
                     t_name = str(gantt_event.get("task_name", "")).strip()
                     t_phase = str(gantt_event.get("phase", "General")).strip()

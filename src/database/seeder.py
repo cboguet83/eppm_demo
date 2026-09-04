@@ -347,4 +347,100 @@ def seed_default_data_if_empty(db_path: Optional[str] = None) -> None:
                 ],
             )
 
+        # Check and seed Team Functions
+        cursor.execute("SELECT COUNT(*) FROM team_function")
+        tf_count = cursor.fetchone()[0]
+        if tf_count == 0:
+            logger.info("Seeding team member functions...")
+            team_func_samples = [
+                # Team 1: Equipe Projets A
+                (1, 10), (1, 17), (1, 18), (1, 19), (1, 20), (1, 21),
+                (1, 27), (1, 28), (1, 29), (1, 30), (1, 31), (1, 32), (1, 33), (1, 47), (1, 48),
+                # Team 2: Equipe Projets B
+                (2, 11), (2, 22), (2, 23), (2, 24), (2, 25), (2, 26),
+                (2, 34), (2, 35), (2, 36), (2, 37), (2, 38), (2, 44), (2, 45),
+                # Team 3: Equipe BIM
+                (3, 13), (3, 49), (3, 50),
+            ]
+            cursor.execute("SELECT function_id FROM function")
+            valid_func_ids = {r[0] for r in cursor.fetchall()}
+            cursor.execute("SELECT team_id FROM team")
+            valid_team_ids = {r[0] for r in cursor.fetchall()}
+            valid_team_funcs = [
+                (t, f) for (t, f) in team_func_samples if t in valid_team_ids and f in valid_func_ids
+            ]
+            if valid_team_funcs:
+                cursor.executemany(
+                    "INSERT OR IGNORE INTO team_function (team_id, function_id) VALUES (?, ?)",
+                    valid_team_funcs,
+                )
+
+        # Check and seed Resource Pools
+        cursor.execute("SELECT COUNT(*) FROM resource_pool")
+        pool_count = cursor.fetchone()[0]
+        if pool_count == 0:
+            logger.info("Seeding default resource pools, mappings, and assignments...")
+            sample_pools = [
+                (1, "Core Engineering Pool", "Central pool combining Project Team A and BIM specialists."),
+                (2, "BIM Specialist Pool", "Dedicated BIM modeling and coordination unit."),
+                (3, "Technical Architecture Pool", "Senior engineering & cloud native systems architecture."),
+            ]
+            cursor.executemany(
+                "INSERT INTO resource_pool (id, name, description) VALUES (?, ?, ?)",
+                sample_pools,
+            )
+
+            # Seed Mappings (with de-duplication demonstration: Function 17 mapped via Team 1 AND directly)
+            cursor.execute("SELECT function_id FROM function")
+            valid_func_ids = {r[0] for r in cursor.fetchall()}
+            cursor.execute("SELECT team_id FROM team")
+            valid_team_ids = {r[0] for r in cursor.fetchall()}
+
+            sample_mappings = [
+                # Pool 1
+                (1, "team", 1, 100.0),       # Team 1 at 100%
+                (1, "function", 17, 100.0),   # Function 17 directly (already in Team 1 -> must be deduplicated!)
+                (1, "function", 49, 50.0),    # Function 49 (BIM Manager) directly at 50%
+                # Pool 2
+                (2, "team", 3, 100.0),       # Team 3 (Equipe BIM) at 100%
+                # Pool 3
+                (3, "function", 44, 100.0),   # Ingénieur B_1_1 at 100%
+                (3, "function", 45, 75.0),    # Ingénieur B_1_2 at 75%
+                (3, "function", 46, 50.0),    # Ingénieur B_2_1 at 50%
+            ]
+            valid_mappings = [
+                m for m in sample_mappings
+                if (m[1] == "team" and m[2] in valid_team_ids) or (m[1] == "function" and m[2] in valid_func_ids)
+            ]
+            if valid_mappings:
+                cursor.executemany(
+                    "INSERT INTO resource_pool_mapping (pool_id, target_type, target_id, allocation_pct) VALUES (?, ?, ?, ?)",
+                    valid_mappings,
+                )
+
+            # Seed Sample Assignments using valid existing projects and tasks
+            cursor.execute("SELECT id, project_id FROM project_task ORDER BY id LIMIT 3")
+            existing_tasks = cursor.fetchall()
+            sample_assignments = []
+            if existing_tasks:
+                t1_id, p1_id = existing_tasks[0]
+                sample_assignments.append((1, p1_id, t1_id, 3.0, "2026-01-10", "2026-02-15", "Core system scoping & discovery"))
+                if len(existing_tasks) > 1:
+                    t2_id, p2_id = existing_tasks[1]
+                    sample_assignments.append((1, p2_id, t2_id, 4.0, "2026-02-16", "2026-06-30", "Backend development squad"))
+                if len(existing_tasks) > 2:
+                    t3_id, p3_id = existing_tasks[2]
+                    sample_assignments.append((2, p3_id, t3_id, 1.5, "2026-03-01", "2026-05-30", "BIM 3D telemetry ingestion"))
+
+            cursor.execute("SELECT id FROM project ORDER BY id LIMIT 1")
+            proj_row = cursor.fetchone()
+            if proj_row:
+                sample_assignments.append((3, proj_row[0], None, 1.0, None, None, "Portfolio advisory & oversight"))
+
+            if sample_assignments:
+                cursor.executemany(
+                    "INSERT INTO resource_pool_assignment (pool_id, project_id, task_id, fte_assigned, start_date, end_date, notes) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    sample_assignments,
+                )
+
         conn.commit()

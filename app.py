@@ -14,11 +14,13 @@ import src.models.organization as _org_models_module
 import src.repositories.milestone_repo as _milestone_repo_module
 import src.repositories.organization_repo as _organization_repo_module
 import src.repositories.project_repo as _project_repo_module
+import src.repositories.resource_pool_repo as _resource_pool_repo_module
 import src.repositories.schema_repo as _schema_repo_module
 import src.repositories.tag_repo as _tag_repo_module
 import src.services.milestone_service as _milestone_service_module
 import src.services.organization_service as _organization_service_module
 import src.services.portfolio_service as _portfolio_service_module
+import src.services.resource_pool_service as _resource_pool_service_module
 import src.services.schema_service as _schema_service_module
 import src.services.tag_service as _tag_service_module
 import src.views.budget_view as _budget_module
@@ -35,11 +37,13 @@ importlib.reload(_project_repo_module)
 importlib.reload(_milestone_repo_module)
 importlib.reload(_schema_repo_module)
 importlib.reload(_organization_repo_module)
+importlib.reload(_resource_pool_repo_module)
 importlib.reload(_tag_repo_module)
 importlib.reload(_portfolio_service_module)
 importlib.reload(_milestone_service_module)
 importlib.reload(_schema_service_module)
 importlib.reload(_organization_service_module)
+importlib.reload(_resource_pool_service_module)
 importlib.reload(_tag_service_module)
 importlib.reload(_portfolio_module)
 importlib.reload(_project_master_module)
@@ -47,6 +51,7 @@ importlib.reload(_schema_def_module)
 importlib.reload(_planning_module)
 importlib.reload(_settings_module)
 importlib.reload(_budget_module)
+
 
 from src.config import config
 from src.database.connection import get_db
@@ -80,12 +85,14 @@ MilestoneRepository = _milestone_repo_module.MilestoneRepository
 SchemaRepository = _schema_repo_module.SchemaRepository
 OrganizationRepository = _organization_repo_module.OrganizationRepository
 TagRepository = _tag_repo_module.TagRepository
+ResourcePoolRepository = _resource_pool_repo_module.ResourcePoolRepository
 
 PortfolioService = _portfolio_service_module.PortfolioService
 MilestoneService = _milestone_service_module.MilestoneService
 SchemaService = _schema_service_module.SchemaService
 OrganizationService = _organization_service_module.OrganizationService
 TagService = _tag_service_module.TagService
+ResourcePoolService = _resource_pool_service_module.ResourcePoolService
 
 render_portfolio_overview = _portfolio_module.render_portfolio_overview
 render_project_master = _project_master_module.render_project_master
@@ -186,6 +193,7 @@ def run_app() -> None:
     milestone_repo = MilestoneRepository()
     org_repo = OrganizationRepository()
     tag_repo = TagRepository()
+    pool_repo = ResourcePoolRepository()
 
     # Language Switcher at top of sidebar
     current_loc = get_current_locale()
@@ -232,15 +240,16 @@ def run_app() -> None:
     if page == PAGE_PORTFOLIO:
         render_portfolio_overview(project_repo, schema_repo)
     elif page == PAGE_PROJECT_MASTER:
-        render_project_master(project_repo, schema_repo)
+        render_project_master(project_repo, schema_repo, pool_repo, milestone_repo)
     elif page == PAGE_SCHEMA_DEF:
         render_schema_definition(schema_repo)
     elif page == PAGE_PLANNING:
-        render_planning_milestones(project_repo, milestone_repo, tag_repo)
+        render_planning_milestones(project_repo, milestone_repo, tag_repo, pool_repo, org_repo)
     elif page == PAGE_SETTINGS:
-        render_settings_view(org_repo, tag_repo, project_repo, milestone_repo)
+        render_settings_view(org_repo, tag_repo, project_repo, milestone_repo, pool_repo)
     elif page == PAGE_BUDGET:
         render_budget_tracking(project_repo)
+
 
 
 # Backward-compatibility aliases for external scripts/tests

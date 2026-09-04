@@ -24,6 +24,15 @@ from src.models.milestone import Milestone
 from src.models.organization import Employee, FunctionType, OrgFunction, Team
 from src.models.project import PortfolioMetrics, Project
 from src.models.schema import SchemaGroup, SchemaParameter, SchemaParamOption
+from src.models.resource_pool import (
+    DailyOverassignment,
+    PoolAssignment,
+    PoolCapacityDetail,
+    PoolFunctionContribution,
+    PoolMapping,
+    ResourcePool,
+    TeamFunction,
+)
 from src.models.tag import ProjectTag, TagDictionary, TagGroup, TaskTag
 
 __all__ = [
@@ -59,4 +68,12 @@ __all__ = [
     "TagDictionary",
     "ProjectTag",
     "TaskTag",
+    "ResourcePool",
+    "PoolMapping",
+    "PoolAssignment",
+    "TeamFunction",
+    "PoolCapacityDetail",
+    "PoolFunctionContribution",
+    "DailyOverassignment",
 ]
+

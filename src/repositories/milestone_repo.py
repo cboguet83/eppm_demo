@@ -565,3 +565,28 @@ class MilestoneRepository:
             cursor.execute("DELETE FROM project_task WHERE id = ?", (milestone_id,))
             conn.commit()
             return cursor.rowcount > 0
+
+    def get_milestone_by_id(self, milestone_id: int) -> Optional[dict[str, Any]]:
+        """Retrieves a single project task by primary key ID.
+
+        Args:
+            milestone_id: Primary key task ID.
+
+        Returns:
+            Optional[dict[str, Any]]: Task dictionary or None if not found.
+        """
+        with get_db(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT id, project_id, task_name, phase, start_date, end_date, progress_pct, description, predecessor_id
+                FROM project_task
+                WHERE id = ?
+                """,
+                (milestone_id,),
+            )
+            row = cursor.fetchone()
+            if not row:
+                return None
+            cols = [col[0] for col in cursor.description]
+            return dict(zip(cols, row))

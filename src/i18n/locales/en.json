@@ -59,9 +59,17 @@
     "select_project": "Select Project to Manage",
     "msg_created_success": "Project '{id} - {name}' created successfully!",
     "msg_updated_success": "Project '{id}' updated successfully!",
-    "msg_deleted_success": "Project '{id}' deleted successfully.",
     "err_required_fields": "Project Code and Project Title are required.",
-    "err_already_exists": "Project with Code '{id}' already exists."
+    "err_already_exists": "Project with Code '{id}' already exists.",
+    "pool_allocations_title": "🏊 Resource Pool Allocations",
+    "field_fte": "Assigned FTE *",
+    "assignment_period_mode": "Assignment Period Mode",
+    "period_full_task": "Full Task Duration (Default)",
+    "period_custom_range": "Custom Specific Period",
+    "custom_start_date": "Start Date",
+    "custom_end_date": "End Date",
+    "field_assignment_notes": "Notes / Allocation Purpose",
+    "date_range_error": "End Date cannot be before Start Date."
   },
   "schema": {
     "title": "Dynamic Schema & Custom Parameter Definition",
@@ -134,7 +142,29 @@
     "no_project_tags_assigned": "No tags associated with this project.",
     "scope_single_project": "Single Project",
     "scope_specific_projects": "Select Specific Projects",
-    "btn_close_dialog": "Close"
+    "btn_close_dialog": "Close",
+    "dialog_task_pools_title": "🏊 Manage Task Resource Pools",
+    "current_pools": "Current Assigned Resource Pools",
+    "no_pools_assigned_task": "No resource pools currently assigned to this task.",
+    "btn_unassign_pool": "Remove pool assignment",
+    "toast_pool_unassigned": "Pool assignment removed!",
+    "assign_new_pool": "Assign Resource Pool",
+    "no_pools_exist": "No resource pools configured. Create pools in Settings > Resource Pools.",
+    "select_resource_pool": "Select Resource Pool *",
+    "btn_confirm_assign_pool": "Assign Pool to Task",
+    "pool_required_error": "Please select a resource pool.",
+    "toast_pool_assigned": "Resource pool assigned to task!",
+    "quick_task_pools": "Quick Action: Assign Resource Pools to Task",
+    "select_task_to_assign_pools": "Select Task to Assign Pools",
+    "btn_open_pool_mgr": "Open Pool Allocator",
+    "dialog_project_pools_title": "🏊 Manage Project Resource Pools",
+    "no_pools_assigned_project": "No resource pools currently assigned to this project.",
+    "btn_confirm_assign_pool_proj": "Assign Pool to Project",
+    "toast_pool_assigned_proj": "Resource pool assigned to project!",
+    "toast_pool_unassigned_proj": "Project pool assignment removed!",
+    "quick_project_pools": "Quick Action: Assign Resource Pools to Project",
+    "select_project_to_assign_pools": "Select Project to Assign Pools",
+    "btn_open_project_pool_mgr": "Open Project Pool Allocator"
   },
   "gantt": {
     "columns": {
@@ -174,7 +204,9 @@
       "edit_dep": "Edit Dependency",
       "delete_dep": "Delete Dependency",
       "view_diagnostics": "View Diagnostics",
-      "view_project_diagnostics": "View Project Violations"
+      "view_project_diagnostics": "View Project Violations",
+      "manage_project_pools": "Assign Resource Pools",
+      "manage_task_pools": "Assign Resource Pools"
     },
     "modal": {
       "add_title": "➕ Add New Step ({project_id})",
@@ -383,6 +415,29 @@
     "stat_tag_groups": "Tag Groups",
     "stat_tags": "Tags",
     "stat_project_tags": "Project Tags",
-    "stat_task_tags": "Task Tags"
+    "stat_task_tags": "Task Tags",
+    "tab_resource_pools": "Resource Pools",
+    "pools_title": "🏊 Resource Pools Management & Capacity",
+    "stat_pools": "Resource Pools",
+    "stat_total_capacity": "Total Pool Capacity (FTE)",
+    "stat_peak_assigned": "Peak Assigned (FTE)",
+    "stat_overassigned_pools": "Overassigned Pools",
+    "dialog_add_pool": "➕ Create Resource Pool",
+    "dialog_edit_pool": "✏️ Edit Resource Pool",
+    "field_pool_name": "Resource Pool Name *",
+    "field_pool_desc": "Description / Scope",
+    "col_pool_name": "Resource Pool",
+    "col_capacity_fte": "Capacity (FTE)",
+    "col_peak_assigned_fte": "Peak Daily Demand (FTE)",
+    "col_status": "Daily Status",
+    "col_mappings_count": "Mapped Units",
+    "col_assignments_count": "Allocations",
+    "team_members_header": "Team Member Functions (Capacity Components)",
+    "demand_within_cap": "Daily Demand (≤ Capacity)",
+    "demand_over_cap": "Daily Demand (> Capacity)",
+    "marker_within_cap": "Normal Daily Demand",
+    "marker_over_cap": "Overassigned Daily Demand",
+    "pool_capacity_line": "Pool Capacity Limit",
+    "daily_demand_chart": "Daily Capacity vs. Assigned Demand Timeline"
   }
 }
