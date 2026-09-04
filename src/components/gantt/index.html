@@ -1639,7 +1639,7 @@
       <span id="ctx-res-filter-clear">Filter on consuming projects</span>
     </div>
     <div class="context-menu-divider" id="ctx-res-divider" style="display:none;"></div>
-    <div class="context-menu-item danger" id="ctx-res-clear-btn" onclick="triggerClearResourcePoolFilter()" style="display:none;">
+    <div class="context-menu-item danger" id="ctx-res-clear-btn" onclick="triggerClearResourcePoolFilter(event)" style="display:none;">
       <span style="font-size:14px;">✖</span>
       <span id="ctx-res-clear-label">Clear Resource Pool Filter</span>
     </div>
@@ -1868,7 +1868,7 @@
           <span>🏊</span>
           <span class="resource-panel-heading" id="lbl-resource-panel-title">Resource Pools & Capacity Usage</span>
           <span class="resource-count-badge" id="resource-count-badge">0 Pools</span>
-          <span class="resource-active-filter-pill" id="resource-active-filter-pill" style="display:none;" onclick="triggerClearResourcePoolFilter()" title="Click to clear active filter"></span>
+          <span class="resource-active-filter-pill" id="resource-active-filter-pill" style="display:none;" onclick="triggerClearResourcePoolFilter(event)" title="Click to clear active filter"></span>
         </div>
         <div class="resource-panel-options">
           <label class="resource-option-checkbox">
@@ -3796,8 +3796,16 @@
       });
     }
 
-    function triggerClearResourcePoolFilter() {
+    function triggerClearResourcePoolFilter(e) {
+      if (e) {
+        e.stopPropagation();
+        e.preventDefault();
+      }
       hideResourceCellContextMenu();
+      activeResourceFilter = null;
+      const filterPill = document.getElementById('resource-active-filter-pill');
+      if (filterPill) filterPill.style.display = 'none';
+      renderResourceGrid();
       Streamlit.setComponentValue({
         action: "clear_resource_pool_filter",
         nonce: Date.now() + "_" + Math.random()
@@ -3852,8 +3860,7 @@
       if (filterPill) {
         if (activeResourceFilter) {
           const pName = activeResourceFilter.pool_name || `Pool #${activeResourceFilter.pool_id}`;
-          const fMode = activeResourceFilter.clear_other_filters ? ' (Cleared other)' : '';
-          filterPill.innerHTML = `🔍 <b>${escapeHtml(pName)}</b> (${activeResourceFilter.start_date} → ${activeResourceFilter.end_date})${fMode} <span class="pill-remove" title="Clear filter">✖</span>`;
+          filterPill.innerHTML = `🔍 <b>${escapeHtml(pName)}</b> (${activeResourceFilter.start_date} → ${activeResourceFilter.end_date}) <span class="pill-remove" title="Clear filter" onclick="triggerClearResourcePoolFilter(event)">✖</span>`;
           filterPill.style.display = 'inline-flex';
         } else {
           filterPill.style.display = 'none';

@@ -597,15 +597,18 @@ def _handle_filter_by_resource_pool(
     st.rerun()
 
 
-def _handle_clear_resource_pool_filter(all_proj_ids: list[int]) -> None:
+def _handle_clear_resource_pool_filter(all_proj_ids: Optional[list[int]] = None) -> None:
     """Clears the active resource pool filter and resets project selection.
 
     Args:
-        all_proj_ids: List of all project IDs.
+        all_proj_ids: Optional list of all project IDs.
     """
     st.session_state.pop("active_resource_pool_filter", None)
     st.session_state["pending_clear_resource_pool_filter"] = True
     st.toast("Resource pool filter cleared", icon="✖")
+    st.rerun()
+
+
 def _render_filtered_active_allocations(
     active_rf: dict[str, Any],
     pool_details_cache: dict[int, Any],
@@ -858,13 +861,16 @@ def render_planning_milestones(
     # 2. Check for pending resource pool filter clears (must be applied BEFORE widgets instantiate)
     if st.session_state.pop("pending_clear_resource_pool_filter", False):
         st.session_state.pop("active_resource_pool_filter", None)
-        st.session_state["ms_multi_projects"] = master_proj_ids[:10] if len(master_proj_ids) > 10 else master_proj_ids
+        st.session_state["ms_planning_tag_filter"] = []
+        st.session_state["last_planning_tag_filter"] = []
+        st.session_state["ms_multi_projects"] = master_proj_ids
 
     # 3. Check for pending resource pool filter updates (must be applied BEFORE widgets instantiate)
     pending_rf = st.session_state.pop("pending_resource_pool_filter", None)
     if pending_rf is not None:
         if pending_rf.get("clear_other"):
             st.session_state["ms_planning_tag_filter"] = []
+            st.session_state["last_planning_tag_filter"] = []
         if "target_pids" in pending_rf:
             st.session_state["ms_multi_projects"] = pending_rf["target_pids"]
 
@@ -875,13 +881,12 @@ def render_planning_milestones(
         f_start = active_rf.get("start_date", "")
         f_end = active_rf.get("end_date", "")
         f_count = active_rf.get("count", 0)
-        f_mode = " (Cleared other filters)" if active_rf.get("clear_other_filters") else " (Refined with existing)"
 
         b_info, b_btn = st.columns([5, 1])
         with b_info:
             st.info(
                 f"🔍 **Active Filter from Resource Pool**: Showing {f_count} projects consuming "
-                f"**{f_pool_name}** during `{f_start} → {f_end}`{f_mode}."
+                f"**{f_pool_name}** during `{f_start} → {f_end}`."
             )
         with b_btn:
             if st.button("✖ Clear Filter", key="btn_clear_pool_filter_top", type="secondary"):
@@ -896,6 +901,13 @@ def render_planning_milestones(
             help="Filter project list to projects assigned any of the chosen tags.",
             key="ms_planning_tag_filter",
         )
+
+    prev_tag_filters = st.session_state.get("last_planning_tag_filter", None)
+    tag_filters_cleared = bool(prev_tag_filters and not selected_tag_filters)
+    tag_filters_changed = bool(
+        prev_tag_filters is not None and set(prev_tag_filters) != set(selected_tag_filters)
+    )
+    st.session_state["last_planning_tag_filter"] = list(selected_tag_filters)
 
     # Filter projects based on tag selection if any
     if selected_tag_filters and not df_all_proj_tags.empty:
@@ -918,15 +930,20 @@ def render_planning_milestones(
 
     all_proj_ids = df_projects["id"].tolist()
 
-    if active_rf and "project_ids" in active_rf:
-        rf_pids = [p for p in active_rf["project_ids"] if p in all_proj_ids]
+    cur_active_rf = st.session_state.get("active_resource_pool_filter")
+    if cur_active_rf and "project_ids" in cur_active_rf:
+        rf_pids = [p for p in cur_active_rf["project_ids"] if p in all_proj_ids]
         st.session_state["ms_multi_projects"] = rf_pids
+    elif tag_filters_cleared:
+        st.session_state["ms_multi_projects"] = all_proj_ids
+    elif tag_filters_changed and selected_tag_filters:
+        st.session_state["ms_multi_projects"] = all_proj_ids
     elif "ms_multi_projects" in st.session_state:
         st.session_state["ms_multi_projects"] = [
             p for p in st.session_state["ms_multi_projects"] if p in all_proj_ids
         ]
     else:
-        st.session_state["ms_multi_projects"] = all_proj_ids[:10] if len(all_proj_ids) > 10 else all_proj_ids
+        st.session_state["ms_multi_projects"] = all_proj_ids
 
     with top_sel_col:
         multi_header_label = f"🔍 {t('planning.select_multi_proj', default='Select Projects to Display in Multi-Gantt')} ({len(df_projects)} projects found)"
@@ -937,10 +954,7 @@ def render_planning_milestones(
             key="ms_multi_projects",
         )
         if not selected_projects:
-            if not active_rf:
-                selected_projects = all_proj_ids
-            else:
-                selected_projects = []
+            selected_projects = all_proj_ids
 
     if not selected_projects:
         if active_rf:

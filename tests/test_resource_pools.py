@@ -3,6 +3,7 @@
 import os
 import tempfile
 import unittest
+from unittest.mock import MagicMock, patch
 
 from src.database.schema_init import init_db
 from src.models.organization import OrgFunction, Team
@@ -911,6 +912,36 @@ class TestResourcePools(unittest.TestCase):
         self.assertIn("2034-08-18", daily_map)
         self.assertEqual(daily_map["2027-04-01"], 0.3)
         self.assertEqual(daily_map["2027-06-30"], 0.3)
+
+    @patch("streamlit.rerun")
+    @patch("streamlit.toast")
+    def test_clear_resource_pool_filter_state(
+        self, mock_toast: MagicMock, mock_rerun: MagicMock
+    ) -> None:
+        """Verify that clearing resource pool filter marks pending clear and triggers immediate rerun."""
+        import streamlit as st
+        from src.views.planning_view import _handle_clear_resource_pool_filter
+
+        # Setup active filter in session_state
+        st.session_state["active_resource_pool_filter"] = {
+            "pool_id": 1,
+            "pool_name": "BIM Specialist",
+            "start_date": "2027-04-01",
+            "end_date": "2027-06-30",
+            "project_ids": [6, 9],
+        }
+        st.session_state["ms_multi_projects"] = [6, 9]
+
+        _handle_clear_resource_pool_filter([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+
+        self.assertNotIn("active_resource_pool_filter", st.session_state)
+        self.assertTrue(st.session_state.get("pending_clear_resource_pool_filter"))
+        mock_toast.assert_called_once_with("Resource pool filter cleared", icon="✖")
+        mock_rerun.assert_called_once()
+
+        # Clean up
+        st.session_state.pop("pending_clear_resource_pool_filter", None)
+        st.session_state.pop("ms_multi_projects", None)
 
 
 if __name__ == "__main__":
