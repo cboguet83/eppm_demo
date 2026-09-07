@@ -284,12 +284,16 @@ class OrganizationService:
     def enrich_projects_with_organization(
         df_projects: pd.DataFrame,
         df_functions: pd.DataFrame,
+        df_employees: Optional[pd.DataFrame] = None,
     ) -> pd.DataFrame:
         """Enriches projects DataFrame with assigned Project Manager and Level 3 Managing Function details.
 
         Args:
             df_projects: Projects DataFrame containing 'function_id'.
             df_functions: Functions DataFrame containing hierarchy details.
+            df_employees: Optional employees DataFrame containing names and
+                assigned ``function_id`` values. When supplied, an occupying
+                employee's full name is preferred over the function name.
 
         Returns:
             pd.DataFrame: Enriched projects DataFrame with 'project_manager',
@@ -305,7 +309,10 @@ class OrganizationService:
             df["level_3_manager_id"] = None
             return df
 
-        func_name_map = dict(zip(df_functions["function_id"], df_functions["name"]))
+        func_name_map = OrganizationService.get_function_occupant_names(
+            df_functions,
+            df_employees,
+        )
         df["project_manager"] = df["function_id"].apply(
             lambda x: func_name_map.get(int(x), "—") if pd.notna(x) and int(x) in func_name_map else "—"
         )
@@ -332,3 +339,48 @@ class OrganizationService:
         df["level_3_manager_id"] = df["function_id"].apply(_get_l3_id)
         return df
 
+    @staticmethod
+    def get_function_occupant_names(
+        df_functions: pd.DataFrame,
+        df_employees: Optional[pd.DataFrame] = None,
+    ) -> dict[int, str]:
+        """Return function labels using the first assigned employee's full name.
+
+        Function names remain the fallback for vacant positions. Employee rows
+        are consumed in their existing order, which is deterministic for the
+        organization repository (last name, then first name).
+        """
+        labels: dict[int, str] = {}
+        if not df_functions.empty:
+            for _, row in df_functions.iterrows():
+                try:
+                    labels[int(row["function_id"])] = str(row.get("name") or "—")
+                except (TypeError, ValueError):
+                    continue
+
+        if df_employees is None or df_employees.empty or "function_id" not in df_employees.columns:
+            return labels
+
+        occupied: set[int] = set()
+        for _, row in df_employees.iterrows():
+            function_id = row.get("function_id")
+            if pd.isna(function_id):
+                continue
+            try:
+                function_id_int = int(function_id)
+            except (TypeError, ValueError):
+                continue
+            if function_id_int in occupied or function_id_int not in labels:
+                continue
+            full_name = " ".join(
+                part
+                for part in (
+                    str(row.get("firstname") or "").strip(),
+                    str(row.get("lastname") or "").strip(),
+                )
+                if part
+            )
+            if full_name:
+                labels[function_id_int] = full_name
+                occupied.add(function_id_int)
+        return labels

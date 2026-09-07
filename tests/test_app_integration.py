@@ -155,6 +155,21 @@ class TestIntegration(unittest.TestCase):
         )
         self.assertEqual(all_result["id"].tolist(), [1])
 
+    def test_portfolio_table_payload_hides_id_but_retains_row_identity(self) -> None:
+        """The custom table payload must not expose the project-code column."""
+        import pandas as pd
+
+        from src.views.portfolio_view import _build_portfolio_table_rows
+
+        frame = pd.DataFrame([
+            {"id": 42, "name": "Apollo", "status": "Draft", "tags": ["Strategic"]},
+        ])
+
+        rows = _build_portfolio_table_rows(frame, ["name", "status"])
+
+        self.assertEqual(rows, [{"name": "Apollo", "status": "Draft", "project_id": 42}])
+        self.assertNotIn("id", rows[0])
+
     def test_parse_cli_args(self) -> None:
         """Verify parsing of CLI arguments for database force-reseeding and project count."""
         import sys

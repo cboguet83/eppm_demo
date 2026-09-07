@@ -286,16 +286,25 @@ class TestServices(unittest.TestCase):
         df_projects = pd.DataFrame([
             {"id": 1, "name": "P1", "function_id": 17},
             {"id": 2, "name": "P2", "function_id": None},
+            {"id": 3, "name": "P3", "function_id": 10},
+        ])
+        df_employees = pd.DataFrame([
+            {"employee_id": 101, "firstname": "Ada", "lastname": "Lovelace", "function_id": 17},
         ])
 
-        enriched = OrganizationService.enrich_projects_with_organization(df_projects, df_funcs)
-        self.assertEqual(enriched.iloc[0]["project_manager"], "Chef Projet A1")
+        enriched = OrganizationService.enrich_projects_with_organization(
+            df_projects,
+            df_funcs,
+            df_employees,
+        )
+        self.assertEqual(enriched.iloc[0]["project_manager"], "Ada Lovelace")
         self.assertEqual(enriched.iloc[0]["level_3_manager_name"], "Chef Service A")
         self.assertEqual(enriched.iloc[0]["level_3_manager_id"], 5)
 
         self.assertEqual(enriched.iloc[1]["project_manager"], "—")
         self.assertEqual(enriched.iloc[1]["level_3_manager_name"], "—")
         self.assertTrue(pd.isna(enriched.iloc[1]["level_3_manager_id"]))
+        self.assertEqual(enriched.iloc[2]["project_manager"], "Chef Div A1")
 
 
 if __name__ == "__main__":

@@ -8,14 +8,11 @@ import streamlit as st
 
 from src.i18n import t
 from src.models.constants import (
-    PAGE_PROJECT_MASTER,
-    PARAM_TYPE_DATE,
     PARAM_TYPE_HYPERLINK,
-    PARAM_TYPE_MULTI_ENUM,
     PARAM_TYPE_NUMBER,
-    PARAM_TYPE_TAGS,
     PARAM_TYPE_TEXT,
     PARAM_TYPE_URL,
+    STATUS_LIST,
 )
 from src.repositories.organization_repo import OrganizationRepository
 from src.repositories.project_repo import ProjectRepository
@@ -23,6 +20,9 @@ from src.repositories.schema_repo import SchemaRepository
 from src.repositories.tag_repo import TagRepository
 from src.services.organization_service import OrganizationService
 from src.services.portfolio_service import PortfolioService
+from src.services.schema_service import SchemaService
+from src.views.portfolio_table_component import portfolio_project_table
+from src.views.project_master_view import _render_dynamic_field
 
 ALLOWED_DYNAMIC_PARAMS: set[str] = {
     "phase",
@@ -95,7 +95,7 @@ def _apply_portfolio_flex_filters(
 
 
 def _project_tag_map(tag_repo: TagRepository) -> dict[int, list[str]]:
-    """Return project tags grouped by project ID for display and flexible filtering."""
+    """Return project tags grouped by project ID for flexible filtering."""
     assignments = tag_repo.get_all_project_tags()
     tags_by_project: dict[int, list[str]] = {}
     for _, row in assignments.iterrows():
@@ -125,10 +125,173 @@ def _clear_portfolio_flex_filter_state() -> None:
             del st.session_state[key]
 
 
+def _portfolio_table_value(value: Any) -> Any:
+    """Convert pandas and collection values to JSON-safe component values."""
+    if isinstance(value, (list, tuple, set)):
+        return [str(item) for item in value]
+    if isinstance(value, pd.Timestamp):
+        return value.isoformat()
+    try:
+        if pd.isna(value):
+            return None
+    except (TypeError, ValueError):
+        pass
+    if hasattr(value, "item"):
+        try:
+            return value.item()
+        except (TypeError, ValueError):
+            pass
+    return value
+
+
+def _build_portfolio_table_rows(
+    frame: pd.DataFrame,
+    display_columns: list[str],
+) -> list[dict[str, Any]]:
+    """Build the safe row payload while retaining a hidden project identifier."""
+    rows: list[dict[str, Any]] = []
+    for _, source in frame.iterrows():
+        row = {column: _portfolio_table_value(source.get(column)) for column in display_columns}
+        row["project_id"] = _portfolio_table_value(source.get("id"))
+        rows.append(row)
+    return rows
+
+
+def _dynamic_project_value(attributes: dict[str, Any], parameter: pd.Series) -> Any:
+    """Find an existing dynamic value by ID, name, or alias."""
+    param_id = str(parameter["param_id"])
+    param_name = str(parameter.get("param_name", ""))
+    alias = str(parameter.get("alias", "")).strip() if pd.notna(parameter.get("alias")) else ""
+    value = attributes.get(param_id)
+    if value is None and param_name:
+        value = attributes.get(param_name)
+    if value is None and alias:
+        value = attributes.get(alias)
+    return value
+
+
+@st.dialog("Edit project details", width="large")
+def _edit_project_details_dialog(
+    project_id: int,
+    project_repo: ProjectRepository,
+    schema_repo: SchemaRepository,
+) -> None:
+    """Edit the selected project without navigating away from the portfolio."""
+    project = project_repo.get_project_by_id(project_id)
+    if project is None:
+        st.error("The selected project no longer exists.")
+        return
+
+    groups = schema_repo.get_all_groups()
+    params = schema_repo.get_all_parameters()
+    options = schema_repo.get_all_options()
+    org_repo = OrganizationRepository(project_repo.db_path)
+    functions = org_repo.get_all_functions()
+    employees = org_repo.get_all_employees()
+    manager_names = OrganizationService.get_function_occupant_names(functions, employees)
+    manager_options: list[Optional[int]] = [None]
+    if not functions.empty:
+        manager_options.extend(int(value) for value in functions["function_id"].tolist())
+    manager_labels: dict[Optional[int], str] = {None: "— None —", **manager_names}
+
+    current_manager = int(project.function_id) if project.function_id is not None else None
+    manager_index = manager_options.index(current_manager) if current_manager in manager_options else 0
+    attributes = dict(project.dynamic_attributes or {})
+
+    with st.form(f"portfolio_edit_project_{project_id}"):
+        id_col, name_col, status_col = st.columns([1, 2, 1])
+        id_col.text_input(t("master_data.field_id"), value=str(project_id), disabled=True)
+        edit_name = name_col.text_input(t("master_data.field_name"), value=project.name)
+        status_index = STATUS_LIST.index(project.status) if project.status in STATUS_LIST else 0
+        edit_status = status_col.selectbox(
+            t("master_data.field_status"),
+            options=STATUS_LIST,
+            index=status_index,
+        )
+
+        planned_col, actual_col, manager_col = st.columns(3)
+        edit_planned = planned_col.number_input(
+            t("master_data.field_planned"),
+            min_value=0.0,
+            value=float(project.planned_budget),
+            step=5000.0,
+        )
+        edit_actual = actual_col.number_input(
+            t("master_data.field_actual"),
+            min_value=0.0,
+            value=float(project.actual_budget),
+            step=5000.0,
+        )
+        edit_manager = manager_col.selectbox(
+            t("master_data.field_project_manager", default="Project Manager"),
+            options=manager_options,
+            index=manager_index,
+            format_func=lambda value: manager_labels.get(value, str(value)),
+            key=f"portfolio_edit_manager_{project_id}",
+        )
+
+        st.write(f"#### {t('master_data.dynamic_section')}")
+        dynamic_values: dict[str, Any] = {}
+        grouped_ids: set[Any] = set()
+        if not groups.empty and not params.empty:
+            for _, group in groups.iterrows():
+                group_id = group["id"]
+                group_params = params[params["group_id"] == group_id]
+                if group_params.empty:
+                    continue
+                grouped_ids.add(group_id)
+                with st.expander(f"📁 {group['group_name']}", expanded=True):
+                    for _, parameter in group_params.iterrows():
+                        param_id = str(parameter["param_id"])
+                        dynamic_values[param_id] = _render_dynamic_field(
+                            parameter,
+                            options,
+                            _dynamic_project_value(attributes, parameter),
+                            f"portfolio_edit_{project_id}",
+                        )
+
+        if not params.empty:
+            ungrouped = params[params["group_id"].isna() | ~params["group_id"].isin(grouped_ids)]
+            if not ungrouped.empty:
+                with st.expander(f"📌 {t('schema.param_group_none')}", expanded=True):
+                    for _, parameter in ungrouped.iterrows():
+                        param_id = str(parameter["param_id"])
+                        dynamic_values[param_id] = _render_dynamic_field(
+                            parameter,
+                            options,
+                            _dynamic_project_value(attributes, parameter),
+                            f"portfolio_edit_{project_id}",
+                        )
+
+        if st.form_submit_button(t("master_data.btn_update"), width="stretch"):
+            clean_name = edit_name.strip()
+            missing = SchemaService.validate_project_dynamic_attributes(dynamic_values, params)
+            if not clean_name:
+                st.error(t("master_data.err_required_fields"))
+            elif missing:
+                st.error(
+                    "Cannot update project: The following mandatory attributes are required: "
+                    + ", ".join(missing)
+                )
+            else:
+                project_repo.update_project(
+                    project_id=project_id,
+                    name=clean_name,
+                    status=edit_status,
+                    planned_budget=edit_planned,
+                    actual_budget=edit_actual,
+                    dynamic_attributes=dynamic_values,
+                    function_id=edit_manager,
+                )
+                st.toast("Project details updated.", icon="✅")
+                st.rerun()
+
+
 def _render_project_details_panel(
     selected_proj: pd.Series,
     params: pd.DataFrame,
     project_repo: ProjectRepository,
+    schema_repo: SchemaRepository,
 ) -> None:
     """Renders the detailed inspection panel below the Projects Master List for the selected project.
 
@@ -136,6 +299,7 @@ def _render_project_details_panel(
         selected_proj: Series containing the selected project's attributes.
         params: Schema parameters DataFrame.
         project_repo: ProjectRepository instance.
+        schema_repo: SchemaRepository instance used by the edit dialog.
     """
     proj_id = selected_proj["id"]
     proj_name = selected_proj["name"]
@@ -184,13 +348,11 @@ def _render_project_details_panel(
         st.subheader(f"📌 {t('portfolio.details_title', default='Project Details')}: #{proj_id} — {proj_name}")
     with head_c2:
         if st.button(
-            f"✏️ {t('portfolio.btn_open_in_master', default='Edit in Master Data')}",
-            key=f"btn_edit_master_{proj_id}",
-            use_container_width=True,
+            "✏️ Edit project details",
+            key=f"btn_edit_details_{proj_id}",
+            width="stretch",
         ):
-            st.session_state["target_edit_project_id"] = proj_id
-            st.session_state["nav_redirect"] = PAGE_PROJECT_MASTER
-            st.rerun()
+            _edit_project_details_dialog(int(proj_id), project_repo, schema_repo)
 
     # KPI Summary Cards
     m1, m2, m3, m4, m5, m6 = st.columns(6)
@@ -359,7 +521,12 @@ def render_portfolio_overview(
     df_merged = PortfolioService.flatten_dynamic_attributes(df_projects, params)
     org_repo = OrganizationRepository(project_repo.db_path)
     df_funcs = org_repo.get_all_functions()
-    df_merged = OrganizationService.enrich_projects_with_organization(df_merged, df_funcs)
+    df_employees = org_repo.get_all_employees()
+    df_merged = OrganizationService.enrich_projects_with_organization(
+        df_merged,
+        df_funcs,
+        df_employees,
+    )
     if tag_repo is not None:
         tags_by_project = _project_tag_map(tag_repo)
         df_merged["_project_tags"] = df_merged["id"].map(
@@ -369,39 +536,30 @@ def render_portfolio_overview(
         df_merged["_project_tags"] = [[] for _ in range(len(df_merged))]
 
     # 3. Dynamic Column Configuration (whitelisted allowed dynamic parameters)
-    column_configs: dict[str, Any] = {
-        "id": st.column_config.TextColumn(t("portfolio.col_id"), help="Unique project identifier", width="small"),
-        "name": st.column_config.TextColumn(t("portfolio.col_name"), width="medium"),
-        "project_manager": st.column_config.TextColumn(
-            t("master_data.field_project_manager", default="Project Manager"),
-            help="Project Manager",
-            width="medium",
-        ),
-        "level_3_manager_name": st.column_config.TextColumn(
-            t("portfolio.filter_level_3_manager", default="Managing Function (Level 3)"),
-            help="Managing function of project manager at level 3 of hierarchy",
-            width="medium",
-        ),
-        "status": st.column_config.TextColumn(t("portfolio.col_status"), width="small"),
-        "planned_budget": st.column_config.NumberColumn(t("portfolio.col_planned"), format="€%.2f"),
-        "actual_budget": st.column_config.NumberColumn(t("portfolio.col_actual"), format="€%.2f"),
-    }
-
     display_cols: list[str] = [
-        "id",
         "name",
         "project_manager",
         "level_3_manager_name",
         "status",
         "planned_budget",
         "actual_budget",
-        "_project_tags",
     ]
-    column_configs["_project_tags"] = st.column_config.ListColumn(
-        "Tags",
-        help="Dictionary and free-form project tags",
-        width="medium",
-    )
+    table_columns: list[dict[str, str]] = [
+        {"key": "name", "label": t("portfolio.col_name"), "format": "text"},
+        {
+            "key": "project_manager",
+            "label": t("master_data.field_project_manager", default="Project Manager"),
+            "format": "text",
+        },
+        {
+            "key": "level_3_manager_name",
+            "label": t("portfolio.filter_level_3_manager", default="Managing Function (Level 3)"),
+            "format": "text",
+        },
+        {"key": "status", "label": t("portfolio.col_status"), "format": "text"},
+        {"key": "planned_budget", "label": t("portfolio.col_planned"), "format": "currency"},
+        {"key": "actual_budget", "label": t("portfolio.col_actual"), "format": "currency"},
+    ]
     flex_filter_fields: dict[str, str] = {
         "Status": "status",
         "Project Manager": "project_manager",
@@ -427,32 +585,10 @@ def render_portfolio_overview(
                 display_cols.append(target_col)
             flex_filter_fields[pname] = target_col
 
-            if ptype in (PARAM_TYPE_URL, PARAM_TYPE_HYPERLINK):
-                column_configs[target_col] = st.column_config.LinkColumn(
-                    label=pname,
-                    help=f"Dynamic URL ({pid})",
-                    display_text="Open Link ↗",
-                )
-            elif ptype in (PARAM_TYPE_MULTI_ENUM, PARAM_TYPE_TAGS):
-                column_configs[target_col] = st.column_config.ListColumn(
-                    label=pname,
-                    help=f"Tags / Multi-selection ({pid})",
-                )
-            elif ptype == PARAM_TYPE_DATE:
-                column_configs[target_col] = st.column_config.TextColumn(
-                    label=pname,
-                    help=f"Date ({pid})",
-                )
-            elif ptype == PARAM_TYPE_NUMBER:
-                column_configs[target_col] = st.column_config.NumberColumn(
-                    label=pname,
-                    help=f"Number ({pid})",
-                )
-            else:
-                column_configs[target_col] = st.column_config.TextColumn(
-                    label=pname,
-                    help=f"{ptype} parameter ({pid})",
-                )
+            value_format = "url" if ptype in (PARAM_TYPE_URL, PARAM_TYPE_HYPERLINK) else "text"
+            if ptype == PARAM_TYPE_NUMBER:
+                value_format = "number"
+            table_columns.append({"key": target_col, "label": pname, "format": value_format})
 
     # 4. Search and reusable multi-criteria flexible filter
     search_col, flex_col = st.columns([4, 1])
@@ -512,51 +648,32 @@ def render_portfolio_overview(
             f"{'s' if len(active_filters) != 1 else ''} · {len(filtered_df)} matching projects"
         )
 
-    # 5. Render Data Grid with Row Selection
+    # 5. Render Data Grid with direct row selection and per-column filters
     st.subheader(t("portfolio.table_header", count=len(filtered_df)))
-    st.caption(t("portfolio.details_hint", default="💡 Click on any project in the table above to display its details below."))
+    st.caption(
+        t(
+            "portfolio.details_hint",
+            default="💡 Click on any project in the table above to display its details below.",
+        )
+    )
 
     available_cols = [c for c in display_cols if c in filtered_df.columns]
     filtered_df_reset = filtered_df.reset_index(drop=True)
-
-    event = st.dataframe(
-        filtered_df_reset[available_cols],
-        column_config=column_configs,
-        width="stretch",
-        hide_index=True,
-        on_select="rerun",
-        selection_mode="single-row",
+    available_column_specs = [column for column in table_columns if column["key"] in available_cols]
+    clicked_project_id = portfolio_project_table(
+        _build_portfolio_table_rows(filtered_df_reset, available_cols),
+        available_column_specs,
+        st.session_state.get("selected_portfolio_project_id"),
         key="portfolio_master_table",
     )
 
     # 6. Render Project Details Below the Master List
-    selected_row_indices: list[int] = []
-    if event and hasattr(event, "selection"):
-        sel_obj = getattr(event, "selection")
-        if isinstance(sel_obj, dict):
-            selected_row_indices = sel_obj.get("rows", [])
-        elif hasattr(sel_obj, "rows"):
-            selected_row_indices = getattr(sel_obj, "rows", [])
-
-    if not selected_row_indices and "portfolio_master_table" in st.session_state:
-        tbl_state = st.session_state.get("portfolio_master_table")
-        if isinstance(tbl_state, dict):
-            sel_dict = tbl_state.get("selection", {})
-            if isinstance(sel_dict, dict):
-                selected_row_indices = sel_dict.get("rows", [])
-            elif hasattr(sel_dict, "rows"):
-                selected_row_indices = getattr(sel_dict, "rows", [])
-
-    if selected_row_indices and len(selected_row_indices) > 0:
-        sel_idx = selected_row_indices[0]
-        if 0 <= sel_idx < len(filtered_df):
-            selected_proj = filtered_df.iloc[sel_idx]
-        if 0 <= sel_idx < len(filtered_df_reset):
-            st.session_state["selected_portfolio_project_id"] = filtered_df_reset.iloc[sel_idx]["id"]
+    if clicked_project_id is not None:
+        st.session_state["selected_portfolio_project_id"] = clicked_project_id
 
     selected_pid = st.session_state.get("selected_portfolio_project_id")
     if selected_pid is not None:
-        matching = df_merged[df_merged["id"] == selected_pid]
+        matching = df_merged[df_merged["id"].astype(str) == str(selected_pid)]
         if not matching.empty:
             selected_proj = matching.iloc[0]
-            _render_project_details_panel(selected_proj, params, project_repo)
+            _render_project_details_panel(selected_proj, params, project_repo, schema_repo)
