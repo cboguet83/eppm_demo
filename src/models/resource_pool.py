@@ -180,6 +180,7 @@ class PoolCapacityDetail:
     daily_usage: Dict[str, float] = field(default_factory=dict)
     defined_capacity_fte: Optional[float] = None
     assigned_capacity_fte: float = 0.0
+    daily_assigned_capacity: Dict[str, float] = field(default_factory=dict)
 
     @property
     def contributing_resources(self) -> List[PoolFunctionContribution]:

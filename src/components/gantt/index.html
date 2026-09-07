@@ -1343,6 +1343,12 @@
       border: 1px solid #bfdbfe;
     }
 
+    .assigned-badge {
+      background: #ecfdf5;
+      color: #047857;
+      border: 1px solid #a7f3d0;
+    }
+
     .active-filter-badge {
       display: inline-flex;
       align-items: center;
@@ -1487,6 +1493,20 @@
 
     .resource-right-row.sub-row:hover {
       background: rgba(37, 99, 235, 0.03);
+    }
+
+    .resource-right-row.assigned-capacity-row,
+    .resource-left-row.assigned-capacity-row {
+      background: #f0fdf9;
+      border-bottom-color: #a7f3d0;
+    }
+
+    .assigned-capacity-cell {
+      color: #047857;
+      background: #ecfdf5;
+      border-right-color: #a7f3d0;
+      cursor: default;
+      font-weight: 700;
     }
 
     .resource-demand-cell {
@@ -1935,7 +1955,7 @@
         <div class="resource-left-pane" id="resource-left-pane">
           <div class="resource-left-header" id="resource-left-header">
             <div class="r-hdr-name">Resource Pool</div>
-            <div class="r-hdr-cap">Capacity</div>
+            <div class="r-hdr-cap" id="lbl-defined-capacity">Defined Capacity</div>
           </div>
           <div class="resource-left-body" id="resource-left-body"></div>
         </div>
@@ -2018,6 +2038,8 @@
         no_pools: "No resource pools configured",
         max_demand: "Max Demand",
         capacity: "Capacity",
+        defined_capacity: "Defined Capacity",
+        assigned_capacity: "Assigned Capacity",
         show_total: "Total Assignments",
         show_selected: "Selected Projects",
         filter_consuming_projects: "Filter on consuming projects",
@@ -2098,6 +2120,8 @@
       if (elShowTotal) elShowTotal.innerText = getT('resource_grid.show_total', 'Total Assignments');
       const elShowSelected = document.getElementById('lbl-show-selected');
       if (elShowSelected) elShowSelected.innerText = getT('resource_grid.show_selected', 'Selected Projects');
+      const elDefinedCapacity = document.getElementById('lbl-defined-capacity');
+      if (elDefinedCapacity) elDefinedCapacity.innerText = getT('resource_grid.defined_capacity', 'Defined Capacity');
       const elCtxFilter = document.getElementById('ctx-res-filter-clear');
       if (elCtxFilter) elCtxFilter.innerText = getT('resource_grid.filter_consuming_projects', 'Filter on consuming projects');
       const elCtxClearBtn = document.getElementById('ctx-res-clear-label');
@@ -3704,6 +3728,32 @@
       return maxVal;
     }
 
+    function getAssignedCapacityForPeriod(baseCapacity, dailyCapacity, startStr, endStr) {
+      const base = Number(baseCapacity || 0);
+      const overrides = dailyCapacity || {};
+      let minValue = Number.POSITIVE_INFINITY;
+      let maxValue = Number.NEGATIVE_INFINITY;
+      let cursor = new Date(`${startStr}T12:00:00`);
+      const end = new Date(`${endStr}T12:00:00`);
+      let dayCount = 0;
+
+      while (cursor <= end && dayCount < 10000) {
+        const dateKey = formatDate(cursor);
+        const value = Object.prototype.hasOwnProperty.call(overrides, dateKey)
+          ? Number(overrides[dateKey])
+          : base;
+        minValue = Math.min(minValue, value);
+        maxValue = Math.max(maxValue, value);
+        cursor = addDays(cursor, 1);
+        dayCount += 1;
+      }
+
+      if (!Number.isFinite(minValue) || !Number.isFinite(maxValue)) {
+        return { min: base, max: base };
+      }
+      return { min: minValue, max: maxValue };
+    }
+
     function showResourceCellTooltip(e, poolName, startStr, endStr, demand, capacity, scopeType) {
       if (!showHoverOverlay) return;
       const isOver = demand > (capacity + 0.001);
@@ -3735,7 +3785,7 @@
             <strong style="color:${isOver ? '#dc2626' : (demand > 0 ? '#2563eb' : '#64748b')};">${demand.toFixed(2)} FTE</strong>
           </div>
           <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
-            <span style="color:#475569;">${getT('resource_grid.capacity', 'Capacity')}:</span>
+            <span style="color:#475569;">${getT('resource_grid.defined_capacity', 'Defined Capacity')}:</span>
             <strong>${capacity.toFixed(2)} FTE</strong>
           </div>
           <div style="margin-top:4px; border-top:1px solid #e2e8f0; padding-top:4px;">
@@ -3965,41 +4015,65 @@
         return;
       }
 
-      if (!showTotalRows && !showSelectedRows) {
-        leftBody.innerHTML = `
-          <div style="padding:14px 10px; color:#94a3b8; font-size:12px; font-style:italic;">
-            No row view selected (enable Total or Selected Projects above)
-          </div>
-        `;
-        rightBody.innerHTML = `
-          <div style="height:38px; display:flex; align-items:center; padding-left:14px; color:#cbd5e1; font-size:12px; font-style:italic;">
-            —
-          </div>
-        `;
-        adjustVerticalScrollbarGaps();
-        return;
-      }
-
-      // 3. Render Left rows & Right rows (Total + Selected Projects)
+      // 3. Render Left rows & Right rows (Assigned Capacity + demand rows)
       let leftHtml = '';
       let rightHtml = '';
 
       pools.forEach(p => {
-        const poolCap = Number(p.capacity || 0);
+        const poolCap = Number(p.defined_capacity ?? p.capacity ?? 0);
+        const assignedCapacity = Number(p.assigned_capacity || 0);
         const isFilterActiveOnPool = activeResourceFilter && Number(activeResourceFilter.pool_id) === Number(p.id);
 
-        // Row 1: Total Demand
+        // Row 1: assigned capacity over time. This is always visible and sits
+        // above the project/task demand rows for the pool.
+        leftHtml += `
+          <div class="resource-left-row assigned-capacity-row ${isFilterActiveOnPool ? 'active-filter-row' : ''}" data-row-id="pool-${p.id}-assigned" title="${escapeHtml(p.name)} - ${getT('resource_grid.assigned_capacity', 'Assigned Capacity')}">
+            <div class="resource-pool-name">
+              <span style="font-size:12px;">🏊</span>
+              <span class="r-name-text">${escapeHtml(p.name)}</span>
+              <span class="r-badge assigned-badge">${getT('resource_grid.assigned_capacity', 'Assigned Capacity')}</span>
+              ${isFilterActiveOnPool ? `<span class="active-filter-badge" title="${getT('resource_grid.active_filter', 'Filter Active')}">🔍 ${getT('resource_grid.active_filter', 'Filter Active')}</span>` : ''}
+            </div>
+            <div class="resource-pool-cap">
+              <span class="cap-badge" title="${getT('resource_grid.defined_capacity', 'Defined Capacity')}">${poolCap.toFixed(1)} FTE</span>
+            </div>
+          </div>
+        `;
+
+        const assignedCellsHtml = bottomCells.map(c => {
+          const startStr = formatDate(c.startDate);
+          const endStr = formatDate(c.endDate);
+          const periodCapacity = getAssignedCapacityForPeriod(
+            assignedCapacity,
+            p.daily_assigned_capacity,
+            startStr,
+            endStr
+          );
+          const displayTxt = Math.abs(periodCapacity.max - periodCapacity.min) > 0.001
+            ? `${periodCapacity.min.toFixed(1)}–${periodCapacity.max.toFixed(1)}`
+            : periodCapacity.min.toFixed(1);
+          return `
+            <div class="resource-demand-cell assigned-capacity-cell"
+                 style="width: ${c.width}px;"
+                 title="${getT('resource_grid.assigned_capacity', 'Assigned Capacity')}: ${displayTxt} FTE (${startStr} → ${endStr})">
+              ${displayTxt}
+            </div>
+          `;
+        }).join('');
+
+        rightHtml += `<div class="resource-right-row assigned-capacity-row ${isFilterActiveOnPool ? 'active-filter-row' : ''}" style="width: ${totalTimelineWidth}px;">${assignedCellsHtml}</div>`;
+
+        // Row 2: Total Demand
         if (showTotalRows) {
           leftHtml += `
-            <div class="resource-left-row ${isFilterActiveOnPool ? 'active-filter-row' : ''}" data-row-id="pool-${p.id}-total" title="${escapeHtml(p.name)} - ${getT('resource_grid.show_total', 'Total Assignments')}">
-              <div class="resource-pool-name">
-                <span style="font-size:12px;">🏊</span>
-                <span class="r-name-text">${escapeHtml(p.name)}</span>
+            <div class="resource-left-row sub-row ${isFilterActiveOnPool ? 'active-filter-row' : ''}" data-row-id="pool-${p.id}-total" title="${escapeHtml(p.name)} - ${getT('resource_grid.show_total', 'Total Assignments')}">
+              <div class="resource-pool-name" style="padding-left: 14px;">
+                <span style="font-size:11px; opacity:0.6;">↳</span>
+                <span class="r-name-text" style="color:#64748b; font-weight:500;">${getT('resource_grid.show_total', 'Total Assignments')}</span>
                 <span class="r-badge total-badge">${getT('resource_grid.show_total', 'Total')}</span>
-                ${isFilterActiveOnPool ? `<span class="active-filter-badge" title="${getT('resource_grid.active_filter', 'Filter Active')}">🔍 ${getT('resource_grid.active_filter', 'Filter Active')}</span>` : ''}
               </div>
               <div class="resource-pool-cap">
-                <span class="cap-badge" title="${getT('resource_grid.capacity', 'Capacity')}">${poolCap.toFixed(1)} FTE</span>
+                <span class="cap-badge" title="${getT('resource_grid.defined_capacity', 'Defined Capacity')}">${poolCap.toFixed(1)} FTE</span>
               </div>
             </div>
           `;
@@ -4041,10 +4115,10 @@
             `;
           }).join('');
 
-          rightHtml += `<div class="resource-right-row ${isFilterActiveOnPool ? 'active-filter-row' : ''}" style="width: ${totalTimelineWidth}px;">${totalCellsHtml}</div>`;
+          rightHtml += `<div class="resource-right-row sub-row ${isFilterActiveOnPool ? 'active-filter-row' : ''}" style="width: ${totalTimelineWidth}px;">${totalCellsHtml}</div>`;
         }
 
-        // Row 2: Selected Projects Demand
+        // Row 3: Selected Projects Demand
         if (showSelectedRows) {
           leftHtml += `
             <div class="resource-left-row sub-row ${isFilterActiveOnPool ? 'active-filter-row' : ''}" data-row-id="pool-${p.id}-selected" title="${escapeHtml(p.name)} - ${getT('resource_grid.show_selected', 'Selected Projects')}">
@@ -4054,7 +4128,7 @@
                 <span class="r-badge scope-badge">Selected</span>
               </div>
               <div class="resource-pool-cap">
-                <span class="cap-badge scope-cap-badge" title="${getT('resource_grid.capacity', 'Capacity')}">${poolCap.toFixed(1)} FTE</span>
+                <span class="cap-badge scope-cap-badge" title="${getT('resource_grid.defined_capacity', 'Defined Capacity')}">${poolCap.toFixed(1)} FTE</span>
               </div>
             </div>
           `;
@@ -4117,7 +4191,7 @@
 
       let resH = 34; // Header bar
       if (!isResourceGridCollapsed) {
-        let activeRowCount = 0;
+        let activeRowCount = pools.length; // Assigned-capacity row is always visible.
         if (showTotalRows) activeRowCount += pools.length;
         if (showSelectedRows) activeRowCount += pools.length;
         const poolRowsH = Math.max(1, activeRowCount) * 34 + 56; // 56px for 2-tier header

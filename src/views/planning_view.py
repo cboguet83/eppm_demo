@@ -1148,6 +1148,13 @@ def render_planning_milestones(
                     "id": p_id,
                     "name": p_name,
                     "capacity": float(p_cap.total_capacity_fte),
+                    "defined_capacity": (
+                        float(p_cap.defined_capacity_fte)
+                        if p_cap.defined_capacity_fte is not None
+                        else float(p_cap.total_capacity_fte)
+                    ),
+                    "assigned_capacity": float(p_cap.assigned_capacity_fte),
+                    "daily_assigned_capacity": p_cap.daily_assigned_capacity,
                     "peak_demand": float(p_cap.peak_assigned_fte),
                     "is_overassigned": bool(p_cap.is_overassigned),
                     "daily_usage": p_cap.daily_usage,

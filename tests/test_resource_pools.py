@@ -3,10 +3,11 @@
 import os
 import tempfile
 import unittest
+from datetime import date
 from unittest.mock import MagicMock, patch
 
 from src.database.schema_init import init_db
-from src.models.organization import Employee, OrgFunction, Team
+from src.models.organization import Employee, EmployeeCalendarException, OrgFunction, Team
 from src.models.project import Project
 from src.models.resource_pool import PoolAssignment, PoolMapping, ResourcePool
 from src.i18n import set_current_locale, t
@@ -182,6 +183,15 @@ class TestResourcePools(unittest.TestCase):
                 allocation_pct=75.0,
             )
         )
+        self.org_repo.create_employee_calendar_exception(
+            EmployeeCalendarException(
+                employee_id=employee_id,
+                start_date=date(2026, 10, 1),
+                end_date=date(2026, 10, 3),
+                occupation_percentage=0.0,
+                reason="Leave",
+            )
+        )
 
         detail = ResourcePoolService.calculate_pool_capacity(
             pool_id, self.org_repo, self.pool_repo
@@ -197,6 +207,9 @@ class TestResourcePools(unittest.TestCase):
         self.assertEqual(contribution.resource_name, "Ada Lovelace")
         self.assertTrue(contribution.is_deduplicated)
         self.assertEqual(contribution.effective_allocation_pct, 75.0)
+        self.assertEqual(detail.daily_assigned_capacity["2026-10-01"], 0.0)
+        self.assertEqual(detail.daily_assigned_capacity["2026-10-03"], 0.0)
+        self.assertNotIn("2026-09-30", detail.daily_assigned_capacity)
 
     def test_daily_overassignment_detection(self) -> None:
         """Verify that overassignment is calculated on a daily basis and detects overlapping peak FTE."""
@@ -999,4 +1012,3 @@ class TestResourcePools(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

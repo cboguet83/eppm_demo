@@ -284,6 +284,36 @@ class ResourcePoolService:
             )
 
         assigned_capacity_fte = round(assigned_capacity_fte, 3)
+        # Calendar exceptions make employee capacity time-dependent. Keep a
+        # sparse date map containing only dates that differ from the normal
+        # assigned capacity; consumers use assigned_capacity_fte otherwise.
+        assigned_capacity_deltas: Dict[str, float] = {}
+        contribution_by_employee = {
+            c.employee_id: c for c in contributions if c.employee_id is not None
+        }
+        if contribution_by_employee:
+            df_exceptions = org_repo.get_employee_calendar_exceptions()
+            if not df_exceptions.empty:
+                for _, exception in df_exceptions.iterrows():
+                    employee_id = int(exception["employee_id"])
+                    contribution = contribution_by_employee.get(employee_id)
+                    employee_info = employee_dict.get(employee_id)
+                    if contribution is None or employee_info is None:
+                        continue
+                    base_pct = float(employee_info["occupation_percentage"])
+                    exception_pct = float(exception["occupation_percentage"])
+                    allocation_factor = contribution.effective_allocation_pct / 100.0
+                    capacity_delta = ((exception_pct - base_pct) / 100.0) * allocation_factor
+                    cls._accumulate_daily_usage(
+                        assigned_capacity_deltas,
+                        str(exception["start_date"]),
+                        str(exception["end_date"]),
+                        capacity_delta,
+                    )
+        daily_assigned_capacity = {
+            date_str: round(assigned_capacity_fte + delta, 3)
+            for date_str, delta in assigned_capacity_deltas.items()
+        }
         defined_capacity_fte = pool.capacity_fte if pool else None
         total_capacity_fte = (
             round(float(defined_capacity_fte), 3)
@@ -440,6 +470,7 @@ class ResourcePoolService:
             daily_usage=daily_usage,
             defined_capacity_fte=defined_capacity_fte,
             assigned_capacity_fte=assigned_capacity_fte,
+            daily_assigned_capacity=daily_assigned_capacity,
         )
 
     @classmethod

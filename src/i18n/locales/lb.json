@@ -239,6 +239,8 @@
       "no_pools": "Keng Ressource-Pools konfiguréiert",
       "max_demand": "Max. Nofro",
       "capacity": "Kapazitéit",
+      "defined_capacity": "Definéiert Kapazitéit",
+      "assigned_capacity": "Zougewisen Kapazitéit",
       "show_total": "Gesamtallokatiounen",
       "show_selected": "Ausgewielte Projeten",
       "filter_consuming_projects": "No verbrauchende Projeten filteren",

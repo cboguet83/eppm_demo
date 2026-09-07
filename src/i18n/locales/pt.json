@@ -239,6 +239,8 @@
       "no_pools": "Nenhum pool de recursos configurado",
       "max_demand": "Demanda Máxima",
       "capacity": "Capacidade",
+      "defined_capacity": "Capacidade definida",
+      "assigned_capacity": "Capacidade atribuída",
       "show_total": "Alocações Totais",
       "show_selected": "Projetos Selecionados",
       "filter_consuming_projects": "Filtrar em projetos consumidores",
