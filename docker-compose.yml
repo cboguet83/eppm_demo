@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   app:
     build:
@@ -12,13 +10,18 @@ services:
     environment:
       - DB_NAME=/app/data/ppm_mock.db
       - LOG_LEVEL=INFO
-      - APP_ENV=production
+      - APP_ENV=${APP_ENV:-development}
       - FORCE_RESEED=${FORCE_RESEED:-false}
       - SEED_PROJECTS_COUNT=${SEED_PROJECTS_COUNT:-0}
     volumes:
       - ppm_data:/app/data
+      # Development bind mounts: Streamlit hot-reloads application changes
+      # without rebuilding the image. Dependencies remain image-managed.
+      - ./app.py:/app/app.py:ro
+      - ./src:/app/src:ro
+      - ./scripts:/app/scripts:ro
+      - ./.streamlit:/app/.streamlit:ro
 
 volumes:
   ppm_data:
     driver: local
-
