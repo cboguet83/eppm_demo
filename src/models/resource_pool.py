@@ -27,12 +27,15 @@ class ResourcePool:
         name: Unique label for the resource pool.
         id: Unique primary key identifier.
         description: Informational notes / description of the pool.
+        capacity_fte: Optional user-defined pool capacity limit. When omitted,
+            the calculated assigned capacity is used for backwards compatibility.
         created_at: ISO timestamp of creation.
     """
 
     name: str
     id: Optional[int] = None
     description: str = ""
+    capacity_fte: Optional[float] = None
     created_at: Optional[str] = None
 
 
@@ -42,8 +45,8 @@ class PoolMapping:
 
     Attributes:
         pool_id: ID of the parent resource pool.
-        target_type: 'team' or 'function'.
-        target_id: ID of the mapped team or function.
+        target_type: 'team', 'employee', or legacy 'function'.
+        target_id: ID of the mapped team, employee, or function.
         allocation_pct: Fractional percentage allocated to this pool (0.0 to 100.0).
         id: Unique primary key identifier.
     """
@@ -82,7 +85,10 @@ class PoolAssignment:
 
 @dataclass
 class PoolFunctionContribution:
-    """Details of an individual function contributing to a resource pool's capacity.
+    """Details of a unique resource contributing to a pool's assigned capacity.
+
+    The historical class name is retained for API compatibility. New records are
+    normally employee-based; legacy function-only pools continue to be supported.
 
     Attributes:
         function_id: Unique function ID.
@@ -93,6 +99,10 @@ class PoolFunctionContribution:
         source_type: 'direct' or 'team'.
         source_name: Name of the team if sourced via a team, or 'Direct Mapping'.
         is_deduplicated: True if function appeared in both team and direct mapping.
+        employee_id: Employee ID when the contribution represents an employee.
+        employee_name: Display name when the contribution represents an employee.
+        resource_type: ``employee`` for normal records or ``function`` for legacy
+            function-only records.
     """
 
     function_id: int
@@ -103,6 +113,19 @@ class PoolFunctionContribution:
     source_type: str
     source_name: str
     is_deduplicated: bool = False
+    employee_id: Optional[int] = None
+    employee_name: Optional[str] = None
+    resource_type: str = "function"
+
+    @property
+    def resource_id(self) -> int:
+        """Return the employee ID, falling back to the legacy function ID."""
+        return self.employee_id if self.employee_id is not None else self.function_id
+
+    @property
+    def resource_name(self) -> str:
+        """Return the employee name, falling back to the legacy function name."""
+        return self.employee_name or self.function_name
 
 
 @dataclass
@@ -129,7 +152,10 @@ class PoolCapacityDetail:
     Attributes:
         pool_id: Pool ID.
         pool_name: Pool name.
-        total_capacity_fte: Total pool capacity in FTE calculated from unique functions.
+        total_capacity_fte: Effective capacity limit used for demand checks. This is
+            the defined capacity when present, otherwise assigned capacity.
+        defined_capacity_fte: User-defined pool capacity, if configured.
+        assigned_capacity_fte: Capacity calculated from unique assigned resources.
         peak_assigned_fte: Maximum assigned FTE active on any single day.
         total_assigned_fte_scalar: Simple scalar sum of all active assignments.
         is_overassigned: True if peak_assigned_fte > total_capacity_fte.
@@ -152,6 +178,13 @@ class PoolCapacityDetail:
     daily_overassignments: List[DailyOverassignment] = field(default_factory=list)
     overassignment_intervals: List[str] = field(default_factory=list)
     daily_usage: Dict[str, float] = field(default_factory=dict)
+    defined_capacity_fte: Optional[float] = None
+    assigned_capacity_fte: float = 0.0
+
+    @property
+    def contributing_resources(self) -> List[PoolFunctionContribution]:
+        """Alias exposing the contribution list using current resource terminology."""
+        return self.contributing_functions
 
     @property
     def peak_daily_fte(self) -> float:

@@ -413,22 +413,59 @@ def init_db(db_path: Optional[str] = None) -> None:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL UNIQUE,
                 description TEXT DEFAULT '',
+                capacity_fte REAL CHECK(capacity_fte >= 0.0),
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
         """)
+
+        cursor.execute("PRAGMA table_info(resource_pool)")
+        resource_pool_cols = [c[1] for c in cursor.fetchall()]
+        if "capacity_fte" not in resource_pool_cols:
+            cursor.execute(
+                "ALTER TABLE resource_pool ADD COLUMN capacity_fte REAL CHECK(capacity_fte >= 0.0)"
+            )
 
         # 18. Resource Pool Mappings Table (Teams & Functions with partial 0-100% allocation)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS resource_pool_mapping (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 pool_id INTEGER NOT NULL,
-                target_type TEXT NOT NULL CHECK(target_type IN ('team', 'function')),
+                target_type TEXT NOT NULL CHECK(target_type IN ('team', 'employee', 'function')),
                 target_id INTEGER NOT NULL,
                 allocation_pct REAL NOT NULL DEFAULT 100.0 CHECK(allocation_pct >= 0.0 AND allocation_pct <= 100.0),
                 FOREIGN KEY (pool_id) REFERENCES resource_pool (id) ON DELETE CASCADE,
                 UNIQUE(pool_id, target_type, target_id)
             )
         """)
+
+        # Existing databases used a CHECK constraint that only accepted teams and
+        # functions. Recreate the table once so direct employee mappings are valid.
+        cursor.execute(
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'resource_pool_mapping'"
+        )
+        mapping_table_row = cursor.fetchone()
+        mapping_table_sql = (mapping_table_row[0] or "") if mapping_table_row else ""
+        if "'employee'" not in mapping_table_sql.lower():
+            cursor.execute("""
+                CREATE TABLE resource_pool_mapping_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    pool_id INTEGER NOT NULL,
+                    target_type TEXT NOT NULL CHECK(target_type IN ('team', 'employee', 'function')),
+                    target_id INTEGER NOT NULL,
+                    allocation_pct REAL NOT NULL DEFAULT 100.0 CHECK(allocation_pct >= 0.0 AND allocation_pct <= 100.0),
+                    FOREIGN KEY (pool_id) REFERENCES resource_pool (id) ON DELETE CASCADE,
+                    UNIQUE(pool_id, target_type, target_id)
+                )
+            """)
+            cursor.execute("""
+                INSERT INTO resource_pool_mapping_new (
+                    id, pool_id, target_type, target_id, allocation_pct
+                )
+                SELECT id, pool_id, target_type, target_id, allocation_pct
+                FROM resource_pool_mapping
+            """)
+            cursor.execute("DROP TABLE resource_pool_mapping")
+            cursor.execute("ALTER TABLE resource_pool_mapping_new RENAME TO resource_pool_mapping")
 
         # 19. Resource Pool Assignments Table (Task or Project with FTE & optional custom period)
         cursor.execute("""

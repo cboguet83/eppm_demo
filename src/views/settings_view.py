@@ -404,12 +404,29 @@ def _open_add_pool_dialog(pool_repo: ResourcePoolRepository) -> None:
     """Modal dialog to create a new resource pool."""
     new_name = st.text_input(t("settings.field_pool_name", default="Resource Pool Name *"), placeholder="e.g. Core Engineering Pool")
     new_desc = st.text_area(t("settings.field_pool_desc", default="Description"), placeholder="Purpose and specialty of this pool...")
+    new_capacity = st.number_input(
+        t("settings.field_pool_capacity", default="Defined capacity (FTE)"),
+        min_value=0.0,
+        value=0.0,
+        step=0.25,
+        help=t(
+            "settings.field_pool_capacity_help",
+            default="Capacity limit used to evaluate project and task demand.",
+        ),
+    )
 
     col_save, col_cancel = st.columns(2)
     if col_save.button(t("settings.btn_save", default="💾 Save Pool"), type="primary", use_container_width=True):
         try:
             ResourcePoolService.validate_pool_name(new_name)
-            p_id = pool_repo.create_pool(ResourcePool(name=new_name.strip(), description=new_desc.strip()))
+            ResourcePoolService.validate_capacity_fte(float(new_capacity))
+            p_id = pool_repo.create_pool(
+                ResourcePool(
+                    name=new_name.strip(),
+                    description=new_desc.strip(),
+                    capacity_fte=float(new_capacity),
+                )
+            )
             st.toast(f"Resource Pool '{new_name}' created (ID: {p_id})!", icon="✅")
             st.rerun()
         except ValueError as val_err:
@@ -431,12 +448,30 @@ def _open_edit_pool_dialog(pool_repo: ResourcePoolRepository, pool_id: int) -> N
 
     edit_name = st.text_input(t("settings.field_pool_name", default="Resource Pool Name *"), value=pool.name)
     edit_desc = st.text_area(t("settings.field_pool_desc", default="Description"), value=pool.description)
+    edit_capacity = st.number_input(
+        t("settings.field_pool_capacity", default="Defined capacity (FTE)"),
+        min_value=0.0,
+        value=float(pool.capacity_fte or 0.0),
+        step=0.25,
+        help=t(
+            "settings.field_pool_capacity_help",
+            default="Capacity limit used to evaluate project and task demand.",
+        ),
+    )
 
     col_save, col_cancel = st.columns(2)
     if col_save.button(t("settings.btn_save_changes", default="💾 Save Changes"), type="primary", use_container_width=True):
         try:
             ResourcePoolService.validate_pool_name(edit_name)
-            pool_repo.update_pool(ResourcePool(id=pool_id, name=edit_name.strip(), description=edit_desc.strip()))
+            ResourcePoolService.validate_capacity_fte(float(edit_capacity))
+            pool_repo.update_pool(
+                ResourcePool(
+                    id=pool_id,
+                    name=edit_name.strip(),
+                    description=edit_desc.strip(),
+                    capacity_fte=float(edit_capacity),
+                )
+            )
             st.toast("Resource Pool updated successfully!", icon="✏️")
             st.rerun()
         except ValueError as val_err:
@@ -464,19 +499,19 @@ def _open_delete_pool_dialog(pool_repo: ResourcePoolRepository, pool_id: int, po
         st.rerun()
 
 
-@st.dialog(t("settings.dialog_add_mapping", default="➕ Map Team or Function to Pool"))
+@st.dialog(t("settings.dialog_add_mapping", default="➕ Assign Team or Employee to Pool"))
 def _open_add_pool_mapping_dialog(
     pool_repo: ResourcePoolRepository,
     pool_id: int,
     df_teams: pd.DataFrame,
-    df_funcs: pd.DataFrame,
+    df_employees: pd.DataFrame,
 ) -> None:
-    """Modal dialog to map a team or function to a resource pool with partial allocation."""
-    map_type = st.radio(
+    """Modal dialog to assign a team or employee to a resource pool."""
+    map_type = st.segmented_control(
         t("settings.mapping_target_type", default="Mapping Target Type"),
-        options=["team", "function"],
-        format_func=lambda x: "🛡️ Team" if x == "team" else "💼 Job Function",
-        horizontal=True,
+        options=["team", "employee"],
+        format_func=lambda x: "Team" if x == "team" else "Employee",
+        default="team",
     )
 
     if map_type == "team":
@@ -490,14 +525,19 @@ def _open_add_pool_mapping_dialog(
             format_func=lambda tid: f"{team_map.get(tid, f'Team #{tid}')} [#{tid}]",
         )
     else:
-        if df_funcs.empty:
-            st.warning("No functions available.")
+        if df_employees.empty:
+            st.warning("No employees available.")
             return
-        func_map = dict(zip(df_funcs["function_id"], df_funcs["name"]))
+        employee_map = {
+            int(row["employee_id"]): (
+                f"{str(row['firstname']).strip()} {str(row['lastname']).strip()}".strip()
+            )
+            for _, row in df_employees.iterrows()
+        }
         target_id = st.selectbox(
-            t("settings.select_func", default="Select Job Function"),
-            options=df_funcs["function_id"].tolist(),
-            format_func=lambda fid: f"{func_map.get(fid, f'Function #{fid}')} [#{fid}]",
+            t("settings.select_employee", default="Select employee"),
+            options=df_employees["employee_id"].tolist(),
+            format_func=lambda eid: f"{employee_map.get(int(eid), f'Employee #{eid}')} [#{eid}]",
         )
 
     alloc_pct = st.slider(
@@ -506,7 +546,7 @@ def _open_add_pool_mapping_dialog(
         max_value=100.0,
         value=100.0,
         step=5.0,
-        help="Percentage of this team or function's capacity allocated to this pool (0% to 100%).",
+        help="Percentage of this team or employee's capacity allocated to this pool (0% to 100%).",
     )
 
     col_save, col_cancel = st.columns(2)
@@ -2381,6 +2421,7 @@ def render_settings_view(
         all_pool_details = ResourcePoolService.get_portfolio_pools_summary(org_repo, pool_repo, milestone_repo)
         total_pools = len(all_pool_details)
         total_portfolio_capacity = sum(p.total_capacity_fte for p in all_pool_details)
+        total_assigned_capacity = sum(p.assigned_capacity_fte for p in all_pool_details)
         peak_portfolio_assigned = sum(p.peak_assigned_fte for p in all_pool_details)
         overassigned_pools_count = sum(1 for p in all_pool_details if p.is_overassigned)
 
@@ -2390,19 +2431,23 @@ def render_settings_view(
         )
 
         # 1. Summary KPI Metrics Cards
-        kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+        kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(5)
         kpi1.metric(t("settings.kpi_total_pools", default="Total Pools"), total_pools)
-        kpi2.metric(t("settings.kpi_total_capacity", default="Total Pool Capacity"), f"{total_portfolio_capacity:.2f} FTE")
-        kpi3.metric(t("settings.kpi_peak_demand", default="Peak Active Demand"), f"{peak_portfolio_assigned:.2f} FTE")
+        kpi2.metric(t("settings.kpi_total_capacity", default="Defined Capacity"), f"{total_portfolio_capacity:.2f} FTE")
+        kpi3.metric(
+            t("settings.kpi_assigned_capacity", default="Assigned Capacity"),
+            f"{total_assigned_capacity:.2f} FTE",
+        )
+        kpi4.metric(t("settings.kpi_peak_demand", default="Peak Active Demand"), f"{peak_portfolio_assigned:.2f} FTE")
         if overassigned_pools_count > 0:
-            kpi4.metric(
+            kpi5.metric(
                 t("settings.kpi_overassigned_pools", default="Overassigned Pools"),
                 f"{overassigned_pools_count} ⚠️",
                 delta=f"+{overassigned_pools_count} Alert",
                 delta_color="inverse",
             )
         else:
-            kpi4.metric(t("settings.kpi_overassigned_pools", default="Overassigned Pools"), "0 ✅")
+            kpi5.metric(t("settings.kpi_overassigned_pools", default="Overassigned Pools"), "0 ✅")
 
         st.divider()
 
@@ -2425,7 +2470,8 @@ def render_settings_view(
                     options=pool_options,
                     format_func=lambda pid: (
                         f"🏊 #{pid} - {pool_id_map[pid].pool_name} "
-                        f"({pool_id_map[pid].total_capacity_fte:.2f} FTE Capacity "
+                        f"(Defined {pool_id_map[pid].total_capacity_fte:.2f} FTE | "
+                        f"Assigned {pool_id_map[pid].assigned_capacity_fte:.2f} FTE "
                         f"{'| ⚠️ OVERASSIGNED' if pool_id_map[pid].is_overassigned else '| ✅ OK'})"
                         if pid in pool_id_map else f"Pool #{pid}"
                     ),
@@ -2452,13 +2498,15 @@ def render_settings_view(
                 if current_detail.is_overassigned:
                     st.error(
                         f"🚨 **DAILY OVERASSIGNMENT ALERT**: Peak daily demand of **{current_detail.peak_assigned_fte:.2f} FTE** "
-                        f"exceeds calculated pool capacity of **{current_detail.total_capacity_fte:.2f} FTE** "
+                        f"exceeds defined pool capacity of **{current_detail.total_capacity_fte:.2f} FTE** "
                         f"by **+{current_detail.peak_excess_fte:.2f} FTE**!\n\n"
+                        f"👥 **Deduplicated assigned capacity**: {current_detail.assigned_capacity_fte:.2f} FTE.\n\n"
                         f"📅 **Overassigned Period(s)**: {', '.join(current_detail.overassignment_intervals) if current_detail.overassignment_intervals else 'Active overlapping assignments'}"
                     )
                 else:
                     st.success(
-                        f"✅ **CAPACITY NORMAL**: Total pool capacity is **{current_detail.total_capacity_fte:.2f} FTE**. "
+                        f"✅ **CAPACITY NORMAL**: Defined pool capacity is **{current_detail.total_capacity_fte:.2f} FTE**; "
+                        f"deduplicated assigned capacity is **{current_detail.assigned_capacity_fte:.2f} FTE**. "
                         f"Peak active daily demand is **{current_detail.peak_assigned_fte:.2f} FTE**."
                     )
 
@@ -2471,19 +2519,25 @@ def render_settings_view(
 
                 st.divider()
 
-                # Sub-section 1: Mapped Teams & Functions
-                st.write(f"#### 🛡️ / 💼 {t('settings.mapped_teams_funcs', default='Mapped Teams & Functions')} (0% - 100%)")
+                # Sub-section 1: Assigned Teams & Employees
+                st.write(f"#### 🛡️ / 👤 {t('settings.mapped_teams_funcs', default='Assigned Teams & Employees')} (0% - 100%)")
                 df_pool_maps = pool_repo.get_mappings_by_pool(selected_pool_id)
                 col_m_add, _ = st.columns([2, 3])
                 with col_m_add:
-                    if st.button(t("settings.btn_add_mapping", default="➕ Map Team or Function"), key=f"btn_add_map_{selected_pool_id}"):
-                        _open_add_pool_mapping_dialog(pool_repo, selected_pool_id, df_teams, df_funcs)
+                    if st.button(t("settings.btn_add_mapping", default="➕ Assign Team or Employee"), key=f"btn_add_map_{selected_pool_id}"):
+                        _open_add_pool_mapping_dialog(pool_repo, selected_pool_id, df_teams, df_emps)
 
                 if df_pool_maps.empty:
-                    st.info(t("settings.no_mappings_in_pool", default="No teams or functions mapped to this pool yet. Click 'Map Team or Function' above."))
+                    st.info(t("settings.no_mappings_in_pool", default="No teams or employees assigned to this pool yet. Click 'Assign Team or Employee' above."))
                 else:
                     team_lookup = dict(zip(df_teams["team_id"], df_teams["team_name"])) if not df_teams.empty else {}
                     func_lookup = dict(zip(df_funcs["function_id"], df_funcs["name"])) if not df_funcs.empty else {}
+                    employee_lookup = {
+                        int(row["employee_id"]): (
+                            f"{str(row['firstname']).strip()} {str(row['lastname']).strip()}".strip()
+                        )
+                        for _, row in df_emps.iterrows()
+                    } if not df_emps.empty else {}
 
                     for _, m_row in df_pool_maps.iterrows():
                         m_id = int(m_row["id"])
@@ -2491,8 +2545,15 @@ def render_settings_view(
                         m_tid = int(m_row["target_id"])
                         m_pct = float(m_row["allocation_pct"])
 
-                        target_label = team_lookup.get(m_tid, f"Team #{m_tid}") if m_type == "team" else func_lookup.get(m_tid, f"Function #{m_tid}")
-                        icon = "🛡️ Team:" if m_type == "team" else "💼 Function:"
+                        if m_type == "team":
+                            target_label = team_lookup.get(m_tid, f"Team #{m_tid}")
+                            icon = "🛡️ Team:"
+                        elif m_type == "employee":
+                            target_label = employee_lookup.get(m_tid, f"Employee #{m_tid}")
+                            icon = "👤 Employee:"
+                        else:
+                            target_label = func_lookup.get(m_tid, f"Function #{m_tid}")
+                            icon = "💼 Legacy function:"
 
                         mc1, mc2, mc3 = st.columns([3, 2, 1])
                         mc1.markdown(f"**{icon}** `{target_label}` `[#{m_tid}]`")
@@ -2516,9 +2577,9 @@ def render_settings_view(
 
                 st.divider()
 
-                # Sub-section 2: Deduplicated Contributing Functions Breakdown
-                st.write(f"#### 🔍 {t('settings.dedup_breakdown_title', default='Deduplicated Contributing Functions Breakdown')}")
-                st.caption(t("settings.dedup_caption", default="Shows unique functions contributing to pool capacity. Functions mapped both directly and via a team are considered strictly once."))
+                # Sub-section 2: Deduplicated contributing resource breakdown
+                st.write(f"#### 🔍 {t('settings.dedup_breakdown_title', default='Deduplicated Assigned Capacity Breakdown')}")
+                st.caption(t("settings.dedup_caption", default="Shows unique employees contributing to assigned capacity. Employees reached through several teams or assigned directly and through a team are counted once."))
 
                 if not current_detail.contributing_functions:
                     st.caption("No contributing functions found.")
@@ -2527,8 +2588,10 @@ def render_settings_view(
                     for cf in current_detail.contributing_functions:
                         status_str = "✅ Considered Once (Direct Override)" if cf.is_deduplicated else "Standard"
                         dedup_table_data.append({
-                            "Function ID": cf.function_id,
-                            "Function Title": cf.function_name,
+                            "Resource type": cf.resource_type.title(),
+                            "Resource ID": cf.resource_id,
+                            "Resource": cf.resource_name,
+                            "Function": cf.function_name,
                             "Nominal FTE": f"{cf.nominal_fte:.2f}",
                             "Effective %": f"{cf.effective_allocation_pct:.1f}%",
                             "Effective FTE": f"{cf.effective_fte:.2f}",

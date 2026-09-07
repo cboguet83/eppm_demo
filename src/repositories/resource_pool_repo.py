@@ -39,7 +39,7 @@ class ResourcePoolRepository:
         with get_db(self.db_path) as conn:
             return pd.read_sql(
                 """
-                SELECT id, name, description, created_at
+                SELECT id, name, description, capacity_fte, created_at
                 FROM resource_pool
                 ORDER BY name ASC
                 """,
@@ -84,7 +84,7 @@ class ResourcePoolRepository:
             cursor = conn.cursor()
             cursor.execute(
                 """
-                SELECT id, name, description, created_at
+                SELECT id, name, description, capacity_fte, created_at
                 FROM resource_pool
                 WHERE id = ?
                 """,
@@ -97,7 +97,8 @@ class ResourcePoolRepository:
                 id=row[0],
                 name=row[1],
                 description=row[2] or "",
-                created_at=row[3],
+                capacity_fte=float(row[3]) if row[3] is not None else None,
+                created_at=row[4],
             )
 
     def create_pool(self, pool: ResourcePool) -> int:
@@ -113,10 +114,10 @@ class ResourcePoolRepository:
             cursor = conn.cursor()
             cursor.execute(
                 """
-                INSERT INTO resource_pool (name, description)
-                VALUES (?, ?)
+                INSERT INTO resource_pool (name, description, capacity_fte)
+                VALUES (?, ?, ?)
                 """,
-                (pool.name.strip(), pool.description.strip()),
+                (pool.name.strip(), pool.description.strip(), pool.capacity_fte),
             )
             conn.commit()
             return int(cursor.lastrowid)
@@ -137,10 +138,10 @@ class ResourcePoolRepository:
             cursor.execute(
                 """
                 UPDATE resource_pool
-                SET name = ?, description = ?
+                SET name = ?, description = ?, capacity_fte = ?
                 WHERE id = ?
                 """,
-                (pool.name.strip(), pool.description.strip(), pool.id),
+                (pool.name.strip(), pool.description.strip(), pool.capacity_fte, pool.id),
             )
             conn.commit()
             return cursor.rowcount > 0

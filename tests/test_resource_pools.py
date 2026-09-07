@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from src.database.schema_init import init_db
-from src.models.organization import OrgFunction, Team
+from src.models.organization import Employee, OrgFunction, Team
 from src.models.project import Project
 from src.models.resource_pool import PoolAssignment, PoolMapping, ResourcePool
 from src.i18n import set_current_locale, t
@@ -144,6 +144,59 @@ class TestResourcePools(unittest.TestCase):
         self.assertFalse(f2_contrib.is_deduplicated)
         self.assertEqual(f2_contrib.effective_allocation_pct, 100.0)
         self.assertEqual(f2_contrib.effective_fte, 1.0)
+
+    def test_defined_and_employee_assigned_capacity_are_separate_and_deduplicated(self) -> None:
+        """An employee reached directly and through several teams contributes only once."""
+        function_id = self.org_repo.create_function(
+            OrgFunction(name="Delivery Engineer", hierarchy_level=3, fte_percentage=100)
+        )
+        employee_id = self.org_repo.create_employee(
+            Employee(
+                firstname="Ada",
+                lastname="Lovelace",
+                email="ada@example.test",
+                employee_code="EMP-ADA",
+                function_id=function_id,
+                occupation_percentage=80.0,
+            )
+        )
+        team_a = self.org_repo.create_team(Team(team_name="Team A"))
+        team_b = self.org_repo.create_team(Team(team_name="Team B"))
+        self.pool_repo.set_team_functions(team_a, [function_id])
+        self.pool_repo.set_team_functions(team_b, [function_id])
+
+        pool_id = self.pool_repo.create_pool(
+            ResourcePool(name="Defined Pool", capacity_fte=2.5)
+        )
+        self.pool_repo.create_mapping(
+            PoolMapping(pool_id=pool_id, target_type="team", target_id=team_a, allocation_pct=100.0)
+        )
+        self.pool_repo.create_mapping(
+            PoolMapping(pool_id=pool_id, target_type="team", target_id=team_b, allocation_pct=50.0)
+        )
+        self.pool_repo.create_mapping(
+            PoolMapping(
+                pool_id=pool_id,
+                target_type="employee",
+                target_id=employee_id,
+                allocation_pct=75.0,
+            )
+        )
+
+        detail = ResourcePoolService.calculate_pool_capacity(
+            pool_id, self.org_repo, self.pool_repo
+        )
+
+        self.assertEqual(detail.defined_capacity_fte, 2.5)
+        self.assertEqual(detail.total_capacity_fte, 2.5)
+        self.assertEqual(detail.assigned_capacity_fte, 0.6)
+        self.assertEqual(len(detail.contributing_resources), 1)
+        contribution = detail.contributing_resources[0]
+        self.assertEqual(contribution.resource_type, "employee")
+        self.assertEqual(contribution.employee_id, employee_id)
+        self.assertEqual(contribution.resource_name, "Ada Lovelace")
+        self.assertTrue(contribution.is_deduplicated)
+        self.assertEqual(contribution.effective_allocation_pct, 75.0)
 
     def test_daily_overassignment_detection(self) -> None:
         """Verify that overassignment is calculated on a daily basis and detects overlapping peak FTE."""
@@ -946,5 +999,4 @@ class TestResourcePools(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
 

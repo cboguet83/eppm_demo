@@ -61,6 +61,12 @@ class ResourcePoolService:
         if fte < 0.0:
             raise ValueError(f"Assigned FTE must be greater than or equal to 0.0 (got {fte}).")
 
+    @staticmethod
+    def validate_capacity_fte(capacity_fte: float) -> None:
+        """Validate a user-defined pool capacity limit."""
+        if capacity_fte < 0.0:
+            raise ValueError(f"Pool capacity must be greater than or equal to 0.0 (got {capacity_fte}).")
+
     @classmethod
     def calculate_pool_capacity(
         cls,
@@ -69,10 +75,12 @@ class ResourcePoolService:
         pool_repo: ResourcePoolRepository,
         milestone_repo: Optional[MilestoneRepository] = None,
     ) -> PoolCapacityDetail:
-        """Calculates total pool capacity, applies function de-duplication, and determines daily overassignment.
+        """Calculate defined capacity, deduplicated assigned capacity, and demand status.
 
-        De-duplication rule: If a function is mapped both directly and through an assigned team,
-        it is considered only once. The direct mapping allocation percentage takes precedence.
+        Employees can be mapped directly or reached through one or more assigned teams.
+        Each employee contributes at most once. A direct employee/function mapping takes
+        precedence over team-derived membership; among multiple teams, the highest
+        allocation is used. Legacy function-only pools remain supported.
 
         Daily overassignment rule: On each calendar date, total assigned FTE is aggregated.
         If the peak daily assigned FTE exceeds total pool capacity, the pool is overassigned.
@@ -93,6 +101,7 @@ class ResourcePoolService:
         df_mappings = pool_repo.get_mappings_by_pool(pool_id)
         df_funcs = org_repo.get_all_functions()
         df_teams = org_repo.get_all_teams()
+        df_employees = org_repo.get_all_employees()
 
         func_dict: Dict[int, Dict[str, Any]] = {}
         if not df_funcs.empty:
@@ -112,7 +121,26 @@ class ResourcePoolService:
                     "leader_function_id": int(r["leader_function_id"]) if pd.notna(r.get("leader_function_id")) else None,
                 }
 
+        employee_dict: Dict[int, Dict[str, Any]] = {}
+        employees_by_function: Dict[int, List[int]] = {}
+        if not df_employees.empty:
+            for _, r in df_employees.iterrows():
+                employee_id = int(r["employee_id"])
+                function_id = int(r["function_id"]) if pd.notna(r.get("function_id")) else None
+                employee_dict[employee_id] = {
+                    "name": f"{str(r['firstname']).strip()} {str(r['lastname']).strip()}".strip(),
+                    "function_id": function_id,
+                    "occupation_percentage": (
+                        float(r["occupation_percentage"])
+                        if pd.notna(r.get("occupation_percentage"))
+                        else 100.0
+                    ),
+                }
+                if function_id is not None:
+                    employees_by_function.setdefault(function_id, []).append(employee_id)
+
         # Separate direct function mappings and team mappings
+        direct_employee_mappings: Dict[int, float] = {}
         direct_function_mappings: Dict[int, float] = {}
         team_mappings: Dict[int, float] = {}
 
@@ -121,14 +149,18 @@ class ResourcePoolService:
                 m_type = str(m["target_type"]).strip().lower()
                 m_tid = int(m["target_id"])
                 m_pct = float(m["allocation_pct"])
-                if m_type == "function":
+                if m_type == "employee":
+                    direct_employee_mappings[m_tid] = m_pct
+                elif m_type == "function":
                     direct_function_mappings[m_tid] = m_pct
                 elif m_type == "team":
                     team_mappings[m_tid] = m_pct
 
-        # Resolve team functions for each mapped team
-        # Map: function_id -> (team_id, team_name, team_allocation_pct)
-        team_derived_functions: Dict[int, Tuple[int, str, float]] = {}
+        # Resource keys are (type, ID). Employees are the normal capacity unit;
+        # legacy functions are used only when no employee occupies that function.
+        ResourceKey = Tuple[str, int]
+        team_derived_resources: Dict[ResourceKey, Tuple[int, str, float]] = {}
+        team_resource_occurrences: Dict[ResourceKey, int] = {}
         for t_id, t_pct in team_mappings.items():
             t_info = team_dict.get(t_id, {"name": f"Team #{t_id}"})
             t_name = t_info["name"]
@@ -152,59 +184,112 @@ class ResourcePoolService:
 
             for fid in set(member_fids):
                 if fid in func_dict:
-                    if fid not in team_derived_functions:
-                        team_derived_functions[fid] = (t_id, t_name, t_pct)
-                    else:
-                        # If in multiple teams, keep maximum team allocation percentage
-                        prev_pct = team_derived_functions[fid][2]
-                        if t_pct > prev_pct:
-                            team_derived_functions[fid] = (t_id, t_name, t_pct)
+                    employee_ids = employees_by_function.get(fid, [])
+                    resource_keys: List[ResourceKey] = (
+                        [("employee", eid) for eid in employee_ids]
+                        if employee_ids
+                        else [("function", fid)]
+                    )
+                    for resource_key in resource_keys:
+                        team_resource_occurrences[resource_key] = team_resource_occurrences.get(resource_key, 0) + 1
+                        previous = team_derived_resources.get(resource_key)
+                        if previous is None or t_pct > previous[2]:
+                            team_derived_resources[resource_key] = (t_id, t_name, t_pct)
 
-        # 2. Build unique contributing functions list applying DE-DUPLICATION RULE
-        contributions: List[PoolFunctionContribution] = []
-        all_candidate_fids: Set[int] = set(direct_function_mappings.keys()).union(set(team_derived_functions.keys()))
+        direct_resources: Dict[ResourceKey, Tuple[float, str]] = {}
+        direct_resource_occurrences: Dict[ResourceKey, int] = {}
 
-        total_capacity_fte = 0.0
+        # Legacy direct function mappings resolve to their occupying employees.
+        for fid, allocation_pct in direct_function_mappings.items():
+            employee_ids = employees_by_function.get(fid, [])
+            resource_keys = (
+                [("employee", eid) for eid in employee_ids]
+                if employee_ids
+                else [("function", fid)]
+            )
+            for resource_key in resource_keys:
+                direct_resource_occurrences[resource_key] = direct_resource_occurrences.get(resource_key, 0) + 1
+                direct_resources[resource_key] = (allocation_pct, "Direct Function Mapping")
 
-        for fid in sorted(list(all_candidate_fids)):
-            if fid not in func_dict:
+        # An explicit employee mapping is the most specific source and overrides
+        # both team-derived and legacy function-derived allocation percentages.
+        for employee_id, allocation_pct in direct_employee_mappings.items():
+            if employee_id not in employee_dict:
                 continue
+            resource_key = ("employee", employee_id)
+            direct_resource_occurrences[resource_key] = direct_resource_occurrences.get(resource_key, 0) + 1
+            direct_resources[resource_key] = (allocation_pct, "Direct Employee Mapping")
 
-            f_info = func_dict[fid]
-            f_name = f_info["name"]
-            nominal_fte = f_info["fte_percentage"] / 100.0
+        # 2. Build the unique contributing-resource list.
+        contributions: List[PoolFunctionContribution] = []
+        all_resource_keys = set(direct_resources).union(team_derived_resources)
+        assigned_capacity_fte = 0.0
 
-            is_direct = fid in direct_function_mappings
-            is_team = fid in team_derived_functions
-            is_dedup = is_direct and is_team
+        for resource_type, resource_id in sorted(all_resource_keys):
+            resource_key = (resource_type, resource_id)
+            is_direct = resource_key in direct_resources
+            is_team = resource_key in team_derived_resources
+            is_dedup = (
+                (is_direct and is_team)
+                or direct_resource_occurrences.get(resource_key, 0) > 1
+                or team_resource_occurrences.get(resource_key, 0) > 1
+            )
+
+            if resource_type == "employee":
+                employee_info = employee_dict.get(resource_id)
+                if employee_info is None:
+                    continue
+                employee_id: Optional[int] = resource_id
+                employee_name: Optional[str] = employee_info["name"]
+                function_id = employee_info["function_id"] or 0
+                function_name = func_dict.get(function_id, {}).get("name", "Unassigned function")
+                nominal_fte = employee_info["occupation_percentage"] / 100.0
+            else:
+                function_info = func_dict.get(resource_id)
+                if function_info is None:
+                    continue
+                employee_id = None
+                employee_name = None
+                function_id = resource_id
+                function_name = function_info["name"]
+                nominal_fte = function_info["fte_percentage"] / 100.0
 
             if is_direct:
-                effective_pct = direct_function_mappings[fid]
+                effective_pct, direct_source_name = direct_resources[resource_key]
                 src_type = "direct"
-                src_name = "Direct Mapping"
+                src_name = direct_source_name
             else:
-                _, t_name, t_pct = team_derived_functions[fid]
+                _, t_name, t_pct = team_derived_resources[resource_key]
                 effective_pct = t_pct
                 src_type = "team"
                 src_name = t_name
 
             effective_fte = round(nominal_fte * (effective_pct / 100.0), 3)
-            total_capacity_fte += effective_fte
+            assigned_capacity_fte += effective_fte
 
             contributions.append(
                 PoolFunctionContribution(
-                    function_id=fid,
-                    function_name=f_name,
+                    function_id=function_id,
+                    function_name=function_name,
                     nominal_fte=nominal_fte,
                     effective_allocation_pct=effective_pct,
                     effective_fte=effective_fte,
                     source_type=src_type,
                     source_name=src_name,
                     is_deduplicated=is_dedup,
+                    employee_id=employee_id,
+                    employee_name=employee_name,
+                    resource_type=resource_type,
                 )
             )
 
-        total_capacity_fte = round(total_capacity_fte, 3)
+        assigned_capacity_fte = round(assigned_capacity_fte, 3)
+        defined_capacity_fte = pool.capacity_fte if pool else None
+        total_capacity_fte = (
+            round(float(defined_capacity_fte), 3)
+            if defined_capacity_fte is not None
+            else assigned_capacity_fte
+        )
 
         # 3. Fetch Assignments & Analyze Daily Overassignments
         df_assign = pool_repo.get_assignments(pool_id=pool_id)
@@ -353,6 +438,8 @@ class ResourcePoolService:
             daily_overassignments=daily_overassignments,
             overassignment_intervals=overassignment_intervals,
             daily_usage=daily_usage,
+            defined_capacity_fte=defined_capacity_fte,
+            assigned_capacity_fte=assigned_capacity_fte,
         )
 
     @classmethod
@@ -614,4 +701,3 @@ class ResourcePoolService:
                 matching_pids.add(p_id)
 
         return sorted(list(matching_pids))
-
