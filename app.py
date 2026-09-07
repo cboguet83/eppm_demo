@@ -148,9 +148,6 @@ def bootstrap_database() -> bool:
     preventing destructive re-seeding on Streamlit script reruns.
     """
     init_db()
-    if config.force_reseed:
-        logger.info("FORCE_RESEED is active: forcing database re-seed on startup.")
-        if config.seed_projects_count > 0:
     cli_force, cli_projects = parse_cli_args()
     force = config.force_reseed or cli_force
     num_projects = cli_projects if cli_projects > 0 else config.seed_projects_count
@@ -162,7 +159,6 @@ def bootstrap_database() -> bool:
                 from scripts.seed_database import seed_database
 
                 seed_database(
-                    num_projects=config.seed_projects_count,
                     num_projects=num_projects,
                     db_path=config.db_path,
                     clean_first=True,
@@ -170,7 +166,6 @@ def bootstrap_database() -> bool:
             except Exception as exc:
                 logger.error(
                     "Failed to seed %d projects: %s. Falling back to default seeder.",
-                    config.seed_projects_count,
                     num_projects,
                     exc,
                 )
@@ -184,8 +179,6 @@ def bootstrap_database() -> bool:
 
 def run_app() -> None:
     """Main routing and execution entrypoint for Streamlit UI."""
-    init_db()
-    seed_default_data_if_empty()
     bootstrap_database()
 
 
@@ -400,10 +393,18 @@ def load_full_schema(db_path=None):
     return repo.get_all_groups(), repo.get_all_parameters(), repo.get_all_options()
 
 
-if __name__ == "__main__" or st.runtime.exists():
 if __name__ == "__main__":
     if not st.runtime.exists():
         import sys
+
+        if "-h" in sys.argv or "--help" in sys.argv:
+            print("PPM Studio Pro CLI")
+            print("Usage: python app.py [OPTIONS]")
+            print("\nOptions:")
+            print("  -f, --force, --force-reseed   Force re-seeding the database.")
+            print("  -n, --projects <COUNT>        Number of mock projects to generate.")
+            print("  -h, --help                    Show this help message and exit.")
+            sys.exit(0)
 
         cli_force, cli_projects = parse_cli_args()
         if cli_force or cli_projects > 0:

@@ -1,4 +1,4 @@
-# PPM Studio Pro - Enterprise Project Portfolio Management
+﻿# PPM Studio Pro - Enterprise Project Portfolio Management
 
 PPM Studio Pro is an enterprise-grade Project Portfolio Management (PPM) web application built with Streamlit, SQLite, and Plotly. It enables portfolio managers, architects, and PMO executives to manage project master data, configure flexible metadata schemas, schedule milestone roadmaps, manage organizational hierarchies and resource pools, and track portfolio analytics in real-time.
   
@@ -13,7 +13,7 @@ C4Context
 
     Person(user, "Portfolio Manager / PMO Lead", "Manages project taxonomies, master records, milestone schedules, and financial budgets.")
     System(ppm_app, "PPM Studio Pro", "Streamlit-based Project Portfolio Management Application with dynamic schema capabilities and analytics.")
-    SystemDb(sqlite_db, "SQLite Database (ppm_mock.db)", "Stores parameter groups, normalized parameters, enum options, organizational hierarchy, resource pools, projects, and milestones.")
+    SystemDb(sqlite_db, "SQLite Database (ppm_mock.db)", "Stores parameter groups, normalized parameters, enum options, organizational hierarchy, employee availability calendars, resource pools, projects, and milestones.")
 
     Rel(user, ppm_app, "Interacts via Web Browser", "HTTPS / Streamlit UI (Port 8501)")
     Rel(ppm_app, sqlite_db, "Queries and Updates Schema & Data", "SQL / SQLite Connection Pool")
@@ -55,6 +55,7 @@ classDiagram
             +enrich_projects_with_organization(df_projects: DataFrame, df_functions: DataFrame) DataFrame
             +enrich_functions(df_functions: DataFrame, df_types: DataFrame) DataFrame
             +enrich_employees(df_employees: DataFrame, df_functions: DataFrame) DataFrame
+            +validate_employee_calendar_exception(start_date: date, end_date: date, percentage: float) void
         }
         class SchemaService {
             +generate_param_id(db_path: str) str
@@ -99,6 +100,8 @@ classDiagram
             +get_all_function_types() DataFrame
             +get_all_teams() DataFrame
             +get_all_employees() DataFrame
+            +get_employee_calendar_exceptions(employee_id: int) DataFrame
+            +get_effective_occupation_percentage(employee_id: int, on_date: date) float
         }
         class ResourcePoolRepository {
             +get_all_pools() DataFrame
@@ -171,7 +174,7 @@ eppm_demo/
 │   │   ├── schema.py           # SchemaGroup, SchemaParameter, SchemaParamOption
 │   │   ├── project.py          # Project (with function_id FK), PortfolioMetrics
 │   │   ├── milestone.py        # Milestone & Task Dependency models
-│   │   ├── organization.py     # OrgFunction, FunctionType, Team, Employee
+│   │   ├── organization.py     # OrgFunction, FunctionType, Team, Employee, calendar exceptions
 │   │   ├── resource_pool.py    # ResourcePool, PoolMapping, PoolAssignment
 │   │   └── tag.py              # TagGroup, TagDictionary, ProjectTag, TaskTag
 │   ├── database/               # SQLite connection, DDL & migrations
@@ -188,7 +191,7 @@ eppm_demo/
 │   │   ├── schema_repo.py      # Schema groups, parameters, options CRUD
 │   │   ├── project_repo.py     # Projects CRUD & foreign key lookups
 │   │   ├── milestone_repo.py   # Tasks, milestones & dependency links CRUD
-│   │   ├── organization_repo.py# Functions, types, teams, employees CRUD
+│   │   ├── organization_repo.py# Functions, types, teams, employees & availability CRUD
 │   │   ├── resource_pool_repo.py # Resource pools, mappings, allocations CRUD
 │   │   └── tag_repo.py         # Tag dictionaries and entity tagging CRUD
 │   ├── services/               # Pure business logic & transformations
@@ -251,7 +254,7 @@ Open `http://localhost:8501` in your browser.
 
 ### 4. Run Automated Tests
 ```powershell
-# Run the complete test suite with 94 passing tests
+# Run the complete test suite with 102 passing tests
 python -m unittest discover tests -v
 ```
 
@@ -274,6 +277,19 @@ On initial application launch, if the database is empty, the system automaticall
   - `strategic_priority`: `Critical`, `High`, `Medium`, `Low`
 - **Organizational Structure**: 5 hierarchy levels, 9 function types, 50 job functions with parent-child management chains, teams, and sample employees.
 - **Sample Projects**: Projects 1, 2, and 3 populated with Project Manager foreign keys (`function_id`) and realistic dynamic attributes.
+
+### Employee Occupation & Calendar Exceptions
+
+Every employee has a normal **occupation percentage from 0% to 100%**. The default is 100%, and existing databases are migrated automatically without changing current employee records.
+
+Temporary calendar exceptions override that normal percentage over an **inclusive** start/end date range. For example, maternity leave can be represented as 0% from date A through date B. The application prevents overlapping exceptions for the same employee so that the effective percentage on any date remains unambiguous. Outside an exception period, the employee's normal occupation percentage applies.
+
+Manage these values in **Settings → Organization Structure → Employees**:
+
+1. Add or edit an employee to set the normal occupation percentage.
+2. Select an employee in the **Employee Calendar Exceptions** section.
+3. Add an exception with start date, end date, temporary percentage, and an optional reason.
+4. Edit or delete existing exceptions as needed.
 
 ### B. High-Volume Batch Generator CLI (`scripts/seed_database.py`)
 For stress-testing, portfolio analytics demos, and UI verification, a dedicated command-line script generates hundreds or thousands of realistic projects with complex task schedules and dependencies:
@@ -457,7 +473,7 @@ PPM Studio Pro recognizes the following environment variables (defined via `.env
    - Bulk CSV milestone loader with validation and downloadable template.
 4. **⚙️ 4. Settings**:
    - Consolidated single settings hub with a top-level section toggle:
-     - **🏢 Organization Structure**: Manage 9 areas (Job Functions, Function Types, Teams, Employees, Tag Groups, Tag Dictionary, Project Tags, Task Tags, and Resource Pools with dynamic capacity timelines).
+     - **🏢 Organization Structure**: Manage 9 areas (Job Functions, Function Types, Teams, Employees with occupation percentages and calendar exceptions, Tag Groups, Tag Dictionary, Project Tags, Task Tags, and Resource Pools with dynamic capacity timelines).
      - **🧩 Parameter Definition**: Dynamic schema builder to manage schema groups, create/edit typed parameters (TEXT, DATE, NUMBER, ENUM, TAGS, HYPERLINK), configure discrete options, and inspect the real-time schema hierarchy tree.
 5. **🌐 5-Language Internationalization (i18n)**:
    - Full live interface translation across English (`en`), French (`fr`), German (`de`), Luxembourgish (`lb`), and Portuguese (`pt`) with 100% key parity guaranteed by automated unit tests.

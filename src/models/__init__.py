@@ -21,7 +21,7 @@ from src.models.constants import (
     STATUS_ON_HOLD,
 )
 from src.models.milestone import Milestone
-from src.models.organization import Employee, FunctionType, OrgFunction, Team
+from src.models.organization import Employee, EmployeeCalendarException, FunctionType, OrgFunction, Team
 from src.models.project import PortfolioMetrics, Project
 from src.models.schema import SchemaGroup, SchemaParameter, SchemaParamOption
 from src.models.resource_pool import (
@@ -64,6 +64,7 @@ __all__ = [
     "OrgFunction",
     "Team",
     "Employee",
+    "EmployeeCalendarException",
     "TagGroup",
     "TagDictionary",
     "ProjectTag",
@@ -76,4 +77,3 @@ __all__ = [
     "PoolFunctionContribution",
     "DailyOverassignment",
 ]
-

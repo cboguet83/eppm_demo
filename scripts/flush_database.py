@@ -62,6 +62,7 @@ def flush_database(db_path: Optional[str] = None, flush_all: bool = False) -> di
             cursor.execute("DELETE FROM team_function")
             cursor.execute("DELETE FROM tag_dictionnary")
             cursor.execute("DELETE FROM tag_group")
+            cursor.execute("DELETE FROM employee_calendar_exception")
             cursor.execute("DELETE FROM employee")
             cursor.execute("DELETE FROM team")
             cursor.execute("DELETE FROM function")
@@ -75,7 +76,7 @@ def flush_database(db_path: Optional[str] = None, flush_all: bool = False) -> di
             "DELETE FROM sqlite_sequence WHERE name IN ("
             "'project', 'project_task', 'task_dependencies', 'task_tag', 'project_tag', "
             "'resource_pool_assignment', 'resource_pool_mapping', 'resource_pool', 'team_function', "
-            "'tag_dictionnary', 'tag_group', 'employee', 'team', 'function', "
+            "'tag_dictionnary', 'tag_group', 'employee_calendar_exception', 'employee', 'team', 'function', "
             "'function_type', 'schema_param_options', 'schema_groups')"
         )
 

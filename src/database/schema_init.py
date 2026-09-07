@@ -319,11 +319,41 @@ def init_db(db_path: Optional[str] = None) -> None:
                 sigle TEXT DEFAULT '',
                 employee_code TEXT NOT NULL UNIQUE,
                 function_id INTEGER,
+                occupation_percentage REAL NOT NULL DEFAULT 100.0
+                    CHECK(occupation_percentage >= 0.0 AND occupation_percentage <= 100.0),
                 FOREIGN KEY (function_id) REFERENCES function (function_id) ON DELETE RESTRICT
             )
         """)
 
-        # 11. Tag Group Table
+        # Existing databases receive a 100% default without changing current employees.
+        cursor.execute("PRAGMA table_info(employee)")
+        employee_columns = [col[1] for col in cursor.fetchall()]
+        if "occupation_percentage" not in employee_columns:
+            cursor.execute(
+                "ALTER TABLE employee ADD COLUMN occupation_percentage REAL NOT NULL DEFAULT 100.0 "
+                "CHECK(occupation_percentage >= 0.0 AND occupation_percentage <= 100.0)"
+            )
+
+        # 11. Employee Calendar Exceptions (inclusive temporary occupation overrides)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS employee_calendar_exception (
+                exception_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                employee_id INTEGER NOT NULL,
+                start_date TEXT NOT NULL,
+                end_date TEXT NOT NULL,
+                occupation_percentage REAL NOT NULL
+                    CHECK(occupation_percentage >= 0.0 AND occupation_percentage <= 100.0),
+                reason TEXT DEFAULT '',
+                CHECK(end_date >= start_date),
+                FOREIGN KEY (employee_id) REFERENCES employee (employee_id) ON DELETE CASCADE
+            )
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_employee_calendar_exception_period
+            ON employee_calendar_exception (employee_id, start_date, end_date)
+        """)
+
+        # 12. Tag Group Table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS tag_group (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -331,7 +361,7 @@ def init_db(db_path: Optional[str] = None) -> None:
             )
         """)
 
-        # 12. Tag Dictionary Table
+        # 13. Tag Dictionary Table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS tag_dictionnary (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -341,7 +371,7 @@ def init_db(db_path: Optional[str] = None) -> None:
             )
         """)
 
-        # 13. Task Tag Table
+        # 14. Task Tag Table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS task_tag (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -353,7 +383,7 @@ def init_db(db_path: Optional[str] = None) -> None:
             )
         """)
 
-        # 14. Project Tag Table
+        # 15. Project Tag Table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS project_tag (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -365,7 +395,7 @@ def init_db(db_path: Optional[str] = None) -> None:
             )
         """)
 
-        # 15. Team Function Membership Table
+        # 16. Team Function Membership Table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS team_function (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -377,7 +407,7 @@ def init_db(db_path: Optional[str] = None) -> None:
             )
         """)
 
-        # 16. Resource Pools Table
+        # 17. Resource Pools Table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS resource_pool (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -387,7 +417,7 @@ def init_db(db_path: Optional[str] = None) -> None:
             )
         """)
 
-        # 17. Resource Pool Mappings Table (Teams & Functions with partial 0-100% allocation)
+        # 18. Resource Pool Mappings Table (Teams & Functions with partial 0-100% allocation)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS resource_pool_mapping (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -400,7 +430,7 @@ def init_db(db_path: Optional[str] = None) -> None:
             )
         """)
 
-        # 18. Resource Pool Assignments Table (Task or Project with FTE & optional custom period)
+        # 19. Resource Pool Assignments Table (Task or Project with FTE & optional custom period)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS resource_pool_assignment (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -425,7 +455,7 @@ def init_db(db_path: Optional[str] = None) -> None:
         if "end_date" not in rpa_cols and len(rpa_cols) > 0:
             cursor.execute("ALTER TABLE resource_pool_assignment ADD COLUMN end_date TEXT")
 
-        # 19. Schema migrations for project, organization, and function tables
+        # 20. Schema migrations for project, organization, and function tables
         cursor.execute("PRAGMA table_info(project)")
         proj_cols = [col[1] for col in cursor.fetchall()]
         if "dynamic_attributes" not in proj_cols:
@@ -497,12 +527,20 @@ def init_db(db_path: Optional[str] = None) -> None:
                         sigle TEXT DEFAULT '',
                         employee_code TEXT NOT NULL UNIQUE,
                         function_id INTEGER,
+                        occupation_percentage REAL NOT NULL DEFAULT 100.0
+                            CHECK(occupation_percentage >= 0.0 AND occupation_percentage <= 100.0),
                         FOREIGN KEY (function_id) REFERENCES function (function_id) ON DELETE RESTRICT
                     )
                 """)
+                occupation_col = "occupation_percentage" if "occupation_percentage" in emp_cols else "100.0"
                 cursor.execute("""
-                    INSERT INTO employee_new (employee_id, firstname, lastname, email, mobile, sigle, employee_code, function_id)
-                    SELECT employee_id, firstname, lastname, email, mobile, sigle, employee_code, function_id FROM employee
+                    INSERT INTO employee_new (
+                        employee_id, firstname, lastname, email, mobile, sigle,
+                        employee_code, function_id, occupation_percentage
+                    )
+                    SELECT employee_id, firstname, lastname, email, mobile, sigle,
+                           employee_code, function_id, """ + occupation_col + """
+                    FROM employee
                 """)
                 cursor.execute("DROP TABLE employee")
                 cursor.execute("ALTER TABLE employee_new RENAME TO employee")

@@ -37,8 +37,49 @@ class TestDatabaseLayer(unittest.TestCase):
             "schema_param_options",
             "project",
             "project_task",
+            "employee",
+            "employee_calendar_exception",
         }
         self.assertTrue(expected.issubset(tables))
+
+    def test_existing_employee_schema_migrates_occupation_percentage(self) -> None:
+        """Verify an existing employee table receives the new availability fields safely."""
+        with get_db(self.temp_db_path) as conn:
+            conn.execute(
+                """
+                CREATE TABLE employee (
+                    employee_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    firstname TEXT NOT NULL,
+                    lastname TEXT NOT NULL,
+                    email TEXT NOT NULL UNIQUE,
+                    mobile TEXT DEFAULT '',
+                    sigle TEXT DEFAULT '',
+                    employee_code TEXT NOT NULL UNIQUE,
+                    function_id INTEGER
+                )
+                """
+            )
+            conn.execute(
+                """
+                INSERT INTO employee (firstname, lastname, email, employee_code)
+                VALUES ('Legacy', 'Employee', 'legacy@example.com', 'EMP-001')
+                """
+            )
+            conn.commit()
+
+        init_db(self.temp_db_path)
+
+        with get_db(self.temp_db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("PRAGMA table_info(employee)")
+            columns = {row[1] for row in cursor.fetchall()}
+            self.assertIn("occupation_percentage", columns)
+            cursor.execute("SELECT occupation_percentage FROM employee WHERE employee_code = 'EMP-001'")
+            self.assertEqual(cursor.fetchone()[0], 100.0)
+            cursor.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'employee_calendar_exception'"
+            )
+            self.assertIsNotNone(cursor.fetchone())
 
     def test_seed_default_data_populates_records(self) -> None:
         """Verify seed_default_data_if_empty seeds initial taxonomy and demo projects."""
@@ -204,4 +245,3 @@ class TestDatabaseLayer(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

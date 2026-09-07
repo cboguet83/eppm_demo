@@ -1,6 +1,7 @@
 """Business logic and data transformation service for organizational structures."""
 
 import re
+from datetime import date
 from typing import Any, Optional
 
 import pandas as pd
@@ -67,6 +68,7 @@ class OrganizationService:
         lastname: str,
         email: str,
         employee_code: str,
+        occupation_percentage: float = 100.0,
     ) -> None:
         """Validates employee profile fields.
 
@@ -75,6 +77,7 @@ class OrganizationService:
             lastname: Last name.
             email: Email address.
             employee_code: Unique badge code.
+            occupation_percentage: Normal working percentage from 0 to 100.
 
         Raises:
             ValueError: If validation fails.
@@ -87,6 +90,26 @@ class OrganizationService:
             raise ValueError(f"Invalid email address: '{email}'.")
         if not employee_code or not employee_code.strip():
             raise ValueError("Employee code cannot be empty.")
+        OrganizationService.validate_occupation_percentage(occupation_percentage)
+
+    @staticmethod
+    def validate_occupation_percentage(occupation_percentage: float) -> None:
+        """Validates a normal or exceptional occupation percentage."""
+        if occupation_percentage < 0 or occupation_percentage > 100:
+            raise ValueError("Occupation percentage must be between 0 and 100.")
+
+    @staticmethod
+    def validate_employee_calendar_exception(
+        start_date: date,
+        end_date: date,
+        occupation_percentage: float,
+    ) -> None:
+        """Validates an inclusive, date-bounded occupation override."""
+        if start_date is None or end_date is None:
+            raise ValueError("Both start and end dates are required.")
+        if end_date < start_date:
+            raise ValueError("End date must be on or after start date.")
+        OrganizationService.validate_occupation_percentage(occupation_percentage)
 
     @staticmethod
     def enrich_functions(
@@ -308,5 +331,4 @@ class OrganizationService:
         df["level_3_manager_name"] = df["function_id"].apply(_get_l3_name)
         df["level_3_manager_id"] = df["function_id"].apply(_get_l3_id)
         return df
-
 

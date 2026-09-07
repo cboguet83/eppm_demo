@@ -25,7 +25,6 @@ from src.services.portfolio_service import PortfolioService
 
 ALLOWED_DYNAMIC_PARAMS: set[str] = {
     "phase",
-    "code_station",
     "code_line",
     "strategic_priority",
     "category",
@@ -124,10 +123,6 @@ def _render_project_details_panel(
     ])
 
     def _get_val(key: str, alias: str = "") -> str:
-        v = dyn_dict.get(key)
-        if v is None and alias:
-            v = dyn_dict.get(alias)
-        if v is None:
         # 1. Search in dyn_dict by key or alias
         val = dyn_dict.get(key)
         if (val is None or val == "") and alias:
@@ -155,9 +150,6 @@ def _render_project_details_panel(
 
         if val is None:
             return "—"
-        if isinstance(v, list):
-            return ", ".join(str(item) for item in v) if v else "—"
-        return str(v) if str(v).strip() else "—"
         if isinstance(val, list):
             return ", ".join(str(item) for item in val) if val else "—"
         s = str(val).strip()
@@ -404,7 +396,6 @@ def render_portfolio_overview(
     filtered_df_reset = filtered_df.reset_index(drop=True)
 
     event = st.dataframe(
-        filtered_df[available_cols],
         filtered_df_reset[available_cols],
         column_config=column_configs,
         width="stretch",
@@ -420,7 +411,6 @@ def render_portfolio_overview(
         sel_obj = getattr(event, "selection")
         if isinstance(sel_obj, dict):
             selected_row_indices = sel_obj.get("rows", [])
-        else:
         elif hasattr(sel_obj, "rows"):
             selected_row_indices = getattr(sel_obj, "rows", [])
 

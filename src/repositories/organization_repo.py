@@ -1,12 +1,13 @@
 """Repository for organizational structure: functions, function types, teams, and employees."""
 
+from datetime import date
 from typing import Optional
 
 import pandas as pd
 
 from src.database.connection import get_db
 from src.logging_config import get_logger
-from src.models.organization import Employee, FunctionType, OrgFunction, Team
+from src.models.organization import Employee, EmployeeCalendarException, FunctionType, OrgFunction, Team
 
 logger = get_logger(__name__)
 
@@ -363,7 +364,8 @@ class OrganizationRepository:
         with get_db(self.db_path) as conn:
             return pd.read_sql(
                 """
-                SELECT employee_id, firstname, lastname, email, mobile, sigle, employee_code, function_id
+                SELECT employee_id, firstname, lastname, email, mobile, sigle, employee_code,
+                       function_id, occupation_percentage
                 FROM employee
                 ORDER BY lastname ASC, firstname ASC
                 """,
@@ -383,7 +385,8 @@ class OrganizationRepository:
             cursor = conn.cursor()
             cursor.execute(
                 """
-                SELECT employee_id, firstname, lastname, email, mobile, sigle, employee_code, function_id
+                SELECT employee_id, firstname, lastname, email, mobile, sigle, employee_code,
+                       function_id, occupation_percentage
                 FROM employee
                 WHERE employee_id = ?
                 """,
@@ -401,6 +404,7 @@ class OrganizationRepository:
                 sigle=row[5] or "",
                 employee_code=row[6],
                 function_id=row[7],
+                occupation_percentage=float(row[8]),
             )
 
     def create_employee(self, emp: Employee) -> int:
@@ -416,8 +420,11 @@ class OrganizationRepository:
             cursor = conn.cursor()
             cursor.execute(
                 """
-                INSERT INTO employee (firstname, lastname, email, mobile, sigle, employee_code, function_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO employee (
+                    firstname, lastname, email, mobile, sigle, employee_code,
+                    function_id, occupation_percentage
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     emp.firstname.strip(),
@@ -427,6 +434,7 @@ class OrganizationRepository:
                     emp.sigle.strip().upper(),
                     emp.employee_code.strip().upper(),
                     emp.function_id,
+                    float(emp.occupation_percentage),
                 ),
             )
             conn.commit()
@@ -448,7 +456,8 @@ class OrganizationRepository:
             cursor.execute(
                 """
                 UPDATE employee
-                SET firstname = ?, lastname = ?, email = ?, mobile = ?, sigle = ?, employee_code = ?, function_id = ?
+                SET firstname = ?, lastname = ?, email = ?, mobile = ?, sigle = ?,
+                    employee_code = ?, function_id = ?, occupation_percentage = ?
                 WHERE employee_id = ?
                 """,
                 (
@@ -459,6 +468,7 @@ class OrganizationRepository:
                     emp.sigle.strip().upper(),
                     emp.employee_code.strip().upper(),
                     emp.function_id,
+                    float(emp.occupation_percentage),
                     emp.employee_id,
                 ),
             )
@@ -479,6 +489,178 @@ class OrganizationRepository:
             cursor.execute("DELETE FROM employee WHERE employee_id = ?", (emp_id,))
             conn.commit()
             return cursor.rowcount > 0
+
+    def get_employee_calendar_exceptions(self, emp_id: Optional[int] = None) -> pd.DataFrame:
+        """Retrieves calendar exceptions, optionally for one employee."""
+        query = """
+            SELECT ece.exception_id, ece.employee_id, e.employee_code,
+                   e.firstname, e.lastname, ece.start_date, ece.end_date,
+                   ece.occupation_percentage, ece.reason
+            FROM employee_calendar_exception AS ece
+            JOIN employee AS e ON e.employee_id = ece.employee_id
+        """
+        params: tuple[int, ...] = ()
+        if emp_id is not None:
+            query += " WHERE ece.employee_id = ?"
+            params = (emp_id,)
+        query += " ORDER BY ece.start_date DESC, ece.end_date DESC, ece.exception_id DESC"
+
+        with get_db(self.db_path) as conn:
+            return pd.read_sql(query, conn, params=params)
+
+    def get_employee_calendar_exception_by_id(
+        self,
+        exception_id: int,
+    ) -> Optional[EmployeeCalendarException]:
+        """Retrieves one employee calendar exception by ID."""
+        with get_db(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT exception_id, employee_id, start_date, end_date,
+                       occupation_percentage, reason
+                FROM employee_calendar_exception
+                WHERE exception_id = ?
+                """,
+                (exception_id,),
+            )
+            row = cursor.fetchone()
+            if not row:
+                return None
+            return EmployeeCalendarException(
+                exception_id=row[0],
+                employee_id=row[1],
+                start_date=date.fromisoformat(row[2]),
+                end_date=date.fromisoformat(row[3]),
+                occupation_percentage=float(row[4]),
+                reason=row[5] or "",
+            )
+
+    def has_overlapping_calendar_exception(
+        self,
+        employee_id: int,
+        start_date: date,
+        end_date: date,
+        exclude_id: Optional[int] = None,
+    ) -> bool:
+        """Checks for an inclusive period overlap for one employee."""
+        query = """
+            SELECT 1
+            FROM employee_calendar_exception
+            WHERE employee_id = ?
+              AND start_date <= ?
+              AND end_date >= ?
+        """
+        params: list[object] = [employee_id, end_date.isoformat(), start_date.isoformat()]
+        if exclude_id is not None:
+            query += " AND exception_id != ?"
+            params.append(exclude_id)
+        query += " LIMIT 1"
+
+        with get_db(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, tuple(params))
+            return cursor.fetchone() is not None
+
+    def create_employee_calendar_exception(self, exception: EmployeeCalendarException) -> int:
+        """Creates a non-overlapping employee calendar exception."""
+        if self.has_overlapping_calendar_exception(
+            exception.employee_id,
+            exception.start_date,
+            exception.end_date,
+        ):
+            raise ValueError("This period overlaps an existing calendar exception for the employee.")
+
+        with get_db(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO employee_calendar_exception (
+                    employee_id, start_date, end_date, occupation_percentage, reason
+                )
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    exception.employee_id,
+                    exception.start_date.isoformat(),
+                    exception.end_date.isoformat(),
+                    float(exception.occupation_percentage),
+                    exception.reason.strip(),
+                ),
+            )
+            conn.commit()
+            return int(cursor.lastrowid)
+
+    def update_employee_calendar_exception(self, exception: EmployeeCalendarException) -> bool:
+        """Updates a non-overlapping employee calendar exception."""
+        if exception.exception_id is None:
+            return False
+        if self.has_overlapping_calendar_exception(
+            exception.employee_id,
+            exception.start_date,
+            exception.end_date,
+            exclude_id=exception.exception_id,
+        ):
+            raise ValueError("This period overlaps an existing calendar exception for the employee.")
+
+        with get_db(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                UPDATE employee_calendar_exception
+                SET employee_id = ?, start_date = ?, end_date = ?,
+                    occupation_percentage = ?, reason = ?
+                WHERE exception_id = ?
+                """,
+                (
+                    exception.employee_id,
+                    exception.start_date.isoformat(),
+                    exception.end_date.isoformat(),
+                    float(exception.occupation_percentage),
+                    exception.reason.strip(),
+                    exception.exception_id,
+                ),
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def delete_employee_calendar_exception(self, exception_id: int) -> bool:
+        """Deletes an employee calendar exception."""
+        with get_db(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "DELETE FROM employee_calendar_exception WHERE exception_id = ?",
+                (exception_id,),
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def get_effective_occupation_percentage(self, employee_id: int, on_date: date) -> Optional[float]:
+        """Returns the exception percentage for a date, or the employee's normal percentage."""
+        target_date = on_date.isoformat()
+        with get_db(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT COALESCE(
+                    (
+                        SELECT occupation_percentage
+                        FROM employee_calendar_exception
+                        WHERE employee_id = e.employee_id
+                          AND start_date <= ?
+                          AND end_date >= ?
+                        ORDER BY start_date DESC, exception_id DESC
+                        LIMIT 1
+                    ),
+                    e.occupation_percentage
+                )
+                FROM employee AS e
+                WHERE e.employee_id = ?
+                """,
+                (target_date, target_date, employee_id),
+            )
+            row = cursor.fetchone()
+            return float(row[0]) if row else None
 
     def check_email_exists(self, email: str, exclude_id: Optional[int] = None) -> bool:
         """Checks whether an email address already exists.

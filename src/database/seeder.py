@@ -233,8 +233,6 @@ DEFAULT_PARAM_OPTIONS: dict[str, list[str]] = {
 }
 
 
-def seed_default_data_if_empty(db_path: Optional[str] = None) -> None:
-    """Populates the database with demo schema, projects, and milestones if empty.
 def seed_default_data_if_empty(db_path: Optional[str] = None, force: bool = False) -> None:
     """Populates the database with demo schema, projects, and milestones.
 
@@ -243,7 +241,6 @@ def seed_default_data_if_empty(db_path: Optional[str] = None, force: bool = Fals
         force: If True, flushes all existing data before seeding. Default False.
     """
     target_path = db_path if db_path is not None else config.db_path
-    logger.info("Checking if database seeding is required for %s", target_path)
     logger.info("Checking if database seeding is required for %s (force=%s)", target_path, force)
 
     init_db(target_path)
@@ -265,6 +262,7 @@ def seed_default_data_if_empty(db_path: Optional[str] = None, force: bool = Fals
                 "task_dependencies",
                 "project_task",
                 "project",
+                "employee_calendar_exception",
                 "employee",
                 "team",
                 "function",

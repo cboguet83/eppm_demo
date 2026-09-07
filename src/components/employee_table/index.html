@@ -295,6 +295,19 @@
       border: 1px solid #e2e8f0;
     }
 
+    .badge-occupation {
+      display: inline-block;
+      min-width: 52px;
+      padding: 2px 7px;
+      border-radius: 10px;
+      font-weight: 700;
+      font-size: 10px;
+      text-align: center;
+      background: #ecfdf5;
+      color: #047857;
+      border: 1px solid #a7f3d0;
+    }
+
     .empty-state {
       padding: 36px 16px;
       text-align: center;
@@ -586,6 +599,7 @@
             <th class="sortable" onclick="sortTable('mobile')"><span id="th-mobile">Mobile</span> <span id="sort-mobile"></span></th>
             <th class="sortable" onclick="sortTable('sigle')"><span id="th-sigle">Sigle</span> <span id="sort-sigle"></span></th>
             <th class="sortable" onclick="sortTable('function_name')"><span id="th-func">Function</span> <span id="sort-function_name"></span></th>
+            <th class="sortable" onclick="sortTable('occupation_percentage')"><span id="th-occupation">Occupation %</span> <span id="sort-occupation_percentage"></span></th>
             <th class="sortable" onclick="sortTable('function_type_name')"><span id="th-type">Type</span> <span id="sort-function_type_name"></span></th>
           </tr>
           <tr class="filter-row">
@@ -610,6 +624,7 @@
                 <span class="excel-trigger-icon">▼</span>
               </div>
             </th>
+            <th><input type="text" class="col-filter-input" id="flt-occupation" placeholder="%..." oninput="setColFilter('occupation_percentage', this.value)" /></th>
             <th>
               <div class="excel-trigger" id="trigger-flt-type" onclick="openExcelFilter('function_type_name', 'Type', event)">
                 <span class="excel-trigger-text" id="label-flt-type">All</span>
@@ -913,8 +928,10 @@
       const clearBtn = document.getElementById('btn-clear');
       if (clearBtn) clearBtn.style.display = hasActiveFilters ? 'inline-flex' : 'none';
 
-      ['employee_code', 'email', 'mobile'].forEach(k => {
-        const el = document.getElementById(`flt-${k === 'employee_code' ? 'code' : k}`);
+      ['employee_code', 'email', 'mobile', 'occupation_percentage'].forEach(k => {
+        const inputId = k === 'employee_code' ? 'code' :
+                        k === 'occupation_percentage' ? 'occupation' : k;
+        const el = document.getElementById(`flt-${inputId}`);
         if (el) el.classList.toggle('active', Boolean(colFilters[k]));
       });
 
@@ -927,12 +944,15 @@
             (d.mobile && String(d.mobile).toLowerCase().includes(globalSearchQuery)) ||
             (d.sigle && String(d.sigle).toLowerCase().includes(globalSearchQuery)) ||
             (d.function_name && String(d.function_name).toLowerCase().includes(globalSearchQuery)) ||
+            (d.occupation_percentage !== null && d.occupation_percentage !== undefined &&
+              String(d.occupation_percentage).toLowerCase().includes(globalSearchQuery)) ||
             (d.function_type_name && String(d.function_type_name).toLowerCase().includes(globalSearchQuery));
           if (!matchGlobal) return false;
         }
 
         for (const [col, fVal] of Object.entries(colFilters)) {
-          if (!d[col] || !String(d[col]).toLowerCase().includes(fVal)) return false;
+          if (d[col] === null || d[col] === undefined ||
+              !String(d[col]).toLowerCase().includes(fVal)) return false;
         }
 
         for (const [colKey, selSet] of Object.entries(excelFilters)) {
@@ -963,7 +983,7 @@
         return sortAsc ? (valA > valB ? 1 : -1) : (valA < valB ? 1 : -1);
       });
 
-      ['employee_code', 'full_name', 'email', 'mobile', 'sigle', 'function_name', 'function_type_name'].forEach(col => {
+      ['employee_code', 'full_name', 'email', 'mobile', 'sigle', 'function_name', 'occupation_percentage', 'function_type_name'].forEach(col => {
         const iconSpan = document.getElementById(`sort-${col}`);
         if (iconSpan) iconSpan.innerText = (currentSortCol === col) ? (sortAsc ? ' ▲' : ' ▼') : '';
       });
@@ -971,7 +991,7 @@
       if (filteredData.length === 0) {
         tbody.innerHTML = `
           <tr>
-            <td colspan="7" class="empty-state">
+            <td colspan="8" class="empty-state">
               ${escapeHtml(translations.no_employees || 'No employees registered matching the filters.')}
             </td>
           </tr>
@@ -991,6 +1011,7 @@
             <td>${escapeHtml(d.mobile || '—')}</td>
             <td><span class="badge-sigle">${escapeHtml(d.sigle || '—')}</span></td>
             <td>${escapeHtml(d.function_name || '—')}</td>
+            <td><span class="badge-occupation">${escapeHtml(Number(d.occupation_percentage || 0).toFixed(1))}%</span></td>
             <td>${escapeHtml(d.function_type_name || '—')}</td>
           `;
 
@@ -1119,6 +1140,7 @@
       if (translations.col_mobile) document.getElementById('th-mobile').innerText = translations.col_mobile;
       if (translations.col_sigle) document.getElementById('th-sigle').innerText = translations.col_sigle;
       if (translations.col_function) document.getElementById('th-func').innerText = translations.col_function;
+      if (translations.col_occupation_percentage) document.getElementById('th-occupation').innerText = translations.col_occupation_percentage;
       if (translations.col_type) document.getElementById('th-type').innerText = translations.col_type;
 
       if (translations.action_add) document.getElementById('ctx-add-label').innerText = `${translations.action_add} Employee`;

@@ -4,9 +4,10 @@ import os
 import sqlite3
 import tempfile
 import unittest
+from datetime import date
 
 from src.database.schema_init import init_db
-from src.models.organization import Employee, FunctionType, OrgFunction, Team
+from src.models.organization import Employee, EmployeeCalendarException, FunctionType, OrgFunction, Team
 from src.repositories.organization_repo import OrganizationRepository
 from src.services.organization_service import OrganizationService
 
@@ -135,6 +136,7 @@ class TestOrganization(unittest.TestCase):
                 sigle="JDO",
                 employee_code=code_1,
                 function_id=fn_id,
+                occupation_percentage=80.0,
             )
         )
         self.assertGreater(e1_id, 0)
@@ -171,10 +173,69 @@ class TestOrganization(unittest.TestCase):
         emp_mod = self.repo.get_employee_by_id(e1_id)
         self.assertEqual(emp_mod.firstname, "Jonathan")
         self.assertEqual(emp_mod.email, "jdoe_updated@example.com")
+        self.assertEqual(emp_mod.occupation_percentage, 100.0)
 
         # Delete
         self.assertTrue(self.repo.delete_employee(e1_id))
         self.assertIsNone(self.repo.get_employee_by_id(e1_id))
+
+    def test_employee_occupation_calendar_exceptions(self) -> None:
+        """Verify base occupation, date overrides, overlap checks, and cascade deletion."""
+        employee_id = self.repo.create_employee(
+            Employee(
+                firstname="Jane",
+                lastname="Doe",
+                email="jane.doe@example.com",
+                employee_code="EMP-001",
+                occupation_percentage=80.0,
+            )
+        )
+        self.assertEqual(
+            self.repo.get_effective_occupation_percentage(employee_id, date(2026, 1, 1)),
+            80.0,
+        )
+
+        exception_id = self.repo.create_employee_calendar_exception(
+            EmployeeCalendarException(
+                employee_id=employee_id,
+                start_date=date(2026, 2, 1),
+                end_date=date(2026, 5, 31),
+                occupation_percentage=0.0,
+                reason="Maternity leave",
+            )
+        )
+        exception = self.repo.get_employee_calendar_exception_by_id(exception_id)
+        self.assertIsNotNone(exception)
+        self.assertEqual(exception.start_date, date(2026, 2, 1))
+        self.assertEqual(exception.end_date, date(2026, 5, 31))
+        self.assertEqual(exception.reason, "Maternity leave")
+
+        # The override applies on both boundary dates and the base rate applies outside it.
+        self.assertEqual(
+            self.repo.get_effective_occupation_percentage(employee_id, date(2026, 2, 1)),
+            0.0,
+        )
+        self.assertEqual(
+            self.repo.get_effective_occupation_percentage(employee_id, date(2026, 5, 31)),
+            0.0,
+        )
+        self.assertEqual(
+            self.repo.get_effective_occupation_percentage(employee_id, date(2026, 6, 1)),
+            80.0,
+        )
+
+        with self.assertRaises(ValueError):
+            self.repo.create_employee_calendar_exception(
+                EmployeeCalendarException(
+                    employee_id=employee_id,
+                    start_date=date(2026, 5, 1),
+                    end_date=date(2026, 6, 30),
+                    occupation_percentage=50.0,
+                )
+            )
+
+        self.assertTrue(self.repo.delete_employee(employee_id))
+        self.assertTrue(self.repo.get_employee_calendar_exceptions(employee_id).empty)
 
     def test_team_crud_and_service_enrichment(self) -> None:
         """Verify Team CRUD operations and OrganizationService.enrich_teams."""
@@ -264,6 +325,14 @@ class TestOrganization(unittest.TestCase):
             OrganizationService.validate_employee("First", "Last", "bad-email", "EMP-001")
         with self.assertRaises(ValueError):
             OrganizationService.validate_employee("First", "Last", "valid@email.com", "")
+        with self.assertRaises(ValueError):
+            OrganizationService.validate_employee(
+                "First", "Last", "valid@email.com", "EMP-001", occupation_percentage=101
+            )
+        with self.assertRaises(ValueError):
+            OrganizationService.validate_employee_calendar_exception(
+                date(2026, 2, 1), date(2026, 1, 31), 0
+            )
 
         # Enrichment test
         ft_id = self.repo.create_function_type(FunctionType(function_type="Full Time"))

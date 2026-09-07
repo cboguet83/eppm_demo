@@ -71,7 +71,6 @@ class PortfolioService:
 
         df_dyn = pd.DataFrame(flattened_rows)
         df_merged = pd.merge(
-            df_projects.drop(columns=["dynamic_attributes"], errors="ignore"),
             df_projects,
             df_dyn,
             on="id",

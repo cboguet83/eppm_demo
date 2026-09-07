@@ -1,6 +1,7 @@
 """Organizational functions, function types, teams, and employee models."""
 
 from dataclasses import dataclass
+from datetime import date
 from typing import Optional
 
 
@@ -72,6 +73,7 @@ class Employee:
         sigle: Trigram / initials acronym (e.g. 'JDO', 'ASM').
         employee_code: Unique employee badge/code (e.g. 'EMP-001').
         function_id: Associated function role ID.
+        occupation_percentage: Employee's normal working percentage (0 to 100).
     """
 
     firstname: str
@@ -82,3 +84,28 @@ class Employee:
     mobile: str = ""
     sigle: str = ""
     function_id: Optional[int] = None
+    occupation_percentage: float = 100.0
+
+
+@dataclass
+class EmployeeCalendarException:
+    """Represents a temporary override to an employee's occupation percentage.
+
+    Date ranges are inclusive, so an exception from January 1 through January 31
+    applies on both boundary dates.
+
+    Attributes:
+        employee_id: Employee whose normal occupation percentage is overridden.
+        start_date: First date on which the override applies.
+        end_date: Last date on which the override applies.
+        occupation_percentage: Temporary working percentage (0 to 100).
+        reason: Optional explanation, such as "Maternity leave".
+        exception_id: Unique primary key identifier.
+    """
+
+    employee_id: int
+    start_date: date
+    end_date: date
+    occupation_percentage: float
+    reason: str = ""
+    exception_id: Optional[int] = None
