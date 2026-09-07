@@ -7,7 +7,15 @@
     "badge_sqlite": "Base SQLite",
     "badge_multidep": "Gantt Multi-Dépendances",
     "badge_i18n": "Multilingue"
+    "badge_i18n": "Multilingue",
+    "seeding_options": "Initialisation base de données",
+    "seed_projects_count": "Projets à générer (0 = démo)",
+    "seed_projects_help": "0 initialise les 3 projets démo; >0 génère des projets avec étapes et dépendances",
+    "btn_force_reseed": "Forcer réinitialisation BDD",
+    "seeding_in_progress": "Réinitialisation en cours...",
+    "seed_success": "Base de données réinitialisée avec succès ({count} projets) !"
   },
+
   "nav": {
     "portfolio": "Aperçu du Portefeuille",
     "master_data": "Données de Base Projets",

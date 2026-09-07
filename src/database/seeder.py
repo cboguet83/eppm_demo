@@ -248,6 +248,7 @@ def seed_default_data_if_empty(db_path: Optional[str] = None, force: bool = Fals
 
     init_db(target_path)
 
+
     with get_db(target_path) as conn:
         cursor = conn.cursor()
 

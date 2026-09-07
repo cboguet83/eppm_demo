@@ -113,7 +113,72 @@ class TestIntegration(unittest.TestCase):
             f"Views must use 'nav_redirect' instead of modifying 'app_sidebar_nav' directly: {violations}",
         )
 
+    def test_allowed_dynamic_params_excludes_code_station(self) -> None:
+        """Verify code_station is excluded from project master list grid but allowed params remain."""
+        from src.views.portfolio_view import ALLOWED_DYNAMIC_PARAMS
+
+        self.assertNotIn("code_station", ALLOWED_DYNAMIC_PARAMS)
+        expected_allowed = {
+            "phase",
+            "code_line",
+            "strategic_priority",
+            "category",
+            "category_tags",
+            "complexity",
+        }
+        self.assertEqual(ALLOWED_DYNAMIC_PARAMS, expected_allowed)
+
+    def test_parse_cli_args(self) -> None:
+        """Verify parsing of CLI arguments for database force-reseeding and project count."""
+        import sys
+        from unittest.mock import patch
+        from app import parse_cli_args
+
+        # Case 1: Long flags
+        with patch.object(sys, "argv", ["app.py", "--force-reseed", "--projects", "75"]):
+            force, count = parse_cli_args()
+            self.assertTrue(force)
+            self.assertEqual(count, 75)
+
+        # Case 2: Short flags
+        with patch.object(sys, "argv", ["app.py", "-f", "-n", "30"]):
+            force, count = parse_cli_args()
+            self.assertTrue(force)
+            self.assertEqual(count, 30)
+
+        # Case 3: Defaults
+        with patch.object(sys, "argv", ["app.py"]):
+            force, count = parse_cli_args()
+            self.assertFalse(force)
+            self.assertEqual(count, 0)
+
+    def test_flatten_dynamic_attributes_preserves_raw_column(self) -> None:
+        """Verify PortfolioService.flatten_dynamic_attributes preserves dynamic_attributes column."""
+        import json
+        import pandas as pd
+
+        df_proj = pd.DataFrame([
+            {
+                "id": 1,
+                "name": "Test Alpha",
+                "status": "Active",
+                "planned_budget": 1000.0,
+                "actual_budget": 500.0,
+                "dynamic_attributes": json.dumps({"code_courrier": "CC-001", "lot": "Lot A"}),
+            }
+        ])
+        df_params = pd.DataFrame([
+            {"param_id": "code_courrier", "param_name": "Code Courrier", "param_type": "TEXT"},
+            {"param_id": "lot", "param_name": "Lot", "param_type": "TEXT"},
+        ])
+
+        df_flat = PortfolioService.flatten_dynamic_attributes(df_proj, df_params)
+        self.assertIn("dynamic_attributes", df_flat.columns)
+        self.assertIn("code_courrier", df_flat.columns)
+        self.assertEqual(df_flat.iloc[0]["code_courrier"], "CC-001")
+        self.assertEqual(df_flat.iloc[0]["lot"], "Lot A")
 
 
 if __name__ == "__main__":
     unittest.main()
+

@@ -7,7 +7,15 @@
     "badge_sqlite": "SQLite Backed",
     "badge_multidep": "Multi-Dependency Gantt",
     "badge_i18n": "Multi-Lingual"
+    "badge_i18n": "Multi-Lingual",
+    "seeding_options": "Database Seeding",
+    "seed_projects_count": "Projects to generate (0 = demo)",
+    "seed_projects_help": "0 seeds default 3 demo projects; >0 generates mock projects with milestones and dependencies",
+    "btn_force_reseed": "Force Re-seed Database",
+    "seeding_in_progress": "Re-seeding database...",
+    "seed_success": "Database successfully re-seeded with {count} projects!"
   },
+
   "nav": {
     "portfolio": "Portfolio Overview",
     "master_data": "Project Master Data",

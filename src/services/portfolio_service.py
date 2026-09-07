@@ -72,10 +72,13 @@ class PortfolioService:
         df_dyn = pd.DataFrame(flattened_rows)
         df_merged = pd.merge(
             df_projects.drop(columns=["dynamic_attributes"], errors="ignore"),
+            df_projects,
             df_dyn,
             on="id",
             how="left",
+            suffixes=("", "_dyn"),
         )
+
 
         if not params.empty and "param_id" in params.columns:
             for _, p in params.iterrows():

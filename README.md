@@ -1,7 +1,7 @@
 # PPM Studio Pro - Enterprise Project Portfolio Management
 
 PPM Studio Pro is an enterprise-grade Project Portfolio Management (PPM) web application built with Streamlit, SQLite, and Plotly. It enables portfolio managers, architects, and PMO executives to manage project master data, configure flexible metadata schemas, schedule milestone roadmaps, manage organizational hierarchies and resource pools, and track portfolio analytics in real-time.
-
+  
 ---
 
 ## 🏛️ System Architecture & C4 Model

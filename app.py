@@ -111,6 +111,35 @@ logger = get_logger("app")
 # ==============================================================================
 # MAIN APPLICATION ROUTING & ENTRYPOINT
 # ==============================================================================
+def parse_cli_args() -> tuple[bool, int]:
+    """Parses command-line arguments for force seeding and project counts.
+
+    Returns:
+        tuple[bool, int]: (force_reseed, seed_projects_count)
+    """
+    import argparse
+
+    parser = argparse.ArgumentParser(description="PPM Studio Pro", add_help=False)
+    parser.add_argument(
+        "--force-reseed",
+        "--force",
+        "-f",
+        action="store_true",
+        default=False,
+        help="Force re-seeding the database on startup.",
+    )
+    parser.add_argument(
+        "--projects",
+        "-n",
+        "--seed-projects",
+        type=int,
+        default=0,
+        help="Number of mock projects to generate if force seeding.",
+    )
+    args, _ = parser.parse_known_args()
+    return bool(args.force_reseed), int(args.projects)
+
+
 @st.cache_resource
 def bootstrap_database() -> bool:
     """Initializes the database schema and performs seeding on server startup.
@@ -122,10 +151,19 @@ def bootstrap_database() -> bool:
     if config.force_reseed:
         logger.info("FORCE_RESEED is active: forcing database re-seed on startup.")
         if config.seed_projects_count > 0:
+    cli_force, cli_projects = parse_cli_args()
+    force = config.force_reseed or cli_force
+    num_projects = cli_projects if cli_projects > 0 else config.seed_projects_count
+
+    if force:
+        logger.info("Force re-seeding active (projects=%d)...", num_projects)
+        if num_projects > 0:
             try:
                 from scripts.seed_database import seed_database
+
                 seed_database(
                     num_projects=config.seed_projects_count,
+                    num_projects=num_projects,
                     db_path=config.db_path,
                     clean_first=True,
                 )
@@ -133,6 +171,7 @@ def bootstrap_database() -> bool:
                 logger.error(
                     "Failed to seed %d projects: %s. Falling back to default seeder.",
                     config.seed_projects_count,
+                    num_projects,
                     exc,
                 )
                 seed_default_data_if_empty(force=True)
@@ -148,6 +187,7 @@ def run_app() -> None:
     init_db()
     seed_default_data_if_empty()
     bootstrap_database()
+
 
 
     st.set_page_config(
@@ -299,6 +339,41 @@ def run_app() -> None:
         key="app_sidebar_nav",
     )
 
+    st.sidebar.markdown("---")
+    with st.sidebar.expander(f"⚡ {t('app.seeding_options', default='Database Seeding')}", expanded=False):
+        ui_num_projects = st.number_input(
+            t("app.seed_projects_count", default="Projects to generate (0 = demo)"),
+            min_value=0,
+            max_value=2000,
+            value=50,
+            step=10,
+            key="sb_num_projects_input",
+            help=t("app.seed_projects_help", default="Number of mock projects to generate. Set to 0 to seed only default core templates."),
+        )
+        if st.button(
+            f"🔄 {t('app.btn_force_reseed', default='Force Re-seed Database')}",
+            key="btn_sidebar_force_reseed",
+            use_container_width=True,
+        ):
+            with st.spinner(t("app.seeding_in_progress", default="Re-seeding database...")):
+                if ui_num_projects > 0:
+                    from scripts.seed_database import seed_database
+
+                    seed_database(num_projects=int(ui_num_projects), db_path=config.db_path, clean_first=True)
+                else:
+                    seed_default_data_if_empty(force=True)
+                st.cache_resource.clear()
+                st.cache_data.clear()
+                st.session_state["seeding_status_message"] = t(
+                    "app.seed_success",
+                    default=f"Database successfully re-seeded with {ui_num_projects or 3} projects!",
+                    count=int(ui_num_projects) or 3,
+                )
+                st.rerun()
+
+    if "seeding_status_message" in st.session_state:
+        st.sidebar.success(st.session_state.pop("seeding_status_message"))
+
     if page == PAGE_PORTFOLIO:
         render_portfolio_overview(project_repo, schema_repo)
     elif page == PAGE_PROJECT_MASTER:
@@ -326,4 +401,27 @@ def load_full_schema(db_path=None):
 
 
 if __name__ == "__main__" or st.runtime.exists():
+if __name__ == "__main__":
+    if not st.runtime.exists():
+        import sys
+
+        cli_force, cli_projects = parse_cli_args()
+        if cli_force or cli_projects > 0:
+            init_db()
+            target_projects = cli_projects if cli_projects > 0 else config.seed_projects_count
+            if target_projects > 0:
+                from scripts.seed_database import seed_database
+
+                print(f"Force re-seeding database with {target_projects} projects at {config.db_path}...")
+                seed_database(num_projects=target_projects, db_path=config.db_path, clean_first=True)
+            else:
+                print(f"Force re-seeding default data at {config.db_path}...")
+                seed_default_data_if_empty(force=True)
+            print("Database seeding completed successfully.")
+            sys.exit(0)
+        else:
+            run_app()
+    else:
+        run_app()
+elif st.runtime.exists():
     run_app()

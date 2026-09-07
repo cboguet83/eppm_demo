@@ -7,7 +7,15 @@
     "badge_sqlite": "SQLite Datebank",
     "badge_multidep": "Multi-Ofhängegkeet Gantt",
     "badge_i18n": "Méisproocheg"
+    "badge_i18n": "Méisproocheg",
+    "seeding_options": "Datebank-Initialiséierung",
+    "seed_projects_count": "Projeten ze generéieren (0 = Demo)",
+    "seed_projects_help": "0 initialiséiert déi 3 Standard-Demoprojeten; >0 generéiert Projeten mat Meilesteng an Ofhängegkeeten",
+    "btn_force_reseed": "Datebank nei initialiséieren",
+    "seeding_in_progress": "Datebank gëtt nei initialiséiert...",
+    "seed_success": "Datebank erfollegräich mat {count} Projeten nei initialiséiert!"
   },
+
   "nav": {
     "portfolio": "Portefeuille Iwwersiicht",
     "master_data": "Projet Stammdaten",

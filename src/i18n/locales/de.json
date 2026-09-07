@@ -7,7 +7,15 @@
     "badge_sqlite": "SQLite-Datenbank",
     "badge_multidep": "Multi-Abhängigkeits-Gantt",
     "badge_i18n": "Mehrsprachig"
+    "badge_i18n": "Mehrsprachig",
+    "seeding_options": "Datenbank-Initialisierung",
+    "seed_projects_count": "Zu generierende Projekte (0 = Demo)",
+    "seed_projects_help": "0 initialisiert die 3 Standard-Demoprojekte; >0 generiert Projekte mit Meilensteinen und Abhängigkeiten",
+    "btn_force_reseed": "Datenbank neu initialisieren",
+    "seeding_in_progress": "Datenbank wird neu initialisiert...",
+    "seed_success": "Datenbank erfolgreich mit {count} Projekten neu initialisiert!"
   },
+
   "nav": {
     "portfolio": "Portfolio-Übersicht",
     "master_data": "Projektstammdaten",

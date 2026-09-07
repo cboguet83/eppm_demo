@@ -57,6 +57,7 @@ def _render_project_details_panel(
     burn_rate = (actual / planned * 100.0) if planned > 0 else 0.0
 
     raw_dyn = selected_proj.get("dynamic_attributes", "{}")
+    # Retrieve complete dynamic attributes from repository
     dyn_dict: dict[str, Any] = {}
     if isinstance(raw_dyn, dict):
         dyn_dict = raw_dyn
@@ -65,6 +66,26 @@ def _render_project_details_panel(
             dyn_dict = json.loads(raw_dyn)
         except (json.JSONDecodeError, TypeError):
             dyn_dict = {}
+    proj_obj = project_repo.get_project_by_id(proj_id)
+    if proj_obj and proj_obj.dynamic_attributes:
+        if isinstance(proj_obj.dynamic_attributes, dict):
+            dyn_dict = dict(proj_obj.dynamic_attributes)
+        elif isinstance(proj_obj.dynamic_attributes, str) and proj_obj.dynamic_attributes.strip():
+            try:
+                dyn_dict = json.loads(proj_obj.dynamic_attributes)
+            except (json.JSONDecodeError, TypeError):
+                dyn_dict = {}
+
+    if not dyn_dict:
+        raw_dyn = selected_proj.get("dynamic_attributes", "{}")
+        if isinstance(raw_dyn, dict):
+            dyn_dict = raw_dyn
+        elif isinstance(raw_dyn, str) and raw_dyn.strip():
+            try:
+                dyn_dict = json.loads(raw_dyn)
+            except (json.JSONDecodeError, TypeError):
+                dyn_dict = {}
+
 
     st.markdown("---")
     head_c1, head_c2 = st.columns([4, 1])
@@ -107,10 +128,40 @@ def _render_project_details_panel(
         if v is None and alias:
             v = dyn_dict.get(alias)
         if v is None:
+        # 1. Search in dyn_dict by key or alias
+        val = dyn_dict.get(key)
+        if (val is None or val == "") and alias:
+            val = dyn_dict.get(alias)
+
+        # 2. Search in selected_proj series columns as fallback
+        if val is None or val == "":
+            if key in selected_proj and pd.notna(selected_proj[key]):
+                val = selected_proj[key]
+            elif alias and alias in selected_proj and pd.notna(selected_proj[alias]):
+                val = selected_proj[alias]
+
+        # 3. Search by matching schema param_id
+        if (val is None or val == "") and not params.empty and "param_name" in params.columns:
+            matching_p = params[
+                (params["param_name"].str.lower() == key.lower())
+                | (params.get("alias", pd.Series(dtype=str)).astype(str).str.lower() == alias.lower())
+            ]
+            if not matching_p.empty:
+                pid = matching_p.iloc[0]["param_id"]
+                if pid in dyn_dict:
+                    val = dyn_dict[pid]
+                elif pid in selected_proj and pd.notna(selected_proj[pid]):
+                    val = selected_proj[pid]
+
+        if val is None:
             return "—"
         if isinstance(v, list):
             return ", ".join(str(item) for item in v) if v else "—"
         return str(v) if str(v).strip() else "—"
+        if isinstance(val, list):
+            return ", ".join(str(item) for item in val) if val else "—"
+        s = str(val).strip()
+        return s if s else "—"
 
     with t_basic:
         b1, b2 = st.columns(2)
@@ -176,11 +227,17 @@ def _render_project_details_panel(
             st.markdown(f"**Complexity:** `{_get_val('complexity', 'Complexity')}`")
         with c2:
             tags_val = dyn_dict.get("category_tags", [])
+            tags_val = dyn_dict.get("category_tags")
+            if not tags_val and "category_tags" in selected_proj and pd.notna(selected_proj["category_tags"]):
+                tags_val = selected_proj["category_tags"]
             st.markdown("**Category Tags:**")
             if isinstance(tags_val, list) and tags_val:
                 st.write(" ".join(f"`{t_item}`" for t_item in tags_val))
+            elif isinstance(tags_val, str) and tags_val.strip() and tags_val != "—":
+                st.write(f"`{tags_val}`")
             else:
                 st.write("—")
+
 
 
 def render_portfolio_overview(
@@ -344,8 +401,11 @@ def render_portfolio_overview(
     st.caption(t("portfolio.details_hint", default="💡 Click on any project in the table above to display its details below."))
 
     available_cols = [c for c in display_cols if c in filtered_df.columns]
+    filtered_df_reset = filtered_df.reset_index(drop=True)
+
     event = st.dataframe(
         filtered_df[available_cols],
+        filtered_df_reset[available_cols],
         column_config=column_configs,
         width="stretch",
         hide_index=True,
@@ -361,10 +421,29 @@ def render_portfolio_overview(
         if isinstance(sel_obj, dict):
             selected_row_indices = sel_obj.get("rows", [])
         else:
+        elif hasattr(sel_obj, "rows"):
             selected_row_indices = getattr(sel_obj, "rows", [])
+
+    if not selected_row_indices and "portfolio_master_table" in st.session_state:
+        tbl_state = st.session_state.get("portfolio_master_table")
+        if isinstance(tbl_state, dict):
+            sel_dict = tbl_state.get("selection", {})
+            if isinstance(sel_dict, dict):
+                selected_row_indices = sel_dict.get("rows", [])
+            elif hasattr(sel_dict, "rows"):
+                selected_row_indices = getattr(sel_dict, "rows", [])
 
     if selected_row_indices and len(selected_row_indices) > 0:
         sel_idx = selected_row_indices[0]
         if 0 <= sel_idx < len(filtered_df):
             selected_proj = filtered_df.iloc[sel_idx]
+        if 0 <= sel_idx < len(filtered_df_reset):
+            st.session_state["selected_portfolio_project_id"] = filtered_df_reset.iloc[sel_idx]["id"]
+
+    selected_pid = st.session_state.get("selected_portfolio_project_id")
+    if selected_pid is not None:
+        matching = df_merged[df_merged["id"] == selected_pid]
+        if not matching.empty:
+            selected_proj = matching.iloc[0]
             _render_project_details_panel(selected_proj, params, project_repo)
+
