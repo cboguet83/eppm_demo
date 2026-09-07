@@ -89,16 +89,16 @@ class TestDatabaseLayer(unittest.TestCase):
             expected_groups = ["basic info", "scoping", "localization", "useful links", "classification"]
             self.assertEqual(groups, expected_groups)
 
-            # 2. Verify 30 Parameters
+            # 2. Verify 29 Parameters (status removed as dynamic attribute)
             cursor.execute("SELECT param_id, param_name, param_type, mandatory, alias FROM schema_parameters ORDER BY param_id")
             params = cursor.fetchall()
-            self.assertEqual(len(params), 30)
+            self.assertEqual(len(params), 29)
 
             param_names = {r[1] for r in params}
             expected_param_names = {
                 "code courrier", "benefits", "acceptance_ctriteria", "scope", "out_of_scope",
                 "risks", "stakeholders", "interfaces", "description", "commentaire",
-                "start_date", "stop_Date", "lot", "status", "phase",
+                "start_date", "stop_Date", "lot", "phase",
                 "code_station", "code_line", "lat", "long", "section",
                 "station", "pk_start", "pk_stop", "acc_link", "pb_link",
                 "orga_link", "strategic_priority", "category", "category_tags", "complexity"
@@ -113,10 +113,6 @@ class TestDatabaseLayer(unittest.TestCase):
             self.assertEqual(code_line_param[4], "code ligne")
 
             # 3. Verify Enums in schema_param_options
-            cursor.execute("SELECT option_value FROM schema_param_options WHERE param_id='PRM_007' ORDER BY display_order")
-            status_opts = [r[0] for r in cursor.fetchall()]
-            self.assertEqual(status_opts, ["draft", "active", "completed", "canceled"])
-
             cursor.execute("SELECT option_value FROM schema_param_options WHERE param_id='PRM_008' ORDER BY display_order")
             phase_opts = [r[0] for r in cursor.fetchall()]
             self.assertEqual(phase_opts, ["FAI", "APS", "APD1", "APD2", "EXE", "CHA", "DEF", "N/A"])

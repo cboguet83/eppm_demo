@@ -1,7 +1,7 @@
 """Business logic and data transformation service for organizational structures."""
 
 import re
-from typing import Optional
+from typing import Any, Optional
 
 import pandas as pd
 
@@ -196,4 +196,117 @@ class OrganizationService:
             lambda x: func_map.get(x, "—") if pd.notna(x) and x in func_map else "—"
         )
         return df
+
+    @staticmethod
+    def get_level_3_managing_function(
+        function_id: Optional[int],
+        df_functions: pd.DataFrame,
+    ) -> Optional[dict[str, Any]]:
+        """Finds the managing function at hierarchy level 3 by traversing up the reporting chain.
+
+        If the function itself is at level 3, returns itself. If above level 3 (levels 1 or 2),
+        returns None. If below level 3 (levels 4, 5, etc.), ascends via manager_function_id
+        until reaching the ancestor at level 3.
+
+        Args:
+            function_id: ID of the starting function (e.g. assigned Project Manager).
+            df_functions: DataFrame containing all functions with columns:
+                          'function_id', 'name', 'hierarchy_level', 'manager_function_id'.
+
+        Returns:
+            Optional[dict[str, Any]]: Dictionary with 'function_id', 'name', and 'hierarchy_level'
+                                     of the level 3 function, or None if not found or starting function is None.
+        """
+        if function_id is None or df_functions.empty or "function_id" not in df_functions.columns:
+            return None
+
+        func_lookup: dict[int, dict[str, Any]] = {}
+        for _, r in df_functions.iterrows():
+            fid = r.get("function_id")
+            if pd.isna(fid):
+                continue
+            try:
+                fid_int = int(fid)
+                lvl = int(r.get("hierarchy_level", 1)) if pd.notna(r.get("hierarchy_level")) else 1
+                mgr = int(r.get("manager_function_id")) if pd.notna(r.get("manager_function_id")) else None
+                func_lookup[fid_int] = {
+                    "function_id": fid_int,
+                    "name": str(r.get("name", "")),
+                    "hierarchy_level": lvl,
+                    "manager_function_id": mgr,
+                }
+            except (ValueError, TypeError):
+                continue
+
+        curr_id: Optional[int] = function_id
+        visited: set[int] = set()
+        max_depth = 20
+        depth = 0
+
+        while curr_id is not None and curr_id not in visited and depth < max_depth:
+            visited.add(curr_id)
+            depth += 1
+            node = func_lookup.get(curr_id)
+            if not node:
+                break
+            if node["hierarchy_level"] == 3:
+                return node
+            if node["hierarchy_level"] < 3:
+                break
+            curr_id = node["manager_function_id"]
+
+        return None
+
+    @staticmethod
+    def enrich_projects_with_organization(
+        df_projects: pd.DataFrame,
+        df_functions: pd.DataFrame,
+    ) -> pd.DataFrame:
+        """Enriches projects DataFrame with assigned Project Manager and Level 3 Managing Function details.
+
+        Args:
+            df_projects: Projects DataFrame containing 'function_id'.
+            df_functions: Functions DataFrame containing hierarchy details.
+
+        Returns:
+            pd.DataFrame: Enriched projects DataFrame with 'project_manager',
+                          'level_3_manager_name', and 'level_3_manager_id'.
+        """
+        if df_projects.empty:
+            return df_projects
+
+        df = df_projects.copy()
+        if df_functions.empty:
+            df["project_manager"] = "—"
+            df["level_3_manager_name"] = "—"
+            df["level_3_manager_id"] = None
+            return df
+
+        func_name_map = dict(zip(df_functions["function_id"], df_functions["name"]))
+        df["project_manager"] = df["function_id"].apply(
+            lambda x: func_name_map.get(int(x), "—") if pd.notna(x) and int(x) in func_name_map else "—"
+        )
+
+        unique_fids = [int(x) for x in df["function_id"].dropna().unique()]
+        level3_map: dict[int, Optional[dict[str, Any]]] = {
+            fid: OrganizationService.get_level_3_managing_function(fid, df_functions)
+            for fid in unique_fids
+        }
+
+        def _get_l3_name(x: Any) -> str:
+            if pd.isna(x):
+                return "—"
+            l3_info = level3_map.get(int(x))
+            return l3_info["name"] if l3_info else "—"
+
+        def _get_l3_id(x: Any) -> Optional[int]:
+            if pd.isna(x):
+                return None
+            l3_info = level3_map.get(int(x))
+            return int(l3_info["function_id"]) if l3_info else None
+
+        df["level_3_manager_name"] = df["function_id"].apply(_get_l3_name)
+        df["level_3_manager_id"] = df["function_id"].apply(_get_l3_id)
+        return df
+
 

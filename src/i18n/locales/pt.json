@@ -13,7 +13,7 @@
     "master_data": "Dados Mestres do Projeto",
     "schema": "Definição de Parâmetros",
     "planning": "Planejamento & Marcos",
-    "settings": "Organização & Configurações"
+    "settings": "Configurações"
   },
   "portfolio": {
     "title": "Analítica de Portfólio & Visão Dinâmica",
@@ -28,6 +28,17 @@
     "filter_search_placeholder": "ex: Cloud ou PRJ-001",
     "filter_status": "Filtrar por Status",
     "filter_all": "Todos",
+    "filter_project_manager": "Gerente de Projeto",
+    "filter_level_3_manager": "Função de Gestão (Nível 3)",
+    "filter_all_managers": "Todos os gerentes de projeto",
+    "filter_all_level3": "Todas as funções nível 3",
+    "details_title": "Detalhes do Projeto",
+    "details_hint": "Clique em um projeto na tabela acima para exibir seus detalhes abaixo.",
+    "tab_details_basic": "Básico e Escopo",
+    "tab_details_localization": "Localização",
+    "tab_details_links": "Links Úteis",
+    "tab_details_classification": "Classificação",
+    "btn_open_in_master": "Editar em Dados Mestres",
     "btn_reset_filters": "🔄 Redefinir Filtros",
     "table_header": "Lista Mestra de Projetos ({count} exibidos)",
     "col_id": "Código do Projeto",
@@ -257,7 +268,9 @@
     }
   },
   "settings": {
-    "title": "Estrutura Organizacional & Configurações",
+    "title": "Configurações",
+    "section_org_structure": "Estrutura Organizacional",
+    "section_param_definition": "Definição de Parâmetros",
     "tab_hierarchy": "Níveis Hierárquicos",
     "tab_functions": "Funções",
     "tab_types": "Tipos de Função",

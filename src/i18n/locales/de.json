@@ -13,7 +13,7 @@
     "master_data": "Projektstammdaten",
     "schema": "Parameterdefinition",
     "planning": "Planung & Meilensteine",
-    "settings": "Organisation & Einstellungen"
+    "settings": "Einstellungen"
   },
   "portfolio": {
     "title": "Portfolio-Analytik & Dynamische Übersicht",
@@ -28,6 +28,17 @@
     "filter_search_placeholder": "z.B. Cloud oder PRJ-001",
     "filter_status": "Nach Status filtern",
     "filter_all": "Alle",
+    "filter_project_manager": "Projektleiter",
+    "filter_level_3_manager": "Leitungsfunktion (Ebene 3)",
+    "filter_all_managers": "Alle Projektleiter",
+    "filter_all_level3": "Alle Ebene 3 Funktionen",
+    "details_title": "Projektdetails",
+    "details_hint": "Klicken Sie auf ein Projekt in der obigen Tabelle, um die Details unten anzuzeigen.",
+    "tab_details_basic": "Basis & Umfang",
+    "tab_details_localization": "Lokalisierung",
+    "tab_details_links": "Nützliche Links",
+    "tab_details_classification": "Klassifizierung",
+    "btn_open_in_master": "In Stammdaten bearbeiten",
     "btn_reset_filters": "🔄 Alle Filter zurücksetzen",
     "table_header": "Projektstammliste ({count} angezeigt)",
     "col_id": "Projektcode",
@@ -257,7 +268,9 @@
     }
   },
   "settings": {
-    "title": "Organisationsstruktur & Einstellungen",
+    "title": "Einstellungen",
+    "section_org_structure": "Organisationsstruktur",
+    "section_param_definition": "Parameterdefinition",
     "tab_hierarchy": "Hierarchieebenen",
     "tab_functions": "Funktionen",
     "tab_types": "Funktionstypen",

@@ -30,7 +30,6 @@ DEFAULT_SCHEMA_PARAMETERS: list[tuple[str, int, str, str, bool, str]] = [
     ("PRM_004", 1, "start_date", "DATE", False, "Start Date"),
     ("PRM_005", 1, "stop_Date", "DATE", False, "Stop Date"),
     ("PRM_006", 1, "lot", "TEXT", False, "Lot"),
-    ("PRM_007", 1, "status", "ENUM", False, "Status"),
     ("PRM_008", 1, "phase", "ENUM", False, "Phase"),
     # scoping
     ("PRM_009", 2, "benefits", "TEXT", False, "Benefits"),
@@ -223,7 +222,6 @@ DEFAULT_STATION_OPTIONS: list[str] = [
 ]
 
 DEFAULT_PARAM_OPTIONS: dict[str, list[str]] = {
-    "PRM_007": DEFAULT_STATUS_OPTIONS,
     "PRM_008": DEFAULT_PHASE_OPTIONS,
     "PRM_016": DEFAULT_STATION_OPTIONS,
     "PRM_017": DEFAULT_LINE_OPTIONS,
@@ -272,6 +270,10 @@ def seed_default_data_if_empty(db_path: Optional[str] = None) -> None:
                         "INSERT INTO schema_param_options (param_id, option_value, display_order) VALUES (?, ?, ?)",
                         (param_id, opt, idx),
                     )
+
+        # Clean up legacy status parameter from dynamic schema if present
+        cursor.execute("DELETE FROM schema_parameters WHERE param_name = 'status'")
+        cursor.execute("DELETE FROM schema_param_options WHERE param_id = 'PRM_007'")
 
         # Check Function Types
         cursor.execute("SELECT COUNT(*) FROM function_type")
@@ -362,7 +364,6 @@ def seed_default_data_if_empty(db_path: Optional[str] = None) -> None:
                     "start_date": "2026-01-10",
                     "stop_Date": "2026-12-31",
                     "lot": "Lot 1 - Core Backend",
-                    "status": "active",
                     "phase": "EXE",
                     "benefits": "Increases system throughput, unifies ledger, and reduces operating costs by 22%",
                     "acceptance_ctriteria": "Pass 100% UAT test scenarios and verify automated reconciliations",
@@ -402,7 +403,6 @@ def seed_default_data_if_empty(db_path: Optional[str] = None) -> None:
                     "start_date": "2026-02-01",
                     "stop_Date": "2026-10-15",
                     "lot": "Lot 2 - ML Pipelines",
-                    "status": "active",
                     "phase": "APD2",
                     "benefits": "Provides real-time customer behavior predictions and churn early-warning signals",
                     "acceptance_ctriteria": "Real-time stream latency < 500ms and model precision > 90%",
@@ -442,7 +442,6 @@ def seed_default_data_if_empty(db_path: Optional[str] = None) -> None:
                     "start_date": "2026-02-11",
                     "stop_Date": "2026-08-30",
                     "lot": "Lot 3 - Governance Audit",
-                    "status": "completed",
                     "phase": "DEF",
                     "benefits": "Ensures full ISO-27001 and regulatory supply chain compliance",
                     "acceptance_ctriteria": "Zero high or critical findings on external audit sign-off",
@@ -548,10 +547,10 @@ def seed_default_data_if_empty(db_path: Optional[str] = None) -> None:
         if emp_count == 0:
             logger.info("Seeding default employees...")
             sample_employees = [
-                (1, "Alan", "Turing", "aturing@enterprise.com", "+352 621 100 001", "ATU", "1", 1),
+                (1, "Linus", "Torvalds", "ltorvalds@enterprise.com", "+352 621 100 004", "LTO", "1", 1),
                 (2, "Louis", "Pasteur", "lpasteur@enterprise.com", "+352 621 100 002", "LPA", "2", 2),
                 (3, "Henri", "Poincaré", "hpoincare@enterprise.com", "+352 621 100 003", "HPO", "3", 3),
-                (4, "Linus", "Torvalds", "ltorvalds@enterprise.com", "+352 621 100 004", "LTO", "4", 4),
+                (4, "Alan", "Turing", "aturing@enterprise.com", "+352 621 100 001", "ATU", "4", 4),
                 (5, "Marie", "Curie", "mcurie@enterprise.com", "+352 621 100 005", "MCU", "5", 5),
                 (6, "Nikola", "Tesla", "ntesla@enterprise.com", "+352 621 100 006", "NTE", "6", 6),
                 (7, "Ada", "Lovelace", "alovelace@enterprise.com", "+352 621 100 007", "ALO", "7", 7),

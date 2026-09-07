@@ -13,6 +13,7 @@ from src.database.schema_init import init_db
 from src.models.constants import PARAM_TYPE_MULTI_ENUM, PARAM_TYPE_TAGS, PARAM_TYPE_TEXT
 from src.repositories.schema_repo import SchemaRepository
 from src.services.milestone_service import MilestoneService
+from src.services.organization_service import OrganizationService
 from src.services.portfolio_service import PortfolioService
 from src.services.schema_service import SchemaService
 
@@ -238,6 +239,63 @@ class TestServices(unittest.TestCase):
         flattened = PortfolioService.flatten_dynamic_attributes(df_projects, params_df)
         self.assertEqual(flattened.iloc[0]["code_line"], "6a")
         self.assertEqual(flattened.iloc[0]["lat"], 49.61)
+
+    def test_get_level_3_managing_function(self) -> None:
+        """Verify traversal up the reporting hierarchy to locate Level 3 managing function."""
+        df_funcs = pd.DataFrame([
+            {"function_id": 1, "name": "DG", "hierarchy_level": 1, "manager_function_id": None},
+            {"function_id": 2, "name": "Dir 1", "hierarchy_level": 2, "manager_function_id": 1},
+            {"function_id": 5, "name": "Chef Service A", "hierarchy_level": 3, "manager_function_id": 2},
+            {"function_id": 10, "name": "Chef Div A1", "hierarchy_level": 4, "manager_function_id": 5},
+            {"function_id": 17, "name": "Chef Projet A1", "hierarchy_level": 5, "manager_function_id": 10},
+        ])
+
+        # 1. Level 5 function climbs up to level 3
+        l3 = OrganizationService.get_level_3_managing_function(17, df_funcs)
+        self.assertIsNotNone(l3)
+        self.assertEqual(l3["function_id"], 5)
+        self.assertEqual(l3["name"], "Chef Service A")
+
+        # 2. Level 4 function climbs up to level 3
+        l3_div = OrganizationService.get_level_3_managing_function(10, df_funcs)
+        self.assertIsNotNone(l3_div)
+        self.assertEqual(l3_div["function_id"], 5)
+
+        # 3. Level 3 function returns itself
+        l3_self = OrganizationService.get_level_3_managing_function(5, df_funcs)
+        self.assertIsNotNone(l3_self)
+        self.assertEqual(l3_self["function_id"], 5)
+
+        # 4. Level 2 function (above level 3) returns None
+        l3_above = OrganizationService.get_level_3_managing_function(2, df_funcs)
+        self.assertIsNone(l3_above)
+
+        # 5. None or invalid function_id returns None
+        self.assertIsNone(OrganizationService.get_level_3_managing_function(None, df_funcs))
+        self.assertIsNone(OrganizationService.get_level_3_managing_function(999, df_funcs))
+
+    def test_enrich_projects_with_organization(self) -> None:
+        """Verify enrichment of projects dataframe with Project Manager and Level 3 Managing Function."""
+        df_funcs = pd.DataFrame([
+            {"function_id": 1, "name": "DG", "hierarchy_level": 1, "manager_function_id": None},
+            {"function_id": 2, "name": "Dir 1", "hierarchy_level": 2, "manager_function_id": 1},
+            {"function_id": 5, "name": "Chef Service A", "hierarchy_level": 3, "manager_function_id": 2},
+            {"function_id": 10, "name": "Chef Div A1", "hierarchy_level": 4, "manager_function_id": 5},
+            {"function_id": 17, "name": "Chef Projet A1", "hierarchy_level": 5, "manager_function_id": 10},
+        ])
+        df_projects = pd.DataFrame([
+            {"id": 1, "name": "P1", "function_id": 17},
+            {"id": 2, "name": "P2", "function_id": None},
+        ])
+
+        enriched = OrganizationService.enrich_projects_with_organization(df_projects, df_funcs)
+        self.assertEqual(enriched.iloc[0]["project_manager"], "Chef Projet A1")
+        self.assertEqual(enriched.iloc[0]["level_3_manager_name"], "Chef Service A")
+        self.assertEqual(enriched.iloc[0]["level_3_manager_id"], 5)
+
+        self.assertEqual(enriched.iloc[1]["project_manager"], "—")
+        self.assertEqual(enriched.iloc[1]["level_3_manager_name"], "—")
+        self.assertTrue(pd.isna(enriched.iloc[1]["level_3_manager_id"]))
 
 
 if __name__ == "__main__":

@@ -3,10 +3,10 @@
 # Page Navigation Constants
 PAGE_PORTFOLIO: str = "1. Portfolio Overview"
 PAGE_PROJECT_MASTER: str = "2. Project Master Data"
-PAGE_SCHEMA_DEF: str = "3. Parameters Definition (Schema)"
-PAGE_PLANNING: str = "4. Planning & Step Loader"
-PAGE_SETTINGS: str = "5. Organization & Settings"
-PAGE_BUDGET: str = "6. Budget Tracking"
+PAGE_SCHEMA_DEF: str = "Parameters Definition (Schema)"
+PAGE_PLANNING: str = "3. Planning & Step Loader"
+PAGE_SETTINGS: str = "4. Settings"
+PAGE_BUDGET: str = "5. Budget Tracking"
 
 # Project Status Constants
 STATUS_DRAFT: str = "Draft"

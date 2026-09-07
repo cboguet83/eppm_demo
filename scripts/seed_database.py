@@ -180,7 +180,6 @@ def seed_database(
             "start_date": p_start_date.isoformat(),
             "stop_Date": p_stop_date.isoformat(),
             "lot": f"Lot {random.randint(1, 5)}",
-            "status": random.choice(DEFAULT_STATUS_OPTIONS),
             "phase": random.choice(DEFAULT_PHASE_OPTIONS),
             "benefits": f"Improves operational efficiency for {theme} and delivers measurable ROI.",
             "acceptance_ctriteria": "Validation tests passing and acceptance signed by technical leads.",

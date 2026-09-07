@@ -221,12 +221,11 @@ def run_app() -> None:
     nav_map = {
         PAGE_PORTFOLIO: f"1. 📊 {t('nav.portfolio')}",
         PAGE_PROJECT_MASTER: f"2. 📁 {t('nav.master_data')}",
-        PAGE_SCHEMA_DEF: f"3. 🧩 {t('nav.schema')}",
-        PAGE_PLANNING: f"4. 📅 {t('nav.planning')}",
-        PAGE_SETTINGS: f"5. ⚙️ {t('nav.settings', default='Organization & Settings')}",
+        PAGE_PLANNING: f"3. 📅 {t('nav.planning')}",
+        PAGE_SETTINGS: f"4. ⚙️ {t('nav.settings', default='Settings')}",
     }
 
-    page_keys = [PAGE_PORTFOLIO, PAGE_PROJECT_MASTER, PAGE_SCHEMA_DEF, PAGE_PLANNING, PAGE_SETTINGS]
+    page_keys = [PAGE_PORTFOLIO, PAGE_PROJECT_MASTER, PAGE_PLANNING, PAGE_SETTINGS]
 
     # Deep-link routing via URL query parameters (e.g. ?nav=planning&project_id=123)
     if "nav" in st.query_params:
@@ -248,6 +247,9 @@ def run_app() -> None:
                     st.session_state["target_planning_task_id"] = int(target_task_id)
                 except (ValueError, TypeError):
                     pass
+        elif target_nav in ("schema", PAGE_SCHEMA_DEF):
+            st.session_state["app_sidebar_nav"] = PAGE_SETTINGS
+            st.session_state["settings_active_section"] = "parameters"
         elif target_nav in page_keys:
             st.session_state["app_sidebar_nav"] = target_nav
 
@@ -267,12 +269,10 @@ def run_app() -> None:
         render_portfolio_overview(project_repo, schema_repo)
     elif page == PAGE_PROJECT_MASTER:
         render_project_master(project_repo, schema_repo, pool_repo, milestone_repo)
-    elif page == PAGE_SCHEMA_DEF:
-        render_schema_definition(schema_repo)
     elif page == PAGE_PLANNING:
         render_planning_milestones(project_repo, milestone_repo, tag_repo, pool_repo, org_repo)
-    elif page == PAGE_SETTINGS:
-        render_settings_view(org_repo, tag_repo, project_repo, milestone_repo, pool_repo)
+    elif page in (PAGE_SETTINGS, PAGE_SCHEMA_DEF):
+        render_settings_view(org_repo, tag_repo, project_repo, milestone_repo, pool_repo, schema_repo)
     elif page == PAGE_BUDGET:
         render_budget_tracking(project_repo)
 

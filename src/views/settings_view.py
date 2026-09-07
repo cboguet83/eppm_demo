@@ -18,10 +18,12 @@ from src.repositories.milestone_repo import MilestoneRepository
 from src.repositories.organization_repo import OrganizationRepository
 from src.repositories.project_repo import ProjectRepository
 from src.repositories.resource_pool_repo import ResourcePoolRepository
+from src.repositories.schema_repo import SchemaRepository
 from src.repositories.tag_repo import TagRepository
 from src.services.organization_service import OrganizationService
 from src.services.resource_pool_service import ResourcePoolService
 from src.services.tag_service import TagService
+from src.views.schema_def_view import render_schema_definition
 
 
 # Declare Interactive Table Custom Components
@@ -1521,9 +1523,33 @@ def render_settings_view(
     project_repo: Optional[ProjectRepository] = None,
     milestone_repo: Optional[MilestoneRepository] = None,
     pool_repo: Optional[ResourcePoolRepository] = None,
+    schema_repo: Optional[SchemaRepository] = None,
 ) -> None:
-    """Renders the Organization & Settings screen with tabbed contextual management."""
-    st.header(f"⚙️ {t('settings.title', default='Organization Structure & Settings')}")
+    """Renders the Settings screen with sections for Organization Structure and Parameter Definition."""
+    st.header(f"⚙️ {t('settings.title', default='Settings')}")
+
+    schema_repo = schema_repo or SchemaRepository(org_repo.db_path)
+
+    # Top-level Section Selector: Organization Structure vs. Parameter Definition
+    default_section_idx = 0
+    if st.session_state.get("settings_active_section") == "parameters":
+        default_section_idx = 1
+
+    selected_section = st.radio(
+        "Settings Section",
+        options=["org_structure", "param_def"],
+        format_func=lambda s: f"🏢 {t('settings.section_org_structure', default='Organization Structure')}"
+        if s == "org_structure"
+        else f"🧩 {t('settings.section_param_definition', default='Parameter Definition')}",
+        index=default_section_idx,
+        horizontal=True,
+        label_visibility="collapsed",
+        key="rb_settings_section",
+    )
+
+    if selected_section == "param_def":
+        render_schema_definition(schema_repo)
+        return
 
     tag_repo = tag_repo or TagRepository(org_repo.db_path)
     project_repo = project_repo or ProjectRepository(org_repo.db_path)

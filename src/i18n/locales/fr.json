@@ -13,7 +13,7 @@
     "master_data": "Données de Base Projets",
     "schema": "Définition des Paramètres",
     "planning": "Planning & Jalons",
-    "settings": "Organisation & Paramètres"
+    "settings": "Paramètres"
   },
   "portfolio": {
     "title": "Analytique du Portefeuille & Vue Dynamique",
@@ -28,6 +28,17 @@
     "filter_search_placeholder": "ex: Cloud ou PRJ-001",
     "filter_status": "Filtrer par Statut",
     "filter_all": "Tous",
+    "filter_project_manager": "Chef de Projet",
+    "filter_level_3_manager": "Fonction de Gestion (Niveau 3)",
+    "filter_all_managers": "Tous les chefs de projet",
+    "filter_all_level3": "Toutes les fonctions niveau 3",
+    "details_title": "Détails du Projet",
+    "details_hint": "Cliquez sur un projet dans le tableau ci-dessus pour afficher ses détails ci-dessous.",
+    "tab_details_basic": "Informations & Cadrage",
+    "tab_details_localization": "Localisation",
+    "tab_details_links": "Liens Utiles",
+    "tab_details_classification": "Classification",
+    "btn_open_in_master": "Modifier dans les données de base",
     "btn_reset_filters": "🔄 Réinitialiser les Filtres",
     "table_header": "Liste Principale des Projets ({count} affichés)",
     "col_id": "Code Projet",
@@ -257,7 +268,9 @@
     }
   },
   "settings": {
-    "title": "Structure Organisationnelle & Paramètres",
+    "title": "Paramètres",
+    "section_org_structure": "Structure Organisationnelle",
+    "section_param_definition": "Définition des Paramètres",
     "tab_hierarchy": "Niveaux Hiérarchiques",
     "tab_functions": "Fonctions",
     "tab_types": "Types de Fonction",
