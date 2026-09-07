@@ -1,7 +1,7 @@
 """Business logic, capacity calculation, de-duplication, and daily overassignment analysis for Resource Pools."""
 
 import datetime
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 import pandas as pd
 
