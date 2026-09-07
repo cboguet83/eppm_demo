@@ -259,6 +259,82 @@ class TestRepositories(unittest.TestCase):
         self.assertIn("project_name", all_milestones.columns)
         self.assertEqual(all_milestones.iloc[0]["project_name"], "Batch 1")
 
+    def test_project_manager_foreign_key_crud(self) -> None:
+        """Verify creating, reading, and updating a project with function_id (Project Manager)."""
+        with get_db(self.temp_db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("INSERT INTO function_type (function_type_id, function_type) VALUES (1, 'Chef de Projet')")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id) VALUES (10, 'Alice PM', 3, 1)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id) VALUES (20, 'Bob PM', 3, 1)")
+
+        # Create project with function_id 10
+        created = self.project_repo.create_project(
+            project_id=101,
+            name="PM Test Project",
+            status="Active",
+            planned_budget=10000.0,
+            actual_budget=5000.0,
+            dynamic_attributes={},
+            function_id=10,
+        )
+        self.assertTrue(created)
+
+        # Read project
+        df = self.project_repo.get_all_projects()
+        proj = df[df["id"] == 101].iloc[0]
+        self.assertEqual(proj["function_id"], 10)
+
+        # Update project with function_id 20
+        updated = self.project_repo.update_project(
+            project_id=101,
+            name="PM Test Project Updated",
+            status="Completed",
+            planned_budget=12000.0,
+            actual_budget=6000.0,
+            dynamic_attributes={},
+            function_id=20,
+        )
+        self.assertTrue(updated)
+
+        df_updated = self.project_repo.get_all_projects()
+        proj_updated = df_updated[df_updated["id"] == 101].iloc[0]
+        self.assertEqual(proj_updated["function_id"], 20)
+
+    def test_schema_parameter_mandatory_and_alias_crud(self) -> None:
+        """Verify creating and updating schema parameters with mandatory and alias flags."""
+        # Create parameter with mandatory=True and custom alias
+        created = self.schema_repo.create_parameter(
+            param_id="PRM_999",
+            param_name="Code Line",
+            param_type="ENUM",
+            group_id=None,
+            mandatory=True,
+            alias="code ligne",
+        )
+        self.assertTrue(created)
+
+        # Read parameter
+        df = self.schema_repo.get_all_parameters()
+        row = df[df["param_id"] == "PRM_999"].iloc[0]
+        self.assertTrue(bool(row["mandatory"]))
+        self.assertEqual(row["alias"], "code ligne")
+
+        # Update parameter
+        updated = self.schema_repo.update_parameter(
+            param_id="PRM_999",
+            param_name="Code Line Updated",
+            param_type="ENUM",
+            group_id=None,
+            mandatory=False,
+            alias="code ligne updated",
+        )
+        self.assertTrue(updated)
+
+        df_updated = self.schema_repo.get_all_parameters()
+        row_updated = df_updated[df_updated["param_id"] == "PRM_999"].iloc[0]
+        self.assertFalse(bool(row_updated["mandatory"]))
+        self.assertEqual(row_updated["alias"], "code ligne updated")
+
 
 if __name__ == "__main__":
     unittest.main()

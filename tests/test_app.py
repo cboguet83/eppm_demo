@@ -85,7 +85,7 @@ class TestPPMStudio(unittest.TestCase):
         self.assertEqual(SchemaService.get_next_available_group_order(self.temp_db_path), 1)
 
         seed_default_data_if_empty(self.temp_db_path)
-        self.assertEqual(SchemaService.get_next_available_group_order(self.temp_db_path), 3)
+        self.assertEqual(SchemaService.get_next_available_group_order(self.temp_db_path), 6)
 
     def test_schema_group_edit_and_delete(self) -> None:
         """Verify editing an existing schema group and deleting it."""

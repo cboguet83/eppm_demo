@@ -183,6 +183,62 @@ class TestServices(unittest.TestCase):
         self.assertTrue(evaluated[0]["is_violated"])
         self.assertEqual(len(violations[10]), 1)
 
+    def test_validate_project_dynamic_attributes_mandatory(self) -> None:
+        """Verify validation of mandatory dynamic attributes."""
+        params_df = pd.DataFrame([
+            {"param_id": "PRM_001", "param_name": "code courrier", "mandatory": True, "alias": "Code Courrier"},
+            {"param_id": "PRM_002", "param_name": "description", "mandatory": False, "alias": "Description"},
+            {"param_id": "PRM_003", "param_name": "tags", "mandatory": True, "alias": "Tags"},
+        ])
+
+        # 1. Missing all mandatory attributes
+        missing = SchemaService.validate_project_dynamic_attributes({}, params_df)
+        self.assertEqual(set(missing), {"code courrier", "tags"})
+
+        # 2. Empty string or empty list
+        missing_empty = SchemaService.validate_project_dynamic_attributes(
+            {"code courrier": "   ", "tags": []}, params_df
+        )
+        self.assertEqual(set(missing_empty), {"code courrier", "tags"})
+
+        # 3. Provided by param_name
+        valid = SchemaService.validate_project_dynamic_attributes(
+            {"code courrier": "CR-001", "tags": ["Tag1"]}, params_df
+        )
+        self.assertEqual(valid, [])
+
+        # 4. Provided by param_id
+        valid_pid = SchemaService.validate_project_dynamic_attributes(
+            {"PRM_001": "CR-001", "PRM_003": ["Tag1"]}, params_df
+        )
+        self.assertEqual(valid_pid, [])
+
+        # 5. Provided by alias
+        valid_alias = SchemaService.validate_project_dynamic_attributes(
+            {"Code Courrier": "CR-001", "Tags": ["Tag1"]}, params_df
+        )
+        self.assertEqual(valid_alias, [])
+
+    def test_flatten_dynamic_attributes_with_alias_and_pname(self) -> None:
+        """Verify dynamic attribute flattening with fallback lookup across param_id, param_name, and alias."""
+        df_projects = pd.DataFrame([
+            {
+                "id": 1,
+                "name": "Project One",
+                "dynamic_attributes": json.dumps({
+                    "code ligne": "6a",
+                    "PRM_018": 49.61,
+                }),
+            }
+        ])
+        params_df = pd.DataFrame([
+            {"param_id": "PRM_017", "param_name": "code_line", "alias": "code ligne", "param_type": "ENUM"},
+            {"param_id": "PRM_018", "param_name": "lat", "alias": "Latitude", "param_type": "NUMBER"},
+        ])
+        flattened = PortfolioService.flatten_dynamic_attributes(df_projects, params_df)
+        self.assertEqual(flattened.iloc[0]["code_line"], "6a")
+        self.assertEqual(flattened.iloc[0]["lat"], 49.61)
+
 
 if __name__ == "__main__":
     unittest.main()

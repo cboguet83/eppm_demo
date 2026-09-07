@@ -19,7 +19,16 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from scripts.flush_database import flush_database
 from src.database.connection import get_db
 from src.database.schema_init import init_db
-from src.database.seeder import seed_default_data_if_empty
+from src.database.seeder import (
+    DEFAULT_CATEGORY_OPTIONS,
+    DEFAULT_COMPLEXITY_OPTIONS,
+    DEFAULT_LINE_OPTIONS,
+    DEFAULT_PHASE_OPTIONS,
+    DEFAULT_STATION_OPTIONS,
+    DEFAULT_STATUS_OPTIONS,
+    DEFAULT_STRATEGIC_PRIORITY_OPTIONS,
+    seed_default_data_if_empty,
+)
 from src.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -134,7 +143,7 @@ def seed_database(
         conn.commit()
 
     # 1. Build Projects Payload
-    projects_data: list[tuple[int, str, str, float, float, str]] = []
+    projects_data: list[tuple[int, str, str, float, float, str, int]] = []
     project_ids: list[int] = []
     base_start_date = datetime.date(2025, 6, 1)
 
@@ -157,11 +166,44 @@ def seed_database(
         else:  # Draft, Planned
             actual_budget = round(planned_budget * random.uniform(0.0, 0.05), 2)
 
+        p_offset_days = random.randint(0, 365)
+        p_start_date = base_start_date + datetime.timedelta(days=p_offset_days)
+        p_stop_date = p_start_date + datetime.timedelta(days=random.randint(90, 730))
+        station_opt = random.choice(DEFAULT_STATION_OPTIONS)
+        line_opt = random.choice(DEFAULT_LINE_OPTIONS)
+        pm_function_id = random.randint(17, 26)
+
         dyn_attrs = {
-            "Category": random.choice(DYNAMIC_CATEGORIES),
-            "Priority": random.choice(DYNAMIC_PRIORITIES),
-            "Business Unit": random.choice(DYNAMIC_DEPARTMENTS),
-            "Risk Level": random.choice(DYNAMIC_RISKS),
+            "code courrier": f"CR-2026-{i:04d}",
+            "description": f"{theme} implementation and rollout for {suffix} #{i}",
+            "commentaire": random.choice(["On track", "Steerco approval pending", "Review scheduled", "Specification completed", "In execution"]),
+            "start_date": p_start_date.isoformat(),
+            "stop_Date": p_stop_date.isoformat(),
+            "lot": f"Lot {random.randint(1, 5)}",
+            "status": random.choice(DEFAULT_STATUS_OPTIONS),
+            "phase": random.choice(DEFAULT_PHASE_OPTIONS),
+            "benefits": f"Improves operational efficiency for {theme} and delivers measurable ROI.",
+            "acceptance_ctriteria": "Validation tests passing and acceptance signed by technical leads.",
+            "scope": f"End-to-end execution of {theme} across designated divisions.",
+            "out_of_scope": "Secondary third-party vendor extensions and legacy integrations.",
+            "risks": random.choice(["Resource availability constraint", "Timeline dependency delay", "Vendor integration latency", "Low risk"]),
+            "stakeholders": "Project Sponsor, Division Head, Operations Manager",
+            "interfaces": "Internal API, ERP Connector, Reporting Data Warehouse",
+            "code_station": station_opt,
+            "code_line": line_opt,
+            "lat": round(random.uniform(49.44, 50.18), 4),
+            "long": round(random.uniform(5.73, 6.53), 4),
+            "section": f"Section {random.choice(['Alpha', 'Beta', 'Gamma', 'Delta', 'Nord', 'Sud', 'Est', 'Ouest'])}",
+            "station": station_opt.split()[0],
+            "pk_start": f"PK {random.randint(0, 50)}+{random.randint(0, 999):03d}",
+            "pk_stop": f"PK {random.randint(51, 120)}+{random.randint(0, 999):03d}",
+            "acc_link": f"https://eppm.enterprise.internal/acc/PRJ-{i:04d}",
+            "pb_link": f"https://jira.enterprise.internal/browse/PRJ-{i:04d}",
+            "orga_link": f"https://confluence.enterprise.internal/wiki/PRJ-{i:04d}",
+            "strategic_priority": random.choice(DEFAULT_STRATEGIC_PRIORITY_OPTIONS),
+            "category": random.choice(DEFAULT_CATEGORY_OPTIONS),
+            "category_tags": random.sample(["Core", "Strategic", "Cloud Native", "Infrastructure", "Modernization", "Compliance", "Digital"], k=random.randint(1, 3)),
+            "complexity": random.choice(DEFAULT_COMPLEXITY_OPTIONS),
         }
 
         projects_data.append((
@@ -171,6 +213,7 @@ def seed_database(
             planned_budget,
             actual_budget,
             json.dumps(dyn_attrs),
+            pm_function_id,
         ))
 
     # 2. Build Tasks / Milestones Payload
@@ -410,8 +453,8 @@ def seed_database(
         # Batch insert projects
         cursor.executemany(
             """
-            INSERT OR REPLACE INTO project (id, name, status, planned_budget, actual_budget, dynamic_attributes)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT OR REPLACE INTO project (id, name, status, planned_budget, actual_budget, dynamic_attributes, function_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             projects_data,
         )

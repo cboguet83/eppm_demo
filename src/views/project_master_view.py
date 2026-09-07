@@ -7,8 +7,11 @@ import streamlit as st
 
 from src.i18n import t
 from src.models.constants import (
+    PARAM_TYPE_DATE,
     PARAM_TYPE_ENUM,
+    PARAM_TYPE_HYPERLINK,
     PARAM_TYPE_MULTI_ENUM,
+    PARAM_TYPE_NUMBER,
     PARAM_TYPE_TAGS,
     PARAM_TYPE_TEXT,
     PARAM_TYPE_URL,
@@ -21,6 +24,82 @@ from src.repositories.project_repo import ProjectRepository
 from src.repositories.resource_pool_repo import ResourcePoolRepository
 from src.repositories.schema_repo import SchemaRepository
 from src.services.resource_pool_service import ResourcePoolService
+from src.services.schema_service import SchemaService
+
+
+def _render_dynamic_field(
+    param_row: pd.Series,
+    options_df: pd.DataFrame,
+    curr_val: Any,
+    key_prefix: str,
+) -> Any:
+    """Renders appropriate Streamlit input widget for a dynamic schema parameter.
+
+    Args:
+        param_row: Series containing parameter metadata.
+        options_df: DataFrame of schema parameter options.
+        curr_val: Existing value to pre-populate.
+        key_prefix: Unique Streamlit widget key prefix.
+
+    Returns:
+        Any: Value entered or selected in the widget.
+    """
+    pid = str(param_row["param_id"])
+    pname = str(param_row["param_name"])
+    ptype = str(param_row["param_type"]).upper()
+    is_mandatory = bool(param_row.get("mandatory", False))
+    alias = str(param_row.get("alias", "")).strip() if pd.notna(param_row.get("alias")) else ""
+
+    label = pname
+    if alias:
+        label += f" ({alias})"
+    if is_mandatory:
+        label += " *"
+
+    key = f"{key_prefix}_{pid}"
+
+    if ptype == PARAM_TYPE_TEXT:
+        return st.text_input(label, value=str(curr_val) if curr_val is not None else "", key=key)
+    if ptype in (PARAM_TYPE_URL, PARAM_TYPE_HYPERLINK):
+        return st.text_input(
+            label,
+            value=str(curr_val) if curr_val is not None else "",
+            placeholder="https://...",
+            key=key,
+        )
+    if ptype == PARAM_TYPE_DATE:
+        parsed_date: Optional[datetime.date] = None
+        if curr_val and isinstance(curr_val, str) and curr_val.strip():
+            try:
+                parsed_date = datetime.date.fromisoformat(curr_val.strip())
+            except ValueError:
+                parsed_date = None
+        d_res = st.date_input(label, value=parsed_date, key=key)
+        return d_res.isoformat() if d_res is not None else ""
+    if ptype == PARAM_TYPE_NUMBER:
+        num_val: Optional[float] = None
+        if curr_val is not None and str(curr_val).strip() != "":
+            try:
+                num_val = float(curr_val)
+            except (ValueError, TypeError):
+                num_val = None
+        return st.number_input(label, value=num_val, key=key)
+    if ptype == PARAM_TYPE_ENUM:
+        p_opts = options_df[options_df["param_id"] == pid]["option_value"].tolist() if not options_df.empty else []
+        all_opts = [""] + p_opts
+        cur_idx = all_opts.index(curr_val) if curr_val in all_opts else 0
+        return st.selectbox(label, options=all_opts, index=cur_idx, key=key)
+    if ptype in (PARAM_TYPE_MULTI_ENUM, PARAM_TYPE_TAGS):
+        p_opts = options_df[options_df["param_id"] == pid]["option_value"].tolist() if not options_df.empty else []
+        cur_multi = curr_val if isinstance(curr_val, list) else ([curr_val] if curr_val else [])
+        valid_opts = sorted(list(set(p_opts + cur_multi)))
+        return st.multiselect(
+            f"{label} ({ptype})",
+            options=valid_opts,
+            default=[o for o in cur_multi if o in valid_opts],
+            key=key,
+        )
+    return st.text_input(label, value=str(curr_val) if curr_val is not None else "", key=key)
 
 
 def render_project_master(
@@ -36,11 +115,17 @@ def render_project_master(
     milestone_repo = milestone_repo or MilestoneRepository(project_repo.db_path)
     org_repo = OrganizationRepository(project_repo.db_path)
 
-
     tab_create, tab_edit = st.tabs([t("master_data.tab_create"), t("master_data.tab_edit")])
     groups = schema_repo.get_all_groups()
     params = schema_repo.get_all_parameters()
     options = schema_repo.get_all_options()
+
+    df_funcs = org_repo.get_all_functions()
+    func_options: list[Optional[int]] = [None] + (df_funcs["function_id"].tolist() if not df_funcs.empty else [])
+    func_map: dict[Optional[int], str] = {
+        None: "— None —",
+        **({int(r["function_id"]): f"👤 {r['name']} (#{r['function_id']})" for _, r in df_funcs.iterrows()} if not df_funcs.empty else {}),
+    }
 
     # --------------------------------------------------------------------------
     # TAB 1: CREATE PROJECT
@@ -58,10 +143,16 @@ def render_project_master(
             )
             new_name = col2.text_input(t("master_data.field_name"), placeholder=t("master_data.field_name_placeholder"))
 
-            col3, col4, col5 = st.columns(3)
+            col3, col4, col5, col6 = st.columns(4)
             new_status = col3.selectbox(t("master_data.field_status"), options=STATUS_LIST, index=0)
             new_planned = col4.number_input(t("master_data.field_planned"), min_value=0.0, value=150000.0, step=5000.0)
             new_actual = col5.number_input(t("master_data.field_actual"), min_value=0.0, value=0.0, step=5000.0)
+            new_manager_id = col6.selectbox(
+                t("master_data.field_project_manager", default="Project Manager"),
+                options=func_options,
+                format_func=lambda x: func_map.get(x, str(x)),
+                key="create_project_manager",
+            )
 
             st.write(f"#### {t('master_data.dynamic_section')}")
             dyn_values: dict[str, Any] = {}
@@ -81,19 +172,7 @@ def render_project_master(
                         with st.expander(f"📁 {gname}", expanded=True):
                             for _, p in grp_params.iterrows():
                                 pid = str(p["param_id"])
-                                pname = str(p["param_name"])
-                                ptype = str(p["param_type"])
-
-                                if ptype == PARAM_TYPE_TEXT:
-                                    dyn_values[pid] = st.text_input(pname, key=f"create_{pid}")
-                                elif ptype == PARAM_TYPE_URL:
-                                    dyn_values[pid] = st.text_input(pname, placeholder="https://...", key=f"create_{pid}")
-                                elif ptype == PARAM_TYPE_ENUM:
-                                    p_opts = options[options["param_id"] == pid]["option_value"].tolist()
-                                    dyn_values[pid] = st.selectbox(pname, options=[""] + p_opts, key=f"create_{pid}")
-                                elif ptype in (PARAM_TYPE_MULTI_ENUM, PARAM_TYPE_TAGS):
-                                    p_opts = options[options["param_id"] == pid]["option_value"].tolist()
-                                    dyn_values[pid] = st.multiselect(f"{pname} ({ptype})", options=p_opts, key=f"create_{pid}")
+                                dyn_values[pid] = _render_dynamic_field(p, options, None, "create")
 
                 # Render Ungrouped Parameters
                 ungrouped_params = params[params["group_id"].isna() | (params["group_id"] == None)]  # noqa: E711
@@ -101,26 +180,17 @@ def render_project_master(
                     with st.expander(f"📌 {t('schema.param_group_none')}", expanded=True):
                         for _, p in ungrouped_params.iterrows():
                             pid = str(p["param_id"])
-                            pname = str(p["param_name"])
-                            ptype = str(p["param_type"])
-
-                            if ptype == PARAM_TYPE_TEXT:
-                                dyn_values[pid] = st.text_input(pname, key=f"create_{pid}")
-                            elif ptype == PARAM_TYPE_URL:
-                                dyn_values[pid] = st.text_input(pname, placeholder="https://...", key=f"create_{pid}")
-                            elif ptype == PARAM_TYPE_ENUM:
-                                p_opts = options[options["param_id"] == pid]["option_value"].tolist()
-                                dyn_values[pid] = st.selectbox(pname, options=[""] + p_opts, key=f"create_{pid}")
-                            elif ptype in (PARAM_TYPE_MULTI_ENUM, PARAM_TYPE_TAGS):
-                                p_opts = options[options["param_id"] == pid]["option_value"].tolist()
-                                dyn_values[pid] = st.multiselect(f"{pname} ({ptype})", options=p_opts, key=f"create_{pid}")
+                            dyn_values[pid] = _render_dynamic_field(p, options, None, "create")
 
             btn_submit = st.form_submit_button(t("master_data.btn_save_new"), width="stretch")
             if btn_submit:
                 clean_name = new_name.strip()
+                missing_mandatory = SchemaService.validate_project_dynamic_attributes(dyn_values, params)
 
                 if not clean_name:
                     st.error(t("master_data.err_required_fields"))
+                elif missing_mandatory:
+                    st.error(f"Cannot save project: The following mandatory attributes are required: {', '.join(missing_mandatory)}")
                 elif project_repo.exists(auto_id):
                     st.error(t("master_data.err_already_exists", id=str(auto_id)))
                 else:
@@ -131,6 +201,7 @@ def render_project_master(
                         planned_budget=new_planned,
                         actual_budget=new_actual,
                         dynamic_attributes=dyn_values,
+                        function_id=new_manager_id,
                     )
                     st.success(t("master_data.msg_created_success", id=str(new_proj_id), name=clean_name))
                     st.rerun()
@@ -179,7 +250,7 @@ def render_project_master(
             edit_status_idx = STATUS_LIST.index(curr_row["status"]) if curr_row["status"] in STATUS_LIST else 0
             edit_status = col2.selectbox(t("master_data.field_status"), options=STATUS_LIST, index=edit_status_idx)
 
-            col3, col4 = st.columns(2)
+            col3, col4, col5 = st.columns(3)
             edit_planned = col3.number_input(
                 t("master_data.field_planned"),
                 min_value=0.0,
@@ -191,6 +262,16 @@ def render_project_master(
                 min_value=0.0,
                 value=float(curr_row["actual_budget"]),
                 step=5000.0,
+            )
+            raw_curr_mgr = curr_row.get("function_id")
+            curr_mgr_id = int(raw_curr_mgr) if pd.notna(raw_curr_mgr) else None
+            cur_mgr_idx = func_options.index(curr_mgr_id) if curr_mgr_id in func_options else 0
+            edit_manager_id = col5.selectbox(
+                t("master_data.field_project_manager", default="Project Manager"),
+                options=func_options,
+                index=cur_mgr_idx,
+                format_func=lambda x: func_map.get(x, str(x)),
+                key=f"edit_manager_{selected_id}",
             )
 
             st.write(f"#### {t('master_data.dynamic_section')}")
@@ -210,42 +291,13 @@ def render_project_master(
                             for _, p in grp_params.iterrows():
                                 pid = str(p["param_id"])
                                 pname = str(p["param_name"])
-                                ptype = str(p["param_type"])
+                                alias = str(p.get("alias", "")).strip() if pd.notna(p.get("alias")) else ""
                                 val = curr_dyn.get(pid)
-
-                                if ptype == PARAM_TYPE_TEXT:
-                                    edit_dyn_values[pid] = st.text_input(
-                                        pname,
-                                        value=str(val) if val is not None else "",
-                                        key=f"edit_{pid}",
-                                    )
-                                elif ptype == PARAM_TYPE_URL:
-                                    edit_dyn_values[pid] = st.text_input(
-                                        pname,
-                                        value=str(val) if val is not None else "",
-                                        placeholder="https://...",
-                                        key=f"edit_{pid}",
-                                    )
-                                elif ptype == PARAM_TYPE_ENUM:
-                                    p_opts = options[options["param_id"] == pid]["option_value"].tolist()
-                                    all_opts = [""] + p_opts
-                                    cur_idx = all_opts.index(val) if val in all_opts else 0
-                                    edit_dyn_values[pid] = st.selectbox(
-                                        pname,
-                                        options=all_opts,
-                                        index=cur_idx,
-                                        key=f"edit_{pid}",
-                                    )
-                                elif ptype in (PARAM_TYPE_MULTI_ENUM, PARAM_TYPE_TAGS):
-                                    p_opts = options[options["param_id"] == pid]["option_value"].tolist()
-                                    cur_multi = val if isinstance(val, list) else ([val] if val else [])
-                                    valid_opts = sorted(list(set(p_opts + cur_multi)))
-                                    edit_dyn_values[pid] = st.multiselect(
-                                        f"{pname} ({ptype})",
-                                        options=valid_opts,
-                                        default=[o for o in cur_multi if o in valid_opts],
-                                        key=f"edit_{pid}",
-                                    )
+                                if val is None:
+                                    val = curr_dyn.get(pname)
+                                if val is None and alias:
+                                    val = curr_dyn.get(alias)
+                                edit_dyn_values[pid] = _render_dynamic_field(p, options, val, f"edit_{selected_id}")
 
                 # Ungrouped parameters
                 ungrouped_params = params[params["group_id"].isna() | (params["group_id"] == None)]  # noqa: E711
@@ -254,55 +306,32 @@ def render_project_master(
                         for _, p in ungrouped_params.iterrows():
                             pid = str(p["param_id"])
                             pname = str(p["param_name"])
-                            ptype = str(p["param_type"])
+                            alias = str(p.get("alias", "")).strip() if pd.notna(p.get("alias")) else ""
                             val = curr_dyn.get(pid)
-
-                            if ptype == PARAM_TYPE_TEXT:
-                                edit_dyn_values[pid] = st.text_input(
-                                    pname,
-                                    value=str(val) if val is not None else "",
-                                    key=f"edit_{pid}",
-                                )
-                            elif ptype == PARAM_TYPE_URL:
-                                edit_dyn_values[pid] = st.text_input(
-                                    pname,
-                                    value=str(val) if val is not None else "",
-                                    placeholder="https://...",
-                                    key=f"edit_{pid}",
-                                )
-                            elif ptype == PARAM_TYPE_ENUM:
-                                p_opts = options[options["param_id"] == pid]["option_value"].tolist()
-                                all_opts = [""] + p_opts
-                                cur_idx = all_opts.index(val) if val in all_opts else 0
-                                edit_dyn_values[pid] = st.selectbox(
-                                    pname,
-                                    options=all_opts,
-                                    index=cur_idx,
-                                    key=f"edit_{pid}",
-                                )
-                            elif ptype in (PARAM_TYPE_MULTI_ENUM, PARAM_TYPE_TAGS):
-                                p_opts = options[options["param_id"] == pid]["option_value"].tolist()
-                                cur_multi = val if isinstance(val, list) else ([val] if val else [])
-                                valid_opts = sorted(list(set(p_opts + cur_multi)))
-                                edit_dyn_values[pid] = st.multiselect(
-                                    f"{pname} ({ptype})",
-                                    options=valid_opts,
-                                    default=[o for o in cur_multi if o in valid_opts],
-                                    key=f"edit_{pid}",
-                                )
+                            if val is None:
+                                val = curr_dyn.get(pname)
+                            if val is None and alias:
+                                val = curr_dyn.get(alias)
+                            edit_dyn_values[pid] = _render_dynamic_field(p, options, val, f"edit_{selected_id}")
 
             btn_update = st.form_submit_button(t("master_data.btn_update"), width="stretch")
             if btn_update:
-                if not edit_name.strip():
+                clean_edit_name = edit_name.strip()
+                missing_mandatory = SchemaService.validate_project_dynamic_attributes(edit_dyn_values, params)
+
+                if not clean_edit_name:
                     st.error(t("master_data.err_required_fields"))
+                elif missing_mandatory:
+                    st.error(f"Cannot update project: The following mandatory attributes are required: {', '.join(missing_mandatory)}")
                 else:
                     project_repo.update_project(
                         project_id=selected_id,
-                        name=edit_name.strip(),
+                        name=clean_edit_name,
                         status=edit_status,
                         planned_budget=edit_planned,
                         actual_budget=edit_actual,
                         dynamic_attributes=edit_dyn_values,
+                        function_id=edit_manager_id,
                     )
                     st.success(t("master_data.msg_updated_success", id=selected_id))
                     st.rerun()

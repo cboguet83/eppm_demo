@@ -26,14 +26,18 @@ class SchemaParameter:
     Attributes:
         param_id: Unique parameter key (e.g. 'PRM_001').
         param_name: User-facing parameter label.
-        param_type: Data type ('TEXT', 'ENUM', 'MULTI_ENUM', 'TAGS', 'URL').
+        param_type: Data type ('TEXT', 'ENUM', 'MULTI_ENUM', 'TAGS', 'URL', 'DATE', 'NUMBER', 'HYPERLINK').
         group_id: Optional reference to parent SchemaGroup ID.
+        mandatory: Whether this dynamic parameter is required to save a project (default False).
+        alias: Optional alternative name or display alias.
     """
 
     param_id: str
     param_name: str
     param_type: str
     group_id: Optional[int] = None
+    mandatory: bool = False
+    alias: Optional[str] = None
 
 
 @dataclass

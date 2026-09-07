@@ -74,6 +74,88 @@ class TestDatabaseLayer(unittest.TestCase):
 
         self.assertEqual(count, 3)
 
+    def test_seed_creates_all_categories_parameters_and_enums(self) -> None:
+        """Verify seeded categories, 30 parameters, all discrete enums, and project manager FKs."""
+        import json
+        init_db(self.temp_db_path)
+        seed_default_data_if_empty(self.temp_db_path)
+
+        with get_db(self.temp_db_path) as conn:
+            cursor = conn.cursor()
+
+            # 1. Verify 5 Groups
+            cursor.execute("SELECT group_name FROM schema_groups ORDER BY display_order")
+            groups = [r[0] for r in cursor.fetchall()]
+            expected_groups = ["basic info", "scoping", "localization", "useful links", "classification"]
+            self.assertEqual(groups, expected_groups)
+
+            # 2. Verify 30 Parameters
+            cursor.execute("SELECT param_id, param_name, param_type, mandatory, alias FROM schema_parameters ORDER BY param_id")
+            params = cursor.fetchall()
+            self.assertEqual(len(params), 30)
+
+            param_names = {r[1] for r in params}
+            expected_param_names = {
+                "code courrier", "benefits", "acceptance_ctriteria", "scope", "out_of_scope",
+                "risks", "stakeholders", "interfaces", "description", "commentaire",
+                "start_date", "stop_Date", "lot", "status", "phase",
+                "code_station", "code_line", "lat", "long", "section",
+                "station", "pk_start", "pk_stop", "acc_link", "pb_link",
+                "orga_link", "strategic_priority", "category", "category_tags", "complexity"
+            }
+            self.assertEqual(param_names, expected_param_names)
+
+            # All parameters default to mandatory=False (0)
+            self.assertTrue(all(r[3] == 0 for r in params))
+
+            # Check alias for code_line
+            code_line_param = next(r for r in params if r[1] == "code_line")
+            self.assertEqual(code_line_param[4], "code ligne")
+
+            # 3. Verify Enums in schema_param_options
+            cursor.execute("SELECT option_value FROM schema_param_options WHERE param_id='PRM_007' ORDER BY display_order")
+            status_opts = [r[0] for r in cursor.fetchall()]
+            self.assertEqual(status_opts, ["draft", "active", "completed", "canceled"])
+
+            cursor.execute("SELECT option_value FROM schema_param_options WHERE param_id='PRM_008' ORDER BY display_order")
+            phase_opts = [r[0] for r in cursor.fetchall()]
+            self.assertEqual(phase_opts, ["FAI", "APS", "APD1", "APD2", "EXE", "CHA", "DEF", "N/A"])
+
+            cursor.execute("SELECT option_value FROM schema_param_options WHERE param_id='PRM_017' ORDER BY display_order")
+            line_opts = [r[0] for r in cursor.fetchall()]
+            expected_lines = ["1", "1a", "1b", "2b", "3", "4", "5", "6", "6a", "6b", "6c", "6d", "6e", "6f", "6g", "6h", "6j", "6k", "7"]
+            self.assertEqual(line_opts, expected_lines)
+
+            cursor.execute("SELECT option_value FROM schema_param_options WHERE param_id='PRM_030' ORDER BY display_order")
+            complexity_opts = [r[0] for r in cursor.fetchall()]
+            self.assertEqual(complexity_opts, ["High", "Medium", "Low"])
+
+            cursor.execute("SELECT option_value FROM schema_param_options WHERE param_id='PRM_028' ORDER BY display_order")
+            category_opts = [r[0] for r in cursor.fetchall()]
+            self.assertEqual(category_opts, ["categ1", "categ2", "categ3"])
+
+            cursor.execute("SELECT option_value FROM schema_param_options WHERE param_id='PRM_027' ORDER BY display_order")
+            strat_opts = [r[0] for r in cursor.fetchall()]
+            self.assertEqual(strat_opts, ["Critical", "High", "Medium", "Low"])
+
+            cursor.execute("SELECT COUNT(*) FROM schema_param_options WHERE param_id='PRM_016'")
+            station_count = cursor.fetchone()[0]
+            self.assertGreaterEqual(station_count, 120)
+
+            # 4. Verify Sample Projects
+            cursor.execute("SELECT id, name, function_id, dynamic_attributes FROM project")
+            projects = cursor.fetchall()
+            self.assertEqual(len(projects), 3)
+
+            for p in projects:
+                p_id, p_name, func_id, dyn_raw = p
+                self.assertIsNotNone(func_id)
+                self.assertGreater(func_id, 0)
+                dyn_dict = json.loads(dyn_raw)
+                # Verify all 30 parameters exist in dynamic attributes
+                for expected_p in expected_param_names:
+                    self.assertIn(expected_p, dyn_dict)
+
 
 if __name__ == "__main__":
     unittest.main()

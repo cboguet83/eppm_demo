@@ -80,11 +80,23 @@ class PortfolioService:
         if not params.empty and "param_id" in params.columns:
             for _, p in params.iterrows():
                 pid = str(p["param_id"])
+                pname = str(p.get("param_name", pid))
+                alias = str(p.get("alias", "")).strip() if pd.notna(p.get("alias")) else ""
                 ptype = str(p.get("param_type", PARAM_TYPE_TEXT))
+
                 if pid not in df_merged.columns:
                     df_merged[pid] = None
+
+                if pname in df_merged.columns and pname != pid:
+                    df_merged[pid] = df_merged[pid].combine_first(df_merged[pname])
+                if alias and alias in df_merged.columns and alias != pid:
+                    df_merged[pid] = df_merged[pid].combine_first(df_merged[alias])
+
                 if ptype in (PARAM_TYPE_MULTI_ENUM, PARAM_TYPE_TAGS):
                     df_merged[pid] = df_merged[pid].apply(
                         lambda x: x if isinstance(x, list) else ([x] if pd.notna(x) and x != "" else [])
                     )
+
+                if pname != pid:
+                    df_merged[pname] = df_merged[pid]
         return df_merged

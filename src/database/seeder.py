@@ -7,14 +7,231 @@ from src.config import config
 from src.database.connection import get_db
 from src.logging_config import get_logger
 from src.models.constants import (
-    PRIORITY_LIST,
-    PRIORITY_P1_CRITICAL,
-    PRIORITY_P2_HIGH,
     STATUS_COMPLETED,
     STATUS_IN_PROGRESS,
 )
 
 logger = get_logger(__name__)
+
+DEFAULT_SCHEMA_GROUPS: list[tuple[int, str, int]] = [
+    (1, "basic info", 1),
+    (2, "scoping", 2),
+    (3, "localization", 3),
+    (4, "useful links", 4),
+    (5, "classification", 5),
+]
+
+DEFAULT_SCHEMA_PARAMETERS: list[tuple[str, int, str, str, bool, str]] = [
+    # (param_id, group_id, param_name, param_type, mandatory, alias)
+    # basic info
+    ("PRM_001", 1, "code courrier", "TEXT", False, "Code Courrier"),
+    ("PRM_002", 1, "description", "TEXT", False, "Description"),
+    ("PRM_003", 1, "commentaire", "TEXT", False, "Commentaire"),
+    ("PRM_004", 1, "start_date", "DATE", False, "Start Date"),
+    ("PRM_005", 1, "stop_Date", "DATE", False, "Stop Date"),
+    ("PRM_006", 1, "lot", "TEXT", False, "Lot"),
+    ("PRM_007", 1, "status", "ENUM", False, "Status"),
+    ("PRM_008", 1, "phase", "ENUM", False, "Phase"),
+    # scoping
+    ("PRM_009", 2, "benefits", "TEXT", False, "Benefits"),
+    ("PRM_010", 2, "acceptance_ctriteria", "TEXT", False, "Acceptance Criteria"),
+    ("PRM_011", 2, "scope", "TEXT", False, "Scope"),
+    ("PRM_012", 2, "out_of_scope", "TEXT", False, "Out of Scope"),
+    ("PRM_013", 2, "risks", "TEXT", False, "Risks"),
+    ("PRM_014", 2, "stakeholders", "TEXT", False, "Stakeholders"),
+    ("PRM_015", 2, "interfaces", "TEXT", False, "Interfaces"),
+    # localization
+    ("PRM_016", 3, "code_station", "ENUM", False, "Code Station"),
+    ("PRM_017", 3, "code_line", "ENUM", False, "code ligne"),
+    ("PRM_018", 3, "lat", "NUMBER", False, "Latitude"),
+    ("PRM_019", 3, "long", "NUMBER", False, "Longitude"),
+    ("PRM_020", 3, "section", "TEXT", False, "Section"),
+    ("PRM_021", 3, "station", "TEXT", False, "Station"),
+    ("PRM_022", 3, "pk_start", "TEXT", False, "PK Start"),
+    ("PRM_023", 3, "pk_stop", "TEXT", False, "PK Stop"),
+    # useful links
+    ("PRM_024", 4, "acc_link", "HYPERLINK", False, "ACC Link"),
+    ("PRM_025", 4, "pb_link", "HYPERLINK", False, "PB Link"),
+    ("PRM_026", 4, "orga_link", "HYPERLINK", False, "Organization Link"),
+    # classification
+    ("PRM_027", 5, "strategic_priority", "ENUM", False, "Strategic Priority"),
+    ("PRM_028", 5, "category", "ENUM", False, "Category"),
+    ("PRM_029", 5, "category_tags", "TAGS", False, "Category Tags"),
+    ("PRM_030", 5, "complexity", "ENUM", False, "Complexity"),
+]
+
+DEFAULT_STATUS_OPTIONS: list[str] = ["draft", "active", "completed", "canceled"]
+DEFAULT_PHASE_OPTIONS: list[str] = ["FAI", "APS", "APD1", "APD2", "EXE", "CHA", "DEF", "N/A"]
+DEFAULT_LINE_OPTIONS: list[str] = [
+    "1", "1a", "1b", "2b", "3", "4", "5", "6", "6a", "6b", "6c", "6d", "6e", "6f", "6g", "6h", "6j", "6k", "7"
+]
+DEFAULT_COMPLEXITY_OPTIONS: list[str] = ["High", "Medium", "Low"]
+DEFAULT_CATEGORY_OPTIONS: list[str] = ["categ1", "categ2", "categ3"]
+DEFAULT_CATEGORY_TAGS: list[str] = [
+    "categ1", "categ2", "categ3", "Core", "Strategic", "Cloud Native", "Infrastructure", "Modernization", "Compliance", "Digital"
+]
+DEFAULT_STRATEGIC_PRIORITY_OPTIONS: list[str] = ["Critical", "High", "Medium", "Low"]
+
+DEFAULT_STATION_OPTIONS: list[str] = [
+    "Alzingen Al",
+    "Audun-le-Tiche Au",
+    "Bascharage secteur Sanem Ba",
+    "Bascharage secteur Nord Ba-N",
+    "Bellain Bl",
+    "Bellain-Poste de Block BI-Pb",
+    "Belval B",
+    "Belval-Usines Bu",
+    "Belval-Lycée BLy",
+    "Belval-Rédange Br",
+    "Belval-Université BUn",
+    "Belvaux-Soleuvre Bs",
+    "Berchem Bc",
+    "Berchem Est Bc-E",
+    "Berchem Nord Bc-N",
+    "Berchem Ouest Bc-O",
+    "Berchem Sud Bc-S",
+    "Bertrange-Strassen Btr",
+    "Bettembourg Bt",
+    "Bettembourg-Voyageurs Bt-V",
+    "Bettembourg-Marchandises Bt-M",
+    "Bettembourg sect. Container Terminal Bt-C",
+    "Bettembourg secteur Daerenbusch Bt-D",
+    "Bettembourg secteur Ouest Bt-W",
+    "Bettembourg-frontière Bt-frf",
+    "Betzdorf Bz",
+    "Betzdorf-Poste de Block Bz-Pb",
+    "Bissen Bi",
+    "Biwer Bw",
+    "Brucherberg Bb",
+    "Burden Bd",
+    "Capellen Cp",
+    "Cents-Hamm Cs",
+    "Cinqfontaines Cf",
+    "Clervaux Cv",
+    "Colmar-Berg Cb",
+    "Colmar-Usines Cu",
+    "Cruchten Ct",
+    "Cruchten-Poste de Transition Ct-Tra",
+    "Diekirch Dk",
+    "Differdange (gare) D",
+    "Differdange (PA) Di",
+    "Dippach secteur Nord Dr-N",
+    "Dippach secteur Reckange Dr",
+    "Dommeldange Dm",
+    "Drauffelt Df",
+    "Dudelange-Usines Du",
+    "Dudelange-Usines secteur Volmerange-les-Mines Vm",
+    "Dudelange-Burange Db",
+    "Dudelange-Centre Dc",
+    "Dudelange-Ville Dv",
+    "Esch-sur-Alzette Es",
+    "Esch-sur-Alzette-frontière Es-frt",
+    "Esch secteur Lallange Es-L",
+    "Esch secteur Usines Es-Us",
+    "Ettelbruck Eb",
+    "Fentange F",
+    "Fentange sud (Ligne 4) F-S4",
+    "Fentange sud (Ligne 6) F-S6",
+    "Fléibour Fb",
+    "Goebelsmuhle Gb",
+    "Hagelsdorf Hgd",
+    "Heisdorf Hd",
+    "Howald Ho",
+    "Huncherange Hu",
+    "Kautenbach Kt",
+    "Kayl Ka",
+    "Kleinbettingen Kb",
+    "Kleinbettingen-frontière Kb-frb",
+    "Kockelscheuer-Poste de block Ko-Pb",
+    "Lamadelaine Lm",
+    "Langengrund Lg",
+    "Leudelange Ld",
+    "Lintgen Li",
+    "Livange Liv",
+    "Lorentzweiler Lr",
+    "Luxembourg L",
+    "Luxembourg gare centrale Lgc",
+    "Luxembourg sect Cents-Hamm L-Cs",
+    "Luxembourg sect Stadtgrund Ligne 1 L-St",
+    "Luxembourg sect Stadtgrund Ligne 3 L-St3",
+    "Luxembourg secteur Gasperich Ga",
+    "Luxembourg secteur Hollerich Lh",
+    "Luxembourg secteur Triage Lt",
+    "Luxembourg-L-Cm  secteur Centre de maintenance",
+    "Luxembourg - secteur Centre de remisage L-Crm",
+    "Mamer Mr",
+    "Mamer-Lycée Mr-L",
+    "Manternach Mn",
+    "Manternach-Poste de Block Mn-Pb",
+    "Mecher Me",
+    "Merkholtz Mk",
+    "Merkholtz-Poste de Block Mk-Pb",
+    "Mersch M",
+    "Mertert Mt",
+    "Mertert-Port Mt-P",
+    "Mertert-Klinker Mt-K",
+    "Michelau Mc",
+    "Munsbach Mb",
+    "Munsbach-Poste de Block Mb-Pb",
+    "Niederkorn Nk",
+    "Noertzange Nz",
+    "Oberkorn Ok",
+    "Oetrange Oe",
+    "Paradiso Pa",
+    "Pétange P",
+    "Pétange secteur Rodange R",
+    "Pfaffenthal - Kirchberg Pf-K",
+    "Rodange-frontière française R-frf",
+    "Rodange-frontière Aub R-frb1",
+    "Rodange-frontière A R-frb2",
+    "Réseau tertiaire - site de Belval RT-Bu",
+    "Réseau tertiaire - site de Differdange RT-D",
+    "Réseau tertiaire – site de Rodange RT-R",
+    "Réseau tertiaire – site de Schifflange RT-Sg",
+    "Roodt Rt",
+    "Roodt Poste de Transition Rt-Tra",
+    "Rumelange Ru",
+    "Sandweiler-Contern Sc",
+    "Scheuerbusch Schb",
+    "Schieren – Ligne 1 Sr",
+    "Schieren – Ligne 2 Sr2",
+    "Schifflange Sg",
+    "Schouweiler Sw",
+    "Scheidhof Sh",
+    "Syren Sy",
+    "Tétange Tg",
+    "Troisvierges Tv",
+    "Troisvierges secteur Pfaffenmuhle Tv-P",
+    "Troisvierges-frontière Tv-frb",
+    "Walferdange Wf",
+    "Wasserbillig W",
+    "Wasserbillig-frontière W-frd",
+    "Wecker Wk",
+    "Wiltz Wz",
+    "Wilwerwiltz Ww",
+    "Athus: A",
+    "Arlon: Ar",
+    "Aubange-Bifurcation: Aub",
+    "Autelbas: Aut",
+    "Gouvy: Gy",
+    "Hettange-Grande: Hg",
+    "Igel: Ig",
+    "Longwy: Lw",
+    "Mont St Martin-Bifurcation: MSM",
+    "Thionville: Thl",
+    "Trier Hbf: Tr",
+]
+
+DEFAULT_PARAM_OPTIONS: dict[str, list[str]] = {
+    "PRM_007": DEFAULT_STATUS_OPTIONS,
+    "PRM_008": DEFAULT_PHASE_OPTIONS,
+    "PRM_016": DEFAULT_STATION_OPTIONS,
+    "PRM_017": DEFAULT_LINE_OPTIONS,
+    "PRM_027": DEFAULT_STRATEGIC_PRIORITY_OPTIONS,
+    "PRM_028": DEFAULT_CATEGORY_OPTIONS,
+    "PRM_029": DEFAULT_CATEGORY_TAGS,
+    "PRM_030": DEFAULT_COMPLEXITY_OPTIONS,
+}
 
 
 def seed_default_data_if_empty(db_path: Optional[str] = None) -> None:
@@ -34,136 +251,27 @@ def seed_default_data_if_empty(db_path: Optional[str] = None) -> None:
         group_count = cursor.fetchone()[0]
 
         if group_count == 0:
-            logger.info("Seeding default schema groups and parameters...")
-            cursor.execute("INSERT OR IGNORE INTO schema_groups (id, group_name, display_order) VALUES (1, 'Strategic Alignment', 1)")
-            cursor.execute("INSERT OR IGNORE INTO schema_groups (id, group_name, display_order) VALUES (2, 'Governance & Architecture', 2)")
-
-            cursor.execute("INSERT OR IGNORE INTO schema_parameters (param_id, group_id, param_name, param_type) VALUES ('PRM_001', 1, 'Strategic Priority', 'ENUM')")
-            cursor.execute("INSERT OR IGNORE INTO schema_parameters (param_id, group_id, param_name, param_type) VALUES ('PRM_002', 1, 'Business Unit', 'ENUM')")
-            cursor.execute("INSERT OR IGNORE INTO schema_parameters (param_id, group_id, param_name, param_type) VALUES ('PRM_003', 2, 'Tech Stack Tags', 'TAGS')")
-            cursor.execute("INSERT OR IGNORE INTO schema_parameters (param_id, group_id, param_name, param_type) VALUES ('PRM_004', 2, 'Repository URL', 'URL')")
-            cursor.execute("INSERT OR IGNORE INTO schema_parameters (param_id, group_id, param_name, param_type) VALUES ('PRM_005', 2, 'Lead Architect', 'TEXT')")
-            cursor.execute("INSERT OR IGNORE INTO schema_parameters (param_id, group_id, param_name, param_type) VALUES ('PRM_006', NULL, 'General Keywords', 'TAGS')")
-
-            prm_001_opts = PRIORITY_LIST
-            for idx, opt in enumerate(prm_001_opts, 1):
-                cursor.execute("INSERT INTO schema_param_options (param_id, option_value, display_order) VALUES ('PRM_001', ?, ?)", (opt, idx))
-
-            prm_002_opts = ["Engineering", "Product", "Operations", "Finance", "Marketing"]
-            for idx, opt in enumerate(prm_002_opts, 1):
-                cursor.execute("INSERT INTO schema_param_options (param_id, option_value, display_order) VALUES ('PRM_002', ?, ?)", (opt, idx))
-
-            prm_003_opts = ["Python", "React", "Cloud Native", "AI/ML", "Kubernetes", "PostgreSQL"]
-            for idx, opt in enumerate(prm_003_opts, 1):
-                cursor.execute("INSERT INTO schema_param_options (param_id, option_value, display_order) VALUES ('PRM_003', ?, ?)", (opt, idx))
-
-        # Check Projects
-        cursor.execute("SELECT id FROM project")
-        existing_pids = {row[0] for row in cursor.fetchall()}
-
-        sample_projects = [
-            (
-                1,
-                "NextGen ERP Modernization",
-                STATUS_IN_PROGRESS,
-                450000.0,
-                380000.0,
-                json.dumps({
-                    "PRM_001": PRIORITY_P1_CRITICAL,
-                    "PRM_002": "Engineering",
-                    "PRM_003": ["Python", "Cloud Native", "Kubernetes"],
-                    "PRM_004": "https://github.com/enterprise/erp-modernization",
-                    "PRM_005": "Dr. Sarah Connor",
-                    "PRM_006": ["Core", "2026-Priority"],
-                }),
-            ),
-            (
-                2,
-                "Customer 360 AI Analytics",
-                STATUS_IN_PROGRESS,
-                280000.0,
-                310000.0,
-                json.dumps({
-                    "PRM_001": PRIORITY_P1_CRITICAL,
-                    "PRM_002": "Product",
-                    "PRM_003": ["Python", "AI/ML"],
-                    "PRM_004": "https://github.com/enterprise/c360-ai",
-                    "PRM_005": "Alex Chen",
-                    "PRM_006": ["AI", "Analytics"],
-                }),
-            ),
-            (
-                3,
-                "Global Supply Chain Audit",
-                STATUS_COMPLETED,
-                150000.0,
-                142000.0,
-                json.dumps({
-                    "PRM_001": PRIORITY_P2_HIGH,
-                    "PRM_002": "Operations",
-                    "PRM_003": ["Cloud Native"],
-                    "PRM_004": "https://docs.enterprise.internal/audit",
-                    "PRM_005": "Elena Rostova",
-                    "PRM_006": ["Compliance"],
-                }),
-            ),
-        ]
-
-        if not existing_pids:
-            logger.info("Seeding sample projects...")
+            logger.info("Seeding default schema groups, parameters, and enum options...")
             cursor.executemany(
-                "INSERT INTO project (id, name, status, planned_budget, actual_budget, dynamic_attributes) VALUES (?, ?, ?, ?, ?, ?)",
-                sample_projects,
+                "INSERT OR IGNORE INTO schema_groups (id, group_name, display_order) VALUES (?, ?, ?)",
+                DEFAULT_SCHEMA_GROUPS,
             )
-            cursor.execute("SELECT id FROM project")
-            existing_pids = {row[0] for row in cursor.fetchall()}
 
-        # Check Tasks / Milestones
-        cursor.execute("SELECT COUNT(*) FROM project_task")
-        milestone_count = cursor.fetchone()[0]
-
-        if milestone_count == 0:
-            logger.info("Seeding sample project steps and tasks...")
-            if 1 in existing_pids or "PRJ-001" in existing_pids:
-                p1_id = 1 if 1 in existing_pids else "PRJ-001"
+            for p_id, g_id, p_name, p_type, mand, alias in DEFAULT_SCHEMA_PARAMETERS:
                 cursor.execute(
-                    "INSERT INTO project_task (id, project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id) VALUES (1, ?, 'Architecture & Scoping', 'Phase 1 - Inception', '2026-01-10', '2026-02-15', 100, NULL)",
-                    (p1_id,),
-                )
-                cursor.execute(
-                    "INSERT INTO project_task (id, project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id) VALUES (2, ?, 'Architecture Sign-Off', 'Phase 1 - Inception', '2026-02-15', '2026-02-15', 100, 1)",
-                    (p1_id,),
-                )
-                cursor.execute(
-                    "INSERT INTO project_task (id, project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id) VALUES (3, ?, 'Core Microservices Dev', 'Phase 2 - Build', '2026-02-16', '2026-06-30', 75, 2)",
-                    (p1_id,),
-                )
-                cursor.execute(
-                    "INSERT INTO project_task (id, project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id) VALUES (4, ?, 'Integration & UAT', 'Phase 3 - Validation', '2026-07-01', '2026-09-15', 25, 3)",
-                    (p1_id,),
-                )
-                cursor.execute(
-                    "INSERT INTO project_task (id, project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id) VALUES (5, ?, 'Go-Live Release', 'Phase 4 - Rollout', '2026-09-15', '2026-09-15', 0, 4)",
-                    (p1_id,),
+                    """
+                    INSERT OR IGNORE INTO schema_parameters (param_id, group_id, param_name, param_type, mandatory, alias)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (p_id, g_id, p_name, p_type, 1 if mand else 0, alias),
                 )
 
-            if 2 in existing_pids or "PRJ-002" in existing_pids:
-                p2_id = 2 if 2 in existing_pids else "PRJ-002"
-                cursor.execute(
-                    "INSERT INTO project_task (project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id) VALUES (?, 'Data Pipeline Ingestion', 'Phase 1 - Data Eng', '2026-02-01', '2026-04-15', 100, NULL)",
-                    (p2_id,),
-                )
-                cursor.execute(
-                    "INSERT INTO project_task (project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id) VALUES (?, 'Model Training & Tuning', 'Phase 2 - ML Dev', '2026-04-16', '2026-07-30', 65, NULL)",
-                    (p2_id,),
-                )
-
-            if 3 in existing_pids or "PRJ-003" in existing_pids:
-                p3_id = 3 if 3 in existing_pids else "PRJ-003"
-                cursor.execute(
-                    "INSERT INTO project_task (project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id) VALUES (?, 'Audit Execution', 'Phase 1 - Audit', '2026-02-11', '2026-04-20', 100, NULL)",
-                    (p3_id,),
-                )
+            for param_id, opts in DEFAULT_PARAM_OPTIONS.items():
+                for idx, opt in enumerate(opts, 1):
+                    cursor.execute(
+                        "INSERT INTO schema_param_options (param_id, option_value, display_order) VALUES (?, ?, ?)",
+                        (param_id, opt, idx),
+                    )
 
         # Check Function Types
         cursor.execute("SELECT COUNT(*) FROM function_type")
@@ -235,7 +343,189 @@ def seed_default_data_if_empty(db_path: Optional[str] = None) -> None:
             cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (48, 'Assistant A_1_B', 5, 6, 10, NULL, 100, 0)")
             cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (49, 'BIM Manager', 5, 8, 13, NULL, 100, 0)")
             cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (50, 'BIM Assistant', 5, 7, 13, NULL, 100, 0)")
-          
+
+        # Check Projects
+        cursor.execute("SELECT id FROM project")
+        existing_pids = {row[0] for row in cursor.fetchall()}
+
+        sample_projects = [
+            (
+                1,
+                "NextGen ERP Modernization",
+                STATUS_IN_PROGRESS,
+                450000.0,
+                380000.0,
+                json.dumps({
+                    "code courrier": "CR-2026-001",
+                    "description": "Modernization of ERP core services across logistics and finance",
+                    "commentaire": "Phase 1 architecture validated by steerco",
+                    "start_date": "2026-01-10",
+                    "stop_Date": "2026-12-31",
+                    "lot": "Lot 1 - Core Backend",
+                    "status": "active",
+                    "phase": "EXE",
+                    "benefits": "Increases system throughput, unifies ledger, and reduces operating costs by 22%",
+                    "acceptance_ctriteria": "Pass 100% UAT test scenarios and verify automated reconciliations",
+                    "scope": "Inventory management, general ledger, and human capital modules",
+                    "out_of_scope": "Legacy mainframe payroll archive interfaces",
+                    "risks": "Database schema migration downtime during live cutover",
+                    "stakeholders": "Finance Director, Operations VP, IT Steering Committee",
+                    "interfaces": "Core SAP Gateway, Legacy Oracle DB, Active Directory",
+                    "code_station": "Luxembourg L",
+                    "code_line": "1",
+                    "lat": 49.6000,
+                    "long": 6.1333,
+                    "section": "Section Alpha",
+                    "station": "Luxembourg Gare Centrale",
+                    "pk_start": "PK 0+000",
+                    "pk_stop": "PK 14+500",
+                    "acc_link": "https://internal.enterprise.org/acc/erp-2026",
+                    "pb_link": "https://jira.enterprise.org/browse/ERP-2026",
+                    "orga_link": "https://confluence.enterprise.org/pages/view/erp-modernization",
+                    "strategic_priority": "Critical",
+                    "category": "categ1",
+                    "category_tags": ["Core", "Strategic", "Cloud Native"],
+                    "complexity": "High",
+                }),
+                17,
+            ),
+            (
+                2,
+                "Customer 360 AI Analytics",
+                STATUS_IN_PROGRESS,
+                280000.0,
+                310000.0,
+                json.dumps({
+                    "code courrier": "CR-2026-002",
+                    "description": "Customer 360 AI Analytics Platform",
+                    "commentaire": "Initial model training shows 94% accuracy",
+                    "start_date": "2026-02-01",
+                    "stop_Date": "2026-10-15",
+                    "lot": "Lot 2 - ML Pipelines",
+                    "status": "active",
+                    "phase": "APD2",
+                    "benefits": "Provides real-time customer behavior predictions and churn early-warning signals",
+                    "acceptance_ctriteria": "Real-time stream latency < 500ms and model precision > 90%",
+                    "scope": "Omnichannel behavioral ingestion and marketing segmentation pipelines",
+                    "out_of_scope": "Third-party ad-network direct bidding integration",
+                    "risks": "Data privacy and GDPR consent compliance overhead",
+                    "stakeholders": "Chief Marketing Officer, Data Science Lead, Compliance Officer",
+                    "interfaces": "Apache Kafka, Snowflake Lakehouse, CRM API",
+                    "code_station": "Bettembourg Bt",
+                    "code_line": "6",
+                    "lat": 49.5186,
+                    "long": 6.0986,
+                    "section": "Section Sud 6",
+                    "station": "Bettembourg Voyageurs",
+                    "pk_start": "PK 5+200",
+                    "pk_stop": "PK 18+750",
+                    "acc_link": "https://internal.enterprise.org/acc/c360-ai",
+                    "pb_link": "https://jira.enterprise.org/browse/C360-AI",
+                    "orga_link": "https://confluence.enterprise.org/pages/view/customer-360",
+                    "strategic_priority": "High",
+                    "category": "categ2",
+                    "category_tags": ["AI/ML", "Analytics", "Innovation"],
+                    "complexity": "Medium",
+                }),
+                18,
+            ),
+            (
+                3,
+                "Global Supply Chain Audit",
+                STATUS_COMPLETED,
+                150000.0,
+                142000.0,
+                json.dumps({
+                    "code courrier": "CR-2026-003",
+                    "description": "Global Supply Chain Compliance & Audit",
+                    "commentaire": "All audit recommendations remediated and approved",
+                    "start_date": "2026-02-11",
+                    "stop_Date": "2026-08-30",
+                    "lot": "Lot 3 - Governance Audit",
+                    "status": "completed",
+                    "phase": "DEF",
+                    "benefits": "Ensures full ISO-27001 and regulatory supply chain compliance",
+                    "acceptance_ctriteria": "Zero high or critical findings on external audit sign-off",
+                    "scope": "Global logistics vendors, supply warehousing, and customs clearance procedures",
+                    "out_of_scope": "Direct tier-3 raw material suppliers",
+                    "risks": "Vendor documentation delivery delays",
+                    "stakeholders": "Audit Committee, Chief Legal Counsel, Procurement Director",
+                    "interfaces": "ERP Vendor Portal, Customs Electronic Clearinghouse",
+                    "code_station": "Esch-sur-Alzette Es",
+                    "code_line": "6a",
+                    "lat": 49.4958,
+                    "long": 5.9806,
+                    "section": "Section Ouest 6a",
+                    "station": "Esch-sur-Alzette",
+                    "pk_start": "PK 1+100",
+                    "pk_stop": "PK 8+900",
+                    "acc_link": "https://internal.enterprise.org/acc/audit-2026",
+                    "pb_link": "https://jira.enterprise.org/browse/AUD-2026",
+                    "orga_link": "https://confluence.enterprise.org/pages/view/supply-audit",
+                    "strategic_priority": "Medium",
+                    "category": "categ3",
+                    "category_tags": ["Compliance", "Operations"],
+                    "complexity": "Low",
+                }),
+                22,
+            ),
+        ]
+
+        if not existing_pids:
+            logger.info("Seeding sample projects...")
+            cursor.executemany(
+                "INSERT INTO project (id, name, status, planned_budget, actual_budget, dynamic_attributes, function_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                sample_projects,
+            )
+            cursor.execute("SELECT id FROM project")
+            existing_pids = {row[0] for row in cursor.fetchall()}
+
+        # Check Tasks / Milestones
+        cursor.execute("SELECT COUNT(*) FROM project_task")
+        milestone_count = cursor.fetchone()[0]
+
+        if milestone_count == 0:
+            logger.info("Seeding sample project steps and tasks...")
+            if 1 in existing_pids or "PRJ-001" in existing_pids:
+                p1_id = 1 if 1 in existing_pids else "PRJ-001"
+                cursor.execute(
+                    "INSERT INTO project_task (id, project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id) VALUES (1, ?, 'Architecture & Scoping', 'Phase 1 - Inception', '2026-01-10', '2026-02-15', 100, NULL)",
+                    (p1_id,),
+                )
+                cursor.execute(
+                    "INSERT INTO project_task (id, project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id) VALUES (2, ?, 'Architecture Sign-Off', 'Phase 1 - Inception', '2026-02-15', '2026-02-15', 100, 1)",
+                    (p1_id,),
+                )
+                cursor.execute(
+                    "INSERT INTO project_task (id, project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id) VALUES (3, ?, 'Core Microservices Dev', 'Phase 2 - Build', '2026-02-16', '2026-06-30', 75, 2)",
+                    (p1_id,),
+                )
+                cursor.execute(
+                    "INSERT INTO project_task (id, project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id) VALUES (4, ?, 'Integration & UAT', 'Phase 3 - Validation', '2026-07-01', '2026-09-15', 25, 3)",
+                    (p1_id,),
+                )
+                cursor.execute(
+                    "INSERT INTO project_task (id, project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id) VALUES (5, ?, 'Go-Live Release', 'Phase 4 - Rollout', '2026-09-15', '2026-09-15', 0, 4)",
+                    (p1_id,),
+                )
+
+            if 2 in existing_pids or "PRJ-002" in existing_pids:
+                p2_id = 2 if 2 in existing_pids else "PRJ-002"
+                cursor.execute(
+                    "INSERT INTO project_task (project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id) VALUES (?, 'Data Pipeline Ingestion', 'Phase 1 - Data Eng', '2026-02-01', '2026-04-15', 100, NULL)",
+                    (p2_id,),
+                )
+                cursor.execute(
+                    "INSERT INTO project_task (project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id) VALUES (?, 'Model Training & Tuning', 'Phase 2 - ML Dev', '2026-04-16', '2026-07-30', 65, NULL)",
+                    (p2_id,),
+                )
+
+            if 3 in existing_pids or "PRJ-003" in existing_pids:
+                p3_id = 3 if 3 in existing_pids else "PRJ-003"
+                cursor.execute(
+                    "INSERT INTO project_task (project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id) VALUES (?, 'Audit Execution', 'Phase 1 - Audit', '2026-02-11', '2026-04-20', 100, NULL)",
+                    (p3_id,),
+                )
 
         # Check Teams
         cursor.execute("SELECT COUNT(*) FROM team")

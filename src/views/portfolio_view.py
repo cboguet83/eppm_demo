@@ -6,7 +6,16 @@ import pandas as pd
 import streamlit as st
 
 from src.i18n import t
-from src.models.constants import PARAM_TYPE_MULTI_ENUM, PARAM_TYPE_TAGS, PARAM_TYPE_TEXT, PARAM_TYPE_URL
+from src.models.constants import (
+    PARAM_TYPE_DATE,
+    PARAM_TYPE_HYPERLINK,
+    PARAM_TYPE_MULTI_ENUM,
+    PARAM_TYPE_NUMBER,
+    PARAM_TYPE_TAGS,
+    PARAM_TYPE_TEXT,
+    PARAM_TYPE_URL,
+)
+from src.repositories.organization_repo import OrganizationRepository
 from src.repositories.project_repo import ProjectRepository
 from src.repositories.schema_repo import SchemaRepository
 from src.services.portfolio_service import PortfolioService
@@ -45,10 +54,24 @@ def render_portfolio_overview(
     # 2. Dynamic Attribute Unpacking
     df_merged = PortfolioService.flatten_dynamic_attributes(df_projects, params)
 
+    # Map project manager function name
+    org_repo = OrganizationRepository(project_repo.db_path)
+    df_funcs = org_repo.get_all_functions()
+    func_name_map = dict(zip(df_funcs["function_id"], df_funcs["name"])) if not df_funcs.empty else {}
+    if "function_id" in df_merged.columns:
+        df_merged["project_manager"] = df_merged["function_id"].map(func_name_map).fillna("—")
+    else:
+        df_merged["project_manager"] = "—"
+
     # 3. Dynamic Column Configuration
     column_configs: dict[str, Any] = {
         "id": st.column_config.TextColumn(t("portfolio.col_id"), help="Unique project identifier", width="small"),
         "name": st.column_config.TextColumn(t("portfolio.col_name"), width="medium"),
+        "project_manager": st.column_config.TextColumn(
+            t("master_data.field_project_manager", default="Project Manager"),
+            help="Project Manager",
+            width="medium",
+        ),
         "status": st.column_config.TextColumn(t("portfolio.col_status"), width="small"),
         "planned_budget": st.column_config.NumberColumn(t("portfolio.col_planned"), format="€%.2f"),
         "actual_budget": st.column_config.NumberColumn(t("portfolio.col_actual"), format="€%.2f"),
@@ -58,9 +81,9 @@ def render_portfolio_overview(
         for _, p in params.iterrows():
             pid = str(p["param_id"])
             pname = str(p.get("param_name", pid))
-            ptype = str(p.get("param_type", PARAM_TYPE_TEXT))
+            ptype = str(p.get("param_type", PARAM_TYPE_TEXT)).upper()
 
-            if ptype == PARAM_TYPE_URL:
+            if ptype in (PARAM_TYPE_URL, PARAM_TYPE_HYPERLINK):
                 column_configs[pid] = st.column_config.LinkColumn(
                     label=pname,
                     help=f"Dynamic URL ({pid})",
@@ -70,6 +93,16 @@ def render_portfolio_overview(
                 column_configs[pid] = st.column_config.ListColumn(
                     label=pname,
                     help=f"Tags / Multi-selection ({pid})",
+                )
+            elif ptype == PARAM_TYPE_DATE:
+                column_configs[pid] = st.column_config.TextColumn(
+                    label=pname,
+                    help=f"Date ({pid})",
+                )
+            elif ptype == PARAM_TYPE_NUMBER:
+                column_configs[pid] = st.column_config.NumberColumn(
+                    label=pname,
+                    help=f"Number ({pid})",
                 )
             else:
                 column_configs[pid] = st.column_config.TextColumn(

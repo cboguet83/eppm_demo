@@ -1,6 +1,8 @@
 """Business logic service for schema management and identifier calculations."""
 
-from typing import Optional
+from typing import Any, Optional
+
+import pandas as pd
 
 from src.database.connection import get_db
 from src.logging_config import get_logger
@@ -63,3 +65,45 @@ class SchemaService:
                         max_num = max(max_num, int(val))
 
             return f"PRM_{max_num + 1:03d}"
+
+    @staticmethod
+    def validate_project_dynamic_attributes(
+        dynamic_attributes: dict[str, Any], params_df: pd.DataFrame
+    ) -> list[str]:
+        """Validates that all mandatory dynamic schema parameters have non-empty values.
+
+        Args:
+            dynamic_attributes: Dictionary of submitted dynamic attribute values.
+            params_df: DataFrame of schema parameters containing [param_id, param_name, mandatory, alias].
+
+        Returns:
+            list[str]: List of parameter labels that are missing or empty.
+        """
+        missing: list[str] = []
+        if params_df.empty or "mandatory" not in params_df.columns:
+            return missing
+
+        for _, row in params_df.iterrows():
+            is_mandatory = bool(row.get("mandatory", False))
+            if not is_mandatory:
+                continue
+
+            pid = str(row["param_id"])
+            pname = str(row.get("param_name", pid))
+            alias = str(row.get("alias", "")).strip() if pd.notna(row.get("alias")) else ""
+
+            # Check value under pid, pname, or alias
+            val = dynamic_attributes.get(pid)
+            if val is None:
+                val = dynamic_attributes.get(pname)
+            if val is None and alias:
+                val = dynamic_attributes.get(alias)
+
+            if val is None:
+                missing.append(pname)
+            elif isinstance(val, str) and not val.strip():
+                missing.append(pname)
+            elif isinstance(val, (list, tuple, set)) and len(val) == 0:
+                missing.append(pname)
+
+        return missing

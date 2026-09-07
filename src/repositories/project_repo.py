@@ -54,7 +54,7 @@ class ProjectRepository:
         """
         with get_db(self.db_path) as conn:
             return pd.read_sql(
-                "SELECT id, name, status, planned_budget, actual_budget, dynamic_attributes FROM project ORDER BY id",
+                "SELECT id, name, status, planned_budget, actual_budget, dynamic_attributes, function_id FROM project ORDER BY id",
                 conn,
             )
 
@@ -93,6 +93,7 @@ class ProjectRepository:
         planned_budget: float = 0.0,
         actual_budget: float = 0.0,
         dynamic_attributes: Optional[dict[str, Any]] = None,
+        function_id: Optional[int] = None,
     ) -> int:
         """Creates a new project record.
 
@@ -103,6 +104,7 @@ class ProjectRepository:
             planned_budget: Planned budget in USD.
             actual_budget: Actual spend in USD.
             dynamic_attributes: Dictionary of dynamic schema values.
+            function_id: Optional foreign key ID towards organizational function (Project Manager).
 
         Returns:
             int: Inserted project ID.
@@ -115,7 +117,7 @@ class ProjectRepository:
             if project_id is not None:
                 int_id = parse_project_id(project_id)
                 cursor.execute(
-                    "INSERT INTO project (id, name, status, planned_budget, actual_budget, dynamic_attributes) VALUES (?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO project (id, name, status, planned_budget, actual_budget, dynamic_attributes, function_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
                     (
                         int_id,
                         name.strip(),
@@ -123,19 +125,21 @@ class ProjectRepository:
                         planned_budget,
                         actual_budget,
                         dyn_json,
+                        function_id,
                     ),
                 )
                 conn.commit()
                 return int_id
             else:
                 cursor.execute(
-                    "INSERT INTO project (name, status, planned_budget, actual_budget, dynamic_attributes) VALUES (?, ?, ?, ?, ?)",
+                    "INSERT INTO project (name, status, planned_budget, actual_budget, dynamic_attributes, function_id) VALUES (?, ?, ?, ?, ?, ?)",
                     (
                         name.strip(),
                         status,
                         planned_budget,
                         actual_budget,
                         dyn_json,
+                        function_id,
                     ),
                 )
                 conn.commit()
@@ -149,6 +153,7 @@ class ProjectRepository:
         planned_budget: float,
         actual_budget: float,
         dynamic_attributes: dict[str, Any],
+        function_id: Optional[int] = None,
     ) -> bool:
         """Updates an existing project record.
 
@@ -159,6 +164,7 @@ class ProjectRepository:
             planned_budget: Updated planned budget.
             actual_budget: Updated actual spend.
             dynamic_attributes: Updated dictionary of dynamic attributes.
+            function_id: Optional foreign key ID towards organizational function (Project Manager).
 
         Returns:
             bool: True if updated.
@@ -167,13 +173,14 @@ class ProjectRepository:
         with get_db(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "UPDATE project SET name = ?, status = ?, planned_budget = ?, actual_budget = ?, dynamic_attributes = ? WHERE id = ?",
+                "UPDATE project SET name = ?, status = ?, planned_budget = ?, actual_budget = ?, dynamic_attributes = ?, function_id = ? WHERE id = ?",
                 (
                     name.strip(),
                     status,
                     planned_budget,
                     actual_budget,
                     json.dumps(dynamic_attributes),
+                    function_id,
                     int_id,
                 ),
             )

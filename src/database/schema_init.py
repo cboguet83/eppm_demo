@@ -39,11 +39,13 @@ def init_db(db_path: Optional[str] = None) -> None:
                 group_id INTEGER,
                 param_name TEXT NOT NULL,
                 param_type TEXT NOT NULL,
+                mandatory BOOLEAN DEFAULT 0,
+                alias TEXT DEFAULT '',
                 FOREIGN KEY (group_id) REFERENCES schema_groups (id) ON DELETE RESTRICT
             )
         """)
 
-        # Migration check: ensure schema_parameters uses param_id as primary key
+        # Migration check: ensure schema_parameters uses param_id as primary key, plus mandatory and alias columns
         cursor.execute("PRAGMA table_info(schema_parameters)")
         param_cols = {col[1]: col for col in cursor.fetchall()}
         if "param_id" not in param_cols or param_cols["param_id"][5] == 0:
@@ -54,6 +56,8 @@ def init_db(db_path: Optional[str] = None) -> None:
                     group_id INTEGER,
                     param_name TEXT NOT NULL,
                     param_type TEXT NOT NULL,
+                    mandatory BOOLEAN DEFAULT 0,
+                    alias TEXT DEFAULT '',
                     FOREIGN KEY (group_id) REFERENCES schema_groups (id) ON DELETE RESTRICT
                 )
             """)
@@ -71,6 +75,13 @@ def init_db(db_path: Optional[str] = None) -> None:
                 """)
             cursor.execute("DROP TABLE schema_parameters")
             cursor.execute("ALTER TABLE schema_parameters_migrated RENAME TO schema_parameters")
+            cursor.execute("PRAGMA table_info(schema_parameters)")
+            param_cols = {col[1]: col for col in cursor.fetchall()}
+
+        if "mandatory" not in param_cols:
+            cursor.execute("ALTER TABLE schema_parameters ADD COLUMN mandatory BOOLEAN DEFAULT 0")
+        if "alias" not in param_cols:
+            cursor.execute("ALTER TABLE schema_parameters ADD COLUMN alias TEXT DEFAULT ''")
 
         # 3. Discrete Enum & Tags Options Table
         cursor.execute("""
@@ -91,7 +102,9 @@ def init_db(db_path: Optional[str] = None) -> None:
                 status TEXT DEFAULT 'Draft',
                 planned_budget REAL DEFAULT 0.0,
                 actual_budget REAL DEFAULT 0.0,
-                dynamic_attributes TEXT
+                dynamic_attributes TEXT,
+                function_id INTEGER,
+                FOREIGN KEY (function_id) REFERENCES function (function_id) ON DELETE RESTRICT
             )
         """)
 
@@ -124,6 +137,12 @@ def init_db(db_path: Optional[str] = None) -> None:
                         (p_name, p_status, p_plan, p_act, p_dyn),
                     )
             cursor.execute("DROP TABLE projects")
+
+        cursor.execute("PRAGMA table_info(project)")
+        proj_cols = {col[1] for col in cursor.fetchall()}
+        if "function_id" not in proj_cols:
+            logger.info("Migrating project table: adding function_id column")
+            cursor.execute("ALTER TABLE project ADD COLUMN function_id INTEGER REFERENCES function (function_id) ON DELETE RESTRICT")
 
         # 5. Project Tasks Table (renamed from project_milestones, INTEGER PRIMARY KEY)
         cursor.execute("""
@@ -415,6 +434,8 @@ def init_db(db_path: Optional[str] = None) -> None:
             cursor.execute("ALTER TABLE project ADD COLUMN planned_budget REAL DEFAULT 0.0")
         if "actual_budget" not in proj_cols:
             cursor.execute("ALTER TABLE project ADD COLUMN actual_budget REAL DEFAULT 0.0")
+        if "function_id" not in proj_cols:
+            cursor.execute("ALTER TABLE project ADD COLUMN function_id INTEGER REFERENCES function(function_id) ON DELETE RESTRICT")
 
         # Cleanup legacy hierarchy_level table if present
         cursor.execute("DROP TABLE IF EXISTS hierarchy_level")

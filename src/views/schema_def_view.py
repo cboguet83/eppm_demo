@@ -180,7 +180,17 @@ def render_schema_definition(schema_repo: SchemaRepository) -> None:
             selected_ptype = col4.selectbox(
                 t("schema.param_type"),
                 options=PARAM_TYPES,
-                help="TEXT, ENUM (Single choice), MULTI_ENUM (Multiple choices), TAGS (Tag pills), URL (Link)",
+                help="TEXT, ENUM (Single choice), MULTI_ENUM (Multiple choices), TAGS (Tag pills), URL (Link), DATE, NUMBER, HYPERLINK",
+            )
+
+            col5, col6 = st.columns(2)
+            new_param_alias = col5.text_input(
+                t("schema.param_alias", default="Parameter Alias (Optional)"),
+                placeholder=t("schema.param_alias_placeholder", default="e.g. code ligne"),
+            )
+            new_param_mandatory = col6.checkbox(
+                t("schema.param_mandatory", default="Mandatory parameter (required to save project)"),
+                value=False,
             )
 
             initial_opts = ""
@@ -203,6 +213,8 @@ def render_schema_definition(schema_repo: SchemaRepository) -> None:
                             group_id=selected_gid,
                             param_name=clean_pname,
                             param_type=selected_ptype,
+                            mandatory=new_param_mandatory,
+                            alias=new_param_alias.strip() if new_param_alias.strip() else None,
                         )
 
                         if selected_ptype in (PARAM_TYPE_ENUM, PARAM_TYPE_MULTI_ENUM, PARAM_TYPE_TAGS) and initial_opts.strip():
@@ -231,8 +243,16 @@ def render_schema_definition(schema_repo: SchemaRepository) -> None:
                 params_display["Group"] = None
 
             params_display["Group"] = params_display["Group"].fillna(t("schema.param_group_none"))
+            cols_to_show = ["param_id", "Group", "param_name"]
+            if "alias" in params_display.columns:
+                cols_to_show.append("alias")
+            cols_to_show.append("param_type")
+            if "mandatory" in params_display.columns:
+                params_display["mandatory"] = params_display["mandatory"].apply(lambda x: "✅ Yes" if bool(x) else "No")
+                cols_to_show.append("mandatory")
+
             st.dataframe(
-                params_display[["param_id", "Group", "param_name", "param_type"]],
+                params_display[cols_to_show],
                 width="stretch",
                 hide_index=True,
             )

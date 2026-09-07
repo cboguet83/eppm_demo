@@ -35,11 +35,11 @@ class SchemaRepository:
         """Loads all schema parameters.
 
         Returns:
-            pd.DataFrame: DataFrame containing [param_id, group_id, param_name, param_type].
+            pd.DataFrame: DataFrame containing [param_id, group_id, param_name, param_type, mandatory, alias].
         """
         with get_db(self.db_path) as conn:
             return pd.read_sql(
-                "SELECT param_id, group_id, param_name, param_type FROM schema_parameters",
+                "SELECT param_id, group_id, param_name, param_type, mandatory, alias FROM schema_parameters",
                 conn,
             )
 
@@ -118,6 +118,8 @@ class SchemaRepository:
         group_id: Optional[int],
         param_name: str,
         param_type: str,
+        mandatory: bool = False,
+        alias: Optional[str] = None,
     ) -> bool:
         """Inserts a new dynamic parameter record.
 
@@ -126,6 +128,8 @@ class SchemaRepository:
             group_id: Optional parent schema group ID.
             param_name: Parameter label.
             param_type: Data type string.
+            mandatory: Whether this parameter is required to save a project.
+            alias: Optional alternative name or display alias.
 
         Returns:
             bool: True if inserted successfully.
@@ -133,8 +137,53 @@ class SchemaRepository:
         with get_db(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "INSERT INTO schema_parameters (param_id, group_id, param_name, param_type) VALUES (?, ?, ?, ?)",
-                (param_id.strip(), group_id, param_name.strip(), param_type),
+                "INSERT INTO schema_parameters (param_id, group_id, param_name, param_type, mandatory, alias) VALUES (?, ?, ?, ?, ?, ?)",
+                (
+                    param_id.strip(),
+                    group_id,
+                    param_name.strip(),
+                    param_type,
+                    1 if mandatory else 0,
+                    alias.strip() if alias else "",
+                ),
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def update_parameter(
+        self,
+        param_id: str,
+        group_id: Optional[int],
+        param_name: str,
+        param_type: str,
+        mandatory: bool = False,
+        alias: Optional[str] = None,
+    ) -> bool:
+        """Updates an existing dynamic parameter definition.
+
+        Args:
+            param_id: Unique parameter ID.
+            group_id: Optional parent schema group ID.
+            param_name: Updated parameter label.
+            param_type: Updated data type string.
+            mandatory: Whether the parameter is mandatory.
+            alias: Optional parameter alias.
+
+        Returns:
+            bool: True if updated.
+        """
+        with get_db(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE schema_parameters SET group_id = ?, param_name = ?, param_type = ?, mandatory = ?, alias = ? WHERE param_id = ?",
+                (
+                    group_id,
+                    param_name.strip(),
+                    param_type,
+                    1 if mandatory else 0,
+                    alias.strip() if alias else "",
+                    param_id.strip(),
+                ),
             )
             conn.commit()
             return cursor.rowcount > 0
