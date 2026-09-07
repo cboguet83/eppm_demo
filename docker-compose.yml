@@ -1,0 +1,22 @@
+version: "3.8"
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ppm-studio-pro
+    restart: unless-stopped
+    ports:
+      - "8501:8501"
+    environment:
+      - DB_NAME=/app/data/ppm_mock.db
+      - LOG_LEVEL=INFO
+      - APP_ENV=production
+    volumes:
+      - ppm_data:/app/data
+
+volumes:
+  ppm_data:
+    driver: local
+
