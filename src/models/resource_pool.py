@@ -152,14 +152,17 @@ class PoolCapacityDetail:
     Attributes:
         pool_id: Pool ID.
         pool_name: Pool name.
-        total_capacity_fte: Effective capacity limit used for demand checks. This is
+        total_capacity_fte: Theoretical pool capacity shown in the grid. This is
             the defined capacity when present, otherwise assigned capacity.
-        defined_capacity_fte: User-defined pool capacity, if configured.
+        defined_capacity_fte: User-defined theoretical pool capacity, if configured.
         assigned_capacity_fte: Capacity calculated from unique assigned resources.
+        has_assigned_resources: Whether at least one valid resource contributes capacity.
+        effective_capacity_fte: Base capacity used for demand checks. This coalesces
+            assigned capacity with theoretical capacity when no resource is assigned.
         peak_assigned_fte: Maximum assigned FTE active on any single day.
         total_assigned_fte_scalar: Simple scalar sum of all active assignments.
-        is_overassigned: True if peak_assigned_fte > total_capacity_fte.
-        peak_excess_fte: peak_assigned_fte - total_capacity_fte if overassigned, else 0.0.
+        is_overassigned: True when demand exceeds effective capacity on any date.
+        peak_excess_fte: Largest single-day excess over effective capacity.
         contributing_functions: List of individual function contributions.
         assignments: List of active assignments with resolved project and task names.
         daily_overassignments: List of dates where assignment exceeds pool capacity.
@@ -181,6 +184,8 @@ class PoolCapacityDetail:
     defined_capacity_fte: Optional[float] = None
     assigned_capacity_fte: float = 0.0
     daily_assigned_capacity: Dict[str, float] = field(default_factory=dict)
+    has_assigned_resources: bool = False
+    effective_capacity_fte: float = 0.0
 
     @property
     def contributing_resources(self) -> List[PoolFunctionContribution]:

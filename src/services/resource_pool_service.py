@@ -82,8 +82,9 @@ class ResourcePoolService:
         precedence over team-derived membership; among multiple teams, the highest
         allocation is used. Legacy function-only pools remain supported.
 
-        Daily overassignment rule: On each calendar date, total assigned FTE is aggregated.
-        If the peak daily assigned FTE exceeds total pool capacity, the pool is overassigned.
+        Daily overassignment rule: On each calendar date, demand is compared with
+        assigned resource capacity for that date. The user-defined theoretical
+        capacity is used only when no resource is assigned to the pool.
 
         Args:
             pool_id: Resource pool ID.
@@ -284,6 +285,7 @@ class ResourcePoolService:
             )
 
         assigned_capacity_fte = round(assigned_capacity_fte, 3)
+        has_assigned_resources = bool(contributions)
         # Calendar exceptions make employee capacity time-dependent. Keep a
         # sparse date map containing only dates that differ from the normal
         # assigned capacity; consumers use assigned_capacity_fte otherwise.
@@ -319,6 +321,9 @@ class ResourcePoolService:
             round(float(defined_capacity_fte), 3)
             if defined_capacity_fte is not None
             else assigned_capacity_fte
+        )
+        effective_capacity_fte = (
+            assigned_capacity_fte if has_assigned_resources else total_capacity_fte
         )
 
         # 3. Fetch Assignments & Analyze Daily Overassignments
@@ -436,21 +441,18 @@ class ResourcePoolService:
 
         if daily_usage:
             peak_assigned_fte = round(max(daily_usage.values()), 3)
+            daily_overassignments = cls.calculate_daily_overassignments(
+                daily_usage,
+                effective_capacity_fte,
+                daily_assigned_capacity if has_assigned_resources else None,
+            )
 
-            for d_str in sorted(daily_usage.keys()):
-                d_fte = round(daily_usage[d_str], 3)
-                if d_fte > (total_capacity_fte + 1e-4):
-                    daily_overassignments.append(
-                        DailyOverassignment(
-                            date=d_str,
-                            capacity_fte=total_capacity_fte,
-                            assigned_fte=d_fte,
-                            excess_fte=round(d_fte - total_capacity_fte, 3),
-                        )
-                    )
-
-        is_overassigned = peak_assigned_fte > (total_capacity_fte + 1e-4)
-        peak_excess = round(peak_assigned_fte - total_capacity_fte, 3) if is_overassigned else 0.0
+        is_overassigned = bool(daily_overassignments)
+        peak_excess = (
+            round(max(item.excess_fte for item in daily_overassignments), 3)
+            if daily_overassignments
+            else 0.0
+        )
 
         # Group daily overassignments into human-readable intervals
         overassignment_intervals = cls._group_date_intervals(daily_overassignments)
@@ -471,6 +473,8 @@ class ResourcePoolService:
             defined_capacity_fte=defined_capacity_fte,
             assigned_capacity_fte=assigned_capacity_fte,
             daily_assigned_capacity=daily_assigned_capacity,
+            has_assigned_resources=has_assigned_resources,
+            effective_capacity_fte=effective_capacity_fte,
         )
 
     @classmethod
@@ -516,16 +520,48 @@ class ResourcePoolService:
             daily_project_usage[d] = round(max(proj_daily.get(d, 0.0), task_daily.get(d, 0.0)), 3)
 
         project_peak_assigned = round(max(daily_project_usage.values()), 3) if daily_project_usage else 0.0
-        is_project_overassigned = project_peak_assigned > (pool_detail.total_capacity_fte + 1e-4)
-        project_excess = round(project_peak_assigned - pool_detail.total_capacity_fte, 3) if is_project_overassigned else 0.0
+        project_overassignments = cls.calculate_daily_overassignments(
+            daily_project_usage,
+            pool_detail.effective_capacity_fte,
+            (
+                pool_detail.daily_assigned_capacity
+                if pool_detail.has_assigned_resources
+                else None
+            ),
+        )
+        is_project_overassigned = bool(project_overassignments)
+        project_excess = (
+            round(max(item.excess_fte for item in project_overassignments), 3)
+            if project_overassignments
+            else 0.0
+        )
+        project_capacities = [
+            cls.get_effective_capacity_for_date(
+                date_str,
+                pool_detail.effective_capacity_fte,
+                (
+                    pool_detail.daily_assigned_capacity
+                    if pool_detail.has_assigned_resources
+                    else None
+                ),
+            )
+            for date_str in daily_project_usage
+        ]
+        minimum_project_capacity = (
+            round(min(project_capacities), 3)
+            if project_capacities
+            else pool_detail.effective_capacity_fte
+        )
 
         return {
             "pool_id": pool_id,
             "pool_name": pool_detail.pool_name,
-            "pool_capacity_fte": pool_detail.total_capacity_fte,
+            "pool_capacity_fte": pool_detail.effective_capacity_fte,
+            "minimum_capacity_fte": minimum_project_capacity,
             "project_peak_assigned_fte": project_peak_assigned,
             "is_overassigned": is_project_overassigned,
             "excess_fte": project_excess,
+            "overallocated_dates": [item.date for item in project_overassignments],
             "assignments_count": len(project_assignments),
         }
 
@@ -561,6 +597,46 @@ class ResourcePoolService:
     # =========================================================================
     # Internal Helpers
     # =========================================================================
+    @staticmethod
+    def get_effective_capacity_for_date(
+        date_str: str,
+        base_capacity_fte: float,
+        daily_capacity: Optional[Dict[str, float]] = None,
+    ) -> float:
+        """Return the effective capacity for one date, honoring sparse overrides."""
+        if daily_capacity and date_str in daily_capacity:
+            return round(float(daily_capacity[date_str]), 3)
+        return round(float(base_capacity_fte), 3)
+
+    @classmethod
+    def calculate_daily_overassignments(
+        cls,
+        daily_usage: Dict[str, float],
+        base_capacity_fte: float,
+        daily_capacity: Optional[Dict[str, float]] = None,
+    ) -> List[DailyOverassignment]:
+        """Compare every demand day with that day's effective capacity.
+
+        A period is therefore considered overallocated when even a single day
+        exceeds capacity; an otherwise under-capacity period cannot hide it.
+        """
+        overassignments: List[DailyOverassignment] = []
+        for date_str in sorted(daily_usage):
+            demand_fte = round(float(daily_usage[date_str]), 3)
+            capacity_fte = cls.get_effective_capacity_for_date(
+                date_str, base_capacity_fte, daily_capacity
+            )
+            if demand_fte > capacity_fte + 1e-4:
+                overassignments.append(
+                    DailyOverassignment(
+                        date=date_str,
+                        capacity_fte=capacity_fte,
+                        assigned_fte=demand_fte,
+                        excess_fte=round(demand_fte - capacity_fte, 3),
+                    )
+                )
+        return overassignments
+
     @staticmethod
     def _accumulate_daily_usage(
         daily_map: Dict[str, float],

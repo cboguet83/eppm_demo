@@ -1026,12 +1026,68 @@ def _open_add_employee_dialog(
         step=5.0,
     )
 
+    st.divider()
+    with st.expander(
+        t(
+            "settings.calendar_exceptions_title",
+            default="Employee Calendar Exceptions",
+        )
+    ):
+        add_initial_exception = st.checkbox(
+            t(
+                "settings.add_initial_calendar_exception",
+                default="Add an initial calendar exception",
+            ),
+            key="new_employee_add_initial_exception",
+        )
+        initial_exception_start = datetime.date.today()
+        initial_exception_end = datetime.date.today()
+        initial_exception_percentage = 0.0
+        initial_exception_reason = ""
+        if add_initial_exception:
+            exc_start_col, exc_end_col = st.columns(2)
+            initial_exception_start = exc_start_col.date_input(
+                t("settings.field_start_date", default="Start date"),
+                value=datetime.date.today(),
+                key="new_employee_exception_start",
+            )
+            initial_exception_end = exc_end_col.date_input(
+                t("settings.field_end_date", default="End date"),
+                value=datetime.date.today(),
+                key="new_employee_exception_end",
+            )
+            initial_exception_percentage = st.number_input(
+                t(
+                    "settings.field_exception_percentage",
+                    default="Working percentage during period",
+                ),
+                min_value=0.0,
+                max_value=100.0,
+                value=0.0,
+                step=5.0,
+                key="new_employee_exception_percentage",
+            )
+            initial_exception_reason = st.text_input(
+                t("settings.field_exception_reason", default="Reason (optional)"),
+                placeholder=t(
+                    "settings.exception_reason_placeholder",
+                    default="e.g. Maternity leave",
+                ),
+                key="new_employee_exception_reason",
+            )
+
     col_save, col_cancel = st.columns(2)
     if col_save.button(t("settings.btn_save", default="💾 Save Employee"), type="primary", use_container_width=True):
         try:
             OrganizationService.validate_employee(
                 new_first, new_last, new_email, new_code, new_occupation
             )
+            if add_initial_exception:
+                OrganizationService.validate_employee_calendar_exception(
+                    initial_exception_start,
+                    initial_exception_end,
+                    initial_exception_percentage,
+                )
             if org_repo.check_email_exists(new_email):
                 st.error(t("settings.err_email_taken", email=new_email, default=f"Email '{new_email}' is already registered."))
             elif org_repo.check_code_exists(new_code):
@@ -1049,6 +1105,16 @@ def _open_add_employee_dialog(
                         occupation_percentage=new_occupation,
                     )
                 )
+                if add_initial_exception:
+                    org_repo.create_employee_calendar_exception(
+                        EmployeeCalendarException(
+                            employee_id=new_eid,
+                            start_date=initial_exception_start,
+                            end_date=initial_exception_end,
+                            occupation_percentage=initial_exception_percentage,
+                            reason=initial_exception_reason,
+                        )
+                    )
                 st.toast(t("settings.msg_emp_created", name=f"{new_first} {new_last}", default=f"Employee '{new_first} {new_last}' added (ID: {new_eid})!"), icon="✅")
                 st.rerun()
         except ValueError as val_err:
@@ -1058,6 +1124,208 @@ def _open_add_employee_dialog(
 
     if col_cancel.button(t("settings.btn_cancel", default="Cancel"), use_container_width=True):
         st.rerun()
+
+
+def _render_employee_calendar_exception_editor(
+    org_repo: OrganizationRepository,
+    employee_id: int,
+    normal_occupation_percentage: float,
+) -> None:
+    """Render calendar exception management for the employee being edited."""
+    st.divider()
+    st.markdown(
+        f"#### {t('settings.calendar_exceptions_title', default='Employee Calendar Exceptions')}"
+    )
+    st.caption(
+        t(
+            "settings.calendar_exceptions_help",
+            default=(
+                "Temporarily override this employee's normal occupation percentage over an "
+                "inclusive date range, for example 0% during maternity leave."
+            ),
+        )
+    )
+
+    effective_today = org_repo.get_effective_occupation_percentage(
+        employee_id, datetime.date.today()
+    )
+    normal_col, effective_col = st.columns(2)
+    normal_col.metric(
+        t("settings.normal_occupation", default="Normal occupation"),
+        f"{normal_occupation_percentage:.1f}%",
+    )
+    effective_col.metric(
+        t("settings.effective_today", default="Effective today"),
+        f"{effective_today:.1f}%" if effective_today is not None else "—",
+    )
+
+    df_exceptions = org_repo.get_employee_calendar_exceptions(employee_id)
+    if not df_exceptions.empty:
+        display_exceptions = df_exceptions[
+            ["start_date", "end_date", "occupation_percentage", "reason"]
+        ].copy()
+        display_exceptions["occupation_percentage"] = display_exceptions[
+            "occupation_percentage"
+        ].map(lambda value: f"{float(value):.1f}%")
+        display_exceptions.columns = [
+            t("settings.field_start_date", default="Start date"),
+            t("settings.field_end_date", default="End date"),
+            t("settings.col_occupation_percentage", default="Occupation %"),
+            t("settings.field_exception_reason", default="Reason"),
+        ]
+        st.dataframe(display_exceptions, hide_index=True, use_container_width=True)
+    else:
+        st.info(
+            t(
+                "settings.no_calendar_exceptions",
+                default="No calendar exceptions are defined for this employee.",
+            )
+        )
+
+    editor_modes = ["add"] + (["edit"] if not df_exceptions.empty else [])
+    editor_mode = st.radio(
+        t("settings.calendar_exception_action", default="Exception action"),
+        options=editor_modes,
+        format_func=lambda mode: (
+            t("settings.action_add", default="Add New")
+            if mode == "add"
+            else t("settings.action_edit", default="Edit")
+        ),
+        horizontal=True,
+        key=f"employee_exception_mode_{employee_id}",
+    )
+
+    selected_exception: Optional[EmployeeCalendarException] = None
+    selected_exception_id: Optional[int] = None
+    if editor_mode == "edit":
+        exception_ids = df_exceptions["exception_id"].astype(int).tolist()
+        exception_labels = {
+            int(row["exception_id"]): (
+                f"{row['start_date']} → {row['end_date']} · "
+                f"{float(row['occupation_percentage']):.1f}%"
+                + (f" · {row['reason']}" if row.get("reason") else "")
+            )
+            for row in df_exceptions.to_dict(orient="records")
+        }
+        selected_exception_id = st.selectbox(
+            t("settings.select_calendar_exception", default="Calendar exception"),
+            options=exception_ids,
+            format_func=lambda exception_id: exception_labels.get(
+                exception_id, str(exception_id)
+            ),
+            key=f"employee_exception_selection_{employee_id}",
+        )
+        selected_exception = org_repo.get_employee_calendar_exception_by_id(
+            selected_exception_id
+        )
+
+    today = datetime.date.today()
+    initial_start = selected_exception.start_date if selected_exception else today
+    initial_end = selected_exception.end_date if selected_exception else today
+    initial_percentage = (
+        float(selected_exception.occupation_percentage)
+        if selected_exception
+        else 0.0
+    )
+    initial_reason = selected_exception.reason if selected_exception else ""
+    widget_suffix = (
+        f"edit_{selected_exception_id}" if selected_exception_id is not None else "add"
+    )
+
+    exception_start_col, exception_end_col = st.columns(2)
+    exception_start = exception_start_col.date_input(
+        t("settings.field_start_date", default="Start date"),
+        value=initial_start,
+        key=f"employee_exception_start_{employee_id}_{widget_suffix}",
+    )
+    exception_end = exception_end_col.date_input(
+        t("settings.field_end_date", default="End date"),
+        value=initial_end,
+        key=f"employee_exception_end_{employee_id}_{widget_suffix}",
+    )
+    exception_percentage = st.number_input(
+        t(
+            "settings.field_exception_percentage",
+            default="Working percentage during period",
+        ),
+        min_value=0.0,
+        max_value=100.0,
+        value=initial_percentage,
+        step=5.0,
+        key=f"employee_exception_percentage_{employee_id}_{widget_suffix}",
+    )
+    exception_reason = st.text_input(
+        t("settings.field_exception_reason", default="Reason (optional)"),
+        value=initial_reason,
+        key=f"employee_exception_reason_{employee_id}_{widget_suffix}",
+    )
+
+    save_exception_col, delete_exception_col = st.columns(2)
+    save_exception_label = (
+        t("settings.btn_add_calendar_exception", default="Add calendar exception")
+        if editor_mode == "add"
+        else t("settings.btn_save_changes", default="Save Changes")
+    )
+    if save_exception_col.button(
+        save_exception_label,
+        type="primary",
+        use_container_width=True,
+        key=f"save_employee_exception_{employee_id}_{widget_suffix}",
+    ):
+        try:
+            OrganizationService.validate_employee_calendar_exception(
+                exception_start, exception_end, exception_percentage
+            )
+            if selected_exception is None:
+                org_repo.create_employee_calendar_exception(
+                    EmployeeCalendarException(
+                        employee_id=employee_id,
+                        start_date=exception_start,
+                        end_date=exception_end,
+                        occupation_percentage=exception_percentage,
+                        reason=exception_reason,
+                    )
+                )
+                message = t(
+                    "settings.msg_calendar_exception_created",
+                    default="Calendar exception created.",
+                )
+            else:
+                org_repo.update_employee_calendar_exception(
+                    EmployeeCalendarException(
+                        exception_id=selected_exception.exception_id,
+                        employee_id=employee_id,
+                        start_date=exception_start,
+                        end_date=exception_end,
+                        occupation_percentage=exception_percentage,
+                        reason=exception_reason,
+                    )
+                )
+                message = t(
+                    "settings.msg_calendar_exception_updated",
+                    default="Calendar exception updated.",
+                )
+            st.toast(message, icon="✅")
+            st.rerun(scope="fragment")
+        except (ValueError, TypeError) as err:
+            st.error(str(err))
+        except Exception as err:
+            st.error(f"Error saving calendar exception: {err}")
+
+    if selected_exception_id is not None and delete_exception_col.button(
+        t("settings.action_delete", default="Delete"),
+        use_container_width=True,
+        key=f"delete_employee_exception_{employee_id}_{selected_exception_id}",
+    ):
+        org_repo.delete_employee_calendar_exception(selected_exception_id)
+        st.toast(
+            t(
+                "settings.msg_calendar_exception_deleted",
+                default="Calendar exception deleted.",
+            ),
+            icon="🗑️",
+        )
+        st.rerun(scope="fragment")
 
 
 @st.dialog(t("settings.dialog_edit_emp", default="✏️ Edit Employee Profile"))
@@ -1101,6 +1369,12 @@ def _open_edit_employee_dialog(
         max_value=100.0,
         value=float(emp_obj.occupation_percentage),
         step=5.0,
+    )
+
+    _render_employee_calendar_exception_editor(
+        org_repo,
+        emp_id,
+        float(emp_obj.occupation_percentage),
     )
 
     col_save, col_cancel = st.columns(2)
@@ -1154,140 +1428,6 @@ def _open_delete_employee_dialog(
         st.toast(t("settings.msg_emp_deleted", default=f"Employee '{emp_name}' deleted."), icon="🗑️")
         st.rerun()
 
-    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), use_container_width=True):
-        st.rerun()
-
-
-@st.dialog(t("settings.dialog_add_calendar_exception", default="Add Calendar Exception"))
-def _open_add_employee_calendar_exception_dialog(
-    org_repo: OrganizationRepository,
-    employee_id: int,
-) -> None:
-    """Modal dialog to add a temporary employee occupation override."""
-    today = datetime.date.today()
-    c_start, c_end = st.columns(2)
-    start_date = c_start.date_input(t("settings.field_start_date", default="Start date"), value=today)
-    end_date = c_end.date_input(t("settings.field_end_date", default="End date"), value=today)
-    occupation_percentage = st.number_input(
-        t("settings.field_exception_percentage", default="Working percentage during period"),
-        min_value=0.0,
-        max_value=100.0,
-        value=0.0,
-        step=5.0,
-    )
-    reason = st.text_input(
-        t("settings.field_exception_reason", default="Reason (optional)"),
-        placeholder=t("settings.exception_reason_placeholder", default="e.g. Maternity leave"),
-    )
-
-    col_save, col_cancel = st.columns(2)
-    if col_save.button(t("settings.btn_save", default="Save"), type="primary", use_container_width=True):
-        try:
-            OrganizationService.validate_employee_calendar_exception(
-                start_date, end_date, occupation_percentage
-            )
-            org_repo.create_employee_calendar_exception(
-                EmployeeCalendarException(
-                    employee_id=employee_id,
-                    start_date=start_date,
-                    end_date=end_date,
-                    occupation_percentage=occupation_percentage,
-                    reason=reason,
-                )
-            )
-            st.toast(t("settings.msg_calendar_exception_created", default="Calendar exception created."), icon="✅")
-            st.rerun()
-        except (ValueError, TypeError) as err:
-            st.error(str(err))
-        except Exception as err:
-            st.error(f"Error adding calendar exception: {err}")
-
-    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), use_container_width=True):
-        st.rerun()
-
-
-@st.dialog(t("settings.dialog_edit_calendar_exception", default="Edit Calendar Exception"))
-def _open_edit_employee_calendar_exception_dialog(
-    org_repo: OrganizationRepository,
-    exception_id: int,
-) -> None:
-    """Modal dialog to edit a temporary employee occupation override."""
-    exception = org_repo.get_employee_calendar_exception_by_id(exception_id)
-    if exception is None:
-        st.error(t("settings.err_calendar_exception_not_found", default="Calendar exception not found."))
-        return
-
-    c_start, c_end = st.columns(2)
-    start_date = c_start.date_input(
-        t("settings.field_start_date", default="Start date"), value=exception.start_date
-    )
-    end_date = c_end.date_input(
-        t("settings.field_end_date", default="End date"), value=exception.end_date
-    )
-    occupation_percentage = st.number_input(
-        t("settings.field_exception_percentage", default="Working percentage during period"),
-        min_value=0.0,
-        max_value=100.0,
-        value=float(exception.occupation_percentage),
-        step=5.0,
-    )
-    reason = st.text_input(
-        t("settings.field_exception_reason", default="Reason (optional)"),
-        value=exception.reason,
-    )
-
-    col_save, col_cancel = st.columns(2)
-    if col_save.button(
-        t("settings.btn_save_changes", default="Save Changes"),
-        type="primary",
-        use_container_width=True,
-    ):
-        try:
-            OrganizationService.validate_employee_calendar_exception(
-                start_date, end_date, occupation_percentage
-            )
-            org_repo.update_employee_calendar_exception(
-                EmployeeCalendarException(
-                    exception_id=exception.exception_id,
-                    employee_id=exception.employee_id,
-                    start_date=start_date,
-                    end_date=end_date,
-                    occupation_percentage=occupation_percentage,
-                    reason=reason,
-                )
-            )
-            st.toast(t("settings.msg_calendar_exception_updated", default="Calendar exception updated."), icon="✅")
-            st.rerun()
-        except (ValueError, TypeError) as err:
-            st.error(str(err))
-        except Exception as err:
-            st.error(f"Error updating calendar exception: {err}")
-
-    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), use_container_width=True):
-        st.rerun()
-
-
-@st.dialog(t("settings.delete_confirm_title", default="Confirm Deletion"))
-def _open_delete_employee_calendar_exception_dialog(
-    org_repo: OrganizationRepository,
-    exception_id: int,
-) -> None:
-    """Modal dialog to confirm deletion of an employee calendar exception."""
-    st.warning(
-        t(
-            "settings.delete_calendar_exception_confirm",
-            default="Delete this calendar exception? This action cannot be undone.",
-        )
-    )
-    col_confirm, col_cancel = st.columns(2)
-    if col_confirm.button(
-        t("settings.btn_confirm_delete", default="Yes, Delete"),
-        type="primary",
-        use_container_width=True,
-    ):
-        org_repo.delete_employee_calendar_exception(exception_id)
-        st.toast(t("settings.msg_calendar_exception_deleted", default="Calendar exception deleted."), icon="🗑️")
-        st.rerun()
     if col_cancel.button(t("settings.btn_cancel", default="Cancel"), use_container_width=True):
         st.rerun()
 
@@ -2063,108 +2203,12 @@ def render_settings_view(
                     if e_id is not None:
                         _open_delete_employee_dialog(org_repo, int(e_id), str(e_name))
 
-        st.divider()
-        st.subheader(t("settings.calendar_exceptions_title", default="Employee Calendar Exceptions"))
         st.caption(
             t(
-                "settings.calendar_exceptions_help",
-                default=(
-                    "Temporarily override an employee's normal occupation percentage over an inclusive "
-                    "date range, for example 0% during maternity leave."
-                ),
+                "settings.calendar_exceptions_in_profile_help",
+                default="Add or edit an employee profile to manage that employee's calendar exceptions.",
             )
         )
-
-        if df_emps.empty:
-            st.info(t("settings.no_employees_for_exceptions", default="Add an employee before creating exceptions."))
-        else:
-            employee_ids = df_emps["employee_id"].astype(int).tolist()
-            employee_labels = {
-                int(row["employee_id"]): (
-                    f"{row['employee_code']} — {row['lastname'].upper()} {row['firstname']}"
-                )
-                for row in df_emps.to_dict(orient="records")
-            }
-            selected_employee_id = st.selectbox(
-                t("settings.select_employee_for_exceptions", default="Employee"),
-                options=employee_ids,
-                format_func=lambda employee_id: employee_labels.get(employee_id, str(employee_id)),
-                key="calendar_exception_employee_id",
-            )
-
-            selected_employee = org_repo.get_employee_by_id(selected_employee_id)
-            effective_today = org_repo.get_effective_occupation_percentage(
-                selected_employee_id, datetime.date.today()
-            )
-            c_normal, c_today, c_add = st.columns([1, 1, 2])
-            c_normal.metric(
-                t("settings.normal_occupation", default="Normal occupation"),
-                f"{selected_employee.occupation_percentage:.1f}%" if selected_employee else "—",
-            )
-            c_today.metric(
-                t("settings.effective_today", default="Effective today"),
-                f"{effective_today:.1f}%" if effective_today is not None else "—",
-            )
-            with c_add:
-                st.write("")
-                if st.button(
-                    t("settings.btn_add_calendar_exception", default="Add calendar exception"),
-                    type="primary",
-                    use_container_width=True,
-                ):
-                    _open_add_employee_calendar_exception_dialog(org_repo, selected_employee_id)
-
-            df_exceptions = org_repo.get_employee_calendar_exceptions(selected_employee_id)
-            if df_exceptions.empty:
-                st.info(
-                    t(
-                        "settings.no_calendar_exceptions",
-                        default="No calendar exceptions are defined for this employee.",
-                    )
-                )
-            else:
-                display_exceptions = df_exceptions[
-                    ["start_date", "end_date", "occupation_percentage", "reason"]
-                ].copy()
-                display_exceptions["occupation_percentage"] = display_exceptions[
-                    "occupation_percentage"
-                ].map(lambda value: f"{float(value):.1f}%")
-                display_exceptions.columns = [
-                    t("settings.field_start_date", default="Start date"),
-                    t("settings.field_end_date", default="End date"),
-                    t("settings.col_occupation_percentage", default="Occupation %"),
-                    t("settings.field_exception_reason", default="Reason"),
-                ]
-                st.dataframe(display_exceptions, hide_index=True, use_container_width=True)
-
-                exception_ids = df_exceptions["exception_id"].astype(int).tolist()
-                exception_labels = {
-                    int(row["exception_id"]): (
-                        f"{row['start_date']} → {row['end_date']} · "
-                        f"{float(row['occupation_percentage']):.1f}%"
-                        + (f" · {row['reason']}" if row.get("reason") else "")
-                    )
-                    for row in df_exceptions.to_dict(orient="records")
-                }
-                c_select, c_edit, c_delete = st.columns([4, 1, 1])
-                selected_exception_id = c_select.selectbox(
-                    t("settings.select_calendar_exception", default="Calendar exception"),
-                    options=exception_ids,
-                    format_func=lambda exception_id: exception_labels.get(exception_id, str(exception_id)),
-                    key=f"calendar_exception_{selected_employee_id}",
-                )
-                if c_edit.button(
-                    t("settings.action_edit", default="Edit"),
-                    key=f"edit_calendar_exception_{selected_employee_id}",
-                    use_container_width=True,
-                ):
-                    _open_edit_employee_calendar_exception_dialog(org_repo, selected_exception_id)
-                if c_delete.button(
-                    t("settings.action_delete", default="Delete"),
-                    key=f"delete_calendar_exception_{selected_employee_id}",
-                    use_container_width=True,
-                ):
-                    _open_delete_employee_calendar_exception_dialog(org_repo, selected_exception_id)
 
     # =========================================================================
     # TAB 5: TAG GROUPS

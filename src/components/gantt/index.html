@@ -1167,7 +1167,21 @@
       background: #ffffff;
       overflow-y: auto;
       max-height: 380px;
+      min-height: 0;
+      scrollbar-gutter: stable;
       transition: max-height 0.2s ease;
+    }
+
+    .resource-grid-main.is-scrollable {
+      overflow-y: scroll;
+    }
+
+    .resource-grid-main > .resource-left-pane,
+    .resource-grid-main > .resource-splitter-spacer,
+    .resource-grid-main > .resource-right-pane-scroller,
+    .resource-grid-main > .resource-scrollbar-spacer {
+      height: var(--resource-content-height, auto);
+      align-self: flex-start;
     }
 
     .resource-grid-main.collapsed {
@@ -1343,10 +1357,32 @@
       border: 1px solid #bfdbfe;
     }
 
-    .assigned-badge {
+    .assigned-badge,
+    .assigned-capacity-cell {
       background: #ecfdf5;
       color: #047857;
       border: 1px solid #a7f3d0;
+    }
+
+    .assigned-badge.capacity-under,
+    .assigned-capacity-cell.capacity-under {
+      background: #fff7ed;
+      color: #c2410c;
+      border-color: #fdba74;
+    }
+
+    .assigned-badge.capacity-over,
+    .assigned-capacity-cell.capacity-over {
+      background: #f3e8ff;
+      color: #7e22ce;
+      border-color: #c084fc;
+    }
+
+    .assigned-badge.capacity-unassigned,
+    .assigned-capacity-cell.capacity-unassigned {
+      background: #f1f5f9;
+      color: #64748b;
+      border-color: #cbd5e1;
     }
 
     .active-filter-badge {
@@ -1495,16 +1531,32 @@
       background: rgba(37, 99, 235, 0.03);
     }
 
-    .resource-right-row.assigned-capacity-row,
+    .resource-right-row.assigned-capacity-row {
+      background: #ffffff;
+      border-bottom-color: #a7f3d0;
+    }
+
     .resource-left-row.assigned-capacity-row {
       background: #f0fdf9;
       border-bottom-color: #a7f3d0;
     }
 
+    .resource-left-row.assigned-capacity-row.capacity-under {
+      background: #fff7ed;
+      border-bottom-color: #fdba74;
+    }
+
+    .resource-left-row.assigned-capacity-row.capacity-over {
+      background: #f3e8ff;
+      border-bottom-color: #c084fc;
+    }
+
+    .resource-left-row.assigned-capacity-row.capacity-unassigned {
+      background: #f1f5f9;
+      border-bottom-color: #cbd5e1;
+    }
+
     .assigned-capacity-cell {
-      color: #047857;
-      background: #ecfdf5;
-      border-right-color: #a7f3d0;
       cursor: default;
       font-weight: 700;
     }
@@ -1955,7 +2007,7 @@
         <div class="resource-left-pane" id="resource-left-pane">
           <div class="resource-left-header" id="resource-left-header">
             <div class="r-hdr-name">Resource Pool</div>
-            <div class="r-hdr-cap" id="lbl-defined-capacity">Defined Capacity</div>
+            <div class="r-hdr-cap" id="lbl-theoretical-capacity">Theoretical Capacity</div>
           </div>
           <div class="resource-left-body" id="resource-left-body"></div>
         </div>
@@ -2038,7 +2090,8 @@
         no_pools: "No resource pools configured",
         max_demand: "Max Demand",
         capacity: "Capacity",
-        defined_capacity: "Defined Capacity",
+        theoretical_capacity: "Theoretical Capacity",
+        effective_capacity: "Minimum Effective Capacity",
         assigned_capacity: "Assigned Capacity",
         show_total: "Total Assignments",
         show_selected: "Selected Projects",
@@ -2120,8 +2173,8 @@
       if (elShowTotal) elShowTotal.innerText = getT('resource_grid.show_total', 'Total Assignments');
       const elShowSelected = document.getElementById('lbl-show-selected');
       if (elShowSelected) elShowSelected.innerText = getT('resource_grid.show_selected', 'Selected Projects');
-      const elDefinedCapacity = document.getElementById('lbl-defined-capacity');
-      if (elDefinedCapacity) elDefinedCapacity.innerText = getT('resource_grid.defined_capacity', 'Defined Capacity');
+      const elTheoreticalCapacity = document.getElementById('lbl-theoretical-capacity');
+      if (elTheoreticalCapacity) elTheoreticalCapacity.innerText = getT('resource_grid.theoretical_capacity', 'Theoretical Capacity');
       const elCtxFilter = document.getElementById('ctx-res-filter-clear');
       if (elCtxFilter) elCtxFilter.innerText = getT('resource_grid.filter_consuming_projects', 'Filter on consuming projects');
       const elCtxClearBtn = document.getElementById('ctx-res-clear-label');
@@ -3754,15 +3807,44 @@
       return { min: minValue, max: maxValue };
     }
 
-    function showResourceCellTooltip(e, poolName, startStr, endStr, demand, capacity, scopeType) {
+    function getCapacityState(capacity, theoreticalCapacity, hasAssignedResources) {
+      if (!hasAssignedResources) return 'capacity-unassigned';
+      if (capacity < theoreticalCapacity - 0.0001) return 'capacity-under';
+      if (capacity > theoreticalCapacity + 0.0001) return 'capacity-over';
+      return 'capacity-balanced';
+    }
+
+    function getDemandCapacityStatusForPeriod(dailyUsage, baseCapacity, dailyCapacity, startStr, endStr) {
+      const usage = dailyUsage || {};
+      const overrides = dailyCapacity || {};
+      const base = Number(baseCapacity || 0);
+      let maxDemand = 0;
+      let maxExcess = 0;
+
+      for (const [dateStr, rawDemand] of Object.entries(usage)) {
+        if (dateStr < startStr || dateStr > endStr) continue;
+        const demand = Number(rawDemand || 0);
+        const capacity = Object.prototype.hasOwnProperty.call(overrides, dateStr)
+          ? Number(overrides[dateStr])
+          : base;
+        maxDemand = Math.max(maxDemand, demand);
+        maxExcess = Math.max(maxExcess, demand - capacity);
+      }
+
+      return {
+        maxDemand,
+        isOverallocated: maxExcess > 0.0001,
+        maxExcess: Math.max(0, maxExcess)
+      };
+    }
+
+    function showResourceCellTooltip(e, poolName, startStr, endStr, demand, capacity, scopeType, isOver, excess) {
       if (!showHoverOverlay) return;
-      const isOver = demand > (capacity + 0.001);
-      const diff = Math.abs(demand - capacity);
       let statusHtml = '';
       if (isOver) {
-        statusHtml = `<span style="color:#ef4444; font-weight:700;">⚠️ ${getT('resource_grid.overallocated', 'Overallocated')} (+${diff.toFixed(2)} FTE excess)</span>`;
+        statusHtml = `<span style="color:#ef4444; font-weight:700;">⚠️ ${getT('resource_grid.overallocated', 'Overallocated')} (+${excess.toFixed(2)} FTE excess)</span>`;
       } else if (demand > 0) {
-        statusHtml = `<span style="color:#10b981; font-weight:600;">✅ ${getT('resource_grid.within_capacity', 'Within Capacity')} (${diff.toFixed(2)} FTE available)</span>`;
+        statusHtml = `<span style="color:#10b981; font-weight:600;">✅ ${getT('resource_grid.within_capacity', 'Within Capacity')}</span>`;
       } else {
         statusHtml = `<span style="color:#94a3b8;">No Active Allocation</span>`;
       }
@@ -3785,7 +3867,7 @@
             <strong style="color:${isOver ? '#dc2626' : (demand > 0 ? '#2563eb' : '#64748b')};">${demand.toFixed(2)} FTE</strong>
           </div>
           <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
-            <span style="color:#475569;">${getT('resource_grid.defined_capacity', 'Defined Capacity')}:</span>
+            <span style="color:#475569;">${getT('resource_grid.effective_capacity', 'Minimum Effective Capacity')}:</span>
             <strong>${capacity.toFixed(2)} FTE</strong>
           </div>
           <div style="margin-top:4px; border-top:1px solid #e2e8f0; padding-top:4px;">
@@ -3819,8 +3901,10 @@
       const demand = parseFloat(el.dataset.demand || '0');
       const capacity = parseFloat(el.dataset.capacity || '0');
       const scopeType = el.dataset.scope || 'total';
+      const isOver = el.dataset.overallocated === 'true';
+      const excess = parseFloat(el.dataset.excess || '0');
 
-      showResourceCellTooltip(e, poolName, startStr, endStr, demand, capacity, scopeType);
+      showResourceCellTooltip(e, poolName, startStr, endStr, demand, capacity, scopeType, isOver, excess);
     }
 
     function openResourceCellContextMenu(e, poolId, poolName, startStr, endStr, periodLabel) {
@@ -3945,10 +4029,18 @@
       const leftBody = document.getElementById('resource-left-body');
       const rightBody = document.getElementById('resource-right-body');
       const rightInner = document.getElementById('resource-right-pane-inner');
+      const resourceMain = document.getElementById('resource-grid-main');
 
       if (!container || !leftBody || !rightBody || !rightInner) return;
 
       const pools = resourcePoolsData || [];
+      const rowsPerPool = 1 + (showTotalRows ? 1 : 0) + (showSelectedRows ? 1 : 0);
+      const resourceContentHeight = 56 + Math.max(1, pools.length * rowsPerPool) * 34;
+      if (resourceMain) {
+        resourceMain.style.setProperty('--resource-content-height', `${resourceContentHeight}px`);
+        resourceMain.style.height = `${Math.min(380, resourceContentHeight)}px`;
+        resourceMain.classList.toggle('is-scrollable', resourceContentHeight > 380);
+      }
       if (badgeCount) {
         badgeCount.innerText = `${pools.length} ${pools.length === 1 ? 'Pool' : 'Pools'}`;
       }
@@ -4020,22 +4112,25 @@
       let rightHtml = '';
 
       pools.forEach(p => {
-        const poolCap = Number(p.defined_capacity ?? p.capacity ?? 0);
-        const assignedCapacity = Number(p.assigned_capacity || 0);
+        const poolCap = Number(p.theoretical_capacity ?? p.capacity ?? 0);
+        const hasAssignedResources = Boolean(p.has_assigned_resources);
+        const assignedCapacity = Number(p.displayed_assigned_capacity ?? poolCap);
+        const assignedBaseState = getCapacityState(assignedCapacity, poolCap, hasAssignedResources);
+        const dailyAssignedCapacity = hasAssignedResources ? (p.daily_assigned_capacity || {}) : {};
         const isFilterActiveOnPool = activeResourceFilter && Number(activeResourceFilter.pool_id) === Number(p.id);
 
         // Row 1: assigned capacity over time. This is always visible and sits
         // above the project/task demand rows for the pool.
         leftHtml += `
-          <div class="resource-left-row assigned-capacity-row ${isFilterActiveOnPool ? 'active-filter-row' : ''}" data-row-id="pool-${p.id}-assigned" title="${escapeHtml(p.name)} - ${getT('resource_grid.assigned_capacity', 'Assigned Capacity')}">
+          <div class="resource-left-row assigned-capacity-row ${assignedBaseState} ${isFilterActiveOnPool ? 'active-filter-row' : ''}" data-row-id="pool-${p.id}-assigned" title="${escapeHtml(p.name)} - ${getT('resource_grid.assigned_capacity', 'Assigned Capacity')}">
             <div class="resource-pool-name">
               <span style="font-size:12px;">🏊</span>
               <span class="r-name-text">${escapeHtml(p.name)}</span>
-              <span class="r-badge assigned-badge">${getT('resource_grid.assigned_capacity', 'Assigned Capacity')}</span>
+              <span class="r-badge assigned-badge ${assignedBaseState}">${getT('resource_grid.assigned_capacity', 'Assigned Capacity')}</span>
               ${isFilterActiveOnPool ? `<span class="active-filter-badge" title="${getT('resource_grid.active_filter', 'Filter Active')}">🔍 ${getT('resource_grid.active_filter', 'Filter Active')}</span>` : ''}
             </div>
             <div class="resource-pool-cap">
-              <span class="cap-badge" title="${getT('resource_grid.defined_capacity', 'Defined Capacity')}">${poolCap.toFixed(1)} FTE</span>
+              <span class="cap-badge" title="${getT('resource_grid.theoretical_capacity', 'Theoretical Capacity')}">${poolCap.toFixed(1)} FTE</span>
             </div>
           </div>
         `;
@@ -4045,15 +4140,14 @@
           const endStr = formatDate(c.endDate);
           const periodCapacity = getAssignedCapacityForPeriod(
             assignedCapacity,
-            p.daily_assigned_capacity,
+            dailyAssignedCapacity,
             startStr,
             endStr
           );
-          const displayTxt = Math.abs(periodCapacity.max - periodCapacity.min) > 0.001
-            ? `${periodCapacity.min.toFixed(1)}–${periodCapacity.max.toFixed(1)}`
-            : periodCapacity.min.toFixed(1);
+          const displayTxt = periodCapacity.min.toFixed(1);
+          const capacityState = getCapacityState(periodCapacity.min, poolCap, hasAssignedResources);
           return `
-            <div class="resource-demand-cell assigned-capacity-cell"
+            <div class="resource-demand-cell assigned-capacity-cell ${capacityState}"
                  style="width: ${c.width}px;"
                  title="${getT('resource_grid.assigned_capacity', 'Assigned Capacity')}: ${displayTxt} FTE (${startStr} → ${endStr})">
               ${displayTxt}
@@ -4073,7 +4167,7 @@
                 <span class="r-badge total-badge">${getT('resource_grid.show_total', 'Total')}</span>
               </div>
               <div class="resource-pool-cap">
-                <span class="cap-badge" title="${getT('resource_grid.defined_capacity', 'Defined Capacity')}">${poolCap.toFixed(1)} FTE</span>
+                <span class="cap-badge" title="${getT('resource_grid.theoretical_capacity', 'Theoretical Capacity')}">${poolCap.toFixed(1)} FTE</span>
               </div>
             </div>
           `;
@@ -4081,8 +4175,14 @@
           const totalCellsHtml = bottomCells.map(c => {
             const startStr = formatDate(c.startDate);
             const endStr = formatDate(c.endDate);
-            const maxD = getMaxDemandForPeriod(p.daily_usage, startStr, endStr);
-            const isOver = maxD > (poolCap + 0.001);
+            const periodCapacity = getAssignedCapacityForPeriod(
+              assignedCapacity, dailyAssignedCapacity, startStr, endStr
+            );
+            const periodStatus = getDemandCapacityStatusForPeriod(
+              p.daily_usage, assignedCapacity, dailyAssignedCapacity, startStr, endStr
+            );
+            const maxD = periodStatus.maxDemand;
+            const isOver = periodStatus.isOverallocated;
             const isCellFiltered = isFilterActiveOnPool && (startStr <= activeResourceFilter.end_date && endStr >= activeResourceFilter.start_date);
 
             let cellCls = 'cell-empty';
@@ -4104,7 +4204,9 @@
                    data-end-date="${endStr}"
                    data-period-label="${escapeHtml(c.label)}"
                    data-demand="${maxD}"
-                   data-capacity="${poolCap}"
+                   data-capacity="${periodCapacity.min}"
+                   data-overallocated="${isOver}"
+                   data-excess="${periodStatus.maxExcess}"
                    data-scope="total"
                    onmouseenter="handleCellMouseEnter(event, this)"
                    onmousemove="moveTooltip(event)"
@@ -4128,7 +4230,7 @@
                 <span class="r-badge scope-badge">Selected</span>
               </div>
               <div class="resource-pool-cap">
-                <span class="cap-badge scope-cap-badge" title="${getT('resource_grid.defined_capacity', 'Defined Capacity')}">${poolCap.toFixed(1)} FTE</span>
+                <span class="cap-badge scope-cap-badge" title="${getT('resource_grid.theoretical_capacity', 'Theoretical Capacity')}">${poolCap.toFixed(1)} FTE</span>
               </div>
             </div>
           `;
@@ -4136,8 +4238,14 @@
           const selectedCellsHtml = bottomCells.map(c => {
             const startStr = formatDate(c.startDate);
             const endStr = formatDate(c.endDate);
-            const scopeD = getMaxDemandForPeriod(p.selected_projects_daily_usage, startStr, endStr);
-            const isOver = scopeD > (poolCap + 0.001);
+            const periodCapacity = getAssignedCapacityForPeriod(
+              assignedCapacity, dailyAssignedCapacity, startStr, endStr
+            );
+            const periodStatus = getDemandCapacityStatusForPeriod(
+              p.selected_projects_daily_usage, assignedCapacity, dailyAssignedCapacity, startStr, endStr
+            );
+            const scopeD = periodStatus.maxDemand;
+            const isOver = periodStatus.isOverallocated;
             const isCellFiltered = isFilterActiveOnPool && (startStr <= activeResourceFilter.end_date && endStr >= activeResourceFilter.start_date);
 
             let cellCls = 'cell-empty';
@@ -4159,7 +4267,9 @@
                    data-end-date="${endStr}"
                    data-period-label="${escapeHtml(c.label)}"
                    data-demand="${scopeD}"
-                   data-capacity="${poolCap}"
+                   data-capacity="${periodCapacity.min}"
+                   data-overallocated="${isOver}"
+                   data-excess="${periodStatus.maxExcess}"
                    data-scope="selected"
                    onmouseenter="handleCellMouseEnter(event, this)"
                    onmousemove="moveTooltip(event)"
@@ -4195,7 +4305,7 @@
         if (showTotalRows) activeRowCount += pools.length;
         if (showSelectedRows) activeRowCount += pools.length;
         const poolRowsH = Math.max(1, activeRowCount) * 34 + 56; // 56px for 2-tier header
-        resH += Math.min(360, poolRowsH);
+        resH += Math.min(380, poolRowsH);
       }
 
       const totalFrameH = maxGanttH + resH + 85;
@@ -4875,6 +4985,8 @@
               pBar.style.left = `${pStartX}px`;
               pBar.style.width = `${pWidth}px`;
               pBar.title = `${cleanProjectName} (${item.taskCount} tasks)`;
+              pBar.style.cursor = 'pointer';
+              pBar.ondblclick = (event) => toggleProjectCollapse(item.project_id, event);
 
               rowEl.appendChild(pBar);
             }

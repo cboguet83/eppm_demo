@@ -212,13 +212,13 @@ def _manage_project_resource_pools_dialog(
             c_end = row.get("custom_end_date")
 
             # Check capacity and daily overassignment status
-            cap_detail = ResourcePoolService.calculate_pool_capacity(p_id, org_repo, pool_repo, milestone_repo)
             p_status = ResourcePoolService.calculate_project_pool_status(project_id, p_id, org_repo, pool_repo, milestone_repo)
+            minimum_capacity = float(p_status["minimum_capacity_fte"])
 
             if p_status["is_overassigned"]:
-                status_html = f'<span style="background-color:#FDE8EC; color:#C41039; border:1px solid #C41039; padding:2px 7px; border-radius:10px; font-weight:700; font-size:11px;">⚠️ Overassigned (Peak: {p_status["project_peak_assigned_fte"]:.2f} / Cap: {cap_detail.total_capacity_fte:.2f} FTE)</span>'
+                status_html = f'<span style="background-color:#FDE8EC; color:#C41039; border:1px solid #C41039; padding:2px 7px; border-radius:10px; font-weight:700; font-size:11px;">⚠️ Overassigned (Peak: {p_status["project_peak_assigned_fte"]:.2f} / Min. effective cap: {minimum_capacity:.2f} FTE)</span>'
             else:
-                status_html = f'<span style="background-color:#ECFDF5; color:#047857; border:1px solid #10B981; padding:2px 7px; border-radius:10px; font-weight:700; font-size:11px;">✅ OK (Peak: {p_status["project_peak_assigned_fte"]:.2f} / Cap: {cap_detail.total_capacity_fte:.2f} FTE)</span>'
+                status_html = f'<span style="background-color:#ECFDF5; color:#047857; border:1px solid #10B981; padding:2px 7px; border-radius:10px; font-weight:700; font-size:11px;">✅ OK (Peak: {p_status["project_peak_assigned_fte"]:.2f} / Min. effective cap: {minimum_capacity:.2f} FTE)</span>'
 
             if pd.notna(c_start) and pd.notna(c_end) and str(c_start).strip() and str(c_end).strip():
                 period_str = f"📅 {c_start} to {c_end} *(Custom Period)*"
@@ -1144,21 +1144,39 @@ def render_planning_milestones(
                 scope_usage = ResourcePoolService.calculate_pool_scope_daily_usage(
                     p_cap.assignments, scope_pids
                 )
+                effective_daily_capacity = (
+                    p_cap.daily_assigned_capacity
+                    if p_cap.has_assigned_resources
+                    else {}
+                )
+                scope_overassignments = ResourcePoolService.calculate_daily_overassignments(
+                    scope_usage,
+                    p_cap.effective_capacity_fte,
+                    effective_daily_capacity,
+                )
                 resource_pools_payload.append({
                     "id": p_id,
                     "name": p_name,
                     "capacity": float(p_cap.total_capacity_fte),
-                    "defined_capacity": (
+                    "theoretical_capacity": (
                         float(p_cap.defined_capacity_fte)
                         if p_cap.defined_capacity_fte is not None
                         else float(p_cap.total_capacity_fte)
                     ),
                     "assigned_capacity": float(p_cap.assigned_capacity_fte),
-                    "daily_assigned_capacity": p_cap.daily_assigned_capacity,
+                    "displayed_assigned_capacity": float(p_cap.effective_capacity_fte),
+                    "has_assigned_resources": bool(p_cap.has_assigned_resources),
+                    "daily_assigned_capacity": effective_daily_capacity,
                     "peak_demand": float(p_cap.peak_assigned_fte),
                     "is_overassigned": bool(p_cap.is_overassigned),
                     "daily_usage": p_cap.daily_usage,
+                    "overallocated_dates": [
+                        item.date for item in p_cap.daily_overassignments
+                    ],
                     "selected_projects_daily_usage": scope_usage,
+                    "selected_projects_overallocated_dates": [
+                        item.date for item in scope_overassignments
+                    ],
                     "assignments": [
                         {
                             "project_id": int(a["project_id"]),

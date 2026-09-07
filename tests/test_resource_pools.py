@@ -200,6 +200,8 @@ class TestResourcePools(unittest.TestCase):
         self.assertEqual(detail.defined_capacity_fte, 2.5)
         self.assertEqual(detail.total_capacity_fte, 2.5)
         self.assertEqual(detail.assigned_capacity_fte, 0.6)
+        self.assertTrue(detail.has_assigned_resources)
+        self.assertEqual(detail.effective_capacity_fte, 0.6)
         self.assertEqual(len(detail.contributing_resources), 1)
         contribution = detail.contributing_resources[0]
         self.assertEqual(contribution.resource_type, "employee")
@@ -210,6 +212,125 @@ class TestResourcePools(unittest.TestCase):
         self.assertEqual(detail.daily_assigned_capacity["2026-10-01"], 0.0)
         self.assertEqual(detail.daily_assigned_capacity["2026-10-03"], 0.0)
         self.assertNotIn("2026-09-30", detail.daily_assigned_capacity)
+
+    def test_theoretical_capacity_is_fallback_when_pool_has_no_resources(self) -> None:
+        """A pool without resource mappings uses theoretical capacity for demand checks."""
+        pool_id = self.pool_repo.create_pool(
+            ResourcePool(name="Unstaffed Pool", capacity_fte=3.0)
+        )
+        self.project_repo.create_project(
+            project_id=9,
+            name="Fallback Project",
+            status="In Progress",
+            planned_budget=0.0,
+            actual_budget=0.0,
+            dynamic_attributes={},
+        )
+        self.pool_repo.create_assignment(
+            PoolAssignment(
+                pool_id=pool_id,
+                project_id=9,
+                task_id=None,
+                fte_assigned=2.5,
+                start_date="2026-11-01",
+                end_date="2026-11-30",
+            )
+        )
+
+        detail = ResourcePoolService.calculate_pool_capacity(
+            pool_id, self.org_repo, self.pool_repo, self.milestone_repo
+        )
+
+        self.assertFalse(detail.has_assigned_resources)
+        self.assertEqual(detail.assigned_capacity_fte, 0.0)
+        self.assertEqual(detail.total_capacity_fte, 3.0)
+        self.assertEqual(detail.effective_capacity_fte, 3.0)
+        self.assertFalse(detail.is_overassigned)
+
+    def test_single_low_capacity_day_marks_the_whole_period_overallocated(self) -> None:
+        """One overallocated day is detected even when all other period days are valid."""
+        function_id = self.org_repo.create_function(
+            OrgFunction(name="Capacity Specialist", hierarchy_level=3, fte_percentage=100)
+        )
+        employee_id = self.org_repo.create_employee(
+            Employee(
+                firstname="Grace",
+                lastname="Hopper",
+                email="grace@example.test",
+                employee_code="EMP-GRACE",
+                function_id=function_id,
+                occupation_percentage=100.0,
+            )
+        )
+        pool_id = self.pool_repo.create_pool(
+            ResourcePool(name="Variable Pool", capacity_fte=2.0)
+        )
+        self.pool_repo.create_mapping(
+            PoolMapping(
+                pool_id=pool_id,
+                target_type="employee",
+                target_id=employee_id,
+                allocation_pct=100.0,
+            )
+        )
+        self.org_repo.create_employee_calendar_exception(
+            EmployeeCalendarException(
+                employee_id=employee_id,
+                start_date=date(2026, 4, 15),
+                end_date=date(2026, 4, 15),
+                occupation_percentage=50.0,
+                reason="Half-day capacity",
+            )
+        )
+        self.project_repo.create_project(
+            project_id=11,
+            name="Long Period Project",
+            status="In Progress",
+            planned_budget=0.0,
+            actual_budget=0.0,
+            dynamic_attributes={},
+        )
+        self.pool_repo.create_assignment(
+            PoolAssignment(
+                pool_id=pool_id,
+                project_id=11,
+                task_id=None,
+                fte_assigned=0.75,
+                start_date="2026-01-01",
+                end_date="2026-04-10",
+            )
+        )
+        self.pool_repo.create_assignment(
+            PoolAssignment(
+                pool_id=pool_id,
+                project_id=11,
+                task_id=None,
+                fte_assigned=0.75,
+                start_date="2026-04-11",
+                end_date="2026-04-15",
+            )
+        )
+
+        detail = ResourcePoolService.calculate_pool_capacity(
+            pool_id, self.org_repo, self.pool_repo, self.milestone_repo
+        )
+
+        self.assertEqual(detail.total_capacity_fte, 2.0)
+        self.assertEqual(detail.effective_capacity_fte, 1.0)
+        self.assertEqual(detail.daily_assigned_capacity["2026-04-15"], 0.5)
+        self.assertTrue(detail.is_overassigned)
+        self.assertEqual(len(detail.daily_overassignments), 1)
+        self.assertEqual(detail.daily_overassignments[0].date, "2026-04-15")
+        self.assertEqual(detail.daily_overassignments[0].capacity_fte, 0.5)
+        self.assertEqual(detail.daily_overassignments[0].assigned_fte, 0.75)
+        self.assertEqual(detail.peak_excess_fte, 0.25)
+
+        project_status = ResourcePoolService.calculate_project_pool_status(
+            11, pool_id, self.org_repo, self.pool_repo, self.milestone_repo
+        )
+        self.assertTrue(project_status["is_overassigned"])
+        self.assertEqual(project_status["overallocated_dates"], ["2026-04-15"])
+        self.assertEqual(project_status["minimum_capacity_fte"], 0.5)
 
     def test_daily_overassignment_detection(self) -> None:
         """Verify that overassignment is calculated on a daily basis and detects overlapping peak FTE."""
