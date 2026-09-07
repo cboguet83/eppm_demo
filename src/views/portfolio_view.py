@@ -77,7 +77,7 @@ def _render_project_details_panel(
             use_container_width=True,
         ):
             st.session_state["target_edit_project_id"] = proj_id
-            st.session_state["app_sidebar_nav"] = PAGE_PROJECT_MASTER
+            st.session_state["nav_redirect"] = PAGE_PROJECT_MASTER
             st.rerun()
 
     # KPI Summary Cards

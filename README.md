@@ -380,9 +380,37 @@ docker run -d \
 ### 3. Managing Database Seeding Inside Docker
 
 To populate or reset mock projects inside a running Docker container, execute the seeding script via `docker compose exec`:
+#### Option A: Force Re-seeding Automatically on Docker Startup
+When persistent named volumes (`ppm_data`) are mounted, the database file persists across container restarts. To wipe and cleanly re-seed the database automatically when starting Docker, set `FORCE_RESEED=true`:
 
 ```powershell
 # Reseed 50 projects inside the active container
+# Windows PowerShell: Force re-seed default demo dataset on startup
+$env:FORCE_RESEED="true"; docker compose up -d
+
+# Or force re-seed with 50 generated projects on startup
+$env:FORCE_RESEED="true"; $env:SEED_PROJECTS_COUNT="50"; docker compose up -d
+```
+
+```bash
+# Linux / macOS:
+FORCE_RESEED=true docker compose up -d
+
+# With 50 generated projects:
+FORCE_RESEED=true SEED_PROJECTS_COUNT=50 docker compose up -d
+```
+
+> [!TIP]
+> Database re-seeding is guarded by Streamlit's `@st.cache_resource`, ensuring it executes **strictly once** on container boot and never interrupts or wipes data during interactive web UI script reruns.
+
+#### Option B: On-Demand Seeding via CLI
+To populate or reset mock projects inside a running Docker container on-demand, execute the seeding commands via `docker compose exec`:
+
+```powershell
+# Force re-seed default taxonomy, schema, and sample projects
+docker compose exec app python -m src.database.seeder --force
+
+# Reseed 50 generated projects inside the active container
 docker compose exec app python scripts/seed_database.py --projects 50
 
 # Reseed 250 projects with custom task bounds
@@ -403,9 +431,12 @@ PPM Studio Pro recognizes the following environment variables (defined via `.env
 | `DB_NAME` | `/app/data/ppm_mock.db` | Absolute path to the SQLite database file inside the container. |
 | `LOG_LEVEL` | `INFO` | Logging threshold (`DEBUG`, `INFO`, `WARNING`, `ERROR`). |
 | `APP_ENV` | `production` | Deployment mode (`development`, `staging`, `production`). |
+| `FORCE_RESEED` | `false` | When `true`, wipes existing data and re-seeds database on startup. |
+| `SEED_PROJECTS_COUNT` | `0` | Number of projects to generate when `FORCE_RESEED=true` (0 uses default seed). |
 | `STREAMLIT_SERVER_PORT` | `8501` | In-container HTTP listening port. |
 | `STREAMLIT_SERVER_ADDRESS` | `0.0.0.0` | In-container network bind address. |
 | `STREAMLIT_SERVER_HEADLESS`| `true` | Runs Streamlit in headless mode without spawning local browser windows. |
+
 
 ---
 

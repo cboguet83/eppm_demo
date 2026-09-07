@@ -5,6 +5,7 @@ from typing import Optional
 
 from src.config import config
 from src.database.connection import get_db
+from src.database.schema_init import init_db
 from src.logging_config import get_logger
 from src.models.constants import (
     STATUS_COMPLETED,
@@ -234,19 +235,59 @@ DEFAULT_PARAM_OPTIONS: dict[str, list[str]] = {
 
 def seed_default_data_if_empty(db_path: Optional[str] = None) -> None:
     """Populates the database with demo schema, projects, and milestones if empty.
+def seed_default_data_if_empty(db_path: Optional[str] = None, force: bool = False) -> None:
+    """Populates the database with demo schema, projects, and milestones.
 
     Args:
         db_path: Filepath to the SQLite database. If None, uses default from config.
+        force: If True, flushes all existing data before seeding. Default False.
     """
     target_path = db_path if db_path is not None else config.db_path
     logger.info("Checking if database seeding is required for %s", target_path)
+    logger.info("Checking if database seeding is required for %s (force=%s)", target_path, force)
+
+    init_db(target_path)
 
     with get_db(target_path) as conn:
         cursor = conn.cursor()
 
+        if force:
+            logger.info("Forcing database reseed: wiping existing data from all tables...")
+            conn.execute("PRAGMA foreign_keys = OFF")
+            tables_to_flush = [
+                "resource_pool_assignment",
+                "resource_pool_mapping",
+                "resource_pool",
+                "team_function",
+                "task_tag",
+                "project_tag",
+                "task_dependencies",
+                "project_task",
+                "project",
+                "employee",
+                "team",
+                "function",
+                "function_type",
+                "tag_dictionnary",
+                "tag_group",
+                "schema_param_options",
+                "schema_parameters",
+                "schema_groups",
+            ]
+            for table in tables_to_flush:
+                cursor.execute(f"DELETE FROM {table}")
+            cursor.execute(
+                "DELETE FROM sqlite_sequence WHERE name IN ("
+                + ", ".join(f"'{t}'" for t in tables_to_flush)
+                + ")"
+            )
+            conn.commit()
+            conn.execute("PRAGMA foreign_keys = ON")
+
         # Check Schema Groups
         cursor.execute("SELECT COUNT(*) FROM schema_groups")
         group_count = cursor.fetchone()[0]
+
 
         if group_count == 0:
             logger.info("Seeding default schema groups, parameters, and enum options...")
@@ -345,7 +386,16 @@ def seed_default_data_if_empty(db_path: Optional[str] = None) -> None:
             cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (48, 'Assistant A_1_B', 5, 6, 10, NULL, 100, 0)")
             cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (49, 'BIM Manager', 5, 8, 13, NULL, 100, 0)")
             cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (50, 'BIM Assistant', 5, 7, 13, NULL, 100, 0)")
-
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (51, 'Chef de Division C_1', 4, 4, 7, NULL, 100, 1)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (52, 'Chef de Division C_2', 4, 4, 7, NULL, 100, 1)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (53, 'Chef de Division D_1', 4, 4, 8, NULL, 100, 1)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (54, 'Chef de Division D_2', 4, 4, 8, NULL, 100, 1)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (55, 'Chef de Division E_1', 4, 4, 9, NULL, 100, 1)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (56, 'Chef de Division E_2', 4, 4, 9, NULL, 100, 1)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (57, 'Chef de Projet B_1_A', 5, 5, 14, NULL, 100, 0)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (58, 'Chef de Projet C_1_A', 5, 5, 51, NULL, 100, 0)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (59, 'Chef de Projet D_1_A', 5, 5, 53, NULL, 100, 0)")
+            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (60, 'Chef de Projet E_1_A', 5, 5, 55, NULL, 100, 0)")
         # Check Projects
         cursor.execute("SELECT id FROM project")
         existing_pids = {row[0] for row in cursor.fetchall()}
@@ -733,3 +783,31 @@ def seed_default_data_if_empty(db_path: Optional[str] = None) -> None:
                 )
 
         conn.commit()
+
+
+seed_database_data = seed_default_data_if_empty
+
+
+def main() -> None:
+    """CLI entrypoint for database seeder."""
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Seed default EPPM database schema, taxonomy, and sample data.")
+    parser.add_argument(
+        "--db-path",
+        type=str,
+        default=None,
+        help="Optional path to custom SQLite database file.",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Force re-seeding by wiping existing data first.",
+    )
+    args = parser.parse_args()
+    seed_default_data_if_empty(db_path=args.db_path, force=args.force)
+    print("Database seeding completed successfully.")
+
+
+if __name__ == "__main__":
+    main()

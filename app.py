@@ -111,10 +111,44 @@ logger = get_logger("app")
 # ==============================================================================
 # MAIN APPLICATION ROUTING & ENTRYPOINT
 # ==============================================================================
+@st.cache_resource
+def bootstrap_database() -> bool:
+    """Initializes the database schema and performs seeding on server startup.
+
+    Guarantees execution runs exactly once per container/process lifecycle,
+    preventing destructive re-seeding on Streamlit script reruns.
+    """
+    init_db()
+    if config.force_reseed:
+        logger.info("FORCE_RESEED is active: forcing database re-seed on startup.")
+        if config.seed_projects_count > 0:
+            try:
+                from scripts.seed_database import seed_database
+                seed_database(
+                    num_projects=config.seed_projects_count,
+                    db_path=config.db_path,
+                    clean_first=True,
+                )
+            except Exception as exc:
+                logger.error(
+                    "Failed to seed %d projects: %s. Falling back to default seeder.",
+                    config.seed_projects_count,
+                    exc,
+                )
+                seed_default_data_if_empty(force=True)
+        else:
+            seed_default_data_if_empty(force=True)
+    else:
+        seed_default_data_if_empty(force=False)
+    return True
+
+
 def run_app() -> None:
     """Main routing and execution entrypoint for Streamlit UI."""
     init_db()
     seed_default_data_if_empty()
+    bootstrap_database()
+
 
     st.set_page_config(
         page_title=t("app.title", default="PPM Studio Pro"),

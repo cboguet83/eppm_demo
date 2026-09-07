@@ -78,6 +78,42 @@ class TestIntegration(unittest.TestCase):
         self.project_repo.delete_project(new_pid)
         self.assertFalse(self.project_repo.exists(new_pid))
 
+    def test_all_src_modules_import_cleanly(self) -> None:
+        """Verify that all src modules and their type annotations import without NameError."""
+        import importlib
+        import pkgutil
+        import src
+
+        for module_info in pkgutil.walk_packages(src.__path__, prefix="src."):
+            mod = importlib.import_module(module_info.name)
+            self.assertIsNotNone(mod)
+
+    def test_no_direct_app_sidebar_nav_assignment_in_views(self) -> None:
+        """Verify that presentation views do not write directly to st.session_state['app_sidebar_nav'].
+
+        Direct writes to a rendered widget key trigger StreamlitWidgetAlreadyInstantiatedError.
+        All programmatic transitions must use st.session_state['nav_redirect'].
+        """
+        import re
+        from pathlib import Path
+
+        views_dir = Path("src/views")
+        pattern = re.compile(r'st\.session_state\[(["\'])app_sidebar_nav\1\]\s*=')
+
+        violations = []
+        for py_file in views_dir.glob("*.py"):
+            content = py_file.read_text(encoding="utf-8")
+            for line_num, line in enumerate(content.splitlines(), start=1):
+                if pattern.search(line):
+                    violations.append(f"{py_file.name}:{line_num}: {line.strip()}")
+
+        self.assertEqual(
+            violations,
+            [],
+            f"Views must use 'nav_redirect' instead of modifying 'app_sidebar_nav' directly: {violations}",
+        )
+
+
 
 if __name__ == "__main__":
     unittest.main()

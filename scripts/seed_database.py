@@ -171,7 +171,8 @@ def seed_database(
         p_stop_date = p_start_date + datetime.timedelta(days=random.randint(90, 730))
         station_opt = random.choice(DEFAULT_STATION_OPTIONS)
         line_opt = random.choice(DEFAULT_LINE_OPTIONS)
-        pm_function_id = random.randint(17, 26)
+        #pm_function_id = random.randint(17, 26)
+        pm_function_id = random.choice([17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 57, 58, 59, 60])
 
         dyn_attrs = {
             "code courrier": f"CR-2026-{i:04d}",

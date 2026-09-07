@@ -2,7 +2,7 @@
 
 import datetime
 import os
-from typing import Optional
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 import pandas as pd
 import plotly.graph_objects as go

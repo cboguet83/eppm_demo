@@ -13,6 +13,8 @@ services:
       - DB_NAME=/app/data/ppm_mock.db
       - LOG_LEVEL=INFO
       - APP_ENV=production
+      - FORCE_RESEED=${FORCE_RESEED:-false}
+      - SEED_PROJECTS_COUNT=${SEED_PROJECTS_COUNT:-0}
     volumes:
       - ppm_data:/app/data
 

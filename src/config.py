@@ -16,11 +16,15 @@ class AppConfig:
         db_path: Path to the SQLite database file.
         log_level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL).
         app_env: Environment mode ('development', 'staging', 'production').
+        force_reseed: Whether to force database re-seeding on application startup.
+        seed_projects_count: Number of projects to generate when force-reseeding (0 uses default seed).
     """
 
     db_path: str = os.getenv("DB_NAME", "ppm_mock.db")
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
     app_env: str = os.getenv("APP_ENV", "development")
+    force_reseed: bool = os.getenv("FORCE_RESEED", "false").lower() in ("true", "1", "yes")
+    seed_projects_count: int = int(os.getenv("SEED_PROJECTS_COUNT", "0"))
 
 
 config = AppConfig()

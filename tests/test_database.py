@@ -149,9 +149,59 @@ class TestDatabaseLayer(unittest.TestCase):
                 self.assertGreater(func_id, 0)
                 dyn_dict = json.loads(dyn_raw)
                 # Verify all 30 parameters exist in dynamic attributes
+                # Verify all 29 parameters exist in dynamic attributes
                 for expected_p in expected_param_names:
                     self.assertIn(expected_p, dyn_dict)
+
+    def test_seed_force_reseed_resets_database(self) -> None:
+        """Verify that passing force=True wipes existing custom records and restores seed data."""
+        init_db(self.temp_db_path)
+        seed_default_data_if_empty(self.temp_db_path)
+
+        # Insert custom dummy data that should be wiped on force re-seed
+        with get_db(self.temp_db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO project (id, name, status, planned_budget, actual_budget) VALUES (999, 'Dummy Custom Project', 'Draft', 1000, 500)"
+            )
+            cursor.execute(
+                "INSERT INTO schema_groups (id, group_name, display_order) VALUES (999, 'custom_group', 999)"
+            )
+            conn.commit()
+
+        # Verify custom data is present before force reseed
+        with get_db(self.temp_db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM project WHERE id = 999")
+            self.assertEqual(cursor.fetchone()[0], 1)
+            cursor.execute("SELECT COUNT(*) FROM schema_groups WHERE id = 999")
+            self.assertEqual(cursor.fetchone()[0], 1)
+
+        # Force reseed
+        seed_default_data_if_empty(self.temp_db_path, force=True)
+
+        # Verify custom data is wiped and standard seed data is cleanly restored
+        with get_db(self.temp_db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM project WHERE id = 999")
+            self.assertEqual(cursor.fetchone()[0], 0)
+            cursor.execute("SELECT COUNT(*) FROM schema_groups WHERE id = 999")
+            self.assertEqual(cursor.fetchone()[0], 0)
+
+            cursor.execute("SELECT COUNT(*) FROM project")
+            self.assertEqual(cursor.fetchone()[0], 3)
+            cursor.execute("SELECT COUNT(*) FROM schema_groups")
+            self.assertEqual(cursor.fetchone()[0], 5)
+            cursor.execute("SELECT COUNT(*) FROM schema_parameters")
+            self.assertEqual(cursor.fetchone()[0], 29)
+            cursor.execute("SELECT COUNT(*) FROM function")
+            self.assertEqual(cursor.fetchone()[0], 60)
+            cursor.execute("SELECT COUNT(*) FROM employee")
+            self.assertEqual(cursor.fetchone()[0], 50)
+            cursor.execute("SELECT COUNT(*) FROM resource_pool")
+            self.assertEqual(cursor.fetchone()[0], 3)
 
 
 if __name__ == "__main__":
     unittest.main()
+
