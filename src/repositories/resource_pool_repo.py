@@ -11,6 +11,7 @@ from src.models.resource_pool import (
     PoolCapacityDetail,
     PoolMapping,
     ResourcePool,
+    ResourcePoolGroup,
 )
 
 logger = get_logger(__name__)
@@ -162,7 +163,252 @@ class ResourcePoolRepository:
             return cursor.rowcount > 0
 
     # =========================================================================
-    # 2. POOL MAPPINGS (TEAMS & FUNCTIONS)
+    # 2. RECURSIVE POOL GROUPS
+    # =========================================================================
+    def get_all_pool_groups(self) -> pd.DataFrame:
+        """Return pool groups with direct and recursively resolved member counts."""
+        with get_db(self.db_path) as conn:
+            groups = pd.read_sql(
+                """
+                SELECT
+                    g.id,
+                    g.name,
+                    g.description,
+                    g.created_at,
+                    SUM(CASE WHEN gm.pool_id IS NOT NULL THEN 1 ELSE 0 END) AS direct_pool_count,
+                    SUM(CASE WHEN gm.child_group_id IS NOT NULL THEN 1 ELSE 0 END) AS child_group_count
+                FROM resource_pool_group g
+                LEFT JOIN resource_pool_group_member gm ON gm.group_id = g.id
+                GROUP BY g.id, g.name, g.description, g.created_at
+                ORDER BY g.name ASC
+                """,
+                conn,
+            )
+
+        if groups.empty:
+            groups["recursive_pool_count"] = pd.Series(dtype="int64")
+            return groups
+
+        groups["direct_pool_count"] = groups["direct_pool_count"].fillna(0).astype(int)
+        groups["child_group_count"] = groups["child_group_count"].fillna(0).astype(int)
+        groups["recursive_pool_count"] = groups["id"].map(
+            lambda group_id: len(self.get_group_descendant_pool_ids(int(group_id)))
+        )
+        return groups
+
+    def get_pool_group_by_id(self, group_id: int) -> Optional[ResourcePoolGroup]:
+        """Return one pool group by ID."""
+        with get_db(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT id, name, description, created_at
+                FROM resource_pool_group
+                WHERE id = ?
+                """,
+                (group_id,),
+            )
+            row = cursor.fetchone()
+        if not row:
+            return None
+        return ResourcePoolGroup(
+            id=int(row[0]),
+            name=str(row[1]),
+            description=str(row[2] or ""),
+            created_at=row[3],
+        )
+
+    def create_pool_group(self, group: ResourcePoolGroup) -> int:
+        """Create an empty pool group."""
+        name = group.name.strip()
+        if not name:
+            raise ValueError("Pool group name is required.")
+        with get_db(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO resource_pool_group (name, description) VALUES (?, ?)",
+                (name, group.description.strip()),
+            )
+            conn.commit()
+            return int(cursor.lastrowid)
+
+    def update_pool_group(self, group: ResourcePoolGroup) -> bool:
+        """Update a pool group's name and description."""
+        if group.id is None:
+            return False
+        name = group.name.strip()
+        if not name:
+            raise ValueError("Pool group name is required.")
+        with get_db(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                UPDATE resource_pool_group
+                SET name = ?, description = ?
+                WHERE id = ?
+                """,
+                (name, group.description.strip(), group.id),
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def delete_pool_group(self, group_id: int) -> bool:
+        """Delete a group and cascade all memberships that reference it."""
+        with get_db(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM resource_pool_group WHERE id = ?", (group_id,))
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def get_group_members(self, group_id: int) -> pd.DataFrame:
+        """Return the direct pool and child-group members of a group."""
+        with get_db(self.db_path) as conn:
+            return pd.read_sql(
+                """
+                SELECT
+                    gm.id,
+                    gm.group_id,
+                    gm.pool_id,
+                    gm.child_group_id,
+                    CASE WHEN gm.pool_id IS NOT NULL THEN 'pool' ELSE 'group' END AS member_type,
+                    COALESCE(rp.name, child.name) AS member_name
+                FROM resource_pool_group_member gm
+                LEFT JOIN resource_pool rp ON rp.id = gm.pool_id
+                LEFT JOIN resource_pool_group child ON child.id = gm.child_group_id
+                WHERE gm.group_id = ?
+                ORDER BY member_type ASC, member_name ASC
+                """,
+                conn,
+                params=(group_id,),
+            )
+
+    def get_group_direct_member_ids(self, group_id: int) -> tuple[list[int], list[int]]:
+        """Return direct pool IDs and child-group IDs for a group."""
+        members = self.get_group_members(group_id)
+        if members.empty:
+            return [], []
+        pool_ids = [int(value) for value in members["pool_id"].dropna().tolist()]
+        child_group_ids = [int(value) for value in members["child_group_id"].dropna().tolist()]
+        return pool_ids, child_group_ids
+
+    @staticmethod
+    def _group_reaches(cursor: Any, start_group_id: int, target_group_id: int) -> bool:
+        """Return whether the existing directed graph reaches ``target_group_id``."""
+        cursor.execute(
+            """
+            WITH RECURSIVE descendants(id) AS (
+                SELECT ?
+                UNION
+                SELECT gm.child_group_id
+                FROM resource_pool_group_member gm
+                JOIN descendants d ON gm.group_id = d.id
+                WHERE gm.child_group_id IS NOT NULL
+            )
+            SELECT 1 FROM descendants WHERE id = ? LIMIT 1
+            """,
+            (start_group_id, target_group_id),
+        )
+        return cursor.fetchone() is not None
+
+    def would_create_group_cycle(self, group_id: int, child_group_id: int) -> bool:
+        """Return whether adding ``child_group_id`` below ``group_id`` makes a loop."""
+        if int(group_id) == int(child_group_id):
+            return True
+        with get_db(self.db_path) as conn:
+            return self._group_reaches(conn.cursor(), int(child_group_id), int(group_id))
+
+    def replace_group_members(
+        self,
+        group_id: int,
+        pool_ids: List[int],
+        child_group_ids: List[int],
+    ) -> None:
+        """Atomically replace direct members, rejecting missing members and graph loops."""
+        normalized_pool_ids = sorted({int(pool_id) for pool_id in pool_ids})
+        normalized_child_ids = sorted({int(child_id) for child_id in child_group_ids})
+
+        with get_db(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT 1 FROM resource_pool_group WHERE id = ?", (group_id,))
+            if cursor.fetchone() is None:
+                raise ValueError(f"Pool group #{group_id} does not exist.")
+
+            if normalized_pool_ids:
+                placeholders = ",".join("?" for _ in normalized_pool_ids)
+                cursor.execute(
+                    f"SELECT id FROM resource_pool WHERE id IN ({placeholders})",
+                    normalized_pool_ids,
+                )
+                existing_pool_ids = {int(row[0]) for row in cursor.fetchall()}
+                missing_pool_ids = set(normalized_pool_ids) - existing_pool_ids
+                if missing_pool_ids:
+                    raise ValueError(f"Unknown resource pool IDs: {sorted(missing_pool_ids)}")
+
+            if normalized_child_ids:
+                placeholders = ",".join("?" for _ in normalized_child_ids)
+                cursor.execute(
+                    f"SELECT id FROM resource_pool_group WHERE id IN ({placeholders})",
+                    normalized_child_ids,
+                )
+                existing_group_ids = {int(row[0]) for row in cursor.fetchall()}
+                missing_group_ids = set(normalized_child_ids) - existing_group_ids
+                if missing_group_ids:
+                    raise ValueError(f"Unknown pool group IDs: {sorted(missing_group_ids)}")
+
+            for child_group_id in normalized_child_ids:
+                if child_group_id == int(group_id) or self._group_reaches(
+                    cursor, child_group_id, int(group_id)
+                ):
+                    raise ValueError(
+                        f"Adding pool group #{child_group_id} below #{group_id} would create a loop."
+                    )
+
+            cursor.execute(
+                "DELETE FROM resource_pool_group_member WHERE group_id = ?",
+                (group_id,),
+            )
+            cursor.executemany(
+                """
+                INSERT INTO resource_pool_group_member (group_id, pool_id, child_group_id)
+                VALUES (?, ?, NULL)
+                """,
+                [(group_id, pool_id) for pool_id in normalized_pool_ids],
+            )
+            cursor.executemany(
+                """
+                INSERT INTO resource_pool_group_member (group_id, pool_id, child_group_id)
+                VALUES (?, NULL, ?)
+                """,
+                [(group_id, child_group_id) for child_group_id in normalized_child_ids],
+            )
+            conn.commit()
+
+    def get_group_descendant_pool_ids(self, group_id: int) -> List[int]:
+        """Resolve all pools recursively below a group, deduplicating shared pools."""
+        with get_db(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                WITH RECURSIVE descendant_groups(id) AS (
+                    SELECT ?
+                    UNION
+                    SELECT gm.child_group_id
+                    FROM resource_pool_group_member gm
+                    JOIN descendant_groups dg ON gm.group_id = dg.id
+                    WHERE gm.child_group_id IS NOT NULL
+                )
+                SELECT DISTINCT gm.pool_id
+                FROM resource_pool_group_member gm
+                JOIN descendant_groups dg ON gm.group_id = dg.id
+                WHERE gm.pool_id IS NOT NULL
+                ORDER BY gm.pool_id ASC
+                """,
+                (group_id,),
+            )
+            return [int(row[0]) for row in cursor.fetchall()]
+
+    # =========================================================================
+    # 3. POOL MAPPINGS (TEAMS & FUNCTIONS)
     # =========================================================================
     def get_mappings_by_pool(self, pool_id: int) -> pd.DataFrame:
         """Retrieves all team and function mappings for a given resource pool.
@@ -268,7 +514,7 @@ class ResourcePoolRepository:
             return cursor.rowcount > 0
 
     # =========================================================================
-    # 3. POOL ASSIGNMENTS (PROJECT / TASK WITH FTE & DATES)
+    # 4. POOL ASSIGNMENTS (PROJECT / TASK WITH FTE & DATES)
     # =========================================================================
     def get_assignments(
         self,
@@ -524,7 +770,7 @@ class ResourcePoolRepository:
         return result
 
     # =========================================================================
-    # 4. TEAM FUNCTIONS
+    # 5. TEAM FUNCTIONS
     # =========================================================================
     def get_team_functions(self, team_id: int) -> List[int]:
         """Retrieves all function IDs assigned to a team.

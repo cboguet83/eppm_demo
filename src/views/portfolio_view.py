@@ -20,6 +20,7 @@ from src.models.constants import (
 from src.repositories.organization_repo import OrganizationRepository
 from src.repositories.project_repo import ProjectRepository
 from src.repositories.schema_repo import SchemaRepository
+from src.repositories.tag_repo import TagRepository
 from src.services.organization_service import OrganizationService
 from src.services.portfolio_service import PortfolioService
 
@@ -31,6 +32,97 @@ ALLOWED_DYNAMIC_PARAMS: set[str] = {
     "category_tags",
     "complexity",
 }
+
+
+def _normalise_flex_filter_values(value: Any) -> list[str]:
+    """Convert scalar, list, and JSON-list cells into comparable display values."""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return []
+        if stripped.startswith("["):
+            try:
+                decoded = json.loads(stripped)
+            except (json.JSONDecodeError, TypeError):
+                decoded = None
+            if isinstance(decoded, list):
+                return [str(item).strip() for item in decoded if str(item).strip()]
+        return [stripped]
+    if isinstance(value, (list, tuple, set)):
+        return [str(item).strip() for item in value if str(item).strip()]
+    try:
+        if pd.isna(value):
+            return []
+    except (TypeError, ValueError):
+        pass
+    return [str(value).strip()]
+
+
+def _unique_flex_filter_options(series: pd.Series) -> list[str]:
+    """Return sorted unique values from scalar or multi-valued DataFrame cells."""
+    values = {
+        item
+        for value in series.tolist()
+        for item in _normalise_flex_filter_values(value)
+        if item
+    }
+    return sorted(values, key=str.casefold)
+
+
+def _apply_portfolio_flex_filters(
+    frame: pd.DataFrame,
+    filters: dict[str, list[str]],
+    match_all_values: bool = False,
+) -> pd.DataFrame:
+    """Apply flexible field filters with AND across fields and configurable value matching."""
+    filtered = frame.copy()
+    for column, selected_values in filters.items():
+        if column not in filtered.columns or not selected_values:
+            continue
+        wanted = {str(value).casefold() for value in selected_values}
+
+        def cell_matches(value: Any) -> bool:
+            actual = {
+                item.casefold()
+                for item in _normalise_flex_filter_values(value)
+            }
+            return wanted.issubset(actual) if match_all_values else bool(wanted & actual)
+
+        filtered = filtered[filtered[column].apply(cell_matches)]
+    return filtered
+
+
+def _project_tag_map(tag_repo: TagRepository) -> dict[int, list[str]]:
+    """Return project tags grouped by project ID for display and flexible filtering."""
+    assignments = tag_repo.get_all_project_tags()
+    tags_by_project: dict[int, list[str]] = {}
+    for _, row in assignments.iterrows():
+        project_id = int(row["project_id"])
+        labels = tags_by_project.setdefault(project_id, [])
+        if pd.notna(row.get("tag_name")):
+            tag_name = str(row["tag_name"])
+            group_name = row.get("tag_group_name")
+            label = (
+                f"{group_name} · {tag_name}"
+                if pd.notna(group_name) and str(group_name).strip()
+                else tag_name
+            )
+            if label not in labels:
+                labels.append(label)
+        if pd.notna(row.get("free_tag")) and str(row["free_tag"]).strip():
+            free_label = str(row["free_tag"]).strip()
+            if free_label not in labels:
+                labels.append(free_label)
+    return tags_by_project
+
+
+def _clear_portfolio_flex_filter_state() -> None:
+    """Clear only session-state keys owned by the portfolio flexible filter."""
+    for key in list(st.session_state):
+        if str(key).startswith("portfolio_flex_"):
+            del st.session_state[key]
 
 
 def _render_project_details_panel(
@@ -235,6 +327,7 @@ def _render_project_details_panel(
 def render_portfolio_overview(
     project_repo: ProjectRepository,
     schema_repo: SchemaRepository,
+    tag_repo: Optional[TagRepository] = None,
 ) -> None:
     """Renders the Portfolio Overview screen with KPI cards, filtering, and dynamic table."""
     st.header(f"📊 {t('portfolio.title')}")
@@ -267,6 +360,13 @@ def render_portfolio_overview(
     org_repo = OrganizationRepository(project_repo.db_path)
     df_funcs = org_repo.get_all_functions()
     df_merged = OrganizationService.enrich_projects_with_organization(df_merged, df_funcs)
+    if tag_repo is not None:
+        tags_by_project = _project_tag_map(tag_repo)
+        df_merged["_project_tags"] = df_merged["id"].map(
+            lambda project_id: tags_by_project.get(int(project_id), [])
+        )
+    else:
+        df_merged["_project_tags"] = [[] for _ in range(len(df_merged))]
 
     # 3. Dynamic Column Configuration (whitelisted allowed dynamic parameters)
     column_configs: dict[str, Any] = {
@@ -295,7 +395,19 @@ def render_portfolio_overview(
         "status",
         "planned_budget",
         "actual_budget",
+        "_project_tags",
     ]
+    column_configs["_project_tags"] = st.column_config.ListColumn(
+        "Tags",
+        help="Dictionary and free-form project tags",
+        width="medium",
+    )
+    flex_filter_fields: dict[str, str] = {
+        "Status": "status",
+        "Project Manager": "project_manager",
+        "Managing Function (Level 3)": "level_3_manager_name",
+        "Project Tags": "_project_tags",
+    }
 
     if not params.empty and "param_id" in params.columns:
         for _, p in params.iterrows():
@@ -313,6 +425,7 @@ def render_portfolio_overview(
 
             if target_col not in display_cols:
                 display_cols.append(target_col)
+            flex_filter_fields[pname] = target_col
 
             if ptype in (PARAM_TYPE_URL, PARAM_TYPE_HYPERLINK):
                 column_configs[target_col] = st.column_config.LinkColumn(
@@ -341,52 +454,63 @@ def render_portfolio_overview(
                     help=f"{ptype} parameter ({pid})",
                 )
 
-    # 4. Search, Status, Project Manager & Level 3 Hierarchy Filters
-    f_c1, f_c2, f_c3, f_c4 = st.columns([2, 1, 1.5, 1.5])
-    with f_c1:
+    # 4. Search and reusable multi-criteria flexible filter
+    search_col, flex_col = st.columns([4, 1])
+    with search_col:
         search_term = st.text_input(
             t("portfolio.filter_search"),
             placeholder=t("portfolio.filter_search_placeholder"),
         )
-    with f_c2:
-        all_statuses = sorted([s for s in df_merged["status"].dropna().unique() if s])
-        status_filter = st.multiselect(
-            t("portfolio.filter_status"),
-            options=all_statuses,
-            default=[],
-            placeholder=t("portfolio.filter_all"),
-        )
-    with f_c3:
-        all_l3 = sorted([m for m in df_merged["level_3_manager_name"].dropna().unique() if m and m != "—"])
-        l3_filter = st.multiselect(
-            t("portfolio.filter_level_3_manager"),
-            options=all_l3,
-            default=[],
-            placeholder=t("portfolio.filter_all_level3", default="All Level 3 Functions"),
-        )
-    with f_c4:
-        pm_scope = df_merged[df_merged["level_3_manager_name"].isin(l3_filter)] if l3_filter else df_merged
-        all_pms = sorted([pm for pm in pm_scope["project_manager"].dropna().unique() if pm and pm != "—"])
-        pm_filter = st.multiselect(
-            t("portfolio.filter_project_manager"),
-            options=all_pms,
-            default=[],
-            placeholder=t("portfolio.filter_all_managers", default="All Project Managers"),
-        )
+    active_filters: dict[str, list[str]] = {}
+    with flex_col:
+        with st.popover("⚙️ Flexible filters", width="stretch"):
+            selected_fields = st.multiselect(
+                "Filter fields",
+                options=list(flex_filter_fields),
+                placeholder="Choose one or more fields",
+                key="portfolio_flex_fields",
+            )
+            match_mode = st.segmented_control(
+                "When several values are selected",
+                options=["Any", "All"],
+                default="Any",
+                key="portfolio_flex_match_mode",
+                help="Fields use AND. This controls matching within each field.",
+            )
+            for field_label in selected_fields:
+                target_column = flex_filter_fields[field_label]
+                options = _unique_flex_filter_options(df_merged[target_column])
+                selected_values = st.multiselect(
+                    field_label,
+                    options=options,
+                    placeholder="All values",
+                    key=f"portfolio_flex_values::{target_column}",
+                )
+                if selected_values:
+                    active_filters[target_column] = selected_values
+            st.button(
+                "Clear filters",
+                on_click=_clear_portfolio_flex_filter_state,
+                width="stretch",
+                disabled=not selected_fields,
+            )
 
-    filtered_df = df_merged.copy()
-    if status_filter:
-        filtered_df = filtered_df[filtered_df["status"].isin(status_filter)]
-    if l3_filter:
-        filtered_df = filtered_df[filtered_df["level_3_manager_name"].isin(l3_filter)]
-    if pm_filter:
-        filtered_df = filtered_df[filtered_df["project_manager"].isin(pm_filter)]
+    filtered_df = _apply_portfolio_flex_filters(
+        df_merged,
+        active_filters,
+        match_all_values=match_mode == "All",
+    )
     if search_term.strip():
         term = search_term.lower()
         filtered_df = filtered_df[
             filtered_df["id"].astype(str).str.lower().str.contains(term, na=False)
             | filtered_df["name"].astype(str).str.lower().str.contains(term, na=False)
         ]
+    if active_filters:
+        st.caption(
+            f"{len(active_filters)} active flexible filter"
+            f"{'s' if len(active_filters) != 1 else ''} · {len(filtered_df)} matching projects"
+        )
 
     # 5. Render Data Grid with Row Selection
     st.subheader(t("portfolio.table_header", count=len(filtered_df)))
@@ -436,4 +560,3 @@ def render_portfolio_overview(
         if not matching.empty:
             selected_proj = matching.iloc[0]
             _render_project_details_panel(selected_proj, params, project_repo)
-

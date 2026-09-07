@@ -1,4 +1,4 @@
-"""Repository for tag management: tag groups, tag dictionary, project tags, and task tags."""
+"""Repository for tag groups, dictionary entries, and project/task/pool tags."""
 
 from typing import Any, Optional, Union
 
@@ -6,14 +6,14 @@ import pandas as pd
 
 from src.database.connection import get_db
 from src.logging_config import get_logger
-from src.models.tag import ProjectTag, TagDictionary, TagGroup, TaskTag
+from src.models.tag import ProjectTag, ResourcePoolTag, TagDictionary, TagGroup, TaskTag
 from src.repositories.project_repo import parse_project_id
 
 logger = get_logger(__name__)
 
 
 class TagRepository:
-    """Encapsulates database operations for Tag Groups, Tag Dictionary, Project Tags, and Task Tags."""
+    """Encapsulate database operations for the shared tagging system."""
 
     def __init__(self, db_path: Optional[str] = None) -> None:
         """Initializes the TagRepository.
@@ -291,7 +291,7 @@ class TagRepository:
             return cursor.rowcount > 0
 
     def delete_tag(self, tag_id: int) -> bool:
-        """Deletes a dictionary tag and cascades to project_tag and task_tag assignments.
+        """Delete a dictionary tag and all project, task, and pool assignments.
 
         Args:
             tag_id: Unique tag ID.
@@ -303,18 +303,19 @@ class TagRepository:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM project_tag WHERE tag_id = ?", (tag_id,))
             cursor.execute("DELETE FROM task_tag WHERE tag_id = ?", (tag_id,))
+            cursor.execute("DELETE FROM resource_pool_tag WHERE tag_id = ?", (tag_id,))
             cursor.execute("DELETE FROM tag_dictionnary WHERE id = ?", (tag_id,))
             conn.commit()
             return cursor.rowcount > 0
 
     def count_tag_usages(self, tag_id: int) -> int:
-        """Counts how many project tags and task tags reference this tag.
+        """Count project, task, and resource-pool references to a tag.
 
         Args:
             tag_id: Tag ID.
 
         Returns:
-            int: Total usage count across projects and tasks.
+            int: Total usage count across projects, tasks, and resource pools.
         """
         with get_db(self.db_path) as conn:
             cursor = conn.cursor()
@@ -322,14 +323,115 @@ class TagRepository:
                 """
                 SELECT 
                     (SELECT COUNT(*) FROM project_tag WHERE tag_id = ?) +
-                    (SELECT COUNT(*) FROM task_tag WHERE tag_id = ?)
+                    (SELECT COUNT(*) FROM task_tag WHERE tag_id = ?) +
+                    (SELECT COUNT(*) FROM resource_pool_tag WHERE tag_id = ?)
                 """,
-                (tag_id, tag_id),
+                (tag_id, tag_id, tag_id),
             )
             return int(cursor.fetchone()[0])
 
     # =========================================================================
-    # 3. PROJECT TAGS (project_tag)
+    # 3. RESOURCE POOL TAGS (resource_pool_tag)
+    # =========================================================================
+    def get_all_resource_pool_tags(self) -> pd.DataFrame:
+        """Return all resource-pool tag assignments with display labels."""
+        with get_db(self.db_path) as conn:
+            return pd.read_sql(
+                """
+                SELECT
+                    rpt.id,
+                    rpt.pool_id,
+                    rp.name AS pool_name,
+                    rpt.tag_id,
+                    td.tag AS tag_name,
+                    tg.tag_group_name
+                FROM resource_pool_tag rpt
+                JOIN resource_pool rp ON rp.id = rpt.pool_id
+                JOIN tag_dictionnary td ON td.id = rpt.tag_id
+                LEFT JOIN tag_group tg ON tg.id = td.tag_group_id
+                ORDER BY rp.name ASC, td.tag ASC
+                """,
+                conn,
+            )
+
+    def get_resource_pool_tags(self, pool_id: int) -> pd.DataFrame:
+        """Return dictionary tags assigned to one resource pool."""
+        with get_db(self.db_path) as conn:
+            return pd.read_sql(
+                """
+                SELECT
+                    rpt.id,
+                    rpt.pool_id,
+                    rpt.tag_id,
+                    td.tag AS tag_name,
+                    tg.tag_group_name
+                FROM resource_pool_tag rpt
+                JOIN tag_dictionnary td ON td.id = rpt.tag_id
+                LEFT JOIN tag_group tg ON tg.id = td.tag_group_id
+                WHERE rpt.pool_id = ?
+                ORDER BY td.tag ASC
+                """,
+                conn,
+                params=(pool_id,),
+            )
+
+    def create_resource_pool_tag(self, pool_tag: ResourcePoolTag) -> int:
+        """Assign one dictionary tag to a resource pool, without duplicates."""
+        with get_db(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO resource_pool_tag (pool_id, tag_id)
+                VALUES (?, ?)
+                ON CONFLICT(pool_id, tag_id) DO NOTHING
+                """,
+                (pool_tag.pool_id, pool_tag.tag_id),
+            )
+            cursor.execute(
+                "SELECT id FROM resource_pool_tag WHERE pool_id = ? AND tag_id = ?",
+                (pool_tag.pool_id, pool_tag.tag_id),
+            )
+            assignment_id = int(cursor.fetchone()[0])
+            conn.commit()
+            return assignment_id
+
+    def set_resource_pool_tags(self, pool_id: int, tag_ids: list[int]) -> None:
+        """Atomically replace all dictionary tags assigned to a resource pool."""
+        normalized_tag_ids = sorted({int(tag_id) for tag_id in tag_ids})
+        with get_db(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT 1 FROM resource_pool WHERE id = ?", (pool_id,))
+            if cursor.fetchone() is None:
+                raise ValueError(f"Resource pool #{pool_id} does not exist.")
+
+            if normalized_tag_ids:
+                placeholders = ",".join("?" for _ in normalized_tag_ids)
+                cursor.execute(
+                    f"SELECT id FROM tag_dictionnary WHERE id IN ({placeholders})",
+                    normalized_tag_ids,
+                )
+                existing_tag_ids = {int(row[0]) for row in cursor.fetchall()}
+                missing_tag_ids = set(normalized_tag_ids) - existing_tag_ids
+                if missing_tag_ids:
+                    raise ValueError(f"Unknown dictionary tag IDs: {sorted(missing_tag_ids)}")
+
+            cursor.execute("DELETE FROM resource_pool_tag WHERE pool_id = ?", (pool_id,))
+            cursor.executemany(
+                "INSERT INTO resource_pool_tag (pool_id, tag_id) VALUES (?, ?)",
+                [(pool_id, tag_id) for tag_id in normalized_tag_ids],
+            )
+            conn.commit()
+
+    def delete_resource_pool_tag(self, pool_tag_id: int) -> bool:
+        """Delete one resource-pool tag assignment."""
+        with get_db(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM resource_pool_tag WHERE id = ?", (pool_tag_id,))
+            conn.commit()
+            return cursor.rowcount > 0
+
+    # =========================================================================
+    # 4. PROJECT TAGS (project_tag)
     # =========================================================================
     def get_all_project_tags(self) -> pd.DataFrame:
         """Retrieves all project tag assignments enriched with project and tag names.
@@ -462,7 +564,7 @@ class TagRepository:
             return cursor.rowcount > 0
 
     # =========================================================================
-    # 4. TASK TAGS (task_tag)
+    # 5. TASK TAGS (task_tag)
     # =========================================================================
     def get_all_task_tags(self) -> pd.DataFrame:
         """Retrieves all task tag assignments enriched with task, project, and tag info.

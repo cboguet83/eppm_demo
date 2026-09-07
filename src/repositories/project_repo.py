@@ -7,6 +7,7 @@ import pandas as pd
 
 from src.database.connection import get_db
 from src.logging_config import get_logger
+from src.models.project import Project
 
 logger = get_logger(__name__)
 
@@ -57,6 +58,45 @@ class ProjectRepository:
                 "SELECT id, name, status, planned_budget, actual_budget, dynamic_attributes, function_id FROM project ORDER BY id",
                 conn,
             )
+
+    def get_project_by_id(self, project_id: Union[int, str]) -> Optional[Project]:
+        """Load one project as a domain model, including all dynamic attributes."""
+        int_id = parse_project_id(project_id)
+        with get_db(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT id, name, status, planned_budget, actual_budget,
+                       dynamic_attributes, function_id
+                FROM project
+                WHERE id = ?
+                """,
+                (int_id,),
+            )
+            row = cursor.fetchone()
+        if row is None:
+            return None
+
+        dynamic_attributes: dict[str, Any] = {}
+        if isinstance(row[5], str) and row[5].strip():
+            try:
+                decoded = json.loads(row[5])
+            except (json.JSONDecodeError, TypeError):
+                decoded = {}
+            if isinstance(decoded, dict):
+                dynamic_attributes = decoded
+        elif isinstance(row[5], dict):
+            dynamic_attributes = dict(row[5])
+
+        return Project(
+            id=int(row[0]),
+            name=str(row[1]),
+            status=str(row[2]),
+            planned_budget=float(row[3] or 0.0),
+            actual_budget=float(row[4] or 0.0),
+            dynamic_attributes=dynamic_attributes,
+            function_id=int(row[6]) if row[6] is not None else None,
+        )
 
     def exists(self, project_id: Union[int, str]) -> bool:
         """Checks if a project ID already exists.

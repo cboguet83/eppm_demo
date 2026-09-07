@@ -368,7 +368,7 @@ def run_app() -> None:
         st.sidebar.success(st.session_state.pop("seeding_status_message"))
 
     if page == PAGE_PORTFOLIO:
-        render_portfolio_overview(project_repo, schema_repo)
+        render_portfolio_overview(project_repo, schema_repo, tag_repo)
     elif page == PAGE_PROJECT_MASTER:
         render_project_master(project_repo, schema_repo, pool_repo, milestone_repo)
     elif page == PAGE_PLANNING:

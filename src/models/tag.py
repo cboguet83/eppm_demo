@@ -1,4 +1,4 @@
-"""Domain models for Tag Groups, Tag Dictionary, Project Tags, and Task Tags."""
+"""Domain models for tag groups, dictionary entries, and tagged entities."""
 
 from dataclasses import dataclass
 from typing import Optional
@@ -64,3 +64,12 @@ class TaskTag:
     task_id: int = 0
     tag_id: Optional[int] = None
     free_tag: Optional[str] = None
+
+
+@dataclass
+class ResourcePoolTag:
+    """Associates a resource pool with a dictionary tag."""
+
+    id: Optional[int] = None
+    pool_id: int = 0
+    tag_id: int = 0

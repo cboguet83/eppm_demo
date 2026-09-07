@@ -255,6 +255,9 @@ def seed_default_data_if_empty(db_path: Optional[str] = None, force: bool = Fals
             tables_to_flush = [
                 "resource_pool_assignment",
                 "resource_pool_mapping",
+                "resource_pool_group_member",
+                "resource_pool_group",
+                "resource_pool_tag",
                 "resource_pool",
                 "team_function",
                 "task_tag",

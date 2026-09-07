@@ -12,7 +12,13 @@ import streamlit.components.v1 as components
 from src.i18n import t
 from src.models.constants import PAGE_PLANNING
 from src.models.organization import Employee, EmployeeCalendarException, FunctionType, OrgFunction, Team
-from src.models.resource_pool import PoolAssignment, PoolCapacityDetail, PoolMapping, ResourcePool
+from src.models.resource_pool import (
+    PoolAssignment,
+    PoolCapacityDetail,
+    PoolMapping,
+    ResourcePool,
+    ResourcePoolGroup,
+)
 from src.models.tag import ProjectTag, TagDictionary, TagGroup, TaskTag
 from src.repositories.milestone_repo import MilestoneRepository
 from src.repositories.organization_repo import OrganizationRepository
@@ -400,7 +406,10 @@ def _open_delete_team_dialog(
 # RESOURCE POOL DIALOGS
 # =============================================================================
 @st.dialog(t("settings.dialog_add_pool", default="➕ Create Resource Pool"))
-def _open_add_pool_dialog(pool_repo: ResourcePoolRepository) -> None:
+def _open_add_pool_dialog(
+    pool_repo: ResourcePoolRepository,
+    tag_repo: TagRepository,
+) -> None:
     """Modal dialog to create a new resource pool."""
     new_name = st.text_input(t("settings.field_pool_name", default="Resource Pool Name *"), placeholder="e.g. Core Engineering Pool")
     new_desc = st.text_area(t("settings.field_pool_desc", default="Description"), placeholder="Purpose and specialty of this pool...")
@@ -413,6 +422,21 @@ def _open_add_pool_dialog(pool_repo: ResourcePoolRepository) -> None:
             "settings.field_pool_capacity_help",
             default="Capacity limit used to evaluate project and task demand.",
         ),
+    )
+    df_tags = tag_repo.get_all_tags()
+    tag_labels = {
+        int(row["id"]): (
+            f"{row['tag_group_name']} · {row['tag']}"
+            if pd.notna(row.get("tag_group_name"))
+            else str(row["tag"])
+        )
+        for _, row in df_tags.iterrows()
+    }
+    selected_tag_ids = st.multiselect(
+        "Pool tags",
+        options=list(tag_labels),
+        format_func=lambda tag_id: tag_labels[tag_id],
+        placeholder="Select dictionary tags",
     )
 
     col_save, col_cancel = st.columns(2)
@@ -427,6 +451,7 @@ def _open_add_pool_dialog(pool_repo: ResourcePoolRepository) -> None:
                     capacity_fte=float(new_capacity),
                 )
             )
+            tag_repo.set_resource_pool_tags(p_id, selected_tag_ids)
             st.toast(f"Resource Pool '{new_name}' created (ID: {p_id})!", icon="✅")
             st.rerun()
         except ValueError as val_err:
@@ -439,7 +464,11 @@ def _open_add_pool_dialog(pool_repo: ResourcePoolRepository) -> None:
 
 
 @st.dialog(t("settings.dialog_edit_pool", default="✏️ Edit Resource Pool"))
-def _open_edit_pool_dialog(pool_repo: ResourcePoolRepository, pool_id: int) -> None:
+def _open_edit_pool_dialog(
+    pool_repo: ResourcePoolRepository,
+    tag_repo: TagRepository,
+    pool_id: int,
+) -> None:
     """Modal dialog to edit an existing resource pool."""
     pool = pool_repo.get_pool_by_id(pool_id)
     if not pool:
@@ -458,6 +487,28 @@ def _open_edit_pool_dialog(pool_repo: ResourcePoolRepository, pool_id: int) -> N
             default="Capacity limit used to evaluate project and task demand.",
         ),
     )
+    df_tags = tag_repo.get_all_tags()
+    tag_labels = {
+        int(row["id"]): (
+            f"{row['tag_group_name']} · {row['tag']}"
+            if pd.notna(row.get("tag_group_name"))
+            else str(row["tag"])
+        )
+        for _, row in df_tags.iterrows()
+    }
+    existing_pool_tags = tag_repo.get_resource_pool_tags(pool_id)
+    existing_tag_ids = (
+        [int(tag_id) for tag_id in existing_pool_tags["tag_id"].tolist()]
+        if not existing_pool_tags.empty
+        else []
+    )
+    selected_tag_ids = st.multiselect(
+        "Pool tags",
+        options=list(tag_labels),
+        default=existing_tag_ids,
+        format_func=lambda tag_id: tag_labels[tag_id],
+        placeholder="Select dictionary tags",
+    )
 
     col_save, col_cancel = st.columns(2)
     if col_save.button(t("settings.btn_save_changes", default="💾 Save Changes"), type="primary", use_container_width=True):
@@ -472,6 +523,7 @@ def _open_edit_pool_dialog(pool_repo: ResourcePoolRepository, pool_id: int) -> N
                     capacity_fte=float(edit_capacity),
                 )
             )
+            tag_repo.set_resource_pool_tags(pool_id, selected_tag_ids)
             st.toast("Resource Pool updated successfully!", icon="✏️")
             st.rerun()
         except ValueError as val_err:
@@ -497,6 +549,217 @@ def _open_delete_pool_dialog(pool_repo: ResourcePoolRepository, pool_id: int, po
 
     if col_cancel.button(t("settings.btn_cancel", default="Cancel"), use_container_width=True):
         st.rerun()
+
+
+def _pool_group_option_maps(
+    pool_repo: ResourcePoolRepository,
+) -> tuple[dict[int, str], dict[int, str]]:
+    """Build current resource-pool and group labels for membership controls."""
+    pools = pool_repo.get_all_pools()
+    groups = pool_repo.get_all_pool_groups()
+    pool_labels = {
+        int(row["id"]): str(row["name"])
+        for _, row in pools.iterrows()
+    }
+    group_labels = {
+        int(row["id"]): str(row["name"])
+        for _, row in groups.iterrows()
+    }
+    return pool_labels, group_labels
+
+
+@st.dialog("➕ Create pool group")
+def _open_add_pool_group_dialog(pool_repo: ResourcePoolRepository) -> None:
+    """Create a recursive group and its direct members."""
+    pool_labels, group_labels = _pool_group_option_maps(pool_repo)
+    name = st.text_input("Group name *", placeholder="e.g. Digital delivery")
+    description = st.text_area("Description", placeholder="Purpose of this pool group")
+    selected_pool_ids = st.multiselect(
+        "Direct pools",
+        options=list(pool_labels),
+        format_func=lambda pool_id: pool_labels[pool_id],
+    )
+    selected_group_ids = st.multiselect(
+        "Child groups",
+        options=list(group_labels),
+        format_func=lambda group_id: group_labels[group_id],
+        help="Child groups can contain pools or more child groups.",
+    )
+
+    save_col, cancel_col = st.columns(2)
+    if save_col.button("💾 Save group", type="primary", width="stretch"):
+        created_group_id: Optional[int] = None
+        try:
+            created_group_id = pool_repo.create_pool_group(
+                ResourcePoolGroup(name=name, description=description)
+            )
+            pool_repo.replace_group_members(
+                created_group_id,
+                selected_pool_ids,
+                selected_group_ids,
+            )
+            st.toast(f"Pool group '{name}' created.", icon="✅")
+            st.rerun()
+        except Exception as exc:
+            if created_group_id is not None:
+                pool_repo.delete_pool_group(created_group_id)
+            st.error(f"Could not create pool group: {exc}")
+    if cancel_col.button("Cancel", width="stretch"):
+        st.rerun()
+
+
+@st.dialog("✏️ Edit pool group")
+def _open_edit_pool_group_dialog(
+    pool_repo: ResourcePoolRepository,
+    group_id: int,
+) -> None:
+    """Edit a recursive group while excluding child choices that form cycles."""
+    group = pool_repo.get_pool_group_by_id(group_id)
+    if group is None:
+        st.error("Pool group not found.")
+        return
+
+    pool_labels, group_labels = _pool_group_option_maps(pool_repo)
+    current_pool_ids, current_child_ids = pool_repo.get_group_direct_member_ids(group_id)
+    safe_group_labels = {
+        candidate_id: label
+        for candidate_id, label in group_labels.items()
+        if candidate_id != group_id
+        and (
+            candidate_id in current_child_ids
+            or not pool_repo.would_create_group_cycle(group_id, candidate_id)
+        )
+    }
+
+    name = st.text_input("Group name *", value=group.name)
+    description = st.text_area("Description", value=group.description)
+    selected_pool_ids = st.multiselect(
+        "Direct pools",
+        options=list(pool_labels),
+        default=current_pool_ids,
+        format_func=lambda pool_id: pool_labels[pool_id],
+    )
+    selected_group_ids = st.multiselect(
+        "Child groups",
+        options=list(safe_group_labels),
+        default=current_child_ids,
+        format_func=lambda child_id: safe_group_labels[child_id],
+        help="Groups that would introduce a direct or indirect loop are excluded.",
+    )
+
+    save_col, cancel_col = st.columns(2)
+    if save_col.button("💾 Save changes", type="primary", width="stretch"):
+        try:
+            pool_repo.replace_group_members(group_id, selected_pool_ids, selected_group_ids)
+            pool_repo.update_pool_group(
+                ResourcePoolGroup(id=group_id, name=name, description=description)
+            )
+            st.toast("Pool group updated.", icon="✅")
+            st.rerun()
+        except Exception as exc:
+            st.error(f"Could not update pool group: {exc}")
+    if cancel_col.button("Cancel", width="stretch"):
+        st.rerun()
+
+
+@st.dialog("🗑️ Delete pool group")
+def _open_delete_pool_group_dialog(
+    pool_repo: ResourcePoolRepository,
+    group_id: int,
+    group_name: str,
+) -> None:
+    """Confirm deletion of a pool group without deleting its member pools."""
+    st.warning(f"Delete pool group **{group_name}**?")
+    st.caption("Member pools and child groups are retained; only group memberships are removed.")
+    confirm_col, cancel_col = st.columns(2)
+    if confirm_col.button("🗑️ Delete group", type="primary", width="stretch"):
+        pool_repo.delete_pool_group(group_id)
+        st.toast(f"Pool group '{group_name}' deleted.", icon="🗑️")
+        st.rerun()
+    if cancel_col.button("Cancel", width="stretch"):
+        st.rerun()
+
+
+def _render_pool_groups_management(pool_repo: ResourcePoolRepository) -> None:
+    """Render creation, editing, and recursive membership inspection for pool groups."""
+    with st.expander("🗂️ Recursive pool groups", expanded=False):
+        title_col, create_col = st.columns([4, 1])
+        title_col.caption(
+            "Groups may contain resource pools or other groups. Recursive membership is "
+            "deduplicated and loop-safe."
+        )
+        if create_col.button("➕ New group", width="stretch"):
+            _open_add_pool_group_dialog(pool_repo)
+
+        groups = pool_repo.get_all_pool_groups()
+        if groups.empty:
+            st.info("No pool groups yet.")
+            return
+
+        st.dataframe(
+            groups[
+                [
+                    "name",
+                    "description",
+                    "direct_pool_count",
+                    "child_group_count",
+                    "recursive_pool_count",
+                ]
+            ],
+            column_config={
+                "name": "Group",
+                "description": "Description",
+                "direct_pool_count": "Direct pools",
+                "child_group_count": "Child groups",
+                "recursive_pool_count": "All pools",
+            },
+            hide_index=True,
+            width="stretch",
+        )
+
+        group_labels = {
+            int(row["id"]): str(row["name"])
+            for _, row in groups.iterrows()
+        }
+        selected_group_id = st.selectbox(
+            "Inspect group",
+            options=list(group_labels),
+            format_func=lambda group_id: group_labels[group_id],
+            key="selected_resource_pool_group",
+        )
+        edit_col, delete_col, _ = st.columns([1, 1, 3])
+        if edit_col.button("✏️ Edit", width="stretch"):
+            _open_edit_pool_group_dialog(pool_repo, selected_group_id)
+        if delete_col.button("🗑️ Delete", width="stretch"):
+            _open_delete_pool_group_dialog(
+                pool_repo,
+                selected_group_id,
+                group_labels[selected_group_id],
+            )
+
+        direct_members = pool_repo.get_group_members(selected_group_id)
+        all_pool_ids = pool_repo.get_group_descendant_pool_ids(selected_group_id)
+        all_pools = pool_repo.get_all_pools()
+        pool_names = {
+            int(row["id"]): str(row["name"])
+            for _, row in all_pools.iterrows()
+        }
+        direct_labels = (
+            [
+                f"{'Pool' if row['member_type'] == 'pool' else 'Group'}: {row['member_name']}"
+                for _, row in direct_members.iterrows()
+            ]
+            if not direct_members.empty
+            else []
+        )
+        st.caption(
+            "Direct members: " + (" · ".join(direct_labels) if direct_labels else "None")
+        )
+        st.write(
+            "Resolved pools:",
+            ", ".join(pool_names.get(pool_id, f"Pool #{pool_id}") for pool_id in all_pool_ids)
+            or "None",
+        )
 
 
 @st.dialog(t("settings.dialog_add_mapping", default="➕ Assign Team or Employee to Pool"))
@@ -1580,7 +1843,10 @@ def _open_delete_tag_dialog(tag_repo: TagRepository, tag_id: int, tag_name: str)
     """Modal dialog to confirm deletion of a dictionary tag."""
     usages = tag_repo.count_tag_usages(tag_id)
     if usages > 0:
-        st.warning(f"⚠️ Tag **{tag_name}** is currently assigned to {usages} project(s) or task(s). Deleting it will also remove those tag assignments.")
+        st.warning(
+            f"⚠️ Tag **{tag_name}** currently has {usages} project, task, or "
+            "resource-pool assignment(s). Deleting it will also remove those assignments."
+        )
     else:
         st.warning(f"⚠️ {t('settings.delete_confirm_msg', name=tag_name, default=f'Are you sure you want to delete Tag **{tag_name}** (ID: {tag_id})?')}")
     st.caption("This action cannot be undone.")
@@ -2494,12 +2760,14 @@ def render_settings_view(
             kpi5.metric(t("settings.kpi_overassigned_pools", default="Overassigned Pools"), "0 ✅")
 
         st.divider()
+        _render_pool_groups_management(pool_repo)
+        st.divider()
 
         # 2. Pool Selection & Action Toolbar
         col_sel, col_add_btn = st.columns([4, 1])
         with col_add_btn:
             if st.button(t("settings.btn_create_pool", default="➕ Create Pool"), type="primary", use_container_width=True):
-                _open_add_pool_dialog(pool_repo)
+                _open_add_pool_dialog(pool_repo, tag_repo)
 
         df_all_pools = pool_repo.get_all_pools()
         if df_all_pools.empty:
@@ -2531,10 +2799,17 @@ def render_settings_view(
                     pool_obj = pool_repo.get_pool_by_id(selected_pool_id)
                     if pool_obj and pool_obj.description:
                         st.caption(f"📝 {pool_obj.description}")
+                    pool_tags = tag_repo.get_resource_pool_tags(selected_pool_id)
+                    if not pool_tags.empty:
+                        tag_text = " ".join(
+                            f"`{row['tag_name']}`"
+                            for _, row in pool_tags.iterrows()
+                        )
+                        st.markdown(f"🏷️ {tag_text}")
                 with c_actions:
                     c_edit, c_del = st.columns(2)
                     if c_edit.button("✏️", key=f"btn_edit_pool_{selected_pool_id}", help="Edit pool details"):
-                        _open_edit_pool_dialog(pool_repo, selected_pool_id)
+                        _open_edit_pool_dialog(pool_repo, tag_repo, selected_pool_id)
                     if c_del.button("🗑️", key=f"btn_del_pool_{selected_pool_id}", help="Delete pool"):
                         _open_delete_pool_dialog(pool_repo, selected_pool_id, current_detail.pool_name)
 

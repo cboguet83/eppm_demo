@@ -1,4 +1,4 @@
-"""Domain data models for resource pools, pool mappings, and pool assignments."""
+"""Domain models for resource pools, recursive groups, mappings, and assignments."""
 
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
@@ -37,6 +37,29 @@ class ResourcePool:
     description: str = ""
     capacity_fte: Optional[float] = None
     created_at: Optional[str] = None
+
+
+@dataclass
+class ResourcePoolGroup:
+    """A named recursive collection of resource pools and other pool groups."""
+
+    name: str
+    id: Optional[int] = None
+    description: str = ""
+    created_at: Optional[str] = None
+
+
+@dataclass
+class ResourcePoolGroupMember:
+    """A direct member of a pool group.
+
+    Exactly one of ``pool_id`` and ``child_group_id`` must be populated.
+    """
+
+    group_id: int
+    id: Optional[int] = None
+    pool_id: Optional[int] = None
+    child_group_id: Optional[int] = None
 
 
 @dataclass

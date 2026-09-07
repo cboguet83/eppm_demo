@@ -1474,6 +1474,13 @@
       display: flex;
     }
 
+    .resource-header-tier-bottom .header-cell.period-overallocated {
+      background: #fee2e2;
+      color: #b91c1c;
+      border-bottom: 2px solid #dc2626;
+      font-weight: 800;
+    }
+
     .resource-header-cell {
       height: 100%;
       display: flex;
@@ -3838,6 +3845,24 @@
       };
     }
 
+    function isDisplayedPoolPeriodOverallocated(pool, startStr, endStr) {
+      const theoreticalCapacity = Number(pool.theoretical_capacity ?? pool.capacity ?? 0);
+      const hasAssignedResources = Boolean(pool.has_assigned_resources);
+      const assignedCapacity = Number(pool.displayed_assigned_capacity ?? theoreticalCapacity);
+      const dailyAssignedCapacity = hasAssignedResources ? (pool.daily_assigned_capacity || {}) : {};
+      const totalIsOver = showTotalRows && getDemandCapacityStatusForPeriod(
+        pool.daily_usage, assignedCapacity, dailyAssignedCapacity, startStr, endStr
+      ).isOverallocated;
+      const selectedIsOver = showSelectedRows && getDemandCapacityStatusForPeriod(
+        pool.selected_projects_daily_usage,
+        assignedCapacity,
+        dailyAssignedCapacity,
+        startStr,
+        endStr
+      ).isOverallocated;
+      return totalIsOver || selectedIsOver;
+    }
+
     function showResourceCellTooltip(e, poolName, startStr, endStr, demand, capacity, scopeType, isOver, excess) {
       if (!showHoverOverlay) return;
       let statusHtml = '';
@@ -4069,9 +4094,24 @@
 
       const resBottomHeader = document.getElementById('resource-header-tier-bottom');
       if (resBottomHeader && bottomCells) {
-        resBottomHeader.innerHTML = bottomCells.map(c => `
-          <div class="header-cell ${c.isCurrent ? 'current-day' : ''}" style="width: ${c.width}px;" title="${escapeHtml(c.label)}">${escapeHtml(c.label)}</div>
-        `).join('');
+        resBottomHeader.innerHTML = bottomCells.map(c => {
+          const startStr = formatDate(c.startDate);
+          const endStr = formatDate(c.endDate);
+          const isOverallocated = pools.some(pool =>
+            isDisplayedPoolPeriodOverallocated(pool, startStr, endStr)
+          );
+          const warning = getT(
+            'resource_grid.period_overallocated',
+            'Overallocated during this period'
+          );
+          return `
+            <div class="header-cell ${c.isCurrent ? 'current-day' : ''} ${isOverallocated ? 'period-overallocated' : ''}"
+                 style="width: ${c.width}px;"
+                 title="${escapeHtml(c.label)}${isOverallocated ? ` — ${escapeHtml(warning)}` : ''}">
+              ${escapeHtml(c.label)}
+            </div>
+          `;
+        }).join('');
       }
 
       // 2. Render Today dashed line on resource pool grid

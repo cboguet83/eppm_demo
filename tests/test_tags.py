@@ -7,9 +7,11 @@ import unittest
 from src.database.schema_init import init_db
 from src.models.milestone import Milestone
 from src.models.project import Project
-from src.models.tag import ProjectTag, TagDictionary, TagGroup, TaskTag
+from src.models.resource_pool import ResourcePool
+from src.models.tag import ProjectTag, ResourcePoolTag, TagDictionary, TagGroup, TaskTag
 from src.repositories.milestone_repo import MilestoneRepository
 from src.repositories.project_repo import ProjectRepository
+from src.repositories.resource_pool_repo import ResourcePoolRepository
 from src.repositories.tag_repo import TagRepository
 from src.services.tag_service import TagService
 
@@ -27,6 +29,7 @@ class TestTagsSystem(unittest.TestCase):
         self.tag_repo = TagRepository(self.db_path)
         self.project_repo = ProjectRepository(self.db_path)
         self.milestone_repo = MilestoneRepository(self.db_path)
+        self.pool_repo = ResourcePoolRepository(self.db_path)
 
         # Create a sample project and task for tagging tests
         self.project_id = self.project_repo.create_project(
@@ -119,6 +122,29 @@ class TestTagsSystem(unittest.TestCase):
         deleted = self.tag_repo.delete_tag(tag_id)
         self.assertTrue(deleted)
         self.assertIsNone(self.tag_repo.get_tag_by_id(tag_id))
+
+    def test_resource_pool_tags_can_be_replaced_and_cascade(self) -> None:
+        """Pools use dictionary tags without duplicates and assignments cascade."""
+        pool_id = self.pool_repo.create_pool(ResourcePool(name="Tagged Pool"))
+        first_tag = self.tag_repo.create_tag(TagDictionary(tag="Critical"))
+        second_tag = self.tag_repo.create_tag(TagDictionary(tag="EMEA"))
+
+        assignment_id = self.tag_repo.create_resource_pool_tag(
+            ResourcePoolTag(pool_id=pool_id, tag_id=first_tag)
+        )
+        duplicate_id = self.tag_repo.create_resource_pool_tag(
+            ResourcePoolTag(pool_id=pool_id, tag_id=first_tag)
+        )
+        self.assertEqual(assignment_id, duplicate_id)
+
+        self.tag_repo.set_resource_pool_tags(pool_id, [first_tag, second_tag, second_tag])
+        assigned = self.tag_repo.get_resource_pool_tags(pool_id)
+        self.assertEqual(set(assigned["tag_id"].astype(int)), {first_tag, second_tag})
+        self.assertEqual(self.tag_repo.count_tag_usages(first_tag), 1)
+
+        self.tag_repo.delete_tag(first_tag)
+        remaining = self.tag_repo.get_resource_pool_tags(pool_id)
+        self.assertEqual(remaining["tag_id"].astype(int).tolist(), [second_tag])
 
     # -------------------------------------------------------------------------
     # Project Tag Assignment Tests
@@ -322,4 +348,3 @@ class TestTagsSystem(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

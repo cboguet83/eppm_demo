@@ -128,6 +128,33 @@ class TestIntegration(unittest.TestCase):
         }
         self.assertEqual(ALLOWED_DYNAMIC_PARAMS, expected_allowed)
 
+    def test_portfolio_flex_filters_scalar_and_multi_value_fields(self) -> None:
+        """Flexible filters use AND across fields and Any/All within list fields."""
+        import pandas as pd
+
+        from src.views.portfolio_view import _apply_portfolio_flex_filters
+
+        projects = pd.DataFrame(
+            [
+                {"id": 1, "status": "Active", "tags": ["Red", "Rail"]},
+                {"id": 2, "status": "Active", "tags": '["Red", "Road"]'},
+                {"id": 3, "status": "Paused", "tags": ["Rail"]},
+            ]
+        )
+
+        any_result = _apply_portfolio_flex_filters(
+            projects,
+            {"status": ["Active"], "tags": ["Rail", "Road"]},
+        )
+        self.assertEqual(any_result["id"].tolist(), [1, 2])
+
+        all_result = _apply_portfolio_flex_filters(
+            projects,
+            {"status": ["Active"], "tags": ["Red", "Rail"]},
+            match_all_values=True,
+        )
+        self.assertEqual(all_result["id"].tolist(), [1])
+
     def test_parse_cli_args(self) -> None:
         """Verify parsing of CLI arguments for database force-reseeding and project count."""
         import sys
@@ -181,4 +208,3 @@ class TestIntegration(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

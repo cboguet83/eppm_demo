@@ -100,6 +100,12 @@ class TestRepositories(unittest.TestCase):
         )
         self.assertTrue(created)
         self.assertTrue(self.project_repo.exists("PRJ-100"))
+        loaded_project = self.project_repo.get_project_by_id("PRJ-100")
+        self.assertIsNotNone(loaded_project)
+        self.assertEqual(loaded_project.id, 100)
+        self.assertEqual(loaded_project.name, "Modernization Core")
+        self.assertEqual(loaded_project.dynamic_attributes, {"PRM_001": "Value"})
+        self.assertIsNone(self.project_repo.get_project_by_id("PRJ-999999"))
 
         # Create step 1
         s1_id = self.milestone_repo.create_milestone(
@@ -338,4 +344,3 @@ class TestRepositories(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

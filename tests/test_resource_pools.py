@@ -1,15 +1,22 @@
 """Unit tests for Resource Pools, partial mappings, de-duplication, and daily overassignment detection."""
 
 import os
+import sqlite3
 import tempfile
 import unittest
 from datetime import date
 from unittest.mock import MagicMock, patch
 
+from src.database.connection import get_db
 from src.database.schema_init import init_db
 from src.models.organization import Employee, EmployeeCalendarException, OrgFunction, Team
 from src.models.project import Project
-from src.models.resource_pool import PoolAssignment, PoolMapping, ResourcePool
+from src.models.resource_pool import (
+    PoolAssignment,
+    PoolMapping,
+    ResourcePool,
+    ResourcePoolGroup,
+)
 from src.i18n import set_current_locale, t
 from src.repositories.milestone_repo import MilestoneRepository
 from src.repositories.organization_repo import OrganizationRepository
@@ -71,6 +78,44 @@ class TestResourcePools(unittest.TestCase):
         # 5. Delete
         self.assertTrue(self.pool_repo.delete_pool(p_id))
         self.assertIsNone(self.pool_repo.get_pool_by_id(p_id))
+
+    def test_recursive_pool_groups_resolve_pools_and_reject_loops(self) -> None:
+        """Nested groups deduplicate pools and reject direct, indirect, and raw-SQL loops."""
+        pool_a = self.pool_repo.create_pool(ResourcePool(name="Pool A"))
+        pool_b = self.pool_repo.create_pool(ResourcePool(name="Pool B"))
+        leaf = self.pool_repo.create_pool_group(ResourcePoolGroup(name="Leaf"))
+        middle = self.pool_repo.create_pool_group(ResourcePoolGroup(name="Middle"))
+        top = self.pool_repo.create_pool_group(ResourcePoolGroup(name="Top"))
+
+        self.pool_repo.replace_group_members(leaf, [pool_a], [])
+        self.pool_repo.replace_group_members(middle, [pool_b], [leaf])
+        self.pool_repo.replace_group_members(top, [pool_a], [middle])
+
+        self.assertEqual(
+            self.pool_repo.get_group_descendant_pool_ids(top),
+            [pool_a, pool_b],
+        )
+        with self.assertRaisesRegex(ValueError, "loop"):
+            self.pool_repo.replace_group_members(leaf, [pool_a], [leaf])
+        with self.assertRaisesRegex(ValueError, "loop"):
+            self.pool_repo.replace_group_members(leaf, [pool_a], [top])
+
+        # Validation happens before replacement, so rejected edits preserve members.
+        self.assertEqual(self.pool_repo.get_group_direct_member_ids(leaf), ([pool_a], []))
+
+        with get_db(self.db_path) as conn:
+            with self.assertRaisesRegex(sqlite3.IntegrityError, "cycle"):
+                conn.execute(
+                    """
+                    INSERT INTO resource_pool_group_member
+                        (group_id, pool_id, child_group_id)
+                    VALUES (?, NULL, ?)
+                    """,
+                    (leaf, top),
+                )
+
+        groups = self.pool_repo.get_all_pool_groups().set_index("name")
+        self.assertEqual(int(groups.loc["Top", "recursive_pool_count"]), 2)
 
     def test_pool_mapping_crud_and_allocations(self) -> None:
         """Verify adding and updating team and function mappings with partial allocations (0-100%)."""

@@ -425,6 +425,87 @@ def init_db(db_path: Optional[str] = None) -> None:
                 "ALTER TABLE resource_pool ADD COLUMN capacity_fte REAL CHECK(capacity_fte >= 0.0)"
             )
 
+        # Resource-pool tags use the shared tag dictionary.
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS resource_pool_tag (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                pool_id INTEGER NOT NULL,
+                tag_id INTEGER NOT NULL,
+                FOREIGN KEY (pool_id) REFERENCES resource_pool (id) ON DELETE CASCADE,
+                FOREIGN KEY (tag_id) REFERENCES tag_dictionnary (id) ON DELETE CASCADE,
+                UNIQUE(pool_id, tag_id)
+            )
+        """)
+
+        # Pool groups can recursively contain pools and other groups. Nullable
+        # typed foreign keys keep referential integrity while the CHECK ensures
+        # that every row represents exactly one member type.
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS resource_pool_group (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                description TEXT DEFAULT '',
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS resource_pool_group_member (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                group_id INTEGER NOT NULL,
+                pool_id INTEGER,
+                child_group_id INTEGER,
+                FOREIGN KEY (group_id) REFERENCES resource_pool_group (id) ON DELETE CASCADE,
+                FOREIGN KEY (pool_id) REFERENCES resource_pool (id) ON DELETE CASCADE,
+                FOREIGN KEY (child_group_id) REFERENCES resource_pool_group (id) ON DELETE CASCADE,
+                CHECK (
+                    (pool_id IS NOT NULL AND child_group_id IS NULL)
+                    OR (pool_id IS NULL AND child_group_id IS NOT NULL)
+                ),
+                CHECK (child_group_id IS NULL OR group_id <> child_group_id),
+                UNIQUE(group_id, pool_id),
+                UNIQUE(group_id, child_group_id)
+            )
+        """)
+
+        # Protect the graph even when a caller writes directly to SQLite rather
+        # than using ResourcePoolRepository.replace_group_members().
+        cursor.execute("""
+            CREATE TRIGGER IF NOT EXISTS resource_pool_group_no_cycle_insert
+            BEFORE INSERT ON resource_pool_group_member
+            WHEN NEW.child_group_id IS NOT NULL
+            BEGIN
+                SELECT CASE WHEN EXISTS (
+                    WITH RECURSIVE descendants(id) AS (
+                        SELECT NEW.child_group_id
+                        UNION
+                        SELECT gm.child_group_id
+                        FROM resource_pool_group_member gm
+                        JOIN descendants d ON gm.group_id = d.id
+                        WHERE gm.child_group_id IS NOT NULL
+                    )
+                    SELECT 1 FROM descendants WHERE id = NEW.group_id
+                ) THEN RAISE(ABORT, 'Pool group membership would create a cycle') END;
+            END
+        """)
+        cursor.execute("""
+            CREATE TRIGGER IF NOT EXISTS resource_pool_group_no_cycle_update
+            BEFORE UPDATE OF group_id, child_group_id ON resource_pool_group_member
+            WHEN NEW.child_group_id IS NOT NULL
+            BEGIN
+                SELECT CASE WHEN EXISTS (
+                    WITH RECURSIVE descendants(id) AS (
+                        SELECT NEW.child_group_id
+                        UNION
+                        SELECT gm.child_group_id
+                        FROM resource_pool_group_member gm
+                        JOIN descendants d ON gm.group_id = d.id
+                        WHERE gm.child_group_id IS NOT NULL AND gm.id <> OLD.id
+                    )
+                    SELECT 1 FROM descendants WHERE id = NEW.group_id
+                ) THEN RAISE(ABORT, 'Pool group membership would create a cycle') END;
+            END
+        """)
+
         # 18. Resource Pool Mappings Table (Teams & Functions with partial 0-100% allocation)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS resource_pool_mapping (
