@@ -1,180 +1,35 @@
-"""Persistent, invalidated pool summaries and on-demand capacity details.
+"""Compatibility exports for callers awaiting the planning migration."""
 
-Source-table triggers invalidate affected pools even for writes outside the UI.
-Full calculations run only on a cache miss; published results are checked against
-the source revision so concurrent edits cannot publish stale calculations.
-"""
-
-from contextlib import closing
-
-import json
-import sqlite3
-import pandas as pd
-from collections import OrderedDict
-from dataclasses import asdict, dataclass, fields
 from datetime import date
-from pathlib import Path
-from threading import RLock
-from types import SimpleNamespace
-from uuid import uuid4
 
-from src.config import config
-from src.database.connection import get_db
-from src.models.resource_pool import DailyOverassignment, PoolCapacityDetail, PoolFunctionContribution, ResourcePool
+from app.main import capacity_cache_state, create_pool_capacity_cache, create_pool_capacity_service
+from app.application.ports.pool_capacity import CapacityResult
+from app.domain.resources.models import PoolCapacityDetail, PoolCapacitySummary
+from app.infrastructure.database.pool_capacity_cache import install_capacity_cache
 
-_LOCK = RLock()
-_MEMORY = OrderedDict()
+_MEMORY = capacity_cache_state().entries
+_LOCK = capacity_cache_state().lock
 _VERSION = 1
 
 
-@dataclass(frozen=True)
-class PoolCapacitySummary:
-    pool_id: int
-    pool_name: str
-    total_capacity_fte: float
-    assigned_capacity_fte: float
-    peak_assigned_fte: float
-    is_overassigned: bool
-    peak_excess_fte: float
+def _batch_calculate(
+    db_path: str | None,
+    pool_ids: list[int],
+    on_date: date | None = None,
+) -> list[PoolCapacityDetail]:
+    """Delegate legacy cache misses to the typed, consistent input reader."""
+    return create_pool_capacity_service(db_path).calculate_many(pool_ids, on_date)
 
 
-def install_capacity_cache(conn):
-    """Install derived-data storage, lookup indexes and invalidation triggers."""
-    conn.execute("CREATE TABLE IF NOT EXISTS pool_capacity_revision "
-                 "(id INTEGER PRIMARY KEY CHECK(id=1), epoch TEXT NOT NULL, revision INTEGER NOT NULL)")
-    conn.execute("INSERT OR IGNORE INTO pool_capacity_revision VALUES (1,?,0)", (uuid4().hex,))
-    conn.execute("CREATE TABLE IF NOT EXISTS pool_capacity_cache "
-                 "(pool_id INTEGER PRIMARY KEY, version INTEGER NOT NULL, day TEXT NOT NULL, "
-                 "summary TEXT NOT NULL, detail TEXT NOT NULL)")
-    conn.execute("CREATE TABLE IF NOT EXISTS pool_capacity_employee "
-                 "(pool_id INTEGER NOT NULL, employee_id INTEGER NOT NULL, PRIMARY KEY(pool_id,employee_id))")
-    for name, table, columns in [
-        ("idx_pool_assignment_pool", "resource_pool_assignment", "pool_id"),
-        ("idx_pool_assignment_project", "resource_pool_assignment", "project_id"),
-        ("idx_pool_assignment_task", "resource_pool_assignment", "task_id"),
-        ("idx_pool_mapping_target", "resource_pool_mapping", "target_type,target_id"),
-        ("idx_pool_capacity_employee", "pool_capacity_employee", "employee_id"),
-        ("idx_task_project_dates", "project_task", "project_id,start_date,end_date"),
-    ]:
-        conn.execute(f"CREATE INDEX IF NOT EXISTS {name} ON {table}({columns})")
-    for table in ["resource_pool", "resource_pool_assignment", "resource_pool_mapping", "project_task",
-                  "project", "employee", "employee_calendar_exception", "function", "team", "team_function"]:
-        for event in ["INSERT", "UPDATE", "DELETE"]:
-            refs = ["OLD", "NEW"] if event == "UPDATE" else ["OLD" if event == "DELETE" else "NEW"]
-            if table == "resource_pool":
-                where = "pool_id IN (" + ",".join(f"{r}.id" for r in refs) + ")"
-            elif table in ("resource_pool_assignment", "resource_pool_mapping"):
-                where = "pool_id IN (" + ",".join(f"{r}.pool_id" for r in refs) + ")"
-            elif table in ("project", "project_task"):
-                field = "id" if table == "project" else "project_id"
-                where = "pool_id IN (SELECT pool_id FROM resource_pool_assignment WHERE project_id IN (" + ",".join(f"{r}.{field}" for r in refs) + "))"
-            elif table in ("employee", "employee_calendar_exception"):
-                ids = ",".join(f"{r}.employee_id" for r in refs)
-                where = f"pool_id IN (SELECT pool_id FROM pool_capacity_employee WHERE employee_id IN ({ids}))"
-                if table == "employee":
-                    # Occupancy changes can add a new employee to a mapped position/team.
-                    where += " OR pool_id IN (SELECT pool_id FROM resource_pool_mapping WHERE target_type IN ('function','team'))"
-                    where += f" OR pool_id IN (SELECT pool_id FROM resource_pool_mapping WHERE target_type='employee' AND target_id IN ({ids}))"
-            else:
-                # Structural organization changes can alter implicit team membership.
-                where = "pool_id IN (SELECT pool_id FROM resource_pool_mapping WHERE target_type IN ('function','team'))"
-                if table == "function":
-                    ids = ",".join(f"{r}.function_id" for r in refs)
-                    where += (" OR pool_id IN (SELECT pe.pool_id FROM pool_capacity_employee pe "
-                              "JOIN employee e ON e.employee_id=pe.employee_id "
-                              f"WHERE e.function_id IN ({ids}))")
-            update_columns = {"project": "name", "project_task": "project_id,start_date,end_date,task_name"}
-            operation = event
-            if event == "UPDATE" and table in update_columns:
-                operation += " OF " + update_columns[table]
-            conn.execute(f"CREATE TRIGGER IF NOT EXISTS capacity_{table}_{event.lower()} "
-                         f"BEFORE {operation} ON {table} BEGIN "
-                         f"DELETE FROM pool_capacity_cache WHERE {where}; "
-                         "UPDATE pool_capacity_revision SET revision=revision+1 WHERE id=1; END")
-
-
-def _batch_calculate(db_path, pool_ids):
-    """Read shared inputs once, reusing the existing tested daily calculation."""
-    from src.repositories.milestone_repo import MilestoneRepository
-    from src.repositories.organization_repo import OrganizationRepository
-    from src.repositories.resource_pool_repo import ResourcePoolRepository
-    from src.services.resource_pool_service import ResourcePoolService
-
-    org, pools, tasks = OrganizationRepository(db_path), ResourcePoolRepository(db_path), MilestoneRepository(db_path)
-    functions, teams, employees = org.get_all_functions(), org.get_all_teams(), org.get_all_employees()
-    exceptions = org.get_employee_calendar_exceptions()
-    pool_rows = {int(r["id"]): ResourcePool(**{k: None if pd.isna(v) else v for k, v in r.items()})
-                 for r in pools.get_all_pools().to_dict("records")}
-    mappings, assignments = pools.get_all_mappings(), pools.get_assignments()
-    mapping_groups = dict(tuple(mappings.groupby("pool_id"))) if not mappings.empty else {}
-    assignment_groups = dict(tuple(assignments.groupby("pool_id"))) if not assignments.empty else {}
-    bounds = tasks.get_all_project_date_bounds()
-    team_functions = {}
-    with closing(get_db(db_path)) as conn, conn:
-        for tid, fid in conn.execute("SELECT team_id,function_id FROM team_function"):
-            team_functions.setdefault(tid, []).append(fid)
-    org_inputs = SimpleNamespace(get_all_functions=lambda: functions, get_all_teams=lambda: teams,
-                                get_all_employees=lambda: employees, get_employee_calendar_exceptions=lambda: exceptions)
-    pool_inputs = SimpleNamespace(get_pool_by_id=pool_rows.get,
-                                 get_mappings_by_pool=lambda pid: mapping_groups.get(pid, mappings.iloc[:0]),
-                                 get_assignments=lambda pool_id: assignment_groups.get(pool_id, assignments.iloc[:0]),
-                                 get_team_functions=lambda tid: list(team_functions.get(tid, [])))
-    task_inputs = SimpleNamespace(get_all_project_date_bounds=lambda: bounds)
-    return [ResourcePoolService.calculate_pool_capacity(pid, org_inputs, pool_inputs, task_inputs) for pid in pool_ids]
-
-
-def _decode_detail(raw):
-    payload = json.loads(raw)
-    payload["contributing_functions"] = [PoolFunctionContribution(**v) for v in payload["contributing_functions"]]
-    payload["daily_overassignments"] = [DailyOverassignment(**v) for v in payload["daily_overassignments"]]
-    return PoolCapacityDetail(**payload)
-
-
-def load_pool_capacities(db_path=None, *, details=False, pool_ids=None):
-    """Return cached summaries or explicitly requested full details (read-only)."""
-    path = str(Path(db_path or config.db_path).resolve())
-    subset = tuple(sorted(set(pool_ids))) if pool_ids is not None else None
-    with _LOCK:
-        for _ in range(3):
-            with closing(get_db(path)) as conn, conn:
-                try:
-                    revision = conn.execute("SELECT epoch,revision FROM pool_capacity_revision WHERE id=1").fetchone()
-                except sqlite3.OperationalError as exc:
-                    if "no such table" not in str(exc):
-                        raise
-                    install_capacity_cache(conn)
-                    conn.commit()
-                    revision = conn.execute("SELECT epoch,revision FROM pool_capacity_revision WHERE id=1").fetchone()
-                day = date.today().isoformat()
-                key = (path, revision, day, _VERSION, details, subset)
-                if key in _MEMORY:
-                    _MEMORY.move_to_end(key)
-                    return _MEMORY[key]
-                column = "detail" if details else "summary"
-                where = 'WHERE p.id IN (SELECT value FROM json_each(?))' if subset is not None else ''
-                params = (_VERSION, day, json.dumps(subset)) if subset is not None else (_VERSION, day)
-                rows = conn.execute(f"SELECT p.id,c.{column} FROM resource_pool p LEFT JOIN pool_capacity_cache c "
-                                    f"ON c.pool_id=p.id AND c.version=? AND c.day=? {where} ORDER BY p.name,p.id",
-                                    params).fetchall()
-            missing = [pid for pid, payload in rows if payload is None]
-            if missing:
-                calculated = _batch_calculate(path, missing)
-                with closing(get_db(path)) as conn, conn:
-                    conn.execute("BEGIN IMMEDIATE")
-                    if revision != conn.execute("SELECT epoch,revision FROM pool_capacity_revision WHERE id=1").fetchone():
-                        continue
-                    for detail in calculated:
-                        payload = asdict(detail)
-                        summary = {f.name: payload[f.name] for f in fields(PoolCapacitySummary)}
-                        conn.execute("INSERT OR REPLACE INTO pool_capacity_cache VALUES(?,?,?,?,?)",
-                                     (detail.pool_id, _VERSION, day, json.dumps(summary), json.dumps(payload)))
-                        conn.execute("DELETE FROM pool_capacity_employee WHERE pool_id=?", (detail.pool_id,))
-                        conn.executemany("INSERT OR IGNORE INTO pool_capacity_employee VALUES(?,?)",
-                                         [(detail.pool_id, c.employee_id) for c in detail.contributing_functions if c.employee_id is not None])
-                continue
-            result = [_decode_detail(raw) if details else PoolCapacitySummary(**json.loads(raw)) for _, raw in rows]
-            _MEMORY[key] = result
-            while len(_MEMORY) > 8:
-                _MEMORY.popitem(last=False)
-            return result
-    raise RuntimeError("Pool data changed repeatedly while calculating capacity; please retry.")
+def load_pool_capacities(
+    db_path: str | None = None,
+    *,
+    details: bool = False,
+    pool_ids: list[int] | None = None,
+) -> CapacityResult:
+    """Keep the existing call shape and cache-miss seam for planning callers."""
+    return create_pool_capacity_cache(db_path).load(
+        lambda ids, day: _batch_calculate(db_path, ids, on_date=day),
+        details=details,
+        pool_ids=pool_ids,
+    )

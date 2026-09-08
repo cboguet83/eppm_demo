@@ -57,7 +57,7 @@ class SettingsLazyLoadingTests(unittest.TestCase):
             db_path = str(Path(directory) / "test.db")
             seed_default_data_if_empty(db_path)
             app = AppTest.from_function(settings_app, args=(db_path,))
-            with patch("src.services.pool_capacity_cache.load_pool_capacities", side_effect=AssertionError("Hidden pools loaded")):
+            with patch("app.application.services.pool_capacity.PoolCapacityService.get_summaries", side_effect=AssertionError("Hidden pools loaded")):
                 app.run()
                 self.assertEqual(list(app.exception), [])
             app.session_state["settings_active_tab"] = "resource_pools"

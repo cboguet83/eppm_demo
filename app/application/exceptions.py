@@ -31,3 +31,11 @@ class OrganizationConflictError(ValueError):
 
 class OrganizationStorageError(RuntimeError):
     """Organization storage is unavailable or failed to complete an operation."""
+
+
+class ResourcePoolConflictError(ValueError):
+    """A resource-pool change conflicts with persisted data or constraints."""
+
+
+class ResourcePoolStorageError(RuntimeError):
+    """Resource-pool or capacity data is unavailable."""

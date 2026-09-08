@@ -398,31 +398,12 @@ class TagRepository:
             return assignment_id
 
     def set_resource_pool_tags(self, pool_id: int, tag_ids: list[int]) -> None:
-        """Atomically replace all dictionary tags assigned to a resource pool."""
-        normalized_tag_ids = sorted({int(tag_id) for tag_id in tag_ids})
-        with closing(get_db(self.db_path)) as conn, conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT 1 FROM resource_pool WHERE id = ?", (pool_id,))
-            if cursor.fetchone() is None:
-                raise ValueError(f"Resource pool #{pool_id} does not exist.")
+        """Replace pool tags through the resource-pool application service."""
+        from app.main import create_resource_pool_service
+        from src.repositories.resource_pool_repo import legacy_pool_errors
 
-            if normalized_tag_ids:
-                placeholders = ",".join("?" for _ in normalized_tag_ids)
-                cursor.execute(
-                    f"SELECT id FROM tag_dictionnary WHERE id IN ({placeholders})",
-                    normalized_tag_ids,
-                )
-                existing_tag_ids = {int(row[0]) for row in cursor.fetchall()}
-                missing_tag_ids = set(normalized_tag_ids) - existing_tag_ids
-                if missing_tag_ids:
-                    raise ValueError(f"Unknown dictionary tag IDs: {sorted(missing_tag_ids)}")
-
-            cursor.execute("DELETE FROM resource_pool_tag WHERE pool_id = ?", (pool_id,))
-            cursor.executemany(
-                "INSERT INTO resource_pool_tag (pool_id, tag_id) VALUES (?, ?)",
-                [(pool_id, tag_id) for tag_id in normalized_tag_ids],
-            )
-            conn.commit()
+        with legacy_pool_errors():
+            create_resource_pool_service(self.db_path).set_pool_tags(pool_id, tag_ids)
 
     def delete_resource_pool_tag(self, pool_tag_id: int) -> bool:
         """Delete one resource-pool tag assignment."""

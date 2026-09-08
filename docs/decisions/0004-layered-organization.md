@@ -137,8 +137,9 @@ database rewrite, reseed, or image rebuild was performed.
 
 ## Next increment
 
-Migrate resource-pool catalogs, groups, assignments, and capacity use cases,
-preserving their lazy loading and deduplication behavior. Follow with planning,
+Implemented in [ADR 0005](0005-layered-resource-pools.md): resource-pool catalogs,
+groups, assignments, and capacity use cases, preserving their lazy loading and
+deduplication behavior. Follow with planning,
 tags, and collaboration internals. Shared translations and legacy routing remain
 explicit migration boundaries. Finance requires separately defined financial
 rules and should be implemented directly in the new layers.

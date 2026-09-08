@@ -7,13 +7,15 @@ PPM Studio Pro is an enterprise-grade Project Portfolio Management (PPM) web app
 ## Architecture and migration status
 
 The layered migration now covers **project types, project creation/editing/deletion,
-portfolio browsing, schema administration, and organization management**. See
+portfolio browsing, schema administration, organization management, resource pools,
+and capacity calculations**. See
 [ADR 0001](docs/decisions/0001-layered-project-types.md) for the initial dependency
 rules, [ADR 0002](docs/decisions/0002-layered-projects-and-portfolio.md) for project
 workflows, [ADR 0003](docs/decisions/0003-layered-schema-administration.md) for
 schema transactions, and [ADR 0004](docs/decisions/0004-layered-organization.md) for
-organization transactions, compatibility, and validation. Resource pools and
-capacity are next, followed by planning and collaboration internals.
+organization transactions. [ADR 0005](docs/decisions/0005-layered-resource-pools.md)
+covers atomic pool/group editing, pure capacity rules, and revision-checked caching.
+Planning, tag administration, and collaboration internals remain to be migrated.
 
 ### C4 level 2: runtime containers
 
@@ -37,10 +39,11 @@ C4Container
 | `app.py` | Compatibility launcher for existing commands |
 | `app/main.py` | Dependency construction and startup |
 | `app/presentation/` | Migrated pages/components and the transitional legacy shell |
-| `app/application/` | Project/type/schema/organization use cases, portfolio queries, ports, and boundary errors |
+| `app/application/` | Project/type/schema/organization/pool use cases, capacity services, portfolio queries, ports, and boundary errors |
 | `app/domain/projects/` | Project/schema records, validation, and effective property values |
 | `app/domain/organization/` | Organization records, validation, and bounded hierarchy traversal |
-| `app/infrastructure/` | SQLite transactions, typed values, project persistence, and paged reads |
+| `app/domain/resources/` | Pool/group records, validation, deduplication, and daily capacity rules |
+| `app/infrastructure/` | SQLite transactions, typed queries, capacity snapshots/cache, and paged reads |
 | `app/shared/` | Configuration and logging |
 | `src/` | Remaining features and compatibility adapters |
 | `scripts/` | Seeding, database maintenance, and benchmarks |

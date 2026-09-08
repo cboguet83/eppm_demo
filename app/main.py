@@ -1,15 +1,53 @@
 """Composition root for application dependencies and Streamlit startup."""
 
+from datetime import date
+from functools import cache
 from typing import TYPE_CHECKING
 
 from app.application.services.organization import OrganizationService
+from app.application.services.pool_capacity import PoolCapacityService
 from app.application.services.portfolio import PortfolioService
 from app.application.services.projects import ProjectService
 from app.application.services.project_types import ProjectTypeService
+from app.application.services.resource_pools import ResourcePoolService
 from app.application.services.schema import SchemaService
 
 if TYPE_CHECKING:
+    from app.infrastructure.database.pool_capacity_cache import (
+        CapacityCacheState, SqliteCapacityCache,
+    )
     from app.presentation.components.project_workspace import ProjectWorkspace
+
+
+@cache
+def capacity_cache_state() -> CapacityCacheState:
+    """Own one bounded process cache; storage adapters receive it explicitly."""
+    from app.infrastructure.database.pool_capacity_cache import CapacityCacheState
+
+    return CapacityCacheState()
+
+
+def create_pool_capacity_cache(db_path: str | None = None) -> SqliteCapacityCache:
+    """Compose the derived-data cache with the process state and current day."""
+    from app.infrastructure.database.pool_capacity_cache import SqliteCapacityCache
+
+    return SqliteCapacityCache(db_path, capacity_cache_state(), date.today)
+
+
+def create_pool_capacity_service(db_path: str | None = None) -> PoolCapacityService:
+    """Connect capacity use cases to one-snapshot reads and revision-checked caching."""
+    from app.infrastructure.repositories.pool_capacity import SqliteCapacityReader
+
+    return PoolCapacityService(
+        SqliteCapacityReader(db_path), create_pool_capacity_cache(db_path), date.today,
+    )
+
+
+def create_resource_pool_service(db_path: str | None = None) -> ResourcePoolService:
+    """Connect pool use cases to the existing SQLite adapter."""
+    from app.infrastructure.repositories.resource_pools import SqliteResourcePoolGateway
+
+    return ResourcePoolService(SqliteResourcePoolGateway(db_path))
 
 
 def create_organization_service(db_path: str | None = None) -> OrganizationService:
