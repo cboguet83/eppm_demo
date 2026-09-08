@@ -24,6 +24,7 @@ from src.repositories.schema_repo import SchemaRepository
 from src.repositories.tag_repo import TagRepository
 from src.services.milestone_service import MilestoneService
 from src.services.resource_pool_service import ResourcePoolService
+from src.services.pool_capacity_cache import load_pool_capacities
 from src.views.project_dialogs import open_edit_project_dialog
 from src.repositories.portfolio_repo import portfolio_revision
 from src.services.planning_data import (
@@ -681,9 +682,16 @@ def _manage_task_resource_pools_dialog(
     milestone_repo: MilestoneRepository,
     org_repo: Optional[OrganizationRepository] = None,
 ) -> None:
-    """Modal dialog for viewing, assigning, and removing resource pools on a task."""
-    if org_repo is None:
-        org_repo = OrganizationRepository(pool_repo.db_path)
+    """Manage task assignments using cached summaries, not full pool timelines.
+
+    Args:
+        task_id: Task being edited.
+        task_name: Task label displayed in the dialog.
+        project_id: Project owning the task.
+        pool_repo: Repository for pools and assignments.
+        milestone_repo: Repository for task dates.
+        org_repo: Retained for callers; the capacity cache loads its own inputs.
+    """
     st.markdown(f"#### 📋 {task_name} `[Task #{task_id}]` (Project #{project_id})")
 
     # Fetch task dates for reference and defaults
@@ -695,12 +703,27 @@ def _manage_task_resource_pools_dialog(
 
     # 1. Existing Pool Assignments on this task
     df_current_assigns = pool_repo.get_assignments(task_id=task_id)
+    df_all_pools = pool_repo.get_all_pools()
+    pool_rows = df_all_pools.to_dict("records")
+    # Dropdown labels need only theoretical capacity. Fetch demand summaries for
+    # assigned pools and legacy pools whose theoretical capacity is unspecified.
+    # In particular, opening a modal must not calculate every unrelated pool
+    # after a seed or a calendar change has invalidated the capacity cache.
+    summary_ids = set(df_current_assigns["pool_id"].astype(int))
+    summary_ids.update(
+        int(row["id"]) for row in pool_rows
+        if pd.isna(row["capacity_fte"])
+    )
+    summaries = {
+        summary.pool_id: summary
+        for summary in load_pool_capacities(pool_repo.db_path, pool_ids=summary_ids)
+    } if summary_ids else {}
     st.markdown(f"##### {t('planning.current_pools', default='Current Assigned Resource Pools')}")
 
     if df_current_assigns.empty:
         st.info(t("planning.no_pools_assigned_task", default="No resource pools currently assigned to this task."))
     else:
-        for _, row in df_current_assigns.iterrows():
+        for row in df_current_assigns.to_dict("records"):
             assign_id = int(row["id"])
             p_id = int(row["pool_id"])
             p_name = str(row["pool_name"])
@@ -709,7 +732,7 @@ def _manage_task_resource_pools_dialog(
             c_end = row.get("custom_end_date")
 
             # Check capacity and daily overassignment status
-            cap_detail = ResourcePoolService.calculate_pool_capacity(p_id, org_repo, pool_repo, milestone_repo)
+            cap_detail = summaries[p_id]
             if cap_detail.is_overassigned:
                 status_html = f'<span style="background-color:#FDE8EC; color:#C41039; border:1px solid #C41039; padding:2px 7px; border-radius:10px; font-weight:700; font-size:11px;">⚠️ Overassigned (Peak: {cap_detail.peak_assigned_fte:.2f} / Cap: {cap_detail.total_capacity_fte:.2f} FTE)</span>'
             else:
@@ -743,16 +766,19 @@ def _manage_task_resource_pools_dialog(
 
     # 2. Assign a Resource Pool
     st.markdown(f"##### ➕ {t('planning.assign_new_pool', default='Assign Resource Pool')}")
-    df_all_pools = pool_repo.get_all_pools()
     if df_all_pools.empty:
         st.warning(t("planning.no_pools_exist", default="No resource pools configured. Create pools in Settings > Resource Pools."))
         return
 
     pool_choices = []
-    for _, pr in df_all_pools.iterrows():
+    for pr in pool_rows:
         pid = int(pr["id"])
-        pcap = ResourcePoolService.calculate_pool_capacity(pid, org_repo, pool_repo, milestone_repo)
-        pool_choices.append((pid, f"🏊 {pr['name']} (Cap: {pcap.total_capacity_fte:.2f} FTE)"))
+        capacity = (
+            summaries[pid].total_capacity_fte
+            if pd.isna(pr["capacity_fte"])
+            else float(pr["capacity_fte"])
+        )
+        pool_choices.append((pid, f"🏊 {pr['name']} (Cap: {capacity:.2f} FTE)"))
 
     sel_pool_tuple = st.selectbox(
         t("planning.select_resource_pool", default="Select Resource Pool *"),

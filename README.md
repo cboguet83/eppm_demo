@@ -529,6 +529,17 @@ Pool demand uses interval boundaries instead of assignment-by-day nested loops,
 and repeated daily values use lossless interval encoding during transport.
 Planning totals are available in the navigation pane on every page.
 
+The **Manage Task Resource Pools** dialog reads theoretical capacities directly
+for its dropdown and loads cached capacity summaries only for pools assigned to
+the task (plus legacy pools without a defined capacity). Changing FTE, dates or
+selection no longer recalculates every pool. Assignment and calendar changes
+still invalidate the relevant summaries, including single-day overallocation.
+Measure the modal separately on a temporary database copy:
+
+```powershell
+docker compose exec -T app python -m scripts.benchmark_task_pool_dialog
+```
+
 Measure 100 selected projects separately from the database's total project count:
 
 ```powershell
