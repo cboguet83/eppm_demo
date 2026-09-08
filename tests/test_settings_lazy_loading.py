@@ -11,9 +11,9 @@ from src.database.seeder import seed_default_data_if_empty
 
 
 def settings_app(db_path):
-    from src.repositories.organization_repo import OrganizationRepository
-    from src.views.settings_view import render_settings_view
-    render_settings_view(OrganizationRepository(db_path))
+    from app.main import create_settings_workspace
+    from app.presentation.pages.settings import render_settings_view
+    render_settings_view(create_settings_workspace(db_path))
 
 
 class SettingsLazyLoadingTests(unittest.TestCase):
@@ -32,7 +32,7 @@ class SettingsLazyLoadingTests(unittest.TestCase):
             )
             app = AppTest.from_function(settings_app, args=(db_path,))
             app.session_state["settings_active_tab"] = "resource_pools"
-            with patch("src.views.settings_view.st.plotly_chart",
+            with patch("app.presentation.pages.settings.st.plotly_chart",
                        side_effect=AssertionError("Removed daily chart rendered")):
                 for pool_id in (assigned_pool_id, empty_pool_id):
                     with self.subTest(pool_id=pool_id):
@@ -61,7 +61,7 @@ class SettingsLazyLoadingTests(unittest.TestCase):
                 app.run()
                 self.assertEqual(list(app.exception), [])
             app.session_state["settings_active_tab"] = "resource_pools"
-            with patch("src.repositories.milestone_repo.MilestoneRepository.get_all_milestones",
+            with patch("app.application.services.tags.TagService.get_task_tags_page",
                        side_effect=AssertionError("Hidden task tab loaded")):
                 app.run()
                 self.assertEqual(list(app.exception), [])

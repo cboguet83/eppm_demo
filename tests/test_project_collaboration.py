@@ -54,34 +54,23 @@ def event_values(repo):
     )
 
 
-def test_app_bootstrap_passes_schema_version_as_an_explicit_cache_key():
-    """A changed default alone must not leave a hot-reloaded app on old tables."""
-    import ast
-    from pathlib import Path
+def test_cached_startup_distinguishes_database_identity_and_schema_version(tmp_path):
+    """Startup cannot reuse another database's result or ignore a changed version."""
+    from app.main import create_maintenance_service
+    from app.presentation.startup import bootstrap_database
 
-    shell = Path(__file__).resolve().parents[1] / "app/presentation/legacy_shell.py"
-    module = ast.parse(shell.read_text(encoding="utf-8"))
-    bootstrap = next(
-        node
-        for node in module.body
-        if isinstance(node, ast.FunctionDef) and node.name == "bootstrap_database"
-    )
-    version = ast.literal_eval(bootstrap.args.defaults[0])
-    run_app = next(
-        node
-        for node in module.body
-        if isinstance(node, ast.FunctionDef) and node.name == "run_app"
-    )
-    call = next(
-        node
-        for node in ast.walk(run_app)
-        if isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Name)
-        and node.func.id == "bootstrap_database"
-    )
-    assert {item.arg: ast.literal_eval(item.value) for item in call.keywords}[
-        "schema_version"
-    ] == version
+    first, second = (str(tmp_path / name) for name in ("first.db", "second.db"))
+    for path in (first, second):
+        bootstrap_database(path, "first-version", True, 1, create_maintenance_service(path))
+        assert create_maintenance_service(path).counts()["projects"] == 1
+    with closing(get_db(first)) as connection, connection:
+        connection.execute("UPDATE project SET name='Retained edit'")
+    bootstrap_database(first, "first-version", True, 1, create_maintenance_service(first))
+    with closing(get_db(first)) as connection:
+        assert connection.execute("SELECT name FROM project").fetchone()[0] == "Retained edit"
+    bootstrap_database(first, "next-version", True, 1, create_maintenance_service(first))
+    with closing(get_db(first)) as connection:
+        assert connection.execute("SELECT name FROM project").fetchone()[0] != "Retained edit"
 
 
 def test_roles_can_repeat_and_occupants_follow_the_function(collaboration):

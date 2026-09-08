@@ -30,8 +30,12 @@ budget calculations and reporting. Existing budget storage remains compatible.
 [ADR 0012](docs/decisions/0012-presentation-resources-and-locale-state.md) moves
 translations and component assets into presentation and isolates locale state.
 [ADR 0013](docs/decisions/0013-layered-database-maintenance.md) covers startup,
-backups, database maintenance, and seed commands. The application/settings shell
-and final runtime dependency audit remain to be migrated.
+backups, database maintenance, and seed commands.
+[ADR 0014](docs/decisions/0014-layered-application-shell.md) completes the application
+shell, Settings navigation, startup composition, and developer command imports.
+The application and active scripts no longer import `src`. That package retains
+compatibility adapters for historical imports and regression tests; it no longer
+owns feature implementations. Existing SQLite data and migration versions are preserved.
 
 ### C4 level 2: runtime containers
 
@@ -54,14 +58,14 @@ C4Container
 | `streamlit_app.py` | Preferred Streamlit launcher |
 | `app.py` | Compatibility launcher for existing commands |
 | `app/main.py` | Dependency construction and startup |
-| `app/presentation/` | Migrated pages/components and the transitional legacy shell |
+| `app/presentation/` | Application shell, pages, components, locale state, and bundled assets |
 | `app/application/` | Project/type/schema/organization/pool use cases, capacity services, portfolio queries, ports, and boundary errors |
 | `app/domain/projects/` | Project/schema records, validation, and effective property values |
 | `app/domain/organization/` | Organization records, validation, and bounded hierarchy traversal |
 | `app/domain/resources/` | Pool/group records, validation, deduplication, and daily capacity rules |
 | `app/infrastructure/` | SQLite transactions, typed queries, capacity snapshots/cache, and paged reads |
 | `app/shared/` | Configuration and logging |
-| `src/` | Remaining features and compatibility adapters |
+| `src/` | Compatibility adapters for historical imports; unused by the active application |
 | `scripts/` | Seeding, database maintenance, and benchmarks |
 | `tests/` | Existing regressions, layer checks, and migration tests |
 | `docs/decisions/` | Architecture decisions and migration status |
@@ -136,7 +140,7 @@ the migration verifies it introduces no new violations.
 
 PPM Studio Pro supports two complementary database seeding workflows:
 
-### A. Automatic Bootstrap Seeding (`src/database/seeder.py`)
+### A. Automatic Bootstrap Seeding (`app/infrastructure/database/seeder.py`)
 On initial application launch, if the database is empty, the system automatically bootstraps:
 - **5 Schema Groups**: `basic info`, `scoping`, `localization`, `useful links`, `classification`.
 - **31 Custom Properties**: Cover all eight supported types, including `URL` and `MULTI_ENUM`, with aliases, applicability, and relational values.

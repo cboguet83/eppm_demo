@@ -34,10 +34,8 @@ def test_domain_and_application_have_only_inward_dependencies() -> None:
 
 
 def test_migrated_presentation_cannot_open_storage_or_construct_repositories() -> None:
-    """Only the transitional shell may retain storage or composition imports."""
+    """Every presentation module receives services instead of constructing storage."""
     for path in (ROOT / "app" / "presentation").rglob("*.py"):
-        if path.name == "legacy_shell.py":
-            continue
         for module in imports(path):
             assert not module.startswith(("src", "sqlite3", "app.infrastructure", "app.main", "app.shared")), (path, module)
 
@@ -71,3 +69,15 @@ def test_core_imports_work_without_installed_third_party_packages() -> None:
         "assert not {'streamlit', 'pandas', 'sqlite3', 'src'} & sys.modules.keys()",
     ], cwd=ROOT, capture_output=True, text=True, check=False)
     assert result.returncode == 0, result.stderr
+
+
+def test_application_runtime_has_no_legacy_imports() -> None:
+    """The composition root and compatibility exports also use migrated owners."""
+    for path in (ROOT / "app").rglob("*.py"):
+        assert not any(module == "src" or module.startswith("src.") for module in imports(path)), path
+
+
+def test_maintenance_and_benchmark_commands_have_no_legacy_imports() -> None:
+    """Developer commands exercise the same owners as the application."""
+    for path in (ROOT / "scripts").glob("*.py"):
+        assert not any(module == "src" or module.startswith("src.") for module in imports(path)), path

@@ -1,6 +1,7 @@
 """Composition root for application dependencies and Streamlit startup."""
 
 from datetime import date
+from argparse import ArgumentParser
 from functools import cache
 from typing import TYPE_CHECKING
 
@@ -20,10 +21,15 @@ from app.application.services.maintenance import MaintenanceService
 
 if TYPE_CHECKING:
     from app.infrastructure.database.pool_capacity_cache import (
-        CapacityCacheState, SqliteCapacityCache,
+        CapacityCacheState,
+        SqliteCapacityCache,
     )
     from app.presentation.components.project_workspace import ProjectWorkspace
     from app.presentation.components.planning_workspace import PlanningWorkspace
+    from app.presentation.components.settings_workspace import SettingsWorkspace
+    from app.presentation.components.application_workspace import ApplicationWorkspace
+
+SCHEMA_VERSION = "project-collaboration-v1"
 
 
 @cache
@@ -46,7 +52,9 @@ def create_pool_capacity_service(db_path: str | None = None) -> PoolCapacityServ
     from app.infrastructure.repositories.pool_capacity import SqliteCapacityReader
 
     return PoolCapacityService(
-        SqliteCapacityReader(db_path), create_pool_capacity_cache(db_path), date.today,
+        SqliteCapacityReader(db_path),
+        create_pool_capacity_cache(db_path),
+        date.today,
     )
 
 
@@ -107,7 +115,9 @@ def create_project_service(db_path: str | None = None) -> ProjectService:
 
 
 def create_portfolio_service(
-    db_path: str | None = None, *, include_allocations: bool = True,
+    db_path: str | None = None,
+    *,
+    include_allocations: bool = True,
 ) -> PortfolioService:
     """Connect bounded portfolio queries and layered daily-overload indicators."""
     from app.infrastructure.repositories.portfolio import SqlitePortfolioReader
@@ -118,9 +128,13 @@ def create_portfolio_service(
     return PortfolioService(SqlitePortfolioReader(db_path), allocations)
 
 
-def create_project_overallocation_service(db_path: str | None = None) -> ProjectOverallocationService:
+def create_project_overallocation_service(
+    db_path: str | None = None,
+) -> ProjectOverallocationService:
     """Compose page-scoped overload indicators with the shared capacity cache."""
-    return ProjectOverallocationService(create_planning_service(db_path), create_pool_capacity_service(db_path))
+    return ProjectOverallocationService(
+        create_planning_service(db_path), create_pool_capacity_service(db_path)
+    )
 
 
 def create_project_workspace(db_path: str | None = None) -> ProjectWorkspace:
@@ -132,7 +146,8 @@ def create_project_workspace(db_path: str | None = None) -> ProjectWorkspace:
     collaboration = create_collaboration_service(db_path)
 
     return ProjectWorkspace(
-        create_project_service(db_path), create_project_type_service(db_path),
+        create_project_service(db_path),
+        create_project_type_service(db_path),
         create_portfolio_service(db_path),
         partial(render_project_contacts, service=collaboration),
         partial(render_project_log, service=collaboration),
@@ -161,10 +176,140 @@ def create_maintenance_service(db_path: str | None = None) -> MaintenanceService
 
 
 def main() -> None:
-    """Run the transitional UI shell with the existing CLI and seeding behavior."""
-    import runpy
+    """Run the existing CLI behavior or compose the Streamlit application."""
+    import streamlit as st
 
-    runpy.run_module("app.presentation.legacy_shell", run_name="__main__")
+    if not st.runtime.exists() and _run_cli():
+        return
+    run_app()
+
+
+def parse_cli_args(argv: list[str] | None = None) -> tuple[bool, int]:
+    """Parse the established startup flags while tolerating Streamlit arguments."""
+    args, _ = _startup_parser().parse_known_args(argv)
+    return bool(args.force_reseed), int(args.projects)
+
+
+def _startup_parser(*, add_help: bool = False) -> ArgumentParser:
+    """Build the source launchers' shared command-line parser."""
+    parser = ArgumentParser(description="PPM Studio Pro", add_help=add_help)
+    parser.add_argument(
+        "--force-reseed",
+        "--force",
+        "-f",
+        action="store_true",
+        help="Force re-seeding the database on startup.",
+    )
+    parser.add_argument(
+        "--projects",
+        "-n",
+        "--seed-projects",
+        type=int,
+        default=0,
+        help="Number of mock projects to generate when seeding.",
+    )
+    return parser
+
+
+def _run_cli() -> bool:
+    """Handle explicit help or seeding requests without rendering a bare UI."""
+    import sys
+    from app.application.exceptions import DatabaseMaintenanceError
+    from app.shared.config import config
+    from app.shared.logging import get_logger, setup_logging
+
+    if "--help" in sys.argv or "-h" in sys.argv:
+        _startup_parser(add_help=True).parse_known_args()
+    force, projects = parse_cli_args()
+    if not force and projects <= 0:
+        return False
+    setup_logging()
+    logger = get_logger(__name__)
+    try:
+        create_maintenance_service(config.db_path).startup(
+            force=True,
+            projects=projects if projects > 0 else config.seed_projects_count,
+        )
+    except (DatabaseMaintenanceError, ValueError) as error:
+        logger.error("%s", error)
+        raise SystemExit(1) from None
+    logger.info("Database seeding completed successfully.")
+    return True
+
+
+def run_app() -> None:
+    """Compose configured services and render the injected application shell."""
+    from app.presentation.shell import render_application
+    from app.shared.config import config
+    from app.shared.logging import setup_logging
+
+    setup_logging()
+    cli_force, cli_projects = parse_cli_args()
+    render_application(
+        create_application_workspace(
+            config.db_path,
+            force_reseed=config.force_reseed or cli_force,
+            seed_projects=cli_projects if cli_projects > 0 else config.seed_projects_count,
+        )
+    )
+
+
+def create_settings_workspace(db_path: str | None = None) -> SettingsWorkspace:
+    """Compose the lazy Settings sections from migrated application services."""
+    from app.presentation.components.settings_workspace import SettingsWorkspace
+
+    return SettingsWorkspace(
+        create_organization_service(db_path),
+        create_tag_service(db_path),
+        create_resource_pool_service(db_path),
+        create_pool_capacity_service(db_path),
+        create_schema_service(db_path),
+        create_project_type_service(db_path),
+        create_collaboration_service(db_path),
+    )
+
+
+def create_application_workspace(
+    db_path: str | None = None,
+    *,
+    force_reseed: bool = False,
+    seed_projects: int = 0,
+) -> ApplicationWorkspace:
+    """Compose page callbacks and explicit startup inputs for one database."""
+    from functools import partial
+    from pathlib import Path
+    from app.shared.config import config
+    from app.presentation.components.application_workspace import ApplicationWorkspace
+    from app.presentation.navigation import (
+        PAGE_PORTFOLIO,
+        PAGE_PLANNING,
+        PAGE_SETTINGS,
+        PAGE_SCHEMA_DEF,
+        PAGE_BUDGET,
+    )
+    from app.presentation.pages.portfolio import render_portfolio_overview
+    from app.presentation.pages.planning import render_planning_milestones
+    from app.presentation.pages.settings import render_settings_view
+    from app.presentation.pages.budgets import render_budget_tracking
+
+    identity = str(Path(db_path or config.db_path).resolve())
+    settings = partial(render_settings_view, create_settings_workspace(identity))
+    return ApplicationWorkspace(
+        identity,
+        SCHEMA_VERSION,
+        force_reseed,
+        seed_projects,
+        create_maintenance_service(identity),
+        {
+            PAGE_PORTFOLIO: partial(render_portfolio_overview, create_project_workspace(identity)),
+            PAGE_PLANNING: partial(
+                render_planning_milestones, create_planning_workspace(identity)
+            ),
+            PAGE_SETTINGS: settings,
+            PAGE_SCHEMA_DEF: settings,
+            PAGE_BUDGET: partial(render_budget_tracking, create_budget_service(identity)),
+        },
+    )
 
 
 def create_planning_workspace(db_path: str | None = None) -> PlanningWorkspace:
@@ -172,9 +317,12 @@ def create_planning_workspace(db_path: str | None = None) -> PlanningWorkspace:
     from app.presentation.components.planning_workspace import PlanningWorkspace
 
     return PlanningWorkspace(
-        create_planning_service(db_path), create_tag_service(db_path),
-        create_resource_pool_service(db_path), create_pool_capacity_service(db_path),
-        create_organization_service(db_path), create_schema_service(db_path),
+        create_planning_service(db_path),
+        create_tag_service(db_path),
+        create_resource_pool_service(db_path),
+        create_pool_capacity_service(db_path),
+        create_organization_service(db_path),
+        create_schema_service(db_path),
         create_project_workspace(db_path),
     )
 

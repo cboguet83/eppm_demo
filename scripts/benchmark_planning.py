@@ -18,7 +18,7 @@ def planning_app(profile=True, capture=False):
     from app.main import create_planning_workspace
     from app.presentation.pages.planning import render_planning_milestones
     workspace = create_planning_workspace()
-    from src.database.connection import get_db
+    from app.infrastructure.database.connection import get_db
 
     with get_db() as conn:
         st.session_state["benchmark_counts"] = conn.execute(
@@ -52,7 +52,7 @@ def planning_app(profile=True, capture=False):
 if __name__ == "__main__":
     import argparse
     import json
-    from src.database.connection import get_db
+    from app.infrastructure.database.connection import get_db
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--projects', type=int, default=100, help='Selected project count; 0 selects all')
     parser.add_argument('--no-profile', action='store_true')

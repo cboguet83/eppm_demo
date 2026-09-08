@@ -16,5 +16,6 @@ __all__ = [
 def __getattr__(name: str) -> object:
     """Resolve documented legacy entry-point helpers only when requested."""
     if name in __all__ or name in {"_get_database_seed_counts", "_get_planning_totals"}:
-        return getattr(import_module("app.presentation.legacy_shell"), name)
+        owner = "app.main" if name in {"parse_cli_args", "run_app"} else "app.compatibility"
+        return getattr(import_module(owner), name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -36,7 +36,7 @@ def modal_app(db_path: str, task_id: int) -> None:
 
 def main() -> None:
     """Benchmark initial opening and widget reruns without editing live data."""
-    from src.config import config
+    from app.shared.config import config
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--task-id', type=int)
