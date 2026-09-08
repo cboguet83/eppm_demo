@@ -9,11 +9,13 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 import src.i18n.translator as _i18n_module
+import src.database.schema_init as _schema_init_module
 import src.models.constants as _constants_module
 import src.models.organization as _org_models_module
 import src.repositories.milestone_repo as _milestone_repo_module
 import src.repositories.organization_repo as _organization_repo_module
 import src.repositories.project_repo as _project_repo_module
+import src.repositories.project_collaboration_repo as _project_collaboration_repo_module
 import src.repositories.portfolio_repo as _portfolio_repo_module
 import src.repositories.resource_pool_repo as _resource_pool_repo_module
 import src.repositories.schema_repo as _schema_repo_module
@@ -21,12 +23,14 @@ import src.repositories.tag_repo as _tag_repo_module
 import src.services.milestone_service as _milestone_service_module
 import src.services.organization_service as _organization_service_module
 import src.services.portfolio_service as _portfolio_service_module
+import src.services.project_overallocation as _project_overallocation_module
 import src.services.planning_data as _planning_data_module
 import src.services.resource_pool_service as _resource_pool_service_module
 import src.services.schema_service as _schema_service_module
 import src.services.tag_service as _tag_service_module
 import src.views.budget_view as _budget_module
 import src.views.project_dialogs as _project_dialogs_module
+import src.views.project_collaboration_view as _project_collaboration_module
 import src.views.planning_view as _planning_module
 import src.views.portfolio_view as _portfolio_module
 import src.views.portfolio_table_component as _portfolio_table_module
@@ -36,7 +40,9 @@ import src.views.settings_view as _settings_module
 importlib.reload(_constants_module)
 importlib.reload(_org_models_module)
 importlib.reload(_i18n_module)
+importlib.reload(_schema_init_module)
 importlib.reload(_project_repo_module)
+importlib.reload(_project_collaboration_repo_module)
 importlib.reload(_portfolio_repo_module)
 importlib.reload(_milestone_repo_module)
 importlib.reload(_schema_repo_module)
@@ -44,6 +50,7 @@ importlib.reload(_organization_repo_module)
 importlib.reload(_resource_pool_repo_module)
 importlib.reload(_tag_repo_module)
 importlib.reload(_portfolio_service_module)
+importlib.reload(_project_overallocation_module)
 importlib.reload(_milestone_service_module)
 importlib.reload(_schema_service_module)
 importlib.reload(_organization_service_module)
@@ -51,6 +58,7 @@ importlib.reload(_resource_pool_service_module)
 importlib.reload(_tag_service_module)
 importlib.reload(_planning_data_module)
 importlib.reload(_project_dialogs_module)
+importlib.reload(_project_collaboration_module)
 importlib.reload(_portfolio_table_module)
 importlib.reload(_portfolio_module)
 importlib.reload(_schema_def_module)
@@ -179,7 +187,7 @@ def _get_planning_totals(db_path: str) -> dict[str, int]:
 
 
 @st.cache_resource
-def bootstrap_database(schema_version: str = "project-types-v1") -> bool:
+def bootstrap_database(schema_version: str = "project-collaboration-v1") -> bool:
     """Initializes the database schema and performs seeding on server startup.
 
     Guarantees execution runs exactly once per container/process lifecycle,
@@ -218,7 +226,9 @@ def bootstrap_database(schema_version: str = "project-types-v1") -> bool:
 
 def run_app() -> None:
     """Main routing and execution entrypoint for Streamlit UI."""
-    bootstrap_database()
+    # Pass the version explicitly: default argument changes do not invalidate
+    # Streamlit's cached startup result on a development hot reload.
+    bootstrap_database(schema_version="project-collaboration-v1")
 
 
 

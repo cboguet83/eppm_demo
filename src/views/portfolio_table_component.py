@@ -15,9 +15,11 @@ _TABLE_CSS = r"""
     position: relative;
 }
 .table-scroll {
+    box-sizing: border-box;
     border: 1px solid color-mix(in srgb, var(--st-text-color) 18%, transparent);
     border-radius: 0.5rem;
-    height: 32rem;
+    /* Header + exactly eight 40px rows; scrollbar height is added at mount. */
+    height: 364px;
     overflow: auto;
     overflow-anchor: none;
 }
@@ -40,6 +42,15 @@ th, td {
     text-overflow: ellipsis;
 }
 td { height: 40px; }
+.overallocation-button {
+    background: transparent;
+    border: 0;
+    color: var(--st-red-color, #d32f2f);
+    cursor: pointer;
+    font: inherit;
+    margin-right: 0.4rem;
+    padding: 0 0.15rem;
+}
 th { height: 44px; }
 .virtual-spacer td { padding: 0; border: 0; }
 .virtual-spacer, .loading-row { pointer-events: none; }
@@ -316,6 +327,16 @@ export default function(component) {
                         const link = document.createElement('a');
                         link.href = row[column.key]; link.target = '_blank'; link.rel = 'noopener noreferrer';
                         link.textContent = text; link.onclick = e => e.stopPropagation(); td.appendChild(link);
+                    } else if (column.key === 'name' && row.is_overallocated) {
+                        const warning = document.createElement('button');
+                        warning.type = 'button'; warning.className = 'overallocation-button';
+                        warning.textContent = '⚠';
+                        warning.title = 'Resource overallocation — open project Gantt';
+                        warning.setAttribute('aria-label', warning.title + ': ' + row.name);
+                        warning.onclick = e => {e.stopPropagation(); setTriggerValue('gantt_click', row.project_id);};
+                        warning.onkeydown = e => e.stopPropagation();
+                        const name = document.createElement('span'); name.textContent = text;
+                        td.append(warning, name);
                     } else td.textContent = text;
                     tr.appendChild(td);
                 });
@@ -430,6 +451,9 @@ export default function(component) {
         });
     };
     drawRows();
+    // Keep eight complete rows even when the browser reserves scrollbar space.
+    scroll.style.height = (HEADER_HEIGHT + 8 * ROW_HEIGHT +
+        Math.max(0, (scroll.offsetHeight || 0) - (scroll.clientHeight || 0))) + 'px';
     scroll.scrollTop = model.top; scroll.scrollLeft = model.left;
     showMenu();
     return () => {if (frame) cancelAnimationFrame(frame);};
@@ -460,5 +484,6 @@ def portfolio_project_table(
         height="content",
         on_request_change=lambda: None,
         on_row_click_change=lambda: None,
+        on_gantt_click_change=lambda: None,
     )
     return getattr(result, "row_click", None)

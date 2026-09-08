@@ -604,7 +604,7 @@ The Portfolio Overview master list uses seamless, scroll-driven pagination:
 100 projects are fetched automatically for the visible scroll position, with
 nearby batches prefetched. Only a small row window is rendered, and the browser
 retains at most five batches (500 projects). No page selector is needed.
-Search, template filters, column filters, sorting, and header statistics cover
+The viewport shows eight projects. Search, column filters, sorting, and header statistics cover
 the full matching portfolio, not just loaded rows. Header choices/statistics load
 only when opened; search finds values beyond the first 200 distinct choices.
 Scroll requests rerun only the portfolio browser fragment. Bounded server caches
@@ -619,19 +619,50 @@ remain enforced. Portfolio regression checks:
 and `node --test tests/test_portfolio_table.cjs`.
 
 1. **📊 1. Portfolio Overview**:
-   - Executive financial KPI banner (Planned, Actual, Variance, Burn Rate).
+   - Compact eight-row list without a page-title/KPI banner or standalone template filter; portfolio totals remain in navigation.
    - Compact master grid with six curated properties: `phase`, `code_line`, `strategic_priority`, `category`, `category_tags`, and `complexity`; complete template properties in details and dialogs.
    - Project search plus Excel-style per-column filtering, sorting, and statistics.
-   - Interactive Master List with single-row click selection rendering complete Project Details (financial cards, scoping, localization, links, classification) below the table.
+   - Interactive Master List with single-row click selection, compact same-size summary labels/values, and lazy detail tabs for all template property groups, Project Contacts, and Project log.
+   - Resource-overallocation icons open the affected project's Gantt. A project is flagged when its positive allocation overlaps any overloaded pool day, using the shared assigned-capacity/calendar-exception calculation (defined capacity is the fallback only for unstaffed pools).
    - Project creation, editing, and deletion through focused modal dialogs.
 2. **📅 2. Planning & Milestones**:
    - Interactive Plotly Gantt timeline chart with 4 dependency link types (`FS`, `SS`, `FF`, `SF`) and lag offsets.
    - Expandable recursive resource-pool group hierarchy with collapsed assignment totals and direct navigation to pool details.
+   - Optional **Hide pools unused by selected projects** checkbox filters the resource grid immediately, retains ancestor groups, and removes empty groups. A used pool has a positive project/task allocation to a selected project; filtering does not alter the pool's global demand or its staffing capacity.
    - Real-time constraint violation diagnostics detecting scheduling breaks.
    - Bulk CSV milestone loader with validation and downloadable template.
 3. **⚙️ 3. Settings**:
    - Consolidated single settings hub with a top-level section toggle:
      - **🏢 Organization Structure**: Manage 9 areas (Job Functions, Function Types, Teams, Employees with occupation percentages and calendar exceptions, Tag Groups, Tag Dictionary, Project Tags, Task Tags, and Resource Pools with dynamic capacity timelines).
      - **🧩 Parameter Definition**: Dynamic schema builder to manage schema groups, create/edit typed parameters (TEXT, DATE, NUMBER, ENUM, TAGS, HYPERLINK), configure discrete options, and inspect the real-time schema hierarchy tree.
+     - **Project configuration**: Maintain project roles and event types. Entries in use cannot be deleted.
 4. **🌐 5-Language Internationalization (i18n)**:
    - Full live interface translation across English (`en`), French (`fr`), German (`de`), Luxembourgish (`lb`), and Portuguese (`pt`) with 100% key parity guaranteed by automated unit tests.
+
+### Project contacts and log persistence
+
+The additive `project-collaboration-v1` migration creates `project_role`,
+`project_contact`, `project_event_type`, and `project_log_event`. Catalog labels
+support locale fallback through their `_translation` tables. Existing projects,
+tasks, pools and assignments are preserved; no reseed is required.
+
+Contacts reference a role and **function**, not an employee. Occupants' full names
+are resolved live (all occupants if several share a function); vacant functions
+fall back to their name. One role may be assigned to several functions in the
+same project, but an identical project/role/function triple cannot be duplicated.
+
+Log events contain title, description, optional deadline, scope, comment, type,
+state and creation/update timestamps. States are New, Active, Completed,
+Cancelled, Rejected and Closed. Internal/Global is a classification field, not
+an access-control boundary; events are listed under their owning project.
+History is loaded in bounded 50-event pages. Forms save through callbacks with
+one automatic fragment refresh. Project deletion cascades to contacts and logs.
+
+Initial event types are **General information**, **Blocking Point**, and
+**Project update**. Startup does not re-create deliberately deleted catalog
+entries. An explicit full demo reset restores these defaults; a projects-only
+flush preserves the catalogs and removes project contacts/logs with projects.
+
+Regression checks: `pytest tests/test_project_collaboration.py
+tests/test_project_overallocation.py tests/test_project_type_views.py` and
+`node --test tests/test_portfolio_table.cjs tests/test_gantt_scrolling.cjs`.

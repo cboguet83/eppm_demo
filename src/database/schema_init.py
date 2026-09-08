@@ -6,6 +6,7 @@ from typing import Optional
 from src.config import config
 from src.database.connection import get_db
 from src.database.project_type_migration import backup_legacy_database, migrate_project_types
+from src.database.project_collaboration_migration import migrate_project_collaboration
 from src.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -668,6 +669,7 @@ def init_db(db_path: Optional[str] = None) -> None:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_planning_task_project ON project_task(project_id,start_date,id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_planning_dependency_task ON task_dependencies(task_id)")
         migrate_project_types(conn)
+        migrate_project_collaboration(conn)
         conn.commit()
         conn.execute("PRAGMA foreign_keys = ON")
     logger.info("Schema initialization complete")

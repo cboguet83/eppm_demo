@@ -10,6 +10,7 @@ import streamlit as st
 
 from src.i18n import t
 from src.models.constants import (
+    PAGE_PLANNING,
     PARAM_TYPE_HYPERLINK,
     PARAM_TYPE_NUMBER,
     PARAM_TYPE_TEXT,
@@ -21,8 +22,10 @@ from src.repositories.project_type_repo import ProjectTypeRepository
 from src.repositories.portfolio_repo import PortfolioRepository, portfolio_revision
 from src.repositories.schema_repo import SchemaRepository
 from src.services.organization_service import OrganizationService
+from src.services.project_overallocation import overallocated_project_ids
 from src.views.portfolio_table_component import portfolio_project_table
 from src.views.project_dialogs import open_create_project_dialog, open_edit_project_dialog
+from src.views.project_collaboration_view import render_project_contacts, render_project_log
 
 ALLOWED_DYNAMIC_PARAMS: set[str] = {
     "phase",
@@ -127,26 +130,32 @@ def _render_project_details_panel(
         ):
             open_edit_project_dialog(int(proj_id), project_repo, schema_repo)
 
-    # KPI Summary Cards
-    m1, m2, m3, m4, m5, m6 = st.columns(6)
-    m1.metric(t("portfolio.col_status", default="Status"), str(proj_status))
-    m2.metric(t("master_data.field_project_manager", default="Project Manager"), str(pm_name))
-    m3.metric(t("portfolio.filter_level_3_manager", default="Managing Func (L3)"), str(l3_name))
-    m4.metric(t("portfolio.col_planned", default="Planned (€)"), f"€{planned:,.2f}")
-    m5.metric(t("portfolio.col_actual", default="Actual (€)"), f"€{actual:,.2f}")
-    m6.metric(
-        t("portfolio.kpi_variance", default="Variance"),
-        f"€{variance:,.2f}",
-        delta=f"{burn_rate:.1f}% burn",
-        delta_color="normal" if variance >= 0 else "inverse",
-    )
+    # Labels and values deliberately use the same native caption font size.
+    summary = [
+        (t("portfolio.col_status", default="Status"), str(proj_status)),
+        (t("master_data.field_project_manager", default="Project Manager"), str(pm_name)),
+        (t("portfolio.filter_level_3_manager", default="Managing Func (L3)"), str(l3_name)),
+        (t("portfolio.col_planned", default="Planned (€)"), f"€{planned:,.2f}"),
+        (t("portfolio.col_actual", default="Actual (€)"), f"€{actual:,.2f}"),
+        (t("portfolio.kpi_variance", default="Variance"), f"€{variance:,.2f} · {burn_rate:.1f}% burn"),
+    ]
+    with st.container(horizontal=True, horizontal_alignment="distribute"):
+        for label, value in summary:
+            with st.container(width="content"):
+                st.caption(label)
+                st.caption(value)
 
     # Render only the effective template, including user-created groups/fields.
     groups = schema_repo.get_all_groups()
     group_names = dict(zip(groups["id"], groups["group_name"])) if not groups.empty else {}
-    if not params.empty:
-        for group_id, fields in params.groupby("group_id", dropna=False, sort=False):
-            with st.expander(group_names.get(group_id, t("schema.param_group_none")), expanded=True):
+    field_groups = list(params.groupby("group_id", dropna=False, sort=False)) if not params.empty else []
+    labels = [group_names.get(group_id, t("schema.param_group_none")) for group_id, _ in field_groups]
+    labels += [t("project_collaboration.contacts", default="Project Contacts"),
+               t("project_collaboration.log", default="Project log")]
+    tabs = st.tabs(labels, key=f"project_details_tabs_{proj_id}", on_change="rerun")
+    for tab, (_, fields) in zip(tabs, field_groups):
+        if tab.open:
+            with tab:
                 for _, prop in fields.iterrows():
                     value = dyn_dict.get(prop["param_id"])
                     display = ", ".join(map(str, value)) if isinstance(value, list) else str(value) if value is not None else "—"
@@ -155,10 +164,20 @@ def _render_project_details_panel(
                     if pd.notna(alias) and alias:
                         label += f" ({alias})"
                     st.write(f"{label}{' *' if prop['mandatory'] else ''}: {display or '—'}")
+    if tabs[-2].open:
+        with tabs[-2]:
+            render_project_contacts(int(proj_id), project_repo.db_path)
+    if tabs[-1].open:
+        with tabs[-1]:
+            render_project_log(int(proj_id), project_repo.db_path)
 
 @st.cache_data(ttl=60, max_entries=128, show_spinner=False)
 def _load_portfolio_page(db_path, revision, columns, query, offset):
-    return PortfolioRepository(db_path).get_page(columns, query, offset)
+    page = PortfolioRepository(db_path).get_page(columns, query, offset)
+    overloaded = overallocated_project_ids(db_path, [row["project_id"] for row in page["rows"]])
+    for row in page["rows"]:
+        row["is_overallocated"] = row["project_id"] in overloaded
+    return page
 
 
 @st.cache_data(ttl=60, max_entries=64, show_spinner=False)
@@ -196,7 +215,6 @@ def _render_portfolio_browser(project_repo: ProjectRepository, schema_repo: Sche
     columns = _portfolio_columns(params)
     templates = ProjectTypeRepository(project_repo.db_path).get_all_types()
     search = st.text_input(t("portfolio.filter_search"), placeholder=t("portfolio.filter_search_placeholder"))
-    selected_templates = st.multiselect(t("project_types.filter"), templates["name"].tolist())
     with st.container(horizontal=True, horizontal_alignment="distribute", vertical_alignment="center"):
         st.subheader(t("portfolio.table_header"))
         if st.button("Create new project", icon=":material/add:", type="primary",
@@ -205,13 +223,13 @@ def _render_portfolio_browser(project_repo: ProjectRepository, schema_repo: Sche
     st.caption("Click a project to see its details. Scroll to load more projects automatically.")
 
     revision = portfolio_revision(project_repo.db_path)
-    context = hashlib.sha256(json.dumps([revision, columns, search, selected_templates],
+    context = hashlib.sha256(json.dumps([revision, columns, search],
                                        sort_keys=True).encode()).hexdigest()
     component_state = st.session_state.get(_PORTFOLIO_TABLE_KEY, {})
     request = (component_state.get("request") if isinstance(component_state, dict)
                else getattr(component_state, "request", None)) or {}
     query = dict(request.get("query") or {})
-    query.update(search=search, templates=selected_templates)
+    query.update(search=search, templates=[])
     current_request = request.get("context") == context
     offset = request.get("offset", 0) if current_request else 0
     try:
@@ -224,6 +242,14 @@ def _render_portfolio_browser(project_repo: ProjectRepository, schema_repo: Sche
         facet = _load_portfolio_facet(project_repo.db_path, revision, columns, query,
                                      request["column"], str(request.get("search") or ""))
     _sync_portfolio_project_selection()
+    gantt_project = (component_state.get("gantt_click") if isinstance(component_state, dict)
+                     else getattr(component_state, "gantt_click", None))
+    if gantt_project is not None and project_repo.get_project_by_id(gantt_project) is not None:
+        st.session_state["target_planning_project_id"] = int(gantt_project)
+        st.session_state.pop("active_resource_pool_filter", None)
+        st.session_state.pop("pending_resource_pool_filter", None)
+        st.session_state["nav_redirect"] = PAGE_PLANNING
+        st.rerun()
     portfolio_project_table(
         page["rows"], columns, st.session_state.get(_SELECTED_PROJECT_KEY),
         key=_PORTFOLIO_TABLE_KEY,
@@ -246,14 +272,5 @@ def _render_portfolio_browser(project_repo: ProjectRepository, schema_repo: Sche
 
 
 def render_portfolio_overview(project_repo: ProjectRepository, schema_repo: SchemaRepository) -> None:
-    st.header(f"📊 {t('portfolio.title')}")
-    metrics = PortfolioRepository(project_repo.db_path).get_metrics()
-    col1, col2, col3, col4, col5 = st.columns(5)
-    col1.metric(t("portfolio.kpi_total_projects"), metrics.total_projects)
-    col2.metric(t("portfolio.kpi_planned_budget"), f"€{metrics.total_planned:,.2f}")
-    col3.metric(t("portfolio.kpi_actual_spend"), f"€{metrics.total_actual:,.2f}")
-    col4.metric(t("portfolio.kpi_variance"), f"€{metrics.variance:,.2f}",
-                delta=f"€{metrics.variance:,.2f}", delta_color="normal" if metrics.variance >= 0 else "inverse")
-    col5.metric(t("portfolio.kpi_burn_rate"), f"{metrics.burn_rate:.1f}%")
-    st.divider()
+    """Render the compact project list; shared totals remain in navigation."""
     _render_portfolio_browser(project_repo, schema_repo)

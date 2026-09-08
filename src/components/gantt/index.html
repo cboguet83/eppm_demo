@@ -2068,6 +2068,10 @@
         </div>
         <div class="resource-panel-options">
           <label class="resource-option-checkbox">
+            <input type="checkbox" id="chk-hide-unused-pools" onchange="onToggleResourceRows()">
+            <span id="lbl-hide-unused-pools">Hide pools unused by selected projects</span>
+          </label>
+          <label class="resource-option-checkbox">
             <input type="checkbox" id="chk-show-total-demand" checked onchange="onToggleResourceRows()">
             <span id="lbl-show-total">Total Assignments</span>
           </label>
@@ -2377,6 +2381,8 @@
       // Resource grid labels
       const elResTitle = document.getElementById('lbl-resource-panel-title');
       if (elResTitle) elResTitle.innerText = getT('resource_grid.title', 'Resource Pools & Capacity Usage');
+      const elHideUnused = document.getElementById('lbl-hide-unused-pools');
+      if (elHideUnused) elHideUnused.innerText = getT('resource_grid.hide_unused', 'Hide pools unused by selected projects');
       const elWithin = document.getElementById('lbl-within-cap');
       if (elWithin) elWithin.innerText = getT('resource_grid.within_capacity', 'Within Capacity');
       const elOver = document.getElementById('lbl-overallocated');
@@ -4384,6 +4390,7 @@
     }
 
     function onToggleResourceRows() {
+      hideUnusedPools = Boolean(document.getElementById('chk-hide-unused-pools')?.checked);
       const chkTotal = document.getElementById('chk-show-total-demand');
       const chkSelected = document.getElementById('chk-show-selected-demand');
       showTotalRows = chkTotal ? chkTotal.checked : true;
@@ -4405,6 +4412,19 @@
 
     function getResourcePoolById(poolId) {
       return resourcePoolIndex.get(Number(poolId));
+    }
+
+    let hideUnusedPools = false;
+
+    function isResourcePoolVisible(pool) {
+      return !hideUnusedPools || Boolean(pool.used_by_selected_projects);
+    }
+
+    function isResourceNodeVisible(node) {
+      if (!hideUnusedPools) return true;
+      if (node.node_type === 'group') return (node.children || []).some(isResourceNodeVisible);
+      const pool = getResourcePoolById(node.pool_id);
+      return Boolean(pool && isResourcePoolVisible(pool));
     }
 
     function aggregatePoolUsage(poolIds, fieldName) {
@@ -4434,6 +4454,7 @@
       const rows = [];
 
       const visit = (node, depth) => {
+        if (!isResourceNodeVisible(node)) return;
         const nodeKey = String(node.key || `${node.node_type}:${node.group_id || node.pool_id}`);
         const collapsed = collapsedResourceNodes.has(nodeKey);
         if (node.node_type === 'group') {
@@ -4497,7 +4518,7 @@
 
       if (!container || !leftBody || !rightBody || !rightInner) return;
 
-      const pools = resourcePoolsData || [];
+      const pools = (resourcePoolsData || []).filter(isResourcePoolVisible);
       const displayRows = getResourceDisplayRows();
       const resourceContentHeight = 56 + Math.max(1, displayRows.length) * 34;
       if (resourceMain) {
@@ -4576,7 +4597,7 @@
         renderedResourceWindow = null;
         leftBody.innerHTML = `
           <div style="padding:14px 10px; color:#94a3b8; font-size:12px; font-style:italic;">
-            ${getT('resource_grid.no_pools', 'No resource pools configured')}
+            ${hideUnusedPools ? getT('resource_grid.no_used_pools', 'No pools are used by the selected projects') : getT('resource_grid.no_pools', 'No resource pools configured')}
           </div>
         `;
         rightBody.innerHTML = `
@@ -4693,7 +4714,10 @@
 
         if (row.rowType === 'group_total') {
           const group = row.node;
-          const descendantIds = group.descendant_pool_ids || [];
+          const descendantIds = (group.descendant_pool_ids || []).filter(poolId => {
+            const pool = getResourcePoolById(poolId);
+            return pool && isResourcePoolVisible(pool);
+          });
           const groupUsage = aggregatePoolUsage(descendantIds, 'daily_usage');
           leftHtml += `
             <div class="resource-left-row resource-group-row"

@@ -97,7 +97,11 @@ schema = SchemaRepository({self.path!r})
         # Each AppTest has its own component registry; register in that runtime.
         portfolio = self.app('import importlib\nimport src.views.portfolio_table_component as component\nimportlib.reload(component)\nfrom src.views.portfolio_view import render_portfolio_overview\nst.session_state["selected_portfolio_project_id"] = 1\nrender_portfolio_overview(repo, schema)')
         self.assert_clean(portfolio)
-        self.assertIn("Filter by project template", [w.label for w in portfolio.multiselect])
+        self.assertNotIn("Filter by project template", [w.label for w in portfolio.multiselect])
+        self.assertIn("Project Contacts", [tab.label for tab in portfolio.tabs])
+        self.assertIn("Project log", [tab.label for tab in portfolio.tabs])
+        self.assertFalse(portfolio.expander)
+        self.assertFalse(portfolio.metric)
 
     def test_all_template_property_types_are_exposed_in_create_edit_and_details(self):
         import datetime
@@ -144,7 +148,12 @@ schema = SchemaRepository({self.path!r})
                          {**values, 'blank': 'Previously empty', 'NUMBER': 42})
         details = self.app('import importlib\nimport src.views.portfolio_table_component as component\nimportlib.reload(component)\nfrom src.views.portfolio_view import render_portfolio_overview\nst.session_state["selected_portfolio_project_id"] = 1\nrender_portfolio_overview(repo, schema)')
         self.assert_clean(details)
-        rendered = '\n'.join(w.value for w in details.markdown)
+        rendered = ''
+        for tab in details.tabs:
+            details.session_state['project_details_tabs_1'] = tab.label
+            details.run()
+            self.assert_clean(details)
+            rendered += '\n'.join(w.value for w in details.markdown)
         for kind in PARAM_TYPES:
             self.assertIn(f'Custom {kind} (Alias {kind}):', rendered)
         self.assertIn('Unfilled property: Previously empty', rendered)

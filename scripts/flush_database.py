@@ -12,6 +12,7 @@ from typing import Optional
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.database.connection import get_db
+from src.database.project_collaboration_migration import seed_project_event_types
 from src.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -49,6 +50,8 @@ def flush_database(db_path: Optional[str] = None, flush_all: bool = False) -> di
         counts["projects_deleted"] = int(cursor.fetchone()[0])
 
         # Execute table flushes
+        cursor.execute("DELETE FROM project_contact")
+        cursor.execute("DELETE FROM project_log_event")
         cursor.execute("DELETE FROM project_property_value_item")
         cursor.execute("DELETE FROM project_property_value")
         cursor.execute("DELETE FROM resource_pool_assignment")
@@ -59,6 +62,10 @@ def flush_database(db_path: Optional[str] = None, flush_all: bool = False) -> di
         cursor.execute("DELETE FROM project")
 
         if flush_all:
+            for table in ("project_role_translation", "project_event_type_translation",
+                          "project_role", "project_event_type"):
+                cursor.execute(f"DELETE FROM {table}")
+            seed_project_event_types(conn)
             cursor.execute("DELETE FROM project_type_property_default_item")
             cursor.execute("DELETE FROM project_type_property_default")
             cursor.execute("DELETE FROM project_type_property_rule")

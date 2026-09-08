@@ -1156,6 +1156,10 @@ def _load_planning_pool_payload(db_path, revision, project_ids, _pool_details_ca
                 "assigned_capacity": float(p_cap.assigned_capacity_fte),
                 "displayed_assigned_capacity": float(p_cap.effective_capacity_fte),
                 "has_assigned_resources": bool(p_cap.has_assigned_resources),
+                "used_by_selected_projects": any(
+                    int(a["project_id"]) in scope_pid_set and float(a["fte_assigned"]) > 0
+                    for a in p_cap.assignments
+                ),
                 "daily_assigned_capacity": effective_daily_capacity,
                 "peak_demand": float(p_cap.peak_assigned_fte),
                 "is_overassigned": bool(p_cap.is_overassigned),

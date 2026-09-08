@@ -1915,17 +1915,18 @@ def render_settings_view(
 
     schema_repo = schema_repo or SchemaRepository(org_repo.db_path)
 
-    # Top-level Section Selector: Organization Structure vs. Parameter Definition
+    # Project roles and event types are independent, lazily loaded catalogs.
     default_section_idx = 0
     if st.session_state.get("settings_active_section") == "parameters":
         default_section_idx = 1
 
     selected_section = st.radio(
         "Settings Section",
-        options=["org_structure", "param_def"],
+        options=["org_structure", "param_def", "project_configuration"],
         format_func=lambda s: f"🏢 {t('settings.section_org_structure', default='Organization Structure')}"
         if s == "org_structure"
-        else f"🧩 {t('settings.section_param_definition', default='Parameter Definition')}",
+        else (f"🧩 {t('settings.section_param_definition', default='Parameter Definition')}"
+              if s == "param_def" else t("project_collaboration.configuration", default="Project configuration")),
         index=default_section_idx,
         horizontal=True,
         label_visibility="collapsed",
@@ -1934,6 +1935,20 @@ def render_settings_view(
 
     if selected_section == "param_def":
         render_schema_definition(schema_repo)
+        return
+
+    if selected_section == "project_configuration":
+        from src.views.project_collaboration_view import render_project_catalog
+        roles_tab, events_tab = st.tabs([
+            t("project_collaboration.roles", default="Project roles"),
+            t("project_collaboration.types", default="Event types"),
+        ], key="project_configuration_tab", on_change="rerun")
+        if roles_tab.open:
+            with roles_tab:
+                render_project_catalog(org_repo.db_path, "role")
+        if events_tab.open:
+            with events_tab:
+                render_project_catalog(org_repo.db_path, "event_type")
         return
 
     tag_repo = tag_repo or TagRepository(org_repo.db_path)

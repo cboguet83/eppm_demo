@@ -7,7 +7,7 @@ const source = fs.readFileSync(path.join(__dirname, '../src/views/portfolio_tabl
 const script = source.match(/_TABLE_JS = r"""([\s\S]*?)"""/)[1].replace('export default function', 'function mount');
 
 function harness() {
-  const requests = [], clicks = [], timers = new Map();
+  const requests = [], clicks = [], ganttClicks = [], timers = new Map();
   let sequence = 0;
   function element(tag = 'div') {
     const el = {tag, children: [], style: {}, dataset: {}, attributes: {}, className: '',
@@ -45,16 +45,17 @@ function harness() {
   function render(offset = 0, extra = {}) {
     const request = requests.at(-1);
     const data = {columns: [{key: 'name', label: 'Project', format: 'text'}, {key: 'planned_budget', label: 'Budget', format: 'currency'}],
-      rows: Array.from({length: 100}, (_, i) => ({project_id: offset + i + 1, name: 'Project ' + (offset + i + 1), planned_budget: i})),
+      rows: Array.from({length: 100}, (_, i) => ({project_id: offset + i + 1, name: 'Project ' + (offset + i + 1), planned_budget: i,
+        is_overallocated: i === 0})),
       selected_id: null,
       page_info: {context: 'db-v1', total: 10000, offset, query: request?.query || {}, request_id: request?.nonce, ...extra}};
     context.mount({data, parentElement: parent, setStateValue: (key, payload) => requests.push(payload),
-      setTriggerValue: (key, payload) => clicks.push(payload)});
+      setTriggerValue: (key, payload) => (key === 'gantt_click' ? ganttClicks : clicks).push(payload)});
     flushFrames();
   }
   function scroll(index) {const scroller = root.querySelector('.table-scroll'); scroller.scrollTop = index * 40 + 44; scroller.onscroll(); flushFrames();}
   function button(text) {return root.querySelectorAll('button').find(b => b.textContent === text);}
-  return {root, requests, clicks, timers, render, scroll, button, flushFrames};
+  return {root, requests, clicks, ganttClicks, timers, render, scroll, button, flushFrames};
 }
 
 test('virtual scrolling renders a small window, prefetches, preserves position, and ignores stale responses', () => {
@@ -126,4 +127,24 @@ test('facet search is debounced and searches the server, not only cached rows', 
   [...app.timers.values()][0]();
   assert.equal(app.requests.at(-1).search, '9999');
   assert.equal(app.requests.at(-1).kind, 'facet');
+});
+
+test('overallocation icon navigates with a stable project ID without selecting another row', () => {
+  const app = harness(); app.render();
+  const warning = app.root.querySelector('.overallocation-button');
+  let stopped = 0;
+  warning.onclick({stopPropagation() {stopped++;}});
+  assert.deepEqual(app.ganttClicks, [1]);
+  assert.deepEqual(app.clicks, []);
+  assert.equal(stopped, 1);
+  assert.match(warning.attributes['aria-label'], /Project 1$/);
+  app.scroll(80); app.render(100); app.scroll(100);
+  app.root.querySelector('.overallocation-button').onclick({stopPropagation() {}});
+  assert.deepEqual(app.ganttClicks, [1, 101]);
+});
+
+test('master-list height is one header and eight rows, with no numbered paging controls', () => {
+  const app = harness(); app.render();
+  assert.equal(app.root.querySelector('.table-scroll').style.height, '364px');
+  assert.match(source, /box-sizing: border-box/);
 });

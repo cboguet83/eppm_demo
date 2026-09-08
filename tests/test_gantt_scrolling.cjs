@@ -9,6 +9,34 @@ const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 
 test('entire Gantt script parses', () => new vm.Script(script));
 
+test('hide-unused pools preserves ancestors, respects collapsed groups, and updates on project changes', () => {
+  const pools = [{id: 1, used_by_selected_projects: true}, {id: 2, used_by_selected_projects: false}];
+  const hierarchy = [{key: 'root', node_type: 'group', children: [
+    {key: 'nested', node_type: 'group', children: [{key: 'pool:1', node_type: 'pool', pool_id: 1}]},
+    {key: 'empty', node_type: 'group', children: [{key: 'pool:2', node_type: 'pool', pool_id: 2}]},
+  ]}];
+  const context = vm.createContext({resourcePoolIndex: new Map(pools.map(p => [p.id, p])),
+    resourcePoolsData: pools, resourcePoolHierarchy: hierarchy, collapsedResourceNodes: new Set(),
+    showTotalRows: true, showSelectedRows: true, groupUsageCache: new Map()});
+  const run = code => vm.runInContext(code, context);
+  run(script.slice(script.indexOf('    function getResourcePoolById('), script.indexOf('    function renderResourceGrid(')));
+  assert.equal(run('getResourceDisplayRows().length'), 9);
+  run('hideUnusedPools = true');
+  assert.deepEqual([...run('getResourceDisplayRows().map(row => row.nodeKey)')],
+    ['root', 'nested', 'pool:1', 'pool:1', 'pool:1']);
+  run("collapsedResourceNodes.add('nested')");
+  assert.equal(run('getResourceDisplayRows().length'), 2);
+  pools[0].used_by_selected_projects = false;
+  pools[1].used_by_selected_projects = true;
+  assert.deepEqual([...run('getResourceDisplayRows().map(row => row.nodeKey)')],
+    ['root', 'empty', 'pool:2', 'pool:2', 'pool:2']);
+  pools[1].used_by_selected_projects = false;
+  assert.equal(run('getResourceDisplayRows().length'), 0);
+  run('hideUnusedPools = false');
+  assert.equal(run('getResourceDisplayRows().length'), 6);
+  assert.doesNotMatch(html.match(/<input[^>]*id="chk-hide-unused-pools"[^>]*>/)[0], /\schecked/);
+});
+
 test('external links start disabled in both the toolbar and renderer', () => {
   assert.doesNotMatch(html.match(/<input[^>]*id="chk-external-links"[^>]*>/)[0], /\schecked(?:\s|=|>)/);
   assert.match(script, /let showExternalLinks = false;/);

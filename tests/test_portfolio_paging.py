@@ -102,9 +102,11 @@ with patch.object(ProjectRepository, 'get_all_projects', side_effect=AssertionEr
 ''', default_timeout=15).run()
         self.assertFalse(app.exception, [e.message for e in app.exception])
         self.assertIn('Projects Master List', [h.value for h in app.subheader])
-        self.assertIn('Filter by project template', [w.label for w in app.multiselect])
+        self.assertNotIn('Filter by project template', [w.label for w in app.multiselect])
+        self.assertFalse(app.header)
+        self.assertFalse(app.metric)
         self.assertNotIn('Filter by project type', [w.label for w in app.multiselect])
-        self.assertEqual(str(app.metric[0].value), '255')
+        self.assertEqual(self.repo.get_metrics().total_projects, 255)
 
 
 if __name__ == '__main__':
