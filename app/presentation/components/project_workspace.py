@@ -12,8 +12,8 @@ from app.application.services.portfolio import PortfolioService
 class ProjectWorkspace:
     """Use cases and lazily called sections assembled by the composition root.
 
-    Collaboration sections remain owned by their existing feature until its
-    migration. Callbacks keep those dependencies out of the migrated screen.
+    Collaboration callbacks retain lazy rendering and receive their application
+    service from the composition root.
     """
 
     projects: ProjectService

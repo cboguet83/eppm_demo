@@ -14,6 +14,7 @@ from app.application.services.schema import SchemaService
 from app.application.services.tags import TagService
 from app.application.services.planning import PlanningService
 from app.application.services.project_overallocation import ProjectOverallocationService
+from app.application.services.collaboration import CollaborationService
 
 if TYPE_CHECKING:
     from app.infrastructure.database.pool_capacity_cache import (
@@ -121,17 +122,26 @@ def create_project_overallocation_service(db_path: str | None = None) -> Project
 
 
 def create_project_workspace(db_path: str | None = None) -> ProjectWorkspace:
-    """Assemble project screens and the remaining collaboration-section bridge."""
+    """Assemble project screens with lazily rendered collaboration sections."""
     from functools import partial
     from app.presentation.components.project_workspace import ProjectWorkspace
-    from src.views.project_collaboration_view import render_project_contacts, render_project_log
+    from app.presentation.pages.collaboration import render_project_contacts, render_project_log
+
+    collaboration = create_collaboration_service(db_path)
 
     return ProjectWorkspace(
         create_project_service(db_path), create_project_type_service(db_path),
         create_portfolio_service(db_path),
-        partial(render_project_contacts, db_path=db_path),
-        partial(render_project_log, db_path=db_path),
+        partial(render_project_contacts, service=collaboration),
+        partial(render_project_log, service=collaboration),
     )
+
+
+def create_collaboration_service(db_path: str | None = None) -> CollaborationService:
+    """Connect collaboration use cases to the transactional SQLite adapter."""
+    from app.infrastructure.repositories.collaboration import SqliteCollaborationGateway
+
+    return CollaborationService(SqliteCollaborationGateway(db_path))
 
 
 def main() -> None:

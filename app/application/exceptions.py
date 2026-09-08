@@ -55,3 +55,11 @@ class PlanningConflictError(ValueError):
 
 class PlanningStorageError(RuntimeError):
     """Task or dependency storage is unavailable."""
+
+
+class CollaborationConflictError(ValueError):
+    """A collaboration write conflicts with a reference or unique assignment."""
+
+
+class CollaborationStorageError(RuntimeError):
+    """Collaboration storage could not complete the requested operation."""

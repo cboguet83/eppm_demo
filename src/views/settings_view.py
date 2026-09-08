@@ -21,6 +21,7 @@ from app.main import (
     create_resource_pool_service,
     create_pool_capacity_service,
     create_tag_service,
+    create_collaboration_service,
 )
 from app.presentation.pages.resource_pools import render_resource_pools
 from app.presentation.pages.organization import (
@@ -77,7 +78,7 @@ def render_settings_view(
         )
         return
     if selected_section == "project_configuration":
-        from src.views.project_collaboration_view import render_project_catalog
+        from app.presentation.pages.collaboration import render_project_catalog
 
         roles_tab, events_tab = st.tabs(
             [
@@ -89,10 +90,10 @@ def render_settings_view(
         )
         if roles_tab.open:
             with roles_tab:
-                render_project_catalog(org_repo.db_path, "role")
+                render_project_catalog(create_collaboration_service(org_repo.db_path), "role")
         if events_tab.open:
             with events_tab:
-                render_project_catalog(org_repo.db_path, "event_type")
+                render_project_catalog(create_collaboration_service(org_repo.db_path), "event_type")
         return
     tag_repo = tag_repo or TagRepository(org_repo.db_path)
     project_repo = project_repo or ProjectRepository(org_repo.db_path)
