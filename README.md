@@ -17,9 +17,10 @@ organization transactions. [ADR 0005](docs/decisions/0005-layered-resource-pools
 covers atomic pool/group editing, pure capacity rules, and revision-checked caching.
 [ADR 0006](docs/decisions/0006-layered-tags.md) covers tag catalogs and assignments.
 [ADR 0007](docs/decisions/0007-layered-planning-core.md) covers atomic task and
-dependency operations, CSV import, and scheduling rules. The Gantt screen and
-planning caches, collaboration, budget tracking, and runtime/bootstrap code remain
-to be migrated.
+dependency operations, CSV import, and scheduling rules.
+[ADR 0008](docs/decisions/0008-layered-planning-read-models.md) covers planning
+summaries and portfolio overload indicators. The Gantt screen and cached display
+loaders, collaboration, budget tracking, and runtime/bootstrap code remain to be migrated.
 
 ### C4 level 2: runtime containers
 

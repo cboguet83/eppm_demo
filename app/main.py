@@ -13,6 +13,7 @@ from app.application.services.resource_pools import ResourcePoolService
 from app.application.services.schema import SchemaService
 from app.application.services.tags import TagService
 from app.application.services.planning import PlanningService
+from app.application.services.project_overallocation import ProjectOverallocationService
 
 if TYPE_CHECKING:
     from app.infrastructure.database.pool_capacity_cache import (
@@ -104,16 +105,18 @@ def create_project_service(db_path: str | None = None) -> ProjectService:
 def create_portfolio_service(
     db_path: str | None = None, *, include_allocations: bool = True,
 ) -> PortfolioService:
-    """Connect bounded queries and the transitional planning-capacity reader."""
-    from functools import partial
+    """Connect bounded portfolio queries and layered daily-overload indicators."""
     from app.infrastructure.repositories.portfolio import SqlitePortfolioReader
 
     allocations = None
     if include_allocations:
-        from src.services.project_overallocation import overallocated_project_ids
-
-        allocations = partial(overallocated_project_ids, db_path)
+        allocations = create_project_overallocation_service(db_path).overallocated_project_ids
     return PortfolioService(SqlitePortfolioReader(db_path), allocations)
+
+
+def create_project_overallocation_service(db_path: str | None = None) -> ProjectOverallocationService:
+    """Compose page-scoped overload indicators with the shared capacity cache."""
+    return ProjectOverallocationService(create_planning_service(db_path), create_pool_capacity_service(db_path))
 
 
 def create_project_workspace(db_path: str | None = None) -> ProjectWorkspace:

@@ -6,7 +6,7 @@ import json
 import sqlite3
 
 from app.application.exceptions import PlanningConflictError, PlanningStorageError
-from app.application.ports.planning import ExternalTask, TaskChoice, TaskRow
+from app.application.ports.planning import ExternalTask, ProjectSummary, TaskChoice, TaskRow
 from app.domain.planning.records import (
     DependencyInput,
     DependencySchedule,
@@ -15,6 +15,10 @@ from app.domain.planning.records import (
     TaskValues,
 )
 from app.infrastructure.database.connection import get_db
+from app.infrastructure.database.planning_summary_cache import (
+    ensure_planning_indexes,
+    read_project_summaries,
+)
 from app.shared.logging import get_logger
 
 logger = get_logger(__name__)
@@ -259,6 +263,54 @@ class SqlitePlanningStore:
         )
         cursor = self.connection.execute("DELETE FROM project_task WHERE id=?", (milestone_id,))
         return cursor.rowcount > 0
+
+    def ensure_indexes(self) -> None:
+        """Maintain the existing derived schema inside the caller's transaction."""
+        ensure_planning_indexes(self.connection)
+
+    def get_project_summaries(self, project_ids: list[int]) -> list[ProjectSummary]:
+        """Read compact project headers, filling cache misses atomically."""
+        return read_project_summaries(self.connection, project_ids)
+
+    def affected_task_projects(self, task_id: int) -> tuple[set[int], set[int]]:
+        """Query only the edited project's direct schedule dependents and assigned pools."""
+        row = self.connection.execute(
+            "SELECT project_id FROM project_task WHERE id=?", (task_id,)
+        ).fetchone()
+        if not row:
+            return set(), set()
+        project_id = row[0]
+        projects = {project_id} | {
+            row[0]
+            for row in self.connection.execute(
+                """
+            SELECT DISTINCT t.project_id FROM task_dependencies d
+            JOIN project_task t ON t.id=d.task_id WHERE d.predecessor_task_id=? OR d.predecessor_project_id=?
+        """,
+                (task_id, project_id),
+            )
+        }
+        pools = {
+            row[0]
+            for row in self.connection.execute(
+                "SELECT DISTINCT pool_id FROM resource_pool_assignment WHERE project_id=?",
+                (project_id,),
+            )
+        }
+        return projects, pools
+
+    def consuming_pool_ids(self, project_ids: list[int]) -> list[int]:
+        """Find positive-demand pools using a bounded project ID parameter."""
+        return [
+            row[0]
+            for row in self.connection.execute(
+                """
+            SELECT DISTINCT pool_id FROM resource_pool_assignment WHERE fte_assigned>0
+            AND project_id IN (SELECT value FROM json_each(?)) ORDER BY pool_id
+        """,
+                (json.dumps(project_ids),),
+            )
+        ]
 
 
 class SqlitePlanningGateway:

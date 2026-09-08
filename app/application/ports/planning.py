@@ -38,6 +38,18 @@ class TaskChoice(TypedDict):
     project_name: str
 
 
+class ProjectSummary(TypedDict):
+    """Small planning header projection using the existing component field names."""
+
+    id: int
+    name: str
+    start: str | None
+    end: str | None
+    taskCount: int
+    progress: float
+    hasViolations: bool
+
+
 class PlanningStore(Protocol):
     """Task operations sharing the gateway's connection and snapshot."""
 
@@ -65,6 +77,10 @@ class PlanningStore(Protocol):
     def update_progress(self, milestone_id: int, progress_pct: int) -> bool: ...
     def bulk_create_milestones(self, rows: list[TaskInput]) -> int: ...
     def delete_milestone(self, milestone_id: int) -> bool: ...
+    def ensure_indexes(self) -> None: ...
+    def get_project_summaries(self, project_ids: list[int]) -> list[ProjectSummary]: ...
+    def affected_task_projects(self, task_id: int) -> tuple[set[int], set[int]]: ...
+    def consuming_pool_ids(self, project_ids: list[int]) -> list[int]: ...
 
 
 class PlanningGateway(Protocol):

@@ -4,6 +4,7 @@ from app.application.ports.planning import (
     ExternalTask,
     PlanningGateway,
     PlanningStore,
+    ProjectSummary,
     TaskChoice,
     TaskRow,
 )
@@ -224,3 +225,23 @@ class PlanningService:
         """Read one task, returning None when it was deleted."""
         with self._gateway.transaction() as store:
             return store.get_milestone_by_id(milestone_id)
+
+    def ensure_indexes(self) -> None:
+        """Prepare the existing planning projection and its lookup indexes."""
+        with self._gateway.transaction(write=True) as store:
+            store.ensure_indexes()
+
+    def get_project_summaries(self, project_ids: list[int]) -> list[ProjectSummary]:
+        """Read or refresh derived headers without publishing over a concurrent edit."""
+        with self._gateway.transaction(write=True) as store:
+            return store.get_project_summaries(project_ids)
+
+    def affected_task_projects(self, task_id: int) -> tuple[set[int], set[int]]:
+        """Find the edited project, dependent projects, and pools requiring refresh."""
+        with self._gateway.transaction() as store:
+            return store.affected_task_projects(task_id)
+
+    def consuming_pool_ids(self, project_ids: list[int]) -> list[int]:
+        """Find pools with positive demand from the requested portfolio projects."""
+        with self._gateway.transaction() as store:
+            return store.consuming_pool_ids(project_ids)
