@@ -10,7 +10,6 @@ from streamlit.testing.v1 import AppTest
 
 from src.database.seeder import seed_default_data_if_empty
 from src.repositories.milestone_repo import MilestoneRepository
-from src.services.organization_service import OrganizationService
 from src.services.pool_capacity_cache import load_pool_capacities
 from src.services.resource_pool_service import ResourcePoolService
 
@@ -31,6 +30,8 @@ def planning_app(db_path):
 
 class PlanningPerformanceTests(unittest.TestCase):
     def test_hierarchy_index_is_built_once_and_loops_are_safe(self):
+        # app.py reloads service modules during integration tests.
+        from src.services.organization_service import OrganizationService
         functions = pd.DataFrame([
             {"function_id": 1, "name": "Director", "hierarchy_level": 2, "manager_function_id": None},
             {"function_id": 2, "name": "Service", "hierarchy_level": 3, "manager_function_id": 1},

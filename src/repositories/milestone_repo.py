@@ -46,6 +46,24 @@ class MilestoneRepository:
                 params=(int_id,),
             )
 
+    def search_task_choices(self, search: str = "", *, limit: int = 50) -> list[dict[str, Any]]:
+        """Small on-demand task lookup for tag editors; never fetch all tasks."""
+        search = search.strip()
+        with get_db(self.db_path) as conn:
+            if search.lstrip("#").isdigit():
+                where, params = "WHERE t.id=?", [int(search.lstrip("#"))]
+            elif search:
+                where, params = ("WHERE instr(lower(t.task_name),lower(?))>0 "
+                                 "OR instr(lower(p.name),lower(?))>0"), [search, search]
+            else:
+                where, params = "", []
+            cursor = conn.execute(
+                "SELECT t.id,t.task_name,t.project_id,p.name AS project_name FROM project_task t "
+                "JOIN project p ON p.id=t.project_id " + where + " ORDER BY t.id DESC LIMIT ?",
+                params + [max(1, min(100, int(limit)))],
+            )
+            return [dict(zip(("id", "task_name", "project_id", "project_name"), row)) for row in cursor]
+
     def get_all_milestones(self) -> pd.DataFrame:
         """Loads all steps/tasks across all projects enriched with project names.
 

@@ -614,6 +614,10 @@ def _seed_default_data(db_path: Optional[str] = None, force: bool = False, *, in
         conn.execute("INSERT INTO schema_migration(version) VALUES ('demo-bootstrap-v1')")
         conn.commit()
 
+    if include_projects:
+        from scripts.seed_pool_scenarios import seed_pool_scenarios
+        seed_pool_scenarios(target_path)
+
 
 seed_database_data = seed_default_data_if_empty
 

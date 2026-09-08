@@ -414,6 +414,11 @@
       </table>
       <div id="empty-state" class="empty-state" style="display: none;">No task tag assignments found.</div>
     </div>
+    <div id="paging" class="toolbar" style="display:none;">
+      <button id="page-prev" class="btn-reset-filters" onclick="changePage(-1)">Previous</button>
+      <span id="page-status" aria-live="polite"></span>
+      <button id="page-next" class="btn-reset-filters" onclick="changePage(1)">Next</button>
+    </div>
   </div>
 
   <!-- Context Menu -->
@@ -439,6 +444,37 @@
     let colFilters = { id: '', task_name: '', project_name: '', tag_name: '', tag_group_name: '', free_tag: '' };
     let globalSearchQuery = '';
     let translations = {};
+    let pageInfo = null;
+    let queryTimer = null;
+    let queryPending = false;
+    let queryInitialized = false;
+    let latestQueryNonce = null;
+
+    function requestPage(page = 1, debounce = false) {
+      if (!pageInfo) { renderTable(); return; }
+      clearTimeout(queryTimer);
+      queryPending = true;
+      selectedItem = null;
+      document.getElementById('table-body').style.pointerEvents = 'none';
+      document.getElementById('page-status').innerText = 'Loading…';
+      document.getElementById('page-prev').disabled = true;
+      document.getElementById('page-next').disabled = true;
+      const send = () => {
+        queryTimer = null;
+        latestQueryNonce = Date.now() + '_' + Math.random();
+        Streamlit.setComponentValue({action: 'query_task_tags', query: {
+          page, search: globalSearchQuery, filters: {...colFilters},
+          sort: currentSort.column, ascending: currentSort.asc
+        }, nonce: latestQueryNonce});
+      };
+      if (debounce) queryTimer = setTimeout(send, 300);
+      else send();
+    }
+
+    function changePage(delta) {
+      if (!pageInfo || queryPending) return;
+      requestPage(Math.max(1, Math.min(pageInfo.pages, pageInfo.page + delta)));
+    }
 
     function StreamlitSend(obj) {
       if (window.parent) {
@@ -480,7 +516,14 @@
       const emptyState = document.getElementById('empty-state');
       tbody.innerHTML = '';
 
-      document.getElementById('stat-count').innerText = filteredData.length;
+      document.getElementById('stat-count').innerText = pageInfo ? pageInfo.filtered_total : filteredData.length;
+      if (pageInfo) {
+        document.getElementById('paging').style.display = 'flex';
+        document.getElementById('page-status').innerText =
+          `Page ${pageInfo.page} / ${pageInfo.pages} · ${pageInfo.filtered_total.toLocaleString()} matching / ${pageInfo.total.toLocaleString()} total`;
+        document.getElementById('page-prev').disabled = pageInfo.page <= 1;
+        document.getElementById('page-next').disabled = pageInfo.page >= pageInfo.pages;
+      }
 
       if (filteredData.length === 0) {
         emptyState.style.display = 'block';
@@ -532,6 +575,11 @@
     }
 
     function applyFiltersAndSort() {
+      if (pageInfo) {
+        filteredData = taskTagsData;
+        updateSortIcons();
+        return;
+      }
       filteredData = taskTagsData.filter(item => {
         if (globalSearchQuery) {
           const q = globalSearchQuery.toLowerCase();
@@ -578,7 +626,7 @@
         currentSort.column = col;
         currentSort.asc = true;
       }
-      renderTable();
+      requestPage(1);
     }
 
     function updateSortIcons() {
@@ -597,7 +645,7 @@
 
     function handleGlobalSearch() {
       globalSearchQuery = document.getElementById('search-box').value.trim();
-      renderTable();
+      requestPage(1, true);
     }
 
     function handleColFilter(col) {
@@ -614,7 +662,7 @@
         if (colFilters[col]) input.classList.add('active');
         else input.classList.remove('active');
       }
-      renderTable();
+      requestPage(1, true);
     }
 
     function resetAllFilters() {
@@ -625,7 +673,7 @@
         const elem = document.getElementById(id);
         if (elem) { elem.value = ''; elem.classList.remove('active'); }
       });
-      renderTable();
+      requestPage(1);
     }
 
     function showContextMenu(e, item) {
@@ -667,6 +715,7 @@
 
     function triggerAction(actionName) {
       hideContextMenu();
+      if (queryPending) return;
       if (actionName === 'add') {
         Streamlit.setComponentValue({
           action: 'add_task_tag',
@@ -740,6 +789,28 @@
     window.addEventListener('message', function(event) {
       if (event.data && event.data.type === 'streamlit:render') {
         const args = event.data.args || {};
+        // Ignore older responses while typing or waiting for a newer query.
+        if (queryPending && (queryTimer !== null || args.query_nonce !== latestQueryNonce)) return;
+        if (args.page_info) {
+          pageInfo = args.page_info;
+          if (!queryInitialized) {
+            const query = args.query || {};
+            globalSearchQuery = query.search || '';
+            colFilters = {...colFilters, ...(query.filters || {})};
+            currentSort = {column: query.sort || 'id', asc: Boolean(query.ascending)};
+            document.getElementById('search-box').value = globalSearchQuery;
+            const fields = {id:'filter-id', task_name:'filter-task', project_name:'filter-proj',
+              tag_name:'filter-tag', tag_group_name:'filter-group', free_tag:'filter-free'};
+            Object.entries(fields).forEach(([key, id]) => {
+              const input = document.getElementById(id);
+              input.value = colFilters[key] || '';
+              input.classList.toggle('active', Boolean(colFilters[key]));
+            });
+            queryInitialized = true;
+          }
+        }
+        queryPending = false;
+        document.getElementById('table-body').style.pointerEvents = '';
         if (args.translations) {
           translations = args.translations;
           updateTranslations();

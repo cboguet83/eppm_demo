@@ -414,6 +414,18 @@ def seed_database(
         conn.commit()
         conn.execute("PRAGMA foreign_keys = ON")
 
+    from scripts.seed_pool_scenarios import seed_pool_scenarios
+    with get_db(db_path) as conn:
+        has_demo_organization = bool(conn.execute(
+            "SELECT 1 FROM schema_migration WHERE version='demo-bootstrap-v1'"
+        ).fetchone())
+    if has_demo_organization:
+        pool_summary = seed_pool_scenarios(db_path)
+    else:
+        # Append mode also supports reference-only, user-defined catalogs.
+        # Do not inject demo employees or pools into those organizations.
+        logger.info("Pool scenarios skipped: existing custom catalog has no demo organization.")
+        pool_summary = {"new_pools": 0, "new_groups": 0}
     elapsed = time.time() - start_time
     summary = {
         "projects_created": len(projects_data),
@@ -421,6 +433,8 @@ def seed_database(
         "property_values_created": property_count,
         "tasks_created": len(milestones_data),
         "dependencies_created": len(dependencies_data),
+        "pools_created": pool_summary["new_pools"],
+        "pool_groups_created": pool_summary["new_groups"],
     }
 
     logger.info(

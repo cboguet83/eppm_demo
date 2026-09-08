@@ -194,6 +194,8 @@ class ProjectTypesTests(unittest.TestCase):
         self.assert_seed_valid()
         with get_db(self.path) as conn:
             self.assertEqual(conn.execute("SELECT DISTINCT text_value FROM project_property_value").fetchall(), [("User choice",)])
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM employee").fetchone()[0], 0)
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM resource_pool").fetchone()[0], 0)
 
 
 class ProjectTypeMigrationTests(unittest.TestCase):

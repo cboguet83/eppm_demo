@@ -198,11 +198,11 @@ def bootstrap_database(schema_version: str = "project-types-v1") -> bool:
                 )
             except Exception as exc:
                 logger.error(
-                    "Failed to seed %d projects: %s. Falling back to default seeder.",
+                    "Failed to seed %d projects: %s. Stopping; the pre-seed backup is retained.",
                     num_projects,
                     exc,
                 )
-                seed_default_data_if_empty(force=True)
+                raise
         else:
             seed_default_data_if_empty(force=True)
     else:

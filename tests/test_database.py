@@ -235,7 +235,9 @@ class TestDatabaseLayer(unittest.TestCase):
             cursor.execute("SELECT COUNT(*) FROM employee")
             self.assertEqual(cursor.fetchone()[0], 50)
             cursor.execute("SELECT COUNT(*) FROM resource_pool")
-            self.assertEqual(cursor.fetchone()[0], 3)
+            self.assertEqual(cursor.fetchone()[0], 127)
+            cursor.execute("SELECT COUNT(*) FROM resource_pool_group")
+            self.assertEqual(cursor.fetchone()[0], 52)
 
 
 if __name__ == "__main__":

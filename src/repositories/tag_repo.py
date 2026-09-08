@@ -566,6 +566,44 @@ class TagRepository:
     # =========================================================================
     # 5. TASK TAGS (task_tag)
     # =========================================================================
+    def get_task_tags_page(self, *, page: int = 1, page_size: int = 100,
+                           search: str = "", filters: Optional[dict] = None,
+                           sort: str = "id", ascending: bool = False) -> dict[str, Any]:
+        """Fetch only one page; search and column filters cover the whole table."""
+        columns = {"id": "tt.id", "task_name": "ptk.task_name", "project_name": "p.name",
+                   "tag_name": "td.tag", "tag_group_name": "tg.tag_group_name", "free_tag": "tt.free_tag"}
+        joins = ("FROM task_tag tt LEFT JOIN project_task ptk ON tt.task_id=ptk.id "
+                 "LEFT JOIN project p ON ptk.project_id=p.id "
+                 "LEFT JOIN tag_dictionnary td ON tt.tag_id=td.id "
+                 "LEFT JOIN tag_group tg ON td.tag_group_id=tg.id ")
+        conditions, params = [], []
+        if search.strip():
+            conditions.append("(" + " OR ".join(
+                f"instr(lower(COALESCE({column},'')),lower(?))>0" for column in columns.values()
+            ) + ")")
+            params.extend([search.strip()] * len(columns))
+        for key, value in (filters or {}).items():
+            if key in columns and str(value or "").strip():
+                conditions.append(f"instr(lower(COALESCE({columns[key]},'')),lower(?))>0")
+                params.append(str(value).strip())
+        where = "WHERE " + " AND ".join(conditions) if conditions else ""
+        order = columns.get(sort, "tt.id")
+        direction = "ASC" if ascending else "DESC"
+        page_size = max(1, min(200, int(page_size)))
+        with get_db(self.db_path) as conn:
+            total = conn.execute("SELECT COUNT(*) FROM task_tag").fetchone()[0]
+            filtered_total = conn.execute("SELECT COUNT(*) " + joins + where, params).fetchone()[0] if conditions else total
+            pages = max(1, (filtered_total + page_size - 1) // page_size)
+            page = max(1, min(pages, int(page)))
+            rows = pd.read_sql(
+                "SELECT tt.id,tt.task_id,ptk.task_name,ptk.project_id,p.name AS project_name,"
+                "tt.tag_id,td.tag AS tag_name,tg.tag_group_name,tt.free_tag " + joins + where +
+                f" ORDER BY {order} COLLATE NOCASE {direction},tt.id {direction} LIMIT ? OFFSET ?",
+                conn, params=params + [page_size, (page - 1) * page_size],
+            )
+        return {"rows": rows, "total": total, "filtered_total": filtered_total,
+                "page": page, "pages": pages, "page_size": page_size}
+
     def get_all_task_tags(self) -> pd.DataFrame:
         """Retrieves all task tag assignments enriched with task, project, and tag info.
 

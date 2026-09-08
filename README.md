@@ -521,8 +521,20 @@ Pool hierarchy scenarios can be previewed without modifying the database:
 docker compose run --rm --entrypoint python app -m scripts.seed_pool_scenarios --year 2026
 ```
 
-Add `--apply` to apply the previewed seed. The script refuses to duplicate an
-existing scenario seed.
+Add `--apply` to apply the previewed seed without replacing projects or tasks.
+Normal project seeds and the default demo seed now include this scenario step:
+six base groups, 3–10 child groups per base group, and 1–5 pools per child group.
+Service C pools receive 3–5 employees plus the overallocated, underassigned, and
+year-long zero-capacity exception examples. Repeated additive calls are no-ops.
+Project/task-free seeds still create the hierarchy without inventing tasks.
+Append seeding into a user-defined catalog without the demo organization leaves
+that organization's employees and pools untouched.
+
+Settings → Task Tags loads 100 assignments per page. Search, column filters, and
+sorting run against the entire database; paging never limits their scope.
+Task and dictionary choices load only when an add/edit dialog opens, with task
+search limited to 50 matches (an exact `#ID` finds any task). Browser regression
+checks: `node --test tests/test_task_tag_table.cjs`.
 
 1. **📊 1. Portfolio Overview**:
    - Executive financial KPI banner (Planned, Actual, Variance, Burn Rate).

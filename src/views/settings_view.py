@@ -1996,24 +1996,43 @@ def _open_delete_project_tag_dialog(tag_repo: TagRepository, pt_id: int, tag_lab
 # =============================================================================
 # 8. TASK TAG DIALOGS
 # =============================================================================
+def _select_task_for_tag(milestone_repo: MilestoneRepository, *, key: str,
+                         current_task_id: Optional[int] = None) -> Optional[int]:
+    search = st.text_input("Find task by name, project or #ID", key=f"{key}_search")
+    choices = milestone_repo.search_task_choices(search)
+    if current_task_id is not None and not any(row["id"] == current_task_id for row in choices):
+        current = milestone_repo.get_milestone_by_id(current_task_id)
+        if current:
+            choices.insert(0, current)
+    labels = {row["id"]: f"#{row['id']} — {row['task_name']} · {row.get('project_name', '')}" for row in choices}
+    options = list(labels)
+    st.caption("Up to 50 matching tasks. Refine the search or enter an exact task ID.")
+    return st.selectbox(
+        t("settings.field_task", default="Task *"), options=options,
+        index=options.index(current_task_id) if current_task_id in options else None,
+        format_func=lambda task_id: labels[task_id], key=f"{key}_task",
+    )
+
+
+def _handle_task_tag_query_change() -> None:
+    event = st.session_state.get("task_tag_interactive_table")
+    if isinstance(event, dict) and event.get("action") == "query_task_tags":
+        query = event.get("query", {})
+        if isinstance(query, dict):
+            st.session_state["task_tag_query"] = {key: query[key] for key in
+                ("page", "search", "filters", "sort", "ascending") if key in query}
+            st.session_state["_last_task_tag_table_nonce"] = event.get("nonce")
+            st.session_state["_last_task_tag_query_nonce"] = event.get("nonce")
+
+
 @st.dialog(t("settings.dialog_add_task_tag", default="➕ Assign Task Tag"))
 def _open_add_task_tag_dialog(
     tag_repo: TagRepository,
-    df_tasks: pd.DataFrame,
-    df_tags: pd.DataFrame,
+    milestone_repo: MilestoneRepository,
 ) -> None:
     """Modal dialog to assign a tag to a task."""
-    if df_tasks.empty:
-        st.warning("No tasks available.")
-        return
-
-    task_opts = df_tasks["id"].tolist()
-    task_map = dict(zip(df_tasks["id"], df_tasks["task_name"]))
-    selected_task = st.selectbox(
-        t("settings.field_task", default="Task *"),
-        options=task_opts,
-        format_func=lambda x: f"#{x} - {task_map.get(x, '')}",
-    )
+    selected_task = _select_task_for_tag(milestone_repo, key="add_task_tag")
+    df_tags = tag_repo.get_task_tag_group_tags()
 
     tag_opts = [None] + (df_tags["id"].tolist() if not df_tags.empty else [])
     tag_map = dict(zip(df_tags["id"], df_tags["tag"])) if not df_tags.empty else {}
@@ -2029,7 +2048,7 @@ def _open_add_task_tag_dialog(
     )
 
     col_save, col_cancel = st.columns(2)
-    if col_save.button(t("settings.btn_save", default="💾 Assign Tag"), type="primary", use_container_width=True):
+    if col_save.button(t("settings.btn_save", default="💾 Assign Tag"), type="primary", width="stretch", disabled=selected_task is None):
         try:
             TagService.validate_task_tag(selected_task, selected_tag, free_tag_val)
             tt_id = tag_repo.create_task_tag(
@@ -2042,7 +2061,7 @@ def _open_add_task_tag_dialog(
         except Exception as e:
             st.error(f"Error creating task tag: {e}")
 
-    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), use_container_width=True):
+    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
         st.rerun()
 
 
@@ -2053,21 +2072,12 @@ def _open_edit_task_tag_dialog(
     current_task_id: int,
     current_tag_id: Optional[int],
     current_free_tag: Optional[str],
-    df_tasks: pd.DataFrame,
-    df_tags: pd.DataFrame,
+    milestone_repo: MilestoneRepository,
 ) -> None:
     """Modal dialog to edit a task tag assignment."""
     st.caption(f"Assignment ID: #{tt_id}")
-    task_opts = df_tasks["id"].tolist() if not df_tasks.empty else [current_task_id]
-    task_map = dict(zip(df_tasks["id"], df_tasks["task_name"])) if not df_tasks.empty else {}
-    t_idx = task_opts.index(current_task_id) if current_task_id in task_opts else 0
-
-    selected_task = st.selectbox(
-        t("settings.field_task", default="Task *"),
-        options=task_opts,
-        index=t_idx,
-        format_func=lambda x: f"#{x} - {task_map.get(x, '')}",
-    )
+    selected_task = _select_task_for_tag(milestone_repo, key=f"edit_task_tag_{tt_id}", current_task_id=current_task_id)
+    df_tags = tag_repo.get_task_tag_group_tags()
 
     tag_opts = [None] + (df_tags["id"].tolist() if not df_tags.empty else [])
     tag_map = dict(zip(df_tags["id"], df_tags["tag"])) if not df_tags.empty else {}
@@ -2086,7 +2096,7 @@ def _open_edit_task_tag_dialog(
     )
 
     col_save, col_cancel = st.columns(2)
-    if col_save.button(t("settings.btn_save_changes", default="💾 Save Changes"), type="primary", use_container_width=True):
+    if col_save.button(t("settings.btn_save_changes", default="💾 Save Changes"), type="primary", width="stretch", disabled=selected_task is None):
         try:
             TagService.validate_task_tag(selected_task, selected_tag, free_tag_val)
             tag_repo.update_task_tag(
@@ -2099,7 +2109,7 @@ def _open_edit_task_tag_dialog(
         except Exception as e:
             st.error(f"Error updating task tag: {e}")
 
-    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), use_container_width=True):
+    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
         st.rerun()
 
 
@@ -2675,10 +2685,10 @@ def render_settings_view(
     # =========================================================================
     if tab_task_tags.open:
         with tab_task_tags:
-            df_task_dict_tags = tag_repo.get_task_tag_group_tags()
-            df_task_tags = tag_repo.get_all_task_tags()
-            df_tasks = milestone_repo.get_all_milestones()
-            total_task_tags = len(df_task_tags)
+            query = st.session_state.get("task_tag_query", {})
+            page_data = tag_repo.get_task_tags_page(**query)
+            df_task_tags = page_data.pop("rows")
+            total_task_tags = page_data["total"]
             st.subheader(f"{t('settings.task_tags_title', default='Task Tag Assignments')} ({total_task_tags} {t('settings.stat_task_tags', default='Task Tags')})")
 
             task_tags_payload = []
@@ -2697,6 +2707,9 @@ def render_settings_view(
 
             task_tag_table_event = _interactive_task_tag_table(
                 task_tags=task_tags_payload,
+                page_info=page_data,
+                query=query,
+                query_nonce=st.session_state.get("_last_task_tag_query_nonce"),
                 translations={
                     "col_task": t("settings.col_task", default="Task"),
                     "col_project": t("settings.col_project", default="Project"),
@@ -2711,6 +2724,7 @@ def render_settings_view(
                 },
                 key="task_tag_interactive_table",
                 default=None,
+                on_change=_handle_task_tag_query_change,
             )
 
             if task_tag_table_event and isinstance(task_tag_table_event, dict):
@@ -2720,7 +2734,7 @@ def render_settings_view(
                     st.session_state["_last_task_tag_table_nonce"] = nonce
                     action = task_tag_table_event.get("action")
                     if action == "add_task_tag":
-                        _open_add_task_tag_dialog(tag_repo, df_tasks, df_task_dict_tags)
+                        _open_add_task_tag_dialog(tag_repo, milestone_repo)
                     elif action == "edit_task_tag":
                         tt_id = task_tag_table_event.get("tt_id")
                         t_id = task_tag_table_event.get("task_id")
@@ -2733,8 +2747,7 @@ def render_settings_view(
                                 int(t_id),
                                 int(tag_id) if tag_id is not None else None,
                                 str(f_tag) if f_tag else None,
-                                df_tasks,
-                                df_task_dict_tags,
+                                milestone_repo,
                             )
                     elif action == "delete_task_tag":
                         tt_id = task_tag_table_event.get("tt_id")
