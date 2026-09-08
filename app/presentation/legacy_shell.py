@@ -70,6 +70,8 @@ importlib.reload(_settings_module)
 importlib.reload(_budget_module)
 
 
+from app.main import create_maintenance_service
+from app.application.exceptions import DatabaseMaintenanceError
 from src.config import config
 from src.database.connection import get_db
 from src.database.schema_init import init_db
@@ -157,36 +159,14 @@ def parse_cli_args() -> tuple[bool, int]:
 
 def _get_database_seed_counts(db_path: str) -> dict[str, int]:
     """Return the persisted project, task, and dependency totals after seeding."""
-    with closing(get_db(db_path)) as conn, conn:
-        row = conn.execute(
-            """
-            SELECT
-                (SELECT COUNT(*) FROM project),
-                (SELECT COUNT(*) FROM project_task),
-                (SELECT COUNT(*) FROM task_dependencies),
-                (SELECT COUNT(*) FROM project_type),
-                (SELECT COUNT(*) FROM project_property_value)
-            """
-        ).fetchone()
-    return {
-        "projects": int(row[0]),
-        "tasks": int(row[1]),
-        "dependencies": int(row[2]),
-        "project_types": int(row[3]),
-        "property_values": int(row[4]),
-    }
+    counts = create_maintenance_service(db_path).counts()
+    return {key: counts[key] for key in ("projects", "tasks", "dependencies", "project_types", "property_values")}
 
 
 def _get_planning_totals(db_path: str) -> dict[str, int]:
     """Read global planning counts in one query without loading table contents."""
-    with closing(get_db(db_path)) as conn, conn:
-        row = conn.execute(
-            "SELECT (SELECT COUNT(*) FROM project), "
-            "(SELECT COUNT(*) FROM project_task), "
-            "(SELECT COUNT(*) FROM task_dependencies), "
-            "(SELECT COUNT(*) FROM resource_pool)"
-        ).fetchone()
-    return dict(zip(("projects", "tasks", "dependencies", "pools"), map(int, row)))
+    counts = create_maintenance_service(db_path).counts()
+    return {key: counts[key] for key in ("projects", "tasks", "dependencies", "pools")}
 
 
 @st.cache_resource
@@ -197,33 +177,10 @@ def bootstrap_database(schema_version: str = "project-collaboration-v1") -> bool
     preventing destructive re-seeding on Streamlit script reruns.
     The schema version invalidates the startup cache when database migrations change.
     """
-    init_db()
     cli_force, cli_projects = parse_cli_args()
     force = config.force_reseed or cli_force
-    num_projects = cli_projects if cli_projects > 0 else config.seed_projects_count
-
-    if force:
-        logger.info("Force re-seeding active (projects=%d)...", num_projects)
-        if num_projects > 0:
-            try:
-                from scripts.seed_database import seed_database
-
-                seed_database(
-                    num_projects=num_projects,
-                    db_path=config.db_path,
-                    clean_first=True,
-                )
-            except Exception as exc:
-                logger.error(
-                    "Failed to seed %d projects: %s. Stopping; the pre-seed backup is retained.",
-                    num_projects,
-                    exc,
-                )
-                raise
-        else:
-            seed_default_data_if_empty(force=True)
-    else:
-        seed_default_data_if_empty(force=False)
+    projects = cli_projects if cli_projects > 0 else config.seed_projects_count
+    create_maintenance_service(config.db_path).startup(force=force, projects=projects)
     return True
 
 
@@ -231,7 +188,11 @@ def run_app() -> None:
     """Main routing and execution entrypoint for Streamlit UI."""
     # Pass the version explicitly: default argument changes do not invalidate
     # Streamlit's cached startup result on a development hot reload.
-    bootstrap_database(schema_version="project-collaboration-v1")
+    try:
+        bootstrap_database(schema_version="project-collaboration-v1")
+    except (DatabaseMaintenanceError, ValueError) as error:
+        st.error(str(error))
+        return
 
 
 
@@ -413,13 +374,12 @@ def run_app() -> None:
             width="stretch",
         ):
             with st.spinner(t("app.seeding_in_progress", default="Re-seeding database...")):
-                if ui_num_projects > 0:
-                    from scripts.seed_database import seed_database
-
-                    seed_database(num_projects=int(ui_num_projects), db_path=config.db_path, clean_first=True)
-                else:
-                    seed_default_data_if_empty(force=True)
-                seed_counts = _get_database_seed_counts(config.db_path)
+                try:
+                    create_maintenance_service(config.db_path).startup(force=True, projects=int(ui_num_projects))
+                    seed_counts = _get_database_seed_counts(config.db_path)
+                except (DatabaseMaintenanceError, ValueError) as error:
+                    st.error(str(error))
+                    return
                 st.cache_resource.clear()
                 st.cache_data.clear()
                 st.session_state["seeding_status_message"] = t(

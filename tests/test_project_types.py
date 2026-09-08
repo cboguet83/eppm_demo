@@ -250,7 +250,7 @@ class ProjectTypeMigrationTests(unittest.TestCase):
         with closing(sqlite3.connect(self.path)) as conn, conn:
             conn.execute("CREATE TABLE external_record(id INTEGER PRIMARY KEY, project_id INTEGER REFERENCES project(id))")
             conn.execute("INSERT INTO external_record VALUES (1,999)")
-        with self.assertLogs("src.database.project_type_migration", level="WARNING") as logs:
+        with self.assertLogs("app.infrastructure.database.project_type_migration", level="WARNING") as logs:
             init_db(self.path)
         self.assertIn("pre-existing", logs.output[0])
         with closing(get_db(self.path)) as conn, conn:

@@ -16,6 +16,7 @@ from app.application.services.planning import PlanningService
 from app.application.services.project_overallocation import ProjectOverallocationService
 from app.application.services.collaboration import CollaborationService
 from app.application.services.budgets import BudgetService
+from app.application.services.maintenance import MaintenanceService
 
 if TYPE_CHECKING:
     from app.infrastructure.database.pool_capacity_cache import (
@@ -150,6 +151,13 @@ def create_budget_service(db_path: str | None = None) -> BudgetService:
     from app.infrastructure.repositories.budgets import SqliteBudgetReader
 
     return BudgetService(SqliteBudgetReader(db_path))
+
+
+def create_maintenance_service(db_path: str | None = None) -> MaintenanceService:
+    """Connect startup and explicit maintenance to SQLite infrastructure."""
+    from app.infrastructure.database.maintenance import SqliteMaintenanceGateway
+
+    return MaintenanceService(SqliteMaintenanceGateway(db_path))
 
 
 def main() -> None:

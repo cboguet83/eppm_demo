@@ -1,0 +1,71 @@
+"""Startup and maintenance contracts independent of configuration and SQLite."""
+
+from dataclasses import dataclass
+from typing import NotRequired, Protocol, TypedDict
+
+
+class PoolScenario(TypedDict):
+    """One generated pool's staffing scenario in the preview report."""
+
+    role: str
+    pool_id: int
+    theoretical_fte: float
+    normal_assigned_fte: float
+
+
+class ParentSummary(TypedDict):
+    """Counts of generated groups and pools beneath a service root."""
+
+    parent: str
+    new_groups: int
+    new_pools: int
+
+
+class PoolSeedReport(TypedDict):
+    """Preview/application outcome of an additive pool scenario installation."""
+
+    new_groups: int
+    new_pools: int
+    applied: NotRequired[bool]
+    already_seeded: NotRequired[bool]
+    parents: NotRequired[list[ParentSummary]]
+    new_employee_mappings: NotRequired[int]
+    new_project_assignments: NotRequired[int]
+    new_task_assignments: NotRequired[int]
+    scenarios: NotRequired[list[PoolScenario]]
+    existing_foreign_key_violations: NotRequired[int]
+
+
+class DatabaseCounts(TypedDict):
+    """Persisted counts used by the startup and navigation summaries."""
+
+    projects: int
+    tasks: int
+    dependencies: int
+    project_types: int
+    property_values: int
+    pools: int
+
+
+@dataclass(frozen=True)
+class SeedRequest:
+    """Explicit options for the existing project and schedule generator."""
+
+    projects: int = 1000
+    min_tasks: int = 0
+    max_tasks: int = 15
+    clean_first: bool = True
+    random_seed: int | None = 42
+
+
+class MaintenanceGateway(Protocol):
+    """Infrastructure operations used by startup and explicit maintenance."""
+
+    def initialize(self) -> None: ...
+    def seed_defaults(self, *, force: bool, include_projects: bool) -> None: ...
+    def seed_projects(self, request: SeedRequest) -> dict[str, int]: ...
+    def flush(self, *, flush_all: bool) -> dict[str, int]: ...
+    def counts(self) -> DatabaseCounts: ...
+    def seed_pool_scenarios(
+        self, *, year: int | None, seed: int, apply: bool
+    ) -> PoolSeedReport: ...

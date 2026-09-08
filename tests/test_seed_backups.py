@@ -36,7 +36,7 @@ class SeedBackupTests(unittest.TestCase):
 
     def test_backup_failure_aborts_before_seed_changes(self):
         seed_database(2, 0, 0, str(self.path))
-        with patch("src.database.backup.backup_database", side_effect=OSError("Disk full")):
+        with patch("app.infrastructure.database.backup.backup_database", side_effect=OSError("Disk full")):
             with self.assertRaises(OSError):
                 seed_database(3, 0, 0, str(self.path))
         with closing(sqlite3.connect(self.path)) as conn, conn:

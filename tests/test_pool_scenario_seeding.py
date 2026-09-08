@@ -56,7 +56,7 @@ class PoolScenarioSeedTests(unittest.TestCase):
 
     def test_additive_repair_preserves_projects_and_is_idempotent(self):
         # Emulate the old full seeder that only created three pools.
-        with patch("scripts.seed_pool_scenarios.seed_pool_scenarios", return_value={"new_pools": 0, "new_groups": 0}):
+        with patch("app.infrastructure.database.pool_scenarios.seed_pool_scenarios", return_value={"new_pools": 0, "new_groups": 0}):
             seed_database(12, 3, 8, self.path)
         with closing(sqlite3.connect(self.path)) as conn, conn:
             before = {table: conn.execute("SELECT * FROM " + table).fetchall()

@@ -63,3 +63,7 @@ class CollaborationConflictError(ValueError):
 
 class CollaborationStorageError(RuntimeError):
     """Collaboration storage could not complete the requested operation."""
+
+
+class DatabaseMaintenanceError(RuntimeError):
+    """Database startup or maintenance failed with a safe user-facing message."""

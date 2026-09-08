@@ -29,7 +29,9 @@ contacts, roles, event types, and logs.
 budget calculations and reporting. Existing budget storage remains compatible.
 [ADR 0012](docs/decisions/0012-presentation-resources-and-locale-state.md) moves
 translations and component assets into presentation and isolates locale state.
-Runtime/bootstrap code and the application shell remain to be migrated.
+[ADR 0013](docs/decisions/0013-layered-database-maintenance.md) covers startup,
+backups, database maintenance, and seed commands. The application/settings shell
+and final runtime dependency audit remain to be migrated.
 
 ### C4 level 2: runtime containers
 
