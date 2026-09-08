@@ -1,12 +1,16 @@
 """Default demo data seeder for PPM Studio Pro."""
 
+import json
 from typing import Optional
 
 from src.config import config
 from src.database.connection import get_db
-from src.database.demo_catalog import install_type_catalog, seed_sample_projects
 from src.database.schema_init import init_db
 from src.logging_config import get_logger
+from src.models.constants import (
+    STATUS_COMPLETED,
+    STATUS_IN_PROGRESS,
+)
 
 logger = get_logger(__name__)
 
@@ -49,8 +53,6 @@ DEFAULT_SCHEMA_PARAMETERS: list[tuple[str, int, str, str, bool, str]] = [
     ("PRM_024", 4, "acc_link", "HYPERLINK", False, "ACC Link"),
     ("PRM_025", 4, "pb_link", "HYPERLINK", False, "PB Link"),
     ("PRM_026", 4, "orga_link", "HYPERLINK", False, "Organization Link"),
-    ("PRM_031", 4, "public_url", "URL", False, "Public URL"),
-    ("PRM_032", 5, "delivery_channels", "MULTI_ENUM", False, "Delivery channels"),
     # classification
     ("PRM_027", 5, "strategic_priority", "ENUM", False, "Strategic Priority"),
     ("PRM_028", 5, "category", "ENUM", False, "Category"),
@@ -228,36 +230,58 @@ DEFAULT_PARAM_OPTIONS: dict[str, list[str]] = {
     "PRM_028": DEFAULT_CATEGORY_OPTIONS,
     "PRM_029": DEFAULT_CATEGORY_TAGS,
     "PRM_030": DEFAULT_COMPLEXITY_OPTIONS,
-    "PRM_032": ["Rail", "Digital", "Operations"],
 }
 
 
-def seed_default_data_if_empty(db_path: Optional[str] = None, force: bool = False, include_projects: bool = True) -> None:
+def seed_default_data_if_empty(db_path: Optional[str] = None, force: bool = False) -> None:
     """Populates the database with demo schema, projects, and milestones.
 
     Args:
         db_path: Filepath to the SQLite database. If None, uses default from config.
         force: If True, flushes all existing data before seeding. Default False.
-        include_projects: False installs reference data without bootstrap projects.
     """
     target_path = db_path if db_path is not None else config.db_path
     logger.info("Checking if database seeding is required for %s (force=%s)", target_path, force)
 
     init_db(target_path)
-    if force:
-        from scripts.flush_database import flush_database
-        flush_database(target_path, flush_all=True)
 
 
     with get_db(target_path) as conn:
         cursor = conn.cursor()
 
-        if conn.execute("SELECT 1 FROM schema_migration WHERE version='demo-bootstrap-v1'").fetchone():
-            return
-        # Existing user/migrated catalogs must never be replaced by demo templates.
-        if any(conn.execute(f"SELECT 1 FROM {table} LIMIT 1").fetchone()
-               for table in ("schema_parameters", "schema_groups", "project", "function")) or conn.execute("SELECT 1 FROM project_type WHERE is_general=0").fetchone():
-            return
+        if force:
+            logger.info("Forcing database reseed: wiping existing data from all tables...")
+            conn.execute("PRAGMA foreign_keys = OFF")
+            tables_to_flush = [
+                "resource_pool_assignment",
+                "resource_pool_mapping",
+                "resource_pool",
+                "team_function",
+                "task_tag",
+                "project_tag",
+                "task_dependencies",
+                "project_task",
+                "project",
+                "employee",
+                "team",
+                "function",
+                "function_type",
+                "tag_dictionnary",
+                "tag_group",
+                "schema_param_options",
+                "schema_parameters",
+                "schema_groups",
+            ]
+            for table in tables_to_flush:
+                cursor.execute(f"DELETE FROM {table}")
+            cursor.execute(
+                "DELETE FROM sqlite_sequence WHERE name IN ("
+                + ", ".join(f"'{t}'" for t in tables_to_flush)
+                + ")"
+            )
+            conn.commit()
+            conn.execute("PRAGMA foreign_keys = ON")
+
         # Check Schema Groups
         cursor.execute("SELECT COUNT(*) FROM schema_groups")
         group_count = cursor.fetchone()[0]
@@ -370,9 +394,201 @@ def seed_default_data_if_empty(db_path: Optional[str] = None, force: bool = Fals
             cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (58, 'Chef de Projet C_1_A', 5, 5, 51, NULL, 100, 0)")
             cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (59, 'Chef de Projet D_1_A', 5, 5, 53, NULL, 100, 0)")
             cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports) VALUES (60, 'Chef de Projet E_1_A', 5, 5, 55, NULL, 100, 0)")
-        install_type_catalog(conn)
-        if include_projects:
-            seed_sample_projects(conn)
+        # Check Projects
+        cursor.execute("SELECT id FROM project")
+        existing_pids = {row[0] for row in cursor.fetchall()}
+
+        sample_projects = [
+            (
+                1,
+                "NextGen ERP Modernization",
+                STATUS_IN_PROGRESS,
+                450000.0,
+                380000.0,
+                json.dumps({
+                    "code courrier": "CR-2026-001",
+                    "description": "Modernization of ERP core services across logistics and finance",
+                    "commentaire": "Phase 1 architecture validated by steerco",
+                    "start_date": "2026-01-10",
+                    "stop_Date": "2026-12-31",
+                    "lot": "Lot 1 - Core Backend",
+                    "phase": "EXE",
+                    "benefits": "Increases system throughput, unifies ledger, and reduces operating costs by 22%",
+                    "acceptance_ctriteria": "Pass 100% UAT test scenarios and verify automated reconciliations",
+                    "scope": "Inventory management, general ledger, and human capital modules",
+                    "out_of_scope": "Legacy mainframe payroll archive interfaces",
+                    "risks": "Database schema migration downtime during live cutover",
+                    "stakeholders": "Finance Director, Operations VP, IT Steering Committee",
+                    "interfaces": "Core SAP Gateway, Legacy Oracle DB, Active Directory",
+                    "code_station": "Luxembourg L",
+                    "code_line": "1",
+                    "lat": 49.6000,
+                    "long": 6.1333,
+                    "section": "Section Alpha",
+                    "station": "Luxembourg Gare Centrale",
+                    "pk_start": "PK 0+000",
+                    "pk_stop": "PK 14+500",
+                    "acc_link": "https://internal.enterprise.org/acc/erp-2026",
+                    "pb_link": "https://jira.enterprise.org/browse/ERP-2026",
+                    "orga_link": "https://confluence.enterprise.org/pages/view/erp-modernization",
+                    "strategic_priority": "Critical",
+                    "category": "categ1",
+                    "category_tags": ["Core", "Strategic", "Cloud Native"],
+                    "complexity": "High",
+                }),
+                17,
+            ),
+            (
+                2,
+                "Customer 360 AI Analytics",
+                STATUS_IN_PROGRESS,
+                280000.0,
+                310000.0,
+                json.dumps({
+                    "code courrier": "CR-2026-002",
+                    "description": "Customer 360 AI Analytics Platform",
+                    "commentaire": "Initial model training shows 94% accuracy",
+                    "start_date": "2026-02-01",
+                    "stop_Date": "2026-10-15",
+                    "lot": "Lot 2 - ML Pipelines",
+                    "phase": "APD2",
+                    "benefits": "Provides real-time customer behavior predictions and churn early-warning signals",
+                    "acceptance_ctriteria": "Real-time stream latency < 500ms and model precision > 90%",
+                    "scope": "Omnichannel behavioral ingestion and marketing segmentation pipelines",
+                    "out_of_scope": "Third-party ad-network direct bidding integration",
+                    "risks": "Data privacy and GDPR consent compliance overhead",
+                    "stakeholders": "Chief Marketing Officer, Data Science Lead, Compliance Officer",
+                    "interfaces": "Apache Kafka, Snowflake Lakehouse, CRM API",
+                    "code_station": "Bettembourg Bt",
+                    "code_line": "6",
+                    "lat": 49.5186,
+                    "long": 6.0986,
+                    "section": "Section Sud 6",
+                    "station": "Bettembourg Voyageurs",
+                    "pk_start": "PK 5+200",
+                    "pk_stop": "PK 18+750",
+                    "acc_link": "https://internal.enterprise.org/acc/c360-ai",
+                    "pb_link": "https://jira.enterprise.org/browse/C360-AI",
+                    "orga_link": "https://confluence.enterprise.org/pages/view/customer-360",
+                    "strategic_priority": "High",
+                    "category": "categ2",
+                    "category_tags": ["AI/ML", "Analytics", "Innovation"],
+                    "complexity": "Medium",
+                }),
+                18,
+            ),
+            (
+                3,
+                "Global Supply Chain Audit",
+                STATUS_COMPLETED,
+                150000.0,
+                142000.0,
+                json.dumps({
+                    "code courrier": "CR-2026-003",
+                    "description": "Global Supply Chain Compliance & Audit",
+                    "commentaire": "All audit recommendations remediated and approved",
+                    "start_date": "2026-02-11",
+                    "stop_Date": "2026-08-30",
+                    "lot": "Lot 3 - Governance Audit",
+                    "phase": "DEF",
+                    "benefits": "Ensures full ISO-27001 and regulatory supply chain compliance",
+                    "acceptance_ctriteria": "Zero high or critical findings on external audit sign-off",
+                    "scope": "Global logistics vendors, supply warehousing, and customs clearance procedures",
+                    "out_of_scope": "Direct tier-3 raw material suppliers",
+                    "risks": "Vendor documentation delivery delays",
+                    "stakeholders": "Audit Committee, Chief Legal Counsel, Procurement Director",
+                    "interfaces": "ERP Vendor Portal, Customs Electronic Clearinghouse",
+                    "code_station": "Esch-sur-Alzette Es",
+                    "code_line": "6a",
+                    "lat": 49.4958,
+                    "long": 5.9806,
+                    "section": "Section Ouest 6a",
+                    "station": "Esch-sur-Alzette",
+                    "pk_start": "PK 1+100",
+                    "pk_stop": "PK 8+900",
+                    "acc_link": "https://internal.enterprise.org/acc/audit-2026",
+                    "pb_link": "https://jira.enterprise.org/browse/AUD-2026",
+                    "orga_link": "https://confluence.enterprise.org/pages/view/supply-audit",
+                    "strategic_priority": "Medium",
+                    "category": "categ3",
+                    "category_tags": ["Compliance", "Operations"],
+                    "complexity": "Low",
+                }),
+                22,
+            ),
+        ]
+
+        if not existing_pids:
+            logger.info("Seeding sample projects...")
+            cursor.executemany(
+                "INSERT INTO project (id, name, status, planned_budget, actual_budget, dynamic_attributes, function_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                sample_projects,
+            )
+            cursor.execute("SELECT id FROM project")
+            existing_pids = {row[0] for row in cursor.fetchall()}
+
+        # Check Tasks / Milestones
+        cursor.execute("SELECT COUNT(*) FROM project_task")
+        milestone_count = cursor.fetchone()[0]
+
+        if milestone_count == 0:
+            logger.info("Seeding sample project steps and tasks...")
+            if 1 in existing_pids or "PRJ-001" in existing_pids:
+                p1_id = 1 if 1 in existing_pids else "PRJ-001"
+                cursor.execute(
+                    "INSERT INTO project_task (id, project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id) VALUES (1, ?, 'Architecture & Scoping', 'Phase 1 - Inception', '2026-01-10', '2026-02-15', 100, NULL)",
+                    (p1_id,),
+                )
+                cursor.execute(
+                    "INSERT INTO project_task (id, project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id) VALUES (2, ?, 'Architecture Sign-Off', 'Phase 1 - Inception', '2026-02-15', '2026-02-15', 100, 1)",
+                    (p1_id,),
+                )
+                cursor.execute(
+                    "INSERT INTO project_task (id, project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id) VALUES (3, ?, 'Core Microservices Dev', 'Phase 2 - Build', '2026-02-16', '2026-06-30', 75, 2)",
+                    (p1_id,),
+                )
+                cursor.execute(
+                    "INSERT INTO project_task (id, project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id) VALUES (4, ?, 'Integration & UAT', 'Phase 3 - Validation', '2026-07-01', '2026-09-15', 25, 3)",
+                    (p1_id,),
+                )
+                cursor.execute(
+                    "INSERT INTO project_task (id, project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id) VALUES (5, ?, 'Go-Live Release', 'Phase 4 - Rollout', '2026-09-15', '2026-09-15', 0, 4)",
+                    (p1_id,),
+                )
+
+            if 2 in existing_pids or "PRJ-002" in existing_pids:
+                p2_id = 2 if 2 in existing_pids else "PRJ-002"
+                cursor.execute(
+                    "INSERT INTO project_task (project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id) VALUES (?, 'Data Pipeline Ingestion', 'Phase 1 - Data Eng', '2026-02-01', '2026-04-15', 100, NULL)",
+                    (p2_id,),
+                )
+                cursor.execute(
+                    "INSERT INTO project_task (project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id) VALUES (?, 'Model Training & Tuning', 'Phase 2 - ML Dev', '2026-04-16', '2026-07-30', 65, NULL)",
+                    (p2_id,),
+                )
+
+            if 3 in existing_pids or "PRJ-003" in existing_pids:
+                p3_id = 3 if 3 in existing_pids else "PRJ-003"
+                cursor.execute(
+                    "INSERT INTO project_task (project_id, task_name, phase, start_date, end_date, progress_pct, predecessor_id) VALUES (?, 'Audit Execution', 'Phase 1 - Audit', '2026-02-11', '2026-04-20', 100, NULL)",
+                    (p3_id,),
+                )
+
+        # Check Teams
+        cursor.execute("SELECT COUNT(*) FROM team")
+        team_count = cursor.fetchone()[0]
+        if team_count == 0:
+            logger.info("Seeding default teams...")
+            sample_teams = [
+                (1, "Equipe Projets A", 10, 17),
+                (2, "Equipe Projets B", 10, 23),
+                (3, "Equipe BIM ", 13, None),
+            ]
+            cursor.executemany(
+                "INSERT INTO team (team_id, team_name, manager_function_id, leader_function_id) VALUES (?, ?, ?, ?)",
+                sample_teams,
+            )
+
         # Check Employees
         cursor.execute("SELECT COUNT(*) FROM employee")
         emp_count = cursor.fetchone()[0]
@@ -564,13 +780,6 @@ def seed_default_data_if_empty(db_path: Optional[str] = None, force: bool = Fals
                     sample_assignments,
                 )
 
-        if include_projects:
-            for target, table, owner, group in [("project", "project_tag", "project_id", "project_tag"), ("project_task", "task_tag", "task_id", "Task_Tag")]:
-                tags = [r[0] for r in conn.execute("SELECT d.id FROM tag_dictionnary d JOIN tag_group g ON d.tag_group_id=g.id WHERE g.tag_group_name=? ORDER BY d.id", (group,))]
-                if tags:
-                    for i, (target_id,) in enumerate(conn.execute(f"SELECT id FROM {target} ORDER BY id").fetchall()):
-                        conn.execute(f"INSERT INTO {table}({owner},tag_id) VALUES (?,?)", (target_id, tags[i % len(tags)]))
-        conn.execute("INSERT INTO schema_migration(version) VALUES ('demo-bootstrap-v1')")
         conn.commit()
 
 
