@@ -12,7 +12,7 @@
     "seed_projects_help": "0 initialise les 3 projets démo; >0 génère des projets avec étapes et dépendances",
     "btn_force_reseed": "Forcer réinitialisation BDD",
     "seeding_in_progress": "Réinitialisation en cours...",
-    "seed_success": "Base de données réinitialisée avec succès : {projects} projets, {tasks} tâches et {dependencies} dépendances créés."
+    "seed_success": "Base de données réinitialisée avec succès ({count} projets) !"
   },
 
   "nav": {
