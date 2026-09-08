@@ -11,6 +11,8 @@ from typing import Any
 from app.shared.config import config
 from app.infrastructure.database.project_transactions import project_connection
 from app.infrastructure.database.property_store import parameters
+from app.infrastructure.repositories.budgets import read_budget_totals
+from app.domain.projects.budgets import euro_amount, monetary_statistics
 from app.application.ports.portfolio import (
     PortfolioMetrics, PortfolioColumn, PortfolioPage, PortfolioFacet, PortfolioRow,
     ProjectCatalog, PropertyGroup, PropertyOption,
@@ -52,14 +54,8 @@ class SqlitePortfolioReader:
         self.db_path = db_path
 
     def get_metrics(self) -> PortfolioMetrics:
-        """Aggregate existing demo budget fields without loading project rows."""
-        with project_connection(self.db_path) as conn:
-            count, planned, actual = conn.execute(
-                'SELECT COUNT(*), COALESCE(SUM(planned_budget),0), '
-                'COALESCE(SUM(actual_budget),0) FROM project'
-            ).fetchone()
-        return PortfolioMetrics(count, planned, actual, planned - actual,
-                                actual / planned * 100 if planned else 0)
+        """Read decimal totals with constant-memory streaming of amount columns."""
+        return read_budget_totals(self.db_path)
 
     @staticmethod
     def _source(columns: list[PortfolioColumn]) -> tuple[str, list, set[str]]:
@@ -159,7 +155,13 @@ class SqlitePortfolioReader:
             count, filled, unique = conn.execute(sql + "SELECT COUNT(*), COUNT(NULLIF(value,'')), COUNT(DISTINCT NULLIF(value,'')) FROM facet", args).fetchone()
             stats: list = [['Rows', count], ['Filled', filled], ['Unique', unique], ['Empty', count - filled]]
             fmt = next((c.get('format') for c in columns if c['key'] == column), 'text')
-            if filled and fmt in ('number', 'currency'):
+            if filled and fmt == 'currency':
+                amounts = conn.execute(sql + "SELECT value FROM facet WHERE value<>''", args)
+                monetary = monetary_statistics(euro_amount(row[0]) for row in amounts)
+                assert monetary is not None
+                low, avg, high = (float(amount) for amount in monetary)
+                stats.extend([['Minimum', low], ['Average', avg], ['Maximum', high]])
+            elif filled and fmt == 'number':
                 low, avg, high = conn.execute(sql + "SELECT MIN(value), AVG(value), MAX(value) FROM facet WHERE value<>''", args).fetchone()
                 stats.extend([['Minimum', low], ['Average', avg], ['Maximum', high]])
             elif filled:

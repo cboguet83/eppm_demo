@@ -12,9 +12,9 @@ PROJECT_STATUSES = ("Draft", "In Progress", "On Hold", "Completed", "Cancelled")
 class Project:
     """Project master data, including inactive values retained for restoration.
 
-    Budgets retain the existing demo's floating-point euro representation. They
-    are not an approved financial ledger; authoritative finance needs Decimal
-    and a separate, explicit data migration.
+    Budgets retain the existing demo's storage-compatible euro representation.
+    Reporting converts these boundary values to Decimal before arithmetic. An
+    authoritative financial ledger still requires an explicit storage migration.
     """
 
     id: int | None = None

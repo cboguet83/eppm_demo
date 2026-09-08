@@ -9,6 +9,7 @@ import streamlit as st
 
 from app.application.exceptions import ProjectStorageError, ProjectTypeStorageError
 from app.application.services.portfolio import PortfolioService
+from app.domain.projects.budgets import BudgetAmounts, analyze_budget, euro_amount
 from app.presentation.i18n import t
 from app.presentation.components.project_workspace import ProjectWorkspace
 from app.presentation.components.project_type_frames import template_frame
@@ -91,10 +92,11 @@ def _render_project_details_panel(
     proj_status = selected_proj.get("status", "—")
     pm_name = selected_proj.get("project_manager", "—")
     l3_name = selected_proj.get("level_3_manager_name", "—")
-    planned = float(selected_proj.get("planned_budget", 0.0))
-    actual = float(selected_proj.get("actual_budget", 0.0))
-    variance = planned - actual
-    burn_rate = (actual / planned * 100.0) if planned > 0 else 0.0
+    planned = euro_amount(selected_proj.get("planned_budget"))
+    actual = euro_amount(selected_proj.get("actual_budget"))
+    analysis = analyze_budget(BudgetAmounts(planned, actual))
+    variance = analysis.variance
+    burn_rate_label = f"{analysis.burn_rate:.1f}%" if analysis.burn_rate is not None else "—"
 
     proj_obj = workspace.projects.get_project_by_id(proj_id)
     if proj_obj is None:
@@ -123,7 +125,7 @@ def _render_project_details_panel(
         (t("portfolio.filter_level_3_manager", default="Managing Func (L3)"), str(l3_name)),
         (t("portfolio.col_planned", default="Planned (€)"), f"€{planned:,.2f}"),
         (t("portfolio.col_actual", default="Actual (€)"), f"€{actual:,.2f}"),
-        (t("portfolio.kpi_variance", default="Variance"), f"€{variance:,.2f} · {burn_rate:.1f}% burn"),
+        (t("portfolio.kpi_variance", default="Variance"), f"€{variance:,.2f} · {burn_rate_label} burn"),
     ]
     with st.container(horizontal=True, horizontal_alignment="distribute"):
         for label, value in summary:

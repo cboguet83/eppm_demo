@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import NotRequired, Protocol, TypedDict
 
 from app.domain.projects.project_types import PropertyDefinition
+from app.domain.projects.budgets import PortfolioMetrics
 
 Scalar = str | int | float | bool | None
 PortfolioRow = dict[str, Scalar]
@@ -43,17 +44,6 @@ class PortfolioFacet(TypedDict):
     format: str
     values: list[FacetValue]
     has_more: bool
-
-
-@dataclass(frozen=True)
-class PortfolioMetrics:
-    """Legacy demo budget totals in euros; not an authoritative finance ledger."""
-
-    total_projects: int = 0
-    total_planned: float = 0.0
-    total_actual: float = 0.0
-    variance: float = 0.0
-    burn_rate: float = 0.0
 
 
 class PropertyGroup(TypedDict):

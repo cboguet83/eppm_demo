@@ -15,6 +15,7 @@ from app.application.services.tags import TagService
 from app.application.services.planning import PlanningService
 from app.application.services.project_overallocation import ProjectOverallocationService
 from app.application.services.collaboration import CollaborationService
+from app.application.services.budgets import BudgetService
 
 if TYPE_CHECKING:
     from app.infrastructure.database.pool_capacity_cache import (
@@ -142,6 +143,13 @@ def create_collaboration_service(db_path: str | None = None) -> CollaborationSer
     from app.infrastructure.repositories.collaboration import SqliteCollaborationGateway
 
     return CollaborationService(SqliteCollaborationGateway(db_path))
+
+
+def create_budget_service(db_path: str | None = None) -> BudgetService:
+    """Connect decimal budget reporting to minimal SQLite projections."""
+    from app.infrastructure.repositories.budgets import SqliteBudgetReader
+
+    return BudgetService(SqliteBudgetReader(db_path))
 
 
 def main() -> None:

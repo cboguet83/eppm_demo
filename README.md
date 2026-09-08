@@ -8,7 +8,8 @@ PPM Studio Pro is an enterprise-grade Project Portfolio Management (PPM) web app
 
 The layered migration now covers **project types, project creation/editing/deletion,
 portfolio browsing, schema administration, organization management, resource pools,
-capacity calculations, tag management, planning, and project collaboration**. See
+capacity calculations, tag management, planning, project collaboration, and budget
+reporting**. See
 [ADR 0001](docs/decisions/0001-layered-project-types.md) for the initial dependency
 rules, [ADR 0002](docs/decisions/0002-layered-projects-and-portfolio.md) for project
 workflows, [ADR 0003](docs/decisions/0003-layered-schema-administration.md) for
@@ -23,7 +24,10 @@ summaries and portfolio overload indicators.
 [ADR 0009](docs/decisions/0009-layered-planning-presentation.md) covers the Gantt
 screen, dialogs, and cached display loaders.
 [ADR 0010](docs/decisions/0010-layered-project-collaboration.md) covers project
-contacts, roles, event types, and logs. Budget tracking and runtime/bootstrap code
+contacts, roles, event types, and logs.
+[ADR 0011](docs/decisions/0011-layered-budget-reporting.md) covers shared Decimal
+budget calculations and reporting. Existing budget storage remains compatible.
+Runtime/bootstrap code, translations, component assets, and the application shell
 remain to be migrated.
 
 ### C4 level 2: runtime containers

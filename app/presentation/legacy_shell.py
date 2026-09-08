@@ -448,7 +448,10 @@ def run_app() -> None:
     elif page in (PAGE_SETTINGS, PAGE_SCHEMA_DEF):
         render_settings_view(org_repo, tag_repo, project_repo, milestone_repo, pool_repo, schema_repo)
     elif page == PAGE_BUDGET:
-        render_budget_tracking(project_repo)
+        from app.main import create_budget_service
+        from app.presentation.pages.budgets import render_budget_tracking as render_budget
+
+        render_budget(create_budget_service(project_repo.db_path))
 
 
 
