@@ -49,6 +49,8 @@ def flush_database(db_path: Optional[str] = None, flush_all: bool = False) -> di
         counts["projects_deleted"] = int(cursor.fetchone()[0])
 
         # Execute table flushes
+        cursor.execute("DELETE FROM project_property_value_item")
+        cursor.execute("DELETE FROM project_property_value")
         cursor.execute("DELETE FROM resource_pool_assignment")
         cursor.execute("DELETE FROM task_tag")
         cursor.execute("DELETE FROM project_tag")
@@ -57,6 +59,14 @@ def flush_database(db_path: Optional[str] = None, flush_all: bool = False) -> di
         cursor.execute("DELETE FROM project")
 
         if flush_all:
+            cursor.execute("DELETE FROM project_type_property_default_item")
+            cursor.execute("DELETE FROM project_type_property_default")
+            cursor.execute("DELETE FROM project_type_property_rule")
+            cursor.execute("DELETE FROM project_type_property")
+            cursor.execute("DELETE FROM project_type")
+            cursor.execute("DELETE FROM resource_pool_group_member")
+            cursor.execute("DELETE FROM resource_pool_group")
+            cursor.execute("DELETE FROM resource_pool_tag")
             cursor.execute("DELETE FROM resource_pool_mapping")
             cursor.execute("DELETE FROM resource_pool")
             cursor.execute("DELETE FROM team_function")
@@ -70,6 +80,9 @@ def flush_database(db_path: Optional[str] = None, flush_all: bool = False) -> di
             cursor.execute("DELETE FROM schema_param_options")
             cursor.execute("DELETE FROM schema_parameters")
             cursor.execute("DELETE FROM schema_groups")
+            cursor.execute("DELETE FROM schema_migration WHERE version='demo-bootstrap-v1'")
+            cursor.execute("DELETE FROM sqlite_sequence WHERE name IN ('project_type','resource_pool_group','resource_pool_group_member','resource_pool_tag')")
+            cursor.execute("INSERT INTO project_type(id,name,is_general) VALUES (1,'General',1)")
 
         # Reset autoincrement sequence counters
         cursor.execute(

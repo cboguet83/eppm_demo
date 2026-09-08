@@ -6,7 +6,6 @@ and rich internal and external task dependencies.
 
 import argparse
 import datetime
-import json
 import os
 import random
 import sys
@@ -16,32 +15,19 @@ from typing import Any, Optional
 # Ensure project root is in sys.path when running script directly
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from src.database.demo_catalog import DEMO_TYPES, sample_values
+from src.database.property_store import effective_template
+from src.repositories.project_repo import ProjectRepository
+from src.models.constants import STATUS_LIST
 from scripts.flush_database import flush_database
 from src.database.connection import get_db
 from src.database.schema_init import init_db
-from src.database.seeder import (
-    DEFAULT_CATEGORY_OPTIONS,
-    DEFAULT_COMPLEXITY_OPTIONS,
-    DEFAULT_LINE_OPTIONS,
-    DEFAULT_PHASE_OPTIONS,
-    DEFAULT_STATION_OPTIONS,
-    DEFAULT_STATUS_OPTIONS,
-    DEFAULT_STRATEGIC_PRIORITY_OPTIONS,
-    seed_default_data_if_empty,
-)
+from src.database.seeder import seed_default_data_if_empty
 from src.logging_config import get_logger
 
 logger = get_logger(__name__)
 
 # Sample Data Dictionaries for Realistic Generation
-PROJECT_THEMES: list[str] = [
-    "Projet Infra",
-    "Projet Digitalisation",
-    "Mise ne conformité",
-    "Projet Rénovation",
-    "Autre Projet",
-]
-
 PROJECT_SUFFIXES: list[str] = [
     "Phase 1", "Phase 2", "Phase 3", "Mise à jour", "Etude", "Pilote"
 ]
@@ -79,17 +65,7 @@ MILESTONE_TEMPLATES: list[tuple[str, str]] = [
     ("CER", "Certificat Conformité"),
 ]
 
-PROJECT_STATUSES: list[str] = [
-    "Active", "Active", "Active", "Planned", "Planned", "In Review", "Completed", "On Hold", "Draft"
-]
-
-LINK_TYPES: list[str] = ["FS", "FS", "FS", "SS", "FF", "SF"]
-
-DYNAMIC_CATEGORIES: list[str] = ["Stratégique", "Opérationnel", "Conformité", "Innovation", "Infrastructure"]
-DYNAMIC_PRIORITIES: list[str] = ["Critique", "Haut", "Moyen", "Bas"]
-DYNAMIC_DEPARTMENTS: list[str] = ["Service A", "Service B", "Service C", "Service D", "Service E", "Global"]
-DYNAMIC_RISKS: list[str] = ["High", "Medium", "Low"]
-
+PROJECT_STATUSES = STATUS_LIST
 
 def seed_database(
     num_projects: int = 1000,
@@ -112,9 +88,9 @@ def seed_database(
     Returns:
         dict[str, int]: Summary counts of generated objects.
     """
-    if random_seed is not None:
-        random.seed(random_seed)
-
+    if num_projects < 0 or min_tasks_per_project < 0 or max_tasks_per_project < min_tasks_per_project or max_tasks_per_project > 50:
+        raise ValueError("Invalid project or task count")
+    rng = random.Random(random_seed)
     start_time = time.time()
     logger.info("Initializing database and preparing seeding for %d projects...", num_projects)
 
@@ -124,104 +100,42 @@ def seed_database(
         flush_database(db_path, flush_all=True)
 
     # Execute default data seeder (populates schema groups, parameters, organization hierarchy, functions, employees)
-    seed_default_data_if_empty(db_path)
+    seed_default_data_if_empty(db_path, include_projects=False)
 
-    # Clean default bootstrap sample projects (1, 2, 3) so only generated projects are populated
-    with get_db(db_path) as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            DELETE FROM task_dependencies 
-            WHERE predecessor_project_id IN (1, 2, 3)
-               OR task_id IN (SELECT id FROM project_task WHERE project_id IN (1, 2, 3))
-               OR predecessor_task_id IN (SELECT id FROM project_task WHERE project_id IN (1, 2, 3))
-            """
-        )
-        cursor.execute("UPDATE project_task SET predecessor_id = NULL WHERE project_id IN (1, 2, 3)")
-        cursor.execute("DELETE FROM project_task WHERE project_id IN (1, 2, 3)")
-        cursor.execute("DELETE FROM project WHERE id IN (1, 2, 3)")
-        conn.commit()
-
-    # 1. Build Projects Payload
-    projects_data: list[tuple[int, str, str, float, float, str, int]] = []
-    project_ids: list[int] = []
+    # Generate against the persisted catalog, preserving custom templates in append mode.
+    projects_data = []
+    project_ids = []
     base_start_date = datetime.date(2025, 6, 1)
-
-    for i in range(1, num_projects + 1):
-        p_id = i
-        project_ids.append(p_id)
-
-        theme = random.choice(PROJECT_THEMES)
-        suffix = random.choice(PROJECT_SUFFIXES)
-        p_name = f"{theme} ({suffix} #{i})"
-        p_status = random.choice(PROJECT_STATUSES)
-
-        planned_budget = round(random.uniform(50_000, 3_000_000), 2)
-        if p_status == "Completed":
-            actual_budget = round(planned_budget * random.uniform(0.85, 1.15), 2)
-        elif p_status == "Active":
-            actual_budget = round(planned_budget * random.uniform(0.20, 0.85), 2)
-        elif p_status in ("In Review", "On Hold"):
-            actual_budget = round(planned_budget * random.uniform(0.05, 0.40), 2)
-        else:  # Draft, Planned
-            actual_budget = round(planned_budget * random.uniform(0.0, 0.05), 2)
-
-        p_offset_days = random.randint(0, 365)
-        p_start_date = base_start_date + datetime.timedelta(days=p_offset_days)
-        p_stop_date = p_start_date + datetime.timedelta(days=random.randint(90, 730))
-        station_opt = random.choice(DEFAULT_STATION_OPTIONS)
-        line_opt = random.choice(DEFAULT_LINE_OPTIONS)
-        #pm_function_id = random.randint(17, 26)
-        pm_function_id = random.choice([17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 57, 58, 59, 60])
-
-        dyn_attrs = {
-            "code courrier": f"CR-2026-{i:04d}",
-            "description": f"{theme} implementation and rollout for {suffix} #{i}",
-            "commentaire": random.choice(["On track", "Steerco approval pending", "Review scheduled", "Specification completed", "In execution"]),
-            "start_date": p_start_date.isoformat(),
-            "stop_Date": p_stop_date.isoformat(),
-            "lot": f"Lot {random.randint(1, 5)}",
-            "phase": random.choice(DEFAULT_PHASE_OPTIONS),
-            "benefits": f"Improves operational efficiency for {theme} and delivers measurable ROI.",
-            "acceptance_ctriteria": "Validation tests passing and acceptance signed by technical leads.",
-            "scope": f"End-to-end execution of {theme} across designated divisions.",
-            "out_of_scope": "Secondary third-party vendor extensions and legacy integrations.",
-            "risks": random.choice(["Resource availability constraint", "Timeline dependency delay", "Vendor integration latency", "Low risk"]),
-            "stakeholders": "Project Sponsor, Division Head, Operations Manager",
-            "interfaces": "Internal API, ERP Connector, Reporting Data Warehouse",
-            "code_station": station_opt,
-            "code_line": line_opt,
-            "lat": round(random.uniform(49.44, 50.18), 4),
-            "long": round(random.uniform(5.73, 6.53), 4),
-            "section": f"Section {random.choice(['Alpha', 'Beta', 'Gamma', 'Delta', 'Nord', 'Sud', 'Est', 'Ouest'])}",
-            "station": station_opt.split()[0],
-            "pk_start": f"PK {random.randint(0, 50)}+{random.randint(0, 999):03d}",
-            "pk_stop": f"PK {random.randint(51, 120)}+{random.randint(0, 999):03d}",
-            "acc_link": f"https://eppm.enterprise.internal/acc/PRJ-{i:04d}",
-            "pb_link": f"https://jira.enterprise.internal/browse/PRJ-{i:04d}",
-            "orga_link": f"https://confluence.enterprise.internal/wiki/PRJ-{i:04d}",
-            "strategic_priority": random.choice(DEFAULT_STRATEGIC_PRIORITY_OPTIONS),
-            "category": random.choice(DEFAULT_CATEGORY_OPTIONS),
-            "category_tags": random.sample(["Core", "Strategic", "Cloud Native", "Infrastructure", "Modernization", "Compliance", "Digital"], k=random.randint(1, 3)),
-            "complexity": random.choice(DEFAULT_COMPLEXITY_OPTIONS),
-        }
-
-        projects_data.append((
-            p_id,
-            p_name,
-            p_status,
-            planned_budget,
-            actual_budget,
-            json.dumps(dyn_attrs),
-            pm_function_id,
-        ))
-
+    with get_db(db_path) as conn:
+        first_id = conn.execute("SELECT MAX(COALESCE((SELECT MAX(id) FROM project),0), COALESCE((SELECT seq FROM sqlite_sequence WHERE name='project'),0))+1").fetchone()[0]
+        task_id_base = max(conn.execute("SELECT COALESCE(MAX(id),0) FROM project_task").fetchone()[0],
+                            conn.execute("SELECT COALESCE((SELECT seq FROM sqlite_sequence WHERE name='project_task'),0)").fetchone()[0])
+        persisted = dict(conn.execute("SELECT name,id FROM project_type ORDER BY id"))
+        type_ids = [persisted[n] for n in DEMO_TYPES if n in persisted]
+        type_ids += [tid for tid in persisted.values() if tid not in type_ids]
+        labels = {v: k for k, v in persisted.items()}
+        templates = {tid: effective_template(conn, tid) for tid in type_ids}
+        options = {}
+        for pid, value in conn.execute("SELECT param_id,option_value FROM schema_param_options ORDER BY display_order,id"):
+            options.setdefault(pid, []).append(value)
+        managers = [r[0] for r in conn.execute("SELECT function_id FROM function ORDER BY function_id")]
+        for i in range(num_projects):
+            p_id = first_id + i
+            project_ids.append(p_id)
+            type_id = type_ids[i % len(type_ids)]
+            name = f"{labels[type_id]} — {rng.choice(PROJECT_SUFFIXES)} #{p_id}"
+            status = rng.choice(PROJECT_STATUSES)
+            planned = round(rng.uniform(50_000, 3_000_000), 2)
+            actual = round(planned * rng.uniform(0, 1), 2)
+            attrs = sample_values(conn, type_id, p_id, rng, template=templates[type_id], options=options)
+            manager = rng.choice(managers) if managers else None
+            projects_data.append((p_id, name, status, planned, actual, attrs, manager, type_id))
     # 2. Build Tasks / Milestones Payload
     # Structure: [(project_id, task_name, phase, start_date, end_date, progress_pct, description)]
     milestones_data: list[tuple[int, str, str, str, str, int, str]] = []
     project_task_indices: dict[int, list[int]] = {p_id: [] for p_id in project_ids}
     project_task_id_by_code: dict[int, dict[str, int]] = {p_id: {} for p_id in project_ids}
-    global_task_counter = 0
+    global_task_counter = task_id_base
 
     # Store planned task dates for dependency validation
     task_date_map: dict[int, tuple[datetime.date, datetime.date, int]] = {}
@@ -230,13 +144,13 @@ def seed_database(
 
     for p_idx, p_id in enumerate(project_ids):
         p_status = projects_data[p_idx][2]
-        p_offset_days = random.randint(0, 365)
+        p_offset_days = rng.randint(0, 365)
         cur_date = base_start_date + datetime.timedelta(days=p_offset_days)
 
         if max_tasks_per_project == 0:
             continue
 
-        # Decide between Project Type 1 and Project Type 2 based on task bounds
+        # Schedule shape is independent of the project's property template.
         can_be_type_1 = (min_tasks_per_project <= 1 <= max_tasks_per_project)
         can_be_type_2 = (max_tasks_per_project >= 2) or (min_tasks_per_project == 0 and max_tasks_per_project >= 1)
 
@@ -245,22 +159,22 @@ def seed_database(
         elif can_be_type_2 and not can_be_type_1:
             is_type_1 = False
         else:
-            is_type_1 = random.random() < 0.20
+            is_type_1 = rng.random() < 0.20
 
         if is_type_1:
             # =================================================================
-            # Project Type 1: Only 1 N/A phase (3 months to 3 years)
+            # Single-phase schedule (3 months to 3 years).
             # =================================================================
-            duration_days = random.randint(90, 1095)
+            duration_days = rng.randint(90, 1095)
             task_start = cur_date
             task_end = task_start + datetime.timedelta(days=duration_days)
 
             if p_status == "Completed":
                 prog_pct = 100
-            elif p_status in ("Draft", "Planned"):
+            elif p_status in ("Draft", "Draft"):
                 prog_pct = 0
             else:
-                prog_pct = random.choice([0, 25, 50, 75, 100])
+                prog_pct = rng.choice([0, 25, 50, 75, 100])
 
             global_task_counter += 1
             milestones_data.append((
@@ -278,7 +192,7 @@ def seed_database(
 
         else:
             # =================================================================
-            # Project Type 2: All standard tasks (FAI, APS, APD1, APD2, EXE, CHA, DEF)
+            # Multi-phase schedule (FAI, APS, APD1, APD2, EXE, CHA, DEF)
             # plus 0 to all milestone templates (AUT, VAL, QUAL, CER).
             # Never duplicated within a project.
             # =================================================================
@@ -296,13 +210,13 @@ def seed_database(
             min_m = min(max_m, remaining_min)
 
             if max_m >= min_m and max_m > 0:
-                num_milestones = random.randint(min_m, max_m)
+                num_milestones = rng.randint(min_m, max_m)
             elif max_m > 0:
                 num_milestones = max_m
             else:
                 num_milestones = 0
 
-            chosen_milestones = random.sample(MILESTONE_TEMPLATES, k=num_milestones) if num_milestones > 0 else []
+            chosen_milestones = rng.sample(MILESTONE_TEMPLATES, k=num_milestones) if num_milestones > 0 else []
 
             # 1. Schedule Tasks sequentially with specific durations
             phase_end_dates: dict[str, datetime.date] = {}
@@ -346,29 +260,38 @@ def seed_database(
                     "is_milestone": True,
                 })
 
+            # Honor minimums above the standard catalog with unique work packages.
+            package = 1
+            while len(task_items) < min_tasks_per_project:
+                end = cur_date + datetime.timedelta(days=30)
+                task_items.append({"code": f"WP{package}", "name": f"Work package {package}",
+                    "phase": "EXE", "start": cur_date, "end": end, "is_milestone": False})
+                cur_date = end
+                package += 1
+
             # Sort items chronologically by start date
             task_items.sort(key=lambda x: (x["start"], 0 if not x["is_milestone"] else 1))
 
             # Determine progress across the project lifecycle
             num_items = len(task_items)
-            active_index = random.randint(0, num_items - 1) if num_items > 0 else 0
+            active_index = rng.randint(0, num_items - 1) if num_items > 0 else 0
 
             for idx, item in enumerate(task_items):
                 global_task_counter += 1
 
                 if p_status == "Completed":
                     prog_pct = 100
-                elif p_status in ("Draft", "Planned"):
+                elif p_status in ("Draft", "Draft"):
                     prog_pct = 0
-                elif p_status == "Active":
+                elif p_status == "In Progress":
                     if idx < active_index:
                         prog_pct = 100
                     elif idx == active_index:
-                        prog_pct = 100 if item["is_milestone"] else random.choice([25, 50, 75])
+                        prog_pct = 100 if item["is_milestone"] else rng.choice([25, 50, 75])
                     else:
                         prog_pct = 0
                 else:
-                    prog_pct = random.choice([0, 0, 25, 50, 75, 100])
+                    prog_pct = rng.choice([0, 0, 25, 50, 75, 100])
 
                 desc = f"Livrable {item['name']} ({item['phase']})"
 
@@ -421,51 +344,47 @@ def seed_database(
             dependencies_data.append((code_map["CER"], code_map["DEF"], None, "FS", 0))
 
         # B. External Dependencies across Projects (for ~20% of projects)
-        if p_idx > 0 and random.random() < 0.22:
+        if p_idx > 0 and rng.random() < 0.22:
             first_task_id = p_task_ids[0]
-            ext_p_idx = random.randint(0, p_idx - 1)
+            ext_p_idx = rng.randint(0, p_idx - 1)
             ext_p_id = project_ids[ext_p_idx]
             ext_p_tasks = project_task_indices[ext_p_id]
 
-            if random.random() < 0.40 or not ext_p_tasks:
+            if rng.random() < 0.40 or not ext_p_tasks:
                 dependencies_data.append((
                     first_task_id,
                     None,
                     ext_p_id,
-                    random.choice(["FS", "SS"]),
-                    random.choice([0, 2, 5]),
+                    rng.choice(["FS", "SS"]),
+                    rng.choice([0, 2, 5]),
                 ))
             else:
-                ext_pred_task_id = random.choice(ext_p_tasks)
+                ext_pred_task_id = rng.choice(ext_p_tasks)
                 dependencies_data.append((
                     first_task_id,
                     ext_pred_task_id,
                     ext_p_id,
-                    random.choice(["FS", "SS", "FF"]),
-                    random.choice([0, 1, 3]),
+                    rng.choice(["FS", "SS", "FF"]),
+                    rng.choice([0, 1, 3]),
                 ))
 
     # 4. Fast SQLite Transaction Execution
     with get_db(db_path) as conn:
-        conn.execute("PRAGMA foreign_keys = OFF")
+
         cursor = conn.cursor()
 
-        # Batch insert projects
-        cursor.executemany(
-            """
-            INSERT OR REPLACE INTO project (id, name, status, planned_budget, actual_budget, dynamic_attributes, function_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            projects_data,
-        )
-
+        # Use the same validation and typed writer as interactive creation.
+        for pid, name, status, planned, actual, attrs, manager, type_id in projects_data:
+            ProjectRepository.create_on_connection(conn, project_id=pid, name=name, status=status,
+                planned_budget=planned, actual_budget=actual, dynamic_attributes=attrs,
+                function_id=manager, project_type_id=type_id)
         # Batch insert project tasks
         cursor.executemany(
             """
-            INSERT INTO project_task (project_id, task_name, phase, start_date, end_date, progress_pct, description)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO project_task (id, project_id, task_name, phase, start_date, end_date, progress_pct, description)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            milestones_data,
+            [(task_id_base + i + 1, *row) for i, row in enumerate(milestones_data)],
         )
 
         # Batch insert task dependencies
@@ -477,12 +396,27 @@ def seed_database(
             dependencies_data,
         )
 
+        pools = [r[0] for r in conn.execute("SELECT id FROM resource_pool ORDER BY id")]
+        project_tags = [r[0] for r in conn.execute("SELECT d.id FROM tag_dictionnary d JOIN tag_group g ON g.id=d.tag_group_id WHERE g.tag_group_name='project_tag' ORDER BY d.id")]
+        task_tags = [r[0] for r in conn.execute("SELECT d.id FROM tag_dictionnary d JOIN tag_group g ON g.id=d.tag_group_id WHERE g.tag_group_name='Task_Tag' ORDER BY d.id")]
+        for i, pid in enumerate(project_ids):
+            if pools:
+                conn.execute("INSERT INTO resource_pool_assignment(pool_id,project_id,fte_assigned,notes) VALUES (?,?,1.0,'Demo allocation')", (pools[i % len(pools)], pid))
+            if project_tags:
+                conn.execute("INSERT INTO project_tag(project_id,tag_id) VALUES (?,?)", (pid, project_tags[i % len(project_tags)]))
+        for i in range(len(milestones_data)):
+            if task_tags:
+                conn.execute("INSERT INTO task_tag(task_id,tag_id) VALUES (?,?)", (task_id_base+i+1, task_tags[i % len(task_tags)]))
+        property_count = sum(conn.execute("SELECT COUNT(*) FROM project_property_value WHERE project_id=?", (pid,)).fetchone()[0] for pid in project_ids)
+        type_count = conn.execute("SELECT COUNT(*) FROM project_type").fetchone()[0]
         conn.commit()
         conn.execute("PRAGMA foreign_keys = ON")
 
     elapsed = time.time() - start_time
     summary = {
         "projects_created": len(projects_data),
+        "project_types": type_count,
+        "property_values_created": property_count,
         "tasks_created": len(milestones_data),
         "dependencies_created": len(dependencies_data),
     }
@@ -563,6 +497,8 @@ def main() -> None:
     print(f"   - Projects Created:     {res['projects_created']:,}")
     print(f"   - Tasks Created:        {res['tasks_created']:,}")
     print(f"   - Dependencies Created: {res['dependencies_created']:,}")
+    print(f"   - Project Types:        {res['project_types']:,}")
+    print(f"   - Property Values:      {res['property_values_created']:,}")
     print("--------------------------------------------------")
 
 

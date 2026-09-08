@@ -230,3 +230,4 @@ __marimo__/
 *.db-journal
 *.db-wal
 *.db-shm
+*.before-project-types.bak

@@ -15,22 +15,28 @@ from src.models.constants import (
 )
 from src.repositories.schema_repo import SchemaRepository
 from src.services.schema_service import SchemaService
+from src.repositories.project_type_repo import ProjectTypeRepository
+from src.views.project_types_view import applicability_input, render_project_types
 
 
 def render_schema_definition(schema_repo: SchemaRepository) -> None:
     """Renders the Parameters Definition screen for schema groups, fields, options, and live tree."""
     st.header(f"⚙️ {t('schema.title')}")
 
-    tab_groups, tab_params, tab_options, tab_preview = st.tabs([
+    tab_groups, tab_params, tab_options, tab_preview, tab_types = st.tabs([
         t("schema.tab_groups"),
         t("schema.tab_params"),
         t("schema.tab_options"),
         f"👁️ {t('schema.tab_tree', default='Live Schema Tree')}",
+        t("project_types.title"),
     ])
 
     groups = schema_repo.get_all_groups()
     params = schema_repo.get_all_parameters()
     options = schema_repo.get_all_options()
+    type_repo = ProjectTypeRepository(schema_repo.db_path)
+    with tab_types:
+        render_project_types(type_repo, options)
 
     # --------------------------------------------------------------------------
     # TAB 1: SCHEMA GROUPS
@@ -152,9 +158,9 @@ def render_schema_definition(schema_repo: SchemaRepository) -> None:
     # --------------------------------------------------------------------------
     with tab_params:
         st.subheader(t("schema.param_create_header"))
-        with st.form("form_add_param"):
+        with st.container():
             col1, col2 = st.columns(2)
-            auto_id = SchemaService.generate_param_id()
+            auto_id = SchemaService.generate_param_id(schema_repo.db_path)
             new_param_id = col1.text_input(
                 t("schema.param_id"),
                 value=auto_id,
@@ -200,7 +206,8 @@ def render_schema_definition(schema_repo: SchemaRepository) -> None:
                     placeholder="Option 1, Option 2, Option 3",
                 )
 
-            btn_add_param = st.form_submit_button(t("schema.btn_add_param"), width="stretch")
+            applies_to_all, type_ids = applicability_input(type_repo, "new_property")
+            btn_add_param = st.button(t("schema.btn_add_param"), width="stretch")
             if btn_add_param:
                 clean_pid = auto_id.strip() if auto_id else new_param_id.strip()
                 clean_pname = new_param_name.strip()
@@ -215,6 +222,8 @@ def render_schema_definition(schema_repo: SchemaRepository) -> None:
                             param_type=selected_ptype,
                             mandatory=new_param_mandatory,
                             alias=new_param_alias.strip() if new_param_alias.strip() else None,
+                            applies_to_all=applies_to_all,
+                            project_type_ids=type_ids,
                         )
 
                         if selected_ptype in (PARAM_TYPE_ENUM, PARAM_TYPE_MULTI_ENUM, PARAM_TYPE_TAGS) and initial_opts.strip():
@@ -224,8 +233,8 @@ def render_schema_definition(schema_repo: SchemaRepository) -> None:
 
                         st.success(t("schema.msg_param_created", name=clean_pname, id=clean_pid))
                         st.rerun()
-                    except sqlite3.IntegrityError:
-                        st.error(f"Parameter ID '{clean_pid}' already exists.")
+                    except (sqlite3.IntegrityError, ValueError) as exc:
+                        st.error(str(exc))
 
         st.write("##### Existing Parameters")
         if params.empty:
@@ -257,11 +266,30 @@ def render_schema_definition(schema_repo: SchemaRepository) -> None:
                 hide_index=True,
             )
 
+            edit_pid = st.selectbox(t("project_types.edit_property"), params["param_id"].tolist())
+            edit_prop = params[params["param_id"] == edit_pid].iloc[0]
+            with st.container(border=True):
+                edit_name = st.text_input(t("schema.param_name"), value=edit_prop["param_name"], key=f"edit_name_{edit_pid}")
+                edit_alias = st.text_input(t("schema.param_alias"), value=edit_prop["alias"] or "", key=f"edit_alias_{edit_pid}")
+                edit_type = st.selectbox(t("schema.param_type"), PARAM_TYPES, index=PARAM_TYPES.index(edit_prop["param_type"]), key=f"edit_kind_{edit_pid}")
+                edit_mandatory = st.checkbox(t("schema.param_mandatory"), value=bool(edit_prop["mandatory"]), key=f"edit_required_{edit_pid}")
+                current_gid = int(edit_prop["group_id"]) if pd.notna(edit_prop["group_id"]) else None
+                edit_group = st.selectbox(t("schema.param_group_assign"), grp_options, index=grp_options.index(current_gid), format_func=grp_map.get, key=f"edit_group_{edit_pid}")
+                edit_all, edit_types = applicability_input(type_repo, f"edit_{edit_pid}", edit_pid)
+                if st.button(t("project_types.save_property")):
+                    try:
+                        schema_repo.update_parameter(edit_pid, edit_group, edit_name, edit_type, edit_mandatory, edit_alias, edit_all, edit_types)
+                        st.rerun()
+                    except (ValueError, sqlite3.IntegrityError) as exc:
+                        st.error(str(exc))
             del_param_id = st.selectbox("Select Parameter to Delete", options=params["param_id"].tolist())
             if st.button(t("schema.btn_del_param"), key="btn_del_param"):
-                schema_repo.delete_parameter(del_param_id)
-                st.success(f"Parameter '{del_param_id}' deleted.")
-                st.rerun()
+                try:
+                    schema_repo.delete_parameter(del_param_id)
+                    st.success(f"Parameter '{del_param_id}' deleted.")
+                    st.rerun()
+                except (ValueError, sqlite3.IntegrityError) as exc:
+                    st.error(str(exc))
 
     # --------------------------------------------------------------------------
     # TAB 3: DISCRETE ENUM & TAGS OPTIONS
@@ -312,9 +340,12 @@ def render_schema_definition(schema_repo: SchemaRepository) -> None:
                     format_func=lambda x: str(current_opts[current_opts["id"] == x]["option_value"].iloc[0]),
                 )
                 if st.button("🗑️ Delete Selected Option"):
-                    schema_repo.delete_option(del_opt_id)
-                    st.success("Option deleted.")
-                    st.rerun()
+                    try:
+                        schema_repo.delete_option(del_opt_id)
+                        st.success("Option deleted.")
+                        st.rerun()
+                    except (ValueError, sqlite3.IntegrityError) as exc:
+                        st.error(str(exc))
 
     # --------------------------------------------------------------------------
     # TAB 4: LIVE SCHEMA TREE

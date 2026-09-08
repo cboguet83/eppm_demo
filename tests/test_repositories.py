@@ -89,6 +89,7 @@ class TestRepositories(unittest.TestCase):
 
     def test_project_crud_and_cascade(self) -> None:
         """Verify project creation, update, query, and cascade deletion."""
+        self.schema_repo.create_parameter("PRM_001", None, "Test value", "TEXT")
         # Create project
         created = self.project_repo.create_project(
             project_id="PRJ-100",

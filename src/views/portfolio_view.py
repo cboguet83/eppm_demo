@@ -1,6 +1,5 @@
 """Screen 1: Portfolio Overview View with Interactive Master List and Details Inspection."""
 
-import json
 from typing import Any
 
 import pandas as pd
@@ -15,6 +14,7 @@ from src.models.constants import (
 )
 from src.repositories.organization_repo import OrganizationRepository
 from src.repositories.project_repo import ProjectRepository
+from src.repositories.project_type_repo import ProjectTypeRepository
 from src.repositories.schema_repo import SchemaRepository
 from src.services.organization_service import OrganizationService
 from src.services.portfolio_service import PortfolioService
@@ -104,37 +104,11 @@ def _render_project_details_panel(
     variance = planned - actual
     burn_rate = (actual / planned * 100.0) if planned > 0 else 0.0
 
-    raw_dyn = selected_proj.get("dynamic_attributes", "{}")
-    # Retrieve complete dynamic attributes from repository
-    dyn_dict: dict[str, Any] = {}
-    if isinstance(raw_dyn, dict):
-        dyn_dict = raw_dyn
-    elif isinstance(raw_dyn, str) and raw_dyn.strip():
-        try:
-            dyn_dict = json.loads(raw_dyn)
-        except (json.JSONDecodeError, TypeError):
-            dyn_dict = {}
     proj_obj = project_repo.get_project_by_id(proj_id)
-    if proj_obj and proj_obj.dynamic_attributes:
-        if isinstance(proj_obj.dynamic_attributes, dict):
-            dyn_dict = dict(proj_obj.dynamic_attributes)
-        elif isinstance(proj_obj.dynamic_attributes, str) and proj_obj.dynamic_attributes.strip():
-            try:
-                dyn_dict = json.loads(proj_obj.dynamic_attributes)
-            except (json.JSONDecodeError, TypeError):
-                dyn_dict = {}
-
-    if not dyn_dict:
-        raw_dyn = selected_proj.get("dynamic_attributes", "{}")
-        if isinstance(raw_dyn, dict):
-            dyn_dict = raw_dyn
-        elif isinstance(raw_dyn, str) and raw_dyn.strip():
-            try:
-                dyn_dict = json.loads(raw_dyn)
-            except (json.JSONDecodeError, TypeError):
-                dyn_dict = {}
-
-
+    params = ProjectTypeRepository(project_repo.db_path).get_template(proj_obj.project_type_id)
+    allowed = set(params["param_id"]) if not params.empty else set()
+    dyn_dict = {pid: value for pid, value in proj_obj.dynamic_attributes.items() if pid in allowed}
+    st.caption(f"{t('project_types.label')}: {selected_proj.get('project_type', '')}")
     st.markdown("---")
     head_c1, head_c2 = st.columns([4, 1])
     with head_c1:
@@ -161,123 +135,16 @@ def _render_project_details_panel(
         delta_color="normal" if variance >= 0 else "inverse",
     )
 
-    # Detailed Categorized Tabs
-    t_basic, t_loc, t_links, t_class = st.tabs([
-        f"📋 {t('portfolio.tab_details_basic', default='Basic & Scoping')}",
-        f"📍 {t('portfolio.tab_details_localization', default='Localization')}",
-        f"🔗 {t('portfolio.tab_details_links', default='Useful Links')}",
-        f"🏷️ {t('portfolio.tab_details_classification', default='Classification')}",
-    ])
-
-    def _get_val(key: str, alias: str = "") -> str:
-        # 1. Search in dyn_dict by key or alias
-        val = dyn_dict.get(key)
-        if (val is None or val == "") and alias:
-            val = dyn_dict.get(alias)
-
-        # 2. Search in selected_proj series columns as fallback
-        if val is None or val == "":
-            if key in selected_proj and pd.notna(selected_proj[key]):
-                val = selected_proj[key]
-            elif alias and alias in selected_proj and pd.notna(selected_proj[alias]):
-                val = selected_proj[alias]
-
-        # 3. Search by matching schema param_id
-        if (val is None or val == "") and not params.empty and "param_name" in params.columns:
-            matching_p = params[
-                (params["param_name"].str.lower() == key.lower())
-                | (params.get("alias", pd.Series(dtype=str)).astype(str).str.lower() == alias.lower())
-            ]
-            if not matching_p.empty:
-                pid = matching_p.iloc[0]["param_id"]
-                if pid in dyn_dict:
-                    val = dyn_dict[pid]
-                elif pid in selected_proj and pd.notna(selected_proj[pid]):
-                    val = selected_proj[pid]
-
-        if val is None:
-            return "—"
-        if isinstance(val, list):
-            return ", ".join(str(item) for item in val) if val else "—"
-        s = str(val).strip()
-        return s if s else "—"
-
-    with t_basic:
-        b1, b2 = st.columns(2)
-        with b1:
-            st.markdown(f"**Code Courrier:** `{_get_val('code courrier', 'Code Courrier')}`")
-            st.markdown(f"**Lot:** `{_get_val('lot', 'Lot')}`")
-            st.markdown(f"**Phase:** `{_get_val('phase', 'Phase')}`")
-            st.markdown(f"**Start Date:** `{_get_val('start_date', 'Start Date')}`")
-            st.markdown(f"**Stop Date:** `{_get_val('stop_Date', 'Stop Date')}`")
-            st.markdown(f"**Description:** {_get_val('description', 'Description')}")
-            st.markdown(f"**Commentaire:** {_get_val('commentaire', 'Commentaire')}")
-        with b2:
-            st.markdown(f"**Benefits:** {_get_val('benefits', 'Benefits')}")
-            st.markdown(f"**Acceptance Criteria:** {_get_val('acceptance_ctriteria', 'Acceptance Criteria')}")
-            st.markdown(f"**Scope:** {_get_val('scope', 'Scope')}")
-            st.markdown(f"**Out of Scope:** {_get_val('out_of_scope', 'Out of Scope')}")
-            st.markdown(f"**Risks:** {_get_val('risks', 'Risks')}")
-            st.markdown(f"**Stakeholders:** {_get_val('stakeholders', 'Stakeholders')}")
-            st.markdown(f"**Interfaces:** {_get_val('interfaces', 'Interfaces')}")
-
-    with t_loc:
-        l1, l2 = st.columns(2)
-        with l1:
-            st.markdown(f"**Code Station:** `{_get_val('code_station', 'Code Station')}`")
-            st.markdown(f"**Station:** `{_get_val('station', 'Station')}`")
-            st.markdown(f"**Code Line:** `{_get_val('code_line', 'code ligne')}`")
-            st.markdown(f"**Section:** `{_get_val('section', 'Section')}`")
-        with l2:
-            st.markdown(f"**Latitude:** `{_get_val('lat', 'Latitude')}`")
-            st.markdown(f"**Longitude:** `{_get_val('long', 'Longitude')}`")
-            st.markdown(f"**PK Start:** `{_get_val('pk_start', 'PK Start')}`")
-            st.markdown(f"**PK Stop:** `{_get_val('pk_stop', 'PK Stop')}`")
-
-    with t_links:
-        acc_url = _get_val("acc_link", "ACC Link")
-        pb_url = _get_val("pb_link", "PB Link")
-        orga_url = _get_val("orga_link", "Organization Link")
-        k1, k2, k3 = st.columns(3)
-        with k1:
-            st.markdown("**ACC Link:**")
-            if acc_url and acc_url != "—" and acc_url.startswith("http"):
-                st.markdown(f"[🔗 Open ACC]({acc_url})")
-            else:
-                st.write(acc_url)
-        with k2:
-            st.markdown("**PB Link:**")
-            if pb_url and pb_url != "—" and pb_url.startswith("http"):
-                st.markdown(f"[🔗 Open PB]({pb_url})")
-            else:
-                st.write(pb_url)
-        with k3:
-            st.markdown("**Organization Link:**")
-            if orga_url and orga_url != "—" and orga_url.startswith("http"):
-                st.markdown(f"[🔗 Open Confluence]({orga_url})")
-            else:
-                st.write(orga_url)
-
-    with t_class:
-        c1, c2 = st.columns(2)
-        with c1:
-            st.markdown(f"**Strategic Priority:** `{_get_val('strategic_priority', 'Strategic Priority')}`")
-            st.markdown(f"**Category:** `{_get_val('category', 'Category')}`")
-            st.markdown(f"**Complexity:** `{_get_val('complexity', 'Complexity')}`")
-        with c2:
-            tags_val = dyn_dict.get("category_tags", [])
-            tags_val = dyn_dict.get("category_tags")
-            if not tags_val and "category_tags" in selected_proj and pd.notna(selected_proj["category_tags"]):
-                tags_val = selected_proj["category_tags"]
-            st.markdown("**Category Tags:**")
-            if isinstance(tags_val, list) and tags_val:
-                st.write(" ".join(f"`{t_item}`" for t_item in tags_val))
-            elif isinstance(tags_val, str) and tags_val.strip() and tags_val != "—":
-                st.write(f"`{tags_val}`")
-            else:
-                st.write("—")
-
-
+    # Render only the effective template, including user-created groups/fields.
+    groups = schema_repo.get_all_groups()
+    group_names = dict(zip(groups["id"], groups["group_name"])) if not groups.empty else {}
+    if not params.empty:
+        for group_id, fields in params.groupby("group_id", dropna=False, sort=False):
+            with st.expander(group_names.get(group_id, t("schema.param_group_none")), expanded=True):
+                for _, prop in fields.iterrows():
+                    value = dyn_dict.get(prop["param_id"])
+                    display = ", ".join(map(str, value)) if isinstance(value, list) else str(value) if value is not None else "—"
+                    st.write(f"{prop['alias'] or prop['param_name']}: {display or '—'}")
 
 def render_portfolio_overview(
     project_repo: ProjectRepository,
@@ -330,6 +197,7 @@ def render_portfolio_overview(
     # 3. Dynamic Column Configuration (whitelisted allowed dynamic parameters)
     display_cols: list[str] = [
         "name",
+        "project_type",
         "project_manager",
         "level_3_manager_name",
         "status",
@@ -337,6 +205,7 @@ def render_portfolio_overview(
         "actual_budget",
     ]
     table_columns: list[dict[str, str]] = [
+        {"key": "project_type", "label": t("project_types.label"), "format": "text"},
         {"key": "name", "label": t("portfolio.col_name"), "format": "text"},
         {
             "key": "project_manager",
@@ -379,7 +248,8 @@ def render_portfolio_overview(
         t("portfolio.filter_search"),
         placeholder=t("portfolio.filter_search_placeholder"),
     )
-    filtered_df = df_merged
+    selected_types = st.multiselect(t("project_types.filter"), sorted(df_merged["project_type"].unique()))
+    filtered_df = df_merged[df_merged["project_type"].isin(selected_types)] if selected_types else df_merged
     if search_term.strip():
         term = search_term.lower()
         filtered_df = filtered_df[

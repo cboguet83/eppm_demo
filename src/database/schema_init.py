@@ -5,6 +5,7 @@ from typing import Optional
 
 from src.config import config
 from src.database.connection import get_db
+from src.database.project_type_migration import backup_legacy_database, migrate_project_types
 from src.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -18,9 +19,11 @@ def init_db(db_path: Optional[str] = None) -> None:
     """
     target_path = db_path if db_path is not None else config.db_path
     logger.info("Initializing database schema for %s", target_path)
+    backup_legacy_database(target_path)
 
     with get_db(target_path) as conn:
         conn.execute("PRAGMA foreign_keys = OFF")
+        conn.execute("BEGIN")
         cursor = conn.cursor()
 
         # 1. Parameter Groups Table
@@ -61,18 +64,16 @@ def init_db(db_path: Optional[str] = None) -> None:
                     FOREIGN KEY (group_id) REFERENCES schema_groups (id) ON DELETE RESTRICT
                 )
             """)
+            legacy_id = "'PRM_' || printf('%03d', id)"
             if "param_id" in param_cols:
-                cursor.execute("""
-                    INSERT OR IGNORE INTO schema_parameters_migrated (param_id, group_id, param_name, param_type)
-                    SELECT COALESCE(param_id, 'PRM_' || printf('%03d', id)), group_id, param_name, param_type
-                    FROM schema_parameters
-                """)
-            else:
-                cursor.execute("""
-                    INSERT OR IGNORE INTO schema_parameters_migrated (param_id, group_id, param_name, param_type)
-                    SELECT 'PRM_' || printf('%03d', id), group_id, param_name, param_type
-                    FROM schema_parameters
-                """)
+                legacy_id = f"COALESCE(param_id, {legacy_id})" if "id" in param_cols else "param_id"
+            mandatory_col = "mandatory" if "mandatory" in param_cols else "0"
+            alias_col = "alias" if "alias" in param_cols else "''"
+            cursor.execute(f"""
+                INSERT INTO schema_parameters_migrated (param_id, group_id, param_name, param_type, mandatory, alias)
+                SELECT {legacy_id}, group_id, param_name, param_type, {mandatory_col}, {alias_col}
+                FROM schema_parameters
+            """)
             cursor.execute("DROP TABLE schema_parameters")
             cursor.execute("ALTER TABLE schema_parameters_migrated RENAME TO schema_parameters")
             cursor.execute("PRAGMA table_info(schema_parameters)")
@@ -576,7 +577,7 @@ def init_db(db_path: Optional[str] = None) -> None:
         # 20. Schema migrations for project, organization, and function tables
         cursor.execute("PRAGMA table_info(project)")
         proj_cols = [col[1] for col in cursor.fetchall()]
-        if "dynamic_attributes" not in proj_cols:
+        if "dynamic_attributes" not in proj_cols and "project_type_id" not in proj_cols:
             cursor.execute("ALTER TABLE project ADD COLUMN dynamic_attributes TEXT")
         if "planned_budget" not in proj_cols:
             cursor.execute("ALTER TABLE project ADD COLUMN planned_budget REAL DEFAULT 0.0")
@@ -663,6 +664,7 @@ def init_db(db_path: Optional[str] = None) -> None:
                 cursor.execute("DROP TABLE employee")
                 cursor.execute("ALTER TABLE employee_new RENAME TO employee")
 
+        migrate_project_types(conn)
         conn.commit()
         conn.execute("PRAGMA foreign_keys = ON")
     logger.info("Schema initialization complete")

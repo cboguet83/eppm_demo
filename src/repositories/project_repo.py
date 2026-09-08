@@ -1,11 +1,11 @@
 """Repository for Project Master Data."""
 
-import json
 from typing import Any, Optional, Union
 
 import pandas as pd
 
 from src.database.connection import get_db
+from src.database.property_store import read_values, write_value, prepare_values, effective_template
 from src.logging_config import get_logger
 from src.models.project import Project
 
@@ -48,55 +48,30 @@ class ProjectRepository:
         self.db_path = db_path
 
     def get_all_projects(self) -> pd.DataFrame:
-        """Loads all projects.
-
-        Returns:
-            pd.DataFrame: DataFrame containing all project columns.
-        """
+        """Load projects and active custom values in bulk."""
         with get_db(self.db_path) as conn:
-            return pd.read_sql(
-                "SELECT id, name, status, planned_budget, actual_budget, dynamic_attributes, function_id FROM project ORDER BY id",
-                conn,
-            )
+            projects = pd.read_sql("SELECT p.*, t.name AS project_type FROM project p JOIN project_type t ON t.id=p.project_type_id ORDER BY p.id", conn)
+            values = read_values(conn)
+            applicability = {}
+            for type_id in projects.get("project_type_id", []):
+                if type_id not in applicability:
+                    applicability[type_id] = {p["param_id"] for p in effective_template(conn, int(type_id))}
+            projects["dynamic_attributes"] = [
+                {pid: value for pid, value in values.get(int(row.id), {}).items() if pid in applicability[row.project_type_id]}
+                for row in projects.itertuples()
+            ]
+            return projects
 
     def get_project_by_id(self, project_id: Union[int, str]) -> Optional[Project]:
-        """Load one project as a domain model, including all dynamic attributes."""
-        int_id = parse_project_id(project_id)
+        """Load all stored values, including inactive values for type restoration."""
         with get_db(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                SELECT id, name, status, planned_budget, actual_budget,
-                       dynamic_attributes, function_id
-                FROM project
-                WHERE id = ?
-                """,
-                (int_id,),
-            )
+            cursor = conn.execute("SELECT id, name, status, planned_budget, actual_budget, function_id, project_type_id FROM project WHERE id=?", (parse_project_id(project_id),))
             row = cursor.fetchone()
-        if row is None:
-            return None
-
-        dynamic_attributes: dict[str, Any] = {}
-        if isinstance(row[5], str) and row[5].strip():
-            try:
-                decoded = json.loads(row[5])
-            except (json.JSONDecodeError, TypeError):
-                decoded = {}
-            if isinstance(decoded, dict):
-                dynamic_attributes = decoded
-        elif isinstance(row[5], dict):
-            dynamic_attributes = dict(row[5])
-
-        return Project(
-            id=int(row[0]),
-            name=str(row[1]),
-            status=str(row[2]),
-            planned_budget=float(row[3] or 0.0),
-            actual_budget=float(row[4] or 0.0),
-            dynamic_attributes=dynamic_attributes,
-            function_id=int(row[6]) if row[6] is not None else None,
-        )
+            if row is None:
+                return None
+            return Project(id=row[0], name=row[1], status=row[2], planned_budget=row[3] or 0.0,
+                           actual_budget=row[4] or 0.0, function_id=row[5], project_type_id=row[6],
+                           dynamic_attributes=read_values(conn, owner_id=row[0]).get(row[0], {}))
 
     def exists(self, project_id: Union[int, str]) -> bool:
         """Checks if a project ID already exists.
@@ -121,111 +96,56 @@ class ProjectRepository:
         """
         with get_db(self.db_path) as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM project")
+            cursor.execute("SELECT MAX(COALESCE((SELECT MAX(id) FROM project),0), COALESCE((SELECT seq FROM sqlite_sequence WHERE name='project'),0))+1")
             row = cursor.fetchone()
             return int(row[0]) if row and row[0] is not None else 1
 
     def create_project(
-        self,
-        project_id: Optional[Union[int, str]] = None,
-        name: str = "",
-        status: str = "Draft",
-        planned_budget: float = 0.0,
-        actual_budget: float = 0.0,
-        dynamic_attributes: Optional[dict[str, Any]] = None,
-        function_id: Optional[int] = None,
+        self, project_id: Optional[Union[int, str]] = None, name: str = "", status: str = "Draft",
+        planned_budget: float = 0.0, actual_budget: float = 0.0,
+        dynamic_attributes: Optional[dict[str, Any]] = None, function_id: Optional[int] = None,
+        project_type_id: Optional[int] = None,
     ) -> int:
-        """Creates a new project record.
-
-        Args:
-            project_id: Optional explicit integer project ID (if None, autoincrements).
-            name: Project title.
-            status: Project status.
-            planned_budget: Planned budget in USD.
-            actual_budget: Actual spend in USD.
-            dynamic_attributes: Dictionary of dynamic schema values.
-            function_id: Optional foreign key ID towards organizational function (Project Manager).
-
-        Returns:
-            int: Inserted project ID.
-        """
-        dyn_dict = dynamic_attributes if dynamic_attributes is not None else {}
-        dyn_json = json.dumps(dyn_dict)
-
         with get_db(self.db_path) as conn:
-            cursor = conn.cursor()
-            if project_id is not None:
-                int_id = parse_project_id(project_id)
-                cursor.execute(
-                    "INSERT INTO project (id, name, status, planned_budget, actual_budget, dynamic_attributes, function_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    (
-                        int_id,
-                        name.strip(),
-                        status,
-                        planned_budget,
-                        actual_budget,
-                        dyn_json,
-                        function_id,
-                    ),
-                )
-                conn.commit()
-                return int_id
-            else:
-                cursor.execute(
-                    "INSERT INTO project (name, status, planned_budget, actual_budget, dynamic_attributes, function_id) VALUES (?, ?, ?, ?, ?, ?)",
-                    (
-                        name.strip(),
-                        status,
-                        planned_budget,
-                        actual_budget,
-                        dyn_json,
-                        function_id,
-                    ),
-                )
-                conn.commit()
-                return int(cursor.lastrowid or 1)
+            return self.create_on_connection(conn, project_id=project_id, name=name, status=status,
+                planned_budget=planned_budget, actual_budget=actual_budget, dynamic_attributes=dynamic_attributes,
+                function_id=function_id, project_type_id=project_type_id)
 
-    def update_project(
-        self,
-        project_id: Union[int, str],
-        name: str,
-        status: str,
-        planned_budget: float,
-        actual_budget: float,
-        dynamic_attributes: dict[str, Any],
-        function_id: Optional[int] = None,
-    ) -> bool:
-        """Updates an existing project record.
+    @staticmethod
+    def create_on_connection(conn, *, project_id=None, name="", status="Draft", planned_budget=0.0,
+                             actual_budget=0.0, dynamic_attributes=None, function_id=None, project_type_id=None) -> int:
+        """Shared transactional writer for interactive creation and both seeders."""
+        if not name.strip():
+            raise ValueError("Project name is required")
+        if project_type_id is None:
+            project_type_id = conn.execute("SELECT id FROM project_type WHERE is_general=1").fetchone()[0]
+        values = prepare_values(conn, project_type_id, dynamic_attributes or {}, creating=True)
+        pid = parse_project_id(project_id) if project_id is not None else None
+        cursor = conn.execute("INSERT INTO project(id,name,status,planned_budget,actual_budget,function_id,project_type_id) VALUES (?,?,?,?,?,?,?)",
+                             (pid, name.strip(), status, planned_budget, actual_budget, function_id, project_type_id))
+        pid = int(cursor.lastrowid)
+        for key, value in values.items():
+            write_value(conn, pid, key, value)
+        return pid
 
-        Args:
-            project_id: Unique project ID.
-            name: Updated project title.
-            status: Updated project status.
-            planned_budget: Updated planned budget.
-            actual_budget: Updated actual spend.
-            dynamic_attributes: Updated dictionary of dynamic attributes.
-            function_id: Optional foreign key ID towards organizational function (Project Manager).
-
-        Returns:
-            bool: True if updated.
-        """
-        int_id = parse_project_id(project_id)
+    def update_project(self, project_id: Union[int, str], name: str, status: str, planned_budget: float,
+                       actual_budget: float, dynamic_attributes: dict[str, Any], function_id: Optional[int] = None,
+                       project_type_id: Optional[int] = None) -> bool:
+        pid = parse_project_id(project_id)
         with get_db(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "UPDATE project SET name = ?, status = ?, planned_budget = ?, actual_budget = ?, dynamic_attributes = ?, function_id = ? WHERE id = ?",
-                (
-                    name.strip(),
-                    status,
-                    planned_budget,
-                    actual_budget,
-                    json.dumps(dynamic_attributes),
-                    function_id,
-                    int_id,
-                ),
-            )
-            conn.commit()
-            return cursor.rowcount > 0
+            row = conn.execute("SELECT project_type_id FROM project WHERE id=?", (pid,)).fetchone()
+            if not row:
+                return False
+            if not name.strip():
+                raise ValueError("Project name is required")
+            type_id = row[0] if project_type_id is None else project_type_id
+            existing = read_values(conn, owner_id=pid).get(pid, {})
+            values = prepare_values(conn, type_id, dynamic_attributes, creating=False, existing=existing)
+            conn.execute("UPDATE project SET name=?,status=?,planned_budget=?,actual_budget=?,function_id=?,project_type_id=? WHERE id=?",
+                         (name.strip(), status, planned_budget, actual_budget, function_id, type_id, pid))
+            for key, value in values.items():
+                write_value(conn, pid, key, value)
+            return True
 
     def delete_project(self, project_id: Union[int, str]) -> bool:
         """Deletes a project and cleans up its tasks and dependencies.

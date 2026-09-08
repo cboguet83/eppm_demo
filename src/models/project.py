@@ -16,6 +16,7 @@ class Project:
         actual_budget: Cumulative actual spend in USD.
         dynamic_attributes: Key-value dictionary of dynamic schema values.
         function_id: Optional foreign key ID towards an organizational function (Project Manager).
+        project_type_id: Type whose effective template governs this project's properties.
     """
 
     id: Optional[int] = None
@@ -25,6 +26,7 @@ class Project:
     actual_budget: float = 0.0
     dynamic_attributes: dict[str, Any] = field(default_factory=dict)
     function_id: Optional[int] = None
+    project_type_id: int = 1
 
 
 @dataclass(frozen=True)

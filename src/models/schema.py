@@ -1,6 +1,6 @@
 """Schema domain models for parameter groups, parameters, and options."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 
 
@@ -30,6 +30,7 @@ class SchemaParameter:
         group_id: Optional reference to parent SchemaGroup ID.
         mandatory: Whether this dynamic parameter is required to save a project (default False).
         alias: Optional alternative name or display alias.
+        applies_to_all: Whether this property applies to current and future types.
     """
 
     param_id: str
@@ -38,6 +39,7 @@ class SchemaParameter:
     group_id: Optional[int] = None
     mandatory: bool = False
     alias: Optional[str] = None
+    applies_to_all: bool = True
 
 
 @dataclass

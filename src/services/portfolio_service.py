@@ -43,7 +43,7 @@ class PortfolioService:
     def flatten_dynamic_attributes(
         df_projects: pd.DataFrame, params: pd.DataFrame
     ) -> pd.DataFrame:
-        """Unpacks JSON dynamic_attributes column into individual DataFrame columns.
+        """Unpacks in-memory attributes into individual DataFrame columns.
 
         Args:
             df_projects: Projects DataFrame containing id and dynamic_attributes columns.
@@ -59,7 +59,9 @@ class PortfolioService:
         for _, row in df_projects.iterrows():
             raw_json = row.get("dynamic_attributes")
             attrs: dict[str, Any] = {}
-            if pd.notna(raw_json) and isinstance(raw_json, str) and raw_json.strip():
+            if isinstance(raw_json, dict):
+                attrs = dict(raw_json)
+            elif isinstance(raw_json, str) and raw_json.strip():
                 try:
                     parsed = json.loads(raw_json)
                     if isinstance(parsed, dict):

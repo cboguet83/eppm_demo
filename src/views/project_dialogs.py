@@ -1,6 +1,7 @@
 """Shared modal workflows for creating, editing, and deleting projects."""
 
 import datetime
+import sqlite3
 from typing import Any, Optional
 
 import pandas as pd
@@ -20,9 +21,18 @@ from src.models.constants import (
 )
 from src.repositories.organization_repo import OrganizationRepository
 from src.repositories.project_repo import ProjectRepository
+from src.repositories.project_type_repo import ProjectTypeRepository
 from src.repositories.schema_repo import SchemaRepository
 from src.services.organization_service import OrganizationService
 from src.services.schema_service import SchemaService
+
+
+def _save_project(save, **kwargs):
+    try:
+        return save(**kwargs)
+    except (ValueError, sqlite3.IntegrityError) as exc:
+        st.error(str(exc))
+        st.stop()
 
 
 def _render_dynamic_field(
@@ -43,28 +53,46 @@ def _render_dynamic_field(
     )
     label = f"{param_name}{f' ({alias})' if alias else ''}{' *' if mandatory else ''}"
     key = f"{key_prefix}_{param_id}"
+    draft_key = f"{key_prefix}_draft"
+    is_creation = key_prefix.startswith("portfolio_create_")
+
+    def remember_edit():
+        draft = dict(st.session_state.get(draft_key, {}))
+        draft[param_id] = st.session_state[key]
+        st.session_state[draft_key] = draft
+
+    if is_creation:
+        draft = st.session_state.get(draft_key, {})
+        if param_id in draft:
+            current_value = draft[param_id]
+        else:
+            # Untouched fields follow the newly selected type's creation default.
+            st.session_state.pop(key, None)
+    widget_args = {"key": key, "persist_state": "page", "on_change": remember_edit if is_creation else None}
 
     if param_type == PARAM_TYPE_TEXT:
         return st.text_input(
             label,
             value=str(current_value) if current_value is not None else "",
-            key=key,
+            **widget_args,
         )
     if param_type in (PARAM_TYPE_URL, PARAM_TYPE_HYPERLINK):
         return st.text_input(
             label,
             value=str(current_value) if current_value is not None else "",
             placeholder="https://...",
-            key=key,
+            **widget_args,
         )
     if param_type == PARAM_TYPE_DATE:
         parsed_date: Optional[datetime.date] = None
+        if isinstance(current_value, datetime.date):
+            parsed_date = current_value
         if current_value and isinstance(current_value, str):
             try:
                 parsed_date = datetime.date.fromisoformat(current_value.strip())
             except ValueError:
                 parsed_date = None
-        selected_date = st.date_input(label, value=parsed_date, key=key)
+        selected_date = st.date_input(label, value=parsed_date, **widget_args)
         return selected_date.isoformat() if selected_date is not None else ""
     if param_type == PARAM_TYPE_NUMBER:
         number_value: Optional[float] = None
@@ -73,7 +101,7 @@ def _render_dynamic_field(
                 number_value = float(current_value)
             except (TypeError, ValueError):
                 number_value = None
-        return st.number_input(label, value=number_value, key=key)
+        return st.number_input(label, value=number_value, **widget_args)
     if param_type == PARAM_TYPE_ENUM:
         param_options = (
             options[options["param_id"] == param_id]["option_value"].tolist()
@@ -82,7 +110,7 @@ def _render_dynamic_field(
         )
         choices = [""] + param_options
         current_index = choices.index(current_value) if current_value in choices else 0
-        return st.selectbox(label, options=choices, index=current_index, key=key)
+        return st.selectbox(label, options=choices, index=current_index, **widget_args)
     if param_type in (PARAM_TYPE_MULTI_ENUM, PARAM_TYPE_TAGS):
         param_options = (
             options[options["param_id"] == param_id]["option_value"].tolist()
@@ -99,12 +127,12 @@ def _render_dynamic_field(
             f"{label} ({param_type})",
             options=choices,
             default=[value for value in current_values if value in choices],
-            key=key,
+            **widget_args,
         )
     return st.text_input(
         label,
         value=str(current_value) if current_value is not None else "",
-        key=key,
+        **widget_args,
     )
 
 
@@ -193,11 +221,17 @@ def open_create_project_dialog(
     """Create a project without leaving the Portfolio Overview."""
     project_id = project_repo.generate_project_id()
     groups = schema_repo.get_all_groups()
-    params = schema_repo.get_all_parameters()
+    type_repo = ProjectTypeRepository(project_repo.db_path)
     options = schema_repo.get_all_options()
     manager_options, manager_labels = _manager_options(project_repo)
 
-    with st.form(f"portfolio_create_project_{project_id}", clear_on_submit=True):
+    type_options = type_repo.get_all_types()
+    type_labels = dict(zip(type_options["id"], type_options["name"]))
+    type_id = st.selectbox(t("project_types.label"), list(type_labels), format_func=type_labels.get,
+                          key=f"create_type_{project_id}")
+    params = type_repo.get_template(int(type_id))
+    defaults = {p["param_id"]: p["default_value"] for _, p in params.iterrows() if p["has_default"]}
+    with st.container():
         id_col, name_col, status_col = st.columns([1, 2, 1])
         id_col.text_input(t("master_data.field_id"), value=str(project_id), disabled=True)
         name = name_col.text_input(t("master_data.field_name"))
@@ -222,10 +256,10 @@ def open_create_project_dialog(
             params,
             groups,
             options,
-            {},
+            defaults,
             f"portfolio_create_{project_id}",
         )
-        if st.form_submit_button("Create project", icon=":material/add:", width="stretch"):
+        if st.button("Create project", icon=":material/add:", width="stretch"):
             clean_name = name.strip()
             missing = SchemaService.validate_project_dynamic_attributes(dynamic_values, params)
             if not clean_name:
@@ -235,7 +269,7 @@ def open_create_project_dialog(
             elif project_repo.exists(project_id):
                 st.error(t("master_data.err_already_exists", id=str(project_id)))
             else:
-                created_id = project_repo.create_project(
+                created_id = _save_project(project_repo.create_project,
                     project_id=project_id,
                     name=clean_name,
                     status=status,
@@ -243,6 +277,7 @@ def open_create_project_dialog(
                     actual_budget=actual,
                     dynamic_attributes=dynamic_values,
                     function_id=manager,
+                    project_type_id=int(type_id),
                 )
                 st.session_state["selected_portfolio_project_id"] = created_id
                 st.toast("Project created.", icon="✅")
@@ -262,7 +297,7 @@ def open_edit_project_dialog(
         return
 
     groups = schema_repo.get_all_groups()
-    params = schema_repo.get_all_parameters()
+    type_repo = ProjectTypeRepository(project_repo.db_path)
     options = schema_repo.get_all_options()
     manager_options, manager_labels = _manager_options(project_repo)
     current_manager = int(project.function_id) if project.function_id is not None else None
@@ -270,7 +305,13 @@ def open_edit_project_dialog(
         manager_options.index(current_manager) if current_manager in manager_options else 0
     )
 
-    with st.form(f"portfolio_edit_project_{project_id}"):
+    type_options = type_repo.get_all_types()
+    type_labels = dict(zip(type_options["id"], type_options["name"]))
+    type_id = st.selectbox(t("project_types.label"), list(type_labels),
+                          index=list(type_labels).index(project.project_type_id), format_func=type_labels.get,
+                          key=f"edit_type_{project_id}")
+    params = type_repo.get_template(int(type_id))
+    with st.container():
         id_col, name_col, status_col = st.columns([1, 2, 1])
         id_col.text_input(t("master_data.field_id"), value=str(project_id), disabled=True)
         name = name_col.text_input(t("master_data.field_name"), value=project.name)
@@ -308,7 +349,7 @@ def open_edit_project_dialog(
             dict(project.dynamic_attributes or {}),
             f"portfolio_edit_{project_id}",
         )
-        if st.form_submit_button(t("master_data.btn_update"), width="stretch"):
+        if st.button(t("master_data.btn_update"), width="stretch"):
             clean_name = name.strip()
             missing = SchemaService.validate_project_dynamic_attributes(dynamic_values, params)
             if not clean_name:
@@ -316,7 +357,7 @@ def open_edit_project_dialog(
             elif missing:
                 st.error("Missing mandatory attributes: " + ", ".join(missing))
             else:
-                project_repo.update_project(
+                _save_project(project_repo.update_project,
                     project_id=project_id,
                     name=clean_name,
                     status=status,
@@ -324,6 +365,7 @@ def open_edit_project_dialog(
                     actual_budget=actual,
                     dynamic_attributes=dynamic_values,
                     function_id=manager,
+                    project_type_id=int(type_id),
                 )
                 st.toast("Project details updated.", icon="✅")
                 st.rerun()

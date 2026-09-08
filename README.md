@@ -260,6 +260,30 @@ python -m unittest discover tests -v
 
 ---
 
+## Project types and custom properties
+
+Manage project types in **Parameters Definition → Project types**. Each template
+includes built-in fields and applicable custom properties. Properties apply to all
+current and future types by default, or to selected types. Each type can inherit
+or override required flags and set typed defaults. Defaults apply only at project
+creation. Changing type preserves inactive values and restores their visibility
+if they become applicable again.
+
+Values live in `project_property_value`, with ordered child rows for multi-select
+and tag items. Template defaults use equivalent relational tables. The Python
+`Project.dynamic_attributes` interface remains a dictionary keyed by property ID;
+project DataFrames now return dictionaries instead of JSON strings.
+
+Existing databases migrate automatically: projects receive the protected General
+type, while existing properties continue applying to all types. The migration
+creates `<database>.before-project-types.bak`, verifies converted values and
+foreign keys, then removes the JSON column. Invalid or ambiguous legacy values
+stop migration and roll back schema changes, identifying the project/property in
+the error. Correct the original data and retry. To roll back a completed upgrade,
+stop the app, restore the backup, and run the previous application version.
+Unrelated foreign-key violations left by older seeders are preserved and logged;
+the migration verifies it introduces no new violations.
+
 ## 🗄️ Database Seeding & Mock Data Generation
 
 PPM Studio Pro supports two complementary database seeding workflows:
@@ -267,7 +291,8 @@ PPM Studio Pro supports two complementary database seeding workflows:
 ### A. Automatic Bootstrap Seeding (`src/database/seeder.py`)
 On initial application launch, if the database is empty, the system automatically bootstraps:
 - **5 Schema Groups**: `basic info`, `scoping`, `localization`, `useful links`, `classification`.
-- **29 Dynamic Parameters**: Typed parameters (`TEXT`, `DATE`, `NUMBER`, `ENUM`, `TAGS`, `HYPERLINK`), each with alias support (e.g. `code_line` with alias `code ligne`) and `mandatory=False` by default.
+- **31 Custom Properties**: Cover all eight supported types, including `URL` and `MULTI_ENUM`, with aliases, applicability, and relational values.
+- **5 Project Types**: General, Infrastructure, Digitalisation, Compliance, and Renovation. Localization applies to Infrastructure/Renovation; interfaces apply to Infrastructure/Digitalisation/Renovation. Scope is globally required but optional for General. Infrastructure requires code line; Compliance requires acceptance criteria. Three types provide distinct scope defaults.
 - **Discrete Enumeration Sets**:
   - `phase`: `FAI`, `APS`, `APD1`, `APD2`, `EXE`, `CHA`, `DEF`, `N/A`
   - `code_line`: 19 railway lines (`1`, `1a`, `1b`, `2b`, `3`, `4`, `5`, `6`, `6a`–`6k`, `7`)
@@ -276,7 +301,7 @@ On initial application launch, if the database is empty, the system automaticall
   - `category`: `categ1`, `categ2`, `categ3`
   - `strategic_priority`: `Critical`, `High`, `Medium`, `Low`
 - **Organizational Structure**: 5 hierarchy levels, 9 function types, 50 job functions with parent-child management chains, teams, and sample employees.
-- **Sample Projects**: Projects 1, 2, and 3 populated with Project Manager foreign keys (`function_id`) and realistic dynamic attributes.
+- **Sample Projects**: One curated project per type, with managers, schedules, dependencies, tags, and resource assignments. Ordinary startup preserves user changes. Install the revised demo catalog in a fresh database or with an explicit full reseed.
 
 ### Employee Occupation & Calendar Exceptions
 
@@ -302,7 +327,7 @@ python scripts/seed_database.py --projects 50
 python scripts/seed_database.py --projects 500 --min-tasks 5 --max-tasks 20
 
 # Seed against a custom database path without wiping existing records
-python scripts/seed_database.py --projects 100 --db-path custom.db --keep-existing
+python scripts/seed_database.py --projects 100 --db-path custom.db --no-clean
 
 # Seed with a fixed random seed for reproducible demo datasets
 python scripts/seed_database.py --projects 50 --seed 12345
@@ -315,15 +340,16 @@ python scripts/seed_database.py --projects 50 --seed 12345
 | `--min-tasks` | `int` | `0` | Minimum tasks / milestones per project. |
 | `--max-tasks` | `int` | `15` | Maximum tasks / milestones per project. |
 | `--db-path` | `str` | `ppm_mock.db` | Target SQLite database file path. |
-| `--keep-existing` | `flag` | `False` | Preserves existing records instead of flushing before seeding. |
+| `--no-clean` | `flag` | `False` | Appends projects with fresh IDs, preserving existing records and templates. |
 | `--seed` | `int` | `42` | Random seed for deterministic data generation. |
 
 #### Generated Mock Data Characteristics:
-- **Assigned Project Managers**: Randomly assigned from organizational functions (`function_id` 17 to 26), ensuring valid Level 3 managing function chains.
-- **Dynamic Attributes**: Generates realistic values for all 29 dynamic attributes including coordinate ranges for Luxembourg rail networks, station codes, line numbers, and Confluence / Jira / ACC URLs.
+- **Assigned Project Managers**: Selected from actual persisted organizational functions, with valid foreign keys.
+- **Custom Properties**: Projects rotate across types deterministically and receive only applicable values. Values use persisted definitions/options and the same validation as interactive creation.
+- **Counts and resets**: Clean generation creates exactly the requested count, including zero. Reference-only initialization creates no temporary projects. Project-only flushes retain templates; full flushes rebuild the catalog. Summaries include type and property-value counts.
 - **Milestone Scheduling**:
-  - **Type 1 Projects (~20%)**: Single N/A phase with variable duration (3 months to 3 years).
-  - **Type 2 Projects (~80%)**: Sequential railway infrastructure phases (`FAI` ➔ `APS` ➔ `APD1` ➔ `APD2` ➔ `EXE` ➔ `CHA` ➔ `DEF`) plus randomized approval milestones (`AUT`, `VAL`, `QUAL`, `CER`).
+  - **Single-phase schedules (~20%, when bounds allow)**: One N/A phase lasting 3 months to 3 years.
+  - **Multi-phase schedules**: Sequential phases (`FAI` ➔ `APS` ➔ `APD1` ➔ `APD2` ➔ `EXE` ➔ `CHA` ➔ `DEF`), approval milestones, and additional work packages when needed for the requested minimum. Schedule shape is independent of project type.
 - **Dependency Graph**: Generates Finish-to-Start (`FS`), Start-to-Start (`SS`), and Finish-to-Finish (`FF`) links internally between sequential phases and cross-project external dependencies.
 
 ---

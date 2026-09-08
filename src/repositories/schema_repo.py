@@ -6,7 +6,9 @@ from typing import Optional
 import pandas as pd
 
 from src.database.connection import get_db
+from src.repositories.project_type_repo import ProjectTypeRepository
 from src.logging_config import get_logger
+from src.models.constants import PARAM_TYPES
 
 logger = get_logger(__name__)
 
@@ -39,7 +41,7 @@ class SchemaRepository:
         """
         with get_db(self.db_path) as conn:
             return pd.read_sql(
-                "SELECT param_id, group_id, param_name, param_type, mandatory, alias FROM schema_parameters",
+                "SELECT param_id, group_id, param_name, param_type, mandatory, alias, applies_to_all FROM schema_parameters",
                 conn,
             )
 
@@ -120,6 +122,8 @@ class SchemaRepository:
         param_type: str,
         mandatory: bool = False,
         alias: Optional[str] = None,
+        applies_to_all: bool = True,
+        project_type_ids: Optional[list[int]] = None,
     ) -> bool:
         """Inserts a new dynamic parameter record.
 
@@ -134,6 +138,8 @@ class SchemaRepository:
         Returns:
             bool: True if inserted successfully.
         """
+        if not param_id.strip() or not param_name.strip() or param_type not in PARAM_TYPES:
+            raise ValueError("A property needs an ID, a name, and a supported type")
         with get_db(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
@@ -147,8 +153,9 @@ class SchemaRepository:
                     alias.strip() if alias else "",
                 ),
             )
+            ProjectTypeRepository.set_applicability_on_connection(conn, param_id.strip(), applies_to_all, project_type_ids or [])
             conn.commit()
-            return cursor.rowcount > 0
+            return True
 
     def update_parameter(
         self,
@@ -158,6 +165,8 @@ class SchemaRepository:
         param_type: str,
         mandatory: bool = False,
         alias: Optional[str] = None,
+        applies_to_all: Optional[bool] = None,
+        project_type_ids: Optional[list[int]] = None,
     ) -> bool:
         """Updates an existing dynamic parameter definition.
 
@@ -172,8 +181,15 @@ class SchemaRepository:
         Returns:
             bool: True if updated.
         """
+        if not param_name.strip() or param_type not in PARAM_TYPES:
+            raise ValueError("A property needs a name and a supported type")
         with get_db(self.db_path) as conn:
             cursor = conn.cursor()
+            previous = conn.execute("SELECT param_type FROM schema_parameters WHERE param_id=?", (param_id,)).fetchone()
+            if previous and previous[0] != param_type:
+                for table in ("project_property_value", "project_type_property_default"):
+                    if conn.execute(f"SELECT 1 FROM {table} WHERE param_id=?", (param_id,)).fetchone():
+                        raise ValueError("Clear stored values and defaults before changing the property type")
             cursor.execute(
                 "UPDATE schema_parameters SET group_id = ?, param_name = ?, param_type = ?, mandatory = ?, alias = ? WHERE param_id = ?",
                 (
@@ -185,8 +201,11 @@ class SchemaRepository:
                     param_id.strip(),
                 ),
             )
+            updated = cursor.rowcount > 0
+            if applies_to_all is not None:
+                ProjectTypeRepository.set_applicability_on_connection(conn, param_id.strip(), applies_to_all, project_type_ids or [])
             conn.commit()
-            return cursor.rowcount > 0
+            return updated
 
     def delete_parameter(self, param_id: str) -> bool:
         """Deletes a parameter and its options.
@@ -200,6 +219,9 @@ class SchemaRepository:
         clean_id = param_id.strip()
         with get_db(self.db_path) as conn:
             cursor = conn.cursor()
+            for table in ("project_property_value", "project_type_property_default"):
+                if conn.execute(f"SELECT 1 FROM {table} WHERE param_id=?", (clean_id,)).fetchone():
+                    raise ValueError("This property has stored values or defaults and cannot be deleted")
             cursor.execute("DELETE FROM schema_param_options WHERE param_id = ?", (clean_id,))
             cursor.execute("DELETE FROM schema_parameters WHERE param_id = ?", (clean_id,))
             conn.commit()
@@ -236,6 +258,11 @@ class SchemaRepository:
         """
         with get_db(self.db_path) as conn:
             cursor = conn.cursor()
+            option = conn.execute("SELECT param_id, option_value FROM schema_param_options WHERE id=?", (option_id,)).fetchone()
+            if option:
+                for table in ("project_property_value", "project_type_property_default"):
+                    if conn.execute(f"SELECT 1 FROM {table} WHERE param_id=? AND text_value=?", option).fetchone() or conn.execute(f"SELECT 1 FROM {table}_item WHERE param_id=? AND value=?", option).fetchone():
+                        raise ValueError("This option is referenced by a project value or template default")
             cursor.execute("DELETE FROM schema_param_options WHERE id = ?", (option_id,))
             conn.commit()
             return cursor.rowcount > 0

@@ -97,10 +97,12 @@ class TestPPMStudio(unittest.TestCase):
 
         counts = _get_database_seed_counts(self.temp_db_path)
 
-        self.assertEqual(set(counts), {"projects", "tasks", "dependencies"})
+        self.assertEqual(set(counts), {"projects", "tasks", "dependencies", "project_types", "property_values"})
         self.assertGreaterEqual(counts["projects"], 3)
         self.assertGreaterEqual(counts["tasks"], 5)
-        self.assertEqual(counts["dependencies"], 1)
+        self.assertEqual(counts["dependencies"], 15)
+        self.assertEqual(counts["project_types"], 5)
+        self.assertGreater(counts["property_values"], 0)
 
     def test_get_next_available_group_order(self) -> None:
         """Verify calculation of next available display order for schema groups."""

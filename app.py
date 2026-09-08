@@ -146,22 +146,27 @@ def _get_database_seed_counts(db_path: str) -> dict[str, int]:
             SELECT
                 (SELECT COUNT(*) FROM project),
                 (SELECT COUNT(*) FROM project_task),
-                (SELECT COUNT(*) FROM task_dependencies)
+                (SELECT COUNT(*) FROM task_dependencies),
+                (SELECT COUNT(*) FROM project_type),
+                (SELECT COUNT(*) FROM project_property_value)
             """
         ).fetchone()
     return {
         "projects": int(row[0]),
         "tasks": int(row[1]),
         "dependencies": int(row[2]),
+        "project_types": int(row[3]),
+        "property_values": int(row[4]),
     }
 
 
 @st.cache_resource
-def bootstrap_database() -> bool:
+def bootstrap_database(schema_version: str = "project-types-v1") -> bool:
     """Initializes the database schema and performs seeding on server startup.
 
     Guarantees execution runs exactly once per container/process lifecycle,
     preventing destructive re-seeding on Streamlit script reruns.
+    The schema version invalidates the startup cache when database migrations change.
     """
     init_db()
     cli_force, cli_projects = parse_cli_args()
@@ -376,7 +381,7 @@ def run_app() -> None:
                 st.cache_resource.clear()
                 st.cache_data.clear()
                 st.session_state["seeding_status_message"] = t(
-                    "app.seed_success",
+                    "project_types.seed_success",
                     default=(
                         "Database successfully re-seeded: {projects} projects, "
                         "{tasks} tasks, and {dependencies} dependencies created."
