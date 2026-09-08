@@ -19,13 +19,24 @@ from typing import cast
 
 
 def portfolio_revision(db_path: str | None) -> tuple:
-    """Invalidate bounded read caches for SQLite commits, including WAL mode."""
+    """Track SQLite commits even when filesystem timestamps do not advance.
+
+    Include the database change counter and WAL/index headers alongside file
+    metadata. The WAL index tracks commits when an existing WAL is reused.
+    See https://www.sqlite.org/fileformat.html and /walformat.html.
+    """
     path = Path(db_path or config.db_path).resolve()
     result = [str(path)]
-    for filename in (path, Path(str(path) + '-wal')):
+    for filename, header_size in (
+        (path, 28),
+        (Path(str(path) + '-wal'), 32),
+        (Path(str(path) + '-shm'), 48),
+    ):
         try:
             stat = filename.stat()
-            result.append((stat.st_mtime_ns, stat.st_size, stat.st_ino))
+            with filename.open('rb') as source:
+                header = source.read(header_size).hex()
+            result.append((stat.st_mtime_ns, stat.st_size, stat.st_ino, header))
         except FileNotFoundError:
             result.append(None)
     return tuple(result)

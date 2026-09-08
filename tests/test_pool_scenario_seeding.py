@@ -1,5 +1,7 @@
 """Full seeds and additive repairs must retain the pool scenario contract."""
 
+from contextlib import closing
+
 import sqlite3
 import tempfile
 import unittest
@@ -26,7 +28,7 @@ class PoolScenarioSeedTests(unittest.TestCase):
         self.assertEqual(len(list(Path(self.path).parent.glob("backups/*.db"))), 1)
 
     def assert_scenarios(self):
-        with sqlite3.connect(self.path) as conn:
+        with closing(sqlite3.connect(self.path)) as conn, conn:
             self.assertEqual(conn.execute("SELECT COUNT(*) FROM resource_pool").fetchone()[0], 103)
             self.assertEqual(conn.execute("SELECT COUNT(*) FROM resource_pool_group").fetchone()[0], 31)
             self.assertEqual(conn.execute("PRAGMA foreign_key_check").fetchall(), [])
@@ -56,13 +58,13 @@ class PoolScenarioSeedTests(unittest.TestCase):
         # Emulate the old full seeder that only created three pools.
         with patch("scripts.seed_pool_scenarios.seed_pool_scenarios", return_value={"new_pools": 0, "new_groups": 0}):
             seed_database(12, 3, 8, self.path)
-        with sqlite3.connect(self.path) as conn:
+        with closing(sqlite3.connect(self.path)) as conn, conn:
             before = {table: conn.execute("SELECT * FROM " + table).fetchall()
                       for table in ("project", "project_task", "task_dependencies", "project_property_value")}
         report = seed_pool_scenarios(self.path, year=2026)
         self.assertTrue(report["applied"])
         self.assert_scenarios()
-        with sqlite3.connect(self.path) as conn:
+        with closing(sqlite3.connect(self.path)) as conn, conn:
             for table, rows in before.items():
                 self.assertEqual(conn.execute("SELECT * FROM " + table).fetchall(), rows)
         self.assertTrue(seed_pool_scenarios(self.path)["already_seeded"])
@@ -70,6 +72,6 @@ class PoolScenarioSeedTests(unittest.TestCase):
 
     def test_task_free_seed_does_not_invent_tasks(self):
         seed_database(2, 0, 0, self.path)
-        with sqlite3.connect(self.path) as conn:
+        with closing(sqlite3.connect(self.path)) as conn, conn:
             self.assertEqual(conn.execute("SELECT COUNT(*) FROM project_task").fetchone()[0], 0)
             self.assertEqual(conn.execute("SELECT COUNT(*) FROM resource_pool").fetchone()[0], 103)

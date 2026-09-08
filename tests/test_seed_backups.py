@@ -1,5 +1,7 @@
 """Seeding must preserve the complete previous database before any writes."""
 
+from contextlib import closing
+
 import sqlite3
 import tempfile
 import unittest
@@ -24,7 +26,7 @@ class SeedBackupTests(unittest.TestCase):
         seed_database(2, 0, 0, str(self.path))
         seed_database(3, 0, 0, str(self.path), clean_first=False)
         self.assertEqual(len(self.backups()), 1)
-        with sqlite3.connect(self.backups()[0]) as conn:
+        with closing(sqlite3.connect(self.backups()[0])) as conn, conn:
             self.assertEqual(conn.execute("SELECT COUNT(*) FROM project").fetchone()[0], 2)
             self.assertEqual(conn.execute("PRAGMA integrity_check").fetchone()[0], "ok")
         seed_default_data_if_empty(str(self.path), force=True)
@@ -37,5 +39,5 @@ class SeedBackupTests(unittest.TestCase):
         with patch("src.database.backup.backup_database", side_effect=OSError("Disk full")):
             with self.assertRaises(OSError):
                 seed_database(3, 0, 0, str(self.path))
-        with sqlite3.connect(self.path) as conn:
+        with closing(sqlite3.connect(self.path)) as conn, conn:
             self.assertEqual(conn.execute("SELECT COUNT(*) FROM project").fetchone()[0], 2)

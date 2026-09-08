@@ -4,6 +4,8 @@ Transitional Streamlit shell. Migrate one feature at a time; new feature logic
 belongs in app.application and app.domain. Startup delegates here from app.main.
 """
 
+from contextlib import closing
+
 import importlib
 
 import streamlit as st
@@ -155,7 +157,7 @@ def parse_cli_args() -> tuple[bool, int]:
 
 def _get_database_seed_counts(db_path: str) -> dict[str, int]:
     """Return the persisted project, task, and dependency totals after seeding."""
-    with get_db(db_path) as conn:
+    with closing(get_db(db_path)) as conn, conn:
         row = conn.execute(
             """
             SELECT
@@ -177,7 +179,7 @@ def _get_database_seed_counts(db_path: str) -> dict[str, int]:
 
 def _get_planning_totals(db_path: str) -> dict[str, int]:
     """Read global planning counts in one query without loading table contents."""
-    with get_db(db_path) as conn:
+    with closing(get_db(db_path)) as conn, conn:
         row = conn.execute(
             "SELECT (SELECT COUNT(*) FROM project), "
             "(SELECT COUNT(*) FROM project_task), "

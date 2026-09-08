@@ -1,5 +1,7 @@
 """Unit tests for Resource Pools, partial mappings, de-duplication, and daily overassignment detection."""
 
+from contextlib import closing
+
 import os
 import sqlite3
 import tempfile
@@ -103,7 +105,7 @@ class TestResourcePools(unittest.TestCase):
         # Validation happens before replacement, so rejected edits preserve members.
         self.assertEqual(self.pool_repo.get_group_direct_member_ids(leaf), ([pool_a], []))
 
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             with self.assertRaisesRegex(sqlite3.IntegrityError, "cycle"):
                 conn.execute(
                     """

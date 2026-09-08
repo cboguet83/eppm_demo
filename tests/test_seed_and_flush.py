@@ -1,5 +1,7 @@
 """Unit tests for Database Seeding and Database Flushing scripts."""
 
+from contextlib import closing
+
 import gc
 import os
 import shutil
@@ -57,7 +59,7 @@ class TestSeedAndFlush(unittest.TestCase):
             self.assertLessEqual(len(tasks_df), 8)
 
         # Verify dependencies existence
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) FROM task_dependencies WHERE predecessor_project_id IS NOT NULL")
             ext_deps_count = cursor.fetchone()[0]
@@ -93,7 +95,7 @@ class TestSeedAndFlush(unittest.TestCase):
 
         # Verify database is now completely empty
         self.assertEqual(len(self.project_repo.get_all_projects()), 0)
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) FROM project_task")
             self.assertEqual(cursor.fetchone()[0], 0)

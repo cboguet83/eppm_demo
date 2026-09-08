@@ -16,7 +16,10 @@ def get_db(db_path: Optional[str] = None) -> sqlite3.Connection:
         db_path: Filepath to the SQLite database. If None, uses default from config.
 
     Returns:
-        sqlite3.Connection: Connected SQLite database object.
+        sqlite3.Connection: Connected SQLite database object owned by the caller.
+            Use ``with closing(get_db(path)) as conn, conn:`` to commit or roll
+            back the transaction and then close the connection on every exit.
+            A bare connection context manager does not close SQLite handles.
     """
     target_path = db_path if db_path is not None else config.db_path
     conn = sqlite3.connect(target_path)

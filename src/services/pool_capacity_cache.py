@@ -5,6 +5,8 @@ Full calculations run only on a cache miss; published results are checked agains
 the source revision so concurrent edits cannot publish stale calculations.
 """
 
+from contextlib import closing
+
 import json
 import sqlite3
 import pandas as pd
@@ -108,7 +110,7 @@ def _batch_calculate(db_path, pool_ids):
     assignment_groups = dict(tuple(assignments.groupby("pool_id"))) if not assignments.empty else {}
     bounds = tasks.get_all_project_date_bounds()
     team_functions = {}
-    with get_db(db_path) as conn:
+    with closing(get_db(db_path)) as conn, conn:
         for tid, fid in conn.execute("SELECT team_id,function_id FROM team_function"):
             team_functions.setdefault(tid, []).append(fid)
     org_inputs = SimpleNamespace(get_all_functions=lambda: functions, get_all_teams=lambda: teams,
@@ -134,7 +136,7 @@ def load_pool_capacities(db_path=None, *, details=False, pool_ids=None):
     subset = tuple(sorted(set(pool_ids))) if pool_ids is not None else None
     with _LOCK:
         for _ in range(3):
-            with get_db(path) as conn:
+            with closing(get_db(path)) as conn, conn:
                 try:
                     revision = conn.execute("SELECT epoch,revision FROM pool_capacity_revision WHERE id=1").fetchone()
                 except sqlite3.OperationalError as exc:
@@ -157,7 +159,7 @@ def load_pool_capacities(db_path=None, *, details=False, pool_ids=None):
             missing = [pid for pid, payload in rows if payload is None]
             if missing:
                 calculated = _batch_calculate(path, missing)
-                with get_db(path) as conn:
+                with closing(get_db(path)) as conn, conn:
                     conn.execute("BEGIN IMMEDIATE")
                     if revision != conn.execute("SELECT epoch,revision FROM pool_capacity_revision WHERE id=1").fetchone():
                         continue

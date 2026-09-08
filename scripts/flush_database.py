@@ -3,6 +3,8 @@
 Removes all project records, milestones/steps, and task dependencies from the SQLite database.
 """
 
+from contextlib import closing
+
 import argparse
 import os
 import sys
@@ -35,7 +37,7 @@ def flush_database(db_path: Optional[str] = None, flush_all: bool = False) -> di
         "dependencies_deleted": 0,
     }
 
-    with get_db(db_path) as conn:
+    with closing(get_db(db_path)) as conn, conn:
         conn.execute("PRAGMA foreign_keys = OFF")
         cursor = conn.cursor()
 

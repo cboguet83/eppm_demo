@@ -1,5 +1,7 @@
 """Behavioral coverage for templates, relational storage, and safe migration."""
 
+from contextlib import closing
+
 import json
 import sqlite3
 import tempfile
@@ -106,7 +108,7 @@ class ProjectTypesTests(unittest.TestCase):
         for kind, value in [("NUMBER", "12"), ("NUMBER", float("nan")), ("DATE", "2026-99-01"), ("ENUM", "unknown"), ("MULTI_ENUM", ["A", "A"])]:
             with self.subTest(kind=kind, value=value), self.assertRaises(ValueError):
                 self.projects.create_project(name="Invalid", dynamic_attributes={kind: value})
-        with get_db(self.path) as conn:
+        with closing(get_db(self.path)) as conn, conn:
             self.assertNotIn("dynamic_attributes", {r[1] for r in conn.execute("PRAGMA table_info(project)")})
             self.assertEqual(conn.execute("PRAGMA foreign_key_check").fetchall(), [])
 
@@ -127,7 +129,7 @@ class ProjectTypesTests(unittest.TestCase):
         self.assertTrue(self.schema.delete_parameter("p"))
 
     def assert_seed_valid(self):
-        with get_db(self.path) as conn:
+        with closing(get_db(self.path)) as conn, conn:
             values = read_values(conn)
             for pid, type_id in conn.execute("SELECT id,project_type_id FROM project"):
                 prepare_values(conn, type_id, values.get(pid, {}), creating=False)
@@ -159,7 +161,7 @@ class ProjectTypesTests(unittest.TestCase):
         seed_database(7, 2, 4, self.path, random_seed=17)
         self.assertEqual(self.projects.get_all_projects().to_dict("records"), snapshot)
         flush_database(self.path)
-        with get_db(self.path) as conn:
+        with closing(get_db(self.path)) as conn, conn:
             self.assertEqual(read_values(conn), {})
             self.assertTrue(read_values(conn, defaults=True))
         self.assertEqual(len(self.types.get_all_types()), 5)
@@ -173,12 +175,12 @@ class ProjectTypesTests(unittest.TestCase):
         seed_default_data_if_empty(self.path)
         self.assertTrue(self.projects.get_all_projects().empty)
         seed_database(2, 0, 0, self.path, clean_first=False)
-        with get_db(self.path) as conn:
+        with closing(get_db(self.path)) as conn, conn:
             self.assertEqual(conn.execute("SELECT COUNT(*) FROM project_task").fetchone()[0], 0)
 
     def test_bulk_respects_large_minimum_and_deleted_high_ids(self):
         seed_database(2, 20, 20, self.path)
-        with get_db(self.path) as conn:
+        with closing(get_db(self.path)) as conn, conn:
             self.assertEqual(conn.execute("SELECT COUNT(*) FROM project_task GROUP BY project_id").fetchall(), [(20,), (20,)])
         self.projects.delete_project(2)
         seed_database(2, 2, 4, self.path, clean_first=False)
@@ -192,7 +194,7 @@ class ProjectTypesTests(unittest.TestCase):
         seed_database(3, 0, 0, self.path, clean_first=False)
         self.assertEqual(len(self.types.get_all_types()), 2)
         self.assert_seed_valid()
-        with get_db(self.path) as conn:
+        with closing(get_db(self.path)) as conn, conn:
             self.assertEqual(conn.execute("SELECT DISTINCT text_value FROM project_property_value").fetchall(), [("User choice",)])
             self.assertEqual(conn.execute("SELECT COUNT(*) FROM employee").fetchone()[0], 0)
             self.assertEqual(conn.execute("SELECT COUNT(*) FROM resource_pool").fetchone()[0], 0)
@@ -205,7 +207,7 @@ class ProjectTypeMigrationTests(unittest.TestCase):
         self.path = str(Path(self.directory.name) / "legacy.db")
 
     def legacy(self, raw, *, ambiguous=False):
-        with sqlite3.connect(self.path) as conn:
+        with closing(sqlite3.connect(self.path)) as conn, conn:
             conn.execute("CREATE TABLE schema_groups(id INTEGER PRIMARY KEY,group_name TEXT,display_order INTEGER)")
             conn.execute("CREATE TABLE schema_parameters(param_id TEXT PRIMARY KEY,group_id INTEGER,param_name TEXT,param_type TEXT,mandatory INTEGER,alias TEXT)")
             conn.execute("INSERT INTO schema_parameters VALUES ('p',NULL,'Name','TEXT',1,'Alias')")
@@ -222,11 +224,11 @@ class ProjectTypeMigrationTests(unittest.TestCase):
         self.assertEqual(project.dynamic_attributes, {"p": "Preserved"})
         backup = Path(self.path + ".before-project-types.bak")
         self.assertTrue(backup.exists())
-        with sqlite3.connect(backup) as conn:
+        with closing(sqlite3.connect(backup)) as conn, conn:
             self.assertEqual(json.loads(conn.execute("SELECT dynamic_attributes FROM project").fetchone()[0]), {"Alias": "Preserved"})
         init_db(self.path)
         seed_default_data_if_empty(self.path)
-        with get_db(self.path) as conn:
+        with closing(get_db(self.path)) as conn, conn:
             self.assertEqual(conn.execute("SELECT COUNT(*) FROM project_property_value").fetchone()[0], 1)
             self.assertEqual(conn.execute("SELECT mandatory,applies_to_all FROM schema_parameters").fetchone(), (1, 1))
             self.assertEqual(conn.execute("SELECT COUNT(*) FROM project_type").fetchone()[0], 1)
@@ -238,19 +240,19 @@ class ProjectTypeMigrationTests(unittest.TestCase):
                 self.legacy(raw, ambiguous=ambiguous)
                 with self.assertRaises(ValueError):
                     init_db(self.path)
-                with sqlite3.connect(self.path) as conn:
+                with closing(sqlite3.connect(self.path)) as conn, conn:
                     self.assertEqual(conn.execute("SELECT dynamic_attributes FROM project").fetchone()[0], raw)
                     self.assertFalse(conn.execute("SELECT 1 FROM sqlite_master WHERE name='project_type'").fetchone())
                     self.assertNotIn("applies_to_all", {r[1] for r in conn.execute("PRAGMA table_info(schema_parameters)")})
 
     def test_unrelated_legacy_orphans_are_preserved_and_reported(self):
         self.legacy('{"p":"Keep"}')
-        with sqlite3.connect(self.path) as conn:
+        with closing(sqlite3.connect(self.path)) as conn, conn:
             conn.execute("CREATE TABLE external_record(id INTEGER PRIMARY KEY, project_id INTEGER REFERENCES project(id))")
             conn.execute("INSERT INTO external_record VALUES (1,999)")
         with self.assertLogs("src.database.project_type_migration", level="WARNING") as logs:
             init_db(self.path)
         self.assertIn("pre-existing", logs.output[0])
-        with get_db(self.path) as conn:
+        with closing(get_db(self.path)) as conn, conn:
             self.assertEqual(conn.execute("PRAGMA foreign_key_check").fetchall(), [("external_record", 1, "project", 0)])
             self.assertEqual(read_values(conn), {10: {"p": "Keep"}})
