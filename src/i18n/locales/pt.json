@@ -12,7 +12,7 @@
     "seed_projects_help": "0 inicializa os 3 projetos de demonstração padrão; >0 gera projetos com marcos e dependências",
     "btn_force_reseed": "Forçar reinicialização do banco",
     "seeding_in_progress": "Reinicializando banco de dados...",
-    "seed_success": "Banco de dados reinicializado com sucesso com {count} projetos!"
+    "seed_success": "Banco de dados reinicializado com sucesso: {projects} projetos, {tasks} tarefas e {dependencies} dependências criadas."
   },
 
   "nav": {
@@ -188,7 +188,15 @@
     "toast_pool_unassigned_proj": "Atribuição de pool do projeto removida!",
     "quick_project_pools": "Ação Rápida: Atribuir Pools de Recursos ao Projeto",
     "select_project_to_assign_pools": "Selecionar Projeto",
-    "btn_open_project_pool_mgr": "Abrir Alocador de Pool do Projeto"
+    "btn_open_project_pool_mgr": "Abrir Alocador de Pool do Projeto",
+    "flex_filters": "Filtros flexíveis",
+    "flex_filter_fields": "Campos de filtro",
+    "flex_filter_fields_placeholder": "Escolha um ou mais campos",
+    "flex_filter_match_label": "Quando vários valores estão selecionados",
+    "flex_filter_match_help": "Os campos usam E. Esta opção controla a correspondência dentro de cada campo.",
+    "flex_filter_all_values": "Todos os valores",
+    "flex_filter_clear": "Limpar filtros",
+    "flex_filter_project_tags": "Tags do projeto"
   },
   "gantt": {
     "columns": {
@@ -230,7 +238,8 @@
       "view_diagnostics": "Ver Diagnósticos",
       "view_project_diagnostics": "Ver Violações do Projeto",
       "manage_project_pools": "Atribuir Pools de Recursos",
-      "manage_task_pools": "Atribuir Pools de Recursos"
+      "manage_task_pools": "Atribuir Pools de Recursos",
+      "filter_project": "Filtrar por este projeto"
     },
     "resource_grid": {
       "title": "Pools de Recursos & Utilização de Capacidade",

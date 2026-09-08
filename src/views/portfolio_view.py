@@ -30,6 +30,23 @@ ALLOWED_DYNAMIC_PARAMS: set[str] = {
     "complexity",
 }
 
+_PORTFOLIO_TABLE_KEY = "portfolio_master_table"
+_SELECTED_PROJECT_KEY = "selected_portfolio_project_id"
+
+
+def _sync_portfolio_project_selection(
+    component_key: str = _PORTFOLIO_TABLE_KEY,
+    selection_key: str = _SELECTED_PROJECT_KEY,
+) -> None:
+    """Apply a row-click event before the next page body is rendered."""
+    component_state = st.session_state.get(component_key)
+    if isinstance(component_state, dict):
+        project_id = component_state.get("row_click")
+    else:
+        project_id = getattr(component_state, "row_click", None)
+    if project_id is not None:
+        st.session_state[selection_key] = project_id
+
 
 def _portfolio_table_value(value: Any) -> Any:
     """Convert pandas and collection values to JSON-safe component values."""
@@ -393,18 +410,27 @@ def render_portfolio_overview(
     available_cols = [c for c in display_cols if c in filtered_df.columns]
     filtered_df_reset = filtered_df.reset_index(drop=True)
     available_column_specs = [column for column in table_columns if column["key"] in available_cols]
+    # Component events are already in Session State at the start of the rerun.
+    # Synchronize before mounting so the new selection is painted in this run.
+    # Keeping the wrapper call signature stable also makes Streamlit hot reloads
+    # safe when an older imported component module is still in memory.
+    _sync_portfolio_project_selection()
     clicked_project_id = portfolio_project_table(
         _build_portfolio_table_rows(filtered_df_reset, available_cols),
         available_column_specs,
-        st.session_state.get("selected_portfolio_project_id"),
-        key="portfolio_master_table",
+        st.session_state.get(_SELECTED_PROJECT_KEY),
+        key=_PORTFOLIO_TABLE_KEY,
     )
 
-    # 6. Render Project Details Below the Master List
-    if clicked_project_id is not None:
-        st.session_state["selected_portfolio_project_id"] = clicked_project_id
+    # Defensive fallback for component runtimes that expose a trigger only in
+    # the mount result. The immediate rerun prevents a stale row highlight.
+    selected_pid = st.session_state.get(_SELECTED_PROJECT_KEY)
+    if clicked_project_id is not None and str(clicked_project_id) != str(selected_pid):
+        st.session_state[_SELECTED_PROJECT_KEY] = clicked_project_id
+        st.rerun()
 
-    selected_pid = st.session_state.get("selected_portfolio_project_id")
+    # 6. Render Project Details Below the Master List
+    selected_pid = st.session_state.get(_SELECTED_PROJECT_KEY)
     if selected_pid is not None:
         matching = df_merged[df_merged["id"].astype(str) == str(selected_pid)]
         if not matching.empty:

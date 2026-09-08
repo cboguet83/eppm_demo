@@ -12,7 +12,7 @@
     "seed_projects_help": "0 initialise les 3 projets démo; >0 génère des projets avec étapes et dépendances",
     "btn_force_reseed": "Forcer réinitialisation BDD",
     "seeding_in_progress": "Réinitialisation en cours...",
-    "seed_success": "Base de données réinitialisée avec succès ({count} projets) !"
+    "seed_success": "Base de données réinitialisée avec succès : {projects} projets, {tasks} tâches et {dependencies} dépendances créés."
   },
 
   "nav": {
@@ -188,7 +188,15 @@
     "toast_pool_unassigned_proj": "Assignation de pool du projet supprimée !",
     "quick_project_pools": "Action Rapide : Assigner des Pools de Ressources au Projet",
     "select_project_to_assign_pools": "Sélectionner le Projet",
-    "btn_open_project_pool_mgr": "Ouvrir l'Allocateur de Pool Projet"
+    "btn_open_project_pool_mgr": "Ouvrir l'Allocateur de Pool Projet",
+    "flex_filters": "Filtres flexibles",
+    "flex_filter_fields": "Champs de filtre",
+    "flex_filter_fields_placeholder": "Choisissez un ou plusieurs champs",
+    "flex_filter_match_label": "Lorsque plusieurs valeurs sont sélectionnées",
+    "flex_filter_match_help": "Les champs utilisent ET. Cette option contrôle la correspondance dans chaque champ.",
+    "flex_filter_all_values": "Toutes les valeurs",
+    "flex_filter_clear": "Effacer les filtres",
+    "flex_filter_project_tags": "Tags du projet"
   },
   "gantt": {
     "columns": {
@@ -230,7 +238,8 @@
       "view_diagnostics": "Voir les Diagnostics",
       "view_project_diagnostics": "Voir les Violations du Projet",
       "manage_project_pools": "Assigner des Pools de Ressources",
-      "manage_task_pools": "Assigner des Pools de Ressources"
+      "manage_task_pools": "Assigner des Pools de Ressources",
+      "filter_project": "Filtrer sur ce projet"
     },
     "resource_grid": {
       "title": "Pools de Ressources & Utilisation de la Capacité",

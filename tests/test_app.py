@@ -79,6 +79,29 @@ class TestPPMStudio(unittest.TestCase):
         self.assertGreaterEqual(project_count, 3)
         self.assertGreaterEqual(milestone_count, 5)
 
+    def test_database_seed_counts_include_projects_tasks_and_dependencies(self) -> None:
+        """Verify the reseeding success summary uses persisted totals for all objects."""
+        from app import _get_database_seed_counts
+
+        init_db(self.temp_db_path)
+        seed_default_data_if_empty(self.temp_db_path)
+        with get_db(self.temp_db_path) as conn:
+            conn.execute(
+                """
+                INSERT INTO task_dependencies
+                    (task_id, predecessor_task_id, link_type, lag_days)
+                VALUES (2, 1, 'FS', 0)
+                """
+            )
+            conn.commit()
+
+        counts = _get_database_seed_counts(self.temp_db_path)
+
+        self.assertEqual(set(counts), {"projects", "tasks", "dependencies"})
+        self.assertGreaterEqual(counts["projects"], 3)
+        self.assertGreaterEqual(counts["tasks"], 5)
+        self.assertEqual(counts["dependencies"], 1)
+
     def test_get_next_available_group_order(self) -> None:
         """Verify calculation of next available display order for schema groups."""
         init_db(self.temp_db_path)

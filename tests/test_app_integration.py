@@ -143,6 +143,25 @@ class TestIntegration(unittest.TestCase):
         self.assertEqual(rows, [{"name": "Apollo", "status": "Draft", "project_id": 42}])
         self.assertNotIn("id", rows[0])
 
+    def test_portfolio_row_click_is_applied_before_table_render(self) -> None:
+        """The component event must synchronize the stable project ID before mounting."""
+        import streamlit as st
+
+        from src.views.portfolio_view import _sync_portfolio_project_selection
+
+        component_key = "test_portfolio_master_table"
+        selection_key = "test_selected_portfolio_project_id"
+        try:
+            st.session_state[component_key] = {"row_click": 42}
+            st.session_state[selection_key] = 7
+
+            _sync_portfolio_project_selection(component_key, selection_key)
+
+            self.assertEqual(st.session_state[selection_key], 42)
+        finally:
+            st.session_state.pop(component_key, None)
+            st.session_state.pop(selection_key, None)
+
     def test_parse_cli_args(self) -> None:
         """Verify parsing of CLI arguments for database force-reseeding and project count."""
         import sys

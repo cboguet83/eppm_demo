@@ -12,7 +12,7 @@
     "seed_projects_help": "0 initialiséiert déi 3 Standard-Demoprojeten; >0 generéiert Projeten mat Meilesteng an Ofhängegkeeten",
     "btn_force_reseed": "Datebank nei initialiséieren",
     "seeding_in_progress": "Datebank gëtt nei initialiséiert...",
-    "seed_success": "Datebank erfollegräich mat {count} Projeten nei initialiséiert!"
+    "seed_success": "Datebank erfollegräich nei initialiséiert: {projects} Projeten, {tasks} Aufgaben an {dependencies} Ofhängegkeeten erstallt."
   },
 
   "nav": {
@@ -188,7 +188,15 @@
     "toast_pool_unassigned_proj": "Projet-Poolallocatioun geläscht!",
     "quick_project_pools": "Schnellaktioun: Ressourcenpools dem Projet zouuerdnen",
     "select_project_to_assign_pools": "Projet auswielen",
-    "btn_open_project_pool_mgr": "Projet-Poolallocateur opmaachen"
+    "btn_open_project_pool_mgr": "Projet-Poolallocateur opmaachen",
+    "flex_filters": "Flexibel Filteren",
+    "flex_filter_fields": "Filterfelder",
+    "flex_filter_fields_placeholder": "Een oder méi Felder auswielen",
+    "flex_filter_match_label": "Wann e puer Wäerter ausgewielt sinn",
+    "flex_filter_match_help": "Felder gi mat AN verbonnen. Dës Optioun steiert d'Ofgläichung an all Feld.",
+    "flex_filter_all_values": "All Wäerter",
+    "flex_filter_clear": "Filteren läschen",
+    "flex_filter_project_tags": "Projet-Tags"
   },
   "gantt": {
     "columns": {
@@ -230,7 +238,8 @@
       "view_diagnostics": "Diagnostik weisen",
       "view_project_diagnostics": "Projetverletzungen uweisen",
       "manage_project_pools": "Ressourcenpools zouuerdnen",
-      "manage_task_pools": "Ressourcenpools zouuerdnen"
+      "manage_task_pools": "Ressourcenpools zouuerdnen",
+      "filter_project": "Op dëse Projet filteren"
     },
     "resource_grid": {
       "title": "Ressource-Pools & Kapazitéitsnotzung",

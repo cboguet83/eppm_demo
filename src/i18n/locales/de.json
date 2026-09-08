@@ -12,7 +12,7 @@
     "seed_projects_help": "0 initialisiert die 3 Standard-Demoprojekte; >0 generiert Projekte mit Meilensteinen und Abhängigkeiten",
     "btn_force_reseed": "Datenbank neu initialisieren",
     "seeding_in_progress": "Datenbank wird neu initialisiert...",
-    "seed_success": "Datenbank erfolgreich mit {count} Projekten neu initialisiert!"
+    "seed_success": "Datenbank erfolgreich neu initialisiert: {projects} Projekte, {tasks} Aufgaben und {dependencies} Abhängigkeiten erstellt."
   },
 
   "nav": {
@@ -188,7 +188,15 @@
     "toast_pool_unassigned_proj": "Projekt-Poolzuweisung entfernt!",
     "quick_project_pools": "Schnellaktion: Ressourcenpools dem Projekt zuweisen",
     "select_project_to_assign_pools": "Projekt auswählen",
-    "btn_open_project_pool_mgr": "Projekt-Poolzuweiser öffnen"
+    "btn_open_project_pool_mgr": "Projekt-Poolzuweiser öffnen",
+    "flex_filters": "Flexible Filter",
+    "flex_filter_fields": "Filterfelder",
+    "flex_filter_fields_placeholder": "Ein oder mehrere Felder auswählen",
+    "flex_filter_match_label": "Wenn mehrere Werte ausgewählt sind",
+    "flex_filter_match_help": "Felder werden mit UND verknüpft. Diese Option steuert die Übereinstimmung innerhalb eines Feldes.",
+    "flex_filter_all_values": "Alle Werte",
+    "flex_filter_clear": "Filter löschen",
+    "flex_filter_project_tags": "Projekt-Tags"
   },
   "gantt": {
     "columns": {
@@ -230,7 +238,8 @@
       "view_diagnostics": "Diagnose anzeigen",
       "view_project_diagnostics": "Projektverletzungen anzeigen",
       "manage_project_pools": "Ressourcenpools zuweisen",
-      "manage_task_pools": "Ressourcenpools zuweisen"
+      "manage_task_pools": "Ressourcenpools zuweisen",
+      "filter_project": "Nach diesem Projekt filtern"
     },
     "resource_grid": {
       "title": "Ressourcen-Pools & Kapazitätsauslastung",

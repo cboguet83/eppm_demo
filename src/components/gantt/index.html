@@ -1748,6 +1748,10 @@
       <span>🔗</span>
       <span id="ctx-view-pred-label">View Predecessors</span>
     </div>
+    <div class="context-menu-item" onclick="triggerFilterContextProject('task')">
+      <span>🔍</span>
+      <span class="ctx-label-filter-project">Filter on this project</span>
+    </div>
     <div class="context-menu-item" onclick="openAddStepModal()">
       <span>➕</span>
       <span id="ctx-label-add-step">Add Step</span>
@@ -1780,6 +1784,10 @@
     <div class="context-menu-item warning" id="ctx-proj-violation-btn" onclick="openProjectDiagModal()" style="display:none;">
       <span>⚠️</span>
       <span id="ctx-proj-violation-label">View Project Violations</span>
+    </div>
+    <div class="context-menu-item" onclick="triggerFilterContextProject('project')">
+      <span>🔍</span>
+      <span class="ctx-label-filter-project">Filter on this project</span>
     </div>
     <div class="context-menu-item" onclick="triggerManageProjectTagsFromMenu()">
       <span>🏷️</span>
@@ -2154,7 +2162,7 @@
       columns: { id: "ID", name: "Task / Step Name", start: "Start", stop: "Stop", prog: "Prog" },
       view_modes: { day: "Day", week: "Week", month: "Month", quarter: "Quarter", year: "Year" },
       toggles: { internal_links: "🔗 Internal Dependencies", external_links: "🌐 External Dependencies", show_description: "📄 Description", show_hover: "💬 Tooltips", expand_all: "▼ Expand All", collapse_all: "▶ Collapse All" },
-      context_menu: { edit_step: "Edit Step Details", add_step_after: "Add Next Step (Successor)", add_step_before: "Add Previous Step (Predecessor)", mark_complete: "Mark as 100% Complete", delete_step: "Delete Step", edit_dep: "Edit Dependency", delete_dep: "Delete Dependency", view_diagnostics: "View Diagnostics" },
+      context_menu: { edit_step: "Edit Step Details", add_step_after: "Add Next Step (Successor)", add_step_before: "Add Previous Step (Predecessor)", filter_project: "Filter on this project", mark_complete: "Mark as 100% Complete", delete_step: "Delete Step", edit_dep: "Edit Dependency", delete_dep: "Delete Dependency", view_diagnostics: "View Diagnostics" },
       resource_grid: {
         title: "Resource Pools & Capacity Usage",
         within_capacity: "Within Capacity",
@@ -2233,6 +2241,9 @@
       if (elProjTags) elProjTags.innerText = getT('context_menu.manage_tags', 'Manage Tags');
       const elEditProj = document.getElementById('ctx-label-edit-project');
       if (elEditProj) elEditProj.innerText = getT('context_menu.edit_project', 'Edit Project Details');
+      document.querySelectorAll('.ctx-label-filter-project').forEach(el => {
+        el.innerText = getT('context_menu.filter_project', 'Filter on this project');
+      });
 
       // Resource grid labels
       const elResTitle = document.getElementById('lbl-resource-panel-title');
@@ -3563,6 +3574,32 @@
       Streamlit.setComponentValue({
         action: "edit_project_details",
         project_id: selectedContextMenuProjectId,
+        nonce: Date.now() + "_" + Math.random()
+      });
+    }
+
+    function triggerFilterContextProject(source) {
+      const fromProjectMenu = source === 'project';
+      const projectId = fromProjectMenu
+        ? selectedContextMenuProjectId
+        : (selectedContextMenuTask && (selectedContextMenuTask.project_id || currentProjectId));
+      if (!projectId) return;
+
+      const projectMeta = (allProjectsData || []).find(
+        project => String(project.id) === String(projectId)
+      );
+      const projectName = fromProjectMenu
+        ? ((projectMeta && projectMeta.name) || '')
+        : ((selectedContextMenuTask && selectedContextMenuTask.project_name)
+          || (projectMeta && projectMeta.name)
+          || '');
+
+      hideContextMenu();
+      hideProjectContextMenu();
+      Streamlit.setComponentValue({
+        action: "filter_project",
+        project_id: projectId,
+        project_name: projectName,
         nonce: Date.now() + "_" + Math.random()
       });
     }
@@ -5106,7 +5143,10 @@
               <span class="task-id-cell" style="width:${colWidths.id}px; min-width:${colWidths.id}px; max-width:${colWidths.id}px; font-weight:700; color:#475569;">📁</span>
               <span class="collapse-toggle-icon" onclick="toggleProjectCollapse('${item.project_id}', event)" style="cursor:pointer;" title="${item.isCollapsed ? 'Click to expand tasks' : 'Click to collapse tasks'}">${item.isCollapsed ? '▶' : '▼'}</span>
               <div class="project-group-title-wrapper" style="width:${nameColW}px; min-width:${nameColW}px; max-width:${nameColW}px; display:flex; align-items:center; gap:6px; overflow:hidden;">
-                <span class="project-group-title" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1;">${escapeHtml(cleanProjectName)}</span>
+                <span class="project-group-title" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; cursor:help;"
+                      onmouseenter="showProjectHoverTooltip(event, '${item.project_id}')"
+                      onmousemove="moveTooltip(event)"
+                      onmouseleave="hideTooltip()">${escapeHtml(cleanProjectName)}</span>
                 <span class="project-group-count" style="font-size:10px; padding:1px 6px; border-radius:10px; flex-shrink:0; cursor:${hasViol ? 'pointer' : 'default'}; ${badgeStyle}" ${hasViol ? `onclick="event.stopPropagation(); openProjectDiagModal('${item.project_id}');"` : ''}>${badgeIcon}${item.taskCount}</span>
               </div>
               <span class="task-date-cell" style="width:${colWidths.start}px; min-width:${colWidths.start}px; max-width:${colWidths.start}px; font-weight:600; color:#334155;">${formatMmmYy(item.start)}</span>

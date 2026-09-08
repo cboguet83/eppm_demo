@@ -22,6 +22,8 @@ from src.repositories.resource_pool_repo import ResourcePoolRepository
 from src.repositories.schema_repo import SchemaRepository
 from src.repositories.tag_repo import TagRepository
 from src.services.milestone_service import MilestoneService
+from src.services.organization_service import OrganizationService
+from src.services.portfolio_service import PortfolioService
 from src.services.resource_pool_service import ResourcePoolService
 from src.views.project_dialogs import open_edit_project_dialog
 
@@ -32,6 +34,186 @@ _COMPONENT_PATH = os.path.join(
     "gantt",
 )
 _interactive_gantt = components.declare_component("interactive_gantt", path=_COMPONENT_PATH)
+
+
+def _get_gantt_event_nonce(gantt_event: dict[str, Any]) -> str:
+    """Return the component nonce, with a deterministic fallback for older events."""
+    nonce = gantt_event.get("nonce")
+    if nonce:
+        return str(nonce)
+    return str(hash(frozenset(str(key) + str(value) for key, value in gantt_event.items())))
+
+
+def _apply_immediate_gantt_update(
+    gantt_event: dict[str, Any],
+    milestone_repo: MilestoneRepository,
+) -> bool:
+    """Persist date/progress events before Streamlit starts its automatic rerun."""
+    action = gantt_event.get("action")
+    step_id = gantt_event.get("id")
+    try:
+        step_id_int = int(step_id)
+    except (TypeError, ValueError):
+        return False
+
+    if action == "update_dates":
+        new_start = str(gantt_event.get("start_date", "")).strip()
+        new_end = str(gantt_event.get("end_date", "")).strip()
+        try:
+            start_date = datetime.date.fromisoformat(new_start)
+            end_date = datetime.date.fromisoformat(new_end)
+        except ValueError:
+            return False
+        if end_date < start_date:
+            return False
+
+        updated = milestone_repo.update_dates(step_id_int, new_start, new_end)
+        if updated:
+            st.toast(
+                t(
+                    "planning.toast_dates_updated",
+                    id=step_id_int,
+                    start=new_start,
+                    end=new_end,
+                ),
+                icon="📅",
+            )
+        return updated
+
+    if action == "update_progress":
+        try:
+            new_progress = int(gantt_event.get("progress"))
+        except (TypeError, ValueError):
+            return False
+
+        updated = milestone_repo.update_progress(step_id_int, new_progress)
+        if updated:
+            st.toast(
+                t(
+                    "planning.toast_progress_updated",
+                    id=step_id_int,
+                    progress=new_progress,
+                ),
+                icon="📊",
+            )
+        return updated
+
+    return False
+
+
+def _handle_gantt_component_change(
+    widget_key: str,
+    milestone_repo: MilestoneRepository,
+) -> None:
+    """Handle inline Gantt mutations in the component callback.
+
+    Component callbacks run before Streamlit executes the automatic rerun, so
+    the rebuilt Gantt immediately reads the newly persisted task values.
+    """
+    gantt_event = st.session_state.get(widget_key)
+    if not isinstance(gantt_event, dict):
+        return
+    if gantt_event.get("action") not in {
+        "filter_project",
+        "update_dates",
+        "update_progress",
+    }:
+        return
+
+    nonce = _get_gantt_event_nonce(gantt_event)
+    if nonce == st.session_state.get("last_gantt_nonce"):
+        return
+
+    # Consume the event even when its client-supplied payload is invalid. This
+    # prevents it from falling through to the post-render event handler.
+    st.session_state["last_gantt_nonce"] = nonce
+    if gantt_event.get("action") == "filter_project":
+        _focus_planning_on_project(gantt_event)
+    else:
+        _apply_immediate_gantt_update(gantt_event, milestone_repo)
+
+
+def _normalise_planning_filter_values(value: Any) -> list[str]:
+    """Convert scalar and multi-valued project attributes to filter values."""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        stripped = value.strip()
+        return [stripped] if stripped else []
+    if isinstance(value, (list, tuple, set)):
+        return [str(item).strip() for item in value if str(item).strip()]
+    try:
+        if pd.isna(value):
+            return []
+    except (TypeError, ValueError):
+        pass
+    return [str(value).strip()]
+
+
+def _unique_planning_filter_options(series: pd.Series) -> list[str]:
+    """Return the sorted distinct values available for one filter field."""
+    values = {
+        item
+        for value in series.tolist()
+        for item in _normalise_planning_filter_values(value)
+        if item
+    }
+    return sorted(values, key=str.casefold)
+
+
+def _apply_planning_flex_filters(
+    frame: pd.DataFrame,
+    filters: dict[str, list[str]],
+    match_all_values: bool = False,
+) -> pd.DataFrame:
+    """Apply AND across fields and Any/All matching within each field."""
+    filtered = frame.copy()
+    for column, selected_values in filters.items():
+        if column not in filtered.columns or not selected_values:
+            continue
+        wanted = {str(value).casefold() for value in selected_values}
+
+        def cell_matches(value: Any) -> bool:
+            actual = {
+                item.casefold()
+                for item in _normalise_planning_filter_values(value)
+            }
+            return wanted.issubset(actual) if match_all_values else bool(wanted & actual)
+
+        filtered = filtered[filtered[column].apply(cell_matches)]
+    return filtered
+
+
+def _clear_planning_flex_filter_state(*, clear_tracking: bool = False) -> None:
+    """Clear only state owned by the planning flexible filter."""
+    for key in list(st.session_state):
+        if str(key).startswith("planning_flex_"):
+            del st.session_state[key]
+    if clear_tracking:
+        st.session_state.pop("planning_last_flex_signature", None)
+
+
+def _focus_planning_on_project(gantt_event: dict[str, Any]) -> bool:
+    """Clear competing filters and focus the planning page on one project."""
+    try:
+        project_id = int(gantt_event.get("project_id"))
+    except (TypeError, ValueError):
+        return False
+    if project_id <= 0:
+        return False
+
+    _clear_planning_flex_filter_state(clear_tracking=True)
+    st.session_state.pop("active_resource_pool_filter", None)
+    st.session_state.pop("pending_resource_pool_filter", None)
+    st.session_state.pop("pending_clear_resource_pool_filter", None)
+    st.session_state["ms_planning_tag_filter"] = []
+    st.session_state["last_planning_tag_filter"] = []
+    st.session_state["ms_multi_projects"] = [project_id]
+
+    project_name = str(gantt_event.get("project_name", "")).strip()
+    label = project_name or f"Project #{project_id}"
+    st.toast(f"Filtered planning to {label}", icon="🔍")
+    return True
 
 
 def _build_resource_pool_hierarchy(
@@ -946,18 +1128,23 @@ def render_planning_milestones(
     proj_map = dict(zip(df_projects["id"], df_projects["name"]))
 
     # --------------------------------------------------------------------------
-    # TOP CONTROL: Project Tag Filter & Projects Multi-Selector
+    # TOP CONTROL: Flexible filters, project tags, and project multi-selector
     # --------------------------------------------------------------------------
     df_all_proj_tags = tag_repo.get_all_project_tags()
     available_tags_set: set[str] = set()
+    project_tags_by_id: dict[int, list[str]] = {}
     if not df_all_proj_tags.empty:
         for _, r in df_all_proj_tags.iterrows():
             t_name = r.get("tag_name")
             f_name = r.get("free_tag")
             if pd.notna(t_name) and str(t_name).strip():
-                available_tags_set.add(str(t_name).strip())
+                tag_name = str(t_name).strip()
+                available_tags_set.add(tag_name)
+                project_tags_by_id.setdefault(int(r["project_id"]), []).append(tag_name)
             if pd.notna(f_name) and str(f_name).strip():
-                available_tags_set.add(str(f_name).strip())
+                free_tag = str(f_name).strip()
+                available_tags_set.add(free_tag)
+                project_tags_by_id.setdefault(int(r["project_id"]), []).append(free_tag)
 
     available_tags_list = sorted(list(available_tags_set))
 
@@ -966,6 +1153,7 @@ def render_planning_milestones(
     if target_pid is not None:
         try:
             target_pid_int = int(target_pid)
+            _clear_planning_flex_filter_state(clear_tracking=True)
             st.session_state["ms_planning_tag_filter"] = []
             st.session_state["ms_multi_projects"] = [target_pid_int]
         except (ValueError, TypeError):
@@ -974,6 +1162,7 @@ def render_planning_milestones(
     # 2. Check for pending resource pool filter clears (must be applied BEFORE widgets instantiate)
     if st.session_state.pop("pending_clear_resource_pool_filter", False):
         st.session_state.pop("active_resource_pool_filter", None)
+        _clear_planning_flex_filter_state(clear_tracking=True)
         st.session_state["ms_planning_tag_filter"] = []
         st.session_state["last_planning_tag_filter"] = []
         st.session_state["ms_multi_projects"] = master_proj_ids
@@ -982,10 +1171,15 @@ def render_planning_milestones(
     pending_rf = st.session_state.pop("pending_resource_pool_filter", None)
     if pending_rf is not None:
         if pending_rf.get("clear_other"):
+            _clear_planning_flex_filter_state(clear_tracking=True)
             st.session_state["ms_planning_tag_filter"] = []
             st.session_state["last_planning_tag_filter"] = []
         if "target_pids" in pending_rf:
             st.session_state["ms_multi_projects"] = pending_rf["target_pids"]
+
+    pending_project_filter = st.session_state.pop("pending_project_context_filter", None)
+    if isinstance(pending_project_filter, dict):
+        _focus_planning_on_project(pending_project_filter)
 
     # Top Active Resource Pool Filter Banner
     active_rf = st.session_state.get("active_resource_pool_filter")
@@ -1005,7 +1199,45 @@ def render_planning_milestones(
             if st.button("✖ Clear Filter", key="btn_clear_pool_filter_top", type="secondary"):
                 _handle_clear_resource_pool_filter(master_proj_ids)
 
-    top_filter_col, top_sel_col = st.columns([2, 3])
+    params = schema_repo.get_all_parameters()
+    project_filter_frame = PortfolioService.flatten_dynamic_attributes(df_projects, params)
+    project_filter_frame = OrganizationService.enrich_projects_with_organization(
+        project_filter_frame,
+        org_repo.get_all_functions(),
+        org_repo.get_all_employees(),
+    )
+    project_filter_frame["_project_tags"] = project_filter_frame["id"].apply(
+        lambda project_id: project_tags_by_id.get(int(project_id), [])
+    )
+
+    flex_filter_fields: dict[str, str] = {
+        t("portfolio.col_name", default="Project name"): "name",
+        t("portfolio.col_status", default="Status"): "status",
+        t("master_data.field_project_manager", default="Project Manager"): "project_manager",
+        t(
+            "portfolio.filter_level_3_manager",
+            default="Managing Function (Level 3)",
+        ): "level_3_manager_name",
+        t("planning.flex_filter_project_tags", default="Project Tags"): "_project_tags",
+    }
+    if not params.empty and "param_id" in params.columns:
+        for _, parameter in params.iterrows():
+            param_id = str(parameter["param_id"])
+            param_name = str(parameter.get("param_name", param_id))
+            target_column = (
+                param_id
+                if param_id in project_filter_frame.columns
+                else param_name
+                if param_name in project_filter_frame.columns
+                else None
+            )
+            if target_column is not None:
+                field_label = param_name
+                if field_label in flex_filter_fields:
+                    field_label = f"{param_name} ({param_id})"
+                flex_filter_fields[field_label] = target_column
+
+    top_filter_col, top_flex_col, top_sel_col = st.columns([2, 1.2, 3])
 
     with top_filter_col:
         selected_tag_filters = st.multiselect(
@@ -1013,6 +1245,87 @@ def render_planning_milestones(
             options=available_tags_list,
             help="Filter project list to projects assigned any of the chosen tags.",
             key="ms_planning_tag_filter",
+        )
+
+    active_flex_filters: dict[str, list[str]] = {}
+    with top_flex_col:
+        with st.popover(
+            t("planning.flex_filters", default="Flexible filters"),
+            icon=":material/filter_alt:",
+            width="stretch",
+        ):
+            selected_flex_fields = st.multiselect(
+                t("planning.flex_filter_fields", default="Filter fields"),
+                options=list(flex_filter_fields),
+                placeholder=t(
+                    "planning.flex_filter_fields_placeholder",
+                    default="Choose one or more fields",
+                ),
+                key="planning_flex_fields",
+            )
+            flex_match_mode = st.segmented_control(
+                t(
+                    "planning.flex_filter_match_label",
+                    default="When several values are selected",
+                ),
+                options=["Any", "All"],
+                default="Any",
+                key="planning_flex_match_mode",
+                help=t(
+                    "planning.flex_filter_match_help",
+                    default="Fields use AND. This controls matching within each field.",
+                ),
+            )
+            for field_label in selected_flex_fields:
+                target_column = flex_filter_fields[field_label]
+                filter_options = _unique_planning_filter_options(
+                    project_filter_frame[target_column]
+                )
+                selected_values = st.multiselect(
+                    field_label,
+                    options=filter_options,
+                    placeholder=t("planning.flex_filter_all_values", default="All values"),
+                    key=f"planning_flex_values::{target_column}",
+                )
+                if selected_values:
+                    active_flex_filters[target_column] = selected_values
+            st.button(
+                t("planning.flex_filter_clear", default="Clear filters"),
+                on_click=_clear_planning_flex_filter_state,
+                width="stretch",
+                disabled=not selected_flex_fields,
+                key="btn_clear_planning_flex",
+            )
+
+    flex_signature = (
+        flex_match_mode,
+        tuple(
+            sorted(
+                (column, tuple(values))
+                for column, values in active_flex_filters.items()
+            )
+        ),
+    )
+    previous_flex_signature = st.session_state.get("planning_last_flex_signature")
+    flex_filters_changed = (
+        previous_flex_signature is not None
+        and previous_flex_signature != flex_signature
+    )
+    st.session_state["planning_last_flex_signature"] = flex_signature
+
+    if active_flex_filters:
+        project_filter_frame = _apply_planning_flex_filters(
+            project_filter_frame,
+            active_flex_filters,
+            match_all_values=flex_match_mode == "All",
+        )
+        df_projects = df_projects[
+            df_projects["id"].isin(project_filter_frame["id"].tolist())
+        ]
+        st.caption(
+            f"{len(active_flex_filters)} active flexible filter"
+            f"{'s' if len(active_flex_filters) != 1 else ''} · "
+            f"{len(df_projects)} matching projects"
         )
 
     prev_tag_filters = st.session_state.get("last_planning_tag_filter", None)
@@ -1047,6 +1360,8 @@ def render_planning_milestones(
     if cur_active_rf and "project_ids" in cur_active_rf:
         rf_pids = [p for p in cur_active_rf["project_ids"] if p in all_proj_ids]
         st.session_state["ms_multi_projects"] = rf_pids
+    elif flex_filters_changed:
+        st.session_state["ms_multi_projects"] = all_proj_ids
     elif tag_filters_cleared:
         st.session_state["ms_multi_projects"] = all_proj_ids
     elif tag_filters_changed and selected_tag_filters:
@@ -1327,13 +1642,12 @@ def render_planning_milestones(
             resource_pool_hierarchy=resource_pool_hierarchy,
             active_resource_filter=st.session_state.get("active_resource_pool_filter"),
             key=widget_key,
+            on_change=lambda: _handle_gantt_component_change(widget_key, milestone_repo),
         )
 
         # Handle bi-directional Drag & Drop changes from JS (deduplicated via nonce)
         if gantt_event and isinstance(gantt_event, dict):
-            nonce = gantt_event.get("nonce")
-            if not nonce:
-                nonce = str(hash(frozenset(str(k) + str(v) for k, v in gantt_event.items())))
+            nonce = _get_gantt_event_nonce(gantt_event)
             last_nonce = st.session_state.get("last_gantt_nonce")
 
             if nonce and nonce != last_nonce:
@@ -1378,6 +1692,11 @@ def render_planning_milestones(
                     if p_id:
                         st.session_state["modal_edit_project"] = int(p_id)
                         st.rerun()
+                elif action == "filter_project":
+                    # The callback normally applies this before the automatic
+                    # component rerun. Queue a compatibility fallback only.
+                    st.session_state["pending_project_context_filter"] = gantt_event
+                    st.rerun()
                 elif action == "manage_task_tags" and step_id:
                     st.session_state["modal_manage_task_tag"] = {
                         "task_id": int(step_id),
@@ -1439,18 +1758,11 @@ def render_planning_milestones(
                         st.toast(t("planning.toast_step_created", name=t_name, project_id=t_proj), icon="➕")
                         st.rerun()
                 elif action == "update_dates" and step_id:
-                    new_start = str(gantt_event.get("start_date", "")).strip()
-                    new_end = str(gantt_event.get("end_date", "")).strip()
-                    if new_start and new_end:
-                        milestone_repo.update_dates(int(step_id), new_start, new_end)
-                        st.toast(t("planning.toast_dates_updated", id=step_id, start=new_start, end=new_end), icon="📅")
-                        st.rerun()
+                    # Normally handled by ``on_change`` before this render. This
+                    # fallback preserves compatibility without starting a second rerun.
+                    _apply_immediate_gantt_update(gantt_event, milestone_repo)
                 elif action == "update_progress" and step_id:
-                    new_prog = gantt_event.get("progress")
-                    if new_prog is not None:
-                        milestone_repo.update_progress(int(step_id), int(new_prog))
-                        st.toast(t("planning.toast_progress_updated", id=step_id, progress=new_prog), icon="📊")
-                        st.rerun()
+                    _apply_immediate_gantt_update(gantt_event, milestone_repo)
                 elif action == "delete_step" and step_id:
                     milestone_repo.delete_milestone(int(step_id))
                     st.toast(t("planning.toast_step_deleted", id=step_id), icon="🗑️")

@@ -138,6 +138,24 @@ def parse_cli_args() -> tuple[bool, int]:
     return bool(args.force_reseed), int(args.projects)
 
 
+def _get_database_seed_counts(db_path: str) -> dict[str, int]:
+    """Return the persisted project, task, and dependency totals after seeding."""
+    with get_db(db_path) as conn:
+        row = conn.execute(
+            """
+            SELECT
+                (SELECT COUNT(*) FROM project),
+                (SELECT COUNT(*) FROM project_task),
+                (SELECT COUNT(*) FROM task_dependencies)
+            """
+        ).fetchone()
+    return {
+        "projects": int(row[0]),
+        "tasks": int(row[1]),
+        "dependencies": int(row[2]),
+    }
+
+
 @st.cache_resource
 def bootstrap_database() -> bool:
     """Initializes the database schema and performs seeding on server startup.
@@ -345,7 +363,7 @@ def run_app() -> None:
         if st.button(
             f"🔄 {t('app.btn_force_reseed', default='Force Re-seed Database')}",
             key="btn_sidebar_force_reseed",
-            use_container_width=True,
+            width="stretch",
         ):
             with st.spinner(t("app.seeding_in_progress", default="Re-seeding database...")):
                 if ui_num_projects > 0:
@@ -354,12 +372,16 @@ def run_app() -> None:
                     seed_database(num_projects=int(ui_num_projects), db_path=config.db_path, clean_first=True)
                 else:
                     seed_default_data_if_empty(force=True)
+                seed_counts = _get_database_seed_counts(config.db_path)
                 st.cache_resource.clear()
                 st.cache_data.clear()
                 st.session_state["seeding_status_message"] = t(
                     "app.seed_success",
-                    default=f"Database successfully re-seeded with {ui_num_projects or 3} projects!",
-                    count=int(ui_num_projects) or 3,
+                    default=(
+                        "Database successfully re-seeded: {projects} projects, "
+                        "{tasks} tasks, and {dependencies} dependencies created."
+                    ),
+                    **seed_counts,
                 )
                 st.rerun()
 

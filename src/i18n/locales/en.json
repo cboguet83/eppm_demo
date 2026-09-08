@@ -12,7 +12,7 @@
     "seed_projects_help": "0 seeds default 3 demo projects; >0 generates mock projects with milestones and dependencies",
     "btn_force_reseed": "Force Re-seed Database",
     "seeding_in_progress": "Re-seeding database...",
-    "seed_success": "Database successfully re-seeded with {count} projects!"
+    "seed_success": "Database successfully re-seeded: {projects} projects, {tasks} tasks, and {dependencies} dependencies created."
   },
 
   "nav": {
@@ -187,7 +187,15 @@
     "toast_pool_unassigned_proj": "Project pool assignment removed!",
     "quick_project_pools": "Quick Action: Assign Resource Pools to Project",
     "select_project_to_assign_pools": "Select Project to Assign Pools",
-    "btn_open_project_pool_mgr": "Open Project Pool Allocator"
+    "btn_open_project_pool_mgr": "Open Project Pool Allocator",
+    "flex_filters": "Flexible filters",
+    "flex_filter_fields": "Filter fields",
+    "flex_filter_fields_placeholder": "Choose one or more fields",
+    "flex_filter_match_label": "When several values are selected",
+    "flex_filter_match_help": "Fields use AND. This controls matching within each field.",
+    "flex_filter_all_values": "All values",
+    "flex_filter_clear": "Clear filters",
+    "flex_filter_project_tags": "Project Tags"
   },
   "gantt": {
     "columns": {
@@ -229,7 +237,8 @@
       "view_diagnostics": "View Diagnostics",
       "view_project_diagnostics": "View Project Violations",
       "manage_project_pools": "Assign Resource Pools",
-      "manage_task_pools": "Assign Resource Pools"
+      "manage_task_pools": "Assign Resource Pools",
+      "filter_project": "Filter on this project"
     },
     "resource_grid": {
       "title": "Resource Pools & Capacity Usage",

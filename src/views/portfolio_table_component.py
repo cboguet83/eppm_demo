@@ -388,6 +388,9 @@ export default function(component) {
     };
 
     const render = () => {
+        const previousScroll = root.querySelector('.table-scroll');
+        const previousScrollTop = previousScroll ? previousScroll.scrollTop : 0;
+        const previousScrollLeft = previousScroll ? previousScroll.scrollLeft : 0;
         root.replaceChildren();
         const scroll = document.createElement('div');
         scroll.className = 'table-scroll';
@@ -429,7 +432,18 @@ export default function(component) {
             tr.setAttribute('role', 'button');
             tr.setAttribute('aria-label', `Open project ${row.name || row.project_id}`);
             if (String(row.project_id) === String(data.selected_id)) tr.classList.add('selected');
-            const selectRow = () => setTriggerValue('row_click', row.project_id);
+            const selectRow = () => {
+                // Give immediate feedback instead of waiting for the Streamlit rerun.
+                root.querySelectorAll('tbody tr.selected').forEach((selectedRow) => {
+                    selectedRow.classList.remove('selected');
+                });
+                tr.classList.add('selected');
+
+                // Clicking the already-selected row should not launch an expensive rerun.
+                if (String(row.project_id) !== String(data.selected_id)) {
+                    setTriggerValue('row_click', row.project_id);
+                }
+            };
             tr.onclick = selectRow;
             tr.onkeydown = (event) => {
                 if (event.key === 'Enter' || event.key === ' ') {
@@ -458,6 +472,8 @@ export default function(component) {
         table.appendChild(body);
         scroll.appendChild(table);
         root.appendChild(scroll);
+        scroll.scrollTop = previousScrollTop;
+        scroll.scrollLeft = previousScrollLeft;
 
         if (!visibleRows.length) {
             const empty = document.createElement('div');
