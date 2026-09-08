@@ -174,7 +174,8 @@ Validation on Python 3.14.6:
 
 ## Next increment
 
-Migrate planning/task/dependency operations and their presentation callers, using
-the resource and capacity services introduced here. Follow with remaining tag
-administration and collaboration internals. Finance still requires separately
-defined financial rules and should be implemented directly in the new layers.
+Tag management was migrated first in [ADR 0006](0006-layered-tags.md) to supply the
+application boundary needed by planning selectors. Migrate planning/task/dependency
+operations and their presentation callers, using the resource and capacity services
+introduced here. Follow with collaboration and existing budget calculations, then
+runtime/bootstrap migration and removal of the remaining runtime compatibility paths.

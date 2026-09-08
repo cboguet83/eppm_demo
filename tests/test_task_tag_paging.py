@@ -14,13 +14,13 @@ from src.models.tag import TaskTag
 from src.repositories.tag_repo import TagRepository
 from src.repositories.milestone_repo import MilestoneRepository
 from tests.test_settings_lazy_loading import settings_app
+from app.application.services.tags import TagService
 
 
 def add_tag_app(path):
-    from src.repositories.tag_repo import TagRepository
-    from src.repositories.milestone_repo import MilestoneRepository
-    from src.views.settings_view import _open_add_task_tag_dialog
-    _open_add_task_tag_dialog(TagRepository(path), MilestoneRepository(path))
+    from app.main import create_tag_service
+    from app.presentation.components.tag_dialogs import _open_add_task_tag_dialog
+    _open_add_task_tag_dialog(create_tag_service(path))
 
 
 class TaskTagPagingTests(unittest.TestCase):
@@ -63,10 +63,10 @@ class TaskTagPagingTests(unittest.TestCase):
     def test_settings_loads_one_page_and_no_editor_data_until_opened(self):
         app = AppTest.from_function(settings_app, args=(self.path,))
         app.session_state['settings_tab_selection'] = '📋 Task Tags'
-        with patch.object(TagRepository, 'get_all_task_tags', side_effect=AssertionError('All tags loaded')), \
+        with patch.object(TagService, 'get_all_task_tags', side_effect=AssertionError('All tags loaded')), \
              patch.object(MilestoneRepository, 'get_all_milestones', side_effect=AssertionError('All tasks loaded')), \
-             patch.object(TagRepository, 'get_task_tag_group_tags', side_effect=AssertionError('Unopened editor loaded')), \
-             patch('src.views.settings_view._interactive_task_tag_table', return_value=None) as table:
+             patch.object(TagService, 'get_task_tag_group_tags', side_effect=AssertionError('Unopened editor loaded')), \
+             patch('app.presentation.pages.tags._interactive_task_tag_table', return_value=None) as table:
             app.run()
             self.assertEqual(list(app.exception), [])
             self.assertEqual(len(table.call_args.kwargs['task_tags']), 100)

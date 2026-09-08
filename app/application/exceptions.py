@@ -39,3 +39,11 @@ class ResourcePoolConflictError(ValueError):
 
 class ResourcePoolStorageError(RuntimeError):
     """Resource-pool or capacity data is unavailable."""
+
+
+class TagConflictError(ValueError):
+    """A tag change violates an existing reference or uniqueness constraint."""
+
+
+class TagStorageError(RuntimeError):
+    """Tag storage could not complete the requested operation."""
