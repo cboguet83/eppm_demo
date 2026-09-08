@@ -28,7 +28,7 @@ def test_task_repository_closes_connections_on_every_exit(
     )
     connection = get_db(path)
     try:
-        with patch("src.repositories.milestone_repo.get_db", return_value=connection):
+        with patch("app.infrastructure.repositories.planning.get_db", return_value=connection):
             if operation == "read":
                 assert not repository.get_all_milestones().empty
             elif operation == "write":

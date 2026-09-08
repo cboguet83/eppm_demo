@@ -12,6 +12,7 @@ from app.application.services.project_types import ProjectTypeService
 from app.application.services.resource_pools import ResourcePoolService
 from app.application.services.schema import SchemaService
 from app.application.services.tags import TagService
+from app.application.services.planning import PlanningService
 
 if TYPE_CHECKING:
     from app.infrastructure.database.pool_capacity_cache import (
@@ -42,6 +43,13 @@ def create_pool_capacity_service(db_path: str | None = None) -> PoolCapacityServ
     return PoolCapacityService(
         SqliteCapacityReader(db_path), create_pool_capacity_cache(db_path), date.today,
     )
+
+
+def create_planning_service(db_path: str | None = None) -> PlanningService:
+    """Connect task use cases to the existing SQLite schema."""
+    from app.infrastructure.repositories.planning import SqlitePlanningGateway
+
+    return PlanningService(SqlitePlanningGateway(db_path))
 
 
 def create_tag_service(db_path: str | None = None) -> TagService:

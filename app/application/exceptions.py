@@ -47,3 +47,11 @@ class TagConflictError(ValueError):
 
 class TagStorageError(RuntimeError):
     """Tag storage could not complete the requested operation."""
+
+
+class PlanningConflictError(ValueError):
+    """A task change conflicts with an existing reference or constraint."""
+
+
+class PlanningStorageError(RuntimeError):
+    """Task or dependency storage is unavailable."""
