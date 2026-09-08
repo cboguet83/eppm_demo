@@ -1,5 +1,7 @@
 """Unit tests for database connection, schema initialization, and seeder."""
 
+from contextlib import closing
+
 import os
 import shutil
 import tempfile
@@ -26,7 +28,7 @@ class TestDatabaseLayer(unittest.TestCase):
         """Verify init_db creates schema_groups, schema_parameters, options, projects, and milestones."""
         init_db(self.temp_db_path)
 
-        with get_db(self.temp_db_path) as conn:
+        with closing(get_db(self.temp_db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
             tables = {row[0] for row in cursor.fetchall()}
@@ -44,7 +46,7 @@ class TestDatabaseLayer(unittest.TestCase):
 
     def test_existing_employee_schema_migrates_occupation_percentage(self) -> None:
         """Verify an existing employee table receives the new availability fields safely."""
-        with get_db(self.temp_db_path) as conn:
+        with closing(get_db(self.temp_db_path)) as conn, conn:
             conn.execute(
                 """
                 CREATE TABLE employee (
@@ -69,7 +71,7 @@ class TestDatabaseLayer(unittest.TestCase):
 
         init_db(self.temp_db_path)
 
-        with get_db(self.temp_db_path) as conn:
+        with closing(get_db(self.temp_db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute("PRAGMA table_info(employee)")
             columns = {row[1] for row in cursor.fetchall()}
@@ -86,7 +88,7 @@ class TestDatabaseLayer(unittest.TestCase):
         init_db(self.temp_db_path)
         seed_default_data_if_empty(self.temp_db_path)
 
-        with get_db(self.temp_db_path) as conn:
+        with closing(get_db(self.temp_db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) FROM schema_groups")
             groups_count = cursor.fetchone()[0]
@@ -108,7 +110,7 @@ class TestDatabaseLayer(unittest.TestCase):
         seed_default_data_if_empty(self.temp_db_path)
         seed_default_data_if_empty(self.temp_db_path)
 
-        with get_db(self.temp_db_path) as conn:
+        with closing(get_db(self.temp_db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) FROM project")
             count = cursor.fetchone()[0]
@@ -121,7 +123,7 @@ class TestDatabaseLayer(unittest.TestCase):
         init_db(self.temp_db_path)
         seed_default_data_if_empty(self.temp_db_path)
 
-        with get_db(self.temp_db_path) as conn:
+        with closing(get_db(self.temp_db_path)) as conn, conn:
             cursor = conn.cursor()
 
             # 1. Verify 5 Groups
@@ -195,7 +197,7 @@ class TestDatabaseLayer(unittest.TestCase):
         seed_default_data_if_empty(self.temp_db_path)
 
         # Insert custom dummy data that should be wiped on force re-seed
-        with get_db(self.temp_db_path) as conn:
+        with closing(get_db(self.temp_db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 "INSERT INTO project (id, name, status, planned_budget, actual_budget) VALUES (999, 'Dummy Custom Project', 'Draft', 1000, 500)"
@@ -206,7 +208,7 @@ class TestDatabaseLayer(unittest.TestCase):
             conn.commit()
 
         # Verify custom data is present before force reseed
-        with get_db(self.temp_db_path) as conn:
+        with closing(get_db(self.temp_db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) FROM project WHERE id = 999")
             self.assertEqual(cursor.fetchone()[0], 1)
@@ -217,7 +219,7 @@ class TestDatabaseLayer(unittest.TestCase):
         seed_default_data_if_empty(self.temp_db_path, force=True)
 
         # Verify custom data is wiped and standard seed data is cleanly restored
-        with get_db(self.temp_db_path) as conn:
+        with closing(get_db(self.temp_db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) FROM project WHERE id = 999")
             self.assertEqual(cursor.fetchone()[0], 0)

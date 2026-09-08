@@ -1,5 +1,7 @@
 """Paged tag data and deferred editor lookups, including real Streamlit reruns."""
 
+from contextlib import closing
+
 import sqlite3
 import tempfile
 import unittest
@@ -27,7 +29,7 @@ class TaskTagPagingTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.path = str(Path(self.temp.name) / "test.db")
         init_db(self.path)
-        with sqlite3.connect(self.path) as conn:
+        with closing(sqlite3.connect(self.path)) as conn, conn:
             conn.execute("INSERT INTO project(id,name) VALUES(1,'Search Project')")
             conn.executemany("INSERT INTO project_task(id,project_id,task_name,start_date,end_date) VALUES(?,1,?,'2026-01-01','2026-01-02')",
                              [(i, f'Task {i}') for i in range(1, 351)])

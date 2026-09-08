@@ -1,5 +1,7 @@
 """Regression coverage for planning fast paths without stale or missing data."""
 
+from contextlib import closing
+
 import tempfile
 import unittest
 from pathlib import Path
@@ -55,7 +57,7 @@ class PlanningPerformanceTests(unittest.TestCase):
             choices = load_dependency_choices(path, portfolio_revision(path), first_project)
             expected = MilestoneRepository(path).get_milestones_for_projects([first_project]).id.tolist()
             self.assertEqual([r['id'] for r in choices], expected)
-            with get_db(path) as conn:
+            with closing(get_db(path)) as conn, conn:
                 indexes = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='index'")}
             self.assertIn('idx_planning_task_project', indexes)
             self.assertIn('idx_planning_dependency_task', indexes)

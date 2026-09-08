@@ -1,5 +1,7 @@
 """Repository for resource pools, team/function mappings, and project/task assignments."""
 
+from contextlib import closing
+
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
@@ -37,7 +39,7 @@ class ResourcePoolRepository:
         Returns:
             pd.DataFrame: Table of resource pools.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             return pd.read_sql(
                 """
                 SELECT id, name, description, capacity_fte, created_at
@@ -81,7 +83,7 @@ class ResourcePoolRepository:
         Returns:
             Optional[ResourcePool]: ResourcePool instance if found, else None.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -111,7 +113,7 @@ class ResourcePoolRepository:
         Returns:
             int: Newly created resource_pool id.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -134,7 +136,7 @@ class ResourcePoolRepository:
         """
         if pool.id is None:
             return False
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -156,7 +158,7 @@ class ResourcePoolRepository:
         Returns:
             bool: True if deleted, False otherwise.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM resource_pool WHERE id = ?", (pool_id,))
             conn.commit()
@@ -167,7 +169,7 @@ class ResourcePoolRepository:
     # =========================================================================
     def get_all_pool_groups(self) -> pd.DataFrame:
         """Return pool groups with direct and recursively resolved member counts."""
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             groups = pd.read_sql(
                 """
                 SELECT
@@ -216,12 +218,12 @@ class ResourcePoolRepository:
 
     def get_all_group_members(self) -> pd.DataFrame:
         """Load the complete hierarchy in one query, including shared children."""
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             return pd.read_sql("SELECT group_id,pool_id,child_group_id FROM resource_pool_group_member", conn)
 
     def get_pool_group_by_id(self, group_id: int) -> Optional[ResourcePoolGroup]:
         """Return one pool group by ID."""
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -246,7 +248,7 @@ class ResourcePoolRepository:
         name = group.name.strip()
         if not name:
             raise ValueError("Pool group name is required.")
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 "INSERT INTO resource_pool_group (name, description) VALUES (?, ?)",
@@ -262,7 +264,7 @@ class ResourcePoolRepository:
         name = group.name.strip()
         if not name:
             raise ValueError("Pool group name is required.")
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -277,7 +279,7 @@ class ResourcePoolRepository:
 
     def delete_pool_group(self, group_id: int) -> bool:
         """Delete a group and cascade all memberships that reference it."""
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM resource_pool_group WHERE id = ?", (group_id,))
             conn.commit()
@@ -285,7 +287,7 @@ class ResourcePoolRepository:
 
     def get_group_members(self, group_id: int) -> pd.DataFrame:
         """Return the direct pool and child-group members of a group."""
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             return pd.read_sql(
                 """
                 SELECT
@@ -337,7 +339,7 @@ class ResourcePoolRepository:
         """Return whether adding ``child_group_id`` below ``group_id`` makes a loop."""
         if int(group_id) == int(child_group_id):
             return True
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             return self._group_reaches(conn.cursor(), int(child_group_id), int(group_id))
 
     def replace_group_members(
@@ -350,7 +352,7 @@ class ResourcePoolRepository:
         normalized_pool_ids = sorted({int(pool_id) for pool_id in pool_ids})
         normalized_child_ids = sorted({int(child_id) for child_id in child_group_ids})
 
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute("SELECT 1 FROM resource_pool_group WHERE id = ?", (group_id,))
             if cursor.fetchone() is None:
@@ -408,7 +410,7 @@ class ResourcePoolRepository:
 
     def get_group_descendant_pool_ids(self, group_id: int) -> List[int]:
         """Resolve all pools recursively below a group, deduplicating shared pools."""
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -442,7 +444,7 @@ class ResourcePoolRepository:
         Returns:
             pd.DataFrame: Table of mappings.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             return pd.read_sql(
                 """
                 SELECT id, pool_id, target_type, target_id, allocation_pct
@@ -460,7 +462,7 @@ class ResourcePoolRepository:
         Returns:
             pd.DataFrame: Table of all mappings.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             return pd.read_sql(
                 """
                 SELECT id, pool_id, target_type, target_id, allocation_pct
@@ -479,7 +481,7 @@ class ResourcePoolRepository:
         Returns:
             int: Newly created or updated mapping ID.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -508,7 +510,7 @@ class ResourcePoolRepository:
         Returns:
             bool: True if updated.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -530,7 +532,7 @@ class ResourcePoolRepository:
         Returns:
             bool: True if deleted.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM resource_pool_mapping WHERE id = ?", (mapping_id,))
             conn.commit()
@@ -595,7 +597,7 @@ class ResourcePoolRepository:
 
         query += " ORDER BY rpa.pool_id ASC, rpa.project_id ASC, rpa.task_id ASC"
 
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             return pd.read_sql(query, conn, params=params if params else None)
 
     def get_assignment_by_id(self, assignment_id: int) -> Optional[PoolAssignment]:
@@ -607,7 +609,7 @@ class ResourcePoolRepository:
         Returns:
             Optional[PoolAssignment]: Assignment instance if found, else None.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -640,7 +642,7 @@ class ResourcePoolRepository:
         Returns:
             int: Newly created assignment ID.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -671,7 +673,7 @@ class ResourcePoolRepository:
         """
         if assignment.id is None:
             return False
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -702,7 +704,7 @@ class ResourcePoolRepository:
         Returns:
             bool: True if deleted.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM resource_pool_assignment WHERE id = ?", (assignment_id,))
             conn.commit()
@@ -735,7 +737,7 @@ class ResourcePoolRepository:
             ORDER BY rp.name ASC
         """
         result: dict[int, List[dict[str, Any]]] = {}
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(query, task_ids)
             for row in cursor.fetchall():
@@ -777,7 +779,7 @@ class ResourcePoolRepository:
             ORDER BY rp.name ASC
         """
         result: dict[int, List[dict[str, Any]]] = {}
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(query, project_ids)
             for row in cursor.fetchall():
@@ -804,7 +806,7 @@ class ResourcePoolRepository:
         Returns:
             List[int]: List of function IDs.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -824,7 +826,7 @@ class ResourcePoolRepository:
             team_id: Team ID.
             function_ids: List of unique function IDs.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM team_function WHERE team_id = ?", (team_id,))
             unique_ids = sorted(list(set(function_ids)))
@@ -845,7 +847,7 @@ class ResourcePoolRepository:
         Returns:
             bool: True if inserted.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 "INSERT OR IGNORE INTO team_function (team_id, function_id) VALUES (?, ?)",
@@ -864,7 +866,7 @@ class ResourcePoolRepository:
         Returns:
             bool: True if removed.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 "DELETE FROM team_function WHERE team_id = ? AND function_id = ?",

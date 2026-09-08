@@ -4,6 +4,8 @@ Populates the EPPM database with realistic projects, hierarchical milestone sche
 and rich internal and external task dependencies.
 """
 
+from contextlib import closing
+
 import argparse
 import datetime
 import os
@@ -108,7 +110,7 @@ def seed_database(
     projects_data = []
     project_ids = []
     base_start_date = datetime.date(2025, 6, 1)
-    with get_db(db_path) as conn:
+    with closing(get_db(db_path)) as conn, conn:
         first_id = conn.execute("SELECT MAX(COALESCE((SELECT MAX(id) FROM project),0), COALESCE((SELECT seq FROM sqlite_sequence WHERE name='project'),0))+1").fetchone()[0]
         task_id_base = max(conn.execute("SELECT COALESCE(MAX(id),0) FROM project_task").fetchone()[0],
                             conn.execute("SELECT COALESCE((SELECT seq FROM sqlite_sequence WHERE name='project_task'),0)").fetchone()[0])
@@ -371,7 +373,7 @@ def seed_database(
                 ))
 
     # 4. Fast SQLite Transaction Execution
-    with get_db(db_path) as conn:
+    with closing(get_db(db_path)) as conn, conn:
 
         cursor = conn.cursor()
 
@@ -415,7 +417,7 @@ def seed_database(
         conn.execute("PRAGMA foreign_keys = ON")
 
     from scripts.seed_pool_scenarios import seed_pool_scenarios
-    with get_db(db_path) as conn:
+    with closing(get_db(db_path)) as conn, conn:
         has_demo_organization = bool(conn.execute(
             "SELECT 1 FROM schema_migration WHERE version='demo-bootstrap-v1'"
         ).fetchone())

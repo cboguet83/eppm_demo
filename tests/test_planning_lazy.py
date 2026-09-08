@@ -1,5 +1,7 @@
 """Planning summary, bounded hydration and targeted edit regression tests."""
 
+from contextlib import closing
+
 import sqlite3
 import tempfile
 from pathlib import Path
@@ -45,7 +47,7 @@ class LazyPlanningTests(TestCase):
         rows = load_project_summaries(self.path, portfolio_revision(self.path), tuple(self.pids))
         self.assertTrue(next(p for p in rows if p['id']==self.pids[1])['hasViolations'])
         self.tasks.update_dates(self.a, '2026-01-01', '2026-01-03')
-        with sqlite3.connect(self.path) as conn:
+        with closing(sqlite3.connect(self.path)) as conn, conn:
             self.assertEqual(conn.execute('SELECT project_id FROM planning_summary_cache').fetchall(), [(self.pids[2],)])
         rows = load_project_summaries(self.path, portfolio_revision(self.path), tuple(self.pids))
         self.assertFalse(next(p for p in rows if p['id']==self.pids[1])['hasViolations'])

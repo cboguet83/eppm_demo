@@ -1,5 +1,7 @@
 """Repository for Project Steps, Tasks, and Schedules."""
 
+from contextlib import closing
+
 from typing import Any, Optional, Union
 
 import pandas as pd
@@ -32,7 +34,7 @@ class MilestoneRepository:
             pd.DataFrame: DataFrame of milestone/task records.
         """
         int_id = parse_project_id(project_id)
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             return pd.read_sql(
                 """
                 SELECT m.id, m.project_id, m.task_name, m.phase, m.start_date, m.end_date, 
@@ -49,7 +51,7 @@ class MilestoneRepository:
     def search_task_choices(self, search: str = "", *, limit: int = 50) -> list[dict[str, Any]]:
         """Small on-demand task lookup for tag editors; never fetch all tasks."""
         search = search.strip()
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             if search.lstrip("#").isdigit():
                 where, params = "WHERE t.id=?", [int(search.lstrip("#"))]
             elif search:
@@ -71,7 +73,7 @@ class MilestoneRepository:
             pd.DataFrame: DataFrame containing id, project_id, task_name, phase, start_date,
                 end_date, progress_pct, description, predecessor_id, and project_name.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             return pd.read_sql(
                 """
                 SELECT m.id, m.project_id, m.task_name, m.phase, m.start_date, m.end_date,
@@ -93,7 +95,7 @@ class MilestoneRepository:
             list[dict[str, Any]]: List of dependency dicts.
         """
         int_id = parse_project_id(project_id)
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -125,7 +127,7 @@ class MilestoneRepository:
         Returns:
             list[dict[str, Any]]: List of dependency dictionaries.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -153,7 +155,7 @@ class MilestoneRepository:
             task_id: Milestone/task primary key ID.
             dependencies: List of dependency dicts with keys [predecessor_task_id, predecessor_project_id, link_type, lag_days].
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM task_dependencies WHERE task_id = ?", (task_id,))
             for dep in dependencies:
@@ -223,7 +225,7 @@ class MilestoneRepository:
             lag = 0
 
         if p_task is not None or p_proj is not None:
-            with get_db(self.db_path) as conn:
+            with closing(get_db(self.db_path)) as conn, conn:
                 cursor = conn.cursor()
                 cursor.execute(
                     """
@@ -245,7 +247,7 @@ class MilestoneRepository:
             tuple[Optional[str], Optional[str]]: (min_start_date, max_end_date).
         """
         int_id = parse_project_id(project_id)
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 "SELECT MIN(start_date), MAX(end_date) FROM project_task WHERE project_id = ?",
@@ -263,7 +265,7 @@ class MilestoneRepository:
             dict[Any, tuple[Optional[str], Optional[str]]]: Map of project_id (both int and str) to (min_start, max_end).
         """
         bounds: dict[Any, tuple[Optional[str], Optional[str]]] = {}
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 "SELECT project_id, MIN(start_date), MAX(end_date) FROM project_task GROUP BY project_id"
@@ -294,7 +296,7 @@ class MilestoneRepository:
         ext_map: dict[str, list[dict[str, Any]]] = {}
         excluded = [parse_project_id(pid) for pid in (exclude_project_ids or [])]
         where = f"WHERE project_id NOT IN ({','.join('?' for _ in excluded)})" if excluded else ""
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 f"SELECT id, project_id, task_name, start_date, end_date FROM project_task {where} ORDER BY project_id, start_date",
@@ -326,7 +328,7 @@ class MilestoneRepository:
 
         int_ids = [parse_project_id(p) for p in project_ids]
         placeholders = ",".join(["?"] * len(int_ids))
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             return pd.read_sql(
                 f"""
                 SELECT m.id, m.project_id, m.task_name, m.phase, m.start_date, m.end_date, 
@@ -354,7 +356,7 @@ class MilestoneRepository:
 
         int_ids = [parse_project_id(p) for p in project_ids]
         placeholders = ",".join(["?"] * len(int_ids))
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 f"""
@@ -408,7 +410,7 @@ class MilestoneRepository:
         int_pid = parse_project_id(project_id)
         clean_desc = description.strip() if description else ""
 
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -471,7 +473,7 @@ class MilestoneRepository:
         clean_pred = predecessor_id if predecessor_id != milestone_id else None
         clean_desc = description.strip() if description is not None else ""
 
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -514,7 +516,7 @@ class MilestoneRepository:
         Returns:
             bool: True if updated.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 "UPDATE project_task SET start_date = ?, end_date = ? WHERE id = ?",
@@ -533,7 +535,7 @@ class MilestoneRepository:
         Returns:
             bool: True if updated.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 "UPDATE project_task SET progress_pct = ? WHERE id = ?",
@@ -554,7 +556,7 @@ class MilestoneRepository:
         if not rows:
             return 0
 
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             params_list = [
                 (
@@ -589,7 +591,7 @@ class MilestoneRepository:
         Returns:
             bool: True if deleted.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 "DELETE FROM task_dependencies WHERE task_id = ? OR predecessor_task_id = ?",
@@ -609,7 +611,7 @@ class MilestoneRepository:
         Returns:
             Optional[dict[str, Any]]: Task dictionary or None if not found.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 """

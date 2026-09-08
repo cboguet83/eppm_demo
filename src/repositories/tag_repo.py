@@ -1,5 +1,7 @@
 """Repository for tag groups, dictionary entries, and project/task/pool tags."""
 
+from contextlib import closing
+
 from typing import Any, Optional, Union
 
 import pandas as pd
@@ -32,7 +34,7 @@ class TagRepository:
         Returns:
             pd.DataFrame: DataFrame containing id and tag_group_name.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             return pd.read_sql(
                 """
                 SELECT id, tag_group_name
@@ -51,7 +53,7 @@ class TagRepository:
         Returns:
             Optional[TagGroup]: TagGroup dataclass instance if found, else None.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 "SELECT id, tag_group_name FROM tag_group WHERE id = ?",
@@ -71,7 +73,7 @@ class TagRepository:
         Returns:
             int: Newly created tag group ID.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 "INSERT INTO tag_group (tag_group_name) VALUES (?)",
@@ -91,7 +93,7 @@ class TagRepository:
         """
         if group.id is None:
             return False
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 "UPDATE tag_group SET tag_group_name = ? WHERE id = ?",
@@ -112,7 +114,7 @@ class TagRepository:
         Raises:
             ValueError: If dictionary tags are assigned to this group.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 "SELECT COUNT(*) FROM tag_dictionnary WHERE tag_group_id = ?",
@@ -137,7 +139,7 @@ class TagRepository:
         Returns:
             int: Number of associated dictionary tags.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 "SELECT COUNT(*) FROM tag_dictionnary WHERE tag_group_id = ?",
@@ -154,7 +156,7 @@ class TagRepository:
         Returns:
             pd.DataFrame: DataFrame containing id, tag, tag_group_id, and tag_group_name.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             return pd.read_sql(
                 """
                 SELECT 
@@ -181,7 +183,7 @@ class TagRepository:
             pd.DataFrame: DataFrame containing id, tag, tag_group_id, and tag_group_name.
         """
         norm_name = group_name.strip().lower().replace("_", "").replace(" ", "")
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             return pd.read_sql(
                 """
                 SELECT 
@@ -216,7 +218,7 @@ class TagRepository:
         Returns:
             Optional[TagGroup]: TagGroup dataclass if found, else None.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -241,7 +243,7 @@ class TagRepository:
         Returns:
             Optional[TagDictionary]: TagDictionary dataclass instance if found.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 "SELECT id, tag, tag_group_id FROM tag_dictionnary WHERE id = ?",
@@ -261,7 +263,7 @@ class TagRepository:
         Returns:
             int: Newly created tag ID.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 "INSERT INTO tag_dictionnary (tag, tag_group_id) VALUES (?, ?)",
@@ -281,7 +283,7 @@ class TagRepository:
         """
         if tag_item.id is None:
             return False
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 "UPDATE tag_dictionnary SET tag = ?, tag_group_id = ? WHERE id = ?",
@@ -299,7 +301,7 @@ class TagRepository:
         Returns:
             bool: True if deleted.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM project_tag WHERE tag_id = ?", (tag_id,))
             cursor.execute("DELETE FROM task_tag WHERE tag_id = ?", (tag_id,))
@@ -317,7 +319,7 @@ class TagRepository:
         Returns:
             int: Total usage count across projects, tasks, and resource pools.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -335,7 +337,7 @@ class TagRepository:
     # =========================================================================
     def get_all_resource_pool_tags(self) -> pd.DataFrame:
         """Return all resource-pool tag assignments with display labels."""
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             return pd.read_sql(
                 """
                 SELECT
@@ -356,7 +358,7 @@ class TagRepository:
 
     def get_resource_pool_tags(self, pool_id: int) -> pd.DataFrame:
         """Return dictionary tags assigned to one resource pool."""
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             return pd.read_sql(
                 """
                 SELECT
@@ -377,7 +379,7 @@ class TagRepository:
 
     def create_resource_pool_tag(self, pool_tag: ResourcePoolTag) -> int:
         """Assign one dictionary tag to a resource pool, without duplicates."""
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -398,7 +400,7 @@ class TagRepository:
     def set_resource_pool_tags(self, pool_id: int, tag_ids: list[int]) -> None:
         """Atomically replace all dictionary tags assigned to a resource pool."""
         normalized_tag_ids = sorted({int(tag_id) for tag_id in tag_ids})
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute("SELECT 1 FROM resource_pool WHERE id = ?", (pool_id,))
             if cursor.fetchone() is None:
@@ -424,7 +426,7 @@ class TagRepository:
 
     def delete_resource_pool_tag(self, pool_tag_id: int) -> bool:
         """Delete one resource-pool tag assignment."""
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM resource_pool_tag WHERE id = ?", (pool_tag_id,))
             conn.commit()
@@ -439,7 +441,7 @@ class TagRepository:
         Returns:
             pd.DataFrame: DataFrame of project tags.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             return pd.read_sql(
                 """
                 SELECT 
@@ -468,7 +470,7 @@ class TagRepository:
         Returns:
             pd.DataFrame: Table of tag assignments for the project.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             return pd.read_sql(
                 """
                 SELECT 
@@ -497,7 +499,7 @@ class TagRepository:
         Returns:
             Optional[ProjectTag]: ProjectTag dataclass if found.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 "SELECT id, project_id, tag_id, free_tag FROM project_tag WHERE id = ?",
@@ -517,7 +519,7 @@ class TagRepository:
         Returns:
             int: Newly created project tag assignment ID.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             free_tag_val = pt.free_tag.strip() if pt.free_tag and pt.free_tag.strip() else None
             cursor.execute(
@@ -538,7 +540,7 @@ class TagRepository:
         """
         if pt.id is None:
             return False
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             free_tag_val = pt.free_tag.strip() if pt.free_tag and pt.free_tag.strip() else None
             cursor.execute(
@@ -557,7 +559,7 @@ class TagRepository:
         Returns:
             bool: True if deleted.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM project_tag WHERE id = ?", (pt_id,))
             conn.commit()
@@ -590,7 +592,7 @@ class TagRepository:
         order = columns.get(sort, "tt.id")
         direction = "ASC" if ascending else "DESC"
         page_size = max(1, min(200, int(page_size)))
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             total = conn.execute("SELECT COUNT(*) FROM task_tag").fetchone()[0]
             filtered_total = conn.execute("SELECT COUNT(*) " + joins + where, params).fetchone()[0] if conditions else total
             pages = max(1, (filtered_total + page_size - 1) // page_size)
@@ -610,7 +612,7 @@ class TagRepository:
         Returns:
             pd.DataFrame: DataFrame of task tags.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             return pd.read_sql(
                 """
                 SELECT 
@@ -642,7 +644,7 @@ class TagRepository:
         Returns:
             pd.DataFrame: Table of tag assignments for the task.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             return pd.read_sql(
                 """
                 SELECT 
@@ -671,7 +673,7 @@ class TagRepository:
         Returns:
             Optional[TaskTag]: TaskTag dataclass if found.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 "SELECT id, task_id, tag_id, free_tag FROM task_tag WHERE id = ?",
@@ -691,7 +693,7 @@ class TagRepository:
         Returns:
             int: Newly created task tag assignment ID.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             free_tag_val = tt.free_tag.strip() if tt.free_tag and tt.free_tag.strip() else None
             cursor.execute(
@@ -712,7 +714,7 @@ class TagRepository:
         """
         if tt.id is None:
             return False
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             free_tag_val = tt.free_tag.strip() if tt.free_tag and tt.free_tag.strip() else None
             cursor.execute(
@@ -731,7 +733,7 @@ class TagRepository:
         Returns:
             bool: True if deleted.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM task_tag WHERE id = ?", (tt_id,))
             conn.commit()
@@ -755,7 +757,7 @@ class TagRepository:
 
         placeholders = ",".join("?" for _ in clean_ids)
         result: dict[int, list[dict[str, Any]]] = {tid: [] for tid in clean_ids}
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 f"""
@@ -797,7 +799,7 @@ class TagRepository:
         int_ids = [parse_project_id(pid) for pid in project_ids]
         placeholders = ",".join("?" for _ in int_ids)
         result: dict[int, list[dict[str, Any]]] = {pid: [] for pid in int_ids}
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 f"""

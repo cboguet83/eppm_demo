@@ -1,5 +1,7 @@
 """Constants and enumeration definitions for PPM Studio Pro."""
 
+from app.domain.projects.property_values import SUPPORTED_PROPERTY_TYPES
+
 # Page Navigation Constants
 PAGE_PORTFOLIO: str = "1. Portfolio Overview"
 PAGE_SCHEMA_DEF: str = "Parameters Definition (Schema)"
@@ -30,16 +32,7 @@ PARAM_TYPE_URL: str = "URL"
 PARAM_TYPE_DATE: str = "DATE"
 PARAM_TYPE_NUMBER: str = "NUMBER"
 PARAM_TYPE_HYPERLINK: str = "HYPERLINK"
-PARAM_TYPES: list[str] = [
-    PARAM_TYPE_TEXT,
-    PARAM_TYPE_ENUM,
-    PARAM_TYPE_MULTI_ENUM,
-    PARAM_TYPE_TAGS,
-    PARAM_TYPE_URL,
-    PARAM_TYPE_DATE,
-    PARAM_TYPE_NUMBER,
-    PARAM_TYPE_HYPERLINK,
-]
+PARAM_TYPES: list[str] = list(SUPPORTED_PROPERTY_TYPES)
 
 # Strategic Priority Constants
 PRIORITY_P1_CRITICAL: str = "P1 - Critical"

@@ -1,5 +1,7 @@
 """Repository for organizational structure: functions, function types, teams, and employees."""
 
+from contextlib import closing
+
 from datetime import date
 from typing import Optional
 
@@ -32,7 +34,7 @@ class OrganizationRepository:
         Returns:
             pd.DataFrame: Table of function types.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             return pd.read_sql(
                 """
                 SELECT function_type_id, function_type
@@ -51,7 +53,7 @@ class OrganizationRepository:
         Returns:
             Optional[FunctionType]: FunctionType dataclass if found, else None.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 "SELECT function_type_id, function_type FROM function_type WHERE function_type_id = ?",
@@ -71,7 +73,7 @@ class OrganizationRepository:
         Returns:
             int: Newly created function_type_id.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 "INSERT INTO function_type (function_type) VALUES (?)",
@@ -91,7 +93,7 @@ class OrganizationRepository:
         """
         if ftype.function_type_id is None:
             return False
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 "UPDATE function_type SET function_type = ? WHERE function_type_id = ?",
@@ -109,7 +111,7 @@ class OrganizationRepository:
         Returns:
             bool: True if deleted.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM function_type WHERE function_type_id = ?", (type_id,))
             conn.commit()
@@ -124,7 +126,7 @@ class OrganizationRepository:
         Returns:
             pd.DataFrame: Table of functions.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             return pd.read_sql(
                 """
                 SELECT function_id, name, hierarchy_level, function_type_id, manager_function_id, dual_manager_function_id, fte_percentage, has_reports
@@ -143,7 +145,7 @@ class OrganizationRepository:
         Returns:
             Optional[OrgFunction]: OrgFunction dataclass if found, else None.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -176,7 +178,7 @@ class OrganizationRepository:
         Returns:
             int: Newly created function_id.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -207,7 +209,7 @@ class OrganizationRepository:
         """
         if func.function_id is None:
             return False
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -238,7 +240,7 @@ class OrganizationRepository:
         Returns:
             bool: True if deleted.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM function WHERE function_id = ?", (func_id,))
             conn.commit()
@@ -253,7 +255,7 @@ class OrganizationRepository:
         Returns:
             pd.DataFrame: Table of teams.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             return pd.read_sql(
                 """
                 SELECT team_id, team_name, manager_function_id, leader_function_id
@@ -272,7 +274,7 @@ class OrganizationRepository:
         Returns:
             Optional[Team]: Team dataclass if found, else None.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -301,7 +303,7 @@ class OrganizationRepository:
         Returns:
             int: Newly created team_id.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -324,7 +326,7 @@ class OrganizationRepository:
         """
         if team.team_id is None:
             return False
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -346,7 +348,7 @@ class OrganizationRepository:
         Returns:
             bool: True if deleted.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM team WHERE team_id = ?", (team_id,))
             conn.commit()
@@ -361,7 +363,7 @@ class OrganizationRepository:
         Returns:
             pd.DataFrame: Table of employees.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             return pd.read_sql(
                 """
                 SELECT employee_id, firstname, lastname, email, mobile, sigle, employee_code,
@@ -381,7 +383,7 @@ class OrganizationRepository:
         Returns:
             Optional[Employee]: Employee dataclass if found, else None.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -416,7 +418,7 @@ class OrganizationRepository:
         Returns:
             int: Newly created employee_id.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -451,7 +453,7 @@ class OrganizationRepository:
         """
         if emp.employee_id is None:
             return False
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -484,7 +486,7 @@ class OrganizationRepository:
         Returns:
             bool: True if deleted.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM employee WHERE employee_id = ?", (emp_id,))
             conn.commit()
@@ -505,7 +507,7 @@ class OrganizationRepository:
             params = (emp_id,)
         query += " ORDER BY ece.start_date DESC, ece.end_date DESC, ece.exception_id DESC"
 
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             return pd.read_sql(query, conn, params=params)
 
     def get_employee_calendar_exception_by_id(
@@ -513,7 +515,7 @@ class OrganizationRepository:
         exception_id: int,
     ) -> Optional[EmployeeCalendarException]:
         """Retrieves one employee calendar exception by ID."""
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -557,7 +559,7 @@ class OrganizationRepository:
             params.append(exclude_id)
         query += " LIMIT 1"
 
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(query, tuple(params))
             return cursor.fetchone() is not None
@@ -571,7 +573,7 @@ class OrganizationRepository:
         ):
             raise ValueError("This period overlaps an existing calendar exception for the employee.")
 
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -603,7 +605,7 @@ class OrganizationRepository:
         ):
             raise ValueError("This period overlaps an existing calendar exception for the employee.")
 
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -626,7 +628,7 @@ class OrganizationRepository:
 
     def delete_employee_calendar_exception(self, exception_id: int) -> bool:
         """Deletes an employee calendar exception."""
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 "DELETE FROM employee_calendar_exception WHERE exception_id = ?",
@@ -638,7 +640,7 @@ class OrganizationRepository:
     def get_effective_occupation_percentage(self, employee_id: int, on_date: date) -> Optional[float]:
         """Returns the exception percentage for a date, or the employee's normal percentage."""
         target_date = on_date.isoformat()
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -673,7 +675,7 @@ class OrganizationRepository:
             bool: True if email already registered.
         """
         clean_email = email.strip().lower()
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             if exclude_id is not None:
                 cursor.execute(
@@ -695,7 +697,7 @@ class OrganizationRepository:
             bool: True if code already registered.
         """
         clean_code = code.strip().upper()
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             if exclude_id is not None:
                 cursor.execute(
@@ -712,7 +714,7 @@ class OrganizationRepository:
         Returns:
             str: Auto-calculated unique employee code.
         """
-        with get_db(self.db_path) as conn:
+        with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute("SELECT employee_code FROM employee")
             rows = cursor.fetchall()

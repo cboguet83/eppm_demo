@@ -1,28 +1,24 @@
-"""Repository for Schema Groups, Dynamic Parameters, and Discrete Options."""
+"""Compatibility facade for schema groups, properties, and discrete choices."""
 
-import sqlite3
-from typing import Optional
+from dataclasses import asdict
 
 import pandas as pd
 
-from src.database.connection import get_db
-from src.repositories.project_type_repo import ProjectTypeRepository
-from src.logging_config import get_logger
-from src.models.constants import PARAM_TYPES
-
-logger = get_logger(__name__)
+from app.main import create_schema_service
+from src.repositories.schema_errors import legacy_schema_errors
 
 
 class SchemaRepository:
-    """Encapsulates all database operations for schema taxonomy tables."""
+    """Keep legacy frames, return values, and SQLite errors outside the new core."""
 
-    def __init__(self, db_path: Optional[str] = None) -> None:
+    def __init__(self, db_path: str | None = None) -> None:
         """Initializes the SchemaRepository with an optional database path.
 
         Args:
             db_path: Path to SQLite database. If None, uses configured default.
         """
         self.db_path = db_path
+        self.service = create_schema_service(db_path)
 
     def get_all_groups(self) -> pd.DataFrame:
         """Loads all schema groups sorted by display order and ID.
@@ -30,8 +26,9 @@ class SchemaRepository:
         Returns:
             pd.DataFrame: DataFrame containing columns [id, group_name, display_order].
         """
-        with get_db(self.db_path) as conn:
-            return pd.read_sql("SELECT * FROM schema_groups ORDER BY display_order, id", conn)
+        with legacy_schema_errors():
+            return pd.DataFrame([asdict(group) for group in self.service.get_all_groups()],
+                                columns=["id", "group_name", "display_order"])
 
     def get_all_parameters(self) -> pd.DataFrame:
         """Loads all schema parameters.
@@ -39,11 +36,11 @@ class SchemaRepository:
         Returns:
             pd.DataFrame: DataFrame containing [param_id, group_id, param_name, param_type, mandatory, alias].
         """
-        with get_db(self.db_path) as conn:
-            return pd.read_sql(
-                "SELECT param_id, group_id, param_name, param_type, mandatory, alias, applies_to_all FROM schema_parameters",
-                conn,
-            )
+        with legacy_schema_errors():
+            return pd.DataFrame([
+                {**asdict(param), "mandatory": int(param.mandatory), "applies_to_all": int(param.applies_to_all)}
+                for param in self.service.get_all_parameters()
+            ], columns=["param_id", "group_id", "param_name", "param_type", "mandatory", "alias", "applies_to_all"])
 
     def get_all_options(self) -> pd.DataFrame:
         """Loads all discrete options sorted by display order and ID.
@@ -51,10 +48,9 @@ class SchemaRepository:
         Returns:
             pd.DataFrame: DataFrame containing [id, param_id, option_value, display_order].
         """
-        with get_db(self.db_path) as conn:
-            return pd.read_sql(
-                "SELECT * FROM schema_param_options ORDER BY display_order, id", conn
-            )
+        with legacy_schema_errors():
+            return pd.DataFrame([asdict(option) for option in self.service.get_all_options()],
+                                columns=["id", "param_id", "option_value", "display_order"])
 
     def create_group(self, group_name: str, display_order: int) -> int:
         """Creates a new schema group.
@@ -69,14 +65,8 @@ class SchemaRepository:
         Raises:
             sqlite3.IntegrityError: If group name or display order is not unique.
         """
-        with get_db(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "INSERT INTO schema_groups (group_name, display_order) VALUES (?, ?)",
-                (group_name.strip(), display_order),
-            )
-            conn.commit()
-            return cursor.lastrowid or 0
+        with legacy_schema_errors():
+            return self.service.create_group(group_name, display_order)
 
     def update_group(self, group_id: int, group_name: str, display_order: int) -> bool:
         """Updates an existing schema group's name and display order.
@@ -89,14 +79,8 @@ class SchemaRepository:
         Returns:
             bool: True if row was updated successfully.
         """
-        with get_db(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "UPDATE schema_groups SET group_name = ?, display_order = ? WHERE id = ?",
-                (group_name.strip(), display_order, group_id),
-            )
-            conn.commit()
-            return cursor.rowcount > 0
+        with legacy_schema_errors():
+            return self.service.update_group(group_id, group_name, display_order)
 
     def delete_group(self, group_id: int) -> bool:
         """Deletes a schema group after unassigning parameters referencing it.
@@ -107,23 +91,19 @@ class SchemaRepository:
         Returns:
             bool: True if deleted.
         """
-        with get_db(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute("UPDATE schema_parameters SET group_id = NULL WHERE group_id = ?", (group_id,))
-            cursor.execute("DELETE FROM schema_groups WHERE id = ?", (group_id,))
-            conn.commit()
-            return cursor.rowcount > 0
+        with legacy_schema_errors():
+            return self.service.delete_group(group_id)
 
     def create_parameter(
         self,
         param_id: str,
-        group_id: Optional[int],
+        group_id: int | None,
         param_name: str,
         param_type: str,
         mandatory: bool = False,
-        alias: Optional[str] = None,
+        alias: str | None = None,
         applies_to_all: bool = True,
-        project_type_ids: Optional[list[int]] = None,
+        project_type_ids: list[int] | None = None,
     ) -> bool:
         """Inserts a new dynamic parameter record.
 
@@ -138,35 +118,20 @@ class SchemaRepository:
         Returns:
             bool: True if inserted successfully.
         """
-        if not param_id.strip() or not param_name.strip() or param_type not in PARAM_TYPES:
-            raise ValueError("A property needs an ID, a name, and a supported type")
-        with get_db(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "INSERT INTO schema_parameters (param_id, group_id, param_name, param_type, mandatory, alias) VALUES (?, ?, ?, ?, ?, ?)",
-                (
-                    param_id.strip(),
-                    group_id,
-                    param_name.strip(),
-                    param_type,
-                    1 if mandatory else 0,
-                    alias.strip() if alias else "",
-                ),
-            )
-            ProjectTypeRepository.set_applicability_on_connection(conn, param_id.strip(), applies_to_all, project_type_ids or [])
-            conn.commit()
-            return True
+        with legacy_schema_errors():
+            return bool(self.service.create_parameter(param_id, group_id, param_name, param_type,
+                                                     mandatory, alias, applies_to_all, project_type_ids))
 
     def update_parameter(
         self,
         param_id: str,
-        group_id: Optional[int],
+        group_id: int | None,
         param_name: str,
         param_type: str,
         mandatory: bool = False,
-        alias: Optional[str] = None,
-        applies_to_all: Optional[bool] = None,
-        project_type_ids: Optional[list[int]] = None,
+        alias: str | None = None,
+        applies_to_all: bool | None = None,
+        project_type_ids: list[int] | None = None,
     ) -> bool:
         """Updates an existing dynamic parameter definition.
 
@@ -181,31 +146,9 @@ class SchemaRepository:
         Returns:
             bool: True if updated.
         """
-        if not param_name.strip() or param_type not in PARAM_TYPES:
-            raise ValueError("A property needs a name and a supported type")
-        with get_db(self.db_path) as conn:
-            cursor = conn.cursor()
-            previous = conn.execute("SELECT param_type FROM schema_parameters WHERE param_id=?", (param_id,)).fetchone()
-            if previous and previous[0] != param_type:
-                for table in ("project_property_value", "project_type_property_default"):
-                    if conn.execute(f"SELECT 1 FROM {table} WHERE param_id=?", (param_id,)).fetchone():
-                        raise ValueError("Clear stored values and defaults before changing the property type")
-            cursor.execute(
-                "UPDATE schema_parameters SET group_id = ?, param_name = ?, param_type = ?, mandatory = ?, alias = ? WHERE param_id = ?",
-                (
-                    group_id,
-                    param_name.strip(),
-                    param_type,
-                    1 if mandatory else 0,
-                    alias.strip() if alias else "",
-                    param_id.strip(),
-                ),
-            )
-            updated = cursor.rowcount > 0
-            if applies_to_all is not None:
-                ProjectTypeRepository.set_applicability_on_connection(conn, param_id.strip(), applies_to_all, project_type_ids or [])
-            conn.commit()
-            return updated
+        with legacy_schema_errors():
+            return self.service.update_parameter(param_id, group_id, param_name, param_type,
+                                                 mandatory, alias, applies_to_all, project_type_ids)
 
     def delete_parameter(self, param_id: str) -> bool:
         """Deletes a parameter and its options.
@@ -216,16 +159,8 @@ class SchemaRepository:
         Returns:
             bool: True if deleted.
         """
-        clean_id = param_id.strip()
-        with get_db(self.db_path) as conn:
-            cursor = conn.cursor()
-            for table in ("project_property_value", "project_type_property_default"):
-                if conn.execute(f"SELECT 1 FROM {table} WHERE param_id=?", (clean_id,)).fetchone():
-                    raise ValueError("This property has stored values or defaults and cannot be deleted")
-            cursor.execute("DELETE FROM schema_param_options WHERE param_id = ?", (clean_id,))
-            cursor.execute("DELETE FROM schema_parameters WHERE param_id = ?", (clean_id,))
-            conn.commit()
-            return cursor.rowcount > 0
+        with legacy_schema_errors():
+            return self.service.delete_parameter(param_id)
 
     def add_option(self, param_id: str, option_value: str, display_order: int) -> int:
         """Adds a discrete option value for an enum or tags parameter.
@@ -238,14 +173,8 @@ class SchemaRepository:
         Returns:
             int: Newly inserted option ID.
         """
-        with get_db(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "INSERT INTO schema_param_options (param_id, option_value, display_order) VALUES (?, ?, ?)",
-                (param_id, option_value.strip(), display_order),
-            )
-            conn.commit()
-            return cursor.lastrowid or 0
+        with legacy_schema_errors():
+            return self.service.add_option(param_id, option_value, display_order)
 
     def delete_option(self, option_id: int) -> bool:
         """Deletes a discrete option record by ID.
@@ -256,13 +185,5 @@ class SchemaRepository:
         Returns:
             bool: True if deleted.
         """
-        with get_db(self.db_path) as conn:
-            cursor = conn.cursor()
-            option = conn.execute("SELECT param_id, option_value FROM schema_param_options WHERE id=?", (option_id,)).fetchone()
-            if option:
-                for table in ("project_property_value", "project_type_property_default"):
-                    if conn.execute(f"SELECT 1 FROM {table} WHERE param_id=? AND text_value=?", option).fetchone() or conn.execute(f"SELECT 1 FROM {table}_item WHERE param_id=? AND value=?", option).fetchone():
-                        raise ValueError("This option is referenced by a project value or template default")
-            cursor.execute("DELETE FROM schema_param_options WHERE id = ?", (option_id,))
-            conn.commit()
-            return cursor.rowcount > 0
+        with legacy_schema_errors():
+            return self.service.delete_option(option_id)

@@ -1,85 +1,102 @@
-"""Project types, applicability, and effective template rules."""
+"""Compatibility facade for callers of the original dataframe repository.
 
-from typing import Any
+New code calls ProjectTypeService. This adapter keeps the existing dataframe
+results, database-path constructor, SQLite exception types, and connection-owned
+schema operations while delegating business behavior to the migrated feature.
+"""
+
+import sqlite3
+from collections.abc import Iterator
+from contextlib import contextmanager
+from dataclasses import asdict
 
 import pandas as pd
 
-from src.database.connection import get_db
-from src.database.property_store import effective_template, write_value
+from app.application.exceptions import ProjectTypeConflictError, ProjectTypeStorageError
+from app.domain.projects.project_types import PropertyValue, make_applicability
+
+
+@contextmanager
+def _legacy_errors() -> Iterator[None]:
+    """Preserve SQLite exceptions expected by existing repository callers."""
+    try:
+        yield
+    except ProjectTypeConflictError as exc:
+        raise sqlite3.IntegrityError(str(exc.__cause__ or exc)) from exc
+    except ProjectTypeStorageError as exc:
+        if isinstance(exc.__cause__, sqlite3.DatabaseError):
+            raise exc.__cause__ from None
+        raise
 
 
 class ProjectTypeRepository:
-    def __init__(self, db_path: str | None = None):
+    """Adapt the former repository API to the new application service."""
+
+    def __init__(self, db_path: str | None = None) -> None:
+        """Retain the old constructor and expose the composed service."""
+        from app.main import create_project_type_service
+
         self.db_path = db_path
+        self.service = create_project_type_service(db_path)
 
     def get_all_types(self) -> pd.DataFrame:
-        with get_db(self.db_path) as conn:
-            return pd.read_sql("SELECT * FROM project_type ORDER BY is_general DESC, name", conn)
+        """Return the legacy type dataframe, including the integer General flag."""
+        with _legacy_errors():
+            return pd.DataFrame([
+                {**asdict(item), "is_general": int(item.is_general)}
+                for item in self.service.get_all_types()
+            ], columns=["id", "name", "description", "is_general"])
 
     def create_type(self, name: str, description: str = "") -> int:
-        if not name.strip():
-            raise ValueError("Project type name is required")
-        with get_db(self.db_path) as conn:
-            return int(conn.execute("INSERT INTO project_type(name, description) VALUES (?, ?)", (name.strip(), description.strip())).lastrowid)
+        """Create a type through the shared use case."""
+        with _legacy_errors():
+            return self.service.create_type(name, description)
 
     def update_type(self, type_id: int, name: str, description: str = "") -> None:
-        if not name.strip():
-            raise ValueError("Project type name is required")
-        with get_db(self.db_path) as conn:
-            general = conn.execute("SELECT is_general FROM project_type WHERE id=?", (type_id,)).fetchone()
-            if not general:
-                raise ValueError("Unknown project type")
-            if general[0] and name != "General":
-                raise ValueError("The General type cannot be renamed")
-            conn.execute("UPDATE project_type SET name=?, description=? WHERE id=?", (name.strip(), description.strip(), type_id))
+        """Update a type through the shared use case."""
+        with _legacy_errors():
+            self.service.update_type(type_id, name, description)
 
     def delete_type(self, type_id: int) -> None:
-        with get_db(self.db_path) as conn:
-            row = conn.execute("SELECT is_general FROM project_type WHERE id=?", (type_id,)).fetchone()
-            if row and row[0]:
-                raise ValueError("The General type cannot be deleted")
-            if conn.execute("SELECT 1 FROM project WHERE project_type_id=?", (type_id,)).fetchone():
-                raise ValueError("Reassign this type's projects before deleting it")
-            # A selected-only property must retain at least one applicable type.
-            if conn.execute("""SELECT 1 FROM project_type_property m JOIN schema_parameters p USING(param_id)
-                WHERE m.project_type_id=? AND p.applies_to_all=0 AND NOT EXISTS
-                (SELECT 1 FROM project_type_property other WHERE other.param_id=m.param_id AND other.project_type_id<>?)""", (type_id, type_id)).fetchone():
-                raise ValueError("Assign this type's exclusive properties to another type first")
-            conn.execute("DELETE FROM project_type WHERE id=?", (type_id,))
+        """Apply domain deletion guards and remove a type."""
+        with _legacy_errors():
+            self.service.delete_type(type_id)
 
     def get_template(self, type_id: int) -> pd.DataFrame:
-        with get_db(self.db_path) as conn:
-            return pd.DataFrame(effective_template(conn, type_id))
+        """Return the effective template using the legacy dataframe shape."""
+        with _legacy_errors():
+            return pd.DataFrame(self.service.get_template(type_id))
 
     def get_applicability(self, param_id: str) -> tuple[bool, list[int]]:
-        with get_db(self.db_path) as conn:
-            row = conn.execute("SELECT applies_to_all FROM schema_parameters WHERE param_id=?", (param_id,)).fetchone()
-            if not row:
-                raise ValueError("Unknown property")
-            return bool(row[0]), [r[0] for r in conn.execute("SELECT project_type_id FROM project_type_property WHERE param_id=? ORDER BY project_type_id", (param_id,))]
+        """Return the former all-types flag and selected-ID list."""
+        with _legacy_errors():
+            scope = self.service.get_applicability(param_id)
+            return scope.applies_to_all, list(scope.type_ids)
 
     @staticmethod
-    def set_applicability_on_connection(conn, param_id: str, applies_to_all: bool, type_ids: list[int]) -> None:
-        if not applies_to_all and not type_ids:
-            raise ValueError("Select at least one project type")
-        updated = conn.execute("UPDATE schema_parameters SET applies_to_all=? WHERE param_id=?", (int(applies_to_all), param_id))
-        if not updated.rowcount:
-            raise ValueError("Unknown property")
-        conn.execute("DELETE FROM project_type_property WHERE param_id=?", (param_id,))
-        if not applies_to_all:
-            conn.executemany("INSERT INTO project_type_property(project_type_id,param_id) VALUES (?,?)", [(tid, param_id) for tid in sorted(set(type_ids))])
+    def set_applicability_on_connection(
+        conn: sqlite3.Connection, param_id: str, applies_to_all: bool, type_ids: list[int],
+    ) -> None:
+        """Join a schema operation's transaction without committing or closing it."""
+        from app.infrastructure.repositories.project_types import SqliteProjectTypeStore
 
-    def set_applicability(self, param_id: str, applies_to_all: bool, type_ids: list[int] | None = None) -> None:
-        with get_db(self.db_path) as conn:
-            self.set_applicability_on_connection(conn, param_id, applies_to_all, type_ids or [])
+        scope = make_applicability(applies_to_all, type_ids)
+        SqliteProjectTypeStore(conn).set_applicability(param_id, scope)
 
-    def save_rule(self, type_id: int, param_id: str, mandatory_override: bool | None = None, *, has_default: bool = False, default_value: Any = None) -> None:
-        with get_db(self.db_path) as conn:
-            if param_id not in {p["param_id"] for p in effective_template(conn, type_id)}:
-                raise ValueError("Property does not apply to this type")
-            conn.execute("""INSERT INTO project_type_property_rule(project_type_id,param_id,mandatory_override) VALUES (?,?,?)
-                ON CONFLICT(project_type_id,param_id) DO UPDATE SET mandatory_override=excluded.mandatory_override""", (type_id, param_id, mandatory_override))
-            if has_default:
-                write_value(conn, type_id, param_id, default_value, defaults=True)
-            else:
-                conn.execute("DELETE FROM project_type_property_default WHERE project_type_id=? AND param_id=?", (type_id, param_id))
+    def set_applicability(
+        self, param_id: str, applies_to_all: bool, type_ids: list[int] | None = None,
+    ) -> None:
+        """Replace scope through the shared use case."""
+        with _legacy_errors():
+            self.service.set_applicability(param_id, applies_to_all, type_ids)
+
+    def save_rule(
+        self, type_id: int, param_id: str, mandatory_override: bool | None = None,
+        *, has_default: bool = False, default_value: PropertyValue = None,
+    ) -> None:
+        """Save required/default settings through the shared use case."""
+        with _legacy_errors():
+            self.service.save_rule(
+                type_id, param_id, mandatory_override,
+                has_default=has_default, default_value=default_value,
+            )

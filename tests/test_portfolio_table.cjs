@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
-const source = fs.readFileSync(path.join(__dirname, '../src/views/portfolio_table_component.py'), 'utf8');
+const source = fs.readFileSync(path.join(__dirname, '../app/presentation/components/portfolio_table.py'), 'utf8');
 const script = source.match(/_TABLE_JS = r"""([\s\S]*?)"""/)[1].replace('export default function', 'function mount');
 
 function harness() {

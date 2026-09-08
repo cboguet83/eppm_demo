@@ -1,5 +1,7 @@
 """Default demo data seeder for PPM Studio Pro."""
 
+from contextlib import closing
+
 from typing import Optional
 
 from src.config import config
@@ -240,7 +242,7 @@ def seed_default_data_if_empty(db_path: Optional[str] = None, force: bool = Fals
     target = db_path or config.db_path
     if not force and Path(target).exists():
         try:
-            with get_db(target) as conn:
+            with closing(get_db(target)) as conn, conn:
                 if conn.execute("SELECT 1 FROM schema_migration WHERE version='demo-bootstrap-v1'").fetchone():
                     return
                 if any(conn.execute(f"SELECT 1 FROM {table} LIMIT 1").fetchone()
@@ -271,7 +273,7 @@ def _seed_default_data(db_path: Optional[str] = None, force: bool = False, *, in
 
 
 
-    with get_db(target_path) as conn:
+    with closing(get_db(target_path)) as conn, conn:
         cursor = conn.cursor()
 
         # Check Schema Groups

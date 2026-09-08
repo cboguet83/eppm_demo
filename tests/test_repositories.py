@@ -1,5 +1,7 @@
 """Unit tests for Data Access Repositories."""
 
+from contextlib import closing
+
 import os
 import shutil
 import sqlite3
@@ -268,7 +270,7 @@ class TestRepositories(unittest.TestCase):
 
     def test_project_manager_foreign_key_crud(self) -> None:
         """Verify creating, reading, and updating a project with function_id (Project Manager)."""
-        with get_db(self.temp_db_path) as conn:
+        with closing(get_db(self.temp_db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute("INSERT INTO function_type (function_type_id, function_type) VALUES (1, 'Chef de Projet')")
             cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id) VALUES (10, 'Alice PM', 3, 1)")

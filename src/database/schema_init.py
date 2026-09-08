@@ -1,5 +1,7 @@
 """Database schema initialization and migration engine."""
 
+from contextlib import closing
+
 import sqlite3
 from typing import Optional
 
@@ -22,7 +24,7 @@ def init_db(db_path: Optional[str] = None) -> None:
     logger.info("Initializing database schema for %s", target_path)
     backup_legacy_database(target_path)
 
-    with get_db(target_path) as conn:
+    with closing(get_db(target_path)) as conn, conn:
         conn.execute("PRAGMA foreign_keys = OFF")
         conn.execute("BEGIN")
         cursor = conn.cursor()

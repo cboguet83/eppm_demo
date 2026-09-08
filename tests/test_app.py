@@ -1,5 +1,7 @@
 """Legacy regression test suite ensuring backward compatibility."""
 
+from contextlib import closing
+
 import json
 import os
 import shutil
@@ -44,7 +46,7 @@ class TestPPMStudio(unittest.TestCase):
         """Arrange, Act, Assert table creation in fresh SQLite database."""
         init_db(self.temp_db_path)
 
-        with get_db(self.temp_db_path) as conn:
+        with closing(get_db(self.temp_db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
             tables = {row[0] for row in cursor.fetchall()}
@@ -63,7 +65,7 @@ class TestPPMStudio(unittest.TestCase):
         init_db(self.temp_db_path)
         seed_default_data_if_empty(self.temp_db_path)
 
-        with get_db(self.temp_db_path) as conn:
+        with closing(get_db(self.temp_db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) FROM schema_groups")
             group_count = cursor.fetchone()[0]
@@ -85,7 +87,7 @@ class TestPPMStudio(unittest.TestCase):
 
         init_db(self.temp_db_path)
         seed_default_data_if_empty(self.temp_db_path)
-        with get_db(self.temp_db_path) as conn:
+        with closing(get_db(self.temp_db_path)) as conn, conn:
             conn.execute(
                 """
                 INSERT INTO task_dependencies

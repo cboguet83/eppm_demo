@@ -27,7 +27,8 @@ from src.repositories.tag_repo import TagRepository
 from src.services.organization_service import OrganizationService
 from src.services.resource_pool_service import ResourcePoolService
 from src.services.tag_service import TagService
-from src.views.schema_def_view import render_schema_definition
+from app.main import create_schema_service, create_project_type_service
+from app.presentation.pages.schema import render_schema_definition
 
 
 # Declare Interactive Table Custom Components
@@ -120,7 +121,7 @@ def _open_add_function_dialog(
     )
 
     col_save, col_cancel = st.columns(2)
-    if col_save.button(t("settings.btn_save", default="💾 Save Function"), type="primary", use_container_width=True):
+    if col_save.button(t("settings.btn_save", default="💾 Save Function"), type="primary", width="stretch"):
         try:
             OrganizationService.validate_function(new_name, int(new_level), int(new_fte))
             new_fid = org_repo.create_function(
@@ -141,7 +142,7 @@ def _open_add_function_dialog(
         except Exception as e:
             st.error(f"Error creating function: {e}")
 
-    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), use_container_width=True):
+    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
         st.rerun()
 
 
@@ -208,7 +209,7 @@ def _open_edit_function_dialog(
     )
 
     col_save, col_cancel = st.columns(2)
-    if col_save.button(t("settings.btn_save_changes", default="💾 Save Changes"), type="primary", use_container_width=True):
+    if col_save.button(t("settings.btn_save_changes", default="💾 Save Changes"), type="primary", width="stretch"):
         try:
             OrganizationService.validate_function(edit_name, int(edit_level), int(edit_fte))
             org_repo.update_function(
@@ -230,7 +231,7 @@ def _open_edit_function_dialog(
         except Exception as e:
             st.error(f"Error updating function: {e}")
 
-    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), use_container_width=True):
+    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
         st.rerun()
 
 
@@ -245,12 +246,12 @@ def _open_delete_function_dialog(
     st.caption("This action cannot be undone.")
 
     col_confirm, col_cancel = st.columns(2)
-    if col_confirm.button(t("settings.btn_confirm_delete", default="🗑️ Yes, Delete"), type="primary", use_container_width=True):
+    if col_confirm.button(t("settings.btn_confirm_delete", default="🗑️ Yes, Delete"), type="primary", width="stretch"):
         org_repo.delete_function(func_id)
         st.toast(t("settings.msg_func_deleted", default=f"Function '{func_name}' deleted."), icon="🗑️")
         st.rerun()
 
-    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), use_container_width=True):
+    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
         st.rerun()
 
 
@@ -289,7 +290,7 @@ def _open_add_team_dialog(
     )
 
     col_save, col_cancel = st.columns(2)
-    if col_save.button(t("settings.btn_save", default="💾 Save Team"), type="primary", use_container_width=True):
+    if col_save.button(t("settings.btn_save", default="💾 Save Team"), type="primary", width="stretch"):
         try:
             OrganizationService.validate_team(new_name)
             new_tid = org_repo.create_team(
@@ -308,7 +309,7 @@ def _open_add_team_dialog(
         except Exception as e:
             st.error(f"Error creating team: {e}")
 
-    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), use_container_width=True):
+    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
         st.rerun()
 
 
@@ -356,7 +357,7 @@ def _open_edit_team_dialog(
     )
 
     col_save, col_cancel = st.columns(2)
-    if col_save.button(t("settings.btn_save_changes", default="💾 Save Changes"), type="primary", use_container_width=True):
+    if col_save.button(t("settings.btn_save_changes", default="💾 Save Changes"), type="primary", width="stretch"):
         try:
             OrganizationService.validate_team(edit_name)
             org_repo.update_team(
@@ -376,7 +377,7 @@ def _open_edit_team_dialog(
         except Exception as e:
             st.error(f"Error updating team: {e}")
 
-    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), use_container_width=True):
+    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
         st.rerun()
 
 
@@ -391,12 +392,12 @@ def _open_delete_team_dialog(
     st.caption("This action cannot be undone.")
 
     col_confirm, col_cancel = st.columns(2)
-    if col_confirm.button(t("settings.btn_confirm_delete", default="🗑️ Yes, Delete"), type="primary", use_container_width=True):
+    if col_confirm.button(t("settings.btn_confirm_delete", default="🗑️ Yes, Delete"), type="primary", width="stretch"):
         org_repo.delete_team(team_id)
         st.toast(t("settings.msg_team_deleted", default=f"Team '{team_name}' deleted."), icon="🗑️")
         st.rerun()
 
-    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), use_container_width=True):
+    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
         st.rerun()
 
 
@@ -438,7 +439,7 @@ def _open_add_pool_dialog(
     )
 
     col_save, col_cancel = st.columns(2)
-    if col_save.button(t("settings.btn_save", default="💾 Save Pool"), type="primary", use_container_width=True):
+    if col_save.button(t("settings.btn_save", default="💾 Save Pool"), type="primary", width="stretch"):
         try:
             ResourcePoolService.validate_pool_name(new_name)
             ResourcePoolService.validate_capacity_fte(float(new_capacity))
@@ -457,7 +458,7 @@ def _open_add_pool_dialog(
         except Exception as e:
             st.error(f"Error creating pool: {e}")
 
-    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), use_container_width=True):
+    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
         st.rerun()
 
 
@@ -509,7 +510,7 @@ def _open_edit_pool_dialog(
     )
 
     col_save, col_cancel = st.columns(2)
-    if col_save.button(t("settings.btn_save_changes", default="💾 Save Changes"), type="primary", use_container_width=True):
+    if col_save.button(t("settings.btn_save_changes", default="💾 Save Changes"), type="primary", width="stretch"):
         try:
             ResourcePoolService.validate_pool_name(edit_name)
             ResourcePoolService.validate_capacity_fte(float(edit_capacity))
@@ -529,7 +530,7 @@ def _open_edit_pool_dialog(
         except Exception as e:
             st.error(f"Error updating pool: {e}")
 
-    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), use_container_width=True):
+    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
         st.rerun()
 
 
@@ -540,12 +541,12 @@ def _open_delete_pool_dialog(pool_repo: ResourcePoolRepository, pool_id: int, po
     st.caption("All mappings and project/task assignments linked to this pool will also be deleted.")
 
     col_confirm, col_cancel = st.columns(2)
-    if col_confirm.button(t("settings.btn_confirm_delete", default="🗑️ Yes, Delete"), type="primary", use_container_width=True):
+    if col_confirm.button(t("settings.btn_confirm_delete", default="🗑️ Yes, Delete"), type="primary", width="stretch"):
         pool_repo.delete_pool(pool_id)
         st.toast(f"Resource Pool '{pool_name}' deleted.", icon="🗑️")
         st.rerun()
 
-    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), use_container_width=True):
+    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
         st.rerun()
 
 
@@ -814,7 +815,7 @@ def _open_add_pool_mapping_dialog(
     )
 
     col_save, col_cancel = st.columns(2)
-    if col_save.button(t("settings.btn_save_mapping", default="💾 Save Mapping"), type="primary", use_container_width=True):
+    if col_save.button(t("settings.btn_save_mapping", default="💾 Save Mapping"), type="primary", width="stretch"):
         try:
             ResourcePoolService.validate_allocation_pct(float(alloc_pct))
             pool_repo.create_mapping(
@@ -832,7 +833,7 @@ def _open_add_pool_mapping_dialog(
         except Exception as e:
             st.error(f"Error saving mapping: {e}")
 
-    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), use_container_width=True):
+    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
         st.rerun()
 
 
@@ -935,12 +936,12 @@ def _render_pool_assignments_table(
             key=f"sb_del_assign_{selected_pool_id}",
             label_visibility="collapsed",
         )
-        if st.button(t("settings.btn_unassign", default="🗑️ Unassign"), key=f"btn_unassign_{selected_pool_id}", use_container_width=True):
+        if st.button(t("settings.btn_unassign", default="🗑️ Unassign"), key=f"btn_unassign_{selected_pool_id}", width="stretch"):
             pool_repo.delete_assignment(del_a_id)
             st.toast(f"Assignment #{del_a_id} removed.", icon="🗑️")
             st.rerun()
 
-        if st.button("📅 " + t("settings.btn_jump_to_planning", default="Open in Planning"), key=f"btn_jump_{selected_pool_id}", use_container_width=True):
+        if st.button("📅 " + t("settings.btn_jump_to_planning", default="Open in Planning"), key=f"btn_jump_{selected_pool_id}", width="stretch"):
             chosen = next((a for a in assignments if a["id"] == del_a_id), None)
             if chosen:
                 st.session_state["target_planning_project_id"] = int(chosen["project_id"])
@@ -962,7 +963,7 @@ def _open_add_function_type_dialog(org_repo: OrganizationRepository) -> None:
     new_name = st.text_input(t("settings.field_type_name", default="Function Type *"), placeholder="e.g. Contractor")
 
     col_save, col_cancel = st.columns(2)
-    if col_save.button(t("settings.btn_save", default="💾 Save Type"), type="primary", use_container_width=True):
+    if col_save.button(t("settings.btn_save", default="💾 Save Type"), type="primary", width="stretch"):
         clean_name = new_name.strip()
         if clean_name:
             try:
@@ -974,7 +975,7 @@ def _open_add_function_type_dialog(org_repo: OrganizationRepository) -> None:
         else:
             st.error(t("settings.err_type_name_empty", default="Function type name cannot be empty."))
 
-    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), use_container_width=True):
+    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
         st.rerun()
 
 
@@ -988,7 +989,7 @@ def _open_edit_function_type_dialog(
     edit_name = st.text_input(t("settings.field_type_name", default="Function Type *"), value=current_name)
 
     col_save, col_cancel = st.columns(2)
-    if col_save.button(t("settings.btn_save_changes", default="💾 Save Changes"), type="primary", use_container_width=True):
+    if col_save.button(t("settings.btn_save_changes", default="💾 Save Changes"), type="primary", width="stretch"):
         clean_name = edit_name.strip()
         if clean_name:
             try:
@@ -1000,7 +1001,7 @@ def _open_edit_function_type_dialog(
         else:
             st.error(t("settings.err_type_name_empty", default="Function type name cannot be empty."))
 
-    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), use_container_width=True):
+    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
         st.rerun()
 
 
@@ -1015,12 +1016,12 @@ def _open_delete_function_type_dialog(
     st.caption("This action cannot be undone.")
 
     col_confirm, col_cancel = st.columns(2)
-    if col_confirm.button(t("settings.btn_confirm_delete", default="🗑️ Yes, Delete"), type="primary", use_container_width=True):
+    if col_confirm.button(t("settings.btn_confirm_delete", default="🗑️ Yes, Delete"), type="primary", width="stretch"):
         org_repo.delete_function_type(type_id)
         st.toast(t("settings.msg_type_deleted", default=f"Function Type '{type_name}' deleted."), icon="🗑️")
         st.rerun()
 
-    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), use_container_width=True):
+    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
         st.rerun()
 
 
@@ -1113,7 +1114,7 @@ def _open_add_employee_dialog(
             )
 
     col_save, col_cancel = st.columns(2)
-    if col_save.button(t("settings.btn_save", default="💾 Save Employee"), type="primary", use_container_width=True):
+    if col_save.button(t("settings.btn_save", default="💾 Save Employee"), type="primary", width="stretch"):
         try:
             OrganizationService.validate_employee(
                 new_first, new_last, new_email, new_code, new_occupation
@@ -1158,7 +1159,7 @@ def _open_add_employee_dialog(
         except Exception as e:
             st.error(f"Error adding employee: {e}")
 
-    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), use_container_width=True):
+    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
         st.rerun()
 
 
@@ -1209,7 +1210,7 @@ def _render_employee_calendar_exception_editor(
             t("settings.col_occupation_percentage", default="Occupation %"),
             t("settings.field_exception_reason", default="Reason"),
         ]
-        st.dataframe(display_exceptions, hide_index=True, use_container_width=True)
+        st.dataframe(display_exceptions, hide_index=True, width="stretch")
     else:
         st.info(
             t(
@@ -1305,7 +1306,7 @@ def _render_employee_calendar_exception_editor(
     if save_exception_col.button(
         save_exception_label,
         type="primary",
-        use_container_width=True,
+        width="stretch",
         key=f"save_employee_exception_{employee_id}_{widget_suffix}",
     ):
         try:
@@ -1350,7 +1351,7 @@ def _render_employee_calendar_exception_editor(
 
     if selected_exception_id is not None and delete_exception_col.button(
         t("settings.action_delete", default="Delete"),
-        use_container_width=True,
+        width="stretch",
         key=f"delete_employee_exception_{employee_id}_{selected_exception_id}",
     ):
         org_repo.delete_employee_calendar_exception(selected_exception_id)
@@ -1414,7 +1415,7 @@ def _open_edit_employee_dialog(
     )
 
     col_save, col_cancel = st.columns(2)
-    if col_save.button(t("settings.btn_save_changes", default="💾 Save Changes"), type="primary", use_container_width=True):
+    if col_save.button(t("settings.btn_save_changes", default="💾 Save Changes"), type="primary", width="stretch"):
         try:
             OrganizationService.validate_employee(
                 edit_first, edit_last, edit_email, edit_code, edit_occupation
@@ -1444,7 +1445,7 @@ def _open_edit_employee_dialog(
         except Exception as e:
             st.error(f"Error updating employee: {e}")
 
-    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), use_container_width=True):
+    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
         st.rerun()
 
 
@@ -1459,12 +1460,12 @@ def _open_delete_employee_dialog(
     st.caption("This action cannot be undone.")
 
     col_confirm, col_cancel = st.columns(2)
-    if col_confirm.button(t("settings.btn_confirm_delete", default="🗑️ Yes, Delete"), type="primary", use_container_width=True):
+    if col_confirm.button(t("settings.btn_confirm_delete", default="🗑️ Yes, Delete"), type="primary", width="stretch"):
         org_repo.delete_employee(emp_id)
         st.toast(t("settings.msg_emp_deleted", default=f"Employee '{emp_name}' deleted."), icon="🗑️")
         st.rerun()
 
-    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), use_container_width=True):
+    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
         st.rerun()
 
 
@@ -1477,7 +1478,7 @@ def _open_add_tag_group_dialog(tag_repo: TagRepository) -> None:
     new_name = st.text_input(t("settings.field_group_name", default="Tag Group Name *"), placeholder="e.g. Architecture")
 
     col_save, col_cancel = st.columns(2)
-    if col_save.button(t("settings.btn_save", default="💾 Save Group"), type="primary", use_container_width=True):
+    if col_save.button(t("settings.btn_save", default="💾 Save Group"), type="primary", width="stretch"):
         try:
             TagService.validate_tag_group(new_name)
             new_id = tag_repo.create_tag_group(TagGroup(tag_group_name=new_name.strip()))
@@ -1488,7 +1489,7 @@ def _open_add_tag_group_dialog(tag_repo: TagRepository) -> None:
         except Exception as e:
             st.error(f"Error creating tag group: {e}")
 
-    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), use_container_width=True):
+    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
         st.rerun()
 
 
@@ -1499,7 +1500,7 @@ def _open_edit_tag_group_dialog(tag_repo: TagRepository, group_id: int, current_
     edit_name = st.text_input(t("settings.field_group_name", default="Tag Group Name *"), value=current_name)
 
     col_save, col_cancel = st.columns(2)
-    if col_save.button(t("settings.btn_save_changes", default="💾 Save Changes"), type="primary", use_container_width=True):
+    if col_save.button(t("settings.btn_save_changes", default="💾 Save Changes"), type="primary", width="stretch"):
         try:
             TagService.validate_tag_group(edit_name)
             tag_repo.update_tag_group(TagGroup(id=group_id, tag_group_name=edit_name.strip()))
@@ -1510,7 +1511,7 @@ def _open_edit_tag_group_dialog(tag_repo: TagRepository, group_id: int, current_
         except Exception as e:
             st.error(f"Error updating tag group: {e}")
 
-    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), use_container_width=True):
+    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
         st.rerun()
 
 
@@ -1520,7 +1521,7 @@ def _open_delete_tag_group_dialog(tag_repo: TagRepository, group_id: int, group_
     usage_count = tag_repo.count_tags_by_group(group_id)
     if usage_count > 0:
         st.error(f"⚠️ Cannot delete Tag Group **{group_name}** (ID: {group_id}) because {usage_count} dictionary tags belong to it.")
-        if st.button(t("settings.btn_cancel", default="Cancel"), use_container_width=True):
+        if st.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
             st.rerun()
         return
 
@@ -1528,7 +1529,7 @@ def _open_delete_tag_group_dialog(tag_repo: TagRepository, group_id: int, group_
     st.caption("This action cannot be undone.")
 
     col_confirm, col_cancel = st.columns(2)
-    if col_confirm.button(t("settings.btn_confirm_delete", default="🗑️ Yes, Delete"), type="primary", use_container_width=True):
+    if col_confirm.button(t("settings.btn_confirm_delete", default="🗑️ Yes, Delete"), type="primary", width="stretch"):
         try:
             tag_repo.delete_tag_group(group_id)
             st.toast(f"Tag Group '{group_name}' deleted.", icon="🗑️")
@@ -1536,7 +1537,7 @@ def _open_delete_tag_group_dialog(tag_repo: TagRepository, group_id: int, group_
         except Exception as e:
             st.error(f"Error deleting tag group: {e}")
 
-    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), use_container_width=True):
+    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
         st.rerun()
 
 
@@ -1557,7 +1558,7 @@ def _open_add_tag_dialog(tag_repo: TagRepository, df_groups: pd.DataFrame) -> No
     )
 
     col_save, col_cancel = st.columns(2)
-    if col_save.button(t("settings.btn_save", default="💾 Save Tag"), type="primary", use_container_width=True):
+    if col_save.button(t("settings.btn_save", default="💾 Save Tag"), type="primary", width="stretch"):
         try:
             TagService.validate_tag(new_tag)
             new_id = tag_repo.create_tag(TagDictionary(tag=new_tag.strip(), tag_group_id=new_group))
@@ -1568,7 +1569,7 @@ def _open_add_tag_dialog(tag_repo: TagRepository, df_groups: pd.DataFrame) -> No
         except Exception as e:
             st.error(f"Error creating tag: {e}")
 
-    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), use_container_width=True):
+    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
         st.rerun()
 
 
@@ -1596,7 +1597,7 @@ def _open_edit_tag_dialog(
     )
 
     col_save, col_cancel = st.columns(2)
-    if col_save.button(t("settings.btn_save_changes", default="💾 Save Changes"), type="primary", use_container_width=True):
+    if col_save.button(t("settings.btn_save_changes", default="💾 Save Changes"), type="primary", width="stretch"):
         try:
             TagService.validate_tag(edit_tag)
             tag_repo.update_tag(TagDictionary(id=tag_id, tag=edit_tag.strip(), tag_group_id=edit_group))
@@ -1607,7 +1608,7 @@ def _open_edit_tag_dialog(
         except Exception as e:
             st.error(f"Error updating tag: {e}")
 
-    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), use_container_width=True):
+    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
         st.rerun()
 
 
@@ -1625,7 +1626,7 @@ def _open_delete_tag_dialog(tag_repo: TagRepository, tag_id: int, tag_name: str)
     st.caption("This action cannot be undone.")
 
     col_confirm, col_cancel = st.columns(2)
-    if col_confirm.button(t("settings.btn_confirm_delete", default="🗑️ Yes, Delete"), type="primary", use_container_width=True):
+    if col_confirm.button(t("settings.btn_confirm_delete", default="🗑️ Yes, Delete"), type="primary", width="stretch"):
         try:
             tag_repo.delete_tag(tag_id)
             st.toast(f"Tag '{tag_name}' deleted.", icon="🗑️")
@@ -1633,7 +1634,7 @@ def _open_delete_tag_dialog(tag_repo: TagRepository, tag_id: int, tag_name: str)
         except Exception as e:
             st.error(f"Error deleting tag: {e}")
 
-    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), use_container_width=True):
+    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
         st.rerun()
 
 
@@ -1673,7 +1674,7 @@ def _open_add_project_tag_dialog(
     )
 
     col_save, col_cancel = st.columns(2)
-    if col_save.button(t("settings.btn_save", default="💾 Assign Tag"), type="primary", use_container_width=True):
+    if col_save.button(t("settings.btn_save", default="💾 Assign Tag"), type="primary", width="stretch"):
         try:
             TagService.validate_project_tag(selected_proj, selected_tag, free_tag_val)
             pt_id = tag_repo.create_project_tag(
@@ -1686,7 +1687,7 @@ def _open_add_project_tag_dialog(
         except Exception as e:
             st.error(f"Error creating project tag: {e}")
 
-    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), use_container_width=True):
+    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
         st.rerun()
 
 
@@ -1730,7 +1731,7 @@ def _open_edit_project_tag_dialog(
     )
 
     col_save, col_cancel = st.columns(2)
-    if col_save.button(t("settings.btn_save_changes", default="💾 Save Changes"), type="primary", use_container_width=True):
+    if col_save.button(t("settings.btn_save_changes", default="💾 Save Changes"), type="primary", width="stretch"):
         try:
             TagService.validate_project_tag(selected_proj, selected_tag, free_tag_val)
             tag_repo.update_project_tag(
@@ -1743,7 +1744,7 @@ def _open_edit_project_tag_dialog(
         except Exception as e:
             st.error(f"Error updating project tag: {e}")
 
-    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), use_container_width=True):
+    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
         st.rerun()
 
 
@@ -1754,12 +1755,12 @@ def _open_delete_project_tag_dialog(tag_repo: TagRepository, pt_id: int, tag_lab
     st.caption("This action cannot be undone.")
 
     col_confirm, col_cancel = st.columns(2)
-    if col_confirm.button(t("settings.btn_confirm_delete", default="🗑️ Yes, Delete"), type="primary", use_container_width=True):
+    if col_confirm.button(t("settings.btn_confirm_delete", default="🗑️ Yes, Delete"), type="primary", width="stretch"):
         tag_repo.delete_project_tag(pt_id)
         st.toast(f"Project tag #{pt_id} deleted.", icon="🗑️")
         st.rerun()
 
-    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), use_container_width=True):
+    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
         st.rerun()
 
 
@@ -1890,12 +1891,12 @@ def _open_delete_task_tag_dialog(tag_repo: TagRepository, tt_id: int, tag_label:
     st.caption("This action cannot be undone.")
 
     col_confirm, col_cancel = st.columns(2)
-    if col_confirm.button(t("settings.btn_confirm_delete", default="🗑️ Yes, Delete"), type="primary", use_container_width=True):
+    if col_confirm.button(t("settings.btn_confirm_delete", default="🗑️ Yes, Delete"), type="primary", width="stretch"):
         tag_repo.delete_task_tag(tt_id)
         st.toast(f"Task tag #{tt_id} deleted.", icon="🗑️")
         st.rerun()
 
-    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), use_container_width=True):
+    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
         st.rerun()
 
 
@@ -1920,13 +1921,15 @@ def render_settings_view(
     if st.session_state.get("settings_active_section") == "parameters":
         default_section_idx = 1
 
+    section_labels = {
+        "org_structure": f"🏢 {t('settings.section_org_structure', default='Organization Structure')}",
+        "param_def": f"🧩 {t('settings.section_param_definition', default='Parameter Definition')}",
+        "project_configuration": t("project_collaboration.configuration", default="Project configuration"),
+    }
     selected_section = st.radio(
         "Settings Section",
-        options=["org_structure", "param_def", "project_configuration"],
-        format_func=lambda s: f"🏢 {t('settings.section_org_structure', default='Organization Structure')}"
-        if s == "org_structure"
-        else (f"🧩 {t('settings.section_param_definition', default='Parameter Definition')}"
-              if s == "param_def" else t("project_collaboration.configuration", default="Project configuration")),
+        options=list(section_labels),
+        format_func=section_labels.get,
         index=default_section_idx,
         horizontal=True,
         label_visibility="collapsed",
@@ -1934,7 +1937,9 @@ def render_settings_view(
     )
 
     if selected_section == "param_def":
-        render_schema_definition(schema_repo)
+        render_schema_definition(
+            create_schema_service(schema_repo.db_path), create_project_type_service(schema_repo.db_path),
+        )
         return
 
     if selected_section == "project_configuration":
@@ -2588,7 +2593,7 @@ def render_settings_view(
             # 2. Pool Selection & Action Toolbar
             col_sel, col_add_btn = st.columns([4, 1])
             with col_add_btn:
-                if st.button(t("settings.btn_create_pool", default="➕ Create Pool"), type="primary", use_container_width=True):
+                if st.button(t("settings.btn_create_pool", default="➕ Create Pool"), type="primary", width="stretch"):
                     _open_add_pool_dialog(pool_repo, tag_repo)
 
             df_all_pools = pool_repo.get_all_pools()
@@ -2736,7 +2741,7 @@ def render_settings_view(
                                 "Source": f"{cf.source_type.title()} ({cf.source_name})",
                                 "Deduplication Rule": status_str,
                             })
-                        st.dataframe(pd.DataFrame(dedup_table_data), use_container_width=True, hide_index=True)
+                        st.dataframe(pd.DataFrame(dedup_table_data), width="stretch", hide_index=True)
 
                     st.divider()
 

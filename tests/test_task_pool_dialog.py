@@ -1,5 +1,7 @@
 """Regression tests for lazy, current task-resource-pool dialogs."""
 
+from contextlib import closing
+
 import datetime
 import sqlite3
 import tempfile
@@ -39,7 +41,7 @@ class TaskPoolDialogTests(unittest.TestCase):
         self.path = str(Path(directory.name) / 'dialog.db')
         init_db(self.path)
         self.repo = ResourcePoolRepository(self.path)
-        with sqlite3.connect(self.path) as conn:
+        with closing(sqlite3.connect(self.path)) as conn, conn:
             conn.execute("INSERT INTO project(id,name) VALUES(1,'Project')")
             conn.executemany(
                 'INSERT INTO project_task(id,project_id,task_name,start_date,end_date) '
@@ -109,7 +111,7 @@ class TaskPoolDialogTests(unittest.TestCase):
                    side_effect=AssertionError('Unassigned task calculated demand')):
             app.run()
             self.assert_healthy(app)
-        with sqlite3.connect(self.path) as conn:
+        with closing(sqlite3.connect(self.path)) as conn, conn:
             conn.execute("INSERT INTO resource_pool(id,name) VALUES(4,'Legacy pool')")
             conn.execute(
                 'INSERT INTO resource_pool_mapping(pool_id,target_type,target_id) '
@@ -126,7 +128,7 @@ class TaskPoolDialogTests(unittest.TestCase):
     def test_external_calendar_and_assignment_changes_refresh_warnings(self) -> None:
         """A single zero-capacity day remains visible after a cached modal rerun."""
         app = self.app().run()
-        with sqlite3.connect(self.path) as conn:
+        with closing(sqlite3.connect(self.path)) as conn, conn:
             conn.execute(
                 'INSERT INTO employee_calendar_exception(employee_id,start_date,end_date,occupation_percentage) '
                 "VALUES(1,'2026-06-15','2026-06-15',0)"
@@ -136,7 +138,7 @@ class TaskPoolDialogTests(unittest.TestCase):
         self.assert_healthy(app)
         self.assertEqual(sum('Overassigned (Peak: 0.50' in item.value for item in app.markdown), 2)
         self.assertIn('🏊 Fallback pool (Cap: 5.00 FTE)', app.selectbox[0].options)
-        with sqlite3.connect(self.path) as conn:
+        with closing(sqlite3.connect(self.path)) as conn, conn:
             conn.execute('DELETE FROM resource_pool_assignment WHERE task_id=1')
         app.run()
         self.assert_healthy(app)

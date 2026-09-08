@@ -1,155 +1,33 @@
-"""Bounded portfolio reads: rows, global filters, and on-demand column statistics.
+"""Compatibility facade for callers of the former portfolio repository."""
 
-The storage model retains the legacy project_type names. The public grid calls
-them project templates. No portfolio query loads all project property records.
-"""
-
-from contextlib import closing
-import json
-from pathlib import Path
-from typing import Any
-
-from src.config import config
-from src.database.connection import get_db
-from src.models.project import PortfolioMetrics
-
-
-def portfolio_revision(db_path: str | None) -> tuple:
-    """Invalidate bounded read caches for SQLite commits, including WAL mode."""
-    path = Path(db_path or config.db_path).resolve()
-    result = [str(path)]
-    for filename in (path, Path(str(path) + '-wal')):
-        try:
-            stat = filename.stat()
-            result.append((stat.st_mtime_ns, stat.st_size, stat.st_ino))
-        except FileNotFoundError:
-            result.append(None)
-    return tuple(result)
+from app.main import create_portfolio_service
+from app.application.ports.portfolio import PortfolioMetrics
+from app.infrastructure.repositories.portfolio import portfolio_revision
+from src.repositories.project_errors import legacy_project_errors
 
 
 class PortfolioRepository:
+    """Preserve legacy dictionary results while delegating to portfolio use cases."""
+
     PAGE_SIZE = 100
     FACET_SIZE = 200
 
-    def __init__(self, db_path: str | None = None):
+    def __init__(self, db_path: str | None = None) -> None:
+        """Compose bounded portfolio queries without planning enrichment."""
         self.db_path = db_path
+        self.service = create_portfolio_service(db_path, include_allocations=False)
 
     def get_metrics(self) -> PortfolioMetrics:
-        with closing(get_db(self.db_path)) as conn:
-            count, planned, actual = conn.execute(
-                'SELECT COUNT(*), COALESCE(SUM(planned_budget),0), '
-                'COALESCE(SUM(actual_budget),0) FROM project'
-            ).fetchone()
-        return PortfolioMetrics(count, planned, actual, planned - actual,
-                                actual / planned * 100 if planned else 0)
-
-    @staticmethod
-    def _source(columns: list[dict]) -> tuple[str, list, set[str]]:
-        expressions = {
-            'project_id': 'p.id', 'name': 'p.name', 'project_template': 't.name',
-            'status': 'p.status', 'planned_budget': 'p.planned_budget',
-            'actual_budget': 'p.actual_budget',
-            'project_manager': "COALESCE((SELECT NULLIF(TRIM(COALESCE(e.firstname,'') || ' ' || COALESCE(e.lastname,'')), '') "
-                "FROM employee e WHERE e.function_id=p.function_id AND TRIM(COALESCE(e.firstname,'') || COALESCE(e.lastname,''))<>'' "
-                "ORDER BY e.lastname, e.firstname, e.employee_id LIMIT 1), f.name, '')",
-            'level_3_manager_name': "COALESCE((SELECT name FROM lineage WHERE origin=p.function_id "
-                "AND hierarchy_level=3 ORDER BY depth LIMIT 1), '')",
-        }
-        args: list[Any] = []
-        for col in columns:
-            # Only server-supplied schema metadata may add SQL expressions.
-            if col['key'] in expressions or not col.get('param_id'):
-                continue
-            expressions[col['key']] = """(SELECT CASE v.kind
-                WHEN 'number' THEN v.number_value WHEN 'date' THEN v.date_value
-                WHEN 'text' THEN v.text_value WHEN 'list' THEN
-                    (SELECT GROUP_CONCAT(value, ', ') FROM
-                        (SELECT value FROM project_property_value_item i
-                         WHERE i.project_id=p.id AND i.param_id=v.param_id ORDER BY position))
-                ELSE NULL END
-                FROM project_property_value v JOIN schema_parameters s USING(param_id)
-                WHERE v.project_id=p.id AND v.param_id=? AND (s.applies_to_all=1 OR EXISTS
-                    (SELECT 1 FROM project_type_property m WHERE m.project_type_id=p.project_type_id
-                     AND m.param_id=v.param_id)))"""
-            args.append(col['param_id'])
-        projection = ', '.join(expr + ' AS "' + key.replace('"', '""') + '"'
-                               for key, expr in expressions.items())
-        sql = """WITH RECURSIVE lineage(origin,function_id,name,hierarchy_level,manager_function_id,depth,path) AS (
-            SELECT function_id,function_id,name,hierarchy_level,manager_function_id,0,','||function_id||',' FROM function
-            UNION ALL
-            SELECT l.origin,f.function_id,f.name,f.hierarchy_level,f.manager_function_id,l.depth+1,l.path||f.function_id||','
-            FROM lineage l JOIN function f ON f.function_id=l.manager_function_id
-            WHERE l.hierarchy_level>3 AND l.depth<20 AND INSTR(l.path,','||f.function_id||',')=0
-        ), portfolio AS (SELECT """ + projection + " FROM project p JOIN project_type t ON t.id=p.project_type_id " \
-            + "LEFT JOIN function f ON f.function_id=p.function_id) "
-        return sql, args, set(expressions)
-
-    @staticmethod
-    def _where(query: dict, keys: set[str], *, exclude: str | None = None) -> tuple[str, list]:
-        clauses, args = [], []
-        search = str(query.get('search') or '').strip()
-        if search:
-            clauses.append('(INSTR(LOWER(name), LOWER(?))>0 OR INSTR(CAST(project_id AS TEXT),?)>0)')
-            args.extend([search, search])
-        templates = query.get('templates') or []
-        if templates:
-            clauses.append('project_template IN (SELECT value FROM json_each(?))')
-            args.append(json.dumps(templates))
-        for key, rule in (query.get('filters') or {}).items():
-            if key not in keys or key == exclude or not isinstance(rule, dict):
-                continue
-            values = rule.get('values', [])
-            if not isinstance(values, list):
-                continue
-            operator = 'NOT IN' if rule.get('mode') == 'exclude' else 'IN'
-            column = '"' + key.replace('"', '""') + '"'
-            clauses.append(f"COALESCE({column},'') {operator} (SELECT value FROM json_each(?))")
-            args.append(json.dumps([v for v in values if isinstance(v, (str, int, float))]))
-        return (' WHERE ' + ' AND '.join(clauses) if clauses else ''), args
+        """Read existing demo budget summaries without loading project rows."""
+        with legacy_project_errors():
+            return self.service.get_metrics()
 
     def get_page(self, columns: list[dict], query: dict, offset: int = 0) -> dict:
-        sql, args, keys = self._source(columns)
-        where, where_args = self._where(query, keys)
-        sort = query.get('sort') or {}
-        key = sort.get('column') if sort.get('column') in keys else 'project_id'
-        direction = 'DESC' if sort.get('direction') == 'desc' else 'ASC'
-        order = '"' + key.replace('"', '""') + '" COLLATE NOCASE ' + direction + ', project_id ASC'
-        with closing(get_db(self.db_path)) as conn:
-            conn.execute('BEGIN')
-            total = conn.execute(sql + 'SELECT COUNT(*) FROM portfolio' + where, args + where_args).fetchone()[0]
-            offset = min(max(0, int(offset)), max(0, (total - 1) // self.PAGE_SIZE * self.PAGE_SIZE))
-            cursor = conn.execute(sql + 'SELECT * FROM portfolio' + where + ' ORDER BY ' + order + ' LIMIT ? OFFSET ?',
-                                  args + where_args + [self.PAGE_SIZE, offset])
-            names = [c[0] for c in cursor.description]
-            rows = [dict(zip(names, row)) for row in cursor]
-        return {'rows': rows, 'total': total, 'offset': offset, 'page_size': self.PAGE_SIZE}
+        """Preserve the legacy bounded page dictionary."""
+        with legacy_project_errors():
+            return self.service.get_page(columns, query, offset)
 
     def get_facet(self, columns: list[dict], query: dict, column: str, search: str = '') -> dict:
-        """Full-result statistics; at most 200 distinct choices, searchable on demand.
-
-        Ignore this column's own selection, as Excel does, but respect every
-        other filter. Include/exclude selections work beyond the returned choices.
-        """
-        sql, args, keys = self._source(columns)
-        if column not in keys:
-            raise ValueError('Unknown portfolio column')
-        where, where_args = self._where(query, keys, exclude=column)
-        value = 'COALESCE("' + column.replace('"', '""') + '",\'\')'
-        sql += ', facet AS (SELECT ' + value + ' AS value FROM portfolio' + where + ') '
-        args += where_args
-        with closing(get_db(self.db_path)) as conn:
-            conn.execute('BEGIN')
-            count, filled, unique = conn.execute(sql + "SELECT COUNT(*), COUNT(NULLIF(value,'')), COUNT(DISTINCT NULLIF(value,'')) FROM facet", args).fetchone()
-            stats: list = [['Rows', count], ['Filled', filled], ['Unique', unique], ['Empty', count - filled]]
-            fmt = next((c.get('format') for c in columns if c['key'] == column), 'text')
-            if filled and fmt in ('number', 'currency'):
-                low, avg, high = conn.execute(sql + "SELECT MIN(value), AVG(value), MAX(value) FROM facet WHERE value<>''", args).fetchone()
-                stats.extend([['Minimum', low], ['Average', avg], ['Maximum', high]])
-            elif filled:
-                top, n = conn.execute(sql + "SELECT value, COUNT(*) n FROM facet WHERE value<>'' GROUP BY value ORDER BY n DESC, value LIMIT 1", args).fetchone()
-                stats.append(['Most common', f'{top} ({n})'])
-            choices = conn.execute(sql + 'SELECT value, COUNT(*) FROM facet WHERE INSTR(LOWER(CAST(value AS TEXT)),LOWER(?))>0 '
-                                   'GROUP BY value ORDER BY value COLLATE NOCASE LIMIT ?', args + [search, self.FACET_SIZE + 1]).fetchall()
-        return {'column': column, 'search': search, 'stats': stats, 'format': fmt,
-                'values': [{'value': v, 'count': n} for v, n in choices[:self.FACET_SIZE]],
-                'has_more': len(choices) > self.FACET_SIZE}
+        """Preserve global column statistics and bounded facet choices."""
+        with legacy_project_errors():
+            return self.service.get_facet(columns, query, column, search)
