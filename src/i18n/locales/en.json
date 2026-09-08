@@ -1,4 +1,11 @@
 {
+  "planning_totals": {
+    "title": "Planning totals · entire portfolio",
+    "projects": "Total projects",
+    "tasks": "Total tasks",
+    "dependencies": "Total dependencies",
+    "pools": "Total pools"
+  },
   "project_types": {
     "default_value": "Default value",
     "label": "Project type",

@@ -243,8 +243,15 @@ class OrganizationService:
         if function_id is None or df_functions.empty or "function_id" not in df_functions.columns:
             return None
 
+        return OrganizationService._find_level_3_function(
+            function_id, OrganizationService._build_function_lookup(df_functions)
+        )
+
+    @staticmethod
+    def _build_function_lookup(df_functions: pd.DataFrame) -> dict[int, dict[str, Any]]:
+        """Index the hierarchy once when enriching a whole portfolio."""
         func_lookup: dict[int, dict[str, Any]] = {}
-        for _, r in df_functions.iterrows():
+        for r in df_functions.to_dict("records"):
             fid = r.get("function_id")
             if pd.isna(fid):
                 continue
@@ -261,6 +268,13 @@ class OrganizationService:
             except (ValueError, TypeError):
                 continue
 
+        return func_lookup
+
+    @staticmethod
+    def _find_level_3_function(
+        function_id: Optional[int],
+        func_lookup: dict[int, dict[str, Any]],
+    ) -> Optional[dict[str, Any]]:
         curr_id: Optional[int] = function_id
         visited: set[int] = set()
         max_depth = 20
@@ -318,8 +332,9 @@ class OrganizationService:
         )
 
         unique_fids = [int(x) for x in df["function_id"].dropna().unique()]
+        func_lookup = OrganizationService._build_function_lookup(df_functions)
         level3_map: dict[int, Optional[dict[str, Any]]] = {
-            fid: OrganizationService.get_level_3_managing_function(fid, df_functions)
+            fid: OrganizationService._find_level_3_function(fid, func_lookup)
             for fid in unique_fids
         }
 

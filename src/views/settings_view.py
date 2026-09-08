@@ -682,7 +682,10 @@ def _open_delete_pool_group_dialog(
 
 def _render_pool_groups_management(pool_repo: ResourcePoolRepository) -> None:
     """Render creation, editing, and recursive membership inspection for pool groups."""
-    with st.expander("🗂️ Recursive pool groups", expanded=False):
+    expander = st.expander("🗂️ Recursive pool groups", expanded=False, on_change="rerun")
+    if not expander.open:
+        return
+    with expander:
         title_col, create_col = st.columns([4, 1])
         title_col.caption(
             "Groups may contain resource pools or other groups. Recursive membership is "
@@ -2170,7 +2173,8 @@ def render_settings_view(
         f"🏊 {t('settings.tab_resource_pools', default='Resource Pools')}",
     ]
     requested_tab = st.session_state.pop("settings_active_tab", None)
-    default_tab = settings_tab_labels[-1] if requested_tab == "resource_pools" else None
+    if requested_tab == "resource_pools":
+        st.session_state["settings_tab_selection"] = settings_tab_labels[-1]
     (
         tab_funcs,
         tab_types,
@@ -2181,752 +2185,770 @@ def render_settings_view(
         tab_proj_tags,
         tab_task_tags,
         tab_pools,
-    ) = st.tabs(settings_tab_labels, default=default_tab)
+    ) = st.tabs(settings_tab_labels, key="settings_tab_selection", on_change="rerun")
 
-
-    df_types = org_repo.get_all_function_types()
-    df_funcs = org_repo.get_all_functions()
-    df_teams = org_repo.get_all_teams()
-    df_emps = org_repo.get_all_employees()
-
-    df_groups = tag_repo.get_all_tag_groups()
-    df_tags = tag_repo.get_all_tags()
-    df_proj_dict_tags = tag_repo.get_project_tag_group_tags()
-    df_task_dict_tags = tag_repo.get_task_tag_group_tags()
-    df_proj_tags = tag_repo.get_all_project_tags()
-    df_task_tags = tag_repo.get_all_task_tags()
-    df_projects = project_repo.get_all_projects()
-    df_tasks = milestone_repo.get_all_milestones()
 
     # =========================================================================
     # TAB 1: FUNCTIONS
     # =========================================================================
-    with tab_funcs:
-        total_funcs = len(df_funcs)
-        total_fte = (df_funcs["fte_percentage"].sum() / 100.0) if not df_funcs.empty and "fte_percentage" in df_funcs.columns else 0.0
+    if tab_funcs.open:
+        with tab_funcs:
+            df_types = org_repo.get_all_function_types()
+            df_funcs = org_repo.get_all_functions()
+            total_funcs = len(df_funcs)
+            total_fte = (df_funcs["fte_percentage"].sum() / 100.0) if not df_funcs.empty and "fte_percentage" in df_funcs.columns else 0.0
 
-        st.subheader(f"{t('settings.functions_title', default='Job Functions Management')} ({total_funcs} {t('settings.stat_functions', default='Functions')} • {total_fte:.2f} {t('settings.stat_fte', default='FTE')})")
+            st.subheader(f"{t('settings.functions_title', default='Job Functions Management')} ({total_funcs} {t('settings.stat_functions', default='Functions')} • {total_fte:.2f} {t('settings.stat_fte', default='FTE')})")
 
-        # Interactive Overview Table with Column Filtering & Right-Click Context Menu
-        enriched_funcs = OrganizationService.enrich_functions(df_funcs, df_types)
-        functions_payload = []
-        if not enriched_funcs.empty:
-            for row in enriched_funcs.to_dict(orient="records"):
-                functions_payload.append({
-                    "function_id": int(row["function_id"]),
-                    "name": str(row["name"]),
-                    "hierarchy_level": int(row["hierarchy_level"]) if pd.notna(row.get("hierarchy_level")) else 1,
-                    "has_reports": bool(row.get("has_reports", False)),
-                    "function_type_id": int(row["function_type_id"]) if pd.notna(row.get("function_type_id")) else None,
-                    "function_type_name": str(row["function_type_name"]) if pd.notna(row.get("function_type_name")) else "—",
-                    "manager_function_id": int(row["manager_function_id"]) if pd.notna(row.get("manager_function_id")) else None,
-                    "manager_function_name": str(row["manager_function_name"]) if pd.notna(row.get("manager_function_name")) else "—",
-                    "dual_manager_function_id": int(row["dual_manager_function_id"]) if pd.notna(row.get("dual_manager_function_id")) else None,
-                    "dual_manager_function_name": str(row["dual_manager_function_name"]) if pd.notna(row.get("dual_manager_function_name")) else "—",
-                    "fte_percentage": int(row["fte_percentage"]) if pd.notna(row.get("fte_percentage")) else 100,
-                })
+            # Interactive Overview Table with Column Filtering & Right-Click Context Menu
+            enriched_funcs = OrganizationService.enrich_functions(df_funcs, df_types)
+            functions_payload = []
+            if not enriched_funcs.empty:
+                for row in enriched_funcs.to_dict(orient="records"):
+                    functions_payload.append({
+                        "function_id": int(row["function_id"]),
+                        "name": str(row["name"]),
+                        "hierarchy_level": int(row["hierarchy_level"]) if pd.notna(row.get("hierarchy_level")) else 1,
+                        "has_reports": bool(row.get("has_reports", False)),
+                        "function_type_id": int(row["function_type_id"]) if pd.notna(row.get("function_type_id")) else None,
+                        "function_type_name": str(row["function_type_name"]) if pd.notna(row.get("function_type_name")) else "—",
+                        "manager_function_id": int(row["manager_function_id"]) if pd.notna(row.get("manager_function_id")) else None,
+                        "manager_function_name": str(row["manager_function_name"]) if pd.notna(row.get("manager_function_name")) else "—",
+                        "dual_manager_function_id": int(row["dual_manager_function_id"]) if pd.notna(row.get("dual_manager_function_id")) else None,
+                        "dual_manager_function_name": str(row["dual_manager_function_name"]) if pd.notna(row.get("dual_manager_function_name")) else "—",
+                        "fte_percentage": int(row["fte_percentage"]) if pd.notna(row.get("fte_percentage")) else 100,
+                    })
 
-        table_event = _interactive_function_table(
-            functions=functions_payload,
-            translations={
-                "col_id": "ID",
-                "col_func_name": t("settings.col_func_name", default="Function Title"),
-                "col_level": t("settings.col_level", default="Hierarchy Level"),
-                "col_has_reports": t("settings.col_has_reports", default="Has Reports"),
-                "col_type": t("settings.col_type", default="Function Type"),
-                "col_primary_mgr": t("settings.col_primary_mgr", default="Primary Manager"),
-                "col_dual_mgr": t("settings.col_dual_mgr", default="Dual Manager"),
-                "col_fte_pct": t("settings.col_fte_pct", default="FTE %"),
-                "action_add": t("settings.action_add", default="Add New"),
-                "action_edit": t("settings.action_edit", default="Edit"),
-                "action_delete": t("settings.action_delete", default="Delete"),
-                "no_functions": t("settings.no_functions", default="No job functions registered."),
-                "hint_right_click": t("settings.hint_right_click", default="💡 Right-click any row to Add, Edit, or Delete"),
-                "badge_yes": t("settings.badge_yes", default="Yes"),
-                "badge_no": t("settings.badge_no", default="No"),
-                "stat_functions": t("settings.stat_functions", default="Functions"),
-                "stat_fte": t("settings.stat_fte", default="FTE"),
-                "filter_all": t("settings.filter_all", default="All"),
-                "filter_clear": t("settings.filter_clear", default="Clear Filters"),
-                "col_filter_ph": t("settings.col_filter_ph", default="Filter..."),
-                "search_values": t("settings.search_values", default="Search values..."),
-                "select_all": t("settings.select_all", default="Select All"),
-                "clear": t("settings.clear", default="Clear"),
-                "apply": t("settings.apply", default="Apply"),
-                "selected_count": t("settings.selected_count", default="{count} selected"),
-                "blanks": t("settings.blanks", default="(Blanks / None)"),
-            },
-            key="func_interactive_table",
-            default=None,
-        )
+            table_event = _interactive_function_table(
+                functions=functions_payload,
+                translations={
+                    "col_id": "ID",
+                    "col_func_name": t("settings.col_func_name", default="Function Title"),
+                    "col_level": t("settings.col_level", default="Hierarchy Level"),
+                    "col_has_reports": t("settings.col_has_reports", default="Has Reports"),
+                    "col_type": t("settings.col_type", default="Function Type"),
+                    "col_primary_mgr": t("settings.col_primary_mgr", default="Primary Manager"),
+                    "col_dual_mgr": t("settings.col_dual_mgr", default="Dual Manager"),
+                    "col_fte_pct": t("settings.col_fte_pct", default="FTE %"),
+                    "action_add": t("settings.action_add", default="Add New"),
+                    "action_edit": t("settings.action_edit", default="Edit"),
+                    "action_delete": t("settings.action_delete", default="Delete"),
+                    "no_functions": t("settings.no_functions", default="No job functions registered."),
+                    "hint_right_click": t("settings.hint_right_click", default="💡 Right-click any row to Add, Edit, or Delete"),
+                    "badge_yes": t("settings.badge_yes", default="Yes"),
+                    "badge_no": t("settings.badge_no", default="No"),
+                    "stat_functions": t("settings.stat_functions", default="Functions"),
+                    "stat_fte": t("settings.stat_fte", default="FTE"),
+                    "filter_all": t("settings.filter_all", default="All"),
+                    "filter_clear": t("settings.filter_clear", default="Clear Filters"),
+                    "col_filter_ph": t("settings.col_filter_ph", default="Filter..."),
+                    "search_values": t("settings.search_values", default="Search values..."),
+                    "select_all": t("settings.select_all", default="Select All"),
+                    "clear": t("settings.clear", default="Clear"),
+                    "apply": t("settings.apply", default="Apply"),
+                    "selected_count": t("settings.selected_count", default="{count} selected"),
+                    "blanks": t("settings.blanks", default="(Blanks / None)"),
+                },
+                key="func_interactive_table",
+                default=None,
+            )
 
-        # Handle context menu trigger events
-        if table_event and isinstance(table_event, dict):
-            nonce = table_event.get("nonce")
-            last_nonce = st.session_state.get("_last_func_table_nonce")
-            if nonce and nonce != last_nonce:
-                st.session_state["_last_func_table_nonce"] = nonce
-                action = table_event.get("action")
-                if action == "add_function":
-                    _open_add_function_dialog(org_repo, df_funcs, df_types)
-                elif action == "edit_function":
-                    fn_id = table_event.get("function_id")
-                    if fn_id is not None:
-                        _open_edit_function_dialog(org_repo, int(fn_id), df_funcs, df_types)
-                elif action == "delete_function":
-                    fn_id = table_event.get("function_id")
-                    fn_name = table_event.get("function_name", f"ID {fn_id}")
-                    if fn_id is not None:
-                        _open_delete_function_dialog(org_repo, int(fn_id), str(fn_name))
+            # Handle context menu trigger events
+            if table_event and isinstance(table_event, dict):
+                nonce = table_event.get("nonce")
+                last_nonce = st.session_state.get("_last_func_table_nonce")
+                if nonce and nonce != last_nonce:
+                    st.session_state["_last_func_table_nonce"] = nonce
+                    action = table_event.get("action")
+                    if action == "add_function":
+                        _open_add_function_dialog(org_repo, df_funcs, df_types)
+                    elif action == "edit_function":
+                        fn_id = table_event.get("function_id")
+                        if fn_id is not None:
+                            _open_edit_function_dialog(org_repo, int(fn_id), df_funcs, df_types)
+                    elif action == "delete_function":
+                        fn_id = table_event.get("function_id")
+                        fn_name = table_event.get("function_name", f"ID {fn_id}")
+                        if fn_id is not None:
+                            _open_delete_function_dialog(org_repo, int(fn_id), str(fn_name))
 
     # =========================================================================
     # TAB 3: FUNCTION TYPES
     # =========================================================================
-    with tab_types:
-        total_types = len(df_types)
-        st.subheader(f"{t('settings.types_title', default='Function Types Management')} ({total_types} {t('settings.stat_types', default='Types')})")
+    if tab_types.open:
+        with tab_types:
+            df_types = org_repo.get_all_function_types()
+            total_types = len(df_types)
+            st.subheader(f"{t('settings.types_title', default='Function Types Management')} ({total_types} {t('settings.stat_types', default='Types')})")
 
-        types_payload = []
-        if not df_types.empty:
-            for row in df_types.to_dict(orient="records"):
-                types_payload.append({
-                    "function_type_id": int(row["function_type_id"]),
-                    "function_type": str(row["function_type"]),
-                })
+            types_payload = []
+            if not df_types.empty:
+                for row in df_types.to_dict(orient="records"):
+                    types_payload.append({
+                        "function_type_id": int(row["function_type_id"]),
+                        "function_type": str(row["function_type"]),
+                    })
 
-        type_table_event = _interactive_function_type_table(
-            types=types_payload,
-            translations={
-                "col_id": "ID",
-                "col_type_name": t("settings.col_type_name", default="Function Type Name"),
-                "action_add": t("settings.action_add", default="Add New"),
-                "action_edit": t("settings.action_edit", default="Edit"),
-                "action_delete": t("settings.action_delete", default="Delete"),
-                "no_types": t("settings.no_types", default="No function types registered."),
-                "stat_types": t("settings.stat_types", default="Types"),
-                "filter_all": t("settings.filter_all", default="All"),
-                "filter_clear": t("settings.filter_clear", default="Clear Filters"),
-                "col_filter_ph": t("settings.col_filter_ph", default="Filter..."),
-                "search_values": t("settings.search_values", default="Search values..."),
-                "select_all": t("settings.select_all", default="Select All"),
-                "clear": t("settings.clear", default="Clear"),
-                "apply": t("settings.apply", default="Apply"),
-                "selected_count": t("settings.selected_count", default="{count} selected"),
-                "blanks": t("settings.blanks", default="(Blanks / None)"),
-            },
-            key="type_interactive_table",
-            default=None,
-        )
+            type_table_event = _interactive_function_type_table(
+                types=types_payload,
+                translations={
+                    "col_id": "ID",
+                    "col_type_name": t("settings.col_type_name", default="Function Type Name"),
+                    "action_add": t("settings.action_add", default="Add New"),
+                    "action_edit": t("settings.action_edit", default="Edit"),
+                    "action_delete": t("settings.action_delete", default="Delete"),
+                    "no_types": t("settings.no_types", default="No function types registered."),
+                    "stat_types": t("settings.stat_types", default="Types"),
+                    "filter_all": t("settings.filter_all", default="All"),
+                    "filter_clear": t("settings.filter_clear", default="Clear Filters"),
+                    "col_filter_ph": t("settings.col_filter_ph", default="Filter..."),
+                    "search_values": t("settings.search_values", default="Search values..."),
+                    "select_all": t("settings.select_all", default="Select All"),
+                    "clear": t("settings.clear", default="Clear"),
+                    "apply": t("settings.apply", default="Apply"),
+                    "selected_count": t("settings.selected_count", default="{count} selected"),
+                    "blanks": t("settings.blanks", default="(Blanks / None)"),
+                },
+                key="type_interactive_table",
+                default=None,
+            )
 
-        if type_table_event and isinstance(type_table_event, dict):
-            nonce = type_table_event.get("nonce")
-            last_nonce = st.session_state.get("_last_type_table_nonce")
-            if nonce and nonce != last_nonce:
-                st.session_state["_last_type_table_nonce"] = nonce
-                action = type_table_event.get("action")
-                if action == "add_function_type":
-                    _open_add_function_type_dialog(org_repo)
-                elif action == "edit_function_type":
-                    ft_id = type_table_event.get("function_type_id")
-                    ft_name = type_table_event.get("function_type_name", "")
-                    if ft_id is not None:
-                        _open_edit_function_type_dialog(org_repo, int(ft_id), str(ft_name))
-                elif action == "delete_function_type":
-                    ft_id = type_table_event.get("function_type_id")
-                    ft_name = type_table_event.get("function_type_name", f"ID {ft_id}")
-                    if ft_id is not None:
-                        _open_delete_function_type_dialog(org_repo, int(ft_id), str(ft_name))
+            if type_table_event and isinstance(type_table_event, dict):
+                nonce = type_table_event.get("nonce")
+                last_nonce = st.session_state.get("_last_type_table_nonce")
+                if nonce and nonce != last_nonce:
+                    st.session_state["_last_type_table_nonce"] = nonce
+                    action = type_table_event.get("action")
+                    if action == "add_function_type":
+                        _open_add_function_type_dialog(org_repo)
+                    elif action == "edit_function_type":
+                        ft_id = type_table_event.get("function_type_id")
+                        ft_name = type_table_event.get("function_type_name", "")
+                        if ft_id is not None:
+                            _open_edit_function_type_dialog(org_repo, int(ft_id), str(ft_name))
+                    elif action == "delete_function_type":
+                        ft_id = type_table_event.get("function_type_id")
+                        ft_name = type_table_event.get("function_type_name", f"ID {ft_id}")
+                        if ft_id is not None:
+                            _open_delete_function_type_dialog(org_repo, int(ft_id), str(ft_name))
 
     # =========================================================================
     # TAB 4: TEAMS
     # =========================================================================
-    with tab_teams:
-        total_teams = len(df_teams)
-        st.subheader(f"{t('settings.teams_title', default='Teams Management')} ({total_teams} {t('settings.stat_teams', default='Teams')})")
+    if tab_teams.open:
+        with tab_teams:
+            df_funcs = org_repo.get_all_functions()
+            df_teams = org_repo.get_all_teams()
+            total_teams = len(df_teams)
+            st.subheader(f"{t('settings.teams_title', default='Teams Management')} ({total_teams} {t('settings.stat_teams', default='Teams')})")
 
-        enriched_teams = OrganizationService.enrich_teams(df_teams, df_funcs)
-        teams_payload = []
-        if not enriched_teams.empty:
-            for row in enriched_teams.to_dict(orient="records"):
-                teams_payload.append({
-                    "team_id": int(row["team_id"]),
-                    "team_name": str(row["team_name"]),
-                    "manager_function_id": int(row["manager_function_id"]) if pd.notna(row.get("manager_function_id")) else None,
-                    "manager_function_name": str(row["manager_function_name"]) if pd.notna(row.get("manager_function_name")) else "—",
-                    "leader_function_id": int(row["leader_function_id"]) if pd.notna(row.get("leader_function_id")) else None,
-                    "leader_function_name": str(row["leader_function_name"]) if pd.notna(row.get("leader_function_name")) else "—",
-                })
+            enriched_teams = OrganizationService.enrich_teams(df_teams, df_funcs)
+            teams_payload = []
+            if not enriched_teams.empty:
+                for row in enriched_teams.to_dict(orient="records"):
+                    teams_payload.append({
+                        "team_id": int(row["team_id"]),
+                        "team_name": str(row["team_name"]),
+                        "manager_function_id": int(row["manager_function_id"]) if pd.notna(row.get("manager_function_id")) else None,
+                        "manager_function_name": str(row["manager_function_name"]) if pd.notna(row.get("manager_function_name")) else "—",
+                        "leader_function_id": int(row["leader_function_id"]) if pd.notna(row.get("leader_function_id")) else None,
+                        "leader_function_name": str(row["leader_function_name"]) if pd.notna(row.get("leader_function_name")) else "—",
+                    })
 
-        team_table_event = _interactive_team_table(
-            teams=teams_payload,
-            translations={
-                "col_id": "ID",
-                "col_team_name": t("settings.col_team_name", default="Team Name"),
-                "col_team_mgr": t("settings.col_team_mgr", default="Manager Function"),
-                "col_team_leader": t("settings.col_team_leader", default="Team Leader"),
-                "action_add": t("settings.action_add", default="Add New"),
-                "action_edit": t("settings.action_edit", default="Edit"),
-                "action_delete": t("settings.action_delete", default="Delete"),
-                "no_teams": t("settings.no_teams", default="No teams registered."),
-                "stat_teams": t("settings.stat_teams", default="Teams"),
-                "filter_all": t("settings.filter_all", default="All"),
-                "filter_clear": t("settings.filter_clear", default="Clear Filters"),
-                "col_filter_ph": t("settings.col_filter_ph", default="Filter..."),
-                "search_values": t("settings.search_values", default="Search values..."),
-                "select_all": t("settings.select_all", default="Select All"),
-                "clear": t("settings.clear", default="Clear"),
-                "apply": t("settings.apply", default="Apply"),
-                "selected_count": t("settings.selected_count", default="{count} selected"),
-                "blanks": t("settings.blanks", default="(Blanks / None)"),
-            },
-            key="team_interactive_table",
-            default=None,
-        )
+            team_table_event = _interactive_team_table(
+                teams=teams_payload,
+                translations={
+                    "col_id": "ID",
+                    "col_team_name": t("settings.col_team_name", default="Team Name"),
+                    "col_team_mgr": t("settings.col_team_mgr", default="Manager Function"),
+                    "col_team_leader": t("settings.col_team_leader", default="Team Leader"),
+                    "action_add": t("settings.action_add", default="Add New"),
+                    "action_edit": t("settings.action_edit", default="Edit"),
+                    "action_delete": t("settings.action_delete", default="Delete"),
+                    "no_teams": t("settings.no_teams", default="No teams registered."),
+                    "stat_teams": t("settings.stat_teams", default="Teams"),
+                    "filter_all": t("settings.filter_all", default="All"),
+                    "filter_clear": t("settings.filter_clear", default="Clear Filters"),
+                    "col_filter_ph": t("settings.col_filter_ph", default="Filter..."),
+                    "search_values": t("settings.search_values", default="Search values..."),
+                    "select_all": t("settings.select_all", default="Select All"),
+                    "clear": t("settings.clear", default="Clear"),
+                    "apply": t("settings.apply", default="Apply"),
+                    "selected_count": t("settings.selected_count", default="{count} selected"),
+                    "blanks": t("settings.blanks", default="(Blanks / None)"),
+                },
+                key="team_interactive_table",
+                default=None,
+            )
 
-        if team_table_event and isinstance(team_table_event, dict):
-            nonce = team_table_event.get("nonce")
-            last_nonce = st.session_state.get("_last_team_table_nonce")
-            if nonce and nonce != last_nonce:
-                st.session_state["_last_team_table_nonce"] = nonce
-                action = team_table_event.get("action")
-                if action == "add_team":
-                    _open_add_team_dialog(org_repo, df_funcs, pool_repo)
-                elif action == "edit_team":
-                    tm_id = team_table_event.get("team_id")
-                    if tm_id is not None:
-                        _open_edit_team_dialog(org_repo, int(tm_id), df_funcs, pool_repo)
-                elif action == "delete_team":
-                    tm_id = team_table_event.get("team_id")
-                    tm_name = team_table_event.get("team_name", f"ID {tm_id}")
-                    if tm_id is not None:
-                        _open_delete_team_dialog(org_repo, int(tm_id), str(tm_name))
+            if team_table_event and isinstance(team_table_event, dict):
+                nonce = team_table_event.get("nonce")
+                last_nonce = st.session_state.get("_last_team_table_nonce")
+                if nonce and nonce != last_nonce:
+                    st.session_state["_last_team_table_nonce"] = nonce
+                    action = team_table_event.get("action")
+                    if action == "add_team":
+                        _open_add_team_dialog(org_repo, df_funcs, pool_repo)
+                    elif action == "edit_team":
+                        tm_id = team_table_event.get("team_id")
+                        if tm_id is not None:
+                            _open_edit_team_dialog(org_repo, int(tm_id), df_funcs, pool_repo)
+                    elif action == "delete_team":
+                        tm_id = team_table_event.get("team_id")
+                        tm_name = team_table_event.get("team_name", f"ID {tm_id}")
+                        if tm_id is not None:
+                            _open_delete_team_dialog(org_repo, int(tm_id), str(tm_name))
 
     # =========================================================================
     # TAB 5: EMPLOYEES
     # =========================================================================
-    with tab_emps:
-        total_emps = len(df_emps)
-        st.subheader(f"{t('settings.employees_title', default='Employee Directory & Profile Management')} ({total_emps} {t('settings.stat_employees', default='Employees')})")
+    if tab_emps.open:
+        with tab_emps:
+            df_types = org_repo.get_all_function_types()
+            df_funcs = org_repo.get_all_functions()
+            df_emps = org_repo.get_all_employees()
+            total_emps = len(df_emps)
+            st.subheader(f"{t('settings.employees_title', default='Employee Directory & Profile Management')} ({total_emps} {t('settings.stat_employees', default='Employees')})")
 
-        enriched_emps = OrganizationService.enrich_employees(df_emps, df_funcs, df_types)
-        emps_payload = []
-        if not enriched_emps.empty:
-            for row in enriched_emps.to_dict(orient="records"):
-                emps_payload.append({
-                    "employee_id": int(row["employee_id"]),
-                    "employee_code": str(row.get("employee_code") or ""),
-                    "full_name": str(row.get("full_name") or ""),
-                    "email": str(row.get("email") or ""),
-                    "mobile": str(row.get("mobile") or ""),
-                    "sigle": str(row.get("sigle") or ""),
-                    "function_id": int(row["function_id"]) if pd.notna(row.get("function_id")) else None,
-                    "function_name": str(row.get("function_name") or "—"),
-                    "function_type_name": str(row.get("function_type_name") or "—"),
-                    "occupation_percentage": float(row.get("occupation_percentage", 100.0)),
-                })
+            enriched_emps = OrganizationService.enrich_employees(df_emps, df_funcs, df_types)
+            emps_payload = []
+            if not enriched_emps.empty:
+                for row in enriched_emps.to_dict(orient="records"):
+                    emps_payload.append({
+                        "employee_id": int(row["employee_id"]),
+                        "employee_code": str(row.get("employee_code") or ""),
+                        "full_name": str(row.get("full_name") or ""),
+                        "email": str(row.get("email") or ""),
+                        "mobile": str(row.get("mobile") or ""),
+                        "sigle": str(row.get("sigle") or ""),
+                        "function_id": int(row["function_id"]) if pd.notna(row.get("function_id")) else None,
+                        "function_name": str(row.get("function_name") or "—"),
+                        "function_type_name": str(row.get("function_type_name") or "—"),
+                        "occupation_percentage": float(row.get("occupation_percentage", 100.0)),
+                    })
 
-        emp_table_event = _interactive_employee_table(
-            employees=emps_payload,
-            translations={
-                "col_emp_code": t("settings.col_emp_code", default="Code"),
-                "col_full_name": t("settings.col_full_name", default="Full Name"),
-                "col_mobile": t("settings.col_mobile", default="Mobile"),
-                "col_sigle": t("settings.col_sigle", default="Sigle"),
-                "col_function": t("settings.col_function", default="Function"),
-                "col_type": t("settings.col_type", default="Function Type"),
-                "col_occupation_percentage": t("settings.col_occupation_percentage", default="Occupation %"),
-                "action_add": t("settings.action_add", default="Add New"),
-                "action_edit": t("settings.action_edit", default="Edit"),
-                "action_delete": t("settings.action_delete", default="Delete"),
-                "no_employees": t("settings.no_employees", default="No employees registered."),
-                "stat_employees": t("settings.stat_employees", default="Employees"),
-                "filter_all": t("settings.filter_all", default="All"),
-                "filter_clear": t("settings.filter_clear", default="Clear Filters"),
-                "col_filter_ph": t("settings.col_filter_ph", default="Filter..."),
-                "search_values": t("settings.search_values", default="Search values..."),
-                "select_all": t("settings.select_all", default="Select All"),
-                "clear": t("settings.clear", default="Clear"),
-                "apply": t("settings.apply", default="Apply"),
-                "selected_count": t("settings.selected_count", default="{count} selected"),
-                "blanks": t("settings.blanks", default="(Blanks / None)"),
-            },
-            key="emp_interactive_table",
-            default=None,
-        )
-
-        if emp_table_event and isinstance(emp_table_event, dict):
-            nonce = emp_table_event.get("nonce")
-            last_nonce = st.session_state.get("_last_emp_table_nonce")
-            if nonce and nonce != last_nonce:
-                st.session_state["_last_emp_table_nonce"] = nonce
-                action = emp_table_event.get("action")
-                if action == "add_employee":
-                    _open_add_employee_dialog(org_repo, df_funcs)
-                elif action == "edit_employee":
-                    e_id = emp_table_event.get("employee_id")
-                    if e_id is not None:
-                        _open_edit_employee_dialog(org_repo, int(e_id), df_funcs)
-                elif action == "delete_employee":
-                    e_id = emp_table_event.get("employee_id")
-                    e_name = emp_table_event.get("full_name", f"ID {e_id}")
-                    if e_id is not None:
-                        _open_delete_employee_dialog(org_repo, int(e_id), str(e_name))
-
-        st.caption(
-            t(
-                "settings.calendar_exceptions_in_profile_help",
-                default="Add or edit an employee profile to manage that employee's calendar exceptions.",
+            emp_table_event = _interactive_employee_table(
+                employees=emps_payload,
+                translations={
+                    "col_emp_code": t("settings.col_emp_code", default="Code"),
+                    "col_full_name": t("settings.col_full_name", default="Full Name"),
+                    "col_mobile": t("settings.col_mobile", default="Mobile"),
+                    "col_sigle": t("settings.col_sigle", default="Sigle"),
+                    "col_function": t("settings.col_function", default="Function"),
+                    "col_type": t("settings.col_type", default="Function Type"),
+                    "col_occupation_percentage": t("settings.col_occupation_percentage", default="Occupation %"),
+                    "action_add": t("settings.action_add", default="Add New"),
+                    "action_edit": t("settings.action_edit", default="Edit"),
+                    "action_delete": t("settings.action_delete", default="Delete"),
+                    "no_employees": t("settings.no_employees", default="No employees registered."),
+                    "stat_employees": t("settings.stat_employees", default="Employees"),
+                    "filter_all": t("settings.filter_all", default="All"),
+                    "filter_clear": t("settings.filter_clear", default="Clear Filters"),
+                    "col_filter_ph": t("settings.col_filter_ph", default="Filter..."),
+                    "search_values": t("settings.search_values", default="Search values..."),
+                    "select_all": t("settings.select_all", default="Select All"),
+                    "clear": t("settings.clear", default="Clear"),
+                    "apply": t("settings.apply", default="Apply"),
+                    "selected_count": t("settings.selected_count", default="{count} selected"),
+                    "blanks": t("settings.blanks", default="(Blanks / None)"),
+                },
+                key="emp_interactive_table",
+                default=None,
             )
-        )
+
+            if emp_table_event and isinstance(emp_table_event, dict):
+                nonce = emp_table_event.get("nonce")
+                last_nonce = st.session_state.get("_last_emp_table_nonce")
+                if nonce and nonce != last_nonce:
+                    st.session_state["_last_emp_table_nonce"] = nonce
+                    action = emp_table_event.get("action")
+                    if action == "add_employee":
+                        _open_add_employee_dialog(org_repo, df_funcs)
+                    elif action == "edit_employee":
+                        e_id = emp_table_event.get("employee_id")
+                        if e_id is not None:
+                            _open_edit_employee_dialog(org_repo, int(e_id), df_funcs)
+                    elif action == "delete_employee":
+                        e_id = emp_table_event.get("employee_id")
+                        e_name = emp_table_event.get("full_name", f"ID {e_id}")
+                        if e_id is not None:
+                            _open_delete_employee_dialog(org_repo, int(e_id), str(e_name))
+
+            st.caption(
+                t(
+                    "settings.calendar_exceptions_in_profile_help",
+                    default="Add or edit an employee profile to manage that employee's calendar exceptions.",
+                )
+            )
 
     # =========================================================================
     # TAB 5: TAG GROUPS
     # =========================================================================
-    with tab_tag_groups:
-        total_groups = len(df_groups)
-        st.subheader(f"{t('settings.tag_groups_title', default='Tag Groups Taxonomy')} ({total_groups} {t('settings.stat_tag_groups', default='Tag Groups')})")
+    if tab_tag_groups.open:
+        with tab_tag_groups:
+            df_groups = tag_repo.get_all_tag_groups()
+            total_groups = len(df_groups)
+            st.subheader(f"{t('settings.tag_groups_title', default='Tag Groups Taxonomy')} ({total_groups} {t('settings.stat_tag_groups', default='Tag Groups')})")
 
-        groups_payload = []
-        if not df_groups.empty:
-            for row in df_groups.to_dict(orient="records"):
-                gid = int(row["id"])
-                count = tag_repo.count_tags_by_group(gid)
-                groups_payload.append({
-                    "id": gid,
-                    "tag_group_name": str(row.get("tag_group_name") or ""),
-                    "tag_count": count,
-                })
+            groups_payload = []
+            if not df_groups.empty:
+                for row in df_groups.to_dict(orient="records"):
+                    gid = int(row["id"])
+                    count = tag_repo.count_tags_by_group(gid)
+                    groups_payload.append({
+                        "id": gid,
+                        "tag_group_name": str(row.get("tag_group_name") or ""),
+                        "tag_count": count,
+                    })
 
-        group_table_event = _interactive_tag_group_table(
-            tag_groups=groups_payload,
-            translations={
-                "col_group_name": t("settings.col_group_name", default="Tag Group Name"),
-                "col_tag_count": t("settings.col_tag_count", default="Tags Count"),
-                "action_add": t("settings.action_add", default="Add New"),
-                "action_edit": t("settings.action_edit", default="Edit"),
-                "action_delete": t("settings.action_delete", default="Delete"),
-                "filter_clear": t("settings.filter_clear", default="Clear Filters"),
-                "stat_tag_groups": t("settings.stat_tag_groups", default="Tag Groups"),
-            },
-            key="tag_group_interactive_table",
-            default=None,
-        )
+            group_table_event = _interactive_tag_group_table(
+                tag_groups=groups_payload,
+                translations={
+                    "col_group_name": t("settings.col_group_name", default="Tag Group Name"),
+                    "col_tag_count": t("settings.col_tag_count", default="Tags Count"),
+                    "action_add": t("settings.action_add", default="Add New"),
+                    "action_edit": t("settings.action_edit", default="Edit"),
+                    "action_delete": t("settings.action_delete", default="Delete"),
+                    "filter_clear": t("settings.filter_clear", default="Clear Filters"),
+                    "stat_tag_groups": t("settings.stat_tag_groups", default="Tag Groups"),
+                },
+                key="tag_group_interactive_table",
+                default=None,
+            )
 
-        if group_table_event and isinstance(group_table_event, dict):
-            nonce = group_table_event.get("nonce")
-            last_nonce = st.session_state.get("_last_tag_group_table_nonce")
-            if nonce and nonce != last_nonce:
-                st.session_state["_last_tag_group_table_nonce"] = nonce
-                action = group_table_event.get("action")
-                if action == "add_tag_group":
-                    _open_add_tag_group_dialog(tag_repo)
-                elif action == "edit_tag_group":
-                    gid = group_table_event.get("group_id")
-                    gname = group_table_event.get("tag_group_name", "")
-                    if gid is not None:
-                        _open_edit_tag_group_dialog(tag_repo, int(gid), str(gname))
-                elif action == "delete_tag_group":
-                    gid = group_table_event.get("group_id")
-                    gname = group_table_event.get("tag_group_name", f"ID {gid}")
-                    if gid is not None:
-                        _open_delete_tag_group_dialog(tag_repo, int(gid), str(gname))
+            if group_table_event and isinstance(group_table_event, dict):
+                nonce = group_table_event.get("nonce")
+                last_nonce = st.session_state.get("_last_tag_group_table_nonce")
+                if nonce and nonce != last_nonce:
+                    st.session_state["_last_tag_group_table_nonce"] = nonce
+                    action = group_table_event.get("action")
+                    if action == "add_tag_group":
+                        _open_add_tag_group_dialog(tag_repo)
+                    elif action == "edit_tag_group":
+                        gid = group_table_event.get("group_id")
+                        gname = group_table_event.get("tag_group_name", "")
+                        if gid is not None:
+                            _open_edit_tag_group_dialog(tag_repo, int(gid), str(gname))
+                    elif action == "delete_tag_group":
+                        gid = group_table_event.get("group_id")
+                        gname = group_table_event.get("tag_group_name", f"ID {gid}")
+                        if gid is not None:
+                            _open_delete_tag_group_dialog(tag_repo, int(gid), str(gname))
 
     # =========================================================================
     # TAB 6: TAG DICTIONARY
     # =========================================================================
-    with tab_tag_dict:
-        total_tags = len(df_tags)
-        st.subheader(f"{t('settings.tag_dict_title', default='Tag Dictionary Taxonomy')} ({total_tags} {t('settings.stat_tags', default='Tags')})")
+    if tab_tag_dict.open:
+        with tab_tag_dict:
+            df_groups = tag_repo.get_all_tag_groups()
+            df_tags = tag_repo.get_all_tags()
+            total_tags = len(df_tags)
+            st.subheader(f"{t('settings.tag_dict_title', default='Tag Dictionary Taxonomy')} ({total_tags} {t('settings.stat_tags', default='Tags')})")
 
-        tags_payload = []
-        if not df_tags.empty:
-            for row in df_tags.to_dict(orient="records"):
-                tid = int(row["id"])
-                usages = tag_repo.count_tag_usages(tid)
-                tags_payload.append({
-                    "id": tid,
-                    "tag": str(row.get("tag") or ""),
-                    "tag_group_id": int(row["tag_group_id"]) if pd.notna(row.get("tag_group_id")) else None,
-                    "tag_group_name": str(row.get("tag_group_name") or ""),
-                    "usage_count": usages,
-                })
+            tags_payload = []
+            if not df_tags.empty:
+                for row in df_tags.to_dict(orient="records"):
+                    tid = int(row["id"])
+                    usages = tag_repo.count_tag_usages(tid)
+                    tags_payload.append({
+                        "id": tid,
+                        "tag": str(row.get("tag") or ""),
+                        "tag_group_id": int(row["tag_group_id"]) if pd.notna(row.get("tag_group_id")) else None,
+                        "tag_group_name": str(row.get("tag_group_name") or ""),
+                        "usage_count": usages,
+                    })
 
-        tag_table_event = _interactive_tag_dictionary_table(
-            tags=tags_payload,
-            translations={
-                "col_tag": t("settings.col_tag", default="Tag"),
-                "col_group_name": t("settings.col_group_name", default="Tag Group Name"),
-                "col_usages": t("settings.col_usages", default="Usages"),
-                "action_add": t("settings.action_add", default="Add New"),
-                "action_edit": t("settings.action_edit", default="Edit"),
-                "action_delete": t("settings.action_delete", default="Delete"),
-                "filter_clear": t("settings.filter_clear", default="Clear Filters"),
-                "stat_tags": t("settings.stat_tags", default="Tags"),
-            },
-            key="tag_dict_interactive_table",
-            default=None,
-        )
+            tag_table_event = _interactive_tag_dictionary_table(
+                tags=tags_payload,
+                translations={
+                    "col_tag": t("settings.col_tag", default="Tag"),
+                    "col_group_name": t("settings.col_group_name", default="Tag Group Name"),
+                    "col_usages": t("settings.col_usages", default="Usages"),
+                    "action_add": t("settings.action_add", default="Add New"),
+                    "action_edit": t("settings.action_edit", default="Edit"),
+                    "action_delete": t("settings.action_delete", default="Delete"),
+                    "filter_clear": t("settings.filter_clear", default="Clear Filters"),
+                    "stat_tags": t("settings.stat_tags", default="Tags"),
+                },
+                key="tag_dict_interactive_table",
+                default=None,
+            )
 
-        if tag_table_event and isinstance(tag_table_event, dict):
-            nonce = tag_table_event.get("nonce")
-            last_nonce = st.session_state.get("_last_tag_dict_table_nonce")
-            if nonce and nonce != last_nonce:
-                st.session_state["_last_tag_dict_table_nonce"] = nonce
-                action = tag_table_event.get("action")
-                if action == "add_tag":
-                    _open_add_tag_dialog(tag_repo, df_groups)
-                elif action == "edit_tag":
-                    tid = tag_table_event.get("tag_id")
-                    tname = tag_table_event.get("tag", "")
-                    tg_id = tag_table_event.get("tag_group_id")
-                    if tid is not None:
-                        _open_edit_tag_dialog(
-                            tag_repo,
-                            int(tid),
-                            str(tname),
-                            int(tg_id) if tg_id is not None else None,
-                            df_groups,
-                        )
-                elif action == "delete_tag":
-                    tid = tag_table_event.get("tag_id")
-                    tname = tag_table_event.get("tag", f"ID {tid}")
-                    if tid is not None:
-                        _open_delete_tag_dialog(tag_repo, int(tid), str(tname))
+            if tag_table_event and isinstance(tag_table_event, dict):
+                nonce = tag_table_event.get("nonce")
+                last_nonce = st.session_state.get("_last_tag_dict_table_nonce")
+                if nonce and nonce != last_nonce:
+                    st.session_state["_last_tag_dict_table_nonce"] = nonce
+                    action = tag_table_event.get("action")
+                    if action == "add_tag":
+                        _open_add_tag_dialog(tag_repo, df_groups)
+                    elif action == "edit_tag":
+                        tid = tag_table_event.get("tag_id")
+                        tname = tag_table_event.get("tag", "")
+                        tg_id = tag_table_event.get("tag_group_id")
+                        if tid is not None:
+                            _open_edit_tag_dialog(
+                                tag_repo,
+                                int(tid),
+                                str(tname),
+                                int(tg_id) if tg_id is not None else None,
+                                df_groups,
+                            )
+                    elif action == "delete_tag":
+                        tid = tag_table_event.get("tag_id")
+                        tname = tag_table_event.get("tag", f"ID {tid}")
+                        if tid is not None:
+                            _open_delete_tag_dialog(tag_repo, int(tid), str(tname))
 
     # =========================================================================
     # TAB 7: PROJECT TAGS
     # =========================================================================
-    with tab_proj_tags:
-        total_proj_tags = len(df_proj_tags)
-        st.subheader(f"{t('settings.proj_tags_title', default='Project Tag Assignments')} ({total_proj_tags} {t('settings.stat_project_tags', default='Project Tags')})")
+    if tab_proj_tags.open:
+        with tab_proj_tags:
+            df_proj_dict_tags = tag_repo.get_project_tag_group_tags()
+            df_proj_tags = tag_repo.get_all_project_tags()
+            df_projects = project_repo.get_all_projects()
+            total_proj_tags = len(df_proj_tags)
+            st.subheader(f"{t('settings.proj_tags_title', default='Project Tag Assignments')} ({total_proj_tags} {t('settings.stat_project_tags', default='Project Tags')})")
 
-        proj_tags_payload = []
-        if not df_proj_tags.empty:
-            for row in df_proj_tags.to_dict(orient="records"):
-                proj_tags_payload.append({
-                    "id": int(row["id"]),
-                    "project_id": int(row["project_id"]),
-                    "project_name": str(row.get("project_name") or f"Project #{row['project_id']}"),
-                    "tag_id": int(row["tag_id"]) if pd.notna(row.get("tag_id")) else None,
-                    "tag_name": str(row.get("tag_name") or ""),
-                    "tag_group_name": str(row.get("tag_group_name") or ""),
-                    "free_tag": str(row.get("free_tag") or ""),
-                })
+            proj_tags_payload = []
+            if not df_proj_tags.empty:
+                for row in df_proj_tags.to_dict(orient="records"):
+                    proj_tags_payload.append({
+                        "id": int(row["id"]),
+                        "project_id": int(row["project_id"]),
+                        "project_name": str(row.get("project_name") or f"Project #{row['project_id']}"),
+                        "tag_id": int(row["tag_id"]) if pd.notna(row.get("tag_id")) else None,
+                        "tag_name": str(row.get("tag_name") or ""),
+                        "tag_group_name": str(row.get("tag_group_name") or ""),
+                        "free_tag": str(row.get("free_tag") or ""),
+                    })
 
-        proj_tag_table_event = _interactive_project_tag_table(
-            project_tags=proj_tags_payload,
-            translations={
-                "col_project": t("settings.col_project", default="Project"),
-                "col_tag": t("settings.col_tag", default="Dictionary Tag"),
-                "col_group_name": t("settings.col_group_name", default="Tag Group"),
-                "col_free_tag": t("settings.col_free_tag", default="Free Tag"),
-                "action_add": t("settings.action_add", default="Add New"),
-                "action_edit": t("settings.action_edit", default="Edit"),
-                "action_delete": t("settings.action_delete", default="Delete"),
-                "filter_clear": t("settings.filter_clear", default="Clear Filters"),
-                "stat_project_tags": t("settings.stat_project_tags", default="Project Tags"),
-            },
-            key="proj_tag_interactive_table",
-            default=None,
-        )
+            proj_tag_table_event = _interactive_project_tag_table(
+                project_tags=proj_tags_payload,
+                translations={
+                    "col_project": t("settings.col_project", default="Project"),
+                    "col_tag": t("settings.col_tag", default="Dictionary Tag"),
+                    "col_group_name": t("settings.col_group_name", default="Tag Group"),
+                    "col_free_tag": t("settings.col_free_tag", default="Free Tag"),
+                    "action_add": t("settings.action_add", default="Add New"),
+                    "action_edit": t("settings.action_edit", default="Edit"),
+                    "action_delete": t("settings.action_delete", default="Delete"),
+                    "filter_clear": t("settings.filter_clear", default="Clear Filters"),
+                    "stat_project_tags": t("settings.stat_project_tags", default="Project Tags"),
+                },
+                key="proj_tag_interactive_table",
+                default=None,
+            )
 
-        if proj_tag_table_event and isinstance(proj_tag_table_event, dict):
-            nonce = proj_tag_table_event.get("nonce")
-            last_nonce = st.session_state.get("_last_proj_tag_table_nonce")
-            if nonce and nonce != last_nonce:
-                st.session_state["_last_proj_tag_table_nonce"] = nonce
-                action = proj_tag_table_event.get("action")
-                if action == "add_project_tag":
-                    _open_add_project_tag_dialog(tag_repo, df_projects, df_proj_dict_tags)
-                elif action == "edit_project_tag":
-                    pt_id = proj_tag_table_event.get("pt_id")
-                    p_id = proj_tag_table_event.get("project_id")
-                    t_id = proj_tag_table_event.get("tag_id")
-                    f_tag = proj_tag_table_event.get("free_tag")
-                    if pt_id is not None and p_id is not None:
-                        _open_edit_project_tag_dialog(
-                            tag_repo,
-                            int(pt_id),
-                            int(p_id),
-                            int(t_id) if t_id is not None else None,
-                            str(f_tag) if f_tag else None,
-                            df_projects,
-                            df_proj_dict_tags,
-                        )
-                elif action == "delete_project_tag":
-                    pt_id = proj_tag_table_event.get("pt_id")
-                    t_label = proj_tag_table_event.get("tag_label", f"ID {pt_id}")
-                    if pt_id is not None:
-                        _open_delete_project_tag_dialog(tag_repo, int(pt_id), str(t_label))
+            if proj_tag_table_event and isinstance(proj_tag_table_event, dict):
+                nonce = proj_tag_table_event.get("nonce")
+                last_nonce = st.session_state.get("_last_proj_tag_table_nonce")
+                if nonce and nonce != last_nonce:
+                    st.session_state["_last_proj_tag_table_nonce"] = nonce
+                    action = proj_tag_table_event.get("action")
+                    if action == "add_project_tag":
+                        _open_add_project_tag_dialog(tag_repo, df_projects, df_proj_dict_tags)
+                    elif action == "edit_project_tag":
+                        pt_id = proj_tag_table_event.get("pt_id")
+                        p_id = proj_tag_table_event.get("project_id")
+                        t_id = proj_tag_table_event.get("tag_id")
+                        f_tag = proj_tag_table_event.get("free_tag")
+                        if pt_id is not None and p_id is not None:
+                            _open_edit_project_tag_dialog(
+                                tag_repo,
+                                int(pt_id),
+                                int(p_id),
+                                int(t_id) if t_id is not None else None,
+                                str(f_tag) if f_tag else None,
+                                df_projects,
+                                df_proj_dict_tags,
+                            )
+                    elif action == "delete_project_tag":
+                        pt_id = proj_tag_table_event.get("pt_id")
+                        t_label = proj_tag_table_event.get("tag_label", f"ID {pt_id}")
+                        if pt_id is not None:
+                            _open_delete_project_tag_dialog(tag_repo, int(pt_id), str(t_label))
 
     # =========================================================================
     # TAB 8: TASK TAGS
     # =========================================================================
-    with tab_task_tags:
-        total_task_tags = len(df_task_tags)
-        st.subheader(f"{t('settings.task_tags_title', default='Task Tag Assignments')} ({total_task_tags} {t('settings.stat_task_tags', default='Task Tags')})")
+    if tab_task_tags.open:
+        with tab_task_tags:
+            df_task_dict_tags = tag_repo.get_task_tag_group_tags()
+            df_task_tags = tag_repo.get_all_task_tags()
+            df_tasks = milestone_repo.get_all_milestones()
+            total_task_tags = len(df_task_tags)
+            st.subheader(f"{t('settings.task_tags_title', default='Task Tag Assignments')} ({total_task_tags} {t('settings.stat_task_tags', default='Task Tags')})")
 
-        task_tags_payload = []
-        if not df_task_tags.empty:
-            for row in df_task_tags.to_dict(orient="records"):
-                task_tags_payload.append({
-                    "id": int(row["id"]),
-                    "task_id": int(row["task_id"]),
-                    "task_name": str(row.get("task_name") or f"Task #{row['task_id']}"),
-                    "project_name": str(row.get("project_name") or ""),
-                    "tag_id": int(row["tag_id"]) if pd.notna(row.get("tag_id")) else None,
-                    "tag_name": str(row.get("tag_name") or ""),
-                    "tag_group_name": str(row.get("tag_group_name") or ""),
-                    "free_tag": str(row.get("free_tag") or ""),
-                })
+            task_tags_payload = []
+            if not df_task_tags.empty:
+                for row in df_task_tags.to_dict(orient="records"):
+                    task_tags_payload.append({
+                        "id": int(row["id"]),
+                        "task_id": int(row["task_id"]),
+                        "task_name": str(row.get("task_name") or f"Task #{row['task_id']}"),
+                        "project_name": str(row.get("project_name") or ""),
+                        "tag_id": int(row["tag_id"]) if pd.notna(row.get("tag_id")) else None,
+                        "tag_name": str(row.get("tag_name") or ""),
+                        "tag_group_name": str(row.get("tag_group_name") or ""),
+                        "free_tag": str(row.get("free_tag") or ""),
+                    })
 
-        task_tag_table_event = _interactive_task_tag_table(
-            task_tags=task_tags_payload,
-            translations={
-                "col_task": t("settings.col_task", default="Task"),
-                "col_project": t("settings.col_project", default="Project"),
-                "col_tag": t("settings.col_tag", default="Dictionary Tag"),
-                "col_group_name": t("settings.col_group_name", default="Tag Group"),
-                "col_free_tag": t("settings.col_free_tag", default="Free Tag"),
-                "action_add": t("settings.action_add", default="Add New"),
-                "action_edit": t("settings.action_edit", default="Edit"),
-                "action_delete": t("settings.action_delete", default="Delete"),
-                "filter_clear": t("settings.filter_clear", default="Clear Filters"),
-                "stat_task_tags": t("settings.stat_task_tags", default="Task Tags"),
-            },
-            key="task_tag_interactive_table",
-            default=None,
-        )
+            task_tag_table_event = _interactive_task_tag_table(
+                task_tags=task_tags_payload,
+                translations={
+                    "col_task": t("settings.col_task", default="Task"),
+                    "col_project": t("settings.col_project", default="Project"),
+                    "col_tag": t("settings.col_tag", default="Dictionary Tag"),
+                    "col_group_name": t("settings.col_group_name", default="Tag Group"),
+                    "col_free_tag": t("settings.col_free_tag", default="Free Tag"),
+                    "action_add": t("settings.action_add", default="Add New"),
+                    "action_edit": t("settings.action_edit", default="Edit"),
+                    "action_delete": t("settings.action_delete", default="Delete"),
+                    "filter_clear": t("settings.filter_clear", default="Clear Filters"),
+                    "stat_task_tags": t("settings.stat_task_tags", default="Task Tags"),
+                },
+                key="task_tag_interactive_table",
+                default=None,
+            )
 
-        if task_tag_table_event and isinstance(task_tag_table_event, dict):
-            nonce = task_tag_table_event.get("nonce")
-            last_nonce = st.session_state.get("_last_task_tag_table_nonce")
-            if nonce and nonce != last_nonce:
-                st.session_state["_last_task_tag_table_nonce"] = nonce
-                action = task_tag_table_event.get("action")
-                if action == "add_task_tag":
-                    _open_add_task_tag_dialog(tag_repo, df_tasks, df_task_dict_tags)
-                elif action == "edit_task_tag":
-                    tt_id = task_tag_table_event.get("tt_id")
-                    t_id = task_tag_table_event.get("task_id")
-                    tag_id = task_tag_table_event.get("tag_id")
-                    f_tag = task_tag_table_event.get("free_tag")
-                    if tt_id is not None and t_id is not None:
-                        _open_edit_task_tag_dialog(
-                            tag_repo,
-                            int(tt_id),
-                            int(t_id),
-                            int(tag_id) if tag_id is not None else None,
-                            str(f_tag) if f_tag else None,
-                            df_tasks,
-                            df_task_dict_tags,
-                        )
-                elif action == "delete_task_tag":
-                    tt_id = task_tag_table_event.get("tt_id")
-                    t_label = task_tag_table_event.get("tag_label", f"ID {tt_id}")
-                    if tt_id is not None:
-                        _open_delete_task_tag_dialog(tag_repo, int(tt_id), str(t_label))
+            if task_tag_table_event and isinstance(task_tag_table_event, dict):
+                nonce = task_tag_table_event.get("nonce")
+                last_nonce = st.session_state.get("_last_task_tag_table_nonce")
+                if nonce and nonce != last_nonce:
+                    st.session_state["_last_task_tag_table_nonce"] = nonce
+                    action = task_tag_table_event.get("action")
+                    if action == "add_task_tag":
+                        _open_add_task_tag_dialog(tag_repo, df_tasks, df_task_dict_tags)
+                    elif action == "edit_task_tag":
+                        tt_id = task_tag_table_event.get("tt_id")
+                        t_id = task_tag_table_event.get("task_id")
+                        tag_id = task_tag_table_event.get("tag_id")
+                        f_tag = task_tag_table_event.get("free_tag")
+                        if tt_id is not None and t_id is not None:
+                            _open_edit_task_tag_dialog(
+                                tag_repo,
+                                int(tt_id),
+                                int(t_id),
+                                int(tag_id) if tag_id is not None else None,
+                                str(f_tag) if f_tag else None,
+                                df_tasks,
+                                df_task_dict_tags,
+                            )
+                    elif action == "delete_task_tag":
+                        tt_id = task_tag_table_event.get("tt_id")
+                        t_label = task_tag_table_event.get("tag_label", f"ID {tt_id}")
+                        if tt_id is not None:
+                            _open_delete_task_tag_dialog(tag_repo, int(tt_id), str(t_label))
 
     # =========================================================================
     # TAB 9: RESOURCE POOLS
     # =========================================================================
-    with tab_pools:
-        all_pool_details = ResourcePoolService.get_portfolio_pools_summary(org_repo, pool_repo, milestone_repo)
-        total_pools = len(all_pool_details)
-        total_portfolio_capacity = sum(p.total_capacity_fte for p in all_pool_details)
-        total_assigned_capacity = sum(p.assigned_capacity_fte for p in all_pool_details)
-        peak_portfolio_assigned = sum(p.peak_assigned_fte for p in all_pool_details)
-        overassigned_pools_count = sum(1 for p in all_pool_details if p.is_overassigned)
+    if tab_pools.open:
+        with tab_pools:
+            df_funcs = org_repo.get_all_functions()
+            df_teams = org_repo.get_all_teams()
+            df_emps = org_repo.get_all_employees()
+            from src.services.pool_capacity_cache import load_pool_capacities
 
-        st.subheader(
-            f"🏊 {t('settings.pools_title', default='Resource Pools Management')} "
-            f"({total_pools} {t('settings.stat_pools', default='Pools')} • {total_portfolio_capacity:.2f} {t('settings.stat_capacity', default='FTE Capacity')})"
-        )
+            all_pool_details = load_pool_capacities(pool_repo.db_path)
+            total_pools = len(all_pool_details)
+            total_portfolio_capacity = sum(p.total_capacity_fte for p in all_pool_details)
+            total_assigned_capacity = sum(p.assigned_capacity_fte for p in all_pool_details)
+            peak_portfolio_assigned = sum(p.peak_assigned_fte for p in all_pool_details)
+            overassigned_pools_count = sum(1 for p in all_pool_details if p.is_overassigned)
 
-        # 1. Summary KPI Metrics Cards
-        kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(5)
-        kpi1.metric(t("settings.kpi_total_pools", default="Total Pools"), total_pools)
-        kpi2.metric(t("settings.kpi_total_capacity", default="Defined Capacity"), f"{total_portfolio_capacity:.2f} FTE")
-        kpi3.metric(
-            t("settings.kpi_assigned_capacity", default="Assigned Capacity"),
-            f"{total_assigned_capacity:.2f} FTE",
-        )
-        kpi4.metric(t("settings.kpi_peak_demand", default="Peak Active Demand"), f"{peak_portfolio_assigned:.2f} FTE")
-        if overassigned_pools_count > 0:
-            kpi5.metric(
-                t("settings.kpi_overassigned_pools", default="Overassigned Pools"),
-                f"{overassigned_pools_count} ⚠️",
-                delta=f"+{overassigned_pools_count} Alert",
-                delta_color="inverse",
+            st.subheader(
+                f"🏊 {t('settings.pools_title', default='Resource Pools Management')} "
+                f"({total_pools} {t('settings.stat_pools', default='Pools')} • {total_portfolio_capacity:.2f} {t('settings.stat_capacity', default='FTE Capacity')})"
             )
-        else:
-            kpi5.metric(t("settings.kpi_overassigned_pools", default="Overassigned Pools"), "0 ✅")
 
-        st.divider()
-        _render_pool_groups_management(pool_repo)
-        st.divider()
-
-        # 2. Pool Selection & Action Toolbar
-        col_sel, col_add_btn = st.columns([4, 1])
-        with col_add_btn:
-            if st.button(t("settings.btn_create_pool", default="➕ Create Pool"), type="primary", use_container_width=True):
-                _open_add_pool_dialog(pool_repo, tag_repo)
-
-        df_all_pools = pool_repo.get_all_pools()
-        if df_all_pools.empty:
-            st.info(t("settings.no_pools_registered", default="No resource pools registered yet. Click 'Create Pool' to add one."))
-        else:
-            pool_id_map = {int(p.pool_id): p for p in all_pool_details}
-            pool_options = df_all_pools["id"].tolist()
-            target_pool_id = st.session_state.pop("target_resource_pool_id", None)
-            if target_pool_id is not None and int(target_pool_id) in pool_options:
-                st.session_state["sb_selected_resource_pool"] = int(target_pool_id)
-
-            with col_sel:
-                selected_pool_id = st.selectbox(
-                    t("settings.select_pool_to_inspect", default="🔍 Select Resource Pool to Inspect & Configure"),
-                    options=pool_options,
-                    format_func=lambda pid: (
-                        f"🏊 #{pid} - {pool_id_map[pid].pool_name} "
-                        f"(Defined {pool_id_map[pid].total_capacity_fte:.2f} FTE | "
-                        f"Assigned {pool_id_map[pid].assigned_capacity_fte:.2f} FTE "
-                        f"{'| ⚠️ OVERASSIGNED' if pool_id_map[pid].is_overassigned else '| ✅ OK'})"
-                        if pid in pool_id_map else f"Pool #{pid}"
-                    ),
-                    key="sb_selected_resource_pool",
+            # 1. Summary KPI Metrics Cards
+            kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(5)
+            kpi1.metric(t("settings.kpi_total_pools", default="Total Pools"), total_pools)
+            kpi2.metric(t("settings.kpi_total_capacity", default="Defined Capacity"), f"{total_portfolio_capacity:.2f} FTE")
+            kpi3.metric(
+                t("settings.kpi_assigned_capacity", default="Assigned Capacity"),
+                f"{total_assigned_capacity:.2f} FTE",
+            )
+            kpi4.metric(t("settings.kpi_peak_demand", default="Peak Active Demand"), f"{peak_portfolio_assigned:.2f} FTE")
+            if overassigned_pools_count > 0:
+                kpi5.metric(
+                    t("settings.kpi_overassigned_pools", default="Overassigned Pools"),
+                    f"{overassigned_pools_count} ⚠️",
+                    delta=f"+{overassigned_pools_count} Alert",
+                    delta_color="inverse",
                 )
+            else:
+                kpi5.metric(t("settings.kpi_overassigned_pools", default="Overassigned Pools"), "0 ✅")
 
-            current_detail = pool_id_map.get(selected_pool_id)
-            if current_detail:
-                # Pool Details & Action Row
-                c_info, c_actions = st.columns([4, 1])
-                with c_info:
-                    st.markdown(f"### 🏊 **{current_detail.pool_name}** `[Pool #{current_detail.pool_id}]`")
-                    pool_obj = pool_repo.get_pool_by_id(selected_pool_id)
-                    if pool_obj and pool_obj.description:
-                        st.caption(f"📝 {pool_obj.description}")
-                    pool_tags = tag_repo.get_resource_pool_tags(selected_pool_id)
-                    if not pool_tags.empty:
-                        tag_text = " ".join(
-                            f"`{row['tag_name']}`"
-                            for _, row in pool_tags.iterrows()
-                        )
-                        st.markdown(f"🏷️ {tag_text}")
-                with c_actions:
-                    c_edit, c_del = st.columns(2)
-                    if c_edit.button("✏️", key=f"btn_edit_pool_{selected_pool_id}", help="Edit pool details"):
-                        _open_edit_pool_dialog(pool_repo, tag_repo, selected_pool_id)
-                    if c_del.button("🗑️", key=f"btn_del_pool_{selected_pool_id}", help="Delete pool"):
-                        _open_delete_pool_dialog(pool_repo, selected_pool_id, current_detail.pool_name)
+            st.divider()
+            _render_pool_groups_management(pool_repo)
+            st.divider()
 
-                # Overassignment Alert Banner if overassigned
-                if current_detail.is_overassigned:
-                    st.error(
-                        f"🚨 **DAILY OVERASSIGNMENT ALERT**: Peak daily demand of **{current_detail.peak_assigned_fte:.2f} FTE** "
-                        f"exceeds defined pool capacity of **{current_detail.total_capacity_fte:.2f} FTE** "
-                        f"by **+{current_detail.peak_excess_fte:.2f} FTE**!\n\n"
-                        f"👥 **Deduplicated assigned capacity**: {current_detail.assigned_capacity_fte:.2f} FTE.\n\n"
-                        f"📅 **Overassigned Period(s)**: {', '.join(current_detail.overassignment_intervals) if current_detail.overassignment_intervals else 'Active overlapping assignments'}"
-                    )
-                else:
-                    st.success(
-                        f"✅ **CAPACITY NORMAL**: Defined pool capacity is **{current_detail.total_capacity_fte:.2f} FTE**; "
-                        f"deduplicated assigned capacity is **{current_detail.assigned_capacity_fte:.2f} FTE**. "
-                        f"Peak active daily demand is **{current_detail.peak_assigned_fte:.2f} FTE**."
+            # 2. Pool Selection & Action Toolbar
+            col_sel, col_add_btn = st.columns([4, 1])
+            with col_add_btn:
+                if st.button(t("settings.btn_create_pool", default="➕ Create Pool"), type="primary", use_container_width=True):
+                    _open_add_pool_dialog(pool_repo, tag_repo)
+
+            df_all_pools = pool_repo.get_all_pools()
+            if df_all_pools.empty:
+                st.info(t("settings.no_pools_registered", default="No resource pools registered yet. Click 'Create Pool' to add one."))
+            else:
+                pool_id_map = {int(p.pool_id): p for p in all_pool_details}
+                pool_options = df_all_pools["id"].tolist()
+                target_pool_id = st.session_state.pop("target_resource_pool_id", None)
+                if target_pool_id is not None and int(target_pool_id) in pool_options:
+                    st.session_state["sb_selected_resource_pool"] = int(target_pool_id)
+
+                with col_sel:
+                    selected_pool_id = st.selectbox(
+                        t("settings.select_pool_to_inspect", default="🔍 Select Resource Pool to Inspect & Configure"),
+                        options=pool_options,
+                        format_func=lambda pid: (
+                            f"🏊 #{pid} - {pool_id_map[pid].pool_name} "
+                            f"(Defined {pool_id_map[pid].total_capacity_fte:.2f} FTE | "
+                            f"Assigned {pool_id_map[pid].assigned_capacity_fte:.2f} FTE "
+                            f"{'| ⚠️ OVERASSIGNED' if pool_id_map[pid].is_overassigned else '| ✅ OK'})"
+                            if pid in pool_id_map else f"Pool #{pid}"
+                        ),
+                        key="sb_selected_resource_pool",
                     )
 
-                # Daily Demand Timeline Plotly Chart
-                if current_detail.assignments:
-                    st.write(f"##### 📈 {t('settings.daily_demand_chart', default='Daily Capacity vs. Assigned Demand Timeline')}")
-                    chart_fig = _build_pool_timeline_figure(current_detail)
-                    if chart_fig is not None:
-                        st.plotly_chart(chart_fig, use_container_width=True)
+                details = load_pool_capacities(pool_repo.db_path, details=True, pool_ids=[selected_pool_id])
+                current_detail = details[0] if details else None
+                if current_detail:
+                    # Pool Details & Action Row
+                    c_info, c_actions = st.columns([4, 1])
+                    with c_info:
+                        st.markdown(f"### 🏊 **{current_detail.pool_name}** `[Pool #{current_detail.pool_id}]`")
+                        pool_obj = pool_repo.get_pool_by_id(selected_pool_id)
+                        if pool_obj and pool_obj.description:
+                            st.caption(f"📝 {pool_obj.description}")
+                        pool_tags = tag_repo.get_resource_pool_tags(selected_pool_id)
+                        if not pool_tags.empty:
+                            tag_text = " ".join(
+                                f"`{row['tag_name']}`"
+                                for _, row in pool_tags.iterrows()
+                            )
+                            st.markdown(f"🏷️ {tag_text}")
+                    with c_actions:
+                        c_edit, c_del = st.columns(2)
+                        if c_edit.button("✏️", key=f"btn_edit_pool_{selected_pool_id}", help="Edit pool details"):
+                            _open_edit_pool_dialog(pool_repo, tag_repo, selected_pool_id)
+                        if c_del.button("🗑️", key=f"btn_del_pool_{selected_pool_id}", help="Delete pool"):
+                            _open_delete_pool_dialog(pool_repo, selected_pool_id, current_detail.pool_name)
 
-                st.divider()
-
-                # Sub-section 1: Assigned Teams & Employees
-                st.write(f"#### 🛡️ / 👤 {t('settings.mapped_teams_funcs', default='Assigned Teams & Employees')} (0% - 100%)")
-                df_pool_maps = pool_repo.get_mappings_by_pool(selected_pool_id)
-                col_m_add, _ = st.columns([2, 3])
-                with col_m_add:
-                    if st.button(t("settings.btn_add_mapping", default="➕ Assign Team or Employee"), key=f"btn_add_map_{selected_pool_id}"):
-                        _open_add_pool_mapping_dialog(pool_repo, selected_pool_id, df_teams, df_emps)
-
-                if df_pool_maps.empty:
-                    st.info(t("settings.no_mappings_in_pool", default="No teams or employees assigned to this pool yet. Click 'Assign Team or Employee' above."))
-                else:
-                    team_lookup = dict(zip(df_teams["team_id"], df_teams["team_name"])) if not df_teams.empty else {}
-                    func_lookup = dict(zip(df_funcs["function_id"], df_funcs["name"])) if not df_funcs.empty else {}
-                    employee_lookup = {
-                        int(row["employee_id"]): (
-                            f"{str(row['firstname']).strip()} {str(row['lastname']).strip()}".strip()
+                    # Overassignment Alert Banner if overassigned
+                    if current_detail.is_overassigned:
+                        st.error(
+                            f"🚨 **DAILY OVERASSIGNMENT ALERT**: Peak daily demand of **{current_detail.peak_assigned_fte:.2f} FTE** "
+                            f"exceeds defined pool capacity of **{current_detail.total_capacity_fte:.2f} FTE** "
+                            f"by **+{current_detail.peak_excess_fte:.2f} FTE**!\n\n"
+                            f"👥 **Deduplicated assigned capacity**: {current_detail.assigned_capacity_fte:.2f} FTE.\n\n"
+                            f"📅 **Overassigned Period(s)**: {', '.join(current_detail.overassignment_intervals) if current_detail.overassignment_intervals else 'Active overlapping assignments'}"
                         )
-                        for _, row in df_emps.iterrows()
-                    } if not df_emps.empty else {}
-
-                    for _, m_row in df_pool_maps.iterrows():
-                        m_id = int(m_row["id"])
-                        m_type = str(m_row["target_type"]).lower()
-                        m_tid = int(m_row["target_id"])
-                        m_pct = float(m_row["allocation_pct"])
-
-                        if m_type == "team":
-                            target_label = team_lookup.get(m_tid, f"Team #{m_tid}")
-                            icon = "🛡️ Team:"
-                        elif m_type == "employee":
-                            target_label = employee_lookup.get(m_tid, f"Employee #{m_tid}")
-                            icon = "👤 Employee:"
-                        else:
-                            target_label = func_lookup.get(m_tid, f"Function #{m_tid}")
-                            icon = "💼 Legacy function:"
-
-                        mc1, mc2, mc3 = st.columns([3, 2, 1])
-                        mc1.markdown(f"**{icon}** `{target_label}` `[#{m_tid}]`")
-                        new_pct = mc2.number_input(
-                            f"Allocation % (#{m_id})",
-                            min_value=0.0,
-                            max_value=100.0,
-                            value=m_pct,
-                            step=5.0,
-                            key=f"num_alloc_pct_{m_id}",
-                            label_visibility="collapsed",
+                    else:
+                        st.success(
+                            f"✅ **CAPACITY NORMAL**: Defined pool capacity is **{current_detail.total_capacity_fte:.2f} FTE**; "
+                            f"deduplicated assigned capacity is **{current_detail.assigned_capacity_fte:.2f} FTE**. "
+                            f"Peak active daily demand is **{current_detail.peak_assigned_fte:.2f} FTE**."
                         )
-                        if abs(new_pct - m_pct) > 0.01:
-                            pool_repo.update_mapping(m_id, float(new_pct))
-                            st.rerun()
 
-                        if mc3.button("🗑️", key=f"btn_del_map_{m_id}", help="Remove mapping from pool"):
-                            pool_repo.delete_mapping(m_id)
-                            st.toast("Mapping removed from pool.", icon="🗑️")
-                            st.rerun()
+                    # Daily Demand Timeline Plotly Chart
+                    if current_detail.assignments:
+                        st.write(f"##### 📈 {t('settings.daily_demand_chart', default='Daily Capacity vs. Assigned Demand Timeline')}")
+                        chart_fig = _build_pool_timeline_figure(current_detail)
+                        if chart_fig is not None:
+                            st.plotly_chart(chart_fig, use_container_width=True)
 
-                st.divider()
+                    st.divider()
 
-                # Sub-section 2: Deduplicated contributing resource breakdown
-                st.write(f"#### 🔍 {t('settings.dedup_breakdown_title', default='Deduplicated Assigned Capacity Breakdown')}")
-                st.caption(t("settings.dedup_caption", default="Shows unique employees contributing to assigned capacity. Employees reached through several teams or assigned directly and through a team are counted once."))
+                    # Sub-section 1: Assigned Teams & Employees
+                    st.write(f"#### 🛡️ / 👤 {t('settings.mapped_teams_funcs', default='Assigned Teams & Employees')} (0% - 100%)")
+                    df_pool_maps = pool_repo.get_mappings_by_pool(selected_pool_id)
+                    col_m_add, _ = st.columns([2, 3])
+                    with col_m_add:
+                        if st.button(t("settings.btn_add_mapping", default="➕ Assign Team or Employee"), key=f"btn_add_map_{selected_pool_id}"):
+                            _open_add_pool_mapping_dialog(pool_repo, selected_pool_id, df_teams, df_emps)
 
-                if not current_detail.contributing_functions:
-                    st.caption("No contributing functions found.")
-                else:
-                    dedup_table_data = []
-                    for cf in current_detail.contributing_functions:
-                        status_str = "✅ Considered Once (Direct Override)" if cf.is_deduplicated else "Standard"
-                        dedup_table_data.append({
-                            "Resource type": cf.resource_type.title(),
-                            "Resource ID": cf.resource_id,
-                            "Resource": cf.resource_name,
-                            "Function": cf.function_name,
-                            "Nominal FTE": f"{cf.nominal_fte:.2f}",
-                            "Effective %": f"{cf.effective_allocation_pct:.1f}%",
-                            "Effective FTE": f"{cf.effective_fte:.2f}",
-                            "Source": f"{cf.source_type.title()} ({cf.source_name})",
-                            "Deduplication Rule": status_str,
-                        })
-                    st.dataframe(pd.DataFrame(dedup_table_data), use_container_width=True, hide_index=True)
+                    if df_pool_maps.empty:
+                        st.info(t("settings.no_mappings_in_pool", default="No teams or employees assigned to this pool yet. Click 'Assign Team or Employee' above."))
+                    else:
+                        team_lookup = dict(zip(df_teams["team_id"], df_teams["team_name"])) if not df_teams.empty else {}
+                        func_lookup = dict(zip(df_funcs["function_id"], df_funcs["name"])) if not df_funcs.empty else {}
+                        employee_lookup = {
+                            int(row["employee_id"]): (
+                                f"{str(row['firstname']).strip()} {str(row['lastname']).strip()}".strip()
+                            )
+                            for _, row in df_emps.iterrows()
+                        } if not df_emps.empty else {}
 
-                st.divider()
+                        for _, m_row in df_pool_maps.iterrows():
+                            m_id = int(m_row["id"])
+                            m_type = str(m_row["target_type"]).lower()
+                            m_tid = int(m_row["target_id"])
+                            m_pct = float(m_row["allocation_pct"])
 
-                # Sub-section 3: Assignments on Projects & Tasks
-                st.write(f"#### 📁 / 📋 {t('settings.assignments_section_title', default='Active Allocations on Projects & Tasks')}")
-                _render_pool_assignments_table(current_detail.assignments, selected_pool_id, pool_repo)
+                            if m_type == "team":
+                                target_label = team_lookup.get(m_tid, f"Team #{m_tid}")
+                                icon = "🛡️ Team:"
+                            elif m_type == "employee":
+                                target_label = employee_lookup.get(m_tid, f"Employee #{m_tid}")
+                                icon = "👤 Employee:"
+                            else:
+                                target_label = func_lookup.get(m_tid, f"Function #{m_tid}")
+                                icon = "💼 Legacy function:"
+
+                            mc1, mc2, mc3 = st.columns([3, 2, 1])
+                            mc1.markdown(f"**{icon}** `{target_label}` `[#{m_tid}]`")
+                            new_pct = mc2.number_input(
+                                f"Allocation % (#{m_id})",
+                                min_value=0.0,
+                                max_value=100.0,
+                                value=m_pct,
+                                step=5.0,
+                                key=f"num_alloc_pct_{m_id}",
+                                label_visibility="collapsed",
+                            )
+                            if abs(new_pct - m_pct) > 0.01:
+                                pool_repo.update_mapping(m_id, float(new_pct))
+                                st.rerun()
+
+                            if mc3.button("🗑️", key=f"btn_del_map_{m_id}", help="Remove mapping from pool"):
+                                pool_repo.delete_mapping(m_id)
+                                st.toast("Mapping removed from pool.", icon="🗑️")
+                                st.rerun()
+
+                    st.divider()
+
+                    # Sub-section 2: Deduplicated contributing resource breakdown
+                    st.write(f"#### 🔍 {t('settings.dedup_breakdown_title', default='Deduplicated Assigned Capacity Breakdown')}")
+                    st.caption(t("settings.dedup_caption", default="Shows unique employees contributing to assigned capacity. Employees reached through several teams or assigned directly and through a team are counted once."))
+
+                    if not current_detail.contributing_functions:
+                        st.caption("No contributing functions found.")
+                    else:
+                        dedup_table_data = []
+                        for cf in current_detail.contributing_functions:
+                            status_str = "✅ Considered Once (Direct Override)" if cf.is_deduplicated else "Standard"
+                            dedup_table_data.append({
+                                "Resource type": cf.resource_type.title(),
+                                "Resource ID": cf.resource_id,
+                                "Resource": cf.resource_name,
+                                "Function": cf.function_name,
+                                "Nominal FTE": f"{cf.nominal_fte:.2f}",
+                                "Effective %": f"{cf.effective_allocation_pct:.1f}%",
+                                "Effective FTE": f"{cf.effective_fte:.2f}",
+                                "Source": f"{cf.source_type.title()} ({cf.source_name})",
+                                "Deduplication Rule": status_str,
+                            })
+                        st.dataframe(pd.DataFrame(dedup_table_data), use_container_width=True, hide_index=True)
+
+                    st.divider()
+
+                    # Sub-section 3: Assignments on Projects & Tasks
+                    st.write(f"#### 📁 / 📋 {t('settings.assignments_section_title', default='Active Allocations on Projects & Tasks')}")
+                    _render_pool_assignments_table(current_detail.assignments, selected_pool_id, pool_repo)

@@ -484,6 +484,46 @@ PPM Studio Pro recognizes the following environment variables (defined via `.env
 
 ## 📋 Features Overview
 
+Pool capacity summaries and details are persisted as derived data in SQLite and
+reused across page loads and application restarts. Source-data triggers invalidate
+affected pools after assignment, mapping, calendar, task-date, and capacity changes.
+Organization structure changes conservatively invalidate related team/function
+pools. Daily minimum capacities and single-day overallocation checks are preserved.
+Settings loads only the selected tab and fetches full details for the selected pool.
+The first request after invalidation recalculates missing entries with shared inputs;
+subsequent requests read the cache. Planning still renders its selected Gantt data,
+so sub-100-ms pool reads do not imply a sub-100-ms complete page render.
+
+Planning reuses cached capacity timelines when all assigned projects are selected,
+indexes organization/project lookups, and avoids sending selected tasks twice to
+the dependency editor. The Gantt reuses overscanned rows and batches scroll work
+once per animation frame. Measure server-side preparation (excluding browser paint):
+
+```powershell
+docker compose exec -T app python -m scripts.benchmark_planning
+node --test tests/test_gantt_scrolling.cjs
+```
+
+The sidebar seed control accepts up to **10,000 projects**. Large seeds and the
+first capacity calculation afterward take longer; filtering the planning view to
+the projects of interest also reduces its task payload.
+
+Every actual seed operation backs up an existing database before changing it, using
+SQLite's backup API (including WAL contents). With Docker, backups are stored in
+`data/backups/` on the host. Append seeds, forced seeds, and the pool-scenario seeder
+are covered. Nested seed calls produce one backup, ordinary no-op startup checks
+produce none, and a backup failure aborts seeding. A brand-new database has no
+previous file to back up. Backups are retained until manually removed.
+
+Pool hierarchy scenarios can be previewed without modifying the database:
+
+```powershell
+docker compose run --rm --entrypoint python app -m scripts.seed_pool_scenarios --year 2026
+```
+
+Add `--apply` to apply the previewed seed. The script refuses to duplicate an
+existing scenario seed.
+
 1. **📊 1. Portfolio Overview**:
    - Executive financial KPI banner (Planned, Actual, Variance, Burn Rate).
    - Dynamic parameter table restricted strictly to 7 whitelisted parameters: `phase`, `code_station`, `code_line`, `strategic_priority`, `category`, `category_tags`, and `complexity`.

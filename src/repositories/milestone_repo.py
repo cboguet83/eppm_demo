@@ -261,17 +261,26 @@ class MilestoneRepository:
                     pass
         return bounds
 
-    def get_all_external_tasks_map(self) -> dict[str, list[dict[str, Any]]]:
+    def get_all_external_tasks_map(
+        self, exclude_project_ids: Optional[list[Union[int, str]]] = None,
+    ) -> dict[str, list[dict[str, Any]]]:
         """Retrieves all tasks grouped by project ID for external link mapping in one query.
+
+        Args:
+            exclude_project_ids: Projects whose full tasks are already supplied
+                to the chart. Omit to retain the complete legacy result.
 
         Returns:
             dict[str, list[dict[str, Any]]]: Map of project_id string to list of step summaries.
         """
         ext_map: dict[str, list[dict[str, Any]]] = {}
+        excluded = [parse_project_id(pid) for pid in (exclude_project_ids or [])]
+        where = f"WHERE project_id NOT IN ({','.join('?' for _ in excluded)})" if excluded else ""
         with get_db(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT id, project_id, task_name, start_date, end_date FROM project_task ORDER BY project_id, start_date"
+                f"SELECT id, project_id, task_name, start_date, end_date FROM project_task {where} ORDER BY project_id, start_date",
+                excluded,
             )
             for row in cursor.fetchall():
                 p_id = str(row[1])

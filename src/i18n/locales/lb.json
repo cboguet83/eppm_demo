@@ -1,4 +1,11 @@
 {
+  "planning_totals": {
+    "title": "Planungsgesamtzuelen · ganze Portfolio",
+    "projects": "Projeten am Ganzen",
+    "tasks": "Aufgaben am Ganzen",
+    "dependencies": "Ofhängegkeeten am Ganzen",
+    "pools": "Poolen am Ganzen"
+  },
   "project_types": {
     "default_value": "Standardwäert",
     "label": "Projetstyp",

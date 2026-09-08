@@ -1,4 +1,11 @@
 {
+  "planning_totals": {
+    "title": "Totais do planeamento · portefólio completo",
+    "projects": "Total de projetos",
+    "tasks": "Total de tarefas",
+    "dependencies": "Total de dependências",
+    "pools": "Total de pools"
+  },
   "project_types": {
     "default_value": "Valor predefinido",
     "label": "Tipo de projeto",

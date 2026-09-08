@@ -4779,6 +4779,7 @@
         }
 
         // Build list of project summaries
+        const projectMetadata = new Map((allProjectsData || []).map(p => [String(p.id), p]));
         const projectGroupsList = projOrder.map(pId => {
           const grp = groups[pId];
           let pMin = null, pMax = null;
@@ -4790,7 +4791,7 @@
             if (!pMax || e > pMax) pMax = e;
             if (t.violations && t.violations.length > 0) pHasViolations = true;
           });
-          const pMeta = (allProjectsData || []).find(p => String(p.id) === String(pId));
+          const pMeta = projectMetadata.get(String(pId));
           const pTags = pMeta && pMeta.tags ? pMeta.tags : [];
           return {
             id: pId,
@@ -5096,14 +5097,25 @@
       adjustVerticalScrollbarGaps();
     }
 
-    function renderVirtualWindow(customScrollTop) {
-      adjustCanvasBottomGaps();
+    let renderedRowWindow = null;
+    let pendingScrollFrame = null;
+
+    function scheduleVirtualWindow() {
+      if (pendingScrollFrame !== null) return;
+      pendingScrollFrame = requestAnimationFrame(() => {
+        pendingScrollFrame = null;
+        renderVirtualWindow(undefined, false);
+      });
+    }
+
+    function renderVirtualWindow(customScrollTop, force = true) {
       const scroller = document.getElementById('timeline-body-scroller');
       const scrollTop = customScrollTop !== undefined ? customScrollTop : (scroller ? scroller.scrollTop : 0);
       const viewportHeight = scroller ? (scroller.clientHeight || 600) : 600;
 
       const totalItems = masterRenderItems.length;
       if (totalItems === 0) {
+        renderedRowWindow = null;
         const fC = document.getElementById('frozen-rows-container');
         if (fC) fC.innerHTML = '';
         const tC = document.getElementById('timeline-rows-container');
@@ -5113,9 +5125,17 @@
         return;
       }
 
-      // Calculate visible row range with 15-row overscan buffer for smooth scrolling
-      const startIndex = Math.max(0, Math.floor(scrollTop / 46) - 15);
-      const endIndex = Math.min(totalItems - 1, Math.ceil((scrollTop + viewportHeight) / 46) + 15);
+      // Reuse overscanned rows until the viewport approaches their edge. Scrolling
+      // horizontally (or by a few pixels vertically) must not rebuild rows/links.
+      const firstVisible = Math.max(0, Math.min(totalItems - 1, Math.floor(scrollTop / 46)));
+      const lastVisible = Math.min(totalItems - 1, Math.ceil((scrollTop + viewportHeight) / 46));
+      const safetyStart = Math.max(0, firstVisible - 5);
+      const safetyEnd = Math.min(totalItems - 1, lastVisible + 5);
+      if (!force && renderedRowWindow &&
+          safetyStart >= renderedRowWindow.start && safetyEnd <= renderedRowWindow.end) return;
+      const startIndex = Math.max(0, firstVisible - 15);
+      const endIndex = Math.min(totalItems - 1, lastVisible + 15);
+      renderedRowWindow = { start: startIndex, end: endIndex };
 
       // 1. Render Visible Frozen Left Column Rows
       const totalW = getTotalFrozenWidth();
@@ -5878,7 +5898,7 @@
           if (resourceRightScroller && resourceRightScroller.scrollLeft !== scroller.scrollLeft) {
             resourceRightScroller.scrollLeft = scroller.scrollLeft;
           }
-          renderVirtualWindow(scroller.scrollTop);
+          scheduleVirtualWindow();
         };
       }
 

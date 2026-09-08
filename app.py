@@ -160,6 +160,18 @@ def _get_database_seed_counts(db_path: str) -> dict[str, int]:
     }
 
 
+def _get_planning_totals(db_path: str) -> dict[str, int]:
+    """Read global planning counts in one query without loading table contents."""
+    with get_db(db_path) as conn:
+        row = conn.execute(
+            "SELECT (SELECT COUNT(*) FROM project), "
+            "(SELECT COUNT(*) FROM project_task), "
+            "(SELECT COUNT(*) FROM task_dependencies), "
+            "(SELECT COUNT(*) FROM resource_pool)"
+        ).fetchone()
+    return dict(zip(("projects", "tasks", "dependencies", "pools"), map(int, row)))
+
+
 @st.cache_resource
 def bootstrap_database(schema_version: str = "project-types-v1") -> bool:
     """Initializes the database schema and performs seeding on server startup.
@@ -354,12 +366,24 @@ def run_app() -> None:
         key="app_sidebar_nav",
     )
 
+    if page == PAGE_PLANNING:
+        totals = _get_planning_totals(config.db_path)
+        with st.sidebar:
+            st.divider()
+            st.caption(t("planning_totals.title", default="Planning totals · entire portfolio"))
+            projects_col, tasks_col = st.columns(2)
+            projects_col.caption(f"{t('planning_totals.projects', default='Total projects')}  \n{totals['projects']:,}")
+            tasks_col.caption(f"{t('planning_totals.tasks', default='Total tasks')}  \n{totals['tasks']:,}")
+            dependencies_col, pools_col = st.columns(2)
+            dependencies_col.caption(f"{t('planning_totals.dependencies', default='Total dependencies')}  \n{totals['dependencies']:,}")
+            pools_col.caption(f"{t('planning_totals.pools', default='Total pools')}  \n{totals['pools']:,}")
+
     st.sidebar.markdown("---")
     with st.sidebar.expander(f"⚡ {t('app.seeding_options', default='Database Seeding')}", expanded=False):
         ui_num_projects = st.number_input(
             t("app.seed_projects_count", default="Projects to generate (0 = demo)"),
             min_value=0,
-            max_value=2000,
+            max_value=10000,
             value=50,
             step=10,
             key="sb_num_projects_input",

@@ -21,6 +21,7 @@ from src.repositories.project_repo import ProjectRepository
 from src.models.constants import STATUS_LIST
 from scripts.flush_database import flush_database
 from src.database.connection import get_db
+from src.database.backup import backup_before_seed
 from src.database.schema_init import init_db
 from src.database.seeder import seed_default_data_if_empty
 from src.logging_config import get_logger
@@ -67,6 +68,7 @@ MILESTONE_TEMPLATES: list[tuple[str, str]] = [
 
 PROJECT_STATUSES = STATUS_LIST
 
+@backup_before_seed
 def seed_database(
     num_projects: int = 1000,
     min_tasks_per_project: int = 0,

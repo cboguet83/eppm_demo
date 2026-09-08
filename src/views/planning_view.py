@@ -248,11 +248,14 @@ def _build_resource_pool_hierarchy(
     members_by_group: dict[int, tuple[list[int], list[int]]] = {}
     child_group_ids: set[int] = set()
     grouped_pool_ids: set[int] = set()
-    for group_id in group_by_id:
-        pool_ids, child_ids = pool_repo.get_group_direct_member_ids(group_id)
-        members_by_group[group_id] = (pool_ids, child_ids)
-        grouped_pool_ids.update(pool_ids)
-        child_group_ids.update(child_ids)
+    for row in pool_repo.get_all_group_members().to_dict("records"):
+        pool_ids, child_ids = members_by_group.setdefault(int(row["group_id"]), ([], []))
+        if pd.notna(row["pool_id"]):
+            pool_ids.append(int(row["pool_id"]))
+            grouped_pool_ids.add(int(row["pool_id"]))
+        if pd.notna(row["child_group_id"]):
+            child_ids.append(int(row["child_group_id"]))
+            child_group_ids.add(int(row["child_group_id"]))
 
     def pool_node(pool_id: int, path: tuple[int, ...]) -> Optional[dict[str, Any]]:
         pool = pool_by_id.get(pool_id)
@@ -303,7 +306,10 @@ def _build_resource_pool_hierarchy(
             "name": group["name"],
             "description": group["description"],
             "children": children,
-            "descendant_pool_ids": pool_repo.get_group_descendant_pool_ids(group_id),
+            "descendant_pool_ids": sorted({
+                pid for child in children
+                for pid in ([child["pool_id"]] if child["node_type"] == "pool" else child["descendant_pool_ids"])
+            }),
         }
 
     root_group_ids = sorted(
@@ -1495,16 +1501,18 @@ def render_planning_milestones(
         task_pools_map = pool_repo.get_task_assignments_map(all_task_ids)
 
         # Precompute pool details for pools in task_pools_map
-        all_task_pool_ids = {p["pool_id"] for plist in task_pools_map.values() for p in plist}
-        pool_details_cache: dict[int, Any] = {
-            pid: ResourcePoolService.calculate_pool_capacity(pid, org_repo, pool_repo, milestone_repo)
-            for pid in all_task_pool_ids
+        from src.services.pool_capacity_cache import load_pool_capacities
+
+        pool_details_cache = {
+            detail.pool_id: detail
+            for detail in load_pool_capacities(pool_repo.db_path, details=True)
         }
 
         # For each task, enrich pool objects with is_overassigned on that specific task and capacity
         enriched_task_pools_map: dict[int, list[dict[str, Any]]] = {}
+        steps_by_id = {int(row["id"]): row for row in steps_records}
         for tid, plist in task_pools_map.items():
-            t_row = next((r for r in steps_records if int(r["id"]) == tid), None)
+            t_row = steps_by_id.get(tid)
             t_start = str(t_row["start_date"]) if t_row else None
             t_end = str(t_row["end_date"]) if t_row else None
             enriched_list = []
@@ -1562,6 +1570,7 @@ def render_planning_milestones(
 
         # Build resource pools payload for the demand & capacity grid below the Gantt
         scope_pids = [int(p) for p in selected_projects if str(p).isdigit()]
+        scope_pid_set = set(scope_pids)
         df_all_pools = pool_repo.get_all_pools()
         resource_pools_payload: list[dict[str, Any]] = []
         if not df_all_pools.empty:
@@ -1573,19 +1582,25 @@ def render_planning_milestones(
                         p_id, org_repo, pool_repo, milestone_repo
                     )
                 p_cap = pool_details_cache[p_id]
-                scope_usage = ResourcePoolService.calculate_pool_scope_daily_usage(
-                    p_cap.assignments, scope_pids
-                )
                 effective_daily_capacity = (
                     p_cap.daily_assigned_capacity
                     if p_cap.has_assigned_resources
                     else {}
                 )
-                scope_overassignments = ResourcePoolService.calculate_daily_overassignments(
-                    scope_usage,
-                    p_cap.effective_capacity_fte,
-                    effective_daily_capacity,
-                )
+                # The usual portfolio-wide view is already computed in the pool
+                # cache. Recalculate only when the filter excludes an assignment.
+                if all(int(a["project_id"]) in scope_pid_set for a in p_cap.assignments):
+                    scope_usage = p_cap.daily_usage
+                    scope_overassignments = p_cap.daily_overassignments
+                else:
+                    scope_usage = ResourcePoolService.calculate_pool_scope_daily_usage(
+                        p_cap.assignments, scope_pids
+                    )
+                    scope_overassignments = ResourcePoolService.calculate_daily_overassignments(
+                        scope_usage,
+                        p_cap.effective_capacity_fte,
+                        effective_daily_capacity,
+                    )
                 resource_pools_payload.append({
                     "id": p_id,
                     "name": p_name,
@@ -1627,7 +1642,11 @@ def render_planning_milestones(
         # Render custom drag-and-drop component with multi-dependency metadata and i18n
         cur_loc = get_current_locale()
         gantt_translations = get_section_catalog("gantt", cur_loc)
-        all_ext_tasks = milestone_repo.get_all_external_tasks_map()
+        # Selected projects' tasks are already in gantt_tasks; the dependency
+        # editor can use those without sending a duplicate copy over the wire.
+        all_ext_tasks = milestone_repo.get_all_external_tasks_map(
+            exclude_project_ids=selected_projects
+        )
         cur_rf = st.session_state.get("active_resource_pool_filter")
         rf_key = f"{cur_rf.get('pool_id')}_{cur_rf.get('start_date')}_{cur_rf.get('clear_other_filters')}" if cur_rf else "none"
         widget_key = f"gantt_{len(selected_projects)}_{selected_id}_{cur_loc}_{rf_key}"

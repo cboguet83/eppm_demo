@@ -191,10 +191,33 @@ class ResourcePoolRepository:
 
         groups["direct_pool_count"] = groups["direct_pool_count"].fillna(0).astype(int)
         groups["child_group_count"] = groups["child_group_count"].fillna(0).astype(int)
-        groups["recursive_pool_count"] = groups["id"].map(
-            lambda group_id: len(self.get_group_descendant_pool_ids(int(group_id)))
-        )
+        members = self.get_all_group_members()
+        direct_pools, children = {}, {}
+        for row in members.to_dict("records"):
+            gid = int(row["group_id"])
+            if pd.notna(row["pool_id"]):
+                direct_pools.setdefault(gid, set()).add(int(row["pool_id"]))
+            if pd.notna(row["child_group_id"]):
+                children.setdefault(gid, set()).add(int(row["child_group_id"]))
+
+        def descendant_count(group_id):
+            pending, visited, resolved = [int(group_id)], set(), set()
+            while pending:
+                gid = pending.pop()
+                if gid in visited:
+                    continue
+                visited.add(gid)
+                resolved.update(direct_pools.get(gid, set()))
+                pending.extend(children.get(gid, set()) - visited)
+            return len(resolved)
+
+        groups["recursive_pool_count"] = groups["id"].map(descendant_count)
         return groups
+
+    def get_all_group_members(self) -> pd.DataFrame:
+        """Load the complete hierarchy in one query, including shared children."""
+        with get_db(self.db_path) as conn:
+            return pd.read_sql("SELECT group_id,pool_id,child_group_id FROM resource_pool_group_member", conn)
 
     def get_pool_group_by_id(self, group_id: int) -> Optional[ResourcePoolGroup]:
         """Return one pool group by ID."""

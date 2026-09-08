@@ -1,4 +1,11 @@
 {
+  "planning_totals": {
+    "title": "Planungssummen · gesamtes Portfolio",
+    "projects": "Projekte gesamt",
+    "tasks": "Aufgaben gesamt",
+    "dependencies": "Abhängigkeiten gesamt",
+    "pools": "Pools gesamt"
+  },
   "project_types": {
     "default_value": "Standardwert",
     "label": "Projekttyp",
