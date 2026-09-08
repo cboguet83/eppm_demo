@@ -34,13 +34,11 @@ def test_domain_and_application_have_only_inward_dependencies() -> None:
 
 
 def test_migrated_presentation_cannot_open_storage_or_construct_repositories() -> None:
-    """The legacy shell/i18n bridge are the only documented presentation exceptions."""
+    """Only the transitional shell may retain storage or composition imports."""
     for path in (ROOT / "app" / "presentation").rglob("*.py"):
         if path.name == "legacy_shell.py":
             continue
         for module in imports(path):
-            if path.name == "i18n.py" and module == "src.i18n":
-                continue
             assert not module.startswith(("src", "sqlite3", "app.infrastructure", "app.main", "app.shared")), (path, module)
 
 

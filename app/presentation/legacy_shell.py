@@ -74,7 +74,7 @@ from src.config import config
 from src.database.connection import get_db
 from src.database.schema_init import init_db
 from src.database.seeder import seed_default_data_if_empty
-from src.i18n import SUPPORTED_LOCALES, get_current_locale, set_current_locale, t
+from app.presentation.i18n import SUPPORTED_LOCALES, get_current_locale, set_current_locale, t
 from src.logging_config import get_logger, setup_logging
 from src.models.constants import (
     PAGE_BUDGET,

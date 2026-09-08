@@ -9,7 +9,7 @@ import html
 import hashlib
 from collections.abc import Callable
 from functools import wraps
-from pathlib import Path
+from app.presentation.assets import component_path
 from typing import Any
 import pandas as pd
 import streamlit as st
@@ -96,7 +96,7 @@ def require_change(changed: bool) -> None:
 
 def _interactive_gantt(**payload: Any) -> Any:
     """Register the existing component in the active Streamlit runtime."""
-    path = Path(__file__).resolve().parents[3] / "src" / "components" / "gantt"
+    path = component_path("gantt")
     return components.declare_component("interactive_gantt", path=str(path))(**payload)
 
 

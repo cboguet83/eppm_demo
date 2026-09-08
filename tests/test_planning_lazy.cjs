@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
-const script = fs.readFileSync(path.join(__dirname,'../src/components/gantt/index.html'),'utf8').match(/<script>([\s\S]*?)<\/script>/)[1];
+const script = fs.readFileSync(path.join(__dirname,'../app/presentation/assets/components/gantt/index.html'),'utf8').match(/<script>([\s\S]*?)<\/script>/)[1];
 
 function harness() {
   const timers=[], messages=[];

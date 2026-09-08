@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
-const html = fs.readFileSync(path.join(__dirname, '../src/components/gantt/index.html'), 'utf8');
+const html = fs.readFileSync(path.join(__dirname, '../app/presentation/assets/components/gantt/index.html'), 'utf8');
 const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 
 test('entire Gantt script parses', () => new vm.Script(script));

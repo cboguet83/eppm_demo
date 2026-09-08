@@ -19,7 +19,7 @@ dependencies = {file = ["requirements.txt"]}
 include = ["app*", "src*", "scripts*"]
 
 [tool.setuptools.package-data]
-src = ["components/*/*.html", "i18n/locales/*.json"]
+app = ["presentation/assets/components/*/*.html", "presentation/assets/locales/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

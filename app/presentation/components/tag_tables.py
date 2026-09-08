@@ -1,6 +1,6 @@
 """Existing tag-table assets registered in the active Streamlit runtime."""
 
-from pathlib import Path
+from app.presentation.assets import component_path
 from typing import Any, Literal
 
 import streamlit.components.v1 as components
@@ -12,7 +12,7 @@ type TagTable = Literal[
 
 def _render(kind: TagTable, payload: dict[str, Any]) -> Any:
     """Adapt dynamic component JSON; application/domain APIs remain typed."""
-    path = Path(__file__).resolve().parents[3] / "src" / "components" / kind
+    path = component_path(kind)
     component = components.declare_component("interactive_" + kind, path=str(path))
     return component(**payload)
 

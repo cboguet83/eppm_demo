@@ -1,8 +1,10 @@
-"""Internationalization (i18n) package for EPPM."""
+"""Compatibility exports for presentation-owned translations and locale state."""
 
-from src.i18n.translator import (
+from app.presentation.i18n import (
     DEFAULT_LOCALE,
     SUPPORTED_LOCALES,
+    LOCALE_ALIASES,
+    LOCALES_DIR,
     get_current_locale,
     get_section_catalog,
     load_locale_catalog,
@@ -13,6 +15,8 @@ from src.i18n.translator import (
 __all__ = [
     "DEFAULT_LOCALE",
     "SUPPORTED_LOCALES",
+    "LOCALE_ALIASES",
+    "LOCALES_DIR",
     "get_current_locale",
     "get_section_catalog",
     "load_locale_catalog",

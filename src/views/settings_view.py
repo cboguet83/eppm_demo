@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple, Union
 import pandas as pd
 import streamlit as st
 
-from src.i18n import t
+from app.presentation.i18n import t
 from src.models.constants import PAGE_PLANNING
 from src.repositories.milestone_repo import MilestoneRepository
 from src.repositories.organization_repo import OrganizationRepository

@@ -64,7 +64,7 @@ async function main() {
       if (result.exceptionDetails) throw new Error(JSON.stringify(result.exceptionDetails));
       return result.result.value;
     };
-    await call('Page.navigate', {url: pathToFileURL(path.resolve(__dirname, '../src/components/gantt/index.html')).href});
+    await call('Page.navigate', {url: pathToFileURL(path.resolve(__dirname, '../app/presentation/assets/components/gantt/index.html')).href});
     for (let tries = 0; tries < 100; tries++) {
       if (await evaluate('typeof renderTimeline === "function"')) break;
       await new Promise(resolve => setTimeout(resolve, 50));

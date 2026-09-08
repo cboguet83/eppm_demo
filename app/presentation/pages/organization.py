@@ -1,6 +1,6 @@
 """Lazy organization catalog sections for the existing Settings navigation."""
 
-from pathlib import Path
+from app.presentation.assets import component_path
 
 import pandas as pd
 import streamlit as st
@@ -39,7 +39,7 @@ def _table(name: str, **kwargs: object) -> dict[str, object] | None:
     Returns:
         The component's event object, or None when there is no event.
     """
-    asset = Path(__file__).resolve().parents[3] / "src" / "components" / name
+    asset = component_path(name)
     component = components.declare_component("interactive_" + name, path=str(asset))
     event = component(**kwargs)
     return event if isinstance(event, dict) else None

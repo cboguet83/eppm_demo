@@ -1,7 +1,7 @@
 """Unit Tests for Internationalization (i18n) Module."""
 
 import unittest
-from src.i18n.translator import (
+from app.presentation.i18n import (
     DEFAULT_LOCALE,
     SUPPORTED_LOCALES,
     get_current_locale,
