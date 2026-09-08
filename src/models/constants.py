@@ -2,11 +2,10 @@
 
 # Page Navigation Constants
 PAGE_PORTFOLIO: str = "1. Portfolio Overview"
-PAGE_PROJECT_MASTER: str = "2. Project Master Data"
 PAGE_SCHEMA_DEF: str = "Parameters Definition (Schema)"
-PAGE_PLANNING: str = "3. Planning & Step Loader"
-PAGE_SETTINGS: str = "4. Settings"
-PAGE_BUDGET: str = "5. Budget Tracking"
+PAGE_PLANNING: str = "2. Planning & Step Loader"
+PAGE_SETTINGS: str = "3. Settings"
+PAGE_BUDGET: str = "4. Budget Tracking"
 
 # Project Status Constants
 STATUS_DRAFT: str = "Draft"
@@ -53,4 +52,3 @@ PRIORITY_LIST: list[str] = [
     PRIORITY_P3_MEDIUM,
     PRIORITY_P4_LOW,
 ]
-

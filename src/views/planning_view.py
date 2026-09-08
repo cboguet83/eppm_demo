@@ -12,16 +12,18 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 from src.i18n import get_current_locale, get_section_catalog, t
-from src.models.constants import PAGE_PROJECT_MASTER
+from src.models.constants import PAGE_SETTINGS
 from src.models.resource_pool import PoolAssignment
 from src.models.tag import ProjectTag, TaskTag
 from src.repositories.milestone_repo import MilestoneRepository
 from src.repositories.organization_repo import OrganizationRepository
 from src.repositories.project_repo import ProjectRepository
 from src.repositories.resource_pool_repo import ResourcePoolRepository
+from src.repositories.schema_repo import SchemaRepository
 from src.repositories.tag_repo import TagRepository
 from src.services.milestone_service import MilestoneService
 from src.services.resource_pool_service import ResourcePoolService
+from src.views.project_dialogs import open_edit_project_dialog
 
 # Declare Frappe Gantt Custom Component
 _COMPONENT_PATH = os.path.join(
@@ -30,6 +32,114 @@ _COMPONENT_PATH = os.path.join(
     "gantt",
 )
 _interactive_gantt = components.declare_component("interactive_gantt", path=_COMPONENT_PATH)
+
+
+def _build_resource_pool_hierarchy(
+    pool_repo: ResourcePoolRepository,
+    pools: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Build a loop-safe tree of pool groups and ungrouped pools for the Gantt."""
+    pool_by_id = {int(pool["id"]): pool for pool in pools}
+    groups = pool_repo.get_all_pool_groups()
+    if groups.empty:
+        return [
+            {
+                "key": f"pool:{pool_id}",
+                "node_type": "pool",
+                "pool_id": pool_id,
+                "name": str(pool["name"]),
+            }
+            for pool_id, pool in sorted(
+                pool_by_id.items(), key=lambda item: str(item[1]["name"]).casefold()
+            )
+        ]
+
+    group_by_id = {
+        int(row["id"]): {
+            "name": str(row["name"]),
+            "description": (
+                str(row.get("description")) if pd.notna(row.get("description")) else ""
+            ),
+        }
+        for _, row in groups.iterrows()
+    }
+    members_by_group: dict[int, tuple[list[int], list[int]]] = {}
+    child_group_ids: set[int] = set()
+    grouped_pool_ids: set[int] = set()
+    for group_id in group_by_id:
+        pool_ids, child_ids = pool_repo.get_group_direct_member_ids(group_id)
+        members_by_group[group_id] = (pool_ids, child_ids)
+        grouped_pool_ids.update(pool_ids)
+        child_group_ids.update(child_ids)
+
+    def pool_node(pool_id: int, path: tuple[int, ...]) -> Optional[dict[str, Any]]:
+        pool = pool_by_id.get(pool_id)
+        if pool is None:
+            return None
+        path_key = "/".join(str(item) for item in path)
+        return {
+            "key": f"pool:{path_key}:{pool_id}" if path_key else f"pool:{pool_id}",
+            "node_type": "pool",
+            "pool_id": pool_id,
+            "name": str(pool["name"]),
+        }
+
+    def group_node(group_id: int, path: tuple[int, ...]) -> dict[str, Any]:
+        group = group_by_id[group_id]
+        current_path = (*path, group_id)
+        path_key = "/".join(str(item) for item in current_path)
+        if group_id in path:
+            return {
+                "key": f"group:{path_key}:cycle",
+                "node_type": "group",
+                "group_id": group_id,
+                "name": group["name"],
+                "children": [],
+                "descendant_pool_ids": [],
+                "cycle_blocked": True,
+            }
+
+        direct_pool_ids, direct_child_ids = members_by_group.get(group_id, ([], []))
+        children: list[dict[str, Any]] = []
+        for child_id in sorted(
+            direct_child_ids,
+            key=lambda item: group_by_id.get(item, {}).get("name", "").casefold(),
+        ):
+            if child_id in group_by_id:
+                children.append(group_node(child_id, current_path))
+        for pool_id in sorted(
+            direct_pool_ids,
+            key=lambda item: str(pool_by_id.get(item, {}).get("name", "")).casefold(),
+        ):
+            node = pool_node(pool_id, current_path)
+            if node is not None:
+                children.append(node)
+        return {
+            "key": f"group:{path_key}",
+            "node_type": "group",
+            "group_id": group_id,
+            "name": group["name"],
+            "description": group["description"],
+            "children": children,
+            "descendant_pool_ids": pool_repo.get_group_descendant_pool_ids(group_id),
+        }
+
+    root_group_ids = sorted(
+        set(group_by_id) - child_group_ids,
+        key=lambda item: group_by_id[item]["name"].casefold(),
+    )
+    if not root_group_ids:
+        root_group_ids = sorted(group_by_id, key=lambda item: group_by_id[item]["name"].casefold())
+
+    hierarchy = [group_node(group_id, ()) for group_id in root_group_ids]
+    for pool_id in sorted(
+        set(pool_by_id) - grouped_pool_ids,
+        key=lambda item: str(pool_by_id[item]["name"]).casefold(),
+    ):
+        node = pool_node(pool_id, ())
+        if node is not None:
+            hierarchy.append(node)
+    return hierarchy
 
 
 @st.dialog(t("planning.dialog_project_tags_title", default="🏷️ Manage Project Tags"))
@@ -759,6 +869,7 @@ def render_planning_milestones(
     tag_repo: Optional[TagRepository] = None,
     pool_repo: Optional[ResourcePoolRepository] = None,
     org_repo: Optional[OrganizationRepository] = None,
+    schema_repo: Optional[SchemaRepository] = None,
 ) -> None:
     """Renders the Planning & Step Loader screen with interactive drag & drop and Plotly timeline."""
     if tag_repo is None:
@@ -767,6 +878,8 @@ def render_planning_milestones(
         pool_repo = ResourcePoolRepository(project_repo.db_path)
     if org_repo is None:
         org_repo = OrganizationRepository(project_repo.db_path)
+    if schema_repo is None:
+        schema_repo = SchemaRepository(project_repo.db_path)
 
     st.markdown(
         """
@@ -1000,6 +1113,10 @@ def render_planning_milestones(
             org_repo,
         )
 
+    edit_project_modal_id = st.session_state.pop("modal_edit_project", None)
+    if edit_project_modal_id:
+        open_edit_project_dialog(int(edit_project_modal_id), project_repo, schema_repo)
+
     # Fetch all project bounds, project tags, and project pool assignments for constraint evaluation and tooltips
     proj_tags_map = tag_repo.get_project_tags_by_project_ids([int(p) for p in selected_projects if str(p).isdigit()])
     proj_pools_map = pool_repo.get_project_assignments_map([int(r["id"]) for _, r in df_projects.iterrows()])
@@ -1187,6 +1304,11 @@ def render_planning_milestones(
                     ],
                 })
 
+        resource_pool_hierarchy = _build_resource_pool_hierarchy(
+            pool_repo,
+            resource_pools_payload,
+        )
+
         # Render custom drag-and-drop component with multi-dependency metadata and i18n
         cur_loc = get_current_locale()
         gantt_translations = get_section_catalog("gantt", cur_loc)
@@ -1202,6 +1324,7 @@ def render_planning_milestones(
             is_multi_project=True,
             translations=gantt_translations,
             resource_pools=resource_pools_payload,
+            resource_pool_hierarchy=resource_pool_hierarchy,
             active_resource_filter=st.session_state.get("active_resource_pool_filter"),
             key=widget_key,
         )
@@ -1231,6 +1354,15 @@ def render_planning_milestones(
                     )
                 elif action == "clear_resource_pool_filter":
                     _handle_clear_resource_pool_filter(master_proj_ids)
+                elif action == "go_to_pool_details":
+                    pool_id = gantt_event.get("pool_id")
+                    if pool_id:
+                        st.session_state["settings_active_section"] = "organization"
+                        st.session_state["rb_settings_section"] = "org_structure"
+                        st.session_state["settings_active_tab"] = "resource_pools"
+                        st.session_state["target_resource_pool_id"] = int(pool_id)
+                        st.session_state["nav_redirect"] = PAGE_SETTINGS
+                        st.rerun()
                 elif action == "manage_project_tags":
                     p_id = gantt_event.get("project_id")
                     if p_id:
@@ -1244,8 +1376,7 @@ def render_planning_milestones(
                 elif action == "edit_project_details":
                     p_id = gantt_event.get("project_id")
                     if p_id:
-                        st.session_state["nav_redirect"] = PAGE_PROJECT_MASTER
-                        st.session_state["target_edit_project_id"] = int(p_id)
+                        st.session_state["modal_edit_project"] = int(p_id)
                         st.rerun()
                 elif action == "manage_task_tags" and step_id:
                     st.session_state["modal_manage_task_tag"] = {

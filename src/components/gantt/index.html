@@ -9,7 +9,7 @@
     :root {
       --primary: #2563eb;
       --primary-hover: #1d4ed8;
-      --milestone: #dc2626;
+      --milestone: #2563eb;
       --border: #e2e8f0;
       --border-dark: #cbd5e1;
       --bg-header: #f8fafc;
@@ -631,6 +631,11 @@
       overflow: hidden;
     }
 
+    .gantt-bar-wrapper.is-complete .gantt-bar-task {
+      background: linear-gradient(135deg, #22c55e, #16a34a);
+      border-color: #15803d;
+    }
+
     .bar-progress {
       position: absolute;
       top: 0;
@@ -639,6 +644,10 @@
       background: rgba(29, 78, 216, 0.5);
       border-radius: 4px 0 0 4px;
       pointer-events: none;
+    }
+
+    .gantt-bar-wrapper.is-complete .bar-progress {
+      background: rgba(21, 128, 61, 0.5);
     }
 
     .bar-label {
@@ -730,17 +739,27 @@
     .milestone-diamond-shape {
       width: 18px;
       height: 18px;
-      background: #dc2626;
-      border: 2px solid #7f1d1d;
+      background: #2563eb;
+      border: 2px solid #1e40af;
       transform: rotate(45deg);
       border-radius: 2px;
-      box-shadow: 0 2px 4px rgba(220, 38, 38, 0.3);
+      box-shadow: 0 2px 4px rgba(37, 99, 235, 0.3);
       transition: transform 0.15s ease, background 0.15s ease;
     }
 
     .milestone-diamond-wrapper:hover .milestone-diamond-shape {
       transform: rotate(45deg) scale(1.15);
-      background: #b91c1c;
+      background: #1d4ed8;
+    }
+
+    .milestone-diamond-wrapper.is-complete .milestone-diamond-shape {
+      background: #16a34a;
+      border-color: #166534;
+      box-shadow: 0 2px 4px rgba(22, 163, 74, 0.3);
+    }
+
+    .milestone-diamond-wrapper.is-complete:hover .milestone-diamond-shape {
+      background: #15803d;
     }
 
     .milestone-text-label {
@@ -749,8 +768,12 @@
       white-space: nowrap;
       font-size: 11px;
       font-weight: 700;
-      color: #991b1b;
+      color: #1d4ed8;
       pointer-events: none;
+    }
+
+    .milestone-diamond-wrapper.is-complete .milestone-text-label {
+      color: #15803d;
     }
 
     /* Tooltip */
@@ -1280,12 +1303,6 @@
       white-space: nowrap;
     }
 
-    .r-hdr-cap {
-      width: 80px;
-      text-align: right;
-      flex-shrink: 0;
-    }
-
     .resource-left-row {
       height: 34px;
       display: flex;
@@ -1313,6 +1330,55 @@
     .resource-left-row.active-filter-row {
       background: #eff6ff !important;
       border-left: 3px solid #2563eb;
+    }
+
+    .resource-left-row.resource-group-row,
+    .resource-right-row.resource-group-row {
+      background: #e8eef6;
+      border-bottom-color: #cbd5e1;
+      font-weight: 700;
+    }
+
+    .resource-left-row.pool-collapsed-row,
+    .resource-right-row.pool-collapsed-row {
+      background: #f8fafc;
+    }
+
+    .resource-tree-toggle {
+      align-items: center;
+      background: transparent;
+      border: 0;
+      color: #475569;
+      cursor: pointer;
+      display: inline-flex;
+      flex: 0 0 18px;
+      font-size: 10px;
+      height: 22px;
+      justify-content: center;
+      padding: 0;
+      width: 18px;
+    }
+
+    .resource-tree-toggle:hover {
+      color: #2563eb;
+    }
+
+    .resource-tree-icon,
+    .resource-tree-branch {
+      flex: 0 0 auto;
+      font-size: 11px;
+      opacity: 0.75;
+    }
+
+    .group-badge {
+      background: #dbeafe;
+      border: 1px solid #93c5fd;
+      color: #1d4ed8;
+    }
+
+    .resource-group-cell {
+      background: #e8eef6;
+      font-weight: 700;
     }
 
     .resource-pool-name {
@@ -1404,12 +1470,6 @@
     @keyframes pulseFilterBadge {
       0%, 100% { opacity: 1; transform: scale(1); }
       50% { opacity: 0.85; transform: scale(1.02); }
-    }
-
-    .resource-pool-cap {
-      width: 80px;
-      text-align: right;
-      flex-shrink: 0;
     }
 
     .cap-badge {
@@ -1750,7 +1810,11 @@
     <div id="ctx-res-header" style="padding:7px 12px; font-size:11px; font-weight:700; color:#334155; border-bottom:1px solid #e2e8f0; background:#f8fafc;">
       🏊 Resource Filter
     </div>
-    <div class="context-menu-item" onclick="triggerFilterResourcePool(true)">
+    <div class="context-menu-item" onclick="triggerGoToResourcePoolDetails()">
+      <span style="font-size:14px;">&#8599;</span>
+      <span>Go to pool details</span>
+    </div>
+    <div class="context-menu-item" id="ctx-res-filter-btn" onclick="triggerFilterResourcePool(true)">
       <span style="font-size:14px;">🔍</span>
       <span id="ctx-res-filter-clear">Filter on consuming projects</span>
     </div>
@@ -2010,11 +2074,10 @@
 
       <!-- Resource Grid Content (Left & Right synchronized panes) -->
       <div class="resource-grid-main" id="resource-grid-main">
-        <!-- Left Pane: Resource Pool names and capacities -->
+        <!-- Left Pane: Resource Pool group hierarchy and names -->
         <div class="resource-left-pane" id="resource-left-pane">
           <div class="resource-left-header" id="resource-left-header">
             <div class="r-hdr-name">Resource Pool</div>
-            <div class="r-hdr-cap" id="lbl-theoretical-capacity">Theoretical Capacity</div>
           </div>
           <div class="resource-left-body" id="resource-left-body"></div>
         </div>
@@ -2061,6 +2124,8 @@
     let allProjectsData = []; // list of { id, name, tags }
     let externalTasksData = {}; // project_id -> list of { id, task_name, start_date, end_date }
     let resourcePoolsData = [];
+    let resourcePoolHierarchy = [];
+    let collapsedResourceNodes = new Set();
     let isResourceGridCollapsed = false;
     let showTotalRows = true;
     let showSelectedRows = true;
@@ -2180,8 +2245,6 @@
       if (elShowTotal) elShowTotal.innerText = getT('resource_grid.show_total', 'Total Assignments');
       const elShowSelected = document.getElementById('lbl-show-selected');
       if (elShowSelected) elShowSelected.innerText = getT('resource_grid.show_selected', 'Selected Projects');
-      const elTheoreticalCapacity = document.getElementById('lbl-theoretical-capacity');
-      if (elTheoreticalCapacity) elTheoreticalCapacity.innerText = getT('resource_grid.theoretical_capacity', 'Theoretical Capacity');
       const elCtxFilter = document.getElementById('ctx-res-filter-clear');
       if (elCtxFilter) elCtxFilter.innerText = getT('resource_grid.filter_consuming_projects', 'Filter on consuming projects');
       const elCtxClearBtn = document.getElementById('ctx-res-clear-label');
@@ -3919,6 +3982,12 @@
       openResourceCellContextMenu(e, poolId, poolName, startStr, endStr, periodLabel);
     }
 
+    function handlePoolRowContextMenu(e, el) {
+      const poolId = parseInt(el.dataset.poolId, 10);
+      const poolName = el.dataset.poolName || '';
+      openResourceCellContextMenu(e, poolId, poolName, '', '', '');
+    }
+
     function handleCellMouseEnter(e, el) {
       const poolName = el.dataset.poolName || '';
       const startStr = el.dataset.startDate || '';
@@ -3954,11 +4023,16 @@
 
       const headerEl = document.getElementById('ctx-res-header');
       if (headerEl) {
-        headerEl.innerHTML = `🏊 <b>${escapeHtml(poolName)}</b> (${periodLabel}: ${startStr} → ${endStr})`;
+        const periodText = startStr && endStr
+          ? ` (${escapeHtml(periodLabel)}: ${startStr} → ${endStr})`
+          : '';
+        headerEl.innerHTML = `🏊 <b>${escapeHtml(poolName)}</b>${periodText}`;
       }
 
+      const filterBtn = document.getElementById('ctx-res-filter-btn');
       const clearDivider = document.getElementById('ctx-res-divider');
       const clearBtn = document.getElementById('ctx-res-clear-btn');
+      if (filterBtn) filterBtn.style.display = startStr && endStr ? 'flex' : 'none';
       if (activeResourceFilter) {
         if (clearDivider) clearDivider.style.display = 'block';
         if (clearBtn) clearBtn.style.display = 'flex';
@@ -3987,6 +4061,17 @@
 
       menu.style.left = `${posX}px`;
       menu.style.top = `${posY}px`;
+    }
+
+    function triggerGoToResourcePoolDetails() {
+      hideResourceCellContextMenu();
+      if (!selectedResourceCellCtx) return;
+      Streamlit.setComponentValue({
+        action: "go_to_pool_details",
+        pool_id: selectedResourceCellCtx.pool_id,
+        pool_name: selectedResourceCellCtx.pool_name,
+        nonce: Date.now() + "_" + Math.random()
+      });
     }
 
     function triggerFilterResourcePool(clearOther) {
@@ -4029,6 +4114,77 @@
       updateComponentFrameHeight();
     }
 
+    function toggleResourceNode(nodeKey) {
+      if (collapsedResourceNodes.has(nodeKey)) {
+        collapsedResourceNodes.delete(nodeKey);
+      } else {
+        collapsedResourceNodes.add(nodeKey);
+      }
+      renderResourceGrid();
+      updateComponentFrameHeight();
+    }
+
+    function getResourcePoolById(poolId) {
+      return (resourcePoolsData || []).find(pool => Number(pool.id) === Number(poolId));
+    }
+
+    function aggregatePoolUsage(poolIds, fieldName) {
+      const result = {};
+      [...new Set(poolIds || [])].forEach(poolId => {
+        const pool = getResourcePoolById(poolId);
+        const usage = pool ? (pool[fieldName] || {}) : {};
+        Object.entries(usage).forEach(([dateStr, rawValue]) => {
+          result[dateStr] = Number(result[dateStr] || 0) + Number(rawValue || 0);
+        });
+      });
+      return result;
+    }
+
+    function getResourceDisplayRows() {
+      const hierarchy = resourcePoolHierarchy && resourcePoolHierarchy.length
+        ? resourcePoolHierarchy
+        : (resourcePoolsData || []).map(pool => ({
+            key: `pool:${pool.id}`,
+            node_type: 'pool',
+            pool_id: pool.id,
+            name: pool.name
+          }));
+      const rows = [];
+
+      const visit = (node, depth) => {
+        const nodeKey = String(node.key || `${node.node_type}:${node.group_id || node.pool_id}`);
+        const collapsed = collapsedResourceNodes.has(nodeKey);
+        if (node.node_type === 'group') {
+          rows.push({
+            rowType: 'group_total',
+            node,
+            nodeKey,
+            depth,
+            collapsed
+          });
+          if (!collapsed) (node.children || []).forEach(child => visit(child, depth + 1));
+          return;
+        }
+
+        const pool = getResourcePoolById(node.pool_id);
+        if (!pool) return;
+        if (collapsed) {
+          rows.push({ rowType: 'pool_total', node, nodeKey, pool, depth, collapsed: true });
+          return;
+        }
+        rows.push({ rowType: 'pool_assigned', node, nodeKey, pool, depth, collapsed: false });
+        if (showTotalRows) {
+          rows.push({ rowType: 'pool_total', node, nodeKey, pool, depth: depth + 1, collapsed: false });
+        }
+        if (showSelectedRows) {
+          rows.push({ rowType: 'pool_selected', node, nodeKey, pool, depth: depth + 1, collapsed: false });
+        }
+      };
+
+      hierarchy.forEach(node => visit(node, 0));
+      return rows;
+    }
+
     function renderResourceGrid(topCells, bottomCells) {
       if (topCells) {
         lastRenderedTopCells = topCells;
@@ -4059,8 +4215,8 @@
       if (!container || !leftBody || !rightBody || !rightInner) return;
 
       const pools = resourcePoolsData || [];
-      const rowsPerPool = 1 + (showTotalRows ? 1 : 0) + (showSelectedRows ? 1 : 0);
-      const resourceContentHeight = 56 + Math.max(1, pools.length * rowsPerPool) * 34;
+      const displayRows = getResourceDisplayRows();
+      const resourceContentHeight = 56 + Math.max(1, displayRows.length) * 34;
       if (resourceMain) {
         resourceMain.style.setProperty('--resource-content-height', `${resourceContentHeight}px`);
         resourceMain.style.height = `${Math.min(380, resourceContentHeight)}px`;
@@ -4151,182 +4307,177 @@
       let leftHtml = '';
       let rightHtml = '';
 
-      pools.forEach(p => {
-        const poolCap = Number(p.theoretical_capacity ?? p.capacity ?? 0);
-        const hasAssignedResources = Boolean(p.has_assigned_resources);
-        const assignedCapacity = Number(p.displayed_assigned_capacity ?? poolCap);
-        const assignedBaseState = getCapacityState(assignedCapacity, poolCap, hasAssignedResources);
-        const dailyAssignedCapacity = hasAssignedResources ? (p.daily_assigned_capacity || {}) : {};
-        const isFilterActiveOnPool = activeResourceFilter && Number(activeResourceFilter.pool_id) === Number(p.id);
-
-        // Row 1: assigned capacity over time. This is always visible and sits
-        // above the project/task demand rows for the pool.
-        leftHtml += `
-          <div class="resource-left-row assigned-capacity-row ${assignedBaseState} ${isFilterActiveOnPool ? 'active-filter-row' : ''}" data-row-id="pool-${p.id}-assigned" title="${escapeHtml(p.name)} - ${getT('resource_grid.assigned_capacity', 'Assigned Capacity')}">
-            <div class="resource-pool-name">
-              <span style="font-size:12px;">🏊</span>
-              <span class="r-name-text">${escapeHtml(p.name)}</span>
-              <span class="r-badge assigned-badge ${assignedBaseState}">${getT('resource_grid.assigned_capacity', 'Assigned Capacity')}</span>
-              ${isFilterActiveOnPool ? `<span class="active-filter-badge" title="${getT('resource_grid.active_filter', 'Filter Active')}">🔍 ${getT('resource_grid.active_filter', 'Filter Active')}</span>` : ''}
-            </div>
-            <div class="resource-pool-cap">
-              <span class="cap-badge" title="${getT('resource_grid.theoretical_capacity', 'Theoretical Capacity')}">${poolCap.toFixed(1)} FTE</span>
-            </div>
-          </div>
-        `;
-
-        const assignedCellsHtml = bottomCells.map(c => {
+      const renderDemandCells = (pool, usage, scopeType) => {
+        const poolCap = Number(pool.theoretical_capacity ?? pool.capacity ?? 0);
+        const hasAssignedResources = Boolean(pool.has_assigned_resources);
+        const assignedCapacity = Number(pool.displayed_assigned_capacity ?? poolCap);
+        const dailyAssignedCapacity = hasAssignedResources ? (pool.daily_assigned_capacity || {}) : {};
+        const isFilterActiveOnPool = activeResourceFilter &&
+          Number(activeResourceFilter.pool_id) === Number(pool.id);
+        return bottomCells.map(c => {
           const startStr = formatDate(c.startDate);
           const endStr = formatDate(c.endDate);
           const periodCapacity = getAssignedCapacityForPeriod(
-            assignedCapacity,
-            dailyAssignedCapacity,
-            startStr,
-            endStr
+            assignedCapacity, dailyAssignedCapacity, startStr, endStr
           );
-          const displayTxt = periodCapacity.min.toFixed(1);
-          const capacityState = getCapacityState(periodCapacity.min, poolCap, hasAssignedResources);
+          const periodStatus = getDemandCapacityStatusForPeriod(
+            usage, assignedCapacity, dailyAssignedCapacity, startStr, endStr
+          );
+          const demand = periodStatus.maxDemand;
+          const isOver = periodStatus.isOverallocated;
+          const isCellFiltered = isFilterActiveOnPool &&
+            startStr <= activeResourceFilter.end_date && endStr >= activeResourceFilter.start_date;
+          let cellClass = 'cell-empty';
+          let displayText = '—';
+          if (demand > 0) {
+            cellClass = isOver
+              ? 'cell-overallocated'
+              : `cell-normal${scopeType === 'selected' ? ' cell-scope' : ''}`;
+            displayText = demand.toFixed(1);
+          }
+          if (isCellFiltered) cellClass += ' cell-active-filter';
           return `
-            <div class="resource-demand-cell assigned-capacity-cell ${capacityState}"
+            <div class="resource-demand-cell ${cellClass}"
                  style="width: ${c.width}px;"
-                 title="${getT('resource_grid.assigned_capacity', 'Assigned Capacity')}: ${displayTxt} FTE (${startStr} → ${endStr})">
-              ${displayTxt}
+                 data-pool-id="${pool.id}"
+                 data-pool-name="${escapeHtml(pool.name)}"
+                 data-start-date="${startStr}"
+                 data-end-date="${endStr}"
+                 data-period-label="${escapeHtml(c.label)}"
+                 data-demand="${demand}"
+                 data-capacity="${periodCapacity.min}"
+                 data-overallocated="${isOver}"
+                 data-excess="${periodStatus.maxExcess}"
+                 data-scope="${scopeType}"
+                 onmouseenter="handleCellMouseEnter(event, this)"
+                 onmousemove="moveTooltip(event)"
+                 onmouseleave="hideTooltip()"
+                 oncontextmenu="handleCellContextMenu(event, this)">
+              ${displayText}
             </div>
           `;
         }).join('');
+      };
 
-        rightHtml += `<div class="resource-right-row assigned-capacity-row ${isFilterActiveOnPool ? 'active-filter-row' : ''}" style="width: ${totalTimelineWidth}px;">${assignedCellsHtml}</div>`;
+      displayRows.forEach(row => {
+        const indent = Math.max(0, Number(row.depth || 0)) * 16;
+        const toggle = row.collapsed ? '&#9654;' : '&#9660;';
 
-        // Row 2: Total Demand
-        if (showTotalRows) {
+        if (row.rowType === 'group_total') {
+          const group = row.node;
+          const descendantIds = group.descendant_pool_ids || [];
+          const groupUsage = aggregatePoolUsage(descendantIds, 'daily_usage');
           leftHtml += `
-            <div class="resource-left-row sub-row ${isFilterActiveOnPool ? 'active-filter-row' : ''}" data-row-id="pool-${p.id}-total" title="${escapeHtml(p.name)} - ${getT('resource_grid.show_total', 'Total Assignments')}">
-              <div class="resource-pool-name" style="padding-left: 14px;">
-                <span style="font-size:11px; opacity:0.6;">↳</span>
-                <span class="r-name-text" style="color:#64748b; font-weight:500;">${getT('resource_grid.show_total', 'Total Assignments')}</span>
-                <span class="r-badge total-badge">${getT('resource_grid.show_total', 'Total')}</span>
-              </div>
-              <div class="resource-pool-cap">
-                <span class="cap-badge" title="${getT('resource_grid.theoretical_capacity', 'Theoretical Capacity')}">${poolCap.toFixed(1)} FTE</span>
+            <div class="resource-left-row resource-group-row"
+                 data-row-id="${escapeHtml(row.nodeKey)}"
+                 title="${escapeHtml(group.description || group.name)}">
+              <div class="resource-pool-name" style="padding-left:${indent}px;">
+                <button class="resource-tree-toggle" type="button"
+                        aria-label="${row.collapsed ? 'Expand' : 'Collapse'} ${escapeHtml(group.name)}"
+                        onclick="toggleResourceNode('${row.nodeKey}')">${toggle}</button>
+                <span class="resource-tree-icon">📁</span>
+                <span class="r-name-text">${escapeHtml(group.name)}</span>
+                <span class="r-badge group-badge">Group total</span>
               </div>
             </div>
           `;
+          const groupCells = bottomCells.map(c => {
+            const startStr = formatDate(c.startDate);
+            const endStr = formatDate(c.endDate);
+            const demand = getMaxDemandForPeriod(groupUsage, startStr, endStr);
+            const isOver = descendantIds.some(poolId => {
+              const childPool = getResourcePoolById(poolId);
+              return childPool && isDisplayedPoolPeriodOverallocated(childPool, startStr, endStr);
+            });
+            const cellClass = demand > 0
+              ? (isOver ? 'cell-overallocated' : 'cell-normal')
+              : 'cell-empty';
+            return `<div class="resource-demand-cell ${cellClass} resource-group-cell"
+                         style="width:${c.width}px;"
+                         title="${escapeHtml(group.name)} total: ${demand.toFixed(1)} FTE">
+                      ${demand > 0 ? demand.toFixed(1) : '—'}
+                    </div>`;
+          }).join('');
+          rightHtml += `<div class="resource-right-row resource-group-row"
+                            style="width:${totalTimelineWidth}px;">${groupCells}</div>`;
+          return;
+        }
 
-          const totalCellsHtml = bottomCells.map(c => {
+        const pool = row.pool;
+        const poolCap = Number(pool.theoretical_capacity ?? pool.capacity ?? 0);
+        const hasAssignedResources = Boolean(pool.has_assigned_resources);
+        const assignedCapacity = Number(pool.displayed_assigned_capacity ?? poolCap);
+        const dailyAssignedCapacity = hasAssignedResources ? (pool.daily_assigned_capacity || {}) : {};
+        const assignedState = getCapacityState(assignedCapacity, poolCap, hasAssignedResources);
+        const isFilterActive = activeResourceFilter &&
+          Number(activeResourceFilter.pool_id) === Number(pool.id);
+        const rowContext = `data-pool-id="${pool.id}" data-pool-name="${escapeHtml(pool.name)}"
+                            oncontextmenu="handlePoolRowContextMenu(event, this)"`;
+
+        if (row.rowType === 'pool_assigned') {
+          leftHtml += `
+            <div class="resource-left-row assigned-capacity-row ${assignedState} ${isFilterActive ? 'active-filter-row' : ''}"
+                 data-row-id="pool-${pool.id}-assigned" ${rowContext}>
+              <div class="resource-pool-name" style="padding-left:${indent}px;">
+                <button class="resource-tree-toggle" type="button"
+                        aria-label="Collapse ${escapeHtml(pool.name)}"
+                        onclick="toggleResourceNode('${row.nodeKey}')">${toggle}</button>
+                <span class="resource-tree-icon">🏊</span>
+                <span class="r-name-text">${escapeHtml(pool.name)}</span>
+                <span class="r-badge assigned-badge ${assignedState}">${getT('resource_grid.assigned_capacity', 'Assigned Capacity')}</span>
+                ${isFilterActive ? `<span class="active-filter-badge">🔍 ${getT('resource_grid.active_filter', 'Filter Active')}</span>` : ''}
+              </div>
+            </div>
+          `;
+          const assignedCells = bottomCells.map(c => {
             const startStr = formatDate(c.startDate);
             const endStr = formatDate(c.endDate);
             const periodCapacity = getAssignedCapacityForPeriod(
               assignedCapacity, dailyAssignedCapacity, startStr, endStr
             );
-            const periodStatus = getDemandCapacityStatusForPeriod(
-              p.daily_usage, assignedCapacity, dailyAssignedCapacity, startStr, endStr
-            );
-            const maxD = periodStatus.maxDemand;
-            const isOver = periodStatus.isOverallocated;
-            const isCellFiltered = isFilterActiveOnPool && (startStr <= activeResourceFilter.end_date && endStr >= activeResourceFilter.start_date);
-
-            let cellCls = 'cell-empty';
-            let displayTxt = '—';
-            if (maxD > 0) {
-              cellCls = isOver ? 'cell-overallocated' : 'cell-normal';
-              displayTxt = maxD.toFixed(1);
-            }
-            if (isCellFiltered) {
-              cellCls += ' cell-active-filter';
-            }
-
-            return `
-              <div class="resource-demand-cell ${cellCls}"
-                   style="width: ${c.width}px;"
-                   data-pool-id="${p.id}"
-                   data-pool-name="${escapeHtml(p.name)}"
-                   data-start-date="${startStr}"
-                   data-end-date="${endStr}"
-                   data-period-label="${escapeHtml(c.label)}"
-                   data-demand="${maxD}"
-                   data-capacity="${periodCapacity.min}"
-                   data-overallocated="${isOver}"
-                   data-excess="${periodStatus.maxExcess}"
-                   data-scope="total"
-                   onmouseenter="handleCellMouseEnter(event, this)"
-                   onmousemove="moveTooltip(event)"
-                   onmouseleave="hideTooltip()"
-                   oncontextmenu="handleCellContextMenu(event, this)">
-                ${displayTxt}
-              </div>
-            `;
+            const capacityState = getCapacityState(periodCapacity.min, poolCap, hasAssignedResources);
+            return `<div class="resource-demand-cell assigned-capacity-cell ${capacityState}"
+                         style="width:${c.width}px;"
+                         title="${getT('resource_grid.assigned_capacity', 'Assigned Capacity')}: ${periodCapacity.min.toFixed(1)} FTE">
+                      ${periodCapacity.min.toFixed(1)}
+                    </div>`;
           }).join('');
-
-          rightHtml += `<div class="resource-right-row sub-row ${isFilterActiveOnPool ? 'active-filter-row' : ''}" style="width: ${totalTimelineWidth}px;">${totalCellsHtml}</div>`;
+          rightHtml += `<div class="resource-right-row assigned-capacity-row ${isFilterActive ? 'active-filter-row' : ''}"
+                            style="width:${totalTimelineWidth}px;">${assignedCells}</div>`;
+          return;
         }
 
-        // Row 3: Selected Projects Demand
-        if (showSelectedRows) {
-          leftHtml += `
-            <div class="resource-left-row sub-row ${isFilterActiveOnPool ? 'active-filter-row' : ''}" data-row-id="pool-${p.id}-selected" title="${escapeHtml(p.name)} - ${getT('resource_grid.show_selected', 'Selected Projects')}">
-              <div class="resource-pool-name" style="padding-left: 14px;">
-                <span style="font-size:11px; opacity:0.6;">↳</span>
-                <span class="r-name-text" style="color:#64748b; font-weight:500;">${getT('resource_grid.show_selected', 'Selected Projects')}</span>
-                <span class="r-badge scope-badge">Selected</span>
-              </div>
-              <div class="resource-pool-cap">
-                <span class="cap-badge scope-cap-badge" title="${getT('resource_grid.theoretical_capacity', 'Theoretical Capacity')}">${poolCap.toFixed(1)} FTE</span>
-              </div>
+        const isCollapsedPool = Boolean(row.collapsed);
+        const isSelected = row.rowType === 'pool_selected';
+        const rowLabel = isSelected
+          ? getT('resource_grid.show_selected', 'Selected Projects')
+          : getT('resource_grid.show_total', 'Total Assignments');
+        const usage = isSelected ? pool.selected_projects_daily_usage : pool.daily_usage;
+        leftHtml += `
+          <div class="resource-left-row ${isCollapsedPool ? 'pool-collapsed-row' : 'sub-row'} ${isFilterActive ? 'active-filter-row' : ''}"
+               data-row-id="pool-${pool.id}-${isSelected ? 'selected' : 'total'}" ${rowContext}>
+            <div class="resource-pool-name" style="padding-left:${indent}px;">
+              ${isCollapsedPool
+                ? `<button class="resource-tree-toggle" type="button" aria-label="Expand ${escapeHtml(pool.name)}"
+                           onclick="toggleResourceNode('${row.nodeKey}')">${toggle}</button>
+                   <span class="resource-tree-icon">🏊</span>
+                   <span class="r-name-text">${escapeHtml(pool.name)}</span>`
+                : `<span class="resource-tree-branch">↳</span>
+                   <span class="r-name-text">${rowLabel}</span>`}
+              <span class="r-badge ${isSelected ? 'scope-badge' : 'total-badge'}">${isSelected ? 'Selected' : 'Total'}</span>
+              ${isCollapsedPool && isFilterActive ? `<span class="active-filter-badge">🔍 ${getT('resource_grid.active_filter', 'Filter Active')}</span>` : ''}
             </div>
-          `;
-
-          const selectedCellsHtml = bottomCells.map(c => {
-            const startStr = formatDate(c.startDate);
-            const endStr = formatDate(c.endDate);
-            const periodCapacity = getAssignedCapacityForPeriod(
-              assignedCapacity, dailyAssignedCapacity, startStr, endStr
-            );
-            const periodStatus = getDemandCapacityStatusForPeriod(
-              p.selected_projects_daily_usage, assignedCapacity, dailyAssignedCapacity, startStr, endStr
-            );
-            const scopeD = periodStatus.maxDemand;
-            const isOver = periodStatus.isOverallocated;
-            const isCellFiltered = isFilterActiveOnPool && (startStr <= activeResourceFilter.end_date && endStr >= activeResourceFilter.start_date);
-
-            let cellCls = 'cell-empty';
-            let displayTxt = '—';
-            if (scopeD > 0) {
-              cellCls = isOver ? 'cell-overallocated' : 'cell-normal cell-scope';
-              displayTxt = scopeD.toFixed(1);
-            }
-            if (isCellFiltered) {
-              cellCls += ' cell-active-filter';
-            }
-
-            return `
-              <div class="resource-demand-cell ${cellCls}"
-                   style="width: ${c.width}px;"
-                   data-pool-id="${p.id}"
-                   data-pool-name="${escapeHtml(p.name)}"
-                   data-start-date="${startStr}"
-                   data-end-date="${endStr}"
-                   data-period-label="${escapeHtml(c.label)}"
-                   data-demand="${scopeD}"
-                   data-capacity="${periodCapacity.min}"
-                   data-overallocated="${isOver}"
-                   data-excess="${periodStatus.maxExcess}"
-                   data-scope="selected"
-                   onmouseenter="handleCellMouseEnter(event, this)"
-                   onmousemove="moveTooltip(event)"
-                   onmouseleave="hideTooltip()"
-                   oncontextmenu="handleCellContextMenu(event, this)">
-                ${displayTxt}
-              </div>
-            `;
-          }).join('');
-
-          rightHtml += `<div class="resource-right-row sub-row ${isFilterActiveOnPool ? 'active-filter-row' : ''}" style="width: ${totalTimelineWidth}px;">${selectedCellsHtml}</div>`;
-        }
+          </div>
+        `;
+        const demandCells = renderDemandCells(pool, usage, isSelected ? 'selected' : 'total');
+        rightHtml += `<div class="resource-right-row ${isCollapsedPool ? 'pool-collapsed-row' : 'sub-row'} ${isFilterActive ? 'active-filter-row' : ''}"
+                          style="width:${totalTimelineWidth}px;">${demandCells}</div>`;
       });
 
       leftBody.innerHTML = leftHtml;
       rightBody.innerHTML = rightHtml;
       adjustVerticalScrollbarGaps();
+
     }
 
     function updateComponentFrameHeight() {
@@ -4341,9 +4492,7 @@
 
       let resH = 34; // Header bar
       if (!isResourceGridCollapsed) {
-        let activeRowCount = pools.length; // Assigned-capacity row is always visible.
-        if (showTotalRows) activeRowCount += pools.length;
-        if (showSelectedRows) activeRowCount += pools.length;
+        const activeRowCount = getResourceDisplayRows().length;
         const poolRowsH = Math.max(1, activeRowCount) * 34 + 56; // 56px for 2-tier header
         resH += Math.min(380, poolRowsH);
       }
@@ -5049,10 +5198,11 @@
             const endX = isMilestone ? startX : Math.max(startX + 24, endDateToX(eDate));
             const barWidth = Math.max(20, endX - startX);
             const hasViol = t.violations && t.violations.length > 0;
+            const isComplete = Number(t.progress || 0) >= 100;
 
             if (isMilestone) {
               const mWrapper = document.createElement('div');
-              mWrapper.className = 'milestone-diamond-wrapper';
+              mWrapper.className = `milestone-diamond-wrapper${isComplete ? ' is-complete' : ''}`;
               mWrapper.style.left = `${startX}px`;
               mWrapper.innerHTML = `
                 ${hasViol ? `<div class="violation-warning-badge">⚠️</div>` : ''}
@@ -5067,7 +5217,7 @@
               rowEl.appendChild(mWrapper);
             } else {
               const bWrapper = document.createElement('div');
-              bWrapper.className = 'gantt-bar-wrapper';
+              bWrapper.className = `gantt-bar-wrapper${isComplete ? ' is-complete' : ''}`;
               bWrapper.style.left = `${startX}px`;
               bWrapper.style.width = `${barWidth}px`;
               bWrapper.innerHTML = `
@@ -5591,6 +5741,9 @@
         }
         if (args.resource_pools) {
           resourcePoolsData = args.resource_pools;
+        }
+        if (args.resource_pool_hierarchy) {
+          resourcePoolHierarchy = args.resource_pool_hierarchy;
         }
         if (args.active_resource_filter !== undefined) {
           activeResourceFilter = args.active_resource_filter || null;

@@ -95,6 +95,28 @@ tbody tr.selected {
     padding: 0.45rem 0.55rem;
     width: 100%;
 }
+.filter-stats {
+    background: var(--st-secondary-background-color);
+    border-radius: 0.35rem;
+    display: grid;
+    gap: 0.25rem 0.7rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-bottom: 0.5rem;
+    padding: 0.5rem;
+}
+.filter-stat {
+    display: flex;
+    gap: 0.35rem;
+    justify-content: space-between;
+}
+.filter-stat-label {
+    color: color-mix(in srgb, var(--st-text-color) 65%, transparent);
+}
+.filter-stat-value {
+    font-weight: 650;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
 .filter-actions, .sort-actions {
     display: flex;
     gap: 0.35rem;
@@ -199,7 +221,12 @@ export default function(component) {
 
     const openFilterMenu = (column, anchor) => {
         closeMenu();
-        const values = [...new Set(rows.map((row) => displayValue(row, column)))].sort((a, b) =>
+        const contextRows = rows.filter((row) => columns.every((otherColumn) => {
+            if (otherColumn.key === column.key) return true;
+            const selected = filters[otherColumn.key];
+            return !Array.isArray(selected) || selected.includes(displayValue(row, otherColumn));
+        }));
+        const values = [...new Set(contextRows.map((row) => displayValue(row, column)))].sort((a, b) =>
             a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
         );
         const selectedValues = new Set(
@@ -215,6 +242,64 @@ export default function(component) {
         search.placeholder = 'Search values';
         search.setAttribute('aria-label', `Search ${column.label} values`);
         menu.appendChild(search);
+
+        const isBlank = (row) => {
+            const value = row[column.key];
+            return value === null || value === undefined || value === '' ||
+                (Array.isArray(value) && value.length === 0);
+        };
+        const blankCount = contextRows.filter(isBlank).length;
+        const populatedRows = contextRows.filter((row) => !isBlank(row));
+        const uniqueCount = new Set(populatedRows.map((row) => displayValue(row, column))).size;
+        const stats = [
+            ['Rows', contextRows.length],
+            ['Filled', populatedRows.length],
+            ['Unique', uniqueCount],
+            ['Empty', blankCount]
+        ];
+        const numericValues = populatedRows
+            .map((row) => Number(row[column.key]))
+            .filter((value) => Number.isFinite(value));
+        const formatStat = (value) => {
+            if (column.format === 'currency') {
+                return new Intl.NumberFormat(undefined, {
+                    style: 'currency', currency: 'EUR', maximumFractionDigits: 2
+                }).format(value);
+            }
+            return Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 });
+        };
+        if (numericValues.length && (column.format === 'currency' || column.format === 'number')) {
+            const total = numericValues.reduce((sum, value) => sum + value, 0);
+            stats.push(
+                ['Minimum', formatStat(Math.min(...numericValues))],
+                ['Average', formatStat(total / numericValues.length)],
+                ['Maximum', formatStat(Math.max(...numericValues))]
+            );
+        } else if (populatedRows.length) {
+            const counts = new Map();
+            populatedRows.forEach((row) => {
+                const value = displayValue(row, column);
+                counts.set(value, (counts.get(value) || 0) + 1);
+            });
+            const top = [...counts.entries()].sort((left, right) => right[1] - left[1])[0];
+            if (top) stats.push(['Most common', `${top[0]} (${top[1]})`]);
+        }
+        const statistics = document.createElement('div');
+        statistics.className = 'filter-stats';
+        stats.forEach(([labelText, valueText]) => {
+            const item = document.createElement('div');
+            item.className = 'filter-stat';
+            const label = document.createElement('span');
+            label.className = 'filter-stat-label';
+            label.textContent = labelText;
+            const value = document.createElement('span');
+            value.className = 'filter-stat-value';
+            value.title = String(valueText);
+            value.textContent = String(valueText);
+            item.append(label, value);
+            statistics.appendChild(item);
+        });
+        menu.appendChild(statistics);
 
         const sortActions = document.createElement('div');
         sortActions.className = 'sort-actions';

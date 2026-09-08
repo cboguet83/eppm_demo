@@ -24,9 +24,9 @@ import src.services.resource_pool_service as _resource_pool_service_module
 import src.services.schema_service as _schema_service_module
 import src.services.tag_service as _tag_service_module
 import src.views.budget_view as _budget_module
+import src.views.project_dialogs as _project_dialogs_module
 import src.views.planning_view as _planning_module
 import src.views.portfolio_view as _portfolio_module
-import src.views.project_master_view as _project_master_module
 import src.views.schema_def_view as _schema_def_module
 import src.views.settings_view as _settings_module
 
@@ -45,8 +45,8 @@ importlib.reload(_schema_service_module)
 importlib.reload(_organization_service_module)
 importlib.reload(_resource_pool_service_module)
 importlib.reload(_tag_service_module)
+importlib.reload(_project_dialogs_module)
 importlib.reload(_portfolio_module)
-importlib.reload(_project_master_module)
 importlib.reload(_schema_def_module)
 importlib.reload(_planning_module)
 importlib.reload(_settings_module)
@@ -63,7 +63,6 @@ from src.models.constants import (
     PAGE_BUDGET,
     PAGE_PLANNING,
     PAGE_PORTFOLIO,
-    PAGE_PROJECT_MASTER,
     PAGE_SCHEMA_DEF,
     PAGE_SETTINGS,
     PARAM_TYPE_ENUM,
@@ -95,7 +94,6 @@ TagService = _tag_service_module.TagService
 ResourcePoolService = _resource_pool_service_module.ResourcePoolService
 
 render_portfolio_overview = _portfolio_module.render_portfolio_overview
-render_project_master = _project_master_module.render_project_master
 render_schema_definition = _schema_def_module.render_schema_definition
 render_planning_milestones = _planning_module.render_planning_milestones
 render_settings_view = _settings_module.render_settings_view
@@ -287,12 +285,11 @@ def run_app() -> None:
 
     nav_map = {
         PAGE_PORTFOLIO: f"1. 📊 {t('nav.portfolio')}",
-        PAGE_PROJECT_MASTER: f"2. 📁 {t('nav.master_data')}",
-        PAGE_PLANNING: f"3. 📅 {t('nav.planning')}",
-        PAGE_SETTINGS: f"4. ⚙️ {t('nav.settings', default='Settings')}",
+        PAGE_PLANNING: f"2. 📅 {t('nav.planning')}",
+        PAGE_SETTINGS: f"3. ⚙️ {t('nav.settings', default='Settings')}",
     }
 
-    page_keys = [PAGE_PORTFOLIO, PAGE_PROJECT_MASTER, PAGE_PLANNING, PAGE_SETTINGS]
+    page_keys = [PAGE_PORTFOLIO, PAGE_PLANNING, PAGE_SETTINGS]
 
     # Deep-link routing via URL query parameters (e.g. ?nav=planning&project_id=123)
     if "nav" in st.query_params:
@@ -324,6 +321,8 @@ def run_app() -> None:
 
     if "nav_redirect" in st.session_state and st.session_state["nav_redirect"]:
         st.session_state["app_sidebar_nav"] = st.session_state.pop("nav_redirect")
+    if st.session_state.get("app_sidebar_nav") not in page_keys:
+        st.session_state["app_sidebar_nav"] = PAGE_PORTFOLIO
 
     page = st.sidebar.radio(
         t("app.sidebar_nav", default="Navigation"),
@@ -368,11 +367,16 @@ def run_app() -> None:
         st.sidebar.success(st.session_state.pop("seeding_status_message"))
 
     if page == PAGE_PORTFOLIO:
-        render_portfolio_overview(project_repo, schema_repo, tag_repo)
-    elif page == PAGE_PROJECT_MASTER:
-        render_project_master(project_repo, schema_repo, pool_repo, milestone_repo)
+        render_portfolio_overview(project_repo, schema_repo)
     elif page == PAGE_PLANNING:
-        render_planning_milestones(project_repo, milestone_repo, tag_repo, pool_repo, org_repo)
+        render_planning_milestones(
+            project_repo,
+            milestone_repo,
+            tag_repo,
+            pool_repo,
+            org_repo,
+            schema_repo,
+        )
     elif page in (PAGE_SETTINGS, PAGE_SCHEMA_DEF):
         render_settings_view(org_repo, tag_repo, project_repo, milestone_repo, pool_repo, schema_repo)
     elif page == PAGE_BUDGET:

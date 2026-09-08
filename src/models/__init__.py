@@ -4,7 +4,6 @@ from src.models.constants import (
     PAGE_BUDGET,
     PAGE_PLANNING,
     PAGE_PORTFOLIO,
-    PAGE_PROJECT_MASTER,
     PAGE_SCHEMA_DEF,
     PAGE_SETTINGS,
     PARAM_TYPE_ENUM,
@@ -37,7 +36,6 @@ from src.models.tag import ProjectTag, TagDictionary, TagGroup, TaskTag
 
 __all__ = [
     "PAGE_PORTFOLIO",
-    "PAGE_PROJECT_MASTER",
     "PAGE_SCHEMA_DEF",
     "PAGE_PLANNING",
     "PAGE_SETTINGS",

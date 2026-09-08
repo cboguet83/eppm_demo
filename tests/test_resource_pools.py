@@ -117,6 +117,23 @@ class TestResourcePools(unittest.TestCase):
         groups = self.pool_repo.get_all_pool_groups().set_index("name")
         self.assertEqual(int(groups.loc["Top", "recursive_pool_count"]), 2)
 
+        from src.views.planning_view import _build_resource_pool_hierarchy
+
+        pool_c = self.pool_repo.create_pool(ResourcePool(name="Ungrouped Pool"))
+        hierarchy = _build_resource_pool_hierarchy(
+            self.pool_repo,
+            [
+                {"id": pool_a, "name": "Pool A"},
+                {"id": pool_b, "name": "Pool B"},
+                {"id": pool_c, "name": "Ungrouped Pool"},
+            ],
+        )
+        self.assertEqual([node["name"] for node in hierarchy], ["Top", "Ungrouped Pool"])
+        self.assertEqual(hierarchy[0]["node_type"], "group")
+        self.assertEqual(hierarchy[0]["descendant_pool_ids"], [pool_a, pool_b])
+        self.assertEqual(hierarchy[0]["children"][0]["name"], "Middle")
+        self.assertEqual(hierarchy[1]["node_type"], "pool")
+
     def test_pool_mapping_crud_and_allocations(self) -> None:
         """Verify adding and updating team and function mappings with partial allocations (0-100%)."""
         p_id = self.pool_repo.create_pool(ResourcePool(name="Backend Pool"))

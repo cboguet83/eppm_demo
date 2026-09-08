@@ -2158,6 +2158,19 @@ def render_settings_view(
     milestone_repo = milestone_repo or MilestoneRepository(org_repo.db_path)
     pool_repo = pool_repo or ResourcePoolRepository(org_repo.db_path)
 
+    settings_tab_labels = [
+        f"💼 {t('settings.tab_functions', default='Functions')}",
+        f"🏷️ {t('settings.tab_types', default='Function Types')}",
+        f"🛡️ {t('settings.tab_teams', default='Teams')}",
+        f"👥 {t('settings.tab_employees', default='Employees')}",
+        f"📁 {t('settings.tab_tag_groups', default='Tag Groups')}",
+        f"📚 {t('settings.tab_tag_dict', default='Tag Dictionary')}",
+        f"📌 {t('settings.tab_proj_tags', default='Project Tags')}",
+        f"📋 {t('settings.tab_task_tags', default='Task Tags')}",
+        f"🏊 {t('settings.tab_resource_pools', default='Resource Pools')}",
+    ]
+    requested_tab = st.session_state.pop("settings_active_tab", None)
+    default_tab = settings_tab_labels[-1] if requested_tab == "resource_pools" else None
     (
         tab_funcs,
         tab_types,
@@ -2168,17 +2181,7 @@ def render_settings_view(
         tab_proj_tags,
         tab_task_tags,
         tab_pools,
-    ) = st.tabs([
-        f"💼 {t('settings.tab_functions', default='Functions')}",
-        f"🏷️ {t('settings.tab_types', default='Function Types')}",
-        f"🛡️ {t('settings.tab_teams', default='Teams')}",
-        f"👥 {t('settings.tab_employees', default='Employees')}",
-        f"📁 {t('settings.tab_tag_groups', default='Tag Groups')}",
-        f"📚 {t('settings.tab_tag_dict', default='Tag Dictionary')}",
-        f"📌 {t('settings.tab_proj_tags', default='Project Tags')}",
-        f"📋 {t('settings.tab_task_tags', default='Task Tags')}",
-        f"🏊 {t('settings.tab_resource_pools', default='Resource Pools')}",
-    ])
+    ) = st.tabs(settings_tab_labels, default=default_tab)
 
 
     df_types = org_repo.get_all_function_types()
@@ -2775,6 +2778,9 @@ def render_settings_view(
         else:
             pool_id_map = {int(p.pool_id): p for p in all_pool_details}
             pool_options = df_all_pools["id"].tolist()
+            target_pool_id = st.session_state.pop("target_resource_pool_id", None)
+            if target_pool_id is not None and int(target_pool_id) in pool_options:
+                st.session_state["sb_selected_resource_pool"] = int(target_pool_id)
 
             with col_sel:
                 selected_pool_id = st.selectbox(

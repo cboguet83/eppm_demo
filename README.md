@@ -202,12 +202,12 @@ eppm_demo/
 │   │   ├── milestone_service.py # Constraint evaluation & CSV parsing
 │   │   ├── resource_pool_service.py # Dynamic pool capacity vs demand calculation
 │   │   └── tag_service.py      # Tag grouping & deduplication
-│   └── views/                  # Streamlit UI Presentation Layer (Screens 1 to 4)
+│   └── views/                  # Streamlit UI Presentation Layer (Screens 1 to 3)
 │       ├── __init__.py
 │       ├── portfolio_view.py   # 1. Portfolio Overview (Master List & Details)
-│       ├── project_master_view.py # 2. Project Master Data
-│       ├── planning_view.py    # 3. Planning & Milestones (Gantt, CSV loader)
-│       ├── settings_view.py    # 4. Settings (Organization & Parameter Definition)
+│       ├── project_dialogs.py  # Project create/edit modal workflows
+│       ├── planning_view.py    # 2. Planning & Milestones (Gantt, CSV loader)
+│       ├── settings_view.py    # 3. Settings (Organization & Parameter Definition)
 │       ├── schema_def_view.py  # Parameter Definition dynamic schema builder
 │       └── budget_view.py      # Budget Analytics & Financial Tracking
 └── tests/                      # Automated test suite (AAA pattern)
@@ -461,19 +461,17 @@ PPM Studio Pro recognizes the following environment variables (defined via `.env
 1. **📊 1. Portfolio Overview**:
    - Executive financial KPI banner (Planned, Actual, Variance, Burn Rate).
    - Dynamic parameter table restricted strictly to 7 whitelisted parameters: `phase`, `code_station`, `code_line`, `strategic_priority`, `category`, `category_tags`, and `complexity`.
-   - Advanced multi-level filters: Project Code/Name search, Status, Assigned Project Manager, and Level 3 Managing Function.
+   - Project search plus Excel-style per-column filtering, sorting, and statistics.
    - Interactive Master List with single-row click selection rendering complete Project Details (financial cards, scoping, localization, links, classification) below the table.
-2. **📁 2. Project Master Data**:
-   - Dynamic form rendering with grouped and ungrouped attributes based on schema definitions.
-   - Assigned Project Manager selectbox mapped to organizational job functions (`function_id`).
-   - Pre-save validation enforcing non-empty input for any parameter marked `mandatory=True`.
-3. **📅 3. Planning & Milestones**:
+   - Project creation, editing, and deletion through focused modal dialogs.
+2. **📅 2. Planning & Milestones**:
    - Interactive Plotly Gantt timeline chart with 4 dependency link types (`FS`, `SS`, `FF`, `SF`) and lag offsets.
+   - Expandable recursive resource-pool group hierarchy with collapsed assignment totals and direct navigation to pool details.
    - Real-time constraint violation diagnostics detecting scheduling breaks.
    - Bulk CSV milestone loader with validation and downloadable template.
-4. **⚙️ 4. Settings**:
+3. **⚙️ 3. Settings**:
    - Consolidated single settings hub with a top-level section toggle:
      - **🏢 Organization Structure**: Manage 9 areas (Job Functions, Function Types, Teams, Employees with occupation percentages and calendar exceptions, Tag Groups, Tag Dictionary, Project Tags, Task Tags, and Resource Pools with dynamic capacity timelines).
      - **🧩 Parameter Definition**: Dynamic schema builder to manage schema groups, create/edit typed parameters (TEXT, DATE, NUMBER, ENUM, TAGS, HYPERLINK), configure discrete options, and inspect the real-time schema hierarchy tree.
-5. **🌐 5-Language Internationalization (i18n)**:
+4. **🌐 5-Language Internationalization (i18n)**:
    - Full live interface translation across English (`en`), French (`fr`), German (`de`), Luxembourgish (`lb`), and Portuguese (`pt`) with 100% key parity guaranteed by automated unit tests.

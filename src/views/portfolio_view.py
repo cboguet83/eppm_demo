@@ -1,7 +1,7 @@
 """Screen 1: Portfolio Overview View with Interactive Master List and Details Inspection."""
 
 import json
-from typing import Any, Optional
+from typing import Any
 
 import pandas as pd
 import streamlit as st
@@ -12,17 +12,14 @@ from src.models.constants import (
     PARAM_TYPE_NUMBER,
     PARAM_TYPE_TEXT,
     PARAM_TYPE_URL,
-    STATUS_LIST,
 )
 from src.repositories.organization_repo import OrganizationRepository
 from src.repositories.project_repo import ProjectRepository
 from src.repositories.schema_repo import SchemaRepository
-from src.repositories.tag_repo import TagRepository
 from src.services.organization_service import OrganizationService
 from src.services.portfolio_service import PortfolioService
-from src.services.schema_service import SchemaService
 from src.views.portfolio_table_component import portfolio_project_table
-from src.views.project_master_view import _render_dynamic_field
+from src.views.project_dialogs import open_create_project_dialog, open_edit_project_dialog
 
 ALLOWED_DYNAMIC_PARAMS: set[str] = {
     "phase",
@@ -32,97 +29,6 @@ ALLOWED_DYNAMIC_PARAMS: set[str] = {
     "category_tags",
     "complexity",
 }
-
-
-def _normalise_flex_filter_values(value: Any) -> list[str]:
-    """Convert scalar, list, and JSON-list cells into comparable display values."""
-    if value is None:
-        return []
-    if isinstance(value, str):
-        stripped = value.strip()
-        if not stripped:
-            return []
-        if stripped.startswith("["):
-            try:
-                decoded = json.loads(stripped)
-            except (json.JSONDecodeError, TypeError):
-                decoded = None
-            if isinstance(decoded, list):
-                return [str(item).strip() for item in decoded if str(item).strip()]
-        return [stripped]
-    if isinstance(value, (list, tuple, set)):
-        return [str(item).strip() for item in value if str(item).strip()]
-    try:
-        if pd.isna(value):
-            return []
-    except (TypeError, ValueError):
-        pass
-    return [str(value).strip()]
-
-
-def _unique_flex_filter_options(series: pd.Series) -> list[str]:
-    """Return sorted unique values from scalar or multi-valued DataFrame cells."""
-    values = {
-        item
-        for value in series.tolist()
-        for item in _normalise_flex_filter_values(value)
-        if item
-    }
-    return sorted(values, key=str.casefold)
-
-
-def _apply_portfolio_flex_filters(
-    frame: pd.DataFrame,
-    filters: dict[str, list[str]],
-    match_all_values: bool = False,
-) -> pd.DataFrame:
-    """Apply flexible field filters with AND across fields and configurable value matching."""
-    filtered = frame.copy()
-    for column, selected_values in filters.items():
-        if column not in filtered.columns or not selected_values:
-            continue
-        wanted = {str(value).casefold() for value in selected_values}
-
-        def cell_matches(value: Any) -> bool:
-            actual = {
-                item.casefold()
-                for item in _normalise_flex_filter_values(value)
-            }
-            return wanted.issubset(actual) if match_all_values else bool(wanted & actual)
-
-        filtered = filtered[filtered[column].apply(cell_matches)]
-    return filtered
-
-
-def _project_tag_map(tag_repo: TagRepository) -> dict[int, list[str]]:
-    """Return project tags grouped by project ID for flexible filtering."""
-    assignments = tag_repo.get_all_project_tags()
-    tags_by_project: dict[int, list[str]] = {}
-    for _, row in assignments.iterrows():
-        project_id = int(row["project_id"])
-        labels = tags_by_project.setdefault(project_id, [])
-        if pd.notna(row.get("tag_name")):
-            tag_name = str(row["tag_name"])
-            group_name = row.get("tag_group_name")
-            label = (
-                f"{group_name} · {tag_name}"
-                if pd.notna(group_name) and str(group_name).strip()
-                else tag_name
-            )
-            if label not in labels:
-                labels.append(label)
-        if pd.notna(row.get("free_tag")) and str(row["free_tag"]).strip():
-            free_label = str(row["free_tag"]).strip()
-            if free_label not in labels:
-                labels.append(free_label)
-    return tags_by_project
-
-
-def _clear_portfolio_flex_filter_state() -> None:
-    """Clear only session-state keys owned by the portfolio flexible filter."""
-    for key in list(st.session_state):
-        if str(key).startswith("portfolio_flex_"):
-            del st.session_state[key]
 
 
 def _portfolio_table_value(value: Any) -> Any:
@@ -155,136 +61,6 @@ def _build_portfolio_table_rows(
         row["project_id"] = _portfolio_table_value(source.get("id"))
         rows.append(row)
     return rows
-
-
-def _dynamic_project_value(attributes: dict[str, Any], parameter: pd.Series) -> Any:
-    """Find an existing dynamic value by ID, name, or alias."""
-    param_id = str(parameter["param_id"])
-    param_name = str(parameter.get("param_name", ""))
-    alias = str(parameter.get("alias", "")).strip() if pd.notna(parameter.get("alias")) else ""
-    value = attributes.get(param_id)
-    if value is None and param_name:
-        value = attributes.get(param_name)
-    if value is None and alias:
-        value = attributes.get(alias)
-    return value
-
-
-@st.dialog("Edit project details", width="large")
-def _edit_project_details_dialog(
-    project_id: int,
-    project_repo: ProjectRepository,
-    schema_repo: SchemaRepository,
-) -> None:
-    """Edit the selected project without navigating away from the portfolio."""
-    project = project_repo.get_project_by_id(project_id)
-    if project is None:
-        st.error("The selected project no longer exists.")
-        return
-
-    groups = schema_repo.get_all_groups()
-    params = schema_repo.get_all_parameters()
-    options = schema_repo.get_all_options()
-    org_repo = OrganizationRepository(project_repo.db_path)
-    functions = org_repo.get_all_functions()
-    employees = org_repo.get_all_employees()
-    manager_names = OrganizationService.get_function_occupant_names(functions, employees)
-    manager_options: list[Optional[int]] = [None]
-    if not functions.empty:
-        manager_options.extend(int(value) for value in functions["function_id"].tolist())
-    manager_labels: dict[Optional[int], str] = {None: "— None —", **manager_names}
-
-    current_manager = int(project.function_id) if project.function_id is not None else None
-    manager_index = manager_options.index(current_manager) if current_manager in manager_options else 0
-    attributes = dict(project.dynamic_attributes or {})
-
-    with st.form(f"portfolio_edit_project_{project_id}"):
-        id_col, name_col, status_col = st.columns([1, 2, 1])
-        id_col.text_input(t("master_data.field_id"), value=str(project_id), disabled=True)
-        edit_name = name_col.text_input(t("master_data.field_name"), value=project.name)
-        status_index = STATUS_LIST.index(project.status) if project.status in STATUS_LIST else 0
-        edit_status = status_col.selectbox(
-            t("master_data.field_status"),
-            options=STATUS_LIST,
-            index=status_index,
-        )
-
-        planned_col, actual_col, manager_col = st.columns(3)
-        edit_planned = planned_col.number_input(
-            t("master_data.field_planned"),
-            min_value=0.0,
-            value=float(project.planned_budget),
-            step=5000.0,
-        )
-        edit_actual = actual_col.number_input(
-            t("master_data.field_actual"),
-            min_value=0.0,
-            value=float(project.actual_budget),
-            step=5000.0,
-        )
-        edit_manager = manager_col.selectbox(
-            t("master_data.field_project_manager", default="Project Manager"),
-            options=manager_options,
-            index=manager_index,
-            format_func=lambda value: manager_labels.get(value, str(value)),
-            key=f"portfolio_edit_manager_{project_id}",
-        )
-
-        st.write(f"#### {t('master_data.dynamic_section')}")
-        dynamic_values: dict[str, Any] = {}
-        grouped_ids: set[Any] = set()
-        if not groups.empty and not params.empty:
-            for _, group in groups.iterrows():
-                group_id = group["id"]
-                group_params = params[params["group_id"] == group_id]
-                if group_params.empty:
-                    continue
-                grouped_ids.add(group_id)
-                with st.expander(f"📁 {group['group_name']}", expanded=True):
-                    for _, parameter in group_params.iterrows():
-                        param_id = str(parameter["param_id"])
-                        dynamic_values[param_id] = _render_dynamic_field(
-                            parameter,
-                            options,
-                            _dynamic_project_value(attributes, parameter),
-                            f"portfolio_edit_{project_id}",
-                        )
-
-        if not params.empty:
-            ungrouped = params[params["group_id"].isna() | ~params["group_id"].isin(grouped_ids)]
-            if not ungrouped.empty:
-                with st.expander(f"📌 {t('schema.param_group_none')}", expanded=True):
-                    for _, parameter in ungrouped.iterrows():
-                        param_id = str(parameter["param_id"])
-                        dynamic_values[param_id] = _render_dynamic_field(
-                            parameter,
-                            options,
-                            _dynamic_project_value(attributes, parameter),
-                            f"portfolio_edit_{project_id}",
-                        )
-
-        if st.form_submit_button(t("master_data.btn_update"), width="stretch"):
-            clean_name = edit_name.strip()
-            missing = SchemaService.validate_project_dynamic_attributes(dynamic_values, params)
-            if not clean_name:
-                st.error(t("master_data.err_required_fields"))
-            elif missing:
-                st.error(
-                    "Cannot update project: The following mandatory attributes are required: "
-                    + ", ".join(missing)
-                )
-            else:
-                project_repo.update_project(
-                    project_id=project_id,
-                    name=clean_name,
-                    status=edit_status,
-                    planned_budget=edit_planned,
-                    actual_budget=edit_actual,
-                    dynamic_attributes=dynamic_values,
-                    function_id=edit_manager,
-                )
-                st.toast("Project details updated.", icon="✅")
-                st.rerun()
 
 
 def _render_project_details_panel(
@@ -352,7 +128,7 @@ def _render_project_details_panel(
             key=f"btn_edit_details_{proj_id}",
             width="stretch",
         ):
-            _edit_project_details_dialog(int(proj_id), project_repo, schema_repo)
+            open_edit_project_dialog(int(proj_id), project_repo, schema_repo)
 
     # KPI Summary Cards
     m1, m2, m3, m4, m5, m6 = st.columns(6)
@@ -489,7 +265,6 @@ def _render_project_details_panel(
 def render_portfolio_overview(
     project_repo: ProjectRepository,
     schema_repo: SchemaRepository,
-    tag_repo: Optional[TagRepository] = None,
 ) -> None:
     """Renders the Portfolio Overview screen with KPI cards, filtering, and dynamic table."""
     st.header(f"📊 {t('portfolio.title')}")
@@ -498,6 +273,13 @@ def render_portfolio_overview(
     params = schema_repo.get_all_parameters()
 
     if df_projects.empty:
+        if st.button(
+            "Create new project",
+            icon=":material/add:",
+            type="primary",
+            key="btn_create_project_from_empty_portfolio",
+        ):
+            open_create_project_dialog(project_repo, schema_repo)
         st.info(t("master_data.dynamic_empty", default="No projects registered yet."))
         return
 
@@ -527,13 +309,6 @@ def render_portfolio_overview(
         df_funcs,
         df_employees,
     )
-    if tag_repo is not None:
-        tags_by_project = _project_tag_map(tag_repo)
-        df_merged["_project_tags"] = df_merged["id"].map(
-            lambda project_id: tags_by_project.get(int(project_id), [])
-        )
-    else:
-        df_merged["_project_tags"] = [[] for _ in range(len(df_merged))]
 
     # 3. Dynamic Column Configuration (whitelisted allowed dynamic parameters)
     display_cols: list[str] = [
@@ -560,13 +335,6 @@ def render_portfolio_overview(
         {"key": "planned_budget", "label": t("portfolio.col_planned"), "format": "currency"},
         {"key": "actual_budget", "label": t("portfolio.col_actual"), "format": "currency"},
     ]
-    flex_filter_fields: dict[str, str] = {
-        "Status": "status",
-        "Project Manager": "project_manager",
-        "Managing Function (Level 3)": "level_3_manager_name",
-        "Project Tags": "_project_tags",
-    }
-
     if not params.empty and "param_id" in params.columns:
         for _, p in params.iterrows():
             pid = str(p["param_id"])
@@ -583,73 +351,38 @@ def render_portfolio_overview(
 
             if target_col not in display_cols:
                 display_cols.append(target_col)
-            flex_filter_fields[pname] = target_col
 
             value_format = "url" if ptype in (PARAM_TYPE_URL, PARAM_TYPE_HYPERLINK) else "text"
             if ptype == PARAM_TYPE_NUMBER:
                 value_format = "number"
             table_columns.append({"key": target_col, "label": pname, "format": value_format})
 
-    # 4. Search and reusable multi-criteria flexible filter
-    search_col, flex_col = st.columns([4, 1])
-    with search_col:
-        search_term = st.text_input(
-            t("portfolio.filter_search"),
-            placeholder=t("portfolio.filter_search_placeholder"),
-        )
-    active_filters: dict[str, list[str]] = {}
-    with flex_col:
-        with st.popover("⚙️ Flexible filters", width="stretch"):
-            selected_fields = st.multiselect(
-                "Filter fields",
-                options=list(flex_filter_fields),
-                placeholder="Choose one or more fields",
-                key="portfolio_flex_fields",
-            )
-            match_mode = st.segmented_control(
-                "When several values are selected",
-                options=["Any", "All"],
-                default="Any",
-                key="portfolio_flex_match_mode",
-                help="Fields use AND. This controls matching within each field.",
-            )
-            for field_label in selected_fields:
-                target_column = flex_filter_fields[field_label]
-                options = _unique_flex_filter_options(df_merged[target_column])
-                selected_values = st.multiselect(
-                    field_label,
-                    options=options,
-                    placeholder="All values",
-                    key=f"portfolio_flex_values::{target_column}",
-                )
-                if selected_values:
-                    active_filters[target_column] = selected_values
-            st.button(
-                "Clear filters",
-                on_click=_clear_portfolio_flex_filter_state,
-                width="stretch",
-                disabled=not selected_fields,
-            )
-
-    filtered_df = _apply_portfolio_flex_filters(
-        df_merged,
-        active_filters,
-        match_all_values=match_mode == "All",
+    # 4. Search; column-level filtering lives in the project table headers.
+    search_term = st.text_input(
+        t("portfolio.filter_search"),
+        placeholder=t("portfolio.filter_search_placeholder"),
     )
+    filtered_df = df_merged
     if search_term.strip():
         term = search_term.lower()
         filtered_df = filtered_df[
             filtered_df["id"].astype(str).str.lower().str.contains(term, na=False)
             | filtered_df["name"].astype(str).str.lower().str.contains(term, na=False)
         ]
-    if active_filters:
-        st.caption(
-            f"{len(active_filters)} active flexible filter"
-            f"{'s' if len(active_filters) != 1 else ''} · {len(filtered_df)} matching projects"
-        )
-
     # 5. Render Data Grid with direct row selection and per-column filters
-    st.subheader(t("portfolio.table_header", count=len(filtered_df)))
+    with st.container(
+        horizontal=True,
+        horizontal_alignment="distribute",
+        vertical_alignment="center",
+    ):
+        st.subheader(t("portfolio.table_header", count=len(filtered_df)))
+        if st.button(
+            "Create new project",
+            icon=":material/add:",
+            type="primary",
+            key="btn_create_project_from_portfolio",
+        ):
+            open_create_project_dialog(project_repo, schema_repo)
     st.caption(
         t(
             "portfolio.details_hint",
