@@ -62,7 +62,8 @@ def test_core_imports_work_without_installed_third_party_packages() -> None:
         "import sys; import app.domain.projects.project_types; "
         "import app.application.services.project_types; import app.application.services.projects; "
         "import app.application.services.portfolio; import app.application.services.schema; "
-        "import app.domain.projects.schema; import app.main; "
+        "import app.domain.projects.schema; import app.domain.organization.rules; "
+        "import app.application.services.organization; import app.main; "
         "assert not {'streamlit', 'pandas', 'sqlite3', 'src'} & sys.modules.keys()",
     ], cwd=ROOT, capture_output=True, text=True, check=False)
     assert result.returncode == 0, result.stderr

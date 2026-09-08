@@ -2,6 +2,7 @@
 
 from typing import TYPE_CHECKING
 
+from app.application.services.organization import OrganizationService
 from app.application.services.portfolio import PortfolioService
 from app.application.services.projects import ProjectService
 from app.application.services.project_types import ProjectTypeService
@@ -9,6 +10,13 @@ from app.application.services.schema import SchemaService
 
 if TYPE_CHECKING:
     from app.presentation.components.project_workspace import ProjectWorkspace
+
+
+def create_organization_service(db_path: str | None = None) -> OrganizationService:
+    """Connect organization use cases to the existing SQLite database."""
+    from app.infrastructure.repositories.organization import SqliteOrganizationGateway
+
+    return OrganizationService(SqliteOrganizationGateway(db_path))
 
 
 def create_project_type_service(db_path: str | None = None) -> ProjectTypeService:

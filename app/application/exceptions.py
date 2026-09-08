@@ -23,3 +23,11 @@ class SchemaConflictError(ValueError):
 
 class SchemaStorageError(RuntimeError):
     """Schema storage is unavailable or could not complete an operation."""
+
+
+class OrganizationConflictError(ValueError):
+    """An organization change conflicts with a reference or unique value."""
+
+
+class OrganizationStorageError(RuntimeError):
+    """Organization storage is unavailable or failed to complete an operation."""

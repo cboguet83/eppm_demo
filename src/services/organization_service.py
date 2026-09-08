@@ -1,224 +1,42 @@
 """Business logic and data transformation service for organizational structures."""
 
-import re
-from datetime import date
 from typing import Any, Optional
 
 import pandas as pd
 
+from app.domain.organization.rules import (
+    find_level_3_function,
+    is_valid_email, validate_function, validate_team, validate_employee,
+    validate_occupation_percentage, validate_employee_calendar_exception,
+)
+from app.presentation.components.organization_frames import (
+    enrich_functions, enrich_employees, enrich_teams,
+)
 from src.logging_config import get_logger
 
 logger = get_logger(__name__)
-
-EMAIL_REGEX = re.compile(r"^[\w\.-]+@[\w\.-]+\.\w+$")
 
 
 class OrganizationService:
     """Provides business validation, formatting, and relational data enrichment for organization entities."""
 
-    @staticmethod
-    def is_valid_email(email: str) -> bool:
-        """Validates standard email format.
+    is_valid_email = staticmethod(is_valid_email)
 
-        Args:
-            email: Email address string to test.
+    validate_function = staticmethod(validate_function)
 
-        Returns:
-            bool: True if valid email format.
-        """
-        if not email or not isinstance(email, str):
-            return False
-        return bool(EMAIL_REGEX.match(email.strip()))
+    validate_team = staticmethod(validate_team)
 
-    @staticmethod
-    def validate_function(name: str, hierarchy_level: Optional[int], fte_percentage: int = 100) -> None:
-        """Validates job function fields.
+    validate_employee = staticmethod(validate_employee)
 
-        Args:
-            name: Function title.
-            hierarchy_level: Numerical hierarchy level rank (must be >= 1).
-            fte_percentage: FTE workload percentage.
+    validate_occupation_percentage = staticmethod(validate_occupation_percentage)
 
-        Raises:
-            ValueError: If validation fails.
-        """
-        if not name or not name.strip():
-            raise ValueError("Function name cannot be empty.")
-        if hierarchy_level is None or hierarchy_level < 1:
-            raise ValueError("Hierarchy level must be an integer greater than or equal to 1.")
-        if fte_percentage < 0 or fte_percentage > 100:
-            raise ValueError("FTE percentage must be between 0 and 100.")
+    validate_employee_calendar_exception = staticmethod(validate_employee_calendar_exception)
 
-    @staticmethod
-    def validate_team(team_name: str) -> None:
-        """Validates team fields.
+    enrich_functions = staticmethod(enrich_functions)
 
-        Args:
-            team_name: Team name.
+    enrich_employees = staticmethod(enrich_employees)
 
-        Raises:
-            ValueError: If validation fails.
-        """
-        if not team_name or not team_name.strip():
-            raise ValueError("Team name cannot be empty.")
-
-    @staticmethod
-    def validate_employee(
-        firstname: str,
-        lastname: str,
-        email: str,
-        employee_code: str,
-        occupation_percentage: float = 100.0,
-    ) -> None:
-        """Validates employee profile fields.
-
-        Args:
-            firstname: First name.
-            lastname: Last name.
-            email: Email address.
-            employee_code: Unique badge code.
-            occupation_percentage: Normal working percentage from 0 to 100.
-
-        Raises:
-            ValueError: If validation fails.
-        """
-        if not firstname or not firstname.strip():
-            raise ValueError("First name cannot be empty.")
-        if not lastname or not lastname.strip():
-            raise ValueError("Last name cannot be empty.")
-        if not email or not OrganizationService.is_valid_email(email):
-            raise ValueError(f"Invalid email address: '{email}'.")
-        if not employee_code or not employee_code.strip():
-            raise ValueError("Employee code cannot be empty.")
-        OrganizationService.validate_occupation_percentage(occupation_percentage)
-
-    @staticmethod
-    def validate_occupation_percentage(occupation_percentage: float) -> None:
-        """Validates a normal or exceptional occupation percentage."""
-        if occupation_percentage < 0 or occupation_percentage > 100:
-            raise ValueError("Occupation percentage must be between 0 and 100.")
-
-    @staticmethod
-    def validate_employee_calendar_exception(
-        start_date: date,
-        end_date: date,
-        occupation_percentage: float,
-    ) -> None:
-        """Validates an inclusive, date-bounded occupation override."""
-        if start_date is None or end_date is None:
-            raise ValueError("Both start and end dates are required.")
-        if end_date < start_date:
-            raise ValueError("End date must be on or after start date.")
-        OrganizationService.validate_occupation_percentage(occupation_percentage)
-
-    @staticmethod
-    def enrich_functions(
-        df_functions: pd.DataFrame,
-        df_types: Optional[pd.DataFrame] = None,
-    ) -> pd.DataFrame:
-        """Enriches job functions DataFrame with readable function type and manager titles.
-
-        Args:
-            df_functions: Functions DataFrame.
-            df_types: Optional function types DataFrame.
-
-        Returns:
-            pd.DataFrame: Enriched DataFrame.
-        """
-        if df_functions.empty:
-            return df_functions
-
-        df = df_functions.copy()
-        type_map = (
-            dict(zip(df_types["function_type_id"], df_types["function_type"]))
-            if df_types is not None and not df_types.empty
-            else {}
-        )
-        func_map = dict(zip(df["function_id"], df["name"]))
-
-        df["function_type_name"] = df["function_type_id"].apply(
-            lambda x: type_map.get(x, "—") if pd.notna(x) and x in type_map else "—"
-        )
-        df["manager_function_name"] = df["manager_function_id"].apply(
-            lambda x: func_map.get(x, "—") if pd.notna(x) and x in func_map else "—"
-        )
-        df["dual_manager_function_name"] = df["dual_manager_function_id"].apply(
-            lambda x: func_map.get(x, "—") if pd.notna(x) and x in func_map else "—"
-        )
-        return df
-
-    @staticmethod
-    def enrich_employees(
-        df_employees: pd.DataFrame,
-        df_functions: pd.DataFrame,
-        df_types: Optional[pd.DataFrame] = None,
-    ) -> pd.DataFrame:
-        """Enriches employee records with full names, function names, and inherited function types.
-
-        Args:
-            df_employees: Employees DataFrame.
-            df_functions: Functions DataFrame.
-            df_types: Optional function types DataFrame.
-
-        Returns:
-            pd.DataFrame: Enriched DataFrame.
-        """
-        if df_employees.empty:
-            return df_employees
-
-        df = df_employees.copy()
-        func_map = dict(zip(df_functions["function_id"], df_functions["name"])) if not df_functions.empty else {}
-
-        type_lookup = (
-            dict(zip(df_types["function_type_id"], df_types["function_type"]))
-            if df_types is not None and not df_types.empty
-            else {}
-        )
-
-        func_to_type = {}
-        if not df_functions.empty and "function_type_id" in df_functions.columns:
-            for _, r in df_functions.iterrows():
-                fid = r.get("function_id")
-                ftid = r.get("function_type_id")
-                if pd.notna(fid) and pd.notna(ftid) and ftid in type_lookup:
-                    func_to_type[fid] = type_lookup[ftid]
-
-        df["full_name"] = df["lastname"].astype(str).str.upper() + " " + df["firstname"].astype(str)
-        df["function_name"] = df["function_id"].apply(
-            lambda x: func_map.get(x, "—") if pd.notna(x) and x in func_map else "—"
-        )
-        df["function_type_name"] = df["function_id"].apply(
-            lambda x: func_to_type.get(x, "—") if pd.notna(x) and x in func_to_type else "—"
-        )
-        return df
-
-    @staticmethod
-    def enrich_teams(
-        df_teams: pd.DataFrame,
-        df_functions: pd.DataFrame,
-    ) -> pd.DataFrame:
-        """Enriches teams DataFrame with readable manager and leader function titles.
-
-        Args:
-            df_teams: Teams DataFrame.
-            df_functions: Functions DataFrame.
-
-        Returns:
-            pd.DataFrame: Enriched DataFrame.
-        """
-        if df_teams.empty:
-            return df_teams
-
-        df = df_teams.copy()
-        func_map = dict(zip(df_functions["function_id"], df_functions["name"])) if not df_functions.empty else {}
-
-        df["manager_function_name"] = df["manager_function_id"].apply(
-            lambda x: func_map.get(x, "—") if pd.notna(x) and x in func_map else "—"
-        )
-        df["leader_function_name"] = df["leader_function_id"].apply(
-            lambda x: func_map.get(x, "—") if pd.notna(x) and x in func_map else "—"
-        )
-        return df
+    enrich_teams = staticmethod(enrich_teams)
 
     @staticmethod
     def get_level_3_managing_function(
@@ -270,29 +88,7 @@ class OrganizationService:
 
         return func_lookup
 
-    @staticmethod
-    def _find_level_3_function(
-        function_id: Optional[int],
-        func_lookup: dict[int, dict[str, Any]],
-    ) -> Optional[dict[str, Any]]:
-        curr_id: Optional[int] = function_id
-        visited: set[int] = set()
-        max_depth = 20
-        depth = 0
-
-        while curr_id is not None and curr_id not in visited and depth < max_depth:
-            visited.add(curr_id)
-            depth += 1
-            node = func_lookup.get(curr_id)
-            if not node:
-                break
-            if node["hierarchy_level"] == 3:
-                return node
-            if node["hierarchy_level"] < 3:
-                break
-            curr_id = node["manager_function_id"]
-
-        return None
+    _find_level_3_function = staticmethod(find_level_3_function)
 
     @staticmethod
     def enrich_projects_with_organization(

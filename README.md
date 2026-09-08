@@ -7,11 +7,13 @@ PPM Studio Pro is an enterprise-grade Project Portfolio Management (PPM) web app
 ## Architecture and migration status
 
 The layered migration now covers **project types, project creation/editing/deletion,
-portfolio browsing, and schema administration**. See
+portfolio browsing, schema administration, and organization management**. See
 [ADR 0001](docs/decisions/0001-layered-project-types.md) for the initial dependency
 rules, [ADR 0002](docs/decisions/0002-layered-projects-and-portfolio.md) for project
-workflows, and [ADR 0003](docs/decisions/0003-layered-schema-administration.md) for
-schema transactions, compatibility, and validation. Organization management is next.
+workflows, [ADR 0003](docs/decisions/0003-layered-schema-administration.md) for
+schema transactions, and [ADR 0004](docs/decisions/0004-layered-organization.md) for
+organization transactions, compatibility, and validation. Resource pools and
+capacity are next, followed by planning and collaboration internals.
 
 ### C4 level 2: runtime containers
 
@@ -35,8 +37,9 @@ C4Container
 | `app.py` | Compatibility launcher for existing commands |
 | `app/main.py` | Dependency construction and startup |
 | `app/presentation/` | Migrated pages/components and the transitional legacy shell |
-| `app/application/` | Project/type/schema use cases, portfolio queries, ports, and boundary errors |
+| `app/application/` | Project/type/schema/organization use cases, portfolio queries, ports, and boundary errors |
 | `app/domain/projects/` | Project/schema records, validation, and effective property values |
+| `app/domain/organization/` | Organization records, validation, and bounded hierarchy traversal |
 | `app/infrastructure/` | SQLite transactions, typed values, project persistence, and paged reads |
 | `app/shared/` | Configuration and logging |
 | `src/` | Remaining features and compatibility adapters |
@@ -134,6 +137,12 @@ On initial application launch, if the database is empty, the system automaticall
 Every employee has a normal **occupation percentage from 0% to 100%**. The default is 100%, and existing databases are migrated automatically without changing current employee records.
 
 Temporary calendar exceptions override that normal percentage over an **inclusive** start/end date range. For example, maternity leave can be represented as 0% from date A through date B. The application prevents overlapping exceptions for the same employee so that the effective percentage on any date remains unambiguous. Outside an exception period, the employee's normal occupation percentage applies.
+
+Organization saves now run through application services. A team and its membership
+save atomically, as do a new employee and an optional initial calendar exception.
+Calendar writes reserve the SQLite writer before checking overlaps, preventing
+concurrent saves from creating overlapping periods. Existing database files and
+tables remain compatible; no database schema migration is required.
 
 Manage these values in **Settings → Organization Structure → Employees**:
 

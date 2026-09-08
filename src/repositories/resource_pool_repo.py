@@ -7,6 +7,8 @@ from typing import Any, Dict, List, Optional
 import pandas as pd
 
 from src.database.connection import get_db
+from app.main import create_organization_service
+from src.repositories.organization_repo import legacy_organization_errors
 from src.logging_config import get_logger
 from src.models.resource_pool import (
     PoolAssignment,
@@ -798,79 +800,21 @@ class ResourcePoolRepository:
     # 5. TEAM FUNCTIONS
     # =========================================================================
     def get_team_functions(self, team_id: int) -> List[int]:
-        """Retrieves all function IDs assigned to a team.
-
-        Args:
-            team_id: Team ID.
-
-        Returns:
-            List[int]: List of function IDs.
-        """
-        with closing(get_db(self.db_path)) as conn, conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                SELECT function_id
-                FROM team_function
-                WHERE team_id = ?
-                ORDER BY function_id ASC
-                """,
-                (team_id,),
-            )
-            return [row[0] for row in cursor.fetchall()]
+        """Delegate team membership to the organization application service."""
+        with legacy_organization_errors():
+            return create_organization_service(self.db_path).get_team_functions(team_id)
 
     def set_team_functions(self, team_id: int, function_ids: List[int]) -> None:
-        """Sets the exact list of functions associated with a team.
-
-        Args:
-            team_id: Team ID.
-            function_ids: List of unique function IDs.
-        """
-        with closing(get_db(self.db_path)) as conn, conn:
-            cursor = conn.cursor()
-            cursor.execute("DELETE FROM team_function WHERE team_id = ?", (team_id,))
-            unique_ids = sorted(list(set(function_ids)))
-            for fid in unique_ids:
-                cursor.execute(
-                    "INSERT OR IGNORE INTO team_function (team_id, function_id) VALUES (?, ?)",
-                    (team_id, fid),
-                )
-            conn.commit()
+        """Delegate team membership to the organization application service."""
+        with legacy_organization_errors():
+            return create_organization_service(self.db_path).set_team_functions(team_id, function_ids)
 
     def add_team_function(self, team_id: int, function_id: int) -> bool:
-        """Adds a single function to a team.
-
-        Args:
-            team_id: Team ID.
-            function_id: Function ID.
-
-        Returns:
-            bool: True if inserted.
-        """
-        with closing(get_db(self.db_path)) as conn, conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "INSERT OR IGNORE INTO team_function (team_id, function_id) VALUES (?, ?)",
-                (team_id, function_id),
-            )
-            conn.commit()
-            return cursor.rowcount > 0
+        """Delegate team membership to the organization application service."""
+        with legacy_organization_errors():
+            return create_organization_service(self.db_path).add_team_function(team_id, function_id)
 
     def remove_team_function(self, team_id: int, function_id: int) -> bool:
-        """Removes a function from a team.
-
-        Args:
-            team_id: Team ID.
-            function_id: Function ID.
-
-        Returns:
-            bool: True if removed.
-        """
-        with closing(get_db(self.db_path)) as conn, conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "DELETE FROM team_function WHERE team_id = ? AND function_id = ?",
-                (team_id, function_id),
-            )
-            conn.commit()
-            return cursor.rowcount > 0
+        """Delegate team membership to the organization application service."""
+        with legacy_organization_errors():
+            return create_organization_service(self.db_path).remove_team_function(team_id, function_id)

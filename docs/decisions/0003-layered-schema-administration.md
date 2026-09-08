@@ -1,6 +1,6 @@
 # ADR 0003: Migrate project-schema administration
 
-- Status: Accepted for the third migration increment
+- Status: Accepted for the third migration increment; extended by [ADR 0004](0004-layered-organization.md)
 - Date: 2026-09-08
 - Parent increment: `f09db8baaebaa8e95691afe51e121fc843666a65`
 - Branch: `migration/layered-project-types`
@@ -152,8 +152,8 @@ applied database migrations are unchanged.
 
 ## Next increment
 
-Migrate organization management next: functions, employees, teams, and related
-reference data. Follow with resource pools/capacity and planning use cases while
+Organization management is completed in ADR 0004: functions, employees, teams,
+function types, and calendar exceptions. Follow with resource pools/capacity and planning use cases while
 retaining their lazy loading and performance checks. Collaboration internals,
 shared translations, and legacy routing still have explicit migration boundaries.
 Finance features should use the new layers with separately defined financial rules.
