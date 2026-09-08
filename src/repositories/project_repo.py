@@ -1,15 +1,14 @@
-"""Repository for Project Master Data."""
+"""Compatibility facade for legacy project callers and bulk seeders."""
 
-from typing import Any, Optional, Union
-
+import sqlite3
+from typing import Any, Union
 import pandas as pd
 
-from src.database.connection import get_db
-from src.database.property_store import read_values, write_value, prepare_values, effective_template
-from src.logging_config import get_logger
-from src.models.project import Project
-
-logger = get_logger(__name__)
+from app.main import create_project_service
+from app.application.services.projects import create_in_transaction
+from app.domain.projects.project import Project
+from app.infrastructure.repositories.projects import SqliteProjectGateway, SqliteProjectStore
+from src.repositories.project_errors import legacy_project_errors
 
 
 def parse_project_id(project_id: Union[int, str]) -> int:
@@ -37,155 +36,82 @@ def parse_project_id(project_id: Union[int, str]) -> int:
 
 
 class ProjectRepository:
-    """Encapsulates all database operations for projects."""
+    """Keep historical IDs, DataFrames, and exceptions outside the migrated core."""
 
-    def __init__(self, db_path: Optional[str] = None) -> None:
-        """Initializes the ProjectRepository with an optional database path.
-
-        Args:
-            db_path: Path to SQLite database. If None, uses configured default.
-        """
+    def __init__(self, db_path: str | None = None) -> None:
+        """Compose project use cases for the existing database path."""
         self.db_path = db_path
+        self.service = create_project_service(db_path)
+        self._reader = SqliteProjectGateway(db_path)
 
     def get_all_projects(self) -> pd.DataFrame:
-        """Load projects and active custom values in bulk."""
-        with get_db(self.db_path) as conn:
-            projects = pd.read_sql("SELECT p.*, t.name AS project_type FROM project p JOIN project_type t ON t.id=p.project_type_id ORDER BY p.id", conn)
-            values = read_values(conn)
-            applicability = {}
-            for type_id in projects.get("project_type_id", []):
-                if type_id not in applicability:
-                    applicability[type_id] = {p["param_id"] for p in effective_template(conn, int(type_id))}
-            projects["dynamic_attributes"] = [
-                {pid: value for pid, value in values.get(int(row.id), {}).items() if pid in applicability[row.project_type_id]}
-                for row in projects.itertuples()
-            ]
-            return projects
+        """Return the legacy bulk-export frame with active custom values."""
+        with legacy_project_errors():
+            rows = self._reader.read_catalog()
+        return pd.DataFrame(rows, columns=["id", "name", "status", "planned_budget", "actual_budget",
+                                           "function_id", "project_type_id", "project_type", "dynamic_attributes"])
 
     def get_planning_catalog(self, property_ids: tuple[str, ...] = ()) -> pd.DataFrame:
-        """Small project directory; read only properties actively used by filters."""
-        with get_db(self.db_path) as conn:
-            projects = pd.read_sql('SELECT p.id,p.name,p.status,p.function_id,p.project_type_id, '
-                                   't.name AS project_template FROM project p '
-                                   'JOIN project_type t ON t.id=p.project_type_id ORDER BY p.id', conn)
-            values = read_values(conn, param_ids=list(property_ids))
-            applicability = {int(tid): {p['param_id'] for p in effective_template(conn, int(tid))}
-                             for tid in projects['project_type_id'].unique()} if property_ids else {}
-            projects['dynamic_attributes'] = [
-                {key: value for key, value in values.get(row.id, {}).items()
-                 if key in applicability.get(row.project_type_id, set())}
-                for row in projects.itertuples()
-            ]
-            return projects
+        """Load only the custom properties requested by planning filters."""
+        with legacy_project_errors():
+            rows = self._reader.read_catalog(property_ids)
+        return pd.DataFrame(rows, columns=["id", "name", "status", "function_id", "project_type_id",
+                                           "project_template", "dynamic_attributes"])
 
-    def get_project_by_id(self, project_id: Union[int, str]) -> Optional[Project]:
-        """Load all stored values, including inactive values for type restoration."""
-        with get_db(self.db_path) as conn:
-            cursor = conn.execute("SELECT id, name, status, planned_budget, actual_budget, function_id, project_type_id FROM project WHERE id=?", (parse_project_id(project_id),))
-            row = cursor.fetchone()
-            if row is None:
-                return None
-            return Project(id=row[0], name=row[1], status=row[2], planned_budget=row[3] or 0.0,
-                           actual_budget=row[4] or 0.0, function_id=row[5], project_type_id=row[6],
-                           dynamic_attributes=read_values(conn, owner_id=row[0]).get(row[0], {}))
+    def get_project_by_id(self, project_id: int | str) -> Project | None:
+        """Normalize historical IDs and read the complete project record."""
+        with legacy_project_errors():
+            return self.service.get_project_by_id(parse_project_id(project_id))
 
-    def exists(self, project_id: Union[int, str]) -> bool:
-        """Checks if a project ID already exists.
-
-        Args:
-            project_id: Project integer ID or string.
-
-        Returns:
-            bool: True if project exists.
-        """
-        int_id = parse_project_id(project_id)
-        with get_db(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT 1 FROM project WHERE id = ?", (int_id,))
-            return cursor.fetchone() is not None
+    def exists(self, project_id: int | str) -> bool:
+        """Check a legacy project ID without loading its values."""
+        with legacy_project_errors():
+            return self.service.exists(parse_project_id(project_id))
 
     def generate_project_id(self) -> int:
-        """Generates the next sequential integer project ID.
-
-        Returns:
-            int: Next sequential project ID.
-        """
-        with get_db(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT MAX(COALESCE((SELECT MAX(id) FROM project),0), COALESCE((SELECT seq FROM sqlite_sequence WHERE name='project'),0))+1")
-            row = cursor.fetchone()
-            return int(row[0]) if row and row[0] is not None else 1
+        """Return an ID preview that respects deleted-project sequences."""
+        with legacy_project_errors():
+            return self.service.generate_project_id()
 
     def create_project(
-        self, project_id: Optional[Union[int, str]] = None, name: str = "", status: str = "Draft",
+        self, project_id: int | str | None = None, name: str = "", status: str = "Draft",
         planned_budget: float = 0.0, actual_budget: float = 0.0,
-        dynamic_attributes: Optional[dict[str, Any]] = None, function_id: Optional[int] = None,
-        project_type_id: Optional[int] = None,
+        dynamic_attributes: dict[str, Any] | None = None, function_id: int | None = None,
+        project_type_id: int | None = None,
     ) -> int:
-        with get_db(self.db_path) as conn:
-            return self.create_on_connection(conn, project_id=project_id, name=name, status=status,
-                planned_budget=planned_budget, actual_budget=actual_budget, dynamic_attributes=dynamic_attributes,
-                function_id=function_id, project_type_id=project_type_id)
+        """Delegate creation while retaining flexible legacy property inputs."""
+        with legacy_project_errors():
+            return self.service.create_project(
+                parse_project_id(project_id) if project_id is not None else None,
+                name, status, planned_budget, actual_budget, dynamic_attributes, function_id, project_type_id,
+            )
 
     @staticmethod
-    def create_on_connection(conn, *, project_id=None, name="", status="Draft", planned_budget=0.0,
-                             actual_budget=0.0, dynamic_attributes=None, function_id=None, project_type_id=None) -> int:
-        """Shared transactional writer for interactive creation and both seeders."""
-        if not name.strip():
-            raise ValueError("Project name is required")
-        if project_type_id is None:
-            project_type_id = conn.execute("SELECT id FROM project_type WHERE is_general=1").fetchone()[0]
-        values = prepare_values(conn, project_type_id, dynamic_attributes or {}, creating=True)
-        pid = parse_project_id(project_id) if project_id is not None else None
-        cursor = conn.execute("INSERT INTO project(id,name,status,planned_budget,actual_budget,function_id,project_type_id) VALUES (?,?,?,?,?,?,?)",
-                             (pid, name.strip(), status, planned_budget, actual_budget, function_id, project_type_id))
-        pid = int(cursor.lastrowid)
-        for key, value in values.items():
-            write_value(conn, pid, key, value)
-        return pid
+    def create_on_connection(
+        conn: sqlite3.Connection, *, project_id: int | str | None = None, name: str = "",
+        status: str = "Draft", planned_budget: float = 0.0, actual_budget: float = 0.0,
+        dynamic_attributes: dict[str, Any] | None = None, function_id: int | None = None,
+        project_type_id: int | None = None,
+    ) -> int:
+        """Keep a seeder's transaction and connection under its caller's control."""
+        store = SqliteProjectStore(conn)
+        type_id = store.default_type_id() if project_type_id is None else project_type_id
+        return create_in_transaction(store, Project(
+            parse_project_id(project_id) if project_id is not None else None,
+            name, status, planned_budget, actual_budget, dynamic_attributes or {}, function_id, type_id,
+        ))
 
-    def update_project(self, project_id: Union[int, str], name: str, status: str, planned_budget: float,
-                       actual_budget: float, dynamic_attributes: dict[str, Any], function_id: Optional[int] = None,
-                       project_type_id: Optional[int] = None) -> bool:
-        pid = parse_project_id(project_id)
-        with get_db(self.db_path) as conn:
-            row = conn.execute("SELECT project_type_id FROM project WHERE id=?", (pid,)).fetchone()
-            if not row:
-                return False
-            if not name.strip():
-                raise ValueError("Project name is required")
-            type_id = row[0] if project_type_id is None else project_type_id
-            existing = read_values(conn, owner_id=pid).get(pid, {})
-            values = prepare_values(conn, type_id, dynamic_attributes, creating=False, existing=existing)
-            conn.execute("UPDATE project SET name=?,status=?,planned_budget=?,actual_budget=?,function_id=?,project_type_id=? WHERE id=?",
-                         (name.strip(), status, planned_budget, actual_budget, function_id, type_id, pid))
-            for key, value in values.items():
-                write_value(conn, pid, key, value)
-            return True
+    def update_project(
+        self, project_id: int | str, name: str, status: str, planned_budget: float,
+        actual_budget: float, dynamic_attributes: dict[str, Any], function_id: int | None = None,
+        project_type_id: int | None = None,
+    ) -> bool:
+        """Delegate atomic edits while retaining the legacy calling convention."""
+        with legacy_project_errors():
+            return self.service.update_project(parse_project_id(project_id), name, status, planned_budget,
+                                               actual_budget, dynamic_attributes, function_id, project_type_id)
 
-    def delete_project(self, project_id: Union[int, str]) -> bool:
-        """Deletes a project and cleans up its tasks and dependencies.
-
-        Args:
-            project_id: Project ID to delete.
-
-        Returns:
-            bool: True if deleted.
-        """
-        int_id = parse_project_id(project_id)
-        with get_db(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                DELETE FROM task_dependencies
-                WHERE predecessor_project_id = ?
-                   OR task_id IN (SELECT id FROM project_task WHERE project_id = ?)
-                   OR predecessor_task_id IN (SELECT id FROM project_task WHERE project_id = ?)
-                """,
-                (int_id, int_id, int_id),
-            )
-            cursor.execute("UPDATE project_task SET predecessor_id = NULL WHERE project_id = ?", (int_id,))
-            cursor.execute("DELETE FROM project_task WHERE project_id = ?", (int_id,))
-            cursor.execute("DELETE FROM project WHERE id = ?", (int_id,))
-            conn.commit()
-            return cursor.rowcount > 0
+    def delete_project(self, project_id: int | str) -> bool:
+        """Delete project dependencies through the transactional use case."""
+        with legacy_project_errors():
+            return self.service.delete_project(parse_project_id(project_id))

@@ -1,4 +1,4 @@
-"""Persistence-boundary errors suitable for application callers."""
+"""Application errors, independent of persistence and presentation."""
 
 
 class ProjectTypeConflictError(ValueError):
@@ -7,3 +7,11 @@ class ProjectTypeConflictError(ValueError):
 
 class ProjectTypeStorageError(RuntimeError):
     """Project-type storage is unavailable or failed to complete an operation."""
+
+
+class ProjectConflictError(ValueError):
+    """A project write conflicts with a reference or database constraint."""
+
+
+class ProjectStorageError(RuntimeError):
+    """Project or portfolio storage is unavailable."""

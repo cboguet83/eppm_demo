@@ -434,7 +434,10 @@ def run_app() -> None:
         st.sidebar.success(st.session_state.pop("seeding_status_message"))
 
     if page == PAGE_PORTFOLIO:
-        render_portfolio_overview(project_repo, schema_repo)
+        from app.main import create_project_workspace
+        from app.presentation.pages.portfolio import render_portfolio_overview as render_portfolio
+
+        render_portfolio(create_project_workspace(project_repo.db_path))
     elif page == PAGE_PLANNING:
         render_planning_milestones(
             project_repo,

@@ -13,8 +13,8 @@ from app.domain.projects.project_types import (
 from app.infrastructure.database.connection import get_db
 from app.shared.logging import get_logger
 
-# Transitional adapter: existing migrations/projects share this typed-value store.
-from src.database.property_store import parameters, read_values, write_value
+# Shared adapter also used by the compatibility exports for migrations.
+from app.infrastructure.database.property_store import parameters, read_values, write_value
 
 logger = get_logger(__name__)
 

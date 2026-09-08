@@ -1,6 +1,13 @@
 """Composition root for application dependencies and Streamlit startup."""
 
+from typing import TYPE_CHECKING
+
+from app.application.services.portfolio import PortfolioService
+from app.application.services.projects import ProjectService
 from app.application.services.project_types import ProjectTypeService
+
+if TYPE_CHECKING:
+    from app.presentation.components.project_workspace import ProjectWorkspace
 
 
 def create_project_type_service(db_path: str | None = None) -> ProjectTypeService:
@@ -15,6 +22,42 @@ def create_project_type_service(db_path: str | None = None) -> ProjectTypeServic
     from app.infrastructure.repositories.project_types import SqliteProjectTypeGateway
 
     return ProjectTypeService(SqliteProjectTypeGateway(db_path))
+
+
+def create_project_service(db_path: str | None = None) -> ProjectService:
+    """Connect transactional project use cases to the SQLite adapter."""
+    from app.infrastructure.repositories.projects import SqliteProjectGateway
+
+    return ProjectService(SqliteProjectGateway(db_path))
+
+
+def create_portfolio_service(
+    db_path: str | None = None, *, include_allocations: bool = True,
+) -> PortfolioService:
+    """Connect bounded queries and the transitional planning-capacity reader."""
+    from functools import partial
+    from app.infrastructure.repositories.portfolio import SqlitePortfolioReader
+
+    allocations = None
+    if include_allocations:
+        from src.services.project_overallocation import overallocated_project_ids
+
+        allocations = partial(overallocated_project_ids, db_path)
+    return PortfolioService(SqlitePortfolioReader(db_path), allocations)
+
+
+def create_project_workspace(db_path: str | None = None) -> ProjectWorkspace:
+    """Assemble project screens and the remaining collaboration-section bridge."""
+    from functools import partial
+    from app.presentation.components.project_workspace import ProjectWorkspace
+    from src.views.project_collaboration_view import render_project_contacts, render_project_log
+
+    return ProjectWorkspace(
+        create_project_service(db_path), create_project_type_service(db_path),
+        create_portfolio_service(db_path),
+        partial(render_project_contacts, db_path=db_path),
+        partial(render_project_log, db_path=db_path),
+    )
 
 
 def main() -> None:

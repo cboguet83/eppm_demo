@@ -49,8 +49,7 @@ def test_infrastructure_and_shared_do_not_depend_on_presentation() -> None:
     for path in (ROOT / "app" / "infrastructure").rglob("*.py"):
         for module in imports(path):
             assert not module.startswith(("app.presentation", "app.main", "streamlit", "pandas")), (path, module)
-            if module.startswith("src"):
-                assert path.name == "project_types.py" and module == "src.database.property_store", (path, module)
+            assert not module.startswith("src"), (path, module)
     for path in (ROOT / "app" / "shared").rglob("*.py"):
         for module in imports(path):
             assert module.startswith("app.shared") or module.split(".")[0] in sys.stdlib_module_names, (path, module)
@@ -61,7 +60,8 @@ def test_core_imports_work_without_installed_third_party_packages() -> None:
     result = subprocess.run([
         sys.executable, "-S", "-c",
         "import sys; import app.domain.projects.project_types; "
-        "import app.application.services.project_types; import app.main; "
+        "import app.application.services.project_types; import app.application.services.projects; "
+        "import app.application.services.portfolio; import app.main; "
         "assert not {'streamlit', 'pandas', 'sqlite3', 'src'} & sys.modules.keys()",
     ], cwd=ROOT, capture_output=True, text=True, check=False)
     assert result.returncode == 0, result.stderr

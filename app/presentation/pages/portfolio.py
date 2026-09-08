@@ -1,0 +1,264 @@
+"""Screen 1: Portfolio Overview View with Interactive Master List and Details Inspection."""
+
+import hashlib
+import json
+from typing import Any
+
+import pandas as pd
+import streamlit as st
+
+from app.application.exceptions import ProjectStorageError, ProjectTypeStorageError
+from app.application.services.portfolio import PortfolioService
+from app.presentation.i18n import t
+from app.presentation.components.project_workspace import ProjectWorkspace
+from app.presentation.components.project_type_frames import template_frame
+from app.presentation.components.portfolio_table import portfolio_project_table
+from app.presentation.components.project_dialogs import open_create_project_dialog, open_edit_project_dialog
+
+ALLOWED_DYNAMIC_PARAMS: set[str] = {
+    "phase",
+    "code_line",
+    "strategic_priority",
+    "category",
+    "category_tags",
+    "complexity",
+}
+
+_PORTFOLIO_TABLE_KEY = "portfolio_master_table"
+_SELECTED_PROJECT_KEY = "selected_portfolio_project_id"
+
+
+def _sync_portfolio_project_selection(
+    component_key: str = _PORTFOLIO_TABLE_KEY,
+    selection_key: str = _SELECTED_PROJECT_KEY,
+) -> None:
+    """Apply a row-click event before the next page body is rendered."""
+    component_state = st.session_state.get(component_key)
+    if isinstance(component_state, dict):
+        project_id = component_state.get("row_click")
+    else:
+        project_id = getattr(component_state, "row_click", None)
+    if project_id is not None:
+        st.session_state[selection_key] = project_id
+
+
+def _portfolio_table_value(value: Any) -> Any:
+    """Convert pandas and collection values to JSON-safe component values."""
+    if isinstance(value, (list, tuple, set)):
+        return [str(item) for item in value]
+    if isinstance(value, pd.Timestamp):
+        return value.isoformat()
+    try:
+        if pd.isna(value):
+            return None
+    except (TypeError, ValueError):
+        pass
+    if hasattr(value, "item"):
+        try:
+            return value.item()
+        except (TypeError, ValueError):
+            pass
+    return value
+
+
+def _build_portfolio_table_rows(
+    frame: pd.DataFrame,
+    display_columns: list[str],
+) -> list[dict[str, Any]]:
+    """Build the safe row payload while retaining a hidden project identifier."""
+    rows: list[dict[str, Any]] = []
+    for _, source in frame.iterrows():
+        row = {column: _portfolio_table_value(source.get(column)) for column in display_columns}
+        row["project_id"] = _portfolio_table_value(source.get("id"))
+        rows.append(row)
+    return rows
+
+
+def _render_project_details_panel(
+    selected_proj: pd.Series,
+    params: pd.DataFrame,
+    workspace: ProjectWorkspace,
+) -> None:
+    """Renders the detailed inspection panel below the Projects Master List for the selected project.
+
+    Args:
+        selected_proj: Series containing the selected project's attributes.
+        params: Schema parameters DataFrame.
+        workspace: Injected project use cases and collaboration sections.
+    """
+    proj_id = selected_proj["id"]
+    proj_name = selected_proj["name"]
+    proj_status = selected_proj.get("status", "—")
+    pm_name = selected_proj.get("project_manager", "—")
+    l3_name = selected_proj.get("level_3_manager_name", "—")
+    planned = float(selected_proj.get("planned_budget", 0.0))
+    actual = float(selected_proj.get("actual_budget", 0.0))
+    variance = planned - actual
+    burn_rate = (actual / planned * 100.0) if planned > 0 else 0.0
+
+    proj_obj = workspace.projects.get_project_by_id(proj_id)
+    if proj_obj is None:
+        st.info("The selected project no longer exists.")
+        return
+    params = template_frame(workspace.types.get_template(proj_obj.project_type_id))
+    allowed = set(params["param_id"]) if not params.empty else set()
+    dyn_dict = {pid: value for pid, value in proj_obj.dynamic_attributes.items() if pid in allowed}
+    st.caption(f"{t('project_types.label')}: {selected_proj.get('project_template', '')}")
+    st.markdown("---")
+    head_c1, head_c2 = st.columns([4, 1])
+    with head_c1:
+        st.subheader(f"📌 {t('portfolio.details_title', default='Project Details')}: #{proj_id} — {proj_name}")
+    with head_c2:
+        if st.button(
+            "✏️ Edit project details",
+            key=f"btn_edit_details_{proj_id}",
+            width="stretch",
+        ):
+            open_edit_project_dialog(int(proj_id), workspace)
+
+    # Labels and values deliberately use the same native caption font size.
+    summary = [
+        (t("portfolio.col_status", default="Status"), str(proj_status)),
+        (t("master_data.field_project_manager", default="Project Manager"), str(pm_name)),
+        (t("portfolio.filter_level_3_manager", default="Managing Func (L3)"), str(l3_name)),
+        (t("portfolio.col_planned", default="Planned (€)"), f"€{planned:,.2f}"),
+        (t("portfolio.col_actual", default="Actual (€)"), f"€{actual:,.2f}"),
+        (t("portfolio.kpi_variance", default="Variance"), f"€{variance:,.2f} · {burn_rate:.1f}% burn"),
+    ]
+    with st.container(horizontal=True, horizontal_alignment="distribute"):
+        for label, value in summary:
+            with st.container(width="content"):
+                st.caption(label)
+                st.caption(value)
+
+    # Render only the effective template, including user-created groups/fields.
+    groups = pd.DataFrame(workspace.portfolio.get_catalog(include_managers=False).groups)
+    group_names = dict(zip(groups["id"], groups["group_name"])) if not groups.empty else {}
+    field_groups = list(params.groupby("group_id", dropna=False, sort=False)) if not params.empty else []
+    labels = [group_names.get(group_id, t("schema.param_group_none")) for group_id, _ in field_groups]
+    labels += [t("project_collaboration.contacts", default="Project Contacts"),
+               t("project_collaboration.log", default="Project log")]
+    tabs = st.tabs(labels, key=f"project_details_tabs_{proj_id}", on_change="rerun")
+    for tab, (_, fields) in zip(tabs, field_groups):
+        if tab.open:
+            with tab:
+                for _, prop in fields.iterrows():
+                    value = dyn_dict.get(prop["param_id"])
+                    display = ", ".join(map(str, value)) if isinstance(value, list) else str(value) if value is not None else "—"
+                    alias = prop.get('alias')
+                    label = str(prop['param_name'])
+                    if pd.notna(alias) and alias:
+                        label += f" ({alias})"
+                    st.write(f"{label}{' *' if prop['mandatory'] else ''}: {display or '—'}")
+    if tabs[-2].open:
+        with tabs[-2]:
+            workspace.render_contacts(int(proj_id))
+    if tabs[-1].open:
+        with tabs[-1]:
+            workspace.render_log(int(proj_id))
+
+@st.cache_data(ttl=60, max_entries=128, show_spinner=False)
+def _load_portfolio_page(revision: tuple, columns: list[dict], query: dict, offset: int,
+                         _service: PortfolioService) -> dict:
+    """Cache by source identity/revision; injected service instances are not hashed."""
+    return _service.get_page(columns, query, offset)
+
+
+@st.cache_data(ttl=60, max_entries=64, show_spinner=False)
+def _load_portfolio_facet(revision: tuple, columns: list[dict], query: dict, column: str,
+                          search: str, _service: PortfolioService) -> dict:
+    """Keep global facet results bounded independently from row pages."""
+    return _service.get_facet(columns, query, column, search)
+
+
+def _portfolio_columns(params: pd.DataFrame) -> list[dict]:
+    columns = [
+        {"key": "name", "label": t("portfolio.col_name"), "format": "text"},
+        {"key": "project_template", "label": t("project_types.label"), "format": "text"},
+        {"key": "project_manager", "label": t("master_data.field_project_manager"), "format": "text"},
+        {"key": "level_3_manager_name", "label": t("portfolio.filter_level_3_manager"), "format": "text"},
+        {"key": "status", "label": t("portfolio.col_status"), "format": "text"},
+        {"key": "planned_budget", "label": t("portfolio.col_planned"), "format": "currency"},
+        {"key": "actual_budget", "label": t("portfolio.col_actual"), "format": "currency"},
+    ]
+    # The compact master grid retains its curated columns. Details and both
+    # dialogs use the entire effective template, with no field whitelist.
+    for prop in params.to_dict("records"):
+        if prop["param_name"] not in ALLOWED_DYNAMIC_PARAMS:
+            continue
+        ptype = prop["param_type"]
+        fmt = "number" if ptype == "NUMBER" else (
+            "url" if ptype in ("URL", "HYPERLINK") else "text")
+        columns.append({"key": "property:" + str(prop["param_id"]), "param_id": str(prop["param_id"]),
+                        "label": prop["param_name"], "format": fmt})
+    return columns
+
+
+@st.fragment
+def _render_portfolio_browser(workspace: ProjectWorkspace) -> None:
+    """Scroll requests rerun only this fragment, not navigation or global KPIs."""
+    params = pd.DataFrame(workspace.portfolio.get_catalog(include_managers=False).parameters)
+    columns = _portfolio_columns(params)
+    search = st.text_input(t("portfolio.filter_search"), placeholder=t("portfolio.filter_search_placeholder"))
+    with st.container(horizontal=True, horizontal_alignment="distribute", vertical_alignment="center"):
+        st.subheader(t("portfolio.table_header"))
+        if st.button("Create new project", icon=":material/add:", type="primary",
+                     key="btn_create_project_from_portfolio"):
+            open_create_project_dialog(workspace)
+    st.caption("Click a project to see its details. Scroll to load more projects automatically.")
+
+    revision = workspace.portfolio.revision()
+    context = hashlib.sha256(json.dumps([revision, columns, search],
+                                       sort_keys=True).encode()).hexdigest()
+    component_state = st.session_state.get(_PORTFOLIO_TABLE_KEY, {})
+    request = (component_state.get("request") if isinstance(component_state, dict)
+               else getattr(component_state, "request", None)) or {}
+    request = request if isinstance(request, dict) else {}
+    raw_query = request.get("query")
+    query = dict(raw_query) if isinstance(raw_query, dict) else {}
+    query.update(search=search, templates=[])
+    current_request = request.get("context") == context
+    offset = request.get("offset", 0) if current_request else 0
+    try:
+        offset = max(0, int(offset)) // 100 * 100
+    except (TypeError, ValueError, OverflowError):
+        offset = 0
+    page = _load_portfolio_page(revision, columns, query, offset, workspace.portfolio)
+    facet = None
+    if current_request and request.get("kind") == "facet" and request.get("column") in {c["key"] for c in columns}:
+        facet = _load_portfolio_facet(revision, columns, query, request["column"],
+                                     str(request.get("search") or ""), workspace.portfolio)
+    _sync_portfolio_project_selection()
+    gantt_project = (component_state.get("gantt_click") if isinstance(component_state, dict)
+                     else getattr(component_state, "gantt_click", None))
+    if gantt_project is not None and workspace.projects.get_project_by_id(gantt_project) is not None:
+        st.session_state["target_planning_project_id"] = int(gantt_project)
+        st.session_state.pop("active_resource_pool_filter", None)
+        st.session_state.pop("pending_resource_pool_filter", None)
+        st.session_state["nav_redirect"] = "2. Planning & Step Loader"
+        st.rerun()
+    portfolio_project_table(
+        page["rows"], columns, st.session_state.get(_SELECTED_PROJECT_KEY),
+        key=_PORTFOLIO_TABLE_KEY,
+        page_info={**{k: v for k, v in page.items() if k != "rows"},
+                   "context": context, "query": query,
+                   "request_id": request.get("nonce") if current_request else None,
+                   "facet": facet},
+    )
+
+    selected_id = st.session_state.get(_SELECTED_PROJECT_KEY)
+    if selected_id is not None:
+        detail = workspace.portfolio.get_detail(int(selected_id))
+        if detail is not None:
+            selected = pd.Series({**detail, "id": detail["project_id"]})
+            for key in ("project_manager", "level_3_manager_name"):
+                selected[key] = selected.get(key) or "—"
+            _render_project_details_panel(selected, params, workspace)
+
+
+def render_portfolio_overview(workspace: ProjectWorkspace) -> None:
+    """Render the compact project list; shared totals remain in navigation."""
+    try:
+        _render_portfolio_browser(workspace)
+    except (ValueError, ProjectStorageError, ProjectTypeStorageError) as exc:
+        st.error(str(exc))

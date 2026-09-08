@@ -6,10 +6,11 @@ PPM Studio Pro is an enterprise-grade Project Portfolio Management (PPM) web app
 
 ## Architecture and migration status
 
-The layered migration starts with **project types and template rules**. The rest
-of the application is migrated incrementally. See
-[ADR 0001](docs/decisions/0001-layered-project-types.md) for dependency rules,
-transaction behavior, compatibility boundaries, and the remaining work.
+The layered migration now covers **project types, project creation/editing/deletion,
+and portfolio browsing**. See [ADR 0001](docs/decisions/0001-layered-project-types.md)
+for the initial dependency rules and
+[ADR 0002](docs/decisions/0002-layered-projects-and-portfolio.md) for the current
+transaction, compatibility, and validation details. Schema administration is next.
 
 ### C4 level 2: runtime containers
 
@@ -33,9 +34,9 @@ C4Container
 | `app.py` | Compatibility launcher for existing commands |
 | `app/main.py` | Dependency construction and startup |
 | `app/presentation/` | Migrated pages/components and the transitional legacy shell |
-| `app/application/` | Project-type services, persistence ports, and boundary errors |
-| `app/domain/projects/` | Project-type and custom-property rules |
-| `app/infrastructure/` | SQLite connections and project-type persistence |
+| `app/application/` | Project/type use cases, portfolio queries, ports, and boundary errors |
+| `app/domain/projects/` | Project records, project-type rules, and effective property values |
+| `app/infrastructure/` | SQLite transactions, typed values, project persistence, and paged reads |
 | `app/shared/` | Configuration and logging |
 | `src/` | Remaining features and compatibility adapters |
 | `scripts/` | Seeding, database maintenance, and benchmarks |

@@ -1,6 +1,6 @@
 # ADR 0001: Begin the layered migration with project types
 
-- Status: Accepted for the first migration increment
+- Status: Accepted for the first migration increment; extended by [ADR 0002](0002-layered-projects-and-portfolio.md)
 - Date: 2026-09-08
 - Initial inspected baseline: `285e879f0ca9dcb3d219594b3d130933ba5d4232`
 - Integrated upstream baseline: `3b64963cf732018bb72496c5dcc75e5ea0ef03c1`
@@ -88,6 +88,9 @@ functions and an isolated core-import check with third-party packages disabled.
 
 ## Temporary compatibility boundaries
 
+This section records the first increment. ADR 0002 migrates the property-store
+adapter and the project/portfolio screens, removing that infrastructure bridge.
+
 These are deliberate migration dependencies, not the destination architecture:
 
 - `app/presentation/legacy_shell.py` retains the existing routing, startup,
@@ -165,10 +168,9 @@ migration only; `AGENTS.md` is unchanged.
 
 ## Remaining migration work
 
-- Migrate project creation/editing and portfolio operations so their screens can
-  receive application services rather than constructing legacy repositories.
-- Move schema administration and the relational property-store adapter fully into
-  the new layers, then remove the related compatibility methods.
+- Project creation/editing and portfolio operations are completed in ADR 0002.
+- The relational property-store adapter is moved in ADR 0002. Migrate schema
+  administration next, then remove its compatibility methods as callers move.
 - Migrate planning and resource-capacity workflows while retaining pagination,
   lazy loading, component event contracts, and performance checks.
 - Move remaining settings screens and shared translations/components, then remove
