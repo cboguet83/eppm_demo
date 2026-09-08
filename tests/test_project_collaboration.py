@@ -37,7 +37,8 @@ def test_app_bootstrap_passes_schema_version_as_an_explicit_cache_key():
     import ast
     from pathlib import Path
 
-    module = ast.parse((Path(__file__).resolve().parents[1] / "app.py").read_text(encoding="utf-8"))
+    shell = Path(__file__).resolve().parents[1] / "app/presentation/legacy_shell.py"
+    module = ast.parse(shell.read_text(encoding="utf-8"))
     bootstrap = next(node for node in module.body if isinstance(node, ast.FunctionDef)
                      and node.name == "bootstrap_database")
     version = ast.literal_eval(bootstrap.args.defaults[0])

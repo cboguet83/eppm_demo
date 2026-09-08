@@ -4,228 +4,48 @@ PPM Studio Pro is an enterprise-grade Project Portfolio Management (PPM) web app
   
 ---
 
-## 🏛️ System Architecture & C4 Model
+## Architecture and migration status
 
-### C4 Level 1: System Context Diagram
+The layered migration starts with **project types and template rules**. The rest
+of the application is migrated incrementally. See
+[ADR 0001](docs/decisions/0001-layered-project-types.md) for dependency rules,
+transaction behavior, compatibility boundaries, and the remaining work.
+
+### C4 level 2: runtime containers
+
 ```mermaid
-C4Context
-    title System Context Diagram - PPM Studio Pro
-
-    Person(user, "Portfolio Manager / PMO Lead", "Manages project taxonomies, master records, milestone schedules, and financial budgets.")
-    System(ppm_app, "PPM Studio Pro", "Streamlit-based Project Portfolio Management Application with dynamic schema capabilities and analytics.")
-    SystemDb(sqlite_db, "SQLite Database (ppm_mock.db)", "Stores parameter groups, normalized parameters, enum options, organizational hierarchy, employee availability calendars, resource pools, projects, and milestones.")
-
-    Rel(user, ppm_app, "Interacts via Web Browser", "HTTPS / Streamlit UI (Port 8501)")
-    Rel(ppm_app, sqlite_db, "Queries and Updates Schema & Data", "SQL / SQLite Connection Pool")
+C4Container
+    title EPPM runtime
+    Person(user, "Portfolio manager", "Manages projects, planning, and resources")
+    System_Boundary(eppm, "EPPM") {
+        Container(web, "Application", "Python 3.14 / Streamlit", "UI and application logic in one process")
+        ContainerDb(database, "Application data", "SQLite file", "Projects, types, properties, planning, and resources")
+    }
+    Rel(user, web, "Uses", "HTTP / HTTPS")
+    Rel(web, database, "Reads and writes", "SQLite")
 ```
 
-### C4 Level 2: Container & Layered Component Architecture
-```mermaid
-classDiagram
-    direction TB
+### Source locations
 
-    namespace Presentation_Layer {
-        class PortfolioView {
-            +render() void
-        }
-        class ProjectMasterView {
-            +render() void
-        }
-        class PlanningView {
-            +render() void
-        }
-        class SettingsView {
-            +render() void
-        }
-        class SchemaDefView {
-            +render() void
-        }
-        class BudgetView {
-            +render() void
-        }
-    }
-
-    namespace Business_Services_Layer {
-        class PortfolioService {
-            +calculate_metrics(df_projects: DataFrame) PortfolioMetrics
-            +flatten_dynamic_attributes(df_projects: DataFrame, params: DataFrame) DataFrame
-        }
-        class OrganizationService {
-            +get_level_3_managing_function(function_id: int, df_functions: DataFrame) dict
-            +enrich_projects_with_organization(df_projects: DataFrame, df_functions: DataFrame) DataFrame
-            +enrich_functions(df_functions: DataFrame, df_types: DataFrame) DataFrame
-            +enrich_employees(df_employees: DataFrame, df_functions: DataFrame) DataFrame
-            +validate_employee_calendar_exception(start_date: date, end_date: date, percentage: float) void
-        }
-        class SchemaService {
-            +generate_param_id(db_path: str) str
-            +get_next_available_group_order(db_path: str) int
-            +validate_project_dynamic_attributes(dyn_values: dict, params_df: DataFrame) list
-        }
-        class MilestoneService {
-            +parse_csv(uploaded_file, project_id: str) list~dict~
-            +evaluate_constraints(tasks: list, dependencies: list) tuple
-            +get_csv_template() str
-        }
-        class ResourcePoolService {
-            +calculate_project_pool_status(project_id: int, pool_id: int) dict
-            +get_pool_capacity_detail(pool_id: int) PoolCapacityDetail
-        }
-    }
-
-    namespace Data_Access_Layer {
-        class SchemaRepository {
-            +get_all_groups() DataFrame
-            +get_all_parameters() DataFrame
-            +get_all_options() DataFrame
-            +create_group(name: str, order: int) int
-            +create_parameter(param_id: str, group_id: int, name: str, ptype: str, mandatory: bool, alias: str) bool
-            +update_parameter(param_id: str, group_id: int, name: str, ptype: str, mandatory: bool, alias: str) bool
-        }
-        class ProjectRepository {
-            +get_all_projects() DataFrame
-            +exists(project_id: str) bool
-            +create_project(id: str, name: str, status: str, planned: float, actual: float, dyn_attrs: dict, function_id: int) bool
-            +update_project(id: str, name: str, status: str, planned: float, actual: float, dyn_attrs: dict, function_id: int) bool
-            +delete_project(id: str) bool
-        }
-        class MilestoneRepository {
-            +get_milestones_by_project(project_id: str) DataFrame
-            +create_milestone(project_id: str, task: str, phase: str, start: str, end: str, progress: int) int
-            +bulk_create_milestones(rows: list~dict~) int
-            +delete_milestone(milestone_id: int) bool
-        }
-        class OrganizationRepository {
-            +get_all_functions() DataFrame
-            +get_all_function_types() DataFrame
-            +get_all_teams() DataFrame
-            +get_all_employees() DataFrame
-            +get_employee_calendar_exceptions(employee_id: int) DataFrame
-            +get_effective_occupation_percentage(employee_id: int, on_date: date) float
-        }
-        class ResourcePoolRepository {
-            +get_all_pools() DataFrame
-            +get_mappings_by_pool(pool_id: int) DataFrame
-            +get_assignments(project_id: int) DataFrame
-        }
-    }
-
-    namespace Core_Database_Config {
-        class AppConfig {
-            +db_path: str
-            +log_level: str
-            +app_env: str
-        }
-        class DatabaseManager {
-            +get_db(db_path: str) Connection
-            +init_db(db_path: str) void
-            +seed_default_data_if_empty(db_path: str) void
-        }
-    }
-
-    PortfolioView --> PortfolioService
-    PortfolioView --> OrganizationService
-    PortfolioView --> ProjectRepository
-    PortfolioView --> SchemaRepository
-    ProjectMasterView --> ProjectRepository
-    ProjectMasterView --> SchemaRepository
-    ProjectMasterView --> OrganizationRepository
-    PlanningView --> MilestoneService
-    PlanningView --> MilestoneRepository
-    PlanningView --> ProjectRepository
-    SettingsView --> OrganizationRepository
-    SettingsView --> SchemaRepository
-    SettingsView --> SchemaDefView
-    BudgetView --> PortfolioService
-    BudgetView --> ProjectRepository
-
-    SchemaRepository --> DatabaseManager
-    ProjectRepository --> DatabaseManager
-    MilestoneRepository --> DatabaseManager
-    OrganizationRepository --> DatabaseManager
-    ResourcePoolRepository --> DatabaseManager
-    DatabaseManager --> AppConfig
-```
-
----
-
-## 📁 Project Directory Structure
-
-```text
-eppm_demo/
-├── .env.example                # 12-Factor environment variable template
-├── .gitignore                  # Git ignore rules including .env and secrets
-├── .dockerignore               # Optimized Docker build context exclusions
-├── Dockerfile                  # Production-ready multi-stage Docker build
-├── docker-compose.yml          # Container orchestration with volume persistence
-├── requirements.txt            # Application Python package dependencies
-├── app.py                      # Main Streamlit application entrypoint & routing
-├── README.md                   # System documentation, seeding & Docker guide
-├── ppm_mock.db                 # SQLite database file
-├── scripts/
-│   └── seed_database.py        # CLI database generator & bulk seeder
-├── src/                        # Modular application source code
-│   ├── __init__.py
-│   ├── config.py               # Environment configuration (12-Factor)
-│   ├── logging_config.py       # Structured logging setup
-│   ├── models/                 # Domain dataclasses and constants
-│   │   ├── __init__.py
-│   │   ├── constants.py        # Statuses, navigation keys, parameter types
-│   │   ├── schema.py           # SchemaGroup, SchemaParameter, SchemaParamOption
-│   │   ├── project.py          # Project (with function_id FK), PortfolioMetrics
-│   │   ├── milestone.py        # Milestone & Task Dependency models
-│   │   ├── organization.py     # OrgFunction, FunctionType, Team, Employee, calendar exceptions
-│   │   ├── resource_pool.py    # ResourcePool, PoolMapping, PoolAssignment
-│   │   └── tag.py              # TagGroup, TagDictionary, ProjectTag, TaskTag
-│   ├── database/               # SQLite connection, DDL & migrations
-│   │   ├── __init__.py
-│   │   ├── connection.py       # get_db context manager
-│   │   ├── schema_init.py      # init_db and automated DDL migration pipeline
-│   │   └── seeder.py           # seed_default_data_if_empty (bootstrap data)
-│   ├── i18n/                   # Multi-language localization (EN, FR, DE, LB, PT)
-│   │   ├── __init__.py
-│   │   ├── translator.py       # Translation lookup & locale switcher
-│   │   └── locales/            # JSON translation catalogs (100% key parity)
-│   ├── repositories/           # Data access layer (CRUD queries)
-│   │   ├── __init__.py
-│   │   ├── schema_repo.py      # Schema groups, parameters, options CRUD
-│   │   ├── project_repo.py     # Projects CRUD & foreign key lookups
-│   │   ├── milestone_repo.py   # Tasks, milestones & dependency links CRUD
-│   │   ├── organization_repo.py# Functions, types, teams, employees & availability CRUD
-│   │   ├── resource_pool_repo.py # Resource pools, mappings, allocations CRUD
-│   │   └── tag_repo.py         # Tag dictionaries and entity tagging CRUD
-│   ├── services/               # Pure business logic & transformations
-│   │   ├── __init__.py
-│   │   ├── schema_service.py   # Schema validation, parameter ID & ordering
-│   │   ├── portfolio_service.py # Financial KPI metrics & attribute flattening
-│   │   ├── organization_service.py # Level 3 managing function & reporting hierarchy
-│   │   ├── milestone_service.py # Constraint evaluation & CSV parsing
-│   │   ├── resource_pool_service.py # Dynamic pool capacity vs demand calculation
-│   │   └── tag_service.py      # Tag grouping & deduplication
-│   └── views/                  # Streamlit UI Presentation Layer (Screens 1 to 3)
-│       ├── __init__.py
-│       ├── portfolio_view.py   # 1. Portfolio Overview (Master List & Details)
-│       ├── project_dialogs.py  # Project create/edit modal workflows
-│       ├── planning_view.py    # 2. Planning & Milestones (Gantt, CSV loader)
-│       ├── settings_view.py    # 3. Settings (Organization & Parameter Definition)
-│       ├── schema_def_view.py  # Parameter Definition dynamic schema builder
-│       └── budget_view.py      # Budget Analytics & Financial Tracking
-└── tests/                      # Automated test suite (AAA pattern)
-    ├── __init__.py
-    ├── test_database.py        # DDL initialization, migrations, connection tests
-    ├── test_repositories.py    # Repository CRUD & foreign key tests
-    ├── test_services.py        # Hierarchy resolution, KPI, CSV, validation tests
-    ├── test_i18n.py            # Strict 5-locale key parity & interpolation tests
-    ├── test_app_integration.py # Full lifecycle integration tests
-    └── test_app.py             # Regression test suite
-```
-
----
+| Location | Purpose |
+| --- | --- |
+| `streamlit_app.py` | Preferred Streamlit launcher |
+| `app.py` | Compatibility launcher for existing commands |
+| `app/main.py` | Dependency construction and startup |
+| `app/presentation/` | Migrated pages/components and the transitional legacy shell |
+| `app/application/` | Project-type services, persistence ports, and boundary errors |
+| `app/domain/projects/` | Project-type and custom-property rules |
+| `app/infrastructure/` | SQLite connections and project-type persistence |
+| `app/shared/` | Configuration and logging |
+| `src/` | Remaining features and compatibility adapters |
+| `scripts/` | Seeding, database maintenance, and benchmarks |
+| `tests/` | Existing regressions, layer checks, and migration tests |
+| `docs/decisions/` | Architecture decisions and migration status |
 
 ## 🚀 Getting Started (Local Development)
 
 ### 1. Prerequisites
-- Python 3.11+
+- Python 3.14.x
 - Virtual environment (`venv` or `conda`)
 
 ### 2. Environment Setup
@@ -240,7 +60,7 @@ python -m venv .venv
 source .venv/bin/activate
 
 # Install dependencies
-pip install -r requirements.txt
+pip install -e ".[dev]"
 
 # Copy environment template
 cp .env.example .env
@@ -248,14 +68,18 @@ cp .env.example .env
 
 ### 3. Run the Application
 ```powershell
-streamlit run app.py
+streamlit run streamlit_app.py
 ```
-Open `http://localhost:8501` in your browser.
+Open `http://localhost:8501` in your browser. Existing `streamlit run app.py` and
+`python app.py` seeding/help commands remain supported.
 
 ### 4. Run Automated Tests
 ```powershell
-# Run the complete test suite with 102 passing tests
-python -m unittest discover tests -v
+# Run the complete Python suite, including architecture checks
+python -m pytest -q
+
+# Run custom-component regressions
+node --test tests/*.cjs
 ```
 
 ---

@@ -4,13 +4,12 @@ Callers own the connection and transaction. A missing row means absent; a row
 with kind ``null`` or ``empty`` records an explicitly cleared scalar value.
 """
 
-import datetime
 import json
-import math
 import sqlite3
 from typing import Any
 
-from src.models.constants import PARAM_TYPES
+from app.domain.projects.property_values import encode_property_value
+from app.domain.projects.project_types import resolve_template
 
 
 def parameters(conn: sqlite3.Connection) -> list[dict[str, Any]]:
@@ -44,36 +43,10 @@ def encode_value(conn: sqlite3.Connection, pid: str, value: Any) -> tuple:
     row = conn.execute("SELECT param_type FROM schema_parameters WHERE param_id = ?", (pid,)).fetchone()
     if not row:
         raise ValueError(f"Unknown property: {pid}")
-    ptype = row[0]
-    if ptype not in PARAM_TYPES:
-        raise ValueError(f"{pid}: unsupported property type {ptype}")
-    if value is None:
-        return ("null", None, None, None, [])
-    if value == "":
-        return ("empty", None, None, None, [])
-    choices = {r[0] for r in conn.execute("SELECT option_value FROM schema_param_options WHERE param_id = ?", (pid,))}
-    if ptype in ("MULTI_ENUM", "TAGS"):
-        if not isinstance(value, list) or any(not isinstance(v, str) for v in value):
-            raise ValueError(f"{pid}: expected a list of text values")
-        if len(set(value)) != len(value):
-            raise ValueError(f"{pid}: duplicate selections")
-        # TAGS historically supports free text in addition to suggested options.
-        if ptype == "MULTI_ENUM" and any(v not in choices for v in value):
-            raise ValueError(f"{pid}: invalid selection")
-        return ("list", None, None, None, value)
-    if ptype == "NUMBER":
-        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
-            raise ValueError(f"{pid}: expected a finite number")
-        return ("number", None, value, None, [])
-    if not isinstance(value, str):
-        raise ValueError(f"{pid}: expected text")
-    if ptype == "DATE":
-        if datetime.date.fromisoformat(value).isoformat() != value:
-            raise ValueError(f"{pid}: expected an ISO date")
-        return ("date", None, None, value, [])
-    if ptype == "ENUM" and value not in choices:
-        raise ValueError(f"{pid}: invalid selection {value!r}")
-    return ("text", value, None, None, [])
+    choices = {r[0] for r in conn.execute(
+        "SELECT option_value FROM schema_param_options WHERE param_id = ?", (pid,)
+    )}
+    return encode_property_value(pid, row[0], value, choices)
 
 
 def write_value(conn: sqlite3.Connection, owner_id: int, pid: str, value: Any, *, defaults: bool = False) -> None:
@@ -114,16 +87,7 @@ def effective_template(conn: sqlite3.Connection, type_id: int) -> list[dict[str,
     selected = {r[0] for r in conn.execute("SELECT param_id FROM project_type_property WHERE project_type_id = ?", (type_id,))}
     overrides = dict(conn.execute("SELECT param_id, mandatory_override FROM project_type_property_rule WHERE project_type_id = ?", (type_id,)))
     defaults = read_values(conn, defaults=True, owner_id=type_id).get(type_id, {})
-    result = []
-    for p in parameters(conn):
-        if p["applies_to_all"] or p["param_id"] in selected:
-            pid = p["param_id"]
-            p["mandatory_override"] = overrides.get(pid)
-            p["mandatory"] = bool(p["mandatory"] if overrides.get(pid) is None else overrides[pid])
-            p["has_default"] = pid in defaults
-            p["default_value"] = defaults.get(pid)
-            result.append(p)
-    return result
+    return resolve_template(parameters(conn), selected, overrides, defaults)
 
 
 def prepare_values(conn: sqlite3.Connection, type_id: int, submitted: dict[str, Any], *, creating: bool, existing: dict[str, Any] | None = None) -> dict[str, Any]:

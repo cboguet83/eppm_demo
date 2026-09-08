@@ -15,8 +15,8 @@ from src.models.constants import (
 )
 from src.repositories.schema_repo import SchemaRepository
 from src.services.schema_service import SchemaService
-from src.repositories.project_type_repo import ProjectTypeRepository
-from src.views.project_types_view import applicability_input, render_project_types
+from app.main import create_project_type_service
+from app.presentation.pages.project_types import applicability_input, render_project_types
 
 
 def render_schema_definition(schema_repo: SchemaRepository) -> None:
@@ -34,9 +34,9 @@ def render_schema_definition(schema_repo: SchemaRepository) -> None:
     groups = schema_repo.get_all_groups()
     params = schema_repo.get_all_parameters()
     options = schema_repo.get_all_options()
-    type_repo = ProjectTypeRepository(schema_repo.db_path)
+    type_service = create_project_type_service(schema_repo.db_path)
     with tab_types:
-        render_project_types(type_repo, options)
+        render_project_types(type_service, options)
 
     # --------------------------------------------------------------------------
     # TAB 1: SCHEMA GROUPS
@@ -48,7 +48,7 @@ def render_schema_definition(schema_repo: SchemaRepository) -> None:
         # Section A: Add New Group
         with col_left:
             st.markdown(f"#### ➕ {t('schema.grp_create_header')}")
-            next_avail_order = SchemaService.get_next_available_group_order()
+            next_avail_order = SchemaService.get_next_available_group_order(schema_repo.db_path)
             existing_orders = groups["display_order"].tolist() if not groups.empty else []
 
             with st.form("form_add_group"):
@@ -206,7 +206,7 @@ def render_schema_definition(schema_repo: SchemaRepository) -> None:
                     placeholder="Option 1, Option 2, Option 3",
                 )
 
-            applies_to_all, type_ids = applicability_input(type_repo, "new_property")
+            applies_to_all, type_ids = applicability_input(type_service, "new_property")
             btn_add_param = st.button(t("schema.btn_add_param"), width="stretch")
             if btn_add_param:
                 clean_pid = auto_id.strip() if auto_id else new_param_id.strip()
@@ -275,7 +275,7 @@ def render_schema_definition(schema_repo: SchemaRepository) -> None:
                 edit_mandatory = st.checkbox(t("schema.param_mandatory"), value=bool(edit_prop["mandatory"]), key=f"edit_required_{edit_pid}")
                 current_gid = int(edit_prop["group_id"]) if pd.notna(edit_prop["group_id"]) else None
                 edit_group = st.selectbox(t("schema.param_group_assign"), grp_options, index=grp_options.index(current_gid), format_func=grp_map.get, key=f"edit_group_{edit_pid}")
-                edit_all, edit_types = applicability_input(type_repo, f"edit_{edit_pid}", edit_pid)
+                edit_all, edit_types = applicability_input(type_service, f"edit_{edit_pid}", edit_pid)
                 if st.button(t("project_types.save_property")):
                     try:
                         schema_repo.update_parameter(edit_pid, edit_group, edit_name, edit_type, edit_mandatory, edit_alias, edit_all, edit_types)

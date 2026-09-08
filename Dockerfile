@@ -3,7 +3,7 @@
 # ==============================================================================
 
 # Stage 1: Build Dependencies
-FROM python:3.11-slim AS builder
+FROM python:3.14-slim AS builder
 
 WORKDIR /build
 
@@ -15,7 +15,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --user -r requirements.txt
 
 # Stage 2: Runtime Image
-FROM python:3.11-slim AS runtime
+FROM python:3.14-slim AS runtime
 
 # Set security and performance environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -37,7 +37,8 @@ RUN useradd -m -u 1000 appuser && \
 COPY --from=builder --chown=appuser:appuser /root/.local /home/appuser/.local
 
 # Copy application source code and scripts
-COPY --chown=appuser:appuser app.py .
+COPY --chown=appuser:appuser app.py streamlit_app.py .
+COPY --chown=appuser:appuser app/ ./app/
 COPY --chown=appuser:appuser src/ ./src/
 COPY --chown=appuser:appuser scripts/ ./scripts/
 COPY --chown=appuser:appuser .streamlit/ ./.streamlit/
@@ -49,5 +50,4 @@ EXPOSE 8501
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health')" || exit 1
 
-ENTRYPOINT ["streamlit", "run", "app.py"]
-
+ENTRYPOINT ["streamlit", "run", "streamlit_app.py"]
