@@ -5,7 +5,6 @@ import os
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 import pandas as pd
-import plotly.graph_objects as go
 import streamlit as st
 import streamlit.components.v1 as components
 
@@ -14,7 +13,6 @@ from src.models.constants import PAGE_PLANNING
 from src.models.organization import Employee, EmployeeCalendarException, FunctionType, OrgFunction, Team
 from src.models.resource_pool import (
     PoolAssignment,
-    PoolCapacityDetail,
     PoolMapping,
     ResourcePool,
     ResourcePoolGroup,
@@ -836,234 +834,6 @@ def _open_add_pool_mapping_dialog(
 
     if col_cancel.button(t("settings.btn_cancel", default="Cancel"), use_container_width=True):
         st.rerun()
-
-
-def _append_block_capacity_coords(
-    block: list[str],
-    cap: float,
-    cap_x: list[Optional[str]],
-    cap_y: list[Optional[float]],
-) -> None:
-    """Append capacity limit coordinates for a contiguous date block.
-
-    Args:
-        block: List of contiguous ISO-formatted date strings.
-        cap: Total pool capacity FTE.
-        cap_x: Target list of X coordinate dates.
-        cap_y: Target list of Y coordinate capacity values.
-    """
-    if len(block) == 1:
-        d_val = datetime.date.fromisoformat(block[0])
-        s_dt = (d_val - datetime.timedelta(hours=6)).strftime("%Y-%m-%d %H:%M:%S")
-        e_dt = (d_val + datetime.timedelta(hours=6)).strftime("%Y-%m-%d %H:%M:%S")
-        cap_x.extend([s_dt, e_dt, None])
-        cap_y.extend([cap, cap, None])
-    else:
-        cap_x.extend([block[0], block[-1], None])
-        cap_y.extend([cap, cap, None])
-
-
-def _append_block_demand_coords(
-    block: list[str],
-    daily_points: dict[str, float],
-    cap: float,
-    blue_x: list[Optional[str]],
-    blue_y: list[Optional[float]],
-    red_x: list[Optional[str]],
-    red_y: list[Optional[float]],
-) -> None:
-    """Append demand line segments for a contiguous date block colored by capacity threshold.
-
-    Args:
-        block: List of contiguous ISO-formatted date strings.
-        daily_points: Map of ISO date strings to assigned FTE demand.
-        cap: Pool capacity limit in FTE.
-        blue_x: Target list for within-capacity X coordinates.
-        blue_y: Target list for within-capacity Y coordinates.
-        red_x: Target list for over-capacity X coordinates.
-        red_y: Target list for over-capacity Y coordinates.
-    """
-    if len(block) < 2:
-        return
-
-    for i in range(len(block) - 1):
-        d1_str = block[i]
-        d2_str = block[i + 1]
-        v1 = daily_points[d1_str]
-        v2 = daily_points[d2_str]
-
-        is_v1_over = v1 > (cap + 1e-4)
-        is_v2_over = v2 > (cap + 1e-4)
-
-        if not is_v1_over and not is_v2_over:
-            blue_x.extend([d1_str, d2_str, None])
-            blue_y.extend([v1, v2, None])
-        elif is_v1_over and is_v2_over:
-            red_x.extend([d1_str, d2_str, None])
-            red_y.extend([v1, v2, None])
-        else:
-            d1_dt = datetime.datetime.combine(datetime.date.fromisoformat(d1_str), datetime.time(12, 0))
-            d2_dt = datetime.datetime.combine(datetime.date.fromisoformat(d2_str), datetime.time(12, 0))
-            denom = v2 - v1
-            ratio = (cap - v1) / denom if abs(denom) > 1e-6 else 0.5
-            ratio = max(0.01, min(0.99, ratio))
-            cross_dt = d1_dt + ratio * (d2_dt - d1_dt)
-            cross_str = cross_dt.strftime("%Y-%m-%d %H:%M:%S")
-
-            if not is_v1_over and is_v2_over:
-                blue_x.extend([d1_str, cross_str, None])
-                blue_y.extend([v1, cap, None])
-                red_x.extend([cross_str, d2_str, None])
-                red_y.extend([cap, v2, None])
-            else:
-                red_x.extend([d1_str, cross_str, None])
-                red_y.extend([v1, cap, None])
-                blue_x.extend([cross_str, d2_str, None])
-                blue_y.extend([cap, v2, None])
-
-
-def _build_pool_timeline_figure(current_detail: PoolCapacityDetail) -> Optional[go.Figure]:
-    """Construct Plotly timeline chart for pool daily demand vs capacity.
-
-    Renders daily assigned demand in red when exceeding capacity and blue when
-    within capacity. Strict line continuity prevents rendering any lines over
-    periods not covered by active assignments.
-
-    Args:
-        current_detail: Detailed pool capacity and assignment information.
-
-    Returns:
-        Plotly Figure object, or None if no daily usage points exist.
-    """
-    daily_points = current_detail.daily_usage
-    if not daily_points and current_detail.assignments:
-        daily_points = {}
-        for a in current_detail.assignments:
-            ResourcePoolService._accumulate_daily_usage(
-                daily_points, a["start_date"], a["end_date"], a["fte_assigned"]
-            )
-
-    if not daily_points:
-        return None
-
-    cap = float(current_detail.total_capacity_fte)
-    sorted_dates = sorted(daily_points.keys())
-
-    # 1. Group active dates into contiguous consecutive-day blocks
-    blocks: list[list[str]] = []
-    current_block: list[str] = []
-
-    for d_str in sorted_dates:
-        if not current_block:
-            current_block.append(d_str)
-            continue
-        prev_dt = datetime.date.fromisoformat(current_block[-1])
-        curr_dt = datetime.date.fromisoformat(d_str)
-        if (curr_dt - prev_dt).days == 1:
-            current_block.append(d_str)
-        else:
-            blocks.append(current_block)
-            current_block = [d_str]
-
-    if current_block:
-        blocks.append(current_block)
-
-    # 2. Build segmented coordinates
-    blue_x: list[Optional[str]] = []
-    blue_y: list[Optional[float]] = []
-    red_x: list[Optional[str]] = []
-    red_y: list[Optional[float]] = []
-    cap_x: list[Optional[str]] = []
-    cap_y: list[Optional[float]] = []
-
-    for blk in blocks:
-        _append_block_capacity_coords(blk, cap, cap_x, cap_y)
-        _append_block_demand_coords(blk, daily_points, cap, blue_x, blue_y, red_x, red_y)
-
-    # 3. Build discrete daily markers
-    blue_m_x: list[str] = []
-    blue_m_y: list[float] = []
-    blue_m_text: list[str] = []
-    red_m_x: list[str] = []
-    red_m_y: list[float] = []
-    red_m_text: list[str] = []
-
-    for d in sorted_dates:
-        val = daily_points[d]
-        if val > (cap + 1e-4):
-            red_m_x.append(d)
-            red_m_y.append(val)
-            red_m_text.append(f"📅 <b>{d}</b><br>Demand: <b>{val:.2f} FTE</b><br>⚠️ Exceeds capacity by +{val - cap:.2f} FTE")
-        else:
-            blue_m_x.append(d)
-            blue_m_y.append(val)
-            blue_m_text.append(f"📅 <b>{d}</b><br>Demand: <b>{val:.2f} FTE</b><br>✅ Within capacity limit ({cap:.2f} FTE)")
-
-    fig = go.Figure()
-
-    if blue_x:
-        fig.add_trace(go.Scatter(
-            x=blue_x,
-            y=blue_y,
-            mode="lines",
-            name=t("settings.demand_within_cap", default="Daily Demand (≤ Capacity)"),
-            line=dict(color="#2563EB", width=3),
-            hoverinfo="skip",
-        ))
-
-    if red_x:
-        fig.add_trace(go.Scatter(
-            x=red_x,
-            y=red_y,
-            mode="lines",
-            name=t("settings.demand_over_cap", default="Daily Demand (> Capacity)"),
-            line=dict(color="#C41039", width=3),
-            hoverinfo="skip",
-        ))
-
-    if blue_m_x:
-        fig.add_trace(go.Scatter(
-            x=blue_m_x,
-            y=blue_m_y,
-            mode="markers",
-            name=t("settings.marker_within_cap", default="Demand (≤ Capacity)"),
-            marker=dict(color="#2563EB", size=7, line=dict(color="#FFFFFF", width=1)),
-            hovertext=blue_m_text,
-            hoverinfo="text",
-            showlegend=not bool(blue_x),
-        ))
-
-    if red_m_x:
-        fig.add_trace(go.Scatter(
-            x=red_m_x,
-            y=red_m_y,
-            mode="markers",
-            name=t("settings.marker_over_cap", default="Demand (> Capacity)"),
-            marker=dict(color="#C41039", size=9, symbol="diamond", line=dict(color="#FFFFFF", width=1.5)),
-            hovertext=red_m_text,
-            hoverinfo="text",
-            showlegend=not bool(red_x),
-        ))
-
-    if cap_x:
-        fig.add_trace(go.Scatter(
-            x=cap_x,
-            y=cap_y,
-            mode="lines",
-            name=t("settings.pool_capacity_line", default="Pool Capacity Limit"),
-            line=dict(color="#10B981", width=2.5, dash="dash"),
-            hoverinfo="skip",
-        ))
-
-    fig.update_layout(
-        height=260,
-        margin=dict(l=20, r=20, t=25, b=20),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        xaxis=dict(title=""),
-        yaxis=dict(title="FTE"),
-        hovermode="closest",
-    )
-    return fig
 
 
 def _render_pool_assignments_table(
@@ -2869,13 +2639,6 @@ def render_settings_view(
                             f"deduplicated assigned capacity is **{current_detail.assigned_capacity_fte:.2f} FTE**. "
                             f"Peak active daily demand is **{current_detail.peak_assigned_fte:.2f} FTE**."
                         )
-
-                    # Daily Demand Timeline Plotly Chart
-                    if current_detail.assignments:
-                        st.write(f"##### 📈 {t('settings.daily_demand_chart', default='Daily Capacity vs. Assigned Demand Timeline')}")
-                        chart_fig = _build_pool_timeline_figure(current_detail)
-                        if chart_fig is not None:
-                            st.plotly_chart(chart_fig, use_container_width=True)
 
                     st.divider()
 

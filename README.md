@@ -490,6 +490,9 @@ affected pools after assignment, mapping, calendar, task-date, and capacity chan
 Organization structure changes conservatively invalidate related team/function
 pools. Daily minimum capacities and single-day overallocation checks are preserved.
 Settings loads only the selected tab and fetches full details for the selected pool.
+The Resource Pools settings tab retains capacity totals, overallocation alerts,
+resource mappings and allocation details; the daily capacity-versus-demand chart
+is no longer displayed. The Planning capacity grid is unchanged.
 The first request after invalidation recalculates missing entries with shared inputs;
 subsequent requests read the cache. Planning still renders its selected Gantt data,
 so sub-100-ms pool reads do not imply a sub-100-ms complete page render.

@@ -17,7 +17,7 @@ from src.models.resource_pool import (
     ResourcePool,
     ResourcePoolGroup,
 )
-from src.i18n import set_current_locale, t
+from src.i18n import set_current_locale
 from src.repositories.milestone_repo import MilestoneRepository
 from src.repositories.organization_repo import OrganizationRepository
 from src.repositories.project_repo import ProjectRepository
@@ -837,9 +837,8 @@ class TestResourcePools(unittest.TestCase):
         self.assertEqual(p_map[60][0]["pool_name"], "PMO Pool")
         self.assertEqual(p_map[60][0]["fte"], 1.5)
 
-    def test_pool_timeline_figure_rendering(self) -> None:
-        """Verify _build_pool_timeline_figure creates valid traces with gap handling."""
-        from src.views.settings_view import _build_pool_timeline_figure
+    def test_pool_demand_preserves_gaps_between_assignments(self) -> None:
+        """Daily demand excludes gaps while retaining overassignment detection."""
 
         # Create Project 70
         self.project_repo.create_project(
@@ -890,17 +889,12 @@ class TestResourcePools(unittest.TestCase):
             milestone_repo=self.milestone_repo,
         )
 
-        fig = _build_pool_timeline_figure(detail)
-        self.assertIsNotNone(fig)
-        trace_names = [tr.name for tr in fig.data]
-        # Should have within cap and over cap traces plus capacity limit
-        self.assertIn(t("settings.demand_within_cap"), trace_names)
-        self.assertIn(t("settings.demand_over_cap"), trace_names)
-        self.assertIn(t("settings.pool_capacity_line"), trace_names)
-
-        # Verify capacity line contains None for the gap between 2026-01-03 and 2026-01-10
-        cap_trace = next(tr for tr in fig.data if tr.name == t("settings.pool_capacity_line"))
-        self.assertIn(None, list(cap_trace.x))
+        self.assertEqual(detail.daily_usage, {
+            "2026-01-01": 0.5, "2026-01-02": 0.5, "2026-01-03": 0.5,
+            "2026-01-10": 1.5, "2026-01-11": 1.5, "2026-01-12": 1.5,
+        })
+        self.assertTrue(detail.is_overassigned)
+        self.assertEqual(detail.peak_assigned_fte, 1.5)
 
     def test_project_level_assignment_inherits_project_bounds_not_today(self) -> None:
         """Verify project-level assignment without custom dates inherits project bounds, not today."""
