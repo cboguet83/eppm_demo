@@ -31,3 +31,15 @@ def overloaded_consumers(pools: Sequence[PoolCapacityDetail], requested: Set[int
             if index < len(days) and days[index] <= str(end):
                 result.add(project_id)
     return result
+
+
+def assignment_is_overallocated(
+    fte: float,
+    start_date: str,
+    end_date: str,
+    pool: PoolCapacityDetail,
+) -> bool:
+    """Keep the planner's individual-demand and overlapping-day warning rule."""
+    return fte > pool.total_capacity_fte + 1e-4 or any(
+        start_date <= day.date <= end_date for day in pool.daily_overassignments
+    )

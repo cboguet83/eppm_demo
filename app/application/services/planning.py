@@ -4,6 +4,7 @@ from app.application.ports.planning import (
     ExternalTask,
     PlanningGateway,
     PlanningStore,
+    PlanningTaskBundle,
     ProjectSummary,
     TaskChoice,
     TaskRow,
@@ -34,6 +35,8 @@ def _replace_dependencies(
         if predecessor_id is None:
             return
         dependencies = [DependencyInput(predecessor_task_id=predecessor_id)]
+    if not isinstance(dependencies, list):
+        raise ValueError("Invalid dependency selection.")
     normalized = [
         item for dep in dependencies if (item := normalize_dependency(task_id, dep)) is not None
     ]
@@ -245,3 +248,8 @@ class PlanningService:
         """Find pools with positive demand from the requested portfolio projects."""
         with self._gateway.transaction() as store:
             return store.consuming_pool_ids(project_ids)
+
+    def read_task_bundle(self, project_ids: list[int]) -> PlanningTaskBundle:
+        """Load tasks, dependencies, tags, and pool assignments from one snapshot."""
+        with self._gateway.transaction() as store:
+            return store.read_task_bundle(project_ids)

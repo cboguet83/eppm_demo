@@ -1,6 +1,7 @@
 """Transactional task storage and bounded planning query contracts."""
 
 from contextlib import AbstractContextManager
+from dataclasses import dataclass
 from typing import NotRequired, Protocol, TypedDict
 
 from app.domain.planning.records import (
@@ -10,6 +11,8 @@ from app.domain.planning.records import (
     TaskInput,
     TaskValues,
 )
+from app.application.ports.tag_records import TagLink
+from app.domain.resources.models import AssignmentLink
 
 
 class TaskRow(TaskInput):
@@ -50,6 +53,16 @@ class ProjectSummary(TypedDict):
     hasViolations: bool
 
 
+@dataclass
+class PlanningTaskBundle:
+    """Tasks and their related links read from one source snapshot."""
+
+    tasks: list[TaskRow]
+    dependencies: list[DependencySchedule]
+    tags: dict[int, list[TagLink]]
+    pools: dict[int, list[AssignmentLink]]
+
+
 class PlanningStore(Protocol):
     """Task operations sharing the gateway's connection and snapshot."""
 
@@ -81,6 +94,7 @@ class PlanningStore(Protocol):
     def get_project_summaries(self, project_ids: list[int]) -> list[ProjectSummary]: ...
     def affected_task_projects(self, task_id: int) -> tuple[set[int], set[int]]: ...
     def consuming_pool_ids(self, project_ids: list[int]) -> list[int]: ...
+    def read_task_bundle(self, project_ids: list[int]) -> PlanningTaskBundle: ...
 
 
 class PlanningGateway(Protocol):

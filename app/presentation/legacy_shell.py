@@ -441,14 +441,10 @@ def run_app() -> None:
 
         render_portfolio(create_project_workspace(project_repo.db_path))
     elif page == PAGE_PLANNING:
-        render_planning_milestones(
-            project_repo,
-            milestone_repo,
-            tag_repo,
-            pool_repo,
-            org_repo,
-            schema_repo,
-        )
+        from app.main import create_planning_workspace
+        from app.presentation.pages.planning import render_planning_milestones as render_planning
+
+        render_planning(create_planning_workspace(project_repo.db_path))
     elif page in (PAGE_SETTINGS, PAGE_SCHEMA_DEF):
         render_settings_view(org_repo, tag_repo, project_repo, milestone_repo, pool_repo, schema_repo)
     elif page == PAGE_BUDGET:

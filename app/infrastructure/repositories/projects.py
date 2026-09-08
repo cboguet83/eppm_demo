@@ -5,7 +5,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
 
-from app.application.ports.projects import ProjectStore
+from app.application.ports.projects import PlanningProject, ProjectStore
 from app.domain.projects.project import Project
 from app.domain.projects.project_types import TemplateProperty
 from app.infrastructure.database.project_transactions import project_connection
@@ -134,3 +134,7 @@ class SqliteProjectGateway:
                     if pid in applicability.get(row["project_type_id"], set())
                 }
             return rows
+
+    def read_planning_catalog(self, property_ids: tuple[str, ...]) -> list[PlanningProject]:
+        """Expose the minimal planning projection through its application port."""
+        return [PlanningProject(**row) for row in self.read_catalog(property_ids)]

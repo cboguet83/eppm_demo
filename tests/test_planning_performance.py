@@ -17,17 +17,10 @@ from src.services.resource_pool_service import ResourcePoolService
 
 
 def planning_app(db_path):
-    from src.repositories.project_repo import ProjectRepository
-    from src.repositories.milestone_repo import MilestoneRepository
-    from src.repositories.tag_repo import TagRepository
-    from src.repositories.resource_pool_repo import ResourcePoolRepository
-    from src.repositories.organization_repo import OrganizationRepository
-    from src.repositories.schema_repo import SchemaRepository
-    from src.views.planning_view import render_planning_milestones
-    render_planning_milestones(
-        ProjectRepository(db_path), MilestoneRepository(db_path), TagRepository(db_path),
-        ResourcePoolRepository(db_path), OrganizationRepository(db_path), SchemaRepository(db_path),
-    )
+    from app.main import create_planning_workspace
+    from app.presentation.pages.planning import render_planning_milestones
+    render_planning_milestones(create_planning_workspace(db_path))
+
 
 
 class PlanningPerformanceTests(unittest.TestCase):
@@ -67,9 +60,14 @@ class PlanningPerformanceTests(unittest.TestCase):
             path = str(Path(directory) / 'test.db')
             seed_default_data_if_empty(path)
             app = AppTest.from_function(planning_app, args=(path,))
-            with patch('src.services.planning_data.ProjectRepository.get_all_projects', side_effect=AssertionError('All properties')):
-                with patch('src.services.planning_data.MilestoneRepository.get_all_external_tasks_map', side_effect=AssertionError('All tasks')):
-                    with patch('src.views.planning_view._interactive_gantt', return_value=None) as component:
+            from app.infrastructure.repositories.projects import SqliteProjectGateway
+            original_catalog = SqliteProjectGateway.read_catalog
+            def bounded_catalog(reader, property_ids=None):
+                self.assertIsNotNone(property_ids, 'Planning requested all property values')
+                return original_catalog(reader, property_ids)
+            with patch.object(SqliteProjectGateway, 'read_catalog', new=bounded_catalog):
+                with patch('app.application.services.planning.PlanningService.get_all_external_tasks_map', side_effect=AssertionError('All tasks')):
+                    with patch('app.presentation.pages.planning._interactive_gantt', return_value=None) as component:
                         app.session_state['ms_multi_projects'] = [1]
                         app.run()
                         self.assertEqual(list(app.exception), [])
@@ -87,7 +85,7 @@ class PlanningPerformanceTests(unittest.TestCase):
         ])
         projects = pd.DataFrame({"function_id": [1, 2, 3, 4, None, 99] * 100})
         employees = pd.DataFrame([{"function_id": 3, "firstname": "Ada", "lastname": "Lovelace"}])
-        with patch.object(OrganizationService, "_build_function_lookup",
+        with patch("app.presentation.components.planning_catalog._build_function_lookup",
                           wraps=OrganizationService._build_function_lookup) as build:
             result = OrganizationService.enrich_projects_with_organization(projects, functions, employees)
         build.assert_called_once()
@@ -101,8 +99,8 @@ class PlanningPerformanceTests(unittest.TestCase):
             seed_default_data_if_empty(path)
             details = {d.pool_id: d for d in load_pool_capacities(path, details=True)}
             app = AppTest.from_function(planning_app, args=(path,))
-            with patch("src.views.planning_view._interactive_gantt", return_value=None) as component:
-                with patch.object(ResourcePoolService, "calculate_pool_scope_daily_usage",
+            with patch("app.presentation.pages.planning._interactive_gantt", return_value=None) as component:
+                with patch("app.presentation.pages.planning.calculate_pool_scope_daily_usage",
                                   side_effect=AssertionError("Recomputed full scope")):
                     app.run()
                     self.assertEqual(list(app.exception), [])

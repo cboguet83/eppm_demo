@@ -6,7 +6,13 @@ import json
 import sqlite3
 
 from app.application.exceptions import PlanningConflictError, PlanningStorageError
-from app.application.ports.planning import ExternalTask, ProjectSummary, TaskChoice, TaskRow
+from app.application.ports.planning import (
+    ExternalTask,
+    PlanningTaskBundle,
+    ProjectSummary,
+    TaskChoice,
+    TaskRow,
+)
 from app.domain.planning.records import (
     DependencyInput,
     DependencySchedule,
@@ -15,6 +21,8 @@ from app.domain.planning.records import (
     TaskValues,
 )
 from app.infrastructure.database.connection import get_db
+from app.infrastructure.repositories.tags import SqliteTagStore
+from app.infrastructure.repositories.resource_pools import SqliteResourcePoolStore
 from app.infrastructure.database.planning_summary_cache import (
     ensure_planning_indexes,
     read_project_summaries,
@@ -311,6 +319,17 @@ class SqlitePlanningStore:
                 (json.dumps(project_ids),),
             )
         ]
+
+    def read_task_bundle(self, project_ids: list[int]) -> PlanningTaskBundle:
+        """Reuse typed stores on the same connection for bounded task hydration."""
+        tasks = self.get_milestones_for_projects(project_ids)
+        task_ids = [task["id"] for task in tasks]
+        return PlanningTaskBundle(
+            tasks,
+            self.get_dependencies_for_projects(project_ids),
+            SqliteTagStore(self.connection).get_task_tags_by_task_ids(task_ids),
+            SqliteResourcePoolStore(self.connection).get_task_assignments_map(task_ids),
+        )
 
 
 class SqlitePlanningGateway:

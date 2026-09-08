@@ -20,17 +20,16 @@ def modal_app(db_path: str, task_id: int) -> None:
     import streamlit as st
     from time import perf_counter
 
-    from src.repositories.milestone_repo import MilestoneRepository
-    from src.repositories.resource_pool_repo import ResourcePoolRepository
-    from src.views.planning_view import _manage_task_resource_pools_dialog
+    from app.main import create_planning_workspace
+    from app.presentation.pages.planning import _manage_task_resource_pools_dialog
 
-    milestones = MilestoneRepository(db_path)
-    task = milestones.get_milestone_by_id(task_id)
+    workspace = create_planning_workspace(db_path)
+    task = workspace.planning.get_milestone_by_id(task_id)
     st.session_state['benchmark_page_runs'] = st.session_state.get('benchmark_page_runs', 0) + 1
     started = perf_counter()
     _manage_task_resource_pools_dialog(
         task_id, task['task_name'], task['project_id'],
-        ResourcePoolRepository(db_path), milestones,
+        workspace,
     )
     st.session_state['benchmark_modal_seconds'] = perf_counter() - started
 

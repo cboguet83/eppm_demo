@@ -19,8 +19,10 @@ covers atomic pool/group editing, pure capacity rules, and revision-checked cach
 [ADR 0007](docs/decisions/0007-layered-planning-core.md) covers atomic task and
 dependency operations, CSV import, and scheduling rules.
 [ADR 0008](docs/decisions/0008-layered-planning-read-models.md) covers planning
-summaries and portfolio overload indicators. The Gantt screen and cached display
-loaders, collaboration, budget tracking, and runtime/bootstrap code remain to be migrated.
+summaries and portfolio overload indicators.
+[ADR 0009](docs/decisions/0009-layered-planning-presentation.md) covers the Gantt
+screen, dialogs, and cached display loaders. Collaboration, budget tracking, and
+runtime/bootstrap code remain to be migrated.
 
 ### C4 level 2: runtime containers
 

@@ -15,13 +15,9 @@ def planning_app(profile=True, capture=False):
     from unittest.mock import patch
 
     import streamlit as st
-    from src.repositories.project_repo import ProjectRepository
-    from src.repositories.milestone_repo import MilestoneRepository
-    from src.repositories.tag_repo import TagRepository
-    from src.repositories.resource_pool_repo import ResourcePoolRepository
-    from src.repositories.organization_repo import OrganizationRepository
-    from src.repositories.schema_repo import SchemaRepository
-    from src.views.planning_view import render_planning_milestones
+    from app.main import create_planning_workspace
+    from app.presentation.pages.planning import render_planning_milestones
+    workspace = create_planning_workspace()
     from src.database.connection import get_db
 
     with get_db() as conn:
@@ -34,16 +30,13 @@ def planning_app(profile=True, capture=False):
     started = time.perf_counter()
     if profile:
         profiler.enable()
-    with (patch('src.views.planning_view._interactive_gantt', return_value=None) if capture else nullcontext()) as component:
+    with (patch('app.presentation.pages.planning._interactive_gantt', return_value=None) if capture else nullcontext()) as component:
         event = st.session_state.pop('benchmark_event', None)
         if event:
-            from src.views.planning_view import _handle_gantt_component_change
+            from app.presentation.pages.planning import _handle_gantt_component_change
             st.session_state['planning_lazy_gantt'] = event
-            _handle_gantt_component_change('planning_lazy_gantt', MilestoneRepository())
-        render_planning_milestones(
-            ProjectRepository(), MilestoneRepository(), TagRepository(),
-            ResourcePoolRepository(), OrganizationRepository(), SchemaRepository(),
-        )
+            _handle_gantt_component_change('planning_lazy_gantt', workspace)
+        render_planning_milestones(workspace)
         if capture:
             st.session_state['benchmark_payload'] = {
                 k: v for k, v in component.call_args.kwargs.items() if k not in ('on_change', 'key')}

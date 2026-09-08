@@ -1,0 +1,7 @@
+"""Stable navigation identities shared by screens and the application shell."""
+
+PAGE_PORTFOLIO = "1. Portfolio Overview"
+PAGE_SCHEMA_DEF = "Parameters Definition (Schema)"
+PAGE_PLANNING = "2. Planning & Step Loader"
+PAGE_SETTINGS = "3. Settings"
+PAGE_BUDGET = "4. Budget Tracking"

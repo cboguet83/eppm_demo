@@ -20,6 +20,7 @@ if TYPE_CHECKING:
         CapacityCacheState, SqliteCapacityCache,
     )
     from app.presentation.components.project_workspace import ProjectWorkspace
+    from app.presentation.components.planning_workspace import PlanningWorkspace
 
 
 @cache
@@ -138,6 +139,18 @@ def main() -> None:
     import runpy
 
     runpy.run_module("app.presentation.legacy_shell", run_name="__main__")
+
+
+def create_planning_workspace(db_path: str | None = None) -> PlanningWorkspace:
+    """Compose planning screens from task, tag, capacity, and catalog use cases."""
+    from app.presentation.components.planning_workspace import PlanningWorkspace
+
+    return PlanningWorkspace(
+        create_planning_service(db_path), create_tag_service(db_path),
+        create_resource_pool_service(db_path), create_pool_capacity_service(db_path),
+        create_organization_service(db_path), create_schema_service(db_path),
+        create_project_workspace(db_path),
+    )
 
 
 if __name__ == "__main__":

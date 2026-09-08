@@ -1,6 +1,6 @@
 """Project creation, editing, and deletion use cases."""
 
-from app.application.ports.projects import ProjectGateway, ProjectStore
+from app.application.ports.projects import PlanningProject, ProjectGateway, ProjectStore
 from app.domain.projects.project import Project, normalize_project_name, prepare_project_values
 from app.domain.projects.project_types import PropertyValue
 
@@ -26,6 +26,10 @@ class ProjectService:
         """Read a project's complete values, including inactive properties."""
         with self._gateway.transaction() as store:
             return store.find(project_id)
+
+    def get_planning_catalog(self, property_ids: tuple[str, ...] = ()) -> list[PlanningProject]:
+        """Read project identities and only the dynamic filter properties requested."""
+        return self._gateway.read_planning_catalog(property_ids)
 
     def exists(self, project_id: int) -> bool:
         """Check existence without loading custom values."""

@@ -16,19 +16,11 @@ from src.repositories.resource_pool_repo import ResourcePoolRepository
 
 
 def task_pool_app(db_path: str, task_id: int = 1) -> None:
-    """Render the real dialog against an isolated test database.
+    """Render the real injected dialog against an isolated database."""
+    from app.main import create_planning_workspace
+    from app.presentation.pages.planning import _manage_task_resource_pools_dialog
+    _manage_task_resource_pools_dialog(task_id, 'Test task', 1, create_planning_workspace(db_path))
 
-    Args:
-        db_path: Test database path.
-        task_id: Task to display.
-    """
-    from src.repositories.milestone_repo import MilestoneRepository
-    from src.repositories.resource_pool_repo import ResourcePoolRepository
-    from src.views.planning_view import _manage_task_resource_pools_dialog
-
-    _manage_task_resource_pools_dialog(
-        task_id, 'Test task', 1, ResourcePoolRepository(db_path), MilestoneRepository(db_path)
-    )
 
 
 class TaskPoolDialogTests(unittest.TestCase):
@@ -88,14 +80,15 @@ class TaskPoolDialogTests(unittest.TestCase):
 
     def test_cold_modal_calculates_only_displayed_statuses_and_reuses_them(self) -> None:
         """Unrelated cold pools never trigger capacity calculations."""
-        from src.services.pool_capacity_cache import _batch_calculate
+        from app.application.services.pool_capacity import PoolCapacityService
+        _batch_calculate = PoolCapacityService.calculate_many
 
         app = self.app()
-        with patch('src.services.pool_capacity_cache._batch_calculate', wraps=_batch_calculate) as calculate:
+        with patch('app.application.services.pool_capacity.PoolCapacityService.calculate_many', autospec=True, side_effect=_batch_calculate) as calculate:
             app.run()
             self.assert_healthy(app)
             self.assertEqual([call.args[1] for call in calculate.call_args_list], [[1]])
-        with patch('src.services.resource_pool_service.ResourcePoolService.calculate_pool_capacity',
+        with patch('app.application.services.pool_capacity.PoolCapacityService.calculate_many',
                    side_effect=AssertionError('Modal recomputed capacity')):
             app.number_input(key='ni_assign_task_fte').set_value(1.5).run()
             app.radio(key='rb_assign_task_period_mode').set_value('custom').run()
@@ -107,7 +100,7 @@ class TaskPoolDialogTests(unittest.TestCase):
     def test_empty_task_needs_no_calculations_and_legacy_capacity_still_has_a_label(self) -> None:
         """Defined capacities are lightweight; unspecified capacities stay compatible."""
         app = self.app(2)
-        with patch('src.services.pool_capacity_cache._batch_calculate',
+        with patch('app.application.services.pool_capacity.PoolCapacityService.calculate_many',
                    side_effect=AssertionError('Unassigned task calculated demand')):
             app.run()
             self.assert_healthy(app)
@@ -117,9 +110,10 @@ class TaskPoolDialogTests(unittest.TestCase):
                 'INSERT INTO resource_pool_mapping(pool_id,target_type,target_id) '
                 "VALUES(4,'employee',1)"
             )
-        from src.services.pool_capacity_cache import _batch_calculate
+        from app.application.services.pool_capacity import PoolCapacityService
+        _batch_calculate = PoolCapacityService.calculate_many
 
-        with patch('src.services.pool_capacity_cache._batch_calculate', wraps=_batch_calculate) as calculate:
+        with patch('app.application.services.pool_capacity.PoolCapacityService.calculate_many', autospec=True, side_effect=_batch_calculate) as calculate:
             app.run()
             self.assert_healthy(app)
             self.assertEqual([call.args[1] for call in calculate.call_args_list], [[4]])

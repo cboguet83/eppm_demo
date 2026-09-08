@@ -119,11 +119,12 @@ class TestResourcePools(unittest.TestCase):
         groups = self.pool_repo.get_all_pool_groups().set_index("name")
         self.assertEqual(int(groups.loc["Top", "recursive_pool_count"]), 2)
 
-        from src.views.planning_view import _build_resource_pool_hierarchy
+        from app.presentation.pages.planning import _build_resource_pool_hierarchy
 
         pool_c = self.pool_repo.create_pool(ResourcePool(name="Ungrouped Pool"))
+        from app.main import create_planning_workspace
         hierarchy = _build_resource_pool_hierarchy(
-            self.pool_repo,
+            create_planning_workspace(self.pool_repo.db_path),
             [
                 {"id": pool_a, "name": "Pool A"},
                 {"id": pool_b, "name": "Pool B"},
@@ -1165,7 +1166,7 @@ class TestResourcePools(unittest.TestCase):
     ) -> None:
         """Verify that clearing resource pool filter marks pending clear and triggers immediate rerun."""
         import streamlit as st
-        from src.views.planning_view import _handle_clear_resource_pool_filter
+        from app.presentation.pages.planning import _handle_clear_resource_pool_filter
 
         # Setup active filter in session_state
         st.session_state["active_resource_pool_filter"] = {

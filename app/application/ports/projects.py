@@ -1,10 +1,22 @@
 """Storage contracts for transactional project operations."""
 
 from contextlib import AbstractContextManager
-from typing import Protocol
+from typing import Protocol, TypedDict
 
 from app.domain.projects.project import Project
-from app.domain.projects.project_types import TemplateProperty
+from app.domain.projects.project_types import PropertyValue, TemplateProperty
+
+
+class PlanningProject(TypedDict):
+    """Minimal project identity and requested filter values for planning."""
+
+    id: int
+    name: str
+    status: str
+    function_id: int | None
+    project_type_id: int
+    project_template: str
+    dynamic_attributes: dict[str, PropertyValue]
 
 
 class ProjectStore(Protocol):
@@ -25,3 +37,4 @@ class ProjectGateway(Protocol):
     """Own the lifetime of a consistent read or atomic write transaction."""
 
     def transaction(self, *, write: bool = False) -> AbstractContextManager[ProjectStore]: ...
+    def read_planning_catalog(self, property_ids: tuple[str, ...]) -> list[PlanningProject]: ...

@@ -12,20 +12,22 @@ from streamlit.testing.v1 import AppTest
 from src.database.seeder import seed_default_data_if_empty
 from src.repositories.project_repo import ProjectRepository
 from src.repositories.milestone_repo import MilestoneRepository
+from app.application.services.planning import PlanningService
 from src.repositories.portfolio_repo import portfolio_revision
 from src.services.planning_data import ensure_planning_indexes, load_project_summaries
 
 
 def lazy_app(db_path):
     import streamlit as st
-    from src.repositories.project_repo import ProjectRepository
-    from src.repositories.milestone_repo import MilestoneRepository
-    from src.views.planning_view import render_planning_milestones, _handle_gantt_component_change
+    from app.main import create_planning_workspace
+    from app.presentation.pages.planning import render_planning_milestones, _handle_gantt_component_change
+    workspace = create_planning_workspace(db_path)
     event = st.session_state.pop('test_event', None)
     if event:
         st.session_state['planning_lazy_gantt'] = event
-        _handle_gantt_component_change('planning_lazy_gantt', MilestoneRepository(db_path))
-    render_planning_milestones(ProjectRepository(db_path), MilestoneRepository(db_path))
+        _handle_gantt_component_change('planning_lazy_gantt', workspace)
+    render_planning_milestones(workspace)
+
 
 
 class LazyPlanningTests(TestCase):
@@ -55,7 +57,7 @@ class LazyPlanningTests(TestCase):
     def test_summary_first_hydration_and_edit_patch_never_resend_unrelated_projects(self):
         app = AppTest.from_function(lazy_app, args=(self.path,), default_timeout=30)
         app.session_state['ms_multi_projects'] = self.pids
-        with patch('src.views.planning_view._interactive_gantt', return_value=None) as component:
+        with patch('app.presentation.pages.planning._interactive_gantt', return_value=None) as component:
             app.run()
             self.assertEqual(list(app.exception), [])
             initial = component.call_args.kwargs
@@ -68,7 +70,7 @@ class LazyPlanningTests(TestCase):
             payload = component.call_args.kwargs['patch']
             self.assertEqual(len(payload['tasks']), 3)
             app.session_state['test_event'] = {'action':'update_dates','id':self.a,'start_date':'2026-01-01','end_date':'2026-01-03','nonce':'move'}
-            with patch.object(MilestoneRepository,'get_milestones_for_projects', wraps=self.tasks.get_milestones_for_projects) as reads:
+            with patch.object(PlanningService,'read_task_bundle', wraps=self.tasks.service.read_task_bundle) as reads:
                 app.run()
                 self.assertEqual(list(app.exception), [])
                 touched = {pid for call in reads.call_args_list for pid in call.args[0]}
