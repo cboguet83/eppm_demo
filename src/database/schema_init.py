@@ -665,6 +665,8 @@ def init_db(db_path: Optional[str] = None) -> None:
                 cursor.execute("ALTER TABLE employee_new RENAME TO employee")
 
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_task_tag_task ON task_tag(task_id,id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_planning_task_project ON project_task(project_id,start_date,id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_planning_dependency_task ON task_dependencies(task_id)")
         migrate_project_types(conn)
         conn.commit()
         conn.execute("PRAGMA foreign_keys = ON")

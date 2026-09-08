@@ -15,15 +15,11 @@ from contextlib import closing
 from datetime import date
 from pathlib import Path
 
-from src.repositories.milestone_repo import MilestoneRepository
-from src.repositories.organization_repo import OrganizationRepository
-from src.repositories.resource_pool_repo import ResourcePoolRepository
-from src.services.resource_pool_service import ResourcePoolService
 from src.config import config
 from src.database.backup import backup_before_seed
 
 
-MARKER = "Pool hierarchy capacity scenarios v1"
+MARKER = "Pool hierarchy capacity scenarios v2"
 BASE_GROUPS = ("Service A", "Service B", "Service C", "Service D", "Service E", "Ressort A")
 
 
@@ -41,206 +37,79 @@ def seed_snapshot(path, year, seed):
 
 
 def _seed_snapshot(conn, path, year, seed):
+    """Exactly five units per Service root, with four staffing scenarios each."""
     rng = random.Random(seed)
     conn.execute("PRAGMA foreign_keys=ON")
-    baseline_violations = set(conn.execute("PRAGMA foreign_key_check"))
-    if conn.execute("SELECT 1 FROM resource_pool_group WHERE description=?", (MARKER,)).fetchone():
-        conn.close()
-        raise ValueError("This scenario seed already exists; refusing to duplicate it.")
-    plan, new_pools, group_summary = [], [], []
+    baseline = set(conn.execute("PRAGMA foreign_key_check"))
+    if conn.execute("SELECT 1 FROM resource_pool_group WHERE description='Pool hierarchy capacity scenarios v1'").fetchone():
+        raise ValueError('Legacy generated pool groups exist. Run a full backed-up seed to replace them with the five-unit/four-pool layout.')
+    plan, summary, scenarios = [], [], []
 
     def insert(sql, params):
         cursor = conn.execute(sql, params)
         plan.append((sql, params))
         return cursor.lastrowid
 
-    groups = conn.execute("SELECT id, name FROM resource_pool_group ORDER BY id").fetchall()
-    reserved_group_id = conn.execute(
-        "SELECT COALESCE(MAX(id),0) FROM (SELECT id FROM resource_pool_group UNION ALL "
-        "SELECT group_id FROM resource_pool_group_member UNION ALL SELECT child_group_id FROM resource_pool_group_member)"
-    ).fetchone()[0]
-    # Recreate the original root hierarchy after a full reseed. Never import
-    # orphan memberships from an old backup or attach new groups in a cycle.
     with conn:
-        if not groups:
-            ids = {name: insert("INSERT INTO resource_pool_group(id,name,description) VALUES(?,?,?)",
-                                (reserved_group_id + index, name, "Demo pool organization"))
-                   for index, name in enumerate(BASE_GROUPS, 1)}
+        roots = conn.execute("SELECT id,name FROM resource_pool_group ORDER BY id").fetchall()
+        if not roots:
+            ids = {name: insert("INSERT INTO resource_pool_group(name,description) VALUES(?,?)",
+                                (name, "Demo pool organization")) for name in BASE_GROUPS}
             for name in BASE_GROUPS[:-1]:
                 insert("INSERT INTO resource_pool_group_member(group_id,child_group_id) VALUES(?,?)",
                        (ids["Ressort A"], ids[name]))
-            for group_name, pool_name in (("Service A", "BIM Specialist Pool"),
-                                          ("Service B", "Core Engineering Pool")):
-                pool = conn.execute("SELECT id FROM resource_pool WHERE name=?", (pool_name,)).fetchone()
-                if pool:
-                    insert("INSERT INTO resource_pool_group_member(group_id,pool_id) VALUES(?,?)",
-                           (ids[group_name], pool[0]))
-        elif not any(name.strip().casefold() == "service c" for _, name in groups):
-            insert("INSERT INTO resource_pool_group(id,name,description) VALUES(?,?,?)",
-                   (reserved_group_id + 1, "Service C", "Demo pool organization"))
-    groups = conn.execute("SELECT id, name FROM resource_pool_group ORDER BY id").fetchall()
-    service_c = [gid for gid, name in groups if name.strip().casefold() == "service c"]
-    if len(service_c) != 1:
-        raise ValueError("Exactly one existing Service C group is required.")
-    employees = dict(conn.execute("SELECT employee_id, occupation_percentage FROM employee"))
-    start, end = f"{year}-01-01", f"{year}-12-31"
-    eligible = [eid for eid, pct in employees.items() if pct > 0 and not conn.execute(
-        "SELECT 1 FROM employee_calendar_exception WHERE employee_id=? "
-        "AND start_date<=? AND end_date>=?", (eid, end, start)
-    ).fetchone()]
-    pools_repo = ResourcePoolRepository(str(path))
-    org_repo = OrganizationRepository(str(path))
-    milestone_repo = MilestoneRepository(str(path))
-    existing_pool_ids = [r[0] for r in conn.execute("SELECT id FROM resource_pool")]
-    used_employees = set()
-    for pid in existing_pool_ids:
-        detail = ResourcePoolService.calculate_pool_capacity(pid, org_repo, pools_repo)
-        used_employees.update(c.employee_id for c in detail.contributing_functions)
-    exception_employee = next((eid for eid in reversed(eligible) if eid not in used_employees), None)
-    if exception_employee is None or len(eligible) < 6:
-        raise ValueError("Need six available employees, including one outside existing pools.")
-    normal_employees = [eid for eid in eligible if eid != exception_employee]
-    today = date.today().isoformat()
-    tasks = conn.execute(
-        "SELECT t.id, t.project_id, t.start_date, t.end_date FROM project_task t "
-        "JOIN project p ON p.id=t.project_id WHERE t.start_date<=? AND t.end_date>=? "
-        "AND t.start_date<t.end_date AND t.progress_pct<100 "
-        "ORDER BY (t.start_date<=? AND t.end_date>=?) DESC, t.id",
-        (end, start, today, today),
-    ).fetchall()
-    # Small/demo or task-free seeds must still build the hierarchy. Use any
-    # overlapping task if all are completed, without altering its schedule.
-    if not tasks:
-        tasks = conn.execute(
-            "SELECT t.id,t.project_id,t.start_date,t.end_date FROM project_task t "
-            "JOIN project p ON p.id=t.project_id WHERE t.start_date<=? AND t.end_date>=? ORDER BY t.id",
-            (end, start),
-        ).fetchall()
-    project_ids = [row[0] for row in conn.execute("SELECT id FROM project ORDER BY id")]
-    # Reserve IDs referenced by old orphan records as well as real records.
-    pool_id = conn.execute(
-        "SELECT max(id) FROM (SELECT id FROM resource_pool UNION ALL "
-        "SELECT pool_id FROM resource_pool_group_member UNION ALL "
-        "SELECT pool_id FROM resource_pool_mapping UNION ALL "
-        "SELECT pool_id FROM resource_pool_assignment UNION ALL SELECT pool_id FROM resource_pool_tag)"
-    ).fetchone()[0] or 0
-    group_id = max([gid for gid, _ in groups] + [r[0] or 0 for r in conn.execute(
-        "SELECT child_group_id FROM resource_pool_group_member UNION SELECT group_id FROM resource_pool_group_member"
-    )])
-    with conn:
-        for parent_id, parent_name in groups:
-            count = rng.randint(3, 10)
-            pool_count = 0
-            for group_index in range(1, count + 1):
-                group_id += 1
-                name = f"{parent_name} / Unit {group_index:02d}"
-                insert("INSERT INTO resource_pool_group(id,name,description) VALUES(?,?,?)",
-                       (group_id, name, MARKER))
-                insert("INSERT INTO resource_pool_group_member(group_id,child_group_id) VALUES(?,?)",
-                       (parent_id, group_id))
-                for pool_index in range(1, rng.randint(1, 5) + 1):
-                    pool_id += 1
-                    pool_count += 1
-                    pool_name = f"{name} / Pool {pool_index:02d}"
-                    capacity = float(rng.randint(2, 5))
-                    insert("INSERT INTO resource_pool(id,name,description,capacity_fte) VALUES(?,?,?,?)",
-                           (pool_id, pool_name, MARKER, capacity))
-                    insert("INSERT INTO resource_pool_group_member(group_id,pool_id) VALUES(?,?)",
-                           (group_id, pool_id))
-                    new_pools.append(pool_id)
-            group_summary.append({"parent": parent_name, "new_groups": count, "new_pools": pool_count})
-
-        c_pools = [r[0] for r in conn.execute(
-            "WITH RECURSIVE descendants(id) AS (SELECT ? UNION SELECT gm.child_group_id "
-            "FROM resource_pool_group_member gm JOIN descendants d ON gm.group_id=d.id "
-            "WHERE gm.child_group_id IS NOT NULL) SELECT DISTINCT gm.pool_id "
-            "FROM resource_pool_group_member gm JOIN descendants d ON gm.group_id=d.id "
-            "JOIN resource_pool p ON p.id=gm.pool_id ORDER BY gm.pool_id", (service_c[0],)
-        )]
-        scenario_ids = [pid for pid in c_pools if pid in new_pools][:3]
-        roles = dict(zip(scenario_ids, ["Overallocated", "Underassigned", "Calendar exception"]))
-        capacities, demands, mapping_count = {}, {}, 0
-        for pid in c_pools:
-            existing = {r[0] for r in conn.execute(
-                "SELECT target_id FROM resource_pool_mapping WHERE pool_id=? AND target_type='employee'", (pid,)
-            )}
-            if len(existing) > 5:
-                raise ValueError(f"Service C pool {pid} already has more than five direct employees.")
-            chosen = set(existing)
-            if roles.get(pid) == "Calendar exception":
-                chosen.add(exception_employee)
-            target = max(len(chosen), rng.randint(3, 5))
-            chosen.update(rng.sample([eid for eid in normal_employees if eid not in chosen], target-len(chosen)))
-            for eid in sorted(chosen-existing):
-                insert("INSERT INTO resource_pool_mapping(pool_id,target_type,target_id,allocation_pct) "
-                       "VALUES(?,'employee',?,100)", (pid, eid))
-                mapping_count += 1
-            nominal = round(sum(employees[eid] / 100 for eid in chosen), 3)
-            if pid in new_pools:
-                role = roles.get(pid)
-                capacity = nominal - 1 if role == "Overallocated" else nominal + 2 if role == "Underassigned" else nominal
-                demand = nominal + 1 if role == "Overallocated" else nominal / 2
-                if role == "Calendar exception":
-                    demand = nominal - employees[exception_employee] / 200
-                insert("UPDATE resource_pool SET capacity_fte=?,name=name||? WHERE id=?",
-                       (max(0.0, capacity), f" - {role}" if role else "", pid))
-                capacities[pid], demands[pid] = nominal, round(demand, 3)
-        insert("INSERT INTO employee_calendar_exception(employee_id,start_date,end_date,occupation_percentage,reason) "
-               "VALUES(?,?,?,0,?)", (exception_employee, start, end, MARKER + ": one year unavailable"))
-
-        assigned_pools = sorted(set(new_pools) | set(c_pools))
-        project_assignment_count = task_assignment_count = 0
-        for index, pid in enumerate(assigned_pools):
-            if not project_ids:
-                break
-            if tasks:
-                task_id, project_id, task_start, task_end = tasks[index % len(tasks)]
-            else:
-                project_id = project_ids[index % len(project_ids)]
-            defined = conn.execute("SELECT capacity_fte FROM resource_pool WHERE id=?", (pid,)).fetchone()[0]
-            demand = demands.get(pid, round(float(defined or 2) / 2, 3))
-            assignments = [(None, start, end)]
-            project_assignment_count += 1
-            if tasks:
-                assignments.append((task_id, max(start, task_start), min(end, task_end)))
-                task_assignment_count += 1
-            for tid, s, e in assignments:
-                insert("INSERT INTO resource_pool_assignment(pool_id,project_id,task_id,fte_assigned,start_date,end_date,notes) "
-                       "VALUES(?,?,?,?,?,?,?)", (pid, project_id, tid, demand, s, e, MARKER))
-        new_violations = set(conn.execute("PRAGMA foreign_key_check")) - baseline_violations
+            roots = conn.execute("SELECT id,name FROM resource_pool_group ORDER BY id").fetchall()
+        services = [(gid, name) for gid, name in roots
+                    if name.strip().casefold().startswith("service ") and "/" not in name]
+        employees = dict(conn.execute("SELECT employee_id,occupation_percentage FROM employee WHERE occupation_percentage>0"))
+        eligible = sorted(employees)
+        if len(eligible) < 3:
+            raise ValueError("At least three employed resources are needed for pool scenarios.")
+        tasks = conn.execute("SELECT id,project_id,start_date,end_date FROM project_task ORDER BY id").fetchall()
+        projects = [r[0] for r in conn.execute("SELECT id FROM project ORDER BY id")]
+        mappings = project_assignments = task_assignments = 0
+        roles = ("Unallocated", "Overassigned", "Underassigned", "Fully assigned")
+        start, end = f"{year}-01-01", f"{year}-12-31"
+        for service_id, service_name in services:
+            for unit in range(1, 6):
+                name = f"{service_name} / Unit {unit:02d}"
+                gid = insert("INSERT INTO resource_pool_group(name,description) VALUES(?,?)", (name, MARKER))
+                insert("INSERT INTO resource_pool_group_member(group_id,child_group_id) VALUES(?,?)", (service_id, gid))
+                for role in roles:
+                    chosen = [] if role == "Unallocated" else rng.sample(eligible, min(4, len(eligible)))
+                    assigned = round(sum(float(employees[eid]) / 100 for eid in chosen), 3)
+                    capacity = (3.0 if not chosen else round(assigned / 2, 3) if role == "Overassigned"
+                                else assigned + 2 if role == "Underassigned" else assigned)
+                    pid = insert("INSERT INTO resource_pool(name,description,capacity_fte) VALUES(?,?,?)",
+                                 (f"{name} / {role}", MARKER, capacity))
+                    insert("INSERT INTO resource_pool_group_member(group_id,pool_id) VALUES(?,?)", (gid, pid))
+                    for eid in chosen:
+                        insert("INSERT INTO resource_pool_mapping(pool_id,target_type,target_id,allocation_pct) VALUES(?,'employee',?,100)", (pid, eid))
+                        mappings += 1
+                    if projects:
+                        index = len(scenarios)
+                        # Both project-level and task-level demand, without changing task dates.
+                        if tasks:
+                            tid, project_id, ts, te = tasks[(index * 37) % len(tasks)]
+                        else:
+                            project_id, tid, ts, te = projects[index % len(projects)], None, start, end
+                        demand = round((assigned or capacity) / 2, 3)
+                        insert("INSERT INTO resource_pool_assignment(pool_id,project_id,fte_assigned,start_date,end_date,notes) VALUES(?,?,?,?,?,?)",
+                               (pid, project_id, demand, ts, te, MARKER))
+                        project_assignments += 1
+                        if tid is not None:
+                            insert("INSERT INTO resource_pool_assignment(pool_id,project_id,task_id,fte_assigned,start_date,end_date,notes) VALUES(?,?,?,?,?,?,?)",
+                                   (pid, project_id, tid, demand, ts, te, MARKER))
+                            task_assignments += 1
+                    scenarios.append({"role": role, "pool_id": pid, "theoretical_fte": capacity, "normal_assigned_fte": assigned})
+            summary.append({"parent": service_name, "new_groups": 5, "new_pools": 20})
+        new_violations = set(conn.execute("PRAGMA foreign_key_check")) - baseline
         if new_violations:
             raise ValueError(f"New foreign-key violations: {new_violations}")
-    conn.close()
-
-    scenarios = []
-    for pid, role in roles.items():
-        detail = ResourcePoolService.calculate_pool_capacity(pid, org_repo, pools_repo, milestone_repo)
-        if role == "Overallocated":
-            if project_ids:
-                assert detail.is_overassigned and detail.peak_assigned_fte > detail.defined_capacity_fte
-            assert detail.assigned_capacity_fte > detail.defined_capacity_fte
-        elif role == "Underassigned":
-            assert not detail.is_overassigned and detail.assigned_capacity_fte < detail.defined_capacity_fte
-            assert detail.peak_assigned_fte < detail.assigned_capacity_fte
-        else:
-            expected = round(capacities[pid] - employees[exception_employee] / 100, 3)
-            if project_ids:
-                assert len(detail.daily_assigned_capacity) == (date(year+1, 1, 1)-date(year, 1, 1)).days
-                assert all(abs(value-expected) < 0.001 for value in detail.daily_assigned_capacity.values())
-                assert detail.is_overassigned
-        scenarios.append({"role": role, "pool_id": pid, "pool": detail.pool_name,
-                          "theoretical_fte": detail.defined_capacity_fte,
-                          "normal_assigned_fte": detail.assigned_capacity_fte,
-                          "year_assigned_fte": detail.daily_assigned_capacity.get(start, detail.assigned_capacity_fte),
-                          "peak_demand_fte": detail.peak_assigned_fte,
-                          "overallocated": detail.is_overassigned})
-    return plan, {"parents": group_summary, "new_groups": sum(g["new_groups"] for g in group_summary),
-                  "new_pools": len(new_pools), "service_c_pools": len(c_pools),
-                  "new_employee_mappings": mapping_count, "new_project_assignments": project_assignment_count,
-                  "new_task_assignments": task_assignment_count, "exception_employee_id": exception_employee,
-                  "exception_start": start, "exception_end": end, "scenarios": scenarios,
-                  "existing_foreign_key_violations": len(baseline_violations)}
-
+    return plan, {"parents": summary, "new_groups": 5 * len(services), "new_pools": len(scenarios),
+                  "new_employee_mappings": mappings, "new_project_assignments": project_assignments,
+                  "new_task_assignments": task_assignments, "scenarios": scenarios,
+                  "existing_foreign_key_violations": len(baseline)}
 
 @backup_before_seed
 def _apply_pool_plan(db_path, plan, original_hash):

@@ -149,11 +149,11 @@ def load_pool_capacities(db_path=None, *, details=False, pool_ids=None):
                     _MEMORY.move_to_end(key)
                     return _MEMORY[key]
                 column = "detail" if details else "summary"
+                where = 'WHERE p.id IN (SELECT value FROM json_each(?))' if subset is not None else ''
+                params = (_VERSION, day, json.dumps(subset)) if subset is not None else (_VERSION, day)
                 rows = conn.execute(f"SELECT p.id,c.{column} FROM resource_pool p LEFT JOIN pool_capacity_cache c "
-                                    "ON c.pool_id=p.id AND c.version=? AND c.day=? ORDER BY p.name,p.id",
-                                    (_VERSION, day)).fetchall()
-                if subset is not None:
-                    rows = [r for r in rows if r[0] in subset]
+                                    f"ON c.pool_id=p.id AND c.version=? AND c.day=? {where} ORDER BY p.name,p.id",
+                                    params).fetchall()
             missing = [pid for pid, payload in rows if payload is None]
             if missing:
                 calculated = _batch_calculate(path, missing)

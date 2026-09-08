@@ -14,12 +14,14 @@ import src.models.organization as _org_models_module
 import src.repositories.milestone_repo as _milestone_repo_module
 import src.repositories.organization_repo as _organization_repo_module
 import src.repositories.project_repo as _project_repo_module
+import src.repositories.portfolio_repo as _portfolio_repo_module
 import src.repositories.resource_pool_repo as _resource_pool_repo_module
 import src.repositories.schema_repo as _schema_repo_module
 import src.repositories.tag_repo as _tag_repo_module
 import src.services.milestone_service as _milestone_service_module
 import src.services.organization_service as _organization_service_module
 import src.services.portfolio_service as _portfolio_service_module
+import src.services.planning_data as _planning_data_module
 import src.services.resource_pool_service as _resource_pool_service_module
 import src.services.schema_service as _schema_service_module
 import src.services.tag_service as _tag_service_module
@@ -27,6 +29,7 @@ import src.views.budget_view as _budget_module
 import src.views.project_dialogs as _project_dialogs_module
 import src.views.planning_view as _planning_module
 import src.views.portfolio_view as _portfolio_module
+import src.views.portfolio_table_component as _portfolio_table_module
 import src.views.schema_def_view as _schema_def_module
 import src.views.settings_view as _settings_module
 
@@ -34,6 +37,7 @@ importlib.reload(_constants_module)
 importlib.reload(_org_models_module)
 importlib.reload(_i18n_module)
 importlib.reload(_project_repo_module)
+importlib.reload(_portfolio_repo_module)
 importlib.reload(_milestone_repo_module)
 importlib.reload(_schema_repo_module)
 importlib.reload(_organization_repo_module)
@@ -45,7 +49,9 @@ importlib.reload(_schema_service_module)
 importlib.reload(_organization_service_module)
 importlib.reload(_resource_pool_service_module)
 importlib.reload(_tag_service_module)
+importlib.reload(_planning_data_module)
 importlib.reload(_project_dialogs_module)
+importlib.reload(_portfolio_table_module)
 importlib.reload(_portfolio_module)
 importlib.reload(_schema_def_module)
 importlib.reload(_planning_module)
@@ -366,17 +372,16 @@ def run_app() -> None:
         key="app_sidebar_nav",
     )
 
-    if page == PAGE_PLANNING:
-        totals = _get_planning_totals(config.db_path)
-        with st.sidebar:
-            st.divider()
-            st.caption(t("planning_totals.title", default="Planning totals · entire portfolio"))
-            projects_col, tasks_col = st.columns(2)
-            projects_col.caption(f"{t('planning_totals.projects', default='Total projects')}  \n{totals['projects']:,}")
-            tasks_col.caption(f"{t('planning_totals.tasks', default='Total tasks')}  \n{totals['tasks']:,}")
-            dependencies_col, pools_col = st.columns(2)
-            dependencies_col.caption(f"{t('planning_totals.dependencies', default='Total dependencies')}  \n{totals['dependencies']:,}")
-            pools_col.caption(f"{t('planning_totals.pools', default='Total pools')}  \n{totals['pools']:,}")
+    totals = _get_planning_totals(config.db_path)
+    with st.sidebar:
+        st.divider()
+        st.caption(t("planning_totals.title", default="Planning totals · entire portfolio"))
+        projects_col, tasks_col = st.columns(2)
+        projects_col.caption(f"{t('planning_totals.projects', default='Total projects')}  \n{totals['projects']:,}")
+        tasks_col.caption(f"{t('planning_totals.tasks', default='Total tasks')}  \n{totals['tasks']:,}")
+        dependencies_col, pools_col = st.columns(2)
+        dependencies_col.caption(f"{t('planning_totals.dependencies', default='Total dependencies')}  \n{totals['dependencies']:,}")
+        pools_col.caption(f"{t('planning_totals.pools', default='Total pools')}  \n{totals['pools']:,}")
 
     st.sidebar.markdown("---")
     with st.sidebar.expander(f"⚡ {t('app.seeding_options', default='Database Seeding')}", expanded=False):

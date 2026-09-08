@@ -2,6 +2,7 @@
 
 import datetime
 import html
+import hashlib
 import os
 from typing import Any, Optional, Union
 
@@ -22,10 +23,14 @@ from src.repositories.resource_pool_repo import ResourcePoolRepository
 from src.repositories.schema_repo import SchemaRepository
 from src.repositories.tag_repo import TagRepository
 from src.services.milestone_service import MilestoneService
-from src.services.organization_service import OrganizationService
-from src.services.portfolio_service import PortfolioService
 from src.services.resource_pool_service import ResourcePoolService
 from src.views.project_dialogs import open_edit_project_dialog
+from src.repositories.portfolio_repo import portfolio_revision
+from src.services.planning_data import (
+    ensure_planning_indexes, load_planning_catalog, load_planning_steps,
+    load_planning_project_metadata, load_planning_bounds, load_dependency_choices,
+    load_project_summaries, affected_task_projects, build_task_payload,
+)
 
 # Declare Frappe Gantt Custom Component
 _COMPONENT_PATH = os.path.join(
@@ -117,6 +122,9 @@ def _handle_gantt_component_change(
         "filter_project",
         "update_dates",
         "update_progress",
+        "load_dependency_tasks",
+        "load_project_tasks",
+        "initialize_planning",
     }:
         return
 
@@ -127,10 +135,26 @@ def _handle_gantt_component_change(
     # Consume the event even when its client-supplied payload is invalid. This
     # prevents it from falling through to the post-render event handler.
     st.session_state["last_gantt_nonce"] = nonce
-    if gantt_event.get("action") == "filter_project":
+    if gantt_event.get("action") == "initialize_planning":
+        st.session_state.pop('planning_chart_snapshot', None)
+    elif gantt_event.get("action") == "load_project_tasks":
+        st.session_state['planning_pending_change'] = dict(gantt_event)
+    elif gantt_event.get("action") == "load_dependency_tasks":
+        try:
+            project_id = int(gantt_event.get("project_id"))
+        except (TypeError, ValueError):
+            return
+        st.session_state['planning_dependency_response'] = {
+            'project_id': str(project_id), 'nonce': nonce,
+            'tasks': load_dependency_choices(milestone_repo.db_path, portfolio_revision(milestone_repo.db_path), project_id),
+        }
+    elif gantt_event.get("action") == "filter_project":
         _focus_planning_on_project(gantt_event)
+        st.session_state['planning_needs_full_rerun'] = True
     else:
-        _apply_immediate_gantt_update(gantt_event, milestone_repo)
+        before = portfolio_revision(milestone_repo.db_path)
+        if _apply_immediate_gantt_update(gantt_event, milestone_repo):
+            st.session_state['planning_pending_change'] = {**gantt_event, 'before_revision': before}
 
 
 def _normalise_planning_filter_values(value: Any) -> list[str]:
@@ -1051,6 +1075,312 @@ def _render_filtered_active_allocations(
     st.markdown(full_table_html, unsafe_allow_html=True)
 
 
+@st.cache_data(ttl=60, max_entries=8, show_spinner=False, hash_funcs={tuple: repr})
+def _load_planning_pool_payload(db_path, revision, project_ids, _pool_details_cache, pool_ids=None):
+    """Reuse exact selected-scope daily demand until source data or scope changes."""
+    selected_projects = project_ids
+    pool_details_cache = _pool_details_cache
+    pool_repo = ResourcePoolRepository(db_path)
+    org_repo = OrganizationRepository(db_path)
+    milestone_repo = MilestoneRepository(db_path)
+    # Build resource pools payload for the demand & capacity grid below the Gantt
+    scope_pids = [int(p) for p in selected_projects if str(p).isdigit()]
+    scope_pid_set = set(scope_pids)
+    df_all_pools = pool_repo.get_all_pools()
+    if pool_ids is not None:
+        df_all_pools = df_all_pools[df_all_pools.id.isin(pool_ids)]
+    resource_pools_payload: list[dict[str, Any]] = []
+    if not df_all_pools.empty:
+        for _, p_row in df_all_pools.iterrows():
+            p_id = int(p_row["id"])
+            p_name = str(p_row["name"])
+            if p_id not in pool_details_cache:
+                pool_details_cache[p_id] = ResourcePoolService.calculate_pool_capacity(
+                    p_id, org_repo, pool_repo, milestone_repo
+                )
+            p_cap = pool_details_cache[p_id]
+            effective_daily_capacity = (
+                p_cap.daily_assigned_capacity
+                if p_cap.has_assigned_resources
+                else {}
+            )
+            # The usual portfolio-wide view is already computed in the pool
+            # cache. Recalculate only when the filter excludes an assignment.
+            if all(int(a["project_id"]) in scope_pid_set for a in p_cap.assignments):
+                scope_usage = p_cap.daily_usage
+                scope_overassignments = p_cap.daily_overassignments
+            else:
+                scope_usage = ResourcePoolService.calculate_pool_scope_daily_usage(
+                    p_cap.assignments, scope_pids
+                )
+                scope_overassignments = ResourcePoolService.calculate_daily_overassignments(
+                    scope_usage,
+                    p_cap.effective_capacity_fte,
+                    effective_daily_capacity,
+                )
+            resource_pools_payload.append({
+                "id": p_id,
+                "name": p_name,
+                "capacity": float(p_cap.total_capacity_fte),
+                "theoretical_capacity": (
+                    float(p_cap.defined_capacity_fte)
+                    if p_cap.defined_capacity_fte is not None
+                    else float(p_cap.total_capacity_fte)
+                ),
+                "assigned_capacity": float(p_cap.assigned_capacity_fte),
+                "displayed_assigned_capacity": float(p_cap.effective_capacity_fte),
+                "has_assigned_resources": bool(p_cap.has_assigned_resources),
+                "daily_assigned_capacity": effective_daily_capacity,
+                "peak_demand": float(p_cap.peak_assigned_fte),
+                "is_overassigned": bool(p_cap.is_overassigned),
+                "daily_usage": p_cap.daily_usage,
+                "overallocated_dates": [
+                    item.date for item in p_cap.daily_overassignments
+                ],
+                "selected_projects_daily_usage": scope_usage,
+                "selected_projects_overallocated_dates": [
+                    item.date for item in scope_overassignments
+                ],
+                "assignments": [
+                    {
+                        "project_id": int(a["project_id"]),
+                        "start_date": str(a.get("start_date", "")),
+                        "end_date": str(a.get("end_date", "")),
+                    }
+                    for a in p_cap.assignments
+                ],
+            })
+
+    resource_pool_hierarchy = [] if pool_ids is not None else _build_resource_pool_hierarchy(
+        pool_repo,
+        resource_pools_payload,
+    )
+    return resource_pools_payload, resource_pool_hierarchy
+
+
+@st.fragment
+def _render_planning_chart(project_repo, milestone_repo, tag_repo, pool_repo, org_repo,
+                           selected_projects, df_projects, proj_map, master_proj_ids, scope_signature):
+    from uuid import uuid4
+    from src.services.pool_capacity_cache import load_pool_capacities
+    from src.services.planning_transport import pack_pool_payloads
+    if st.session_state.pop('planning_needs_full_rerun', False):
+        st.rerun()
+    db_path = project_repo.db_path
+    selected_id = selected_projects[0]
+    all_proj_ids = df_projects.id.tolist()
+    ids = tuple(sorted(map(int, selected_projects)))
+    scope = (ids, get_current_locale(), repr(scope_signature))
+    widget_key = 'planning_lazy_gantt'
+    snapshot = st.session_state.get('planning_chart_snapshot')
+    event = st.session_state.pop('planning_pending_change', None)
+    revision = portfolio_revision(db_path)
+    unchanged_scope = snapshot is not None and snapshot['scope'] == scope
+    known_edit = (event and event.get('before_revision') and unchanged_scope
+                  and event['before_revision'] == snapshot['revision'])
+    rebuild = not unchanged_scope or (revision != snapshot['revision'] and not known_edit)
+    if rebuild:
+        details = {d.pool_id: d for d in load_pool_capacities(db_path, details=True)}
+        summaries = load_project_summaries(db_path, revision, ids)
+        pools, hierarchy = _load_planning_pool_payload(db_path, revision, ids, details)
+        bounds = {str(p['id']): (p['start'], p['end']) for p in summaries}
+        loaded = list(ids) if len(ids) == 1 else []
+        tasks = build_task_payload(db_path, loaded, bounds, details) if loaded else []
+        snapshot = {'scope': scope, 'token': uuid4().hex, 'details': details, 'bounds': bounds,
+                    'loaded': loaded, 'revision': portfolio_revision(db_path)}
+        st.session_state['planning_chart_snapshot'] = snapshot
+        args = dict(tasks=tasks, project_summaries=summaries, lazy_projects=True,
+                    loaded_project_ids=loaded, scope_token=snapshot['token'],
+                    all_projects=[{'id': str(r.id), 'name': r.name} for r in df_projects.itertuples()],
+                    external_tasks={}, project_id=selected_id, is_multi_project=True,
+                    translations=get_section_catalog('gantt', get_current_locale()),
+                    resource_pools=pack_pool_payloads(pools), resource_pool_hierarchy=hierarchy,
+                    active_resource_filter=st.session_state.get('active_resource_pool_filter'),
+                    data_revision=snapshot['token'])
+    else:
+        args = {}
+        patch = None
+        if event and event.get('action') == 'load_project_tasks' and event.get('scope_token') == snapshot['token']:
+            requested = []
+            for value in event.get('project_ids', [])[:25]:
+                try:
+                    pid = int(value)
+                except (ValueError, TypeError):
+                    continue
+                if pid in ids and pid not in requested:
+                    requested.append(pid)
+            patch = {'replace_projects': requested, 'tasks': build_task_payload(db_path, requested, snapshot['bounds'], snapshot['details'])}
+            loaded = [p for p in snapshot['loaded'] if p not in requested] + requested
+            evicted, snapshot['loaded'] = loaded[:-100], loaded[-100:]
+            patch['evict_project_ids'] = evicted
+        elif known_edit:
+            changed, pool_ids = affected_task_projects(db_path, int(event['id']))
+            for pid in changed:
+                snapshot['bounds'][pid] = snapshot['bounds'][str(pid)] = milestone_repo.get_project_date_bounds(pid)
+            if event['action'] == 'update_progress':
+                pool_ids = set()
+            if pool_ids:
+                snapshot['details'].update({d.pool_id: d for d in load_pool_capacities(db_path, details=True, pool_ids=pool_ids)})
+            refresh = changed.intersection(snapshot['loaded'])
+            patch = {'replace_projects': sorted(refresh),
+                     'tasks': build_task_payload(db_path, refresh, snapshot['bounds'], snapshot['details']),
+                     'project_summaries': load_project_summaries(db_path, portfolio_revision(db_path), tuple(sorted(changed.intersection(ids))))}
+            if pool_ids:
+                patch['resource_pools'], _ = _load_planning_pool_payload(db_path, portfolio_revision(db_path), ids,
+                                                                        snapshot['details'], tuple(sorted(pool_ids)))
+                patch['resource_pools'] = pack_pool_payloads(patch['resource_pools'])
+            snapshot['revision'] = portfolio_revision(db_path)
+        if patch is not None:
+            metadata_ids = patch['replace_projects']
+            tags, pools = load_planning_project_metadata(db_path, portfolio_revision(db_path), tuple(metadata_ids))
+            patch['project_metadata'] = [{'id': str(pid), 'tags': tags.get(pid, []), 'pools': pools.get(pid, [])} for pid in metadata_ids]
+            patch.update(scope_token=snapshot['token'], nonce=event.get('nonce'), loaded_project_ids=snapshot['loaded'])
+            args['patch'] = patch
+    response = st.session_state.pop('planning_dependency_response', None)
+    if response:
+        args['dependency_response'] = response
+    pool_details_cache = snapshot['details']
+    gantt_event = _interactive_gantt(**args, key=widget_key,
+        on_change=lambda: _handle_gantt_component_change(widget_key, milestone_repo))
+
+    # Handle bi-directional Drag & Drop changes from JS (deduplicated via nonce)
+    if gantt_event and isinstance(gantt_event, dict):
+        nonce = _get_gantt_event_nonce(gantt_event)
+        last_nonce = st.session_state.get("last_gantt_nonce")
+
+        if nonce and nonce != last_nonce:
+            st.session_state["last_gantt_nonce"] = nonce
+            action = gantt_event.get("action")
+            step_id = gantt_event.get("id")
+
+            if action == "filter_by_resource_pool":
+                _handle_filter_by_resource_pool(
+                    gantt_event=gantt_event,
+                    pool_details_cache=pool_details_cache,
+                    org_repo=org_repo,
+                    pool_repo=pool_repo,
+                    milestone_repo=milestone_repo,
+                    selected_projects=selected_projects,
+                    all_proj_ids=all_proj_ids,
+                    master_proj_ids=master_proj_ids,
+                )
+            elif action == "clear_resource_pool_filter":
+                _handle_clear_resource_pool_filter(master_proj_ids)
+            elif action == "go_to_pool_details":
+                pool_id = gantt_event.get("pool_id")
+                if pool_id:
+                    st.session_state["settings_active_section"] = "organization"
+                    st.session_state["rb_settings_section"] = "org_structure"
+                    st.session_state["settings_active_tab"] = "resource_pools"
+                    st.session_state["target_resource_pool_id"] = int(pool_id)
+                    st.session_state["nav_redirect"] = PAGE_SETTINGS
+                    st.rerun()
+            elif action == "manage_project_tags":
+                p_id = gantt_event.get("project_id")
+                if p_id:
+                    st.session_state["modal_manage_project_tag"] = int(p_id)
+                    st.rerun()
+            elif action == "manage_project_pools":
+                p_id = gantt_event.get("project_id")
+                if p_id:
+                    st.session_state["modal_manage_project_pool"] = int(p_id)
+                    st.rerun()
+            elif action == "edit_project_details":
+                p_id = gantt_event.get("project_id")
+                if p_id:
+                    st.session_state["modal_edit_project"] = int(p_id)
+                    st.rerun()
+            elif action == "filter_project":
+                # The callback normally applies this before the automatic
+                # component rerun. Queue a compatibility fallback only.
+                st.session_state["pending_project_context_filter"] = gantt_event
+                st.rerun()
+            elif action == "manage_task_tags" and step_id:
+                st.session_state["modal_manage_task_tag"] = {
+                    "task_id": int(step_id),
+                    "task_name": str(gantt_event.get("task_name", "")),
+                    "project_id": str(gantt_event.get("project_id", "")),
+                }
+                st.rerun()
+            elif action == "manage_task_pools":
+                t_id = gantt_event.get("task_id") or step_id
+                if t_id:
+                    st.session_state["modal_manage_task_pool"] = {
+                        "task_id": int(t_id),
+                        "task_name": str(gantt_event.get("task_name", "")),
+                        "project_id": str(gantt_event.get("project_id", selected_id)),
+                    }
+                    st.rerun()
+            elif action == "update_task_full" and step_id:
+                t_name = str(gantt_event.get("task_name", "")).strip()
+                t_phase = str(gantt_event.get("phase", "General")).strip()
+                t_start = str(gantt_event.get("start_date", "")).strip()
+                t_end = str(gantt_event.get("end_date", "")).strip()
+                t_prog = int(gantt_event.get("progress_pct", 0))
+                t_desc = str(gantt_event.get("description", "")).strip()
+                t_deps = gantt_event.get("dependencies")
+                if t_name and t_start and t_end:
+                    milestone_repo.update_milestone(
+                        milestone_id=int(step_id),
+                        task_name=t_name,
+                        phase=t_phase,
+                        start_date=t_start,
+                        end_date=t_end,
+                        progress_pct=t_prog,
+                        dependencies=t_deps,
+                        description=t_desc,
+                    )
+                    st.toast(t("planning.toast_step_updated", name=t_name), icon="✏️")
+                    st.rerun()
+            elif action == "create_step_full":
+                t_proj = str(gantt_event.get("project_id", "")).strip() or selected_id
+                t_name = str(gantt_event.get("task_name", "")).strip()
+                t_phase = str(gantt_event.get("phase", "")).strip() or "General"
+                t_start = str(gantt_event.get("start_date", "")).strip()
+                t_end = str(gantt_event.get("end_date", "")).strip()
+                t_prog = int(gantt_event.get("progress_pct", 0))
+                t_desc = str(gantt_event.get("description", "")).strip()
+                t_deps = gantt_event.get("dependencies", [])
+
+                if t_name and t_start and t_end:
+                    new_step_id = milestone_repo.create_milestone(
+                        project_id=t_proj,
+                        task_name=t_name,
+                        phase=t_phase,
+                        start_date=t_start,
+                        end_date=t_end,
+                        progress_pct=t_prog,
+                        dependencies=t_deps,
+                        description=t_desc,
+                    )
+                    st.toast(t("planning.toast_step_created", name=t_name, project_id=t_proj), icon="➕")
+                    st.rerun()
+            elif action == "update_dates" and step_id:
+                # Normally handled by ``on_change`` before this render. This
+                # fallback preserves compatibility without starting a second rerun.
+                _apply_immediate_gantt_update(gantt_event, milestone_repo)
+            elif action == "update_progress" and step_id:
+                _apply_immediate_gantt_update(gantt_event, milestone_repo)
+            elif action == "delete_step" and step_id:
+                milestone_repo.delete_milestone(int(step_id))
+                st.toast(t("planning.toast_step_deleted", id=step_id), icon="🗑️")
+                st.rerun()
+
+    # --------------------------------------------------------------------------
+    # ACTIVE ALLOCATIONS ON PROJECTS & TASKS (Shown when a Resource Pool filter is active)
+    # --------------------------------------------------------------------------
+    active_rf = st.session_state.get("active_resource_pool_filter")
+    if active_rf and pool_repo is not None:
+        _render_filtered_active_allocations(
+            active_rf=active_rf,
+            pool_details_cache=pool_details_cache,
+            org_repo=org_repo,
+            pool_repo=pool_repo,
+            milestone_repo=milestone_repo,
+        )
+
+
+@st.fragment
 def render_planning_milestones(
     project_repo: ProjectRepository,
     milestone_repo: MilestoneRepository,
@@ -1124,7 +1454,14 @@ def render_planning_milestones(
         unsafe_allow_html=True,
     )
 
-    df_projects = project_repo.get_all_projects()
+    ensure_planning_indexes(project_repo.db_path)
+    revision = portfolio_revision(project_repo.db_path)
+    params = schema_repo.get_all_parameters()
+    chosen_fields = set(st.session_state.get('planning_flex_fields', []))
+    property_ids = tuple(sorted(str(p['param_id']) for p in params.to_dict('records')
+        if p['param_name'] in chosen_fields or f"{p['param_name']} ({p['param_id']})" in chosen_fields))
+    df_projects, project_filter_frame, params, project_tag_records = load_planning_catalog(
+        project_repo.db_path, revision, property_ids)
 
     if df_projects.empty:
         st.info(t("master_data.dynamic_empty", default="No projects registered yet."))
@@ -1136,11 +1473,11 @@ def render_planning_milestones(
     # --------------------------------------------------------------------------
     # TOP CONTROL: Flexible filters, project tags, and project multi-selector
     # --------------------------------------------------------------------------
-    df_all_proj_tags = tag_repo.get_all_project_tags()
+    df_all_proj_tags = pd.DataFrame(project_tag_records)
     available_tags_set: set[str] = set()
     project_tags_by_id: dict[int, list[str]] = {}
     if not df_all_proj_tags.empty:
-        for _, r in df_all_proj_tags.iterrows():
+        for r in project_tag_records:
             t_name = r.get("tag_name")
             f_name = r.get("free_tag")
             if pd.notna(t_name) and str(t_name).strip():
@@ -1205,13 +1542,6 @@ def render_planning_milestones(
             if st.button("✖ Clear Filter", key="btn_clear_pool_filter_top", type="secondary"):
                 _handle_clear_resource_pool_filter(master_proj_ids)
 
-    params = schema_repo.get_all_parameters()
-    project_filter_frame = PortfolioService.flatten_dynamic_attributes(df_projects, params)
-    project_filter_frame = OrganizationService.enrich_projects_with_organization(
-        project_filter_frame,
-        org_repo.get_all_functions(),
-        org_repo.get_all_employees(),
-    )
     project_filter_frame["_project_tags"] = project_filter_frame["id"].apply(
         lambda project_id: project_tags_by_id.get(int(project_id), [])
     )
@@ -1230,13 +1560,9 @@ def render_planning_milestones(
         for _, parameter in params.iterrows():
             param_id = str(parameter["param_id"])
             param_name = str(parameter.get("param_name", param_id))
-            target_column = (
-                param_id
-                if param_id in project_filter_frame.columns
-                else param_name
-                if param_name in project_filter_frame.columns
-                else None
-            )
+            target_column = param_id
+            if param_id not in project_filter_frame.columns:
+                project_filter_frame[param_id] = None
             if target_column is not None:
                 field_label = param_name
                 if field_label in flex_filter_fields:
@@ -1344,7 +1670,7 @@ def render_planning_milestones(
     # Filter projects based on tag selection if any
     if selected_tag_filters and not df_all_proj_tags.empty:
         matching_proj_ids = set()
-        for _, r in df_all_proj_tags.iterrows():
+        for r in project_tag_records:
             t_name = str(r.get("tag_name", "")).strip()
             f_name = str(r.get("free_tag", "")).strip()
             if (t_name and t_name in selected_tag_filters) or (f_name and f_name in selected_tag_filters):
@@ -1377,7 +1703,7 @@ def render_planning_milestones(
             p for p in st.session_state["ms_multi_projects"] if p in all_proj_ids
         ]
     else:
-        st.session_state["ms_multi_projects"] = all_proj_ids
+        st.session_state["ms_multi_projects"] = []  # Empty means all; avoid 10,000 selected chips.
 
     with top_sel_col:
         multi_header_label = f"🔍 {t('planning.select_multi_proj', default='Select Projects to Display in Multi-Gantt')} ({len(df_projects)} projects found)"
@@ -1438,367 +1764,9 @@ def render_planning_milestones(
     if edit_project_modal_id:
         open_edit_project_dialog(int(edit_project_modal_id), project_repo, schema_repo)
 
-    # Fetch all project bounds, project tags, and project pool assignments for constraint evaluation and tooltips
-    proj_tags_map = tag_repo.get_project_tags_by_project_ids([int(p) for p in selected_projects if str(p).isdigit()])
-    proj_pools_map = pool_repo.get_project_assignments_map([int(r["id"]) for _, r in df_projects.iterrows()])
-    
-    if len(selected_projects) == 1:
-        s_id = int(selected_projects[0]) if str(selected_projects[0]).isdigit() else selected_projects[0]
-        s_tags = proj_tags_map.get(s_id, [])
-        if s_tags:
-            tag_badges_html = "".join([
-                f'<span style="background-color:#FDE8EC; color:#C41039; border:1px solid #C41039; padding:2px 8px; border-radius:10px; font-size:11.5px; font-weight:600; margin-right:5px; display:inline-block; margin-bottom:4px;">🏷️ {("[" + str(tg.get("tag_group_name")) + "] ") if tg.get("tag_group_name") else ""}{tg.get("tag_name") or tg.get("free_tag") or tg.get("tag")}</span>'
-                for tg in s_tags
-            ])
-            st.markdown(f'<div style="margin-top:-6px; margin-bottom:6px;">{tag_badges_html}</div>', unsafe_allow_html=True)
-
-    all_projects_list = [
-        {
-            "id": str(r["id"]),
-            "name": f"{r['name']}",
-            "tags": proj_tags_map.get(int(r["id"]), []),
-            "pools": proj_pools_map.get(int(r["id"]), []),
-        }
-        for _, r in df_projects.iterrows()
-    ]
-    project_bounds = milestone_repo.get_all_project_date_bounds()
-
-    # Gather tasks and dependencies for active project(s) via batch queries
-    combined_steps_df = milestone_repo.get_milestones_for_projects(selected_projects)
-    if not combined_steps_df.empty:
-        # In multi-project view, display strictly the clean project name without ID prefix
-        combined_steps_df["project_name"] = combined_steps_df["project_id"].apply(
-            lambda pid: proj_map.get(pid, str(pid))
-        )
-    raw_dependencies = milestone_repo.get_dependencies_for_projects(selected_projects)
-
-    if combined_steps_df.empty:
-        st.info(t("planning.no_steps_defined"))
-    else:
-        steps_records = combined_steps_df.to_dict(orient="records")
-        raw_tasks = [
-            {
-                "id": int(row["id"]),
-                "task_name": str(row["task_name"]),
-                "start_date": str(row["start_date"]),
-                "end_date": str(row["end_date"]),
-                "phase": str(row.get("phase", "General")),
-                "progress_pct": int(row.get("progress_pct", 0)),
-                "description": str(row.get("description", "")) if pd.notna(row.get("description")) else "",
-                "project_id": str(row.get("project_id", selected_id)),
-                "project_name": str(row.get("project_name", "")),
-            }
-            for row in steps_records
-        ]
-
-        evaluated_deps, task_violations = MilestoneService.evaluate_constraints(
-            raw_tasks, raw_dependencies, project_bounds
-        )
-
-        # Batch load tags and resource pool assignments for all tasks
-        all_task_ids = [int(row["id"]) for row in steps_records]
-        task_tags_map = tag_repo.get_task_tags_by_task_ids(all_task_ids)
-        task_pools_map = pool_repo.get_task_assignments_map(all_task_ids)
-
-        # Precompute pool details for pools in task_pools_map
-        from src.services.pool_capacity_cache import load_pool_capacities
-
-        pool_details_cache = {
-            detail.pool_id: detail
-            for detail in load_pool_capacities(pool_repo.db_path, details=True)
-        }
-
-        # For each task, enrich pool objects with is_overassigned on that specific task and capacity
-        enriched_task_pools_map: dict[int, list[dict[str, Any]]] = {}
-        steps_by_id = {int(row["id"]): row for row in steps_records}
-        for tid, plist in task_pools_map.items():
-            t_row = steps_by_id.get(tid)
-            t_start = str(t_row["start_date"]) if t_row else None
-            t_end = str(t_row["end_date"]) if t_row else None
-            enriched_list = []
-            for p in plist:
-                p_copy = dict(p)
-                p_det = pool_details_cache.get(p["pool_id"])
-                is_over = False
-                if p_det:
-                    p_copy["pool_capacity"] = p_det.total_capacity_fte
-                    if float(p["fte"]) > (p_det.total_capacity_fte + 1e-4):
-                        is_over = True
-                    eff_s = str(p.get("start_date")) if pd.notna(p.get("start_date")) and str(p.get("start_date")).strip() else t_start
-                    eff_e = str(p.get("end_date")) if pd.notna(p.get("end_date")) and str(p.get("end_date")).strip() else t_end
-                    if not is_over and p_det.is_overassigned and eff_s and eff_e:
-                        for ov in p_det.daily_overassignments:
-                            if eff_s <= ov.date <= eff_e:
-                                is_over = True
-                                break
-                p_copy["is_overassigned"] = is_over
-                enriched_list.append(p_copy)
-            enriched_task_pools_map[tid] = enriched_list
-
-        # Index evaluated dependencies by task_id in O(N)
-        deps_by_task_id: dict[int, list[dict[str, Any]]] = {}
-        for d in evaluated_deps:
-            t_id = d.get("task_id")
-            if t_id is not None:
-                deps_by_task_id.setdefault(int(t_id), []).append(d)
-
-        # Build gantt tasks payload in fast O(N)
-        gantt_tasks = []
-        for row in steps_records:
-            tid = int(row["id"])
-            task_deps = deps_by_task_id.get(tid, [])
-            first_pred = task_deps[0]["predecessor_task_id"] if task_deps and task_deps[0].get("predecessor_task_id") else None
-            dep_str = str(int(first_pred)) if first_pred is not None else ""
-
-            gantt_tasks.append({
-                "id": str(tid),
-                "name": str(row["task_name"]),
-                "start": str(row["start_date"]),
-                "end": str(row["end_date"]),
-                "progress": int(row.get("progress_pct", 0)),
-                "description": str(row.get("description", "")) if pd.notna(row.get("description")) else "",
-                "dependencies": dep_str,
-                "dependenciesList": task_deps,
-                "violations": task_violations.get(tid, []),
-                "tags": task_tags_map.get(tid, []),
-                "pools": enriched_task_pools_map.get(tid, []),
-                "phase": str(row.get("phase", "General")),
-                "project_id": str(row["project_id"]),
-                "project_name": str(row["project_name"]),
-                "custom_class": "bar-milestone" if row["start_date"] == row["end_date"] else "bar-step",
-            })
-
-        # Build resource pools payload for the demand & capacity grid below the Gantt
-        scope_pids = [int(p) for p in selected_projects if str(p).isdigit()]
-        scope_pid_set = set(scope_pids)
-        df_all_pools = pool_repo.get_all_pools()
-        resource_pools_payload: list[dict[str, Any]] = []
-        if not df_all_pools.empty:
-            for _, p_row in df_all_pools.iterrows():
-                p_id = int(p_row["id"])
-                p_name = str(p_row["name"])
-                if p_id not in pool_details_cache:
-                    pool_details_cache[p_id] = ResourcePoolService.calculate_pool_capacity(
-                        p_id, org_repo, pool_repo, milestone_repo
-                    )
-                p_cap = pool_details_cache[p_id]
-                effective_daily_capacity = (
-                    p_cap.daily_assigned_capacity
-                    if p_cap.has_assigned_resources
-                    else {}
-                )
-                # The usual portfolio-wide view is already computed in the pool
-                # cache. Recalculate only when the filter excludes an assignment.
-                if all(int(a["project_id"]) in scope_pid_set for a in p_cap.assignments):
-                    scope_usage = p_cap.daily_usage
-                    scope_overassignments = p_cap.daily_overassignments
-                else:
-                    scope_usage = ResourcePoolService.calculate_pool_scope_daily_usage(
-                        p_cap.assignments, scope_pids
-                    )
-                    scope_overassignments = ResourcePoolService.calculate_daily_overassignments(
-                        scope_usage,
-                        p_cap.effective_capacity_fte,
-                        effective_daily_capacity,
-                    )
-                resource_pools_payload.append({
-                    "id": p_id,
-                    "name": p_name,
-                    "capacity": float(p_cap.total_capacity_fte),
-                    "theoretical_capacity": (
-                        float(p_cap.defined_capacity_fte)
-                        if p_cap.defined_capacity_fte is not None
-                        else float(p_cap.total_capacity_fte)
-                    ),
-                    "assigned_capacity": float(p_cap.assigned_capacity_fte),
-                    "displayed_assigned_capacity": float(p_cap.effective_capacity_fte),
-                    "has_assigned_resources": bool(p_cap.has_assigned_resources),
-                    "daily_assigned_capacity": effective_daily_capacity,
-                    "peak_demand": float(p_cap.peak_assigned_fte),
-                    "is_overassigned": bool(p_cap.is_overassigned),
-                    "daily_usage": p_cap.daily_usage,
-                    "overallocated_dates": [
-                        item.date for item in p_cap.daily_overassignments
-                    ],
-                    "selected_projects_daily_usage": scope_usage,
-                    "selected_projects_overallocated_dates": [
-                        item.date for item in scope_overassignments
-                    ],
-                    "assignments": [
-                        {
-                            "project_id": int(a["project_id"]),
-                            "start_date": str(a.get("start_date", "")),
-                            "end_date": str(a.get("end_date", "")),
-                        }
-                        for a in p_cap.assignments
-                    ],
-                })
-
-        resource_pool_hierarchy = _build_resource_pool_hierarchy(
-            pool_repo,
-            resource_pools_payload,
-        )
-
-        # Render custom drag-and-drop component with multi-dependency metadata and i18n
-        cur_loc = get_current_locale()
-        gantt_translations = get_section_catalog("gantt", cur_loc)
-        # Selected projects' tasks are already in gantt_tasks; the dependency
-        # editor can use those without sending a duplicate copy over the wire.
-        all_ext_tasks = milestone_repo.get_all_external_tasks_map(
-            exclude_project_ids=selected_projects
-        )
-        cur_rf = st.session_state.get("active_resource_pool_filter")
-        rf_key = f"{cur_rf.get('pool_id')}_{cur_rf.get('start_date')}_{cur_rf.get('clear_other_filters')}" if cur_rf else "none"
-        widget_key = f"gantt_{len(selected_projects)}_{selected_id}_{cur_loc}_{rf_key}"
-        gantt_event = _interactive_gantt(
-            tasks=gantt_tasks,
-            all_projects=all_projects_list,
-            external_tasks=all_ext_tasks,
-            project_id=selected_id,
-            is_multi_project=True,
-            translations=gantt_translations,
-            resource_pools=resource_pools_payload,
-            resource_pool_hierarchy=resource_pool_hierarchy,
-            active_resource_filter=st.session_state.get("active_resource_pool_filter"),
-            key=widget_key,
-            on_change=lambda: _handle_gantt_component_change(widget_key, milestone_repo),
-        )
-
-        # Handle bi-directional Drag & Drop changes from JS (deduplicated via nonce)
-        if gantt_event and isinstance(gantt_event, dict):
-            nonce = _get_gantt_event_nonce(gantt_event)
-            last_nonce = st.session_state.get("last_gantt_nonce")
-
-            if nonce and nonce != last_nonce:
-                st.session_state["last_gantt_nonce"] = nonce
-                action = gantt_event.get("action")
-                step_id = gantt_event.get("id")
-
-                if action == "filter_by_resource_pool":
-                    _handle_filter_by_resource_pool(
-                        gantt_event=gantt_event,
-                        pool_details_cache=pool_details_cache,
-                        org_repo=org_repo,
-                        pool_repo=pool_repo,
-                        milestone_repo=milestone_repo,
-                        selected_projects=selected_projects,
-                        all_proj_ids=all_proj_ids,
-                        master_proj_ids=master_proj_ids,
-                    )
-                elif action == "clear_resource_pool_filter":
-                    _handle_clear_resource_pool_filter(master_proj_ids)
-                elif action == "go_to_pool_details":
-                    pool_id = gantt_event.get("pool_id")
-                    if pool_id:
-                        st.session_state["settings_active_section"] = "organization"
-                        st.session_state["rb_settings_section"] = "org_structure"
-                        st.session_state["settings_active_tab"] = "resource_pools"
-                        st.session_state["target_resource_pool_id"] = int(pool_id)
-                        st.session_state["nav_redirect"] = PAGE_SETTINGS
-                        st.rerun()
-                elif action == "manage_project_tags":
-                    p_id = gantt_event.get("project_id")
-                    if p_id:
-                        st.session_state["modal_manage_project_tag"] = int(p_id)
-                        st.rerun()
-                elif action == "manage_project_pools":
-                    p_id = gantt_event.get("project_id")
-                    if p_id:
-                        st.session_state["modal_manage_project_pool"] = int(p_id)
-                        st.rerun()
-                elif action == "edit_project_details":
-                    p_id = gantt_event.get("project_id")
-                    if p_id:
-                        st.session_state["modal_edit_project"] = int(p_id)
-                        st.rerun()
-                elif action == "filter_project":
-                    # The callback normally applies this before the automatic
-                    # component rerun. Queue a compatibility fallback only.
-                    st.session_state["pending_project_context_filter"] = gantt_event
-                    st.rerun()
-                elif action == "manage_task_tags" and step_id:
-                    st.session_state["modal_manage_task_tag"] = {
-                        "task_id": int(step_id),
-                        "task_name": str(gantt_event.get("task_name", "")),
-                        "project_id": str(gantt_event.get("project_id", "")),
-                    }
-                    st.rerun()
-                elif action == "manage_task_pools":
-                    t_id = gantt_event.get("task_id") or step_id
-                    if t_id:
-                        st.session_state["modal_manage_task_pool"] = {
-                            "task_id": int(t_id),
-                            "task_name": str(gantt_event.get("task_name", "")),
-                            "project_id": str(gantt_event.get("project_id", selected_id)),
-                        }
-                        st.rerun()
-                elif action == "update_task_full" and step_id:
-                    t_name = str(gantt_event.get("task_name", "")).strip()
-                    t_phase = str(gantt_event.get("phase", "General")).strip()
-                    t_start = str(gantt_event.get("start_date", "")).strip()
-                    t_end = str(gantt_event.get("end_date", "")).strip()
-                    t_prog = int(gantt_event.get("progress_pct", 0))
-                    t_desc = str(gantt_event.get("description", "")).strip()
-                    t_deps = gantt_event.get("dependencies")
-                    if t_name and t_start and t_end:
-                        milestone_repo.update_milestone(
-                            milestone_id=int(step_id),
-                            task_name=t_name,
-                            phase=t_phase,
-                            start_date=t_start,
-                            end_date=t_end,
-                            progress_pct=t_prog,
-                            dependencies=t_deps,
-                            description=t_desc,
-                        )
-                        st.toast(t("planning.toast_step_updated", name=t_name), icon="✏️")
-                        st.rerun()
-                elif action == "create_step_full":
-                    t_proj = str(gantt_event.get("project_id", "")).strip() or selected_id
-                    t_name = str(gantt_event.get("task_name", "")).strip()
-                    t_phase = str(gantt_event.get("phase", "")).strip() or "General"
-                    t_start = str(gantt_event.get("start_date", "")).strip()
-                    t_end = str(gantt_event.get("end_date", "")).strip()
-                    t_prog = int(gantt_event.get("progress_pct", 0))
-                    t_desc = str(gantt_event.get("description", "")).strip()
-                    t_deps = gantt_event.get("dependencies", [])
-
-                    if t_name and t_start and t_end:
-                        new_step_id = milestone_repo.create_milestone(
-                            project_id=t_proj,
-                            task_name=t_name,
-                            phase=t_phase,
-                            start_date=t_start,
-                            end_date=t_end,
-                            progress_pct=t_prog,
-                            dependencies=t_deps,
-                            description=t_desc,
-                        )
-                        st.toast(t("planning.toast_step_created", name=t_name, project_id=t_proj), icon="➕")
-                        st.rerun()
-                elif action == "update_dates" and step_id:
-                    # Normally handled by ``on_change`` before this render. This
-                    # fallback preserves compatibility without starting a second rerun.
-                    _apply_immediate_gantt_update(gantt_event, milestone_repo)
-                elif action == "update_progress" and step_id:
-                    _apply_immediate_gantt_update(gantt_event, milestone_repo)
-                elif action == "delete_step" and step_id:
-                    milestone_repo.delete_milestone(int(step_id))
-                    st.toast(t("planning.toast_step_deleted", id=step_id), icon="🗑️")
-                    st.rerun()
-
-    # --------------------------------------------------------------------------
-    # ACTIVE ALLOCATIONS ON PROJECTS & TASKS (Shown when a Resource Pool filter is active)
-    # --------------------------------------------------------------------------
-    active_rf = st.session_state.get("active_resource_pool_filter")
-    if active_rf and pool_repo is not None:
-        _render_filtered_active_allocations(
-            active_rf=active_rf,
-            pool_details_cache=pool_details_cache,
-            org_repo=org_repo,
-            pool_repo=pool_repo,
-            milestone_repo=milestone_repo,
-        )
+    _render_planning_chart(project_repo, milestone_repo, tag_repo, pool_repo, org_repo,
+                           selected_projects, df_projects, proj_map, master_proj_ids,
+                           (flex_signature, selected_tag_filters, st.session_state.get('active_resource_pool_filter')))
 
     # --------------------------------------------------------------------------
     # 2. CSV BULK STEP LOADER & EXPORTER
@@ -1811,8 +1779,6 @@ def render_planning_milestones(
         format_func=lambda x: f"{x} - {proj_map.get(x, '')}",
         key="sb_manage_target_project",
     )
-
-    df_steps = milestone_repo.get_milestones_by_project(manage_project_id)
 
     with st.expander(t("planning.csv_section_title"), expanded=False):
         st.subheader(f"{t('planning.csv_section_title')} ({manage_project_id})")

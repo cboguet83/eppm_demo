@@ -29,6 +29,51 @@ def planning_app(db_path):
 
 
 class PlanningPerformanceTests(unittest.TestCase):
+    def test_catalog_reads_only_requested_properties_and_invalidates_after_edits(self):
+        from src.repositories.project_repo import ProjectRepository
+        from src.repositories.schema_repo import SchemaRepository
+        from src.repositories.portfolio_repo import portfolio_revision
+        from src.services.planning_data import load_planning_catalog, load_dependency_choices
+        from src.database.connection import get_db
+        with tempfile.TemporaryDirectory() as directory:
+            path = str(Path(directory) / 'lazy.db')
+            seed_default_data_if_empty(path)
+            schema = SchemaRepository(path)
+            schema.create_parameter('custom_lazy', None, 'Lazy property', 'TEXT')
+            repo = ProjectRepository(path)
+            pid = repo.create_project(name='Lazy project', dynamic_attributes={'custom_lazy': 'Present'})
+            revision = portfolio_revision(path)
+            projects, frame, _, _ = load_planning_catalog(path, revision)
+            self.assertTrue(all(not values for values in projects.dynamic_attributes))
+            self.assertNotIn('custom_lazy', frame.columns)
+            _, filtered, _, _ = load_planning_catalog(path, revision, ('custom_lazy',))
+            self.assertEqual(filtered[filtered.id == pid].iloc[0]['custom_lazy'], 'Present')
+            repo.update_project(pid, 'Changed', 'Draft', 0, 0, {'custom_lazy': 'Updated'})
+            _, updated, _, _ = load_planning_catalog(path, portfolio_revision(path), ('custom_lazy',))
+            self.assertEqual(updated[updated.id == pid].iloc[0]['custom_lazy'], 'Updated')
+            first_project = int(projects.iloc[0].id)
+            choices = load_dependency_choices(path, portfolio_revision(path), first_project)
+            expected = MilestoneRepository(path).get_milestones_for_projects([first_project]).id.tolist()
+            self.assertEqual([r['id'] for r in choices], expected)
+            with get_db(path) as conn:
+                indexes = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='index'")}
+            self.assertIn('idx_planning_task_project', indexes)
+            self.assertIn('idx_planning_dependency_task', indexes)
+
+    def test_planning_never_eagerly_loads_all_properties_or_external_tasks(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = str(Path(directory) / 'test.db')
+            seed_default_data_if_empty(path)
+            app = AppTest.from_function(planning_app, args=(path,))
+            with patch('src.services.planning_data.ProjectRepository.get_all_projects', side_effect=AssertionError('All properties')):
+                with patch('src.services.planning_data.MilestoneRepository.get_all_external_tasks_map', side_effect=AssertionError('All tasks')):
+                    with patch('src.views.planning_view._interactive_gantt', return_value=None) as component:
+                        app.session_state['ms_multi_projects'] = [1]
+                        app.run()
+                        self.assertEqual(list(app.exception), [])
+                        self.assertEqual(component.call_args.kwargs['external_tasks'], {})
+                        self.assertTrue(all(t['project_id'] == '1' for t in component.call_args.kwargs['tasks']))
+
     def test_hierarchy_index_is_built_once_and_loops_are_safe(self):
         # app.py reloads service modules during integration tests.
         from src.services.organization_service import OrganizationService
@@ -62,25 +107,22 @@ class PlanningPerformanceTests(unittest.TestCase):
                 payload = component.call_args.kwargs
                 self.assertEqual(payload["external_tasks"], {})
                 for pool in payload["resource_pools"]:
-                    self.assertEqual(pool["selected_projects_daily_usage"], pool["daily_usage"])
-                    self.assertEqual(pool["selected_projects_overallocated_dates"], pool["overallocated_dates"])
+                    self.assertEqual(pool["selected_projects_daily_usage_intervals"], pool["daily_usage_intervals"])
 
-                project_id = int(payload["tasks"][0]["project_id"])
+                self.assertEqual(payload['tasks'], [])
+                project_id = int(payload['project_summaries'][0]['id'])
                 app.session_state["ms_multi_projects"] = [project_id]
                 app.run()
                 self.assertEqual(list(app.exception), [])
                 payload = component.call_args.kwargs
                 self.assertNotIn(str(project_id), payload["external_tasks"])
-                self.assertTrue(payload["external_tasks"])
+                self.assertEqual(payload["external_tasks"], {})  # editor choices are lazy
                 for pool in payload["resource_pools"]:
                     detail = details[pool["id"]]
                     expected = ResourcePoolService.calculate_pool_scope_daily_usage(detail.assignments, [project_id])
-                    self.assertEqual(pool["selected_projects_daily_usage"], expected)
-                    violations = ResourcePoolService.calculate_daily_overassignments(
-                        expected, detail.effective_capacity_fte,
-                        detail.daily_assigned_capacity if detail.has_assigned_resources else {},
-                    )
-                    self.assertEqual(pool["selected_projects_overallocated_dates"], [v.date for v in violations])
+                    from src.services.planning_transport import pack_pool_payloads
+                    self.assertEqual(pool["selected_projects_daily_usage_intervals"],
+                                     pack_pool_payloads([{'selected_projects_daily_usage': expected}])[0]['selected_projects_daily_usage_intervals'])
 
     def test_external_tasks_exclusion_retains_unselected_projects(self):
         with tempfile.TemporaryDirectory() as directory:

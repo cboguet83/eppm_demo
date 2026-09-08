@@ -5,6 +5,7 @@ with kind ``null`` or ``empty`` records an explicitly cleared scalar value.
 """
 
 import datetime
+import json
 import math
 import sqlite3
 from typing import Any
@@ -88,11 +89,17 @@ def write_value(conn: sqlite3.Connection, owner_id: int, pid: str, value: Any, *
                      [(owner_id, pid, i, item) for i, item in enumerate(items)])
 
 
-def read_values(conn: sqlite3.Connection, *, defaults: bool = False, owner_id: int | None = None) -> dict[int, dict[str, Any]]:
+def read_values(conn: sqlite3.Connection, *, defaults: bool = False, owner_id: int | None = None,
+                param_ids: list[str] | None = None) -> dict[int, dict[str, Any]]:
     """Load all values in two queries, avoiding per-project portfolio queries."""
     table, owner = ("project_type_property_default", "project_type_id") if defaults else ("project_property_value", "project_id")
     where = f" WHERE {owner} = ?" if owner_id is not None else ""
     args = (owner_id,) if owner_id is not None else ()
+    if param_ids is not None:
+        if not param_ids:
+            return {}
+        where += (' AND ' if where else ' WHERE ') + 'param_id IN (SELECT value FROM json_each(?))'
+        args += (json.dumps(param_ids),)
     result: dict[int, dict[str, Any]] = {}
     for oid, pid, kind, text, number, date in conn.execute(f"SELECT {owner}, param_id, kind, text_value, number_value, date_value FROM {table}{where}", args):
         result.setdefault(oid, {})[pid] = {"null": None, "empty": "", "list": [], "text": text, "number": number, "date": date}[kind]

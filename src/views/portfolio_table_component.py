@@ -17,21 +17,32 @@ _TABLE_CSS = r"""
 .table-scroll {
     border: 1px solid color-mix(in srgb, var(--st-text-color) 18%, transparent);
     border-radius: 0.5rem;
-    max-height: 32rem;
+    height: 32rem;
     overflow: auto;
+    overflow-anchor: none;
 }
 table {
     border-collapse: separate;
     border-spacing: 0;
     min-width: 100%;
+    table-layout: fixed;
     width: max-content;
 }
 th, td {
     border-bottom: 1px solid color-mix(in srgb, var(--st-text-color) 12%, transparent);
-    padding: 0.58rem 0.7rem;
+    padding: 0 0.7rem;
+    line-height: 20px;
     text-align: left;
     white-space: nowrap;
+    box-sizing: border-box;
+    max-width: 320px;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
+td { height: 40px; }
+th { height: 44px; }
+.virtual-spacer td { padding: 0; border: 0; }
+.virtual-spacer, .loading-row { pointer-events: none; }
 th {
     background: var(--st-secondary-background-color);
     font-weight: 600;
@@ -166,328 +177,262 @@ a {
 
 _TABLE_JS = r"""
 export default function(component) {
-    const { data, state, setStateValue, setTriggerValue, parentElement } = component;
+    const {data, parentElement, setStateValue, setTriggerValue} = component;
     const root = parentElement.querySelector('#portfolio-project-table');
-    const rows = Array.isArray(data.rows) ? data.rows : [];
-    const columns = Array.isArray(data.columns) ? data.columns : [];
-    let filters = { ...((state && state.filters) || {}) };
-    let sort = { ...((state && state.sort) || {}) };
+    const info = data.page_info;
+    const columns = data.columns || [];
+    const ROW_HEIGHT = 40, HEADER_HEIGHT = 44, OVERSCAN = 8, PAGE_SIZE = 100;
+    let model = root._portfolio;
+    if (!model || model.context !== info.context) {
+        model = root._portfolio = {context: info.context, pages: new Map(), pending: null,
+            query: info.query || {}, total: info.total, top: 0, left: 0, menu: null, sequence: 0};
+    }
+    // A late page/filter response must never replace a newer request's rows.
+    if (model.pending && info.request_id !== model.pending.nonce) return;
+    const pending = model.pending;
+    model.pending = null;
+    model.query = info.query || {};
+    model.total = info.total;
+    model.selected = data.selected_id;
+    model.pages.delete(info.offset);
+    model.pages.set(info.offset, data.rows || []);
+    while (model.pages.size > 5) model.pages.delete(model.pages.keys().next().value);
+    if (model.menu && info.facet && pending?.kind === 'facet' &&
+            info.facet.column === model.menu.column && info.facet.search === model.menu.search) {
+        model.menu.facet = info.facet;
+    }
 
-    const displayValue = (row, column) => {
-        const value = row[column.key];
+    const display = (value, column) => {
         if (value === null || value === undefined || value === '') return '—';
-        if (Array.isArray(value)) return value.join(', ');
-        if (column.format === 'currency') {
-            const number = Number(value);
-            if (!Number.isNaN(number)) {
-                return new Intl.NumberFormat(undefined, {
-                    style: 'currency', currency: 'EUR', minimumFractionDigits: 2
-                }).format(number);
-            }
-        }
-        return String(value);
+        if (column?.format === 'currency') return new Intl.NumberFormat(undefined,
+            {style: 'currency', currency: 'EUR', maximumFractionDigits: 2}).format(Number(value));
+        return Array.isArray(value) ? value.join(', ') : String(value);
     };
+    const request = (kind, extra = {}) => {
+        const nonce = String(Date.now()) + '-' + (++model.sequence);
+        const payload = {kind, context: model.context, query: model.query,
+            offset: Math.floor(Math.max(0, model.top - HEADER_HEIGHT) / ROW_HEIGHT / PAGE_SIZE) * PAGE_SIZE,
+            ...extra, nonce};
+        model.pending = payload;
+        status.textContent = kind === 'facet' ? 'Loading column statistics…' : 'Loading projects…';
+        setStateValue('request', payload);
+    };
+    const changeQuery = () => {
+        model.pages.clear();
+        model.top = 0;
+        scroll.scrollTop = 0;
+        model.menu = null;
+        closeMenu();
+        request('page', {offset: 0});
+        drawRows();
+    };
+    const closeMenu = () => root.querySelector('.filter-menu')?.remove();
 
-    const filteredAndSortedRows = () => {
-        const visible = rows.filter((row) => columns.every((column) => {
-            const selected = filters[column.key];
-            return !Array.isArray(selected) || selected.includes(displayValue(row, column));
-        }));
-        if (sort.column && sort.direction) {
-            const column = columns.find((item) => item.key === sort.column);
-            if (column) {
-                visible.sort((left, right) => {
-                    const aRaw = left[column.key];
-                    const bRaw = right[column.key];
-                    let comparison;
-                    if (column.format === 'currency' || column.format === 'number') {
-                        comparison = (Number(aRaw) || 0) - (Number(bRaw) || 0);
-                    } else {
-                        comparison = displayValue(left, column).localeCompare(
-                            displayValue(right, column), undefined, { numeric: true, sensitivity: 'base' }
-                        );
-                    }
-                    return sort.direction === 'desc' ? -comparison : comparison;
+    // Keep scroll offsets and the bounded row cache across component updates.
+    root.replaceChildren();
+    const scroll = document.createElement('div');
+    scroll.className = 'table-scroll';
+    scroll.setAttribute('aria-label', 'Projects master list; scroll to load projects');
+    const table = document.createElement('table');
+    table.style.width = (320 + Math.max(0, columns.length - 1) * 190) + 'px';
+    const colgroup = document.createElement('colgroup');
+    columns.forEach(column => {
+        const col = document.createElement('col');
+        col.style.width = column.key === 'name' ? '320px' : '190px';
+        colgroup.appendChild(col);
+    });
+    table.appendChild(colgroup);
+    const head = document.createElement('thead');
+    const header = document.createElement('tr');
+    const anchors = new Map();
+    columns.forEach(column => {
+        const th = document.createElement('th');
+        const content = document.createElement('div');
+        content.className = 'header-content';
+        const label = document.createElement('span');
+        label.textContent = column.label;
+        const button = document.createElement('button');
+        button.type = 'button'; button.className = 'filter-button'; button.textContent = '▼';
+        button.setAttribute('aria-label', 'Filter or sort ' + column.label);
+        if (model.query.filters?.[column.key] || model.query.sort?.column === column.key) button.classList.add('active');
+        button.onclick = () => {
+            const rule = model.query.filters?.[column.key] || {mode: 'exclude', values: []};
+            model.menu = {column: column.key, search: '', facet: null,
+                draft: {mode: rule.mode, values: [...rule.values]}};
+            showMenu();
+            request('facet', {column: column.key, search: ''});
+        };
+        anchors.set(column.key, button);
+        content.append(label, button); th.appendChild(content); header.appendChild(th);
+    });
+    head.appendChild(header); table.appendChild(head);
+    const body = document.createElement('tbody');
+    table.appendChild(body); scroll.appendChild(table); root.appendChild(scroll);
+    const status = document.createElement('div');
+    status.className = 'row-count'; status.setAttribute('role', 'status');
+    status.setAttribute('aria-live', 'polite'); root.appendChild(status);
+
+    const spacer = height => {
+        if (!height) return;
+        const tr = document.createElement('tr'), td = document.createElement('td');
+        tr.className = 'virtual-spacer'; tr.setAttribute('aria-hidden', 'true');
+        td.colSpan = columns.length; td.style.height = height + 'px';
+        tr.appendChild(td); body.appendChild(tr);
+    };
+    const drawRows = () => {
+        const first = Math.max(0, Math.floor((model.top - HEADER_HEIGHT) / ROW_HEIGHT) - OVERSCAN);
+        const last = Math.min(model.total, first + Math.ceil((scroll.clientHeight || 512) / ROW_HEIGHT) + OVERSCAN * 2);
+        body.replaceChildren();
+        spacer(first * ROW_HEIGHT);
+        for (let index = first; index < last; index++) {
+            const offset = Math.floor(index / PAGE_SIZE) * PAGE_SIZE;
+            const row = model.pages.get(offset)?.[index - offset];
+            const tr = document.createElement('tr');
+            tr.style.height = ROW_HEIGHT + 'px';
+            if (!row) {
+                const td = document.createElement('td'); td.colSpan = columns.length;
+                td.textContent = 'Loading…'; tr.className = 'loading-row'; tr.appendChild(td);
+            } else {
+                tr.tabIndex = 0; tr.setAttribute('role', 'button');
+                tr.setAttribute('aria-label', 'Open project ' + row.name);
+                tr.dataset.projectId = String(row.project_id);
+                if (String(row.project_id) === String(model.selected)) tr.classList.add('selected');
+                const select = () => {
+                    if (String(row.project_id) === String(model.selected)) return;
+                    model.selected = row.project_id;
+                    root.querySelectorAll('tbody tr.selected').forEach(r => r.classList.remove('selected'));
+                    tr.classList.add('selected');
+                    setTriggerValue('row_click', row.project_id);
+                };
+                tr.onclick = select;
+                tr.onkeydown = e => {
+                    if (e.key === 'Enter' || e.key === ' ') {e.preventDefault(); select();}
+                };
+                columns.forEach(column => {
+                    const td = document.createElement('td');
+                    const text = display(row[column.key], column);
+                    td.title = text;
+                    if (column.format === 'url' && /^https?:\/\//i.test(String(row[column.key] || ''))) {
+                        const link = document.createElement('a');
+                        link.href = row[column.key]; link.target = '_blank'; link.rel = 'noopener noreferrer';
+                        link.textContent = text; link.onclick = e => e.stopPropagation(); td.appendChild(link);
+                    } else td.textContent = text;
+                    tr.appendChild(td);
                 });
             }
+            body.appendChild(tr);
         }
-        return visible;
-    };
-
-    const closeMenu = () => {
-        const existing = root.querySelector('.filter-menu');
-        if (existing) existing.remove();
-    };
-
-    const openFilterMenu = (column, anchor) => {
-        closeMenu();
-        const contextRows = rows.filter((row) => columns.every((otherColumn) => {
-            if (otherColumn.key === column.key) return true;
-            const selected = filters[otherColumn.key];
-            return !Array.isArray(selected) || selected.includes(displayValue(row, otherColumn));
-        }));
-        const values = [...new Set(contextRows.map((row) => displayValue(row, column)))].sort((a, b) =>
-            a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
-        );
-        const selectedValues = new Set(
-            Array.isArray(filters[column.key]) ? filters[column.key] : values
-        );
-        const menu = document.createElement('div');
-        menu.className = 'filter-menu';
-        menu.setAttribute('role', 'dialog');
-        menu.setAttribute('aria-label', `Filter ${column.label}`);
-
-        const search = document.createElement('input');
-        search.type = 'search';
-        search.placeholder = 'Search values';
-        search.setAttribute('aria-label', `Search ${column.label} values`);
-        menu.appendChild(search);
-
-        const isBlank = (row) => {
-            const value = row[column.key];
-            return value === null || value === undefined || value === '' ||
-                (Array.isArray(value) && value.length === 0);
-        };
-        const blankCount = contextRows.filter(isBlank).length;
-        const populatedRows = contextRows.filter((row) => !isBlank(row));
-        const uniqueCount = new Set(populatedRows.map((row) => displayValue(row, column))).size;
-        const stats = [
-            ['Rows', contextRows.length],
-            ['Filled', populatedRows.length],
-            ['Unique', uniqueCount],
-            ['Empty', blankCount]
-        ];
-        const numericValues = populatedRows
-            .map((row) => Number(row[column.key]))
-            .filter((value) => Number.isFinite(value));
-        const formatStat = (value) => {
-            if (column.format === 'currency') {
-                return new Intl.NumberFormat(undefined, {
-                    style: 'currency', currency: 'EUR', maximumFractionDigits: 2
-                }).format(value);
+        spacer(Math.max(0, model.total - last) * ROW_HEIGHT);
+        if (!model.pending) {
+            status.textContent = model.total ? model.total.toLocaleString() + ' matching projects · scroll to browse'
+                : 'No projects match the filters.';
+            // Fetch visible gaps first, then prefetch just before a batch boundary.
+            const from = Math.floor(first / PAGE_SIZE) * PAGE_SIZE;
+            const through = Math.min(model.total - 1, last + 15);
+            for (let offset = from; offset <= through; offset += PAGE_SIZE) {
+                if (!model.pages.has(offset)) {request('page', {offset}); break;}
             }
-            return Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 });
-        };
-        if (numericValues.length && (column.format === 'currency' || column.format === 'number')) {
-            const total = numericValues.reduce((sum, value) => sum + value, 0);
-            stats.push(
-                ['Minimum', formatStat(Math.min(...numericValues))],
-                ['Average', formatStat(total / numericValues.length)],
-                ['Maximum', formatStat(Math.max(...numericValues))]
-            );
-        } else if (populatedRows.length) {
-            const counts = new Map();
-            populatedRows.forEach((row) => {
-                const value = displayValue(row, column);
-                counts.set(value, (counts.get(value) || 0) + 1);
-            });
-            const top = [...counts.entries()].sort((left, right) => right[1] - left[1])[0];
-            if (top) stats.push(['Most common', `${top[0]} (${top[1]})`]);
         }
-        const statistics = document.createElement('div');
-        statistics.className = 'filter-stats';
-        stats.forEach(([labelText, valueText]) => {
-            const item = document.createElement('div');
-            item.className = 'filter-stat';
-            const label = document.createElement('span');
-            label.className = 'filter-stat-label';
-            label.textContent = labelText;
-            const value = document.createElement('span');
-            value.className = 'filter-stat-value';
-            value.title = String(valueText);
-            value.textContent = String(valueText);
-            item.append(label, value);
-            statistics.appendChild(item);
-        });
-        menu.appendChild(statistics);
+    };
 
-        const sortActions = document.createElement('div');
-        sortActions.className = 'sort-actions';
+    const showMenu = () => {
+        closeMenu();
+        const active = model.menu;
+        if (!active) return;
+        const column = columns.find(c => c.key === active.column);
+        if (!column) return;
+        const menu = document.createElement('div');
+        menu.className = 'filter-menu'; menu.setAttribute('role', 'dialog');
+        menu.setAttribute('aria-label', 'Filter ' + column.label);
+        const search = document.createElement('input');
+        search.type = 'search'; search.placeholder = 'Search all values'; search.value = active.search;
+        search.setAttribute('aria-label', 'Search ' + column.label + ' values');
+        search.oninput = () => {
+            active.search = search.value;
+            clearTimeout(model.searchTimer);
+            model.searchTimer = setTimeout(() => {
+                active.facet = null;
+                request('facet', {column: active.column, search: active.search});
+            }, 250);
+        };
+        menu.appendChild(search);
+        const facet = active.facet;
+        const stats = document.createElement('div'); stats.className = 'filter-stats';
+        if (facet) facet.stats.forEach(([name, raw]) => {
+            const item = document.createElement('div'); item.className = 'filter-stat';
+            const label = document.createElement('span'); label.className = 'filter-stat-label'; label.textContent = name;
+            const value = document.createElement('span'); value.className = 'filter-stat-value';
+            const isNumber = ['Minimum', 'Average', 'Maximum'].includes(name);
+            value.textContent = isNumber ? display(raw, column) : String(raw);
+            value.title = value.textContent; item.append(label, value); stats.appendChild(item);
+        });
+        else stats.textContent = 'Loading full-result statistics…';
+        menu.appendChild(stats);
+        const sortActions = document.createElement('div'); sortActions.className = 'sort-actions';
         [['asc', 'Sort A → Z'], ['desc', 'Sort Z → A']].forEach(([direction, label]) => {
-            const button = document.createElement('button');
-            button.type = 'button';
-            button.textContent = label;
-            button.onclick = () => {
-                sort = { column: column.key, direction };
-                setStateValue('sort', sort);
-                render();
-            };
+            const button = document.createElement('button'); button.type = 'button'; button.textContent = label;
+            button.onclick = () => {model.query.sort = {column: column.key, direction}; changeQuery();};
             sortActions.appendChild(button);
         });
         menu.appendChild(sortActions);
-
-        const quickActions = document.createElement('div');
-        quickActions.className = 'filter-actions';
-        const selectAll = document.createElement('button');
-        selectAll.type = 'button';
-        selectAll.textContent = 'Select all';
-        const clearAll = document.createElement('button');
-        clearAll.type = 'button';
-        clearAll.textContent = 'Clear';
-        quickActions.append(selectAll, clearAll);
-        menu.appendChild(quickActions);
-
-        const valueList = document.createElement('div');
-        valueList.className = 'value-list';
-        const options = [];
-        values.forEach((value, index) => {
-            const label = document.createElement('label');
-            label.className = 'value-option';
-            const checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.value = value;
-            checkbox.checked = selectedValues.has(value);
-            checkbox.id = `filter-${column.key}-${index}`;
-            const text = document.createElement('span');
-            text.textContent = value;
-            label.append(checkbox, text);
-            valueList.appendChild(label);
-            options.push({ label, checkbox, value });
+        const quick = document.createElement('div'); quick.className = 'filter-actions';
+        [['Select all', 'exclude'], ['Clear', 'include']].forEach(([label, mode]) => {
+            const button = document.createElement('button'); button.type = 'button'; button.textContent = label;
+            button.onclick = () => {active.draft = {mode, values: []}; showMenu();};
+            quick.appendChild(button);
         });
-        menu.appendChild(valueList);
-
-        const applyActions = document.createElement('div');
-        applyActions.className = 'filter-actions';
-        const cancel = document.createElement('button');
-        cancel.type = 'button';
-        cancel.textContent = 'Cancel';
-        cancel.onclick = closeMenu;
-        const apply = document.createElement('button');
-        apply.type = 'button';
-        apply.className = 'primary';
-        apply.textContent = 'Apply';
-        apply.onclick = () => {
-            const selected = options.filter((item) => item.checkbox.checked).map((item) => item.value);
-            if (selected.length === values.length) delete filters[column.key];
-            else filters[column.key] = selected;
-            setStateValue('filters', filters);
-            render();
-        };
-        applyActions.append(cancel, apply);
-        menu.appendChild(applyActions);
-
-        search.oninput = () => {
-            const needle = search.value.toLocaleLowerCase();
-            options.forEach((item) => {
-                item.label.hidden = !item.value.toLocaleLowerCase().includes(needle);
-            });
-        };
-        selectAll.onclick = () => options
-            .filter((item) => !item.label.hidden)
-            .forEach((item) => { item.checkbox.checked = true; });
-        clearAll.onclick = () => options
-            .filter((item) => !item.label.hidden)
-            .forEach((item) => { item.checkbox.checked = false; });
-
-        root.appendChild(menu);
-        const rect = anchor.getBoundingClientRect();
-        const maxLeft = Math.max(8, window.innerWidth - 272);
-        menu.style.left = `${Math.min(rect.left, maxLeft)}px`;
-        menu.style.top = `${Math.max(8, Math.min(rect.bottom + 4, window.innerHeight - 390))}px`;
-        search.focus();
-    };
-
-    const render = () => {
-        const previousScroll = root.querySelector('.table-scroll');
-        const previousScrollTop = previousScroll ? previousScroll.scrollTop : 0;
-        const previousScrollLeft = previousScroll ? previousScroll.scrollLeft : 0;
-        root.replaceChildren();
-        const scroll = document.createElement('div');
-        scroll.className = 'table-scroll';
-        const table = document.createElement('table');
-        const head = document.createElement('thead');
-        const headerRow = document.createElement('tr');
-
-        columns.forEach((column) => {
-            const th = document.createElement('th');
-            const content = document.createElement('div');
-            content.className = 'header-content';
-            const label = document.createElement('span');
-            label.textContent = column.label;
-            const button = document.createElement('button');
-            button.type = 'button';
-            button.className = 'filter-button';
-            if (Object.prototype.hasOwnProperty.call(filters, column.key) || sort.column === column.key) {
-                button.classList.add('active');
-            }
-            button.textContent = '▼';
-            button.title = `Filter or sort ${column.label}`;
-            button.setAttribute('aria-label', `Filter or sort ${column.label}`);
-            button.onclick = (event) => {
-                event.stopPropagation();
-                openFilterMenu(column, button);
+        menu.appendChild(quick);
+        const list = document.createElement('div'); list.className = 'value-list';
+        (facet?.values || []).forEach(item => {
+            const label = document.createElement('label'); label.className = 'value-option';
+            const input = document.createElement('input'); input.type = 'checkbox';
+            const contains = active.draft.values.includes(item.value);
+            input.checked = active.draft.mode === 'exclude' ? !contains : contains;
+            input.onchange = () => {
+                const values = new Set(active.draft.values);
+                const add = active.draft.mode === 'exclude' ? !input.checked : input.checked;
+                if (add) values.add(item.value); else values.delete(item.value);
+                active.draft.values = [...values];
             };
-            content.append(label, button);
-            th.appendChild(content);
-            headerRow.appendChild(th);
+            const text = document.createElement('span'); text.textContent = display(item.value, column) + ' (' + item.count + ')';
+            label.append(input, text); list.appendChild(label);
         });
-        head.appendChild(headerRow);
-        table.appendChild(head);
-
-        const body = document.createElement('tbody');
-        const visibleRows = filteredAndSortedRows();
-        visibleRows.forEach((row) => {
-            const tr = document.createElement('tr');
-            tr.tabIndex = 0;
-            tr.setAttribute('role', 'button');
-            tr.setAttribute('aria-label', `Open project ${row.name || row.project_id}`);
-            if (String(row.project_id) === String(data.selected_id)) tr.classList.add('selected');
-            const selectRow = () => {
-                // Give immediate feedback instead of waiting for the Streamlit rerun.
-                root.querySelectorAll('tbody tr.selected').forEach((selectedRow) => {
-                    selectedRow.classList.remove('selected');
-                });
-                tr.classList.add('selected');
-
-                // Clicking the already-selected row should not launch an expensive rerun.
-                if (String(row.project_id) !== String(data.selected_id)) {
-                    setTriggerValue('row_click', row.project_id);
-                }
-            };
-            tr.onclick = selectRow;
-            tr.onkeydown = (event) => {
-                if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault();
-                    selectRow();
-                }
-            };
-            columns.forEach((column) => {
-                const td = document.createElement('td');
-                const text = displayValue(row, column);
-                if (column.format === 'url' && /^https?:\/\//i.test(String(row[column.key] || ''))) {
-                    const link = document.createElement('a');
-                    link.href = String(row[column.key]);
-                    link.target = '_blank';
-                    link.rel = 'noopener noreferrer';
-                    link.textContent = text;
-                    link.onclick = (event) => event.stopPropagation();
-                    td.appendChild(link);
-                } else {
-                    td.textContent = text;
-                }
-                tr.appendChild(td);
-            });
-            body.appendChild(tr);
-        });
-        table.appendChild(body);
-        scroll.appendChild(table);
-        root.appendChild(scroll);
-        scroll.scrollTop = previousScrollTop;
-        scroll.scrollLeft = previousScrollLeft;
-
-        if (!visibleRows.length) {
-            const empty = document.createElement('div');
-            empty.className = 'empty-state';
-            empty.textContent = 'No projects match the column filters.';
-            root.appendChild(empty);
+        menu.appendChild(list);
+        if (facet?.has_more) {
+            const hint = document.createElement('div');
+            hint.textContent = 'First 200 values. Search to find others. Select all includes every matching value.';
+            hint.className = 'row-count'; menu.appendChild(hint);
         }
-        const count = document.createElement('div');
-        count.className = 'row-count';
-        count.textContent = `${visibleRows.length} of ${rows.length} project${rows.length === 1 ? '' : 's'}`;
-        root.appendChild(count);
+        const actions = document.createElement('div'); actions.className = 'filter-actions';
+        const cancel = document.createElement('button'); cancel.type = 'button'; cancel.textContent = 'Cancel';
+        cancel.onclick = () => {model.menu = null; clearTimeout(model.searchTimer); closeMenu();};
+        const apply = document.createElement('button'); apply.type = 'button'; apply.className = 'primary'; apply.textContent = 'Apply';
+        apply.onclick = () => {
+            clearTimeout(model.searchTimer);
+            model.query.filters = {...(model.query.filters || {})};
+            if (active.draft.mode === 'exclude' && !active.draft.values.length) delete model.query.filters[column.key];
+            else model.query.filters[column.key] = active.draft;
+            changeQuery();
+        };
+        actions.append(cancel, apply); menu.appendChild(actions); root.appendChild(menu);
+        const rect = anchors.get(column.key).getBoundingClientRect();
+        menu.style.left = Math.min(rect.left, Math.max(8, window.innerWidth - 300)) + 'px';
+        menu.style.top = Math.max(8, Math.min(rect.bottom + 4, window.innerHeight - 460)) + 'px';
+        search.focus();
+        search.setSelectionRange(search.value.length, search.value.length);
     };
 
-    render();
+    let frame;
+    scroll.onscroll = () => {
+        model.top = scroll.scrollTop; model.left = scroll.scrollLeft;
+        if (!frame) frame = requestAnimationFrame(() => {
+            frame = null; drawRows();
+        });
+    };
+    drawRows();
+    scroll.scrollTop = model.top; scroll.scrollLeft = model.left;
+    showMenu();
+    return () => {if (frame) cancelAnimationFrame(frame);};
 }
 """
 
@@ -505,16 +450,15 @@ def portfolio_project_table(
     selected_id: Any,
     *,
     key: str,
+    page_info: dict[str, Any],
 ) -> Any:
     """Render the portfolio table and return the ID from the latest row click."""
     result = _PORTFOLIO_PROJECT_TABLE(
-        data={"rows": rows, "columns": columns, "selected_id": selected_id},
-        default={"filters": {}, "sort": {}},
+        data={"rows": rows, "columns": columns, "selected_id": selected_id, "page_info": page_info},
         key=key,
         width="stretch",
         height="content",
-        on_filters_change=lambda: None,
-        on_sort_change=lambda: None,
+        on_request_change=lambda: None,
         on_row_click_change=lambda: None,
     )
     return getattr(result, "row_click", None)

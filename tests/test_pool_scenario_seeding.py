@@ -27,20 +27,30 @@ class PoolScenarioSeedTests(unittest.TestCase):
 
     def assert_scenarios(self):
         with sqlite3.connect(self.path) as conn:
-            self.assertEqual(conn.execute("SELECT COUNT(*) FROM resource_pool").fetchone()[0], 127)
-            self.assertEqual(conn.execute("SELECT COUNT(*) FROM resource_pool_group").fetchone()[0], 52)
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM resource_pool").fetchone()[0], 103)
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM resource_pool_group").fetchone()[0], 31)
             self.assertEqual(conn.execute("PRAGMA foreign_key_check").fetchall(), [])
-            for gid, in conn.execute("SELECT id FROM resource_pool_group WHERE description=?", (MARKER,)):
-                self.assertTrue(1 <= conn.execute("SELECT COUNT(*) FROM resource_pool_group_member WHERE group_id=? AND pool_id IS NOT NULL", (gid,)).fetchone()[0] <= 5)
-            for gid, in conn.execute("SELECT id FROM resource_pool_group WHERE description!=?", (MARKER,)):
-                self.assertTrue(3 <= conn.execute("SELECT COUNT(*) FROM resource_pool_group_member m JOIN resource_pool_group g ON g.id=m.child_group_id WHERE m.group_id=? AND g.description=?", (gid, MARKER)).fetchone()[0] <= 10)
-            mappings = conn.execute("SELECT p.id,COUNT(m.target_id) FROM resource_pool p JOIN resource_pool_mapping m ON m.pool_id=p.id WHERE p.name LIKE 'Service C /%' AND m.target_type='employee' GROUP BY p.id").fetchall()
-            self.assertEqual(len(mappings), 24)
-            self.assertTrue(all(3 <= count <= 5 for _, count in mappings))
-            # Every generated pool has both project-level and task-level demand.
-            for pid, in conn.execute("SELECT id FROM resource_pool WHERE description=?", (MARKER,)):
-                self.assertEqual(conn.execute("SELECT COUNT(*) FROM resource_pool_assignment WHERE pool_id=?", (pid,)).fetchone()[0], 2)
-            self.assertEqual(conn.execute("SELECT COUNT(*) FROM employee_calendar_exception WHERE occupation_percentage=0 AND reason LIKE ?", (MARKER + '%',)).fetchone()[0], 1)
+            units = conn.execute("SELECT id FROM resource_pool_group WHERE description=?", (MARKER,)).fetchall()
+            self.assertEqual(len(units), 25)
+            for gid, in units:
+                pools = conn.execute("SELECT p.id,p.name,p.capacity_fte FROM resource_pool p JOIN resource_pool_group_member m ON m.pool_id=p.id WHERE m.group_id=?", (gid,)).fetchall()
+                self.assertEqual(len(pools), 4)
+                for pid, name, theoretical in pools:
+                    nominal, count = conn.execute("SELECT COALESCE(SUM(e.occupation_percentage*m.allocation_pct/10000),0),COUNT(*) FROM resource_pool_mapping m JOIN employee e ON m.target_type='employee' AND e.employee_id=m.target_id WHERE m.pool_id=?", (pid,)).fetchone()
+                    if name.endswith('/ Unallocated'):
+                        self.assertEqual(count, 0)
+                        self.assertGreater(theoretical, 0)
+                    elif name.endswith('/ Overassigned'):
+                        self.assertGreater(nominal, theoretical)
+                    elif name.endswith('/ Underassigned'):
+                        self.assertLess(nominal, theoretical)
+                        self.assertGreater(nominal, 0)
+                    else:
+                        self.assertTrue(name.endswith('/ Fully assigned'))
+                        self.assertAlmostEqual(nominal, theoretical)
+                    self.assertEqual(conn.execute("SELECT COUNT(*) FROM resource_pool_assignment WHERE pool_id=?", (pid,)).fetchone()[0], 2)
+            for gid, in conn.execute("SELECT id FROM resource_pool_group WHERE name LIKE 'Service %' AND description!=?", (MARKER,)):
+                self.assertEqual(conn.execute("SELECT COUNT(*) FROM resource_pool_group_member WHERE group_id=? AND child_group_id IS NOT NULL", (gid,)).fetchone()[0], 5)
 
     def test_additive_repair_preserves_projects_and_is_idempotent(self):
         # Emulate the old full seeder that only created three pools.
@@ -62,4 +72,4 @@ class PoolScenarioSeedTests(unittest.TestCase):
         seed_database(2, 0, 0, self.path)
         with sqlite3.connect(self.path) as conn:
             self.assertEqual(conn.execute("SELECT COUNT(*) FROM project_task").fetchone()[0], 0)
-            self.assertEqual(conn.execute("SELECT COUNT(*) FROM resource_pool").fetchone()[0], 127)
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM resource_pool").fetchone()[0], 103)

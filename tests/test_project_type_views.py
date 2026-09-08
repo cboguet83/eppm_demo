@@ -90,11 +90,62 @@ schema = SchemaRepository({self.path!r})
         seed_default_data_if_empty(self.path)
         config_app = self.app('from src.views.schema_def_view import render_schema_definition\nrender_schema_definition(schema)')
         self.assert_clean(config_app)
-        self.assertIn("Project types", [tab.label for tab in config_app.tabs])
+        self.assertIn("Project templates", [tab.label for tab in config_app.tabs])
         types = dict(zip(self.types.get_all_types().name, self.types.get_all_types().id))
         config_app.selectbox(key="template_type").select(types["Infrastructure"]).run()
         self.assert_clean(config_app)
         # Each AppTest has its own component registry; register in that runtime.
         portfolio = self.app('import importlib\nimport src.views.portfolio_table_component as component\nimportlib.reload(component)\nfrom src.views.portfolio_view import render_portfolio_overview\nst.session_state["selected_portfolio_project_id"] = 1\nrender_portfolio_overview(repo, schema)')
         self.assert_clean(portfolio)
-        self.assertIn("Filter by project type", [w.label for w in portfolio.multiselect])
+        self.assertIn("Filter by project template", [w.label for w in portfolio.multiselect])
+
+    def test_all_template_property_types_are_exposed_in_create_edit_and_details(self):
+        import datetime
+        from src.models.constants import PARAM_TYPES
+
+        template = self.types.create_type('Complete template')
+        group = self.schema.create_group('Custom template group', 1)
+        values = {'TEXT': 'Text value', 'ENUM': 'Option A', 'MULTI_ENUM': ['Option A'],
+                  'TAGS': ['Free tag'], 'URL': 'https://example.com', 'DATE': '2026-09-08',
+                  'NUMBER': 0, 'HYPERLINK': 'https://example.com/details'}
+        for index, kind in enumerate(PARAM_TYPES):
+            self.schema.create_parameter(kind, group if index % 2 else None, f'Custom {kind}', kind,
+                alias=f'Alias {kind}', applies_to_all=False, project_type_ids=[template])
+            if kind in ('ENUM', 'MULTI_ENUM'):
+                self.schema.add_option(kind, 'Option A', 1)
+            self.types.save_rule(template, kind, has_default=True, default_value=values[kind])
+        self.schema.create_parameter('blank', None, 'Unfilled property', 'TEXT',
+                                     applies_to_all=False, project_type_ids=[template])
+        self.schema.create_parameter('other', None, 'Other template only', 'TEXT',
+                                     applies_to_all=False, project_type_ids=[1])
+        app = self.app('open_create_project_dialog(repo, schema)')
+        app.selectbox(key='create_type_1').select(template).run()
+        self.assert_clean(app)
+        for kind in ('TEXT', 'URL', 'HYPERLINK', 'blank'):
+            self.assertIn(f'portfolio_create_1_{kind}', [w.key for w in app.text_input])
+        self.assertEqual(app.date_input(key='portfolio_create_1_DATE').value, datetime.date(2026, 9, 8))
+        self.assertEqual(app.number_input(key='portfolio_create_1_NUMBER').value, 0)
+        self.assertEqual(app.selectbox(key='portfolio_create_1_ENUM').value, 'Option A')
+        self.assertEqual(app.multiselect(key='portfolio_create_1_MULTI_ENUM').value, ['Option A'])
+        self.assertEqual(app.multiselect(key='portfolio_create_1_TAGS').value, ['Free tag'])
+        self.assertNotIn('portfolio_create_1_other', [w.key for w in app.text_input])
+        next(w for w in app.text_input if w.label == t('master_data.field_name')).input('Complete project').run()
+        next(b for b in app.button if b.label == 'Create project').click().run()
+        self.assert_clean(app)
+        self.assertEqual(self.repo.get_project_by_id(1).dynamic_attributes, {**values, 'blank': ''})
+
+        app = self.app('open_edit_project_dialog(1, repo, schema)')
+        self.assert_clean(app)
+        app.text_input(key='portfolio_edit_1_blank').input('Previously empty').run()
+        app.number_input(key='portfolio_edit_1_NUMBER').set_value(42).run()
+        next(b for b in app.button if b.label == t('master_data.btn_update')).click().run()
+        self.assert_clean(app)
+        self.assertEqual(self.repo.get_project_by_id(1).dynamic_attributes,
+                         {**values, 'blank': 'Previously empty', 'NUMBER': 42})
+        details = self.app('import importlib\nimport src.views.portfolio_table_component as component\nimportlib.reload(component)\nfrom src.views.portfolio_view import render_portfolio_overview\nst.session_state["selected_portfolio_project_id"] = 1\nrender_portfolio_overview(repo, schema)')
+        self.assert_clean(details)
+        rendered = '\n'.join(w.value for w in details.markdown)
+        for kind in PARAM_TYPES:
+            self.assertIn(f'Custom {kind} (Alias {kind}):', rendered)
+        self.assertIn('Unfilled property: Previously empty', rendered)
+        self.assertNotIn('Other template only:', rendered)

@@ -1191,7 +1191,7 @@
       overflow-y: auto;
       max-height: 380px;
       min-height: 0;
-      scrollbar-gutter: stable;
+      scrollbar-gutter: auto;
       transition: max-height 0.2s ease;
     }
 
@@ -1952,7 +1952,7 @@
             <span id="lbl-internal-links">🔗 Internal Dependencies</span>
           </label>
           <label class="toggle-link-opt" title="Toggle visibility of cross-project external dependencies">
-            <input type="checkbox" id="chk-external-links" checked
+            <input type="checkbox" id="chk-external-links"
               onchange="toggleLinkVisibility('external', this.checked)">
             <span id="lbl-external-links">🌐 External Dependencies</span>
           </label>
@@ -2041,7 +2041,9 @@
               </defs>
               <g id="grid-ticks-group"></g>
               <g id="grid-today-group"></g>
-              <g id="grid-links-group"></g>
+              <svg id="dependency-viewport" overflow="hidden">
+                <g id="grid-links-group"></g>
+              </svg>
             </svg>
             <div id="timeline-rows-container"></div>
             <div class="column-hover-overlay" id="column-hover-overlay-gantt"></div>
@@ -2131,6 +2133,133 @@
     let tasksData = [];
     let allProjectsData = []; // list of { id, name, tags }
     let externalTasksData = {}; // project_id -> list of { id, task_name, start_date, end_date }
+    let projectSummariesData = [];
+    let lazyProjects = false;
+    let loadedProjectIds = new Set();
+    let planningScopeToken = null;
+    let planningPendingRequest = null;
+    let planningLoadTimer = null;
+    let planningNeededProjects = [];
+    let planningForcedProjects = new Set();
+    let planningPendingDiagnostics = null;
+    const projectTaskWindows = new Map();
+
+    function updateLoadedProjectWindows(replaced) {
+      const tasks = new Map();
+      for (const task of tasksData) {
+        const pid = String(task.project_id);
+        if (!replaced.has(pid)) continue;
+        if (!tasks.has(pid)) tasks.set(pid, []);
+        tasks.get(pid).push(task);
+      }
+      for (const pid of replaced) {
+        const window = projectTaskWindows.get(pid);
+        if (!window || window.start === window.end || !loadedProjectIds.has(pid)) continue;
+        if ((tasks.get(pid) || []).length !== window.end - window.start) return false;
+      }
+      for (const [tid, position] of Object.entries(allTaskPositions)) {
+        if (replaced.has(String(position.project_id))) delete allTaskPositions[tid];
+      }
+      for (const pid of replaced) {
+        const window = projectTaskWindows.get(pid);
+        if (!window || window.start === window.end) continue;
+        const sorted = sortTasksList(tasks.get(pid) || []);
+        for (let index = window.start; index < window.end; index++) {
+          const task = loadedProjectIds.has(pid) ? sorted[index-window.start] : null;
+          masterRenderItems[index] = task ? {type:'task',task,isChild:true} : {type:'loading',project_id:pid};
+          if (task) {
+            const startX = dateToX(parseDate(task.start));
+            const milestone = task.start === task.end;
+            allTaskPositions[String(task.id)] = {startX,endX:milestone?startX:Math.max(startX+24,endDateToX(parseDate(task.end))),
+              centerY:index*46+23,rowIdx:index,isMilestone:milestone,isProject:false,name:task.name,project_id:pid};
+          }
+        }
+      }
+      buildDependencyIndex();
+      renderVirtualWindow();
+      return true;
+    }
+
+    function unpackPoolData(pool) {
+      for (const field of ['daily_usage','daily_assigned_capacity','selected_projects_daily_usage']) {
+        if (!pool[field + '_intervals']) continue;
+        const daily = {};
+        for (const [start, end, value] of pool[field + '_intervals']) {
+          const stop = Date.parse(end + 'T00:00:00Z');
+          for (let stamp = Date.parse(start + 'T00:00:00Z'); stamp <= stop; stamp += 86400000) {
+            daily[new Date(stamp).toISOString().slice(0,10)] = value;
+          }
+        }
+        pool[field] = daily;
+        delete pool[field + '_intervals'];
+      }
+      return pool;
+    }
+
+    function scheduleProjectLoads(start, end) {
+      if (!lazyProjects) return;
+      const needed = new Set([...planningForcedProjects].filter(pid => !loadedProjectIds.has(pid)));
+      for (let i = start; i <= end; i++) {
+        const item = masterRenderItems[i];
+        if (!item) continue;
+        const pid = String(item.project_id || item.task?.project_id || '');
+        if (pid && !loadedProjectIds.has(pid) &&
+            (item.type === 'loading' || (item.type === 'project_header' && (!item.isCollapsed || showExternalLinks)))) needed.add(pid);
+      }
+      planningNeededProjects = [...needed].slice(0, 25);
+      if (!planningPendingRequest && planningNeededProjects.length && !planningLoadTimer) {
+        planningLoadTimer = setTimeout(() => {
+          planningLoadTimer = null;
+          if (!planningNeededProjects.length || planningPendingRequest) return;
+          const nonce = Date.now() + '_projects_' + Math.random();
+          planningPendingRequest = nonce;
+          Streamlit.setComponentValue({action:'load_project_tasks',project_ids:planningNeededProjects,
+            scope_token:planningScopeToken,nonce});
+          // A user edit can supersede a pending read on a Streamlit rerun.
+          setTimeout(() => {
+            if (planningPendingRequest === nonce) {
+              planningPendingRequest = null;
+              if (renderedRowWindow) scheduleProjectLoads(renderedRowWindow.start, renderedRowWindow.end);
+            }
+          }, 3000);
+        }, 60);
+      }
+    }
+
+    function applyPlanningPatch(patch) {
+      if (patch.scope_token !== planningScopeToken) return;
+      planningPendingRequest = null;
+      const replaced = new Set([...(patch.replace_projects || []), ...(patch.evict_project_ids || [])].map(String));
+      tasksData = tasksData.filter(task => !replaced.has(String(task.project_id))).concat(patch.tasks || []);
+      loadedProjectIds = new Set((patch.loaded_project_ids || []).map(String));
+      for (const pid of loadedProjectIds) planningForcedProjects.delete(pid);
+      const summaries = new Map((patch.project_summaries || []).map(p => [String(p.id), p]));
+      projectSummariesData = projectSummariesData.map(p => summaries.get(String(p.id)) || p);
+      const metadata = new Map((patch.project_metadata || []).map(p => [String(p.id), p]));
+      allProjectsData = allProjectsData.map(p => metadata.has(String(p.id)) ? {...p, ...metadata.get(String(p.id))} : p);
+      if (patch.resource_pools) {
+        const changed = new Map(patch.resource_pools.map(p => [p.id, unpackPoolData(p)]));
+        resourcePoolsData = resourcePoolsData.map(p => changed.get(p.id) || p);
+        // Shared-pool warnings can change on otherwise unrelated loaded tasks;
+        // derive them from the patched daily pool timeline without refetching those projects.
+        for (const task of tasksData) for (const assignment of task.pools || []) {
+          const pool = changed.get(assignment.pool_id);
+          if (!pool) continue;
+          assignment.pool_capacity = pool.capacity;
+          assignment.is_overassigned = Number(assignment.fte) > pool.capacity + 0.0001 ||
+            getDemandCapacityStatusForPeriod(pool.daily_usage, pool.displayed_assigned_capacity,
+              pool.daily_assigned_capacity, assignment.start_date || task.start, assignment.end_date || task.end).isOverallocated;
+        }
+        groupUsageCache.clear();
+      }
+      if (patch.project_summaries || patch.resource_pools || !updateLoadedProjectWindows(replaced)) {
+        renderTimeline({resourcesChanged:Boolean(patch.resource_pools)});
+      }
+      if (planningPendingDiagnostics && loadedProjectIds.has(planningPendingDiagnostics)) {
+        const pid = planningPendingDiagnostics; planningPendingDiagnostics = null;
+        openProjectDiagModal(pid);
+      }
+    }
     let resourcePoolsData = [];
     let resourcePoolHierarchy = [];
     let collapsedResourceNodes = new Set();
@@ -2555,6 +2684,10 @@
       if (!item) return;
 
       const pId = item.project_id;
+      if (lazyProjects && !loadedProjectIds.has(String(pId))) {
+        planningForcedProjects.add(String(pId));
+        if (renderedRowWindow) scheduleProjectLoads(renderedRowWindow.start, renderedRowWindow.end);
+      }
       const pName = item.project_name || `Project #${pId}`;
       const cleanPName = String(pName).replace(/^[A-Za-z0-9_-]+\s*-\s*/, '');
       const taskCount = item.taskCount !== undefined ? item.taskCount : 0;
@@ -2580,7 +2713,7 @@
       } else {
         tagsHtml = `
           <div style="margin-top:5px; border-top:1px solid #334155; padding-top:4px; font-size:10.5px; color:#64748b; font-style:italic;">
-            🏷️ No tags attached
+            🏷️ ${lazyProjects && !loadedProjectIds.has(String(pId)) ? 'Loading project details…' : 'No tags attached'}
           </div>
         `;
       }
@@ -2824,6 +2957,31 @@
       if (menu) menu.style.display = 'none';
     }
 
+    // Collapsed projects often have many dependencies with identical anchors.
+    // Paint that line once, but keep every underlying dependency inspectable.
+    function showDependencyBundleMenu(e, bundle, selected = 0) {
+      const members = bundle.members;
+      if (!members.length) return;
+      showDependencyContextMenu(e, members[selected].getInfo());
+      if (members.length < 2) return;
+      const content = document.getElementById('dep-ctx-content');
+      const label = document.createElement('label');
+      label.textContent = `${members.length} dependencies on this link`;
+      const select = document.createElement('select');
+      select.style.cssText = 'width:100%; margin:6px 0 10px;';
+      members.forEach(({entry}, index) => {
+        const option = document.createElement('option');
+        const dep = entry.dep;
+        option.value = String(index);
+        option.textContent = `${dep.pred_task_name || dep.predecessor_task_id || dep.predecessor_project_id || 'Project'} → ${entry.succTask.name}`;
+        option.selected = index === selected;
+        select.appendChild(option);
+      });
+      select.onchange = () => showDependencyBundleMenu(e, {members}, Number(select.value));
+      label.appendChild(select);
+      content.prepend(label);
+    }
+
     function openEditModalForDep() {
       hideDepContextMenu();
       if (!selectedDependencyInfo) return;
@@ -2879,6 +3037,12 @@
 
       const targetPId = projectId || selectedContextMenuProjectId;
       if (!targetPId) return;
+      if (lazyProjects && !loadedProjectIds.has(String(targetPId))) {
+        planningPendingDiagnostics = String(targetPId);
+        planningForcedProjects.add(String(targetPId));
+        if (renderedRowWindow) scheduleProjectLoads(renderedRowWindow.start, renderedRowWindow.end);
+        return;
+      }
 
       const projTasks = tasksData.filter(t => String(t.project_id || currentProjectId) === String(targetPId));
       const violsList = [];
@@ -3350,6 +3514,52 @@
       populateDepTargets(row, {});
     }
 
+    const dependencyRequests = new Map();
+    let activeDependencyRequest = null;
+
+    function sendNextDependencyRequest() {
+      if (activeDependencyRequest) return;
+      for (const [projectId, entry] of dependencyRequests) {
+        entry.rows = entry.rows.filter(item => item.row.isConnected);
+        if (!entry.rows.length) {dependencyRequests.delete(projectId); continue;}
+        entry.nonce = Date.now() + '_choices_' + Math.random();
+        activeDependencyRequest = {projectId, nonce: entry.nonce};
+        Streamlit.setComponentValue({action: 'load_dependency_tasks', project_id: projectId, nonce: entry.nonce});
+        break;
+      }
+    }
+
+    function requestDependencyChoices(projectId, row, initialData) {
+      if (!projectId) return;
+      row._dependencyProject = projectId;
+      const target = row.querySelector('.dep-target');
+      target.disabled = true;
+      if (initialData.predecessor_task_id) {
+        const option = document.createElement('option');
+        option.value = 'TASK:' + initialData.predecessor_task_id;
+        option.textContent = 'Loading predecessor…'; option.selected = true;
+        target.appendChild(option);
+      }
+      const entry = dependencyRequests.get(projectId) || {rows: []};
+      entry.rows.push({row, initialData});
+      dependencyRequests.set(projectId, entry);
+      sendNextDependencyRequest();
+    }
+
+    function receiveDependencyChoices(response) {
+      if (!response || response.nonce !== activeDependencyRequest?.nonce) return;
+      const projectId = String(response.project_id);
+      externalTasksData[projectId] = response.tasks || [];
+      const entry = dependencyRequests.get(projectId);
+      dependencyRequests.delete(projectId); activeDependencyRequest = null;
+      for (const item of entry?.rows || []) {
+        if (item.row.isConnected && item.row._dependencyProject === projectId) {
+          populateDepTargets(item.row, item.initialData);
+        }
+      }
+      sendNextDependencyRequest();
+    }
+
     function populateDepTargets(rowDiv, initialData = {}) {
       const activeProjId = getActiveModalProjectId();
       const chk = rowDiv.querySelector('.dep-is-ext');
@@ -3358,6 +3568,8 @@
       const otherProjects = (allProjectsData || []).filter(p => String(p.id) !== String(activeProjId));
 
       targetSelect.innerHTML = '';
+      targetSelect.disabled = false;
+      rowDiv._dependencyProject = null;
 
       if (chk && chk.checked) {
         // External Project
@@ -3384,6 +3596,7 @@
             start_date: t.start || t.start_date,
             end_date: t.end || t.end_date,
           }));
+          if (!extTasks.length) requestDependencyChoices(selectedProj, rowDiv, initialData);
         }
 
         extTasks.forEach(item => {
@@ -3420,6 +3633,7 @@
             id: t.id,
             task_name: t.name || t.task_name
           }));
+          if (!internalTasks.length) requestDependencyChoices(String(activeProjId), rowDiv, initialData);
         }
 
         internalTasks.forEach(item => {
@@ -3439,6 +3653,10 @@
     }
 
     function saveEditModal() {
+      if (document.querySelector('.dep-target:disabled')) {
+        alert('Please wait for predecessor tasks to finish loading.');
+        return;
+      }
       const name = document.getElementById('modal-task-name').value.trim();
       const phase = document.getElementById('modal-task-phase').value.trim();
       const desc = document.getElementById('modal-task-desc').value.trim();
@@ -3634,14 +3852,15 @@
     // TIMELINE RENDERER
     // --------------------------------------------------------------------------
     function computeTimelineBounds() {
-      if (!tasksData || tasksData.length === 0) {
+      const boundsData = lazyProjects ? projectSummariesData.filter(p => p.start && p.end) : tasksData;
+      if (!boundsData || boundsData.length === 0) {
         timelineStart = new Date();
         timelineEnd = addDays(timelineStart, 90);
         return;
       }
 
       let minDate = null, maxDate = null;
-      tasksData.forEach(t => {
+      boundsData.forEach(t => {
         const s = parseDate(t.start);
         const e = parseDate(t.end);
         const effectiveEnd = (t.start === t.end) ? e : addDays(e, 1);
@@ -3851,6 +4070,13 @@
         totalTimelineWidth = mCount * colWidth;
       }
 
+      const available = document.getElementById('timeline-body-scroller')?.clientWidth || 0;
+      if (totalTimelineWidth > 0 && totalTimelineWidth < available) {
+        const scale = available / totalTimelineWidth;
+        topCells.forEach(cell => cell.width *= scale);
+        bottomCells.forEach(cell => cell.width *= scale);
+        totalTimelineWidth = available;
+      }
       msPerPixel = (timelineEnd.getTime() - timelineStart.getTime()) / totalTimelineWidth;
       return { topCells, bottomCells };
     }
@@ -3871,47 +4097,65 @@
           if (btnToggle) btnToggle.innerText = '▼';
         }
       }
+      if (!isResourceGridCollapsed) renderResourceWindow(true);
       adjustCanvasBottomGaps();
       updateComponentFrameHeight();
     }
 
-    function getMaxDemandForPeriod(dailyUsage, startStr, endStr) {
-      if (!dailyUsage) return 0;
-      let maxVal = 0;
-      for (const [dStr, fte] of Object.entries(dailyUsage)) {
-        if (dStr >= startStr && dStr <= endStr) {
-          if (fte > maxVal) {
-            maxVal = fte;
-          }
-        }
+    const EMPTY_DAILY_SERIES = Object.freeze({});
+    let dailySeriesIndex = new WeakMap();
+    let capacityPeriodCache = new WeakMap();
+    let demandPeriodCache = new WeakMap();
+    let resourcePoolIndex = new Map();
+    let groupUsageCache = new Map();
+
+    function getDailySeries(data) {
+      data = data || EMPTY_DAILY_SERIES;
+      let series = dailySeriesIndex.get(data);
+      if (!series) {
+        const dates = Object.keys(data).sort();
+        series = {dates, values: dates.map(date => Number(data[date] || 0))};
+        dailySeriesIndex.set(data, series);
       }
-      return maxVal;
+      return series;
+    }
+
+    function lowerDateBound(dates, target) {
+      let low = 0, high = dates.length;
+      while (low < high) {
+        const mid = (low + high) >>> 1;
+        if (dates[mid] < target) low = mid + 1; else high = mid;
+      }
+      return low;
+    }
+
+    function getMaxDemandForPeriod(dailyUsage, startStr, endStr) {
+      const series = getDailySeries(dailyUsage);
+      let maximum = 0;
+      for (let i = lowerDateBound(series.dates, startStr); i < series.dates.length && series.dates[i] <= endStr; i++) {
+        maximum = Math.max(maximum, series.values[i]);
+      }
+      return maximum;
     }
 
     function getAssignedCapacityForPeriod(baseCapacity, dailyCapacity, startStr, endStr) {
       const base = Number(baseCapacity || 0);
-      const overrides = dailyCapacity || {};
-      let minValue = Number.POSITIVE_INFINITY;
-      let maxValue = Number.NEGATIVE_INFINITY;
-      let cursor = new Date(`${startStr}T12:00:00`);
-      const end = new Date(`${endStr}T12:00:00`);
-      let dayCount = 0;
-
-      while (cursor <= end && dayCount < 10000) {
-        const dateKey = formatDate(cursor);
-        const value = Object.prototype.hasOwnProperty.call(overrides, dateKey)
-          ? Number(overrides[dateKey])
-          : base;
-        minValue = Math.min(minValue, value);
-        maxValue = Math.max(maxValue, value);
-        cursor = addDays(cursor, 1);
-        dayCount += 1;
+      const overrides = dailyCapacity || EMPTY_DAILY_SERIES;
+      let cache = capacityPeriodCache.get(overrides);
+      if (!cache) {cache = new Map(); capacityPeriodCache.set(overrides, cache);}
+      const key = base + ':' + startStr + ':' + endStr;
+      if (cache.has(key)) return cache.get(key);
+      const series = getDailySeries(overrides);
+      let min = Infinity, max = -Infinity, count = 0;
+      for (let i = lowerDateBound(series.dates, startStr); i < series.dates.length && series.dates[i] <= endStr; i++) {
+        min = Math.min(min, series.values[i]); max = Math.max(max, series.values[i]); count++;
       }
-
-      if (!Number.isFinite(minValue) || !Number.isFinite(maxValue)) {
-        return { min: base, max: base };
-      }
-      return { min: minValue, max: maxValue };
+      // Missing dates coalesce to the base; explicit zero capacity must not.
+      const days = Math.round((Date.parse(endStr + 'T00:00:00Z') - Date.parse(startStr + 'T00:00:00Z')) / 86400000) + 1;
+      if (count < days || !count) {min = Math.min(min, base); max = Math.max(max, base);}
+      const result = {min, max};
+      cache.set(key, result);
+      return result;
     }
 
     function getCapacityState(capacity, theoreticalCapacity, hasAssignedResources) {
@@ -3922,27 +4166,25 @@
     }
 
     function getDemandCapacityStatusForPeriod(dailyUsage, baseCapacity, dailyCapacity, startStr, endStr) {
-      const usage = dailyUsage || {};
-      const overrides = dailyCapacity || {};
+      const usage = dailyUsage || EMPTY_DAILY_SERIES;
+      const overrides = dailyCapacity || EMPTY_DAILY_SERIES;
       const base = Number(baseCapacity || 0);
-      let maxDemand = 0;
-      let maxExcess = 0;
-
-      for (const [dateStr, rawDemand] of Object.entries(usage)) {
-        if (dateStr < startStr || dateStr > endStr) continue;
-        const demand = Number(rawDemand || 0);
-        const capacity = Object.prototype.hasOwnProperty.call(overrides, dateStr)
-          ? Number(overrides[dateStr])
-          : base;
-        maxDemand = Math.max(maxDemand, demand);
-        maxExcess = Math.max(maxExcess, demand - capacity);
+      let byCapacity = demandPeriodCache.get(usage);
+      if (!byCapacity) {byCapacity = new WeakMap(); demandPeriodCache.set(usage, byCapacity);}
+      let cache = byCapacity.get(overrides);
+      if (!cache) {cache = new Map(); byCapacity.set(overrides, cache);}
+      const key = base + ':' + startStr + ':' + endStr;
+      if (cache.has(key)) return cache.get(key);
+      const series = getDailySeries(usage);
+      let maxDemand = 0, maxExcess = 0;
+      for (let i = lowerDateBound(series.dates, startStr); i < series.dates.length && series.dates[i] <= endStr; i++) {
+        const date = series.dates[i], demand = series.values[i];
+        const capacity = Object.prototype.hasOwnProperty.call(overrides, date) ? Number(overrides[date]) : base;
+        maxDemand = Math.max(maxDemand, demand); maxExcess = Math.max(maxExcess, demand - capacity);
       }
-
-      return {
-        maxDemand,
-        isOverallocated: maxExcess > 0.0001,
-        maxExcess: Math.max(0, maxExcess)
-      };
+      const result = {maxDemand, isOverallocated: maxExcess > 0.0001, maxExcess: Math.max(0, maxExcess)};
+      cache.set(key, result);
+      return result;
     }
 
     function isDisplayedPoolPeriodOverallocated(pool, startStr, endStr) {
@@ -4162,10 +4404,12 @@
     }
 
     function getResourcePoolById(poolId) {
-      return (resourcePoolsData || []).find(pool => Number(pool.id) === Number(poolId));
+      return resourcePoolIndex.get(Number(poolId));
     }
 
     function aggregatePoolUsage(poolIds, fieldName) {
+      const key = fieldName + ':' + [...new Set(poolIds || [])].sort((a,b) => a-b).join(',');
+      if (groupUsageCache.has(key)) return groupUsageCache.get(key);
       const result = {};
       [...new Set(poolIds || [])].forEach(poolId => {
         const pool = getResourcePoolById(poolId);
@@ -4174,6 +4418,7 @@
           result[dateStr] = Number(result[dateStr] || 0) + Number(rawValue || 0);
         });
       });
+      groupUsageCache.set(key, result);
       return result;
     }
 
@@ -4223,6 +4468,7 @@
     }
 
     function renderResourceGrid(topCells, bottomCells) {
+      resourcePoolIndex = new Map((resourcePoolsData || []).map(pool => [Number(pool.id), pool]));
       if (topCells) {
         lastRenderedTopCells = topCells;
       } else {
@@ -4326,6 +4572,8 @@
 
       // Empty states
       if (pools.length === 0) {
+        resourceWindowData = null;
+        renderedResourceWindow = null;
         leftBody.innerHTML = `
           <div style="padding:14px 10px; color:#94a3b8; font-size:12px; font-style:italic;">
             ${getT('resource_grid.no_pools', 'No resource pools configured')}
@@ -4340,6 +4588,49 @@
         return;
       }
 
+      resourceWindowData = {displayRows, bottomCells};
+      renderResourceWindow(true);
+      adjustVerticalScrollbarGaps();
+    }
+
+    let resourceWindowData = null;
+    let renderedResourceWindow = null;
+    let pendingResourceFrame = null;
+
+    function scheduleResourceWindow() {
+      if (pendingResourceFrame !== null) return;
+      pendingResourceFrame = requestAnimationFrame(() => {
+        pendingResourceFrame = null;
+        renderResourceWindow(false);
+      });
+    }
+
+    function renderResourceWindow(force = false) {
+      if (!resourceWindowData || isResourceGridCollapsed) return;
+      const {displayRows, bottomCells} = resourceWindowData;
+      const main = document.getElementById('resource-grid-main');
+      const right = document.getElementById('resource-right-pane-scroller');
+      const leftBody = document.getElementById('resource-left-body');
+      const rightBody = document.getElementById('resource-right-body');
+      if (!main || !right || !leftBody || !rightBody) return;
+      const first = Math.max(0, Math.min(displayRows.length - 1, Math.floor((main.scrollTop - 56) / 34)));
+      const last = Math.min(displayRows.length - 1, first + Math.ceil((main.clientHeight || 380) / 34));
+      const left = right.scrollLeft, width = right.clientWidth || 900;
+      const colFirst = Math.max(0, bottomCells.findIndex(c => c.startX + c.width > left));
+      let colLast = bottomCells.findIndex(c => c.startX > left + width);
+      if (colLast < 0) colLast = bottomCells.length - 1;
+      if (!force && renderedResourceWindow && Math.max(0, first - 2) >= renderedResourceWindow.start &&
+          Math.min(displayRows.length - 1, last + 2) <= renderedResourceWindow.end && colFirst >= renderedResourceWindow.colFirst &&
+          colLast <= renderedResourceWindow.colLast) return;
+      const startRow = Math.max(0, first - 6), endRow = Math.min(displayRows.length - 1, last + 6);
+      const startCol = Math.max(0, colFirst - 2), endCol = Math.min(bottomCells.length - 1, colLast + 2);
+      renderedResourceWindow = {start: startRow, end: endRow, colFirst: startCol, colLast: endCol};
+      const visibleCells = bottomCells.slice(startCol, endCol + 1);
+      const columnLeft = visibleCells[0]?.startX || 0;
+      for (const element of [leftBody, rightBody]) {
+        element.style.paddingTop = (startRow * 34) + 'px';
+        element.style.paddingBottom = (Math.max(0, displayRows.length - endRow - 1) * 34) + 'px';
+      }
       // 3. Render Left rows & Right rows (Assigned Capacity + demand rows)
       let leftHtml = '';
       let rightHtml = '';
@@ -4351,7 +4642,7 @@
         const dailyAssignedCapacity = hasAssignedResources ? (pool.daily_assigned_capacity || {}) : {};
         const isFilterActiveOnPool = activeResourceFilter &&
           Number(activeResourceFilter.pool_id) === Number(pool.id);
-        return bottomCells.map(c => {
+        return visibleCells.map(c => {
           const startStr = formatDate(c.startDate);
           const endStr = formatDate(c.endDate);
           const periodCapacity = getAssignedCapacityForPeriod(
@@ -4396,7 +4687,7 @@
         }).join('');
       };
 
-      displayRows.forEach(row => {
+      displayRows.slice(startRow, endRow + 1).forEach(row => {
         const indent = Math.max(0, Number(row.depth || 0)) * 16;
         const toggle = row.collapsed ? '&#9654;' : '&#9660;';
 
@@ -4418,7 +4709,7 @@
               </div>
             </div>
           `;
-          const groupCells = bottomCells.map(c => {
+          const groupCells = visibleCells.map(c => {
             const startStr = formatDate(c.startDate);
             const endStr = formatDate(c.endDate);
             const demand = getMaxDemandForPeriod(groupUsage, startStr, endStr);
@@ -4436,7 +4727,7 @@
                     </div>`;
           }).join('');
           rightHtml += `<div class="resource-right-row resource-group-row"
-                            style="width:${totalTimelineWidth}px;">${groupCells}</div>`;
+                            style="width:${totalTimelineWidth}px;box-sizing:border-box;padding-left:${columnLeft}px;">${groupCells}</div>`;
           return;
         }
 
@@ -4466,7 +4757,7 @@
               </div>
             </div>
           `;
-          const assignedCells = bottomCells.map(c => {
+          const assignedCells = visibleCells.map(c => {
             const startStr = formatDate(c.startDate);
             const endStr = formatDate(c.endDate);
             const periodCapacity = getAssignedCapacityForPeriod(
@@ -4480,7 +4771,7 @@
                     </div>`;
           }).join('');
           rightHtml += `<div class="resource-right-row assigned-capacity-row ${isFilterActive ? 'active-filter-row' : ''}"
-                            style="width:${totalTimelineWidth}px;">${assignedCells}</div>`;
+                            style="width:${totalTimelineWidth}px;box-sizing:border-box;padding-left:${columnLeft}px;">${assignedCells}</div>`;
           return;
         }
 
@@ -4508,12 +4799,11 @@
         `;
         const demandCells = renderDemandCells(pool, usage, isSelected ? 'selected' : 'total');
         rightHtml += `<div class="resource-right-row ${isCollapsedPool ? 'pool-collapsed-row' : 'sub-row'} ${isFilterActive ? 'active-filter-row' : ''}"
-                          style="width:${totalTimelineWidth}px;">${demandCells}</div>`;
+                          style="width:${totalTimelineWidth}px;box-sizing:border-box;padding-left:${columnLeft}px;">${demandCells}</div>`;
       });
 
       leftBody.innerHTML = leftHtml;
       rightBody.innerHTML = rightHtml;
-      adjustVerticalScrollbarGaps();
 
     }
 
@@ -4602,7 +4892,7 @@
     let allTaskPositions = {};
     let allProjectPositions = {};
     let showInternalLinks = true;
-    let showExternalLinks = true;
+    let showExternalLinks = false;
     let showDescriptions = true;
 
     function setViewMode(mode, btn) {
@@ -4623,7 +4913,8 @@
       } else if (type === 'external') {
         showExternalLinks = Boolean(checked);
       }
-      renderVirtualWindow();
+      if (renderedRowWindow) renderDependencyLinks(renderedRowWindow.start, renderedRowWindow.end);
+      if (renderedRowWindow) scheduleProjectLoads(renderedRowWindow.start, renderedRowWindow.end);
     }
 
     function toggleDescriptionVisibility(checked) {
@@ -4657,11 +4948,16 @@
         if (pId) allPIds.add(pId);
       });
       allPIds.forEach(p => collapsedProjects.add(p));
+      projectSummariesData.forEach(p => collapsedProjects.add(String(p.id)));
       renderTimeline();
     }
 
     // Build fast O(1) dependency and task indexes for virtual viewport rendering
     function buildDependencyIndex() {
+      renderedDependencyLinks.clear();
+      dependencyClipWindow = null;
+      const linksGroup = document.getElementById('grid-links-group');
+      if (linksGroup) linksGroup.replaceChildren();
       tasksByIdMap.clear();
       taskIncomingDeps.clear();
       taskOutgoingDeps.clear();
@@ -4733,7 +5029,8 @@
       }
     }
 
-    function renderTimeline() {
+    function renderTimeline(options = {}) {
+      const previousGeometry = `${timelineStart?.getTime()}|${timelineEnd?.getTime()}|${totalTimelineWidth}`;
       computeTimelineBounds();
       const { topCells, bottomCells } = buildHeaderStructure();
 
@@ -4762,6 +5059,11 @@
       const projOrder = [];
 
       if (isMultiProject) {
+        if (lazyProjects) projectSummariesData.forEach(p => {
+          const id = String(p.id);
+          groups[id] = {id, name:p.name, tasks:[], summary:p};
+          projOrder.push(id);
+        });
         tasksData.forEach(t => {
           const pId = t.project_id || currentProjectId || "General";
           const pName = t.project_name || pId;
@@ -4796,12 +5098,12 @@
           return {
             id: pId,
             name: grp.name,
-            start: pMin ? formatDate(pMin) : '',
-            end: pMax ? formatDate(pMax) : '',
+            start: grp.summary ? grp.summary.start : pMin ? formatDate(pMin) : '',
+            end: grp.summary ? grp.summary.end : pMax ? formatDate(pMax) : '',
             tasks: grp.tasks,
-            taskCount: grp.tasks.length,
+            taskCount: grp.summary ? grp.summary.taskCount : grp.tasks.length,
             isCollapsed: collapsedProjects.has(pId),
-            hasViolations: pHasViolations,
+            hasViolations: grp.summary ? grp.summary.hasViolations : pHasViolations,
             tags: pTags
           };
         });
@@ -4834,6 +5136,7 @@
         }
 
         masterRenderItems = [];
+        projectTaskWindows.clear();
         projectGroupsList.forEach(grp => {
           masterRenderItems.push({
             type: 'project_header',
@@ -4847,7 +5150,13 @@
             tags: grp.tags || []
           });
 
+          const taskStart = masterRenderItems.length;
           if (!grp.isCollapsed) {
+            if (lazyProjects && !loadedProjectIds.has(String(grp.id))) {
+              for (let index = 0; index < grp.taskCount; index++) {
+                masterRenderItems.push({type:'loading', project_id:String(grp.id)});
+              }
+            }
             // Sort ONLY within this project! Project boundaries are strictly maintained.
             const sortedGroupTasks = sortTasksList(grp.tasks);
             sortedGroupTasks.forEach(t => {
@@ -4858,6 +5167,7 @@
               });
             });
           }
+          projectTaskWindows.set(String(grp.id), {start:taskStart,end:masterRenderItems.length});
         });
 
         // Update projects count badge with strictly the filtered projects count
@@ -4866,7 +5176,7 @@
           const pId = t.project_id || currentProjectId;
           if (pId) distinctProjects.add(String(pId));
         });
-        const totalProjCount = distinctProjects.size || projectGroupsList.length || 0;
+        const totalProjCount = projectGroupsList.length || distinctProjects.size || 0;
         const badgeEl = document.getElementById('badge-projects-count-text');
         if (badgeEl) {
           const pUnit = totalProjCount === 1 ? 'Project' : 'Projects';
@@ -4909,7 +5219,7 @@
               name: item.project_name
             };
           }
-        } else {
+        } else if (item.task) {
           const t = item.task;
           const sDate = parseDate(t.start);
           const eDate = parseDate(t.end);
@@ -4999,7 +5309,9 @@
       }
 
       // Render Resource Demand Grid & Update Frame Sizing
-      renderResourceGrid(topCells, bottomCells);
+      if (options.resourcesChanged !== false || previousGeometry !== `${timelineStart?.getTime()}|${timelineEnd?.getTime()}|${totalTimelineWidth}`) {
+        renderResourceGrid(topCells, bottomCells);
+      }
       updateComponentFrameHeight();
       initTimelineHoverListeners();
 
@@ -5097,6 +5409,27 @@
       adjustVerticalScrollbarGaps();
     }
 
+    const renderedDependencyLinks = new Map();
+    let dependencyClipWindow = null;
+
+    function updateDependencyClip(startIndex, endIndex) {
+      const viewport = document.getElementById('dependency-viewport');
+      const scroller = document.getElementById('timeline-body-scroller');
+      if (!viewport || !scroller) return;
+      const left = scroller.scrollLeft, width = scroller.clientWidth || 900;
+      if (dependencyClipWindow && dependencyClipWindow.start === startIndex && dependencyClipWindow.end === endIndex &&
+          (dependencyClipWindow.left === 0 || left >= dependencyClipWindow.left + 100) &&
+          (dependencyClipWindow.right === totalTimelineWidth || left + width <= dependencyClipWindow.right - 100)) return;
+      const x = Math.max(0, left - 600), right = Math.min(totalTimelineWidth, left + width + 600);
+      const y = startIndex * 46, height = (endIndex - startIndex + 1) * 46;
+      viewport.setAttribute('x', x);
+      viewport.setAttribute('y', y);
+      viewport.setAttribute('width', Math.max(1, right - x));
+      viewport.setAttribute('height', height);
+      viewport.setAttribute('viewBox', `${x} ${y} ${Math.max(1, right - x)} ${height}`);
+      dependencyClipWindow = {start: startIndex, end: endIndex, left: x, right};
+    }
+
     let renderedRowWindow = null;
     let pendingScrollFrame = null;
 
@@ -5116,6 +5449,8 @@
       const totalItems = masterRenderItems.length;
       if (totalItems === 0) {
         renderedRowWindow = null;
+        renderedDependencyLinks.clear();
+        dependencyClipWindow = null;
         const fC = document.getElementById('frozen-rows-container');
         if (fC) fC.innerHTML = '';
         const tC = document.getElementById('timeline-rows-container');
@@ -5132,10 +5467,15 @@
       const safetyStart = Math.max(0, firstVisible - 5);
       const safetyEnd = Math.min(totalItems - 1, lastVisible + 5);
       if (!force && renderedRowWindow &&
-          safetyStart >= renderedRowWindow.start && safetyEnd <= renderedRowWindow.end) return;
+          safetyStart >= renderedRowWindow.start && safetyEnd <= renderedRowWindow.end) {
+        updateDependencyClip(renderedRowWindow.start, renderedRowWindow.end);
+        scheduleProjectLoads(renderedRowWindow.start, renderedRowWindow.end);
+        return;
+      }
       const startIndex = Math.max(0, firstVisible - 15);
       const endIndex = Math.min(totalItems - 1, lastVisible + 15);
       renderedRowWindow = { start: startIndex, end: endIndex };
+      scheduleProjectLoads(startIndex, endIndex);
 
       // 1. Render Visible Frozen Left Column Rows
       const totalW = getTotalFrozenWidth();
@@ -5302,10 +5642,16 @@
         }
       }
 
-      // 3. Render Viewport-Culled Dependency Links
+      renderDependencyLinks(startIndex, endIndex);
+    }
+
+    function renderDependencyLinks(startIndex, endIndex) {
+      updateDependencyClip(startIndex, endIndex);
+      // Reconcile only changed links; retain paths, listeners and hover state for
+      // the overlapping window instead of rebuilding thousands of SVG nodes.
       const linksGroup = document.getElementById('grid-links-group');
       if (linksGroup) {
-        linksGroup.innerHTML = '';
+        for (const bundle of renderedDependencyLinks.values()) bundle.members = [];
 
         // Collect candidate dependency links starting and/or finishing on displayed items
         const candidateEntries = new Map();
@@ -5333,7 +5679,7 @@
           } else if (item.type === 'project_header') {
             const pid = String(item.project_id);
             // Dependencies finishing on this displayed project
-            const inDeps = projIncomingDeps.get(pid);
+            const inDeps = item.isCollapsed ? projIncomingDeps.get(pid) : null;
             if (inDeps) {
               for (let k = 0; k < inDeps.length; k++) {
                 candidateEntries.set(inDeps[k].key, inDeps[k]);
@@ -5343,6 +5689,7 @@
             const outDeps = projOutgoingDeps.get(pid);
             if (outDeps) {
               for (let k = 0; k < outDeps.length; k++) {
+                if (!item.isCollapsed && outDeps[k].dep.predecessor_task_id) continue;
                 candidateEntries.set(outDeps[k].key, outDeps[k]);
               }
             }
@@ -5358,7 +5705,8 @@
           if (!succ) return;
 
           const pTaskId = dep.predecessor_task_id ? String(dep.predecessor_task_id) : null;
-          const pProjId = dep.predecessor_project_id ? String(dep.predecessor_project_id) : null;
+          const predProjectId = dep.predecessor_project_id || dep.pred_task_project_id;
+          const pProjId = predProjectId ? String(predProjectId) : null;
           const pTaskProjId = dep.pred_task_project_id ? String(dep.pred_task_project_id) : null;
 
           // Check if predecessor task is in another project
@@ -5403,42 +5751,65 @@
           // If predecessor is a project summary bar, only show if it is an external link
           if (pred && pred.isProject && !isExternal) return;
 
-          const pTaskObj = pTaskId ? tasksByIdMap.get(String(pTaskId)) : null;
-          let predName = dep.pred_task_name || (pTaskObj ? pTaskObj.name : null);
-          if (!predName) {
-            if (pTaskId) predName = `Task #${pTaskId}`;
-            else if (pProjId) predName = `Project ${pProjId}`;
-            else if (pred && pred.name) predName = pred.name;
-            else predName = 'Predecessor';
+          if (pred === succ) return;
+          if (pred) {
+            if (Math.max(pred.rowIdx, succ.rowIdx) < startIndex || Math.min(pred.rowIdx, succ.rowIdx) > endIndex) return;
+          } else if (!isExternal || !(pProjId || dep.pred_start_date) || succ.rowIdx < startIndex || succ.rowIdx > endIndex) {
+            return;
           }
 
-          let predDates = '-';
-          if (pTaskObj) {
-            predDates = `${formatMmmYy(pTaskObj.start)} ➔ ${formatMmmYy(pTaskObj.end)}`;
-          } else if (dep.pred_start_date && dep.pred_end_date) {
-            predDates = `${formatMmmYy(dep.pred_start_date)} ➔ ${formatMmmYy(dep.pred_end_date)}`;
-          } else if (pred && pred.isProject && pred.start && pred.end) {
-            predDates = `${formatMmmYy(pred.start)} ➔ ${formatMmmYy(pred.end)}`;
+          const bundleKey = `${pred ? pred.rowIdx : 'stub'}:${succ.rowIdx}:${linkType}:${isViolated}:${isExternal}`;
+          const member = {entry, getInfo: getDepInfo};
+          const existing = renderedDependencyLinks.get(bundleKey);
+          if (existing) {
+            existing.members.push(member);
+            return;
           }
+          const linkNodes = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+          const bundle = {nodes: linkNodes, members: [member]};
+          renderedDependencyLinks.set(bundleKey, bundle);
+          linksGroup.appendChild(linkNodes);
 
-          const predProject = dep.pred_task_project_name || dep.pred_project_name || pProjId || (pTaskObj ? pTaskObj.project_name || pTaskObj.project_id : (pred && pred.project_id ? pred.project_id : tProjId));
+          // Dates and labels are only needed when opening dependency details.
+          function getDepInfo() {
+            const pTaskObj = pTaskId ? tasksByIdMap.get(String(pTaskId)) : null;
+            let predName = dep.pred_task_name || (pTaskObj ? pTaskObj.name : null);
+            if (!predName) {
+              if (pTaskId) predName = `Task #${pTaskId}`;
+              else if (pProjId) predName = `Project ${pProjId}`;
+              else if (pred && pred.name) predName = pred.name;
+              else predName = 'Predecessor';
+            }
 
-          const depInfo = {
-            predName: predName,
-            predId: pTaskId || (pred && !pred.isProject ? pred.id : null),
-            predProject: predProject,
-            predDates: predDates,
-            succName: t.name,
-            succId: t.id,
-            succProject: t.project_name || tProjId,
-            succDates: `${formatMmmYy(t.start)} ➔ ${formatMmmYy(t.end)}`,
-            linkType: linkType,
-            linkTypeLabel: formatLinkTypeLabel(linkType),
-            lagStr: dep.lag_days !== undefined ? (dep.lag_days >= 0 ? '+' + dep.lag_days : dep.lag_days) + ' day(s)' : '0 days',
-            scopeLabel: isExternal ? '🌐 External Cross-Project Dependency' : '🔗 Internal Project Dependency',
-            isViolated: isViolated,
-            violationReason: dep.violation_reason || (isViolated ? 'Constraint violated based on predecessor and successor schedules' : '')
-          };
+            let predDates = '-';
+            if (pTaskObj) {
+              predDates = `${formatMmmYy(pTaskObj.start)} ➔ ${formatMmmYy(pTaskObj.end)}`;
+            } else if (dep.pred_start_date && dep.pred_end_date) {
+              predDates = `${formatMmmYy(dep.pred_start_date)} ➔ ${formatMmmYy(dep.pred_end_date)}`;
+            } else if (pred && pred.isProject && pred.start && pred.end) {
+              predDates = `${formatMmmYy(pred.start)} ➔ ${formatMmmYy(pred.end)}`;
+            }
+
+            const predProject = dep.pred_task_project_name || dep.pred_project_name || pProjId || (pTaskObj ? pTaskObj.project_name || pTaskObj.project_id : (pred && pred.project_id ? pred.project_id : tProjId));
+
+            return {
+              predName: predName,
+              predId: pTaskId || (pred && !pred.isProject ? pred.id : null),
+              predProject: predProject,
+              predDates: predDates,
+              succName: t.name,
+              succId: t.id,
+              succProject: t.project_name || tProjId,
+              succDates: `${formatMmmYy(t.start)} ➔ ${formatMmmYy(t.end)}`,
+              linkType: linkType,
+              linkTypeLabel: formatLinkTypeLabel(linkType),
+              lagStr: dep.lag_days !== undefined ? (dep.lag_days >= 0 ? '+' + dep.lag_days : dep.lag_days) + ' day(s)' : '0 days',
+              scopeLabel: isExternal ? '🌐 External Cross-Project Dependency' : '🔗 Internal Project Dependency',
+              isViolated: isViolated,
+              isExternal: isExternal,
+              violationReason: dep.violation_reason || (isViolated ? 'Constraint violated based on predecessor and successor schedules' : '')
+            };
+          }
 
           // Link Type logic:
           // SS and SF must start from the start of the predecessor
@@ -5447,15 +5818,6 @@
           const succEndsAtEnd = (linkType === 'FF' || linkType === 'SF');
 
           if (pred) {
-            if (pred === succ) return;
-
-            // Viewport Link Culling Check
-            const minRow = Math.min(pred.rowIdx, succ.rowIdx);
-            const maxRow = Math.max(pred.rowIdx, succ.rowIdx);
-            if (maxRow < startIndex - 3 || minRow > endIndex + 3) {
-              return; // Culled
-            }
-
             // Predecessor link anchor & exit offset
             let pX;
             if (pred.isMilestone) {
@@ -5580,7 +5942,7 @@
                 e.preventDefault();
                 e.stopPropagation();
               }
-              showDependencyContextMenu(e, depInfo);
+              showDependencyBundleMenu(e, bundle);
             }
 
             hitPath.addEventListener('mouseenter', onLinkEnter);
@@ -5595,15 +5957,10 @@
             path.addEventListener('contextmenu', onLinkContextMenu);
             path.addEventListener('click', onLinkContextMenu);
 
-            linksGroup.appendChild(path);
-            linksGroup.appendChild(hitPath);
+            linkNodes.appendChild(path);
+            linkNodes.appendChild(hitPath);
           } else if (isExternal && (pProjId || dep.pred_start_date)) {
-            // External project entry marker: only draw if succ is in visible window and external links enabled
-            if (!showExternalLinks) return;
-            if (succ.rowIdx < startIndex - 2 || succ.rowIdx > endIndex + 2) {
-              return;
-            }
-
+            // Entry marker for a predecessor outside the selected project scope.
             let sX;
             if (succ.isMilestone) {
               sX = succEndsAtEnd ? (succ.startX + 9) : (succ.startX - 9);
@@ -5647,7 +6004,7 @@
                 e.preventDefault();
                 e.stopPropagation();
               }
-              showDependencyContextMenu(e, depInfo);
+              showDependencyBundleMenu(e, bundle);
             }
 
             hitPath.addEventListener('mouseenter', onStubEnter);
@@ -5660,8 +6017,8 @@
             path.addEventListener('contextmenu', onStubContextMenu);
             path.addEventListener('click', onStubContextMenu);
 
-            linksGroup.appendChild(path);
-            linksGroup.appendChild(hitPath);
+            linkNodes.appendChild(path);
+            linkNodes.appendChild(hitPath);
 
             const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
             dot.setAttribute('cx', inX);
@@ -5674,9 +6031,15 @@
             dot.addEventListener('mouseleave', onStubLeave);
             dot.addEventListener('contextmenu', onStubContextMenu);
             dot.addEventListener('click', onStubContextMenu);
-            linksGroup.appendChild(dot);
+            linkNodes.appendChild(dot);
           }
         });
+        for (const [key, bundle] of renderedDependencyLinks) {
+          if (!bundle.members.length) {
+            bundle.nodes.remove();
+            renderedDependencyLinks.delete(key);
+          }
+        }
       }
     }
 
@@ -5791,31 +6154,51 @@
       });
     }
 
-    // Listen for data from Streamlit
+    // Choice-only responses keep the chart, open modal, drafts, and scroll intact.
+    let lastDataRevision = null;
+    let requestingInitialPlanning = false;
     window.addEventListener("message", function (event) {
       if (event.data && event.data.type === "streamlit:render") {
         const args = event.data.args || {};
-        if (args.translations) {
-          i18n = Object.assign({}, i18n, args.translations);
-          updateLocalizedUI();
+        if (!args.tasks && lastDataRevision === null && !requestingInitialPlanning) {
+          requestingInitialPlanning = true;
+          Streamlit.setComponentValue({action:'initialize_planning',nonce:Date.now()+'_initialize'});
+          return;
         }
-        if (args.resource_pools) {
-          resourcePoolsData = args.resource_pools;
+        if (args.patch) {applyPlanningPatch(args.patch); if (args.dependency_response) receiveDependencyChoices(args.dependency_response); return;}
+        if (args.tasks && (!args.data_revision || args.data_revision !== lastDataRevision)) {
+          lastDataRevision = args.data_revision;
+          requestingInitialPlanning = false;
+          lazyProjects = Boolean(args.lazy_projects);
+          projectSummariesData = args.project_summaries || [];
+          loadedProjectIds = new Set((args.loaded_project_ids || []).map(String));
+          if (planningScopeToken !== args.scope_token) {
+            hasInitializedCollapse = false;
+            collapsedProjects.clear();
+            planningPendingRequest = null;
+            planningNeededProjects = [];
+            planningForcedProjects.clear();
+            planningPendingDiagnostics = null;
+          }
+          planningScopeToken = args.scope_token || null;
+          if (args.translations) {i18n = Object.assign({}, i18n, args.translations); updateLocalizedUI();}
+          if (args.resource_pools) {
+            resourcePoolsData = args.resource_pools.map(unpackPoolData);
+            dailySeriesIndex = new WeakMap(); capacityPeriodCache = new WeakMap();
+            demandPeriodCache = new WeakMap(); groupUsageCache = new Map();
+          }
+          if (args.resource_pool_hierarchy) resourcePoolHierarchy = args.resource_pool_hierarchy;
+          if (args.active_resource_filter !== undefined) activeResourceFilter = args.active_resource_filter || null;
+          if (args.tasks) {
+            tasksData = args.tasks;
+            allProjectsData = args.all_projects || [];
+            externalTasksData = args.external_tasks || {};
+            currentProjectId = args.project_id || "";
+            isMultiProject = Boolean(args.is_multi_project);
+            renderTimeline();
+          }
         }
-        if (args.resource_pool_hierarchy) {
-          resourcePoolHierarchy = args.resource_pool_hierarchy;
-        }
-        if (args.active_resource_filter !== undefined) {
-          activeResourceFilter = args.active_resource_filter || null;
-        }
-        if (args.tasks) {
-          tasksData = args.tasks;
-          allProjectsData = args.all_projects || [];
-          externalTasksData = args.external_tasks || {};
-          currentProjectId = args.project_id || "";
-          isMultiProject = Boolean(args.is_multi_project);
-          renderTimeline();
-        }
+        if (args.dependency_response) receiveDependencyChoices(args.dependency_response);
       }
     });
 
@@ -5872,12 +6255,15 @@
           document.body.style.cursor = '';
           document.body.style.userSelect = '';
           adjustCanvasBottomGaps();
+          renderTimeline();
         }
       });
     }
 
     // Attach high-performance scrolling & wheel forwarding listeners
     function setupScrollAndWheelListeners() {
+      const resourceMain = document.getElementById('resource-grid-main');
+      if (resourceMain) resourceMain.onscroll = scheduleResourceWindow;
       const scroller = document.getElementById('timeline-body-scroller');
       const frozenBody = document.getElementById('frozen-body');
       const frozenHeaderWrapper = document.getElementById('frozen-header-wrapper');
@@ -5904,6 +6290,7 @@
 
       if (resourceRightScroller) {
         resourceRightScroller.onscroll = function () {
+          scheduleResourceWindow();
           if (scroller && scroller.scrollLeft !== resourceRightScroller.scrollLeft) {
             scroller.scrollLeft = resourceRightScroller.scrollLeft;
           }
@@ -5943,7 +6330,7 @@
 
     window.addEventListener('resize', function () {
       adjustCanvasBottomGaps();
-      renderVirtualWindow();
+      renderTimeline();
     }, { passive: true });
   </script>
 </body>

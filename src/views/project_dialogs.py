@@ -127,6 +127,7 @@ def _render_dynamic_field(
             f"{label} ({param_type})",
             options=choices,
             default=[value for value in current_values if value in choices],
+            accept_new_options=param_type == PARAM_TYPE_TAGS,
             **widget_args,
         )
     return st.text_input(
@@ -174,7 +175,11 @@ def _render_dynamic_fields(
     attributes: dict[str, Any],
     key_prefix: str,
 ) -> dict[str, Any]:
-    """Render grouped and ungrouped dynamic project fields."""
+    """Expose every applicable template property, including custom/ungrouped ones.
+
+    Do not use the master-list column whitelist here. Missing values still need
+    editable widgets, and required/default rules come from the effective template.
+    """
     values: dict[str, Any] = {}
     known_group_ids = set(groups["id"].tolist()) if not groups.empty else set()
 
@@ -251,7 +256,7 @@ def open_create_project_dialog(
             key=f"portfolio_create_manager_{project_id}",
         )
 
-        st.write(f"#### {t('master_data.dynamic_section')}")
+        st.write(f"#### {t('project_types.template')}")
         dynamic_values = _render_dynamic_fields(
             params,
             groups,
@@ -341,7 +346,7 @@ def open_edit_project_dialog(
             key=f"portfolio_edit_manager_{project_id}",
         )
 
-        st.write(f"#### {t('master_data.dynamic_section')}")
+        st.write(f"#### {t('project_types.template')}")
         dynamic_values = _render_dynamic_fields(
             params,
             groups,

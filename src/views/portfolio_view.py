@@ -1,5 +1,8 @@
 """Screen 1: Portfolio Overview View with Interactive Master List and Details Inspection."""
 
+from dataclasses import asdict
+import hashlib
+import json
 from typing import Any
 
 import pandas as pd
@@ -15,9 +18,9 @@ from src.models.constants import (
 from src.repositories.organization_repo import OrganizationRepository
 from src.repositories.project_repo import ProjectRepository
 from src.repositories.project_type_repo import ProjectTypeRepository
+from src.repositories.portfolio_repo import PortfolioRepository, portfolio_revision
 from src.repositories.schema_repo import SchemaRepository
 from src.services.organization_service import OrganizationService
-from src.services.portfolio_service import PortfolioService
 from src.views.portfolio_table_component import portfolio_project_table
 from src.views.project_dialogs import open_create_project_dialog, open_edit_project_dialog
 
@@ -105,10 +108,13 @@ def _render_project_details_panel(
     burn_rate = (actual / planned * 100.0) if planned > 0 else 0.0
 
     proj_obj = project_repo.get_project_by_id(proj_id)
+    if proj_obj is None:
+        st.info("The selected project no longer exists.")
+        return
     params = ProjectTypeRepository(project_repo.db_path).get_template(proj_obj.project_type_id)
     allowed = set(params["param_id"]) if not params.empty else set()
     dyn_dict = {pid: value for pid, value in proj_obj.dynamic_attributes.items() if pid in allowed}
-    st.caption(f"{t('project_types.label')}: {selected_proj.get('project_type', '')}")
+    st.caption(f"{t('project_types.label')}: {selected_proj.get('project_template', '')}")
     st.markdown("---")
     head_c1, head_c2 = st.columns([4, 1])
     with head_c1:
@@ -144,165 +150,110 @@ def _render_project_details_panel(
                 for _, prop in fields.iterrows():
                     value = dyn_dict.get(prop["param_id"])
                     display = ", ".join(map(str, value)) if isinstance(value, list) else str(value) if value is not None else "—"
-                    st.write(f"{prop['alias'] or prop['param_name']}: {display or '—'}")
+                    alias = prop.get('alias')
+                    label = str(prop['param_name'])
+                    if pd.notna(alias) and alias:
+                        label += f" ({alias})"
+                    st.write(f"{label}{' *' if prop['mandatory'] else ''}: {display or '—'}")
 
-def render_portfolio_overview(
-    project_repo: ProjectRepository,
-    schema_repo: SchemaRepository,
-) -> None:
-    """Renders the Portfolio Overview screen with KPI cards, filtering, and dynamic table."""
-    st.header(f"📊 {t('portfolio.title')}")
+@st.cache_data(ttl=60, max_entries=128, show_spinner=False)
+def _load_portfolio_page(db_path, revision, columns, query, offset):
+    return PortfolioRepository(db_path).get_page(columns, query, offset)
 
-    df_projects = project_repo.get_all_projects()
-    params = schema_repo.get_all_parameters()
 
-    if df_projects.empty:
-        if st.button(
-            "Create new project",
-            icon=":material/add:",
-            type="primary",
-            key="btn_create_project_from_empty_portfolio",
-        ):
-            open_create_project_dialog(project_repo, schema_repo)
-        st.info(t("master_data.dynamic_empty", default="No projects registered yet."))
-        return
+@st.cache_data(ttl=60, max_entries=64, show_spinner=False)
+def _load_portfolio_facet(db_path, revision, columns, query, column, search):
+    return PortfolioRepository(db_path).get_facet(columns, query, column, search)
 
-    # 1. Financial KPI Summary Banner
-    metrics = PortfolioService.calculate_portfolio_metrics(df_projects)
-    col1, col2, col3, col4, col5 = st.columns(5)
-    col1.metric(t("portfolio.kpi_total_projects"), metrics.total_projects)
-    col2.metric(t("portfolio.kpi_planned_budget"), f"€{metrics.total_planned:,.2f}")
-    col3.metric(t("portfolio.kpi_actual_spend"), f"€{metrics.total_actual:,.2f}")
-    col4.metric(
-        t("portfolio.kpi_variance"),
-        f"€{metrics.variance:,.2f}",
-        delta=f"€{metrics.variance:,.2f}",
-        delta_color="normal" if metrics.variance >= 0 else "inverse",
-    )
-    col5.metric(t("portfolio.kpi_burn_rate"), f"{metrics.burn_rate:.1f}%")
 
-    st.divider()
-
-    # 2. Dynamic Attribute Unpacking & Organization Enrichment
-    df_merged = PortfolioService.flatten_dynamic_attributes(df_projects, params)
-    org_repo = OrganizationRepository(project_repo.db_path)
-    df_funcs = org_repo.get_all_functions()
-    df_employees = org_repo.get_all_employees()
-    df_merged = OrganizationService.enrich_projects_with_organization(
-        df_merged,
-        df_funcs,
-        df_employees,
-    )
-
-    # 3. Dynamic Column Configuration (whitelisted allowed dynamic parameters)
-    display_cols: list[str] = [
-        "name",
-        "project_type",
-        "project_manager",
-        "level_3_manager_name",
-        "status",
-        "planned_budget",
-        "actual_budget",
-    ]
-    table_columns: list[dict[str, str]] = [
-        {"key": "project_type", "label": t("project_types.label"), "format": "text"},
+def _portfolio_columns(params: pd.DataFrame) -> list[dict]:
+    columns = [
         {"key": "name", "label": t("portfolio.col_name"), "format": "text"},
-        {
-            "key": "project_manager",
-            "label": t("master_data.field_project_manager", default="Project Manager"),
-            "format": "text",
-        },
-        {
-            "key": "level_3_manager_name",
-            "label": t("portfolio.filter_level_3_manager", default="Managing Function (Level 3)"),
-            "format": "text",
-        },
+        {"key": "project_template", "label": t("project_types.label"), "format": "text"},
+        {"key": "project_manager", "label": t("master_data.field_project_manager"), "format": "text"},
+        {"key": "level_3_manager_name", "label": t("portfolio.filter_level_3_manager"), "format": "text"},
         {"key": "status", "label": t("portfolio.col_status"), "format": "text"},
         {"key": "planned_budget", "label": t("portfolio.col_planned"), "format": "currency"},
         {"key": "actual_budget", "label": t("portfolio.col_actual"), "format": "currency"},
     ]
-    if not params.empty and "param_id" in params.columns:
-        for _, p in params.iterrows():
-            pid = str(p["param_id"])
-            pname = str(p.get("param_name", pid))
-            ptype = str(p.get("param_type", PARAM_TYPE_TEXT)).upper()
+    # The compact master grid retains its curated columns. Details and both
+    # dialogs use the entire effective template, with no field whitelist.
+    for prop in params.to_dict("records"):
+        if prop["param_name"] not in ALLOWED_DYNAMIC_PARAMS:
+            continue
+        ptype = prop["param_type"]
+        fmt = "number" if ptype == PARAM_TYPE_NUMBER else (
+            "url" if ptype in (PARAM_TYPE_URL, PARAM_TYPE_HYPERLINK) else "text")
+        columns.append({"key": "property:" + str(prop["param_id"]), "param_id": str(prop["param_id"]),
+                        "label": prop["param_name"], "format": fmt})
+    return columns
 
-            # Strictly whitelist only requested dynamic parameters
-            if pname not in ALLOWED_DYNAMIC_PARAMS:
-                continue
 
-            target_col = pid if pid in df_merged.columns else (pname if pname in df_merged.columns else None)
-            if not target_col:
-                continue
-
-            if target_col not in display_cols:
-                display_cols.append(target_col)
-
-            value_format = "url" if ptype in (PARAM_TYPE_URL, PARAM_TYPE_HYPERLINK) else "text"
-            if ptype == PARAM_TYPE_NUMBER:
-                value_format = "number"
-            table_columns.append({"key": target_col, "label": pname, "format": value_format})
-
-    # 4. Search; column-level filtering lives in the project table headers.
-    search_term = st.text_input(
-        t("portfolio.filter_search"),
-        placeholder=t("portfolio.filter_search_placeholder"),
-    )
-    selected_types = st.multiselect(t("project_types.filter"), sorted(df_merged["project_type"].unique()))
-    filtered_df = df_merged[df_merged["project_type"].isin(selected_types)] if selected_types else df_merged
-    if search_term.strip():
-        term = search_term.lower()
-        filtered_df = filtered_df[
-            filtered_df["id"].astype(str).str.lower().str.contains(term, na=False)
-            | filtered_df["name"].astype(str).str.lower().str.contains(term, na=False)
-        ]
-    # 5. Render Data Grid with direct row selection and per-column filters
-    with st.container(
-        horizontal=True,
-        horizontal_alignment="distribute",
-        vertical_alignment="center",
-    ):
-        st.subheader(t("portfolio.table_header", count=len(filtered_df)))
-        if st.button(
-            "Create new project",
-            icon=":material/add:",
-            type="primary",
-            key="btn_create_project_from_portfolio",
-        ):
+@st.fragment
+def _render_portfolio_browser(project_repo: ProjectRepository, schema_repo: SchemaRepository) -> None:
+    """Scroll requests rerun only this fragment, not navigation or global KPIs."""
+    params = schema_repo.get_all_parameters()
+    columns = _portfolio_columns(params)
+    templates = ProjectTypeRepository(project_repo.db_path).get_all_types()
+    search = st.text_input(t("portfolio.filter_search"), placeholder=t("portfolio.filter_search_placeholder"))
+    selected_templates = st.multiselect(t("project_types.filter"), templates["name"].tolist())
+    with st.container(horizontal=True, horizontal_alignment="distribute", vertical_alignment="center"):
+        st.subheader(t("portfolio.table_header"))
+        if st.button("Create new project", icon=":material/add:", type="primary",
+                     key="btn_create_project_from_portfolio"):
             open_create_project_dialog(project_repo, schema_repo)
-    st.caption(
-        t(
-            "portfolio.details_hint",
-            default="💡 Click on any project in the table above to display its details below.",
-        )
-    )
+    st.caption("Click a project to see its details. Scroll to load more projects automatically.")
 
-    available_cols = [c for c in display_cols if c in filtered_df.columns]
-    filtered_df_reset = filtered_df.reset_index(drop=True)
-    available_column_specs = [column for column in table_columns if column["key"] in available_cols]
-    # Component events are already in Session State at the start of the rerun.
-    # Synchronize before mounting so the new selection is painted in this run.
-    # Keeping the wrapper call signature stable also makes Streamlit hot reloads
-    # safe when an older imported component module is still in memory.
+    revision = portfolio_revision(project_repo.db_path)
+    context = hashlib.sha256(json.dumps([revision, columns, search, selected_templates],
+                                       sort_keys=True).encode()).hexdigest()
+    component_state = st.session_state.get(_PORTFOLIO_TABLE_KEY, {})
+    request = (component_state.get("request") if isinstance(component_state, dict)
+               else getattr(component_state, "request", None)) or {}
+    query = dict(request.get("query") or {})
+    query.update(search=search, templates=selected_templates)
+    current_request = request.get("context") == context
+    offset = request.get("offset", 0) if current_request else 0
+    try:
+        offset = max(0, int(offset)) // 100 * 100
+    except (TypeError, ValueError):
+        offset = 0
+    page = _load_portfolio_page(project_repo.db_path, revision, columns, query, offset)
+    facet = None
+    if current_request and request.get("kind") == "facet" and request.get("column") in {c["key"] for c in columns}:
+        facet = _load_portfolio_facet(project_repo.db_path, revision, columns, query,
+                                     request["column"], str(request.get("search") or ""))
     _sync_portfolio_project_selection()
-    clicked_project_id = portfolio_project_table(
-        _build_portfolio_table_rows(filtered_df_reset, available_cols),
-        available_column_specs,
-        st.session_state.get(_SELECTED_PROJECT_KEY),
+    portfolio_project_table(
+        page["rows"], columns, st.session_state.get(_SELECTED_PROJECT_KEY),
         key=_PORTFOLIO_TABLE_KEY,
+        page_info={**{k: v for k, v in page.items() if k != "rows"},
+                   "context": context, "query": query,
+                   "request_id": request.get("nonce") if current_request else None,
+                   "facet": facet},
     )
 
-    # Defensive fallback for component runtimes that expose a trigger only in
-    # the mount result. The immediate rerun prevents a stale row highlight.
-    selected_pid = st.session_state.get(_SELECTED_PROJECT_KEY)
-    if clicked_project_id is not None and str(clicked_project_id) != str(selected_pid):
-        st.session_state[_SELECTED_PROJECT_KEY] = clicked_project_id
-        st.rerun()
+    selected_id = st.session_state.get(_SELECTED_PROJECT_KEY)
+    if selected_id is not None:
+        project = project_repo.get_project_by_id(selected_id)
+        if project is not None:
+            org = OrganizationRepository(project_repo.db_path)
+            selected = OrganizationService.enrich_projects_with_organization(
+                pd.DataFrame([asdict(project)]), org.get_all_functions(), org.get_all_employees()).iloc[0]
+            names = dict(zip(templates["id"], templates["name"]))
+            selected["project_template"] = names.get(project.project_type_id, "")
+            _render_project_details_panel(selected, params, project_repo, schema_repo)
 
-    # 6. Render Project Details Below the Master List
-    selected_pid = st.session_state.get(_SELECTED_PROJECT_KEY)
-    if selected_pid is not None:
-        matching = df_merged[df_merged["id"].astype(str) == str(selected_pid)]
-        if not matching.empty:
-            selected_proj = matching.iloc[0]
-            _render_project_details_panel(selected_proj, params, project_repo, schema_repo)
+
+def render_portfolio_overview(project_repo: ProjectRepository, schema_repo: SchemaRepository) -> None:
+    st.header(f"📊 {t('portfolio.title')}")
+    metrics = PortfolioRepository(project_repo.db_path).get_metrics()
+    col1, col2, col3, col4, col5 = st.columns(5)
+    col1.metric(t("portfolio.kpi_total_projects"), metrics.total_projects)
+    col2.metric(t("portfolio.kpi_planned_budget"), f"€{metrics.total_planned:,.2f}")
+    col3.metric(t("portfolio.kpi_actual_spend"), f"€{metrics.total_actual:,.2f}")
+    col4.metric(t("portfolio.kpi_variance"), f"€{metrics.variance:,.2f}",
+                delta=f"€{metrics.variance:,.2f}", delta_color="normal" if metrics.variance >= 0 else "inverse")
+    col5.metric(t("portfolio.kpi_burn_rate"), f"{metrics.burn_rate:.1f}%")
+    st.divider()
+    _render_portfolio_browser(project_repo, schema_repo)

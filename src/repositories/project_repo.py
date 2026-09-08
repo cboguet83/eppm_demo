@@ -62,6 +62,22 @@ class ProjectRepository:
             ]
             return projects
 
+    def get_planning_catalog(self, property_ids: tuple[str, ...] = ()) -> pd.DataFrame:
+        """Small project directory; read only properties actively used by filters."""
+        with get_db(self.db_path) as conn:
+            projects = pd.read_sql('SELECT p.id,p.name,p.status,p.function_id,p.project_type_id, '
+                                   't.name AS project_template FROM project p '
+                                   'JOIN project_type t ON t.id=p.project_type_id ORDER BY p.id', conn)
+            values = read_values(conn, param_ids=list(property_ids))
+            applicability = {int(tid): {p['param_id'] for p in effective_template(conn, int(tid))}
+                             for tid in projects['project_type_id'].unique()} if property_ids else {}
+            projects['dynamic_attributes'] = [
+                {key: value for key, value in values.get(row.id, {}).items()
+                 if key in applicability.get(row.project_type_id, set())}
+                for row in projects.itertuples()
+            ]
+            return projects
+
     def get_project_by_id(self, project_id: Union[int, str]) -> Optional[Project]:
         """Load all stored values, including inactive values for type restoration."""
         with get_db(self.db_path) as conn:

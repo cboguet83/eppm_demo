@@ -340,7 +340,7 @@ class ResourcePoolService:
             proj_bounds = milestone_repo.get_all_project_date_bounds()
 
         if not df_assign.empty:
-            for _, a in df_assign.iterrows():
+            for a in df_assign.to_dict('records'):
                 a_id = int(a["id"])
                 p_id = int(a["project_id"])
                 p_name = str(a.get("project_name", f"Project #{p_id}"))
@@ -383,57 +383,14 @@ class ResourcePoolService:
                     "notes": str(a.get("notes", "")),
                 })
 
-        # 4. Deduplicate Project-Level and Task-Level Assignments per Project
-        # Map: project_id -> { date -> fte } for project level
-        project_level_usage: Dict[int, Dict[str, float]] = {}
-        # Map: project_id -> { date -> fte } for task level
-        task_level_usage: Dict[int, Dict[str, float]] = {}
-
-        for a in assignments_payload:
-            p_id = int(a["project_id"])
-            t_id = a["task_id"]
-            s_date = a["start_date"]
-            e_date = a["end_date"]
-            fte_val = float(a["fte_assigned"])
-
-            if t_id is None:
-                p_map = project_level_usage.setdefault(p_id, {})
-                cls._accumulate_daily_usage(p_map, s_date, e_date, fte_val)
-            else:
-                t_map = task_level_usage.setdefault(p_id, {})
-                cls._accumulate_daily_usage(t_map, s_date, e_date, fte_val)
-
-        # Build deduplicated daily usage across all projects:
-        # On each date: demand = max(f_proj, f_task)
-        all_pids = set(project_level_usage.keys()).union(set(task_level_usage.keys()))
-        all_dates: Set[str] = set()
-        for p_id in all_pids:
-            all_dates.update(project_level_usage.get(p_id, {}).keys())
-            all_dates.update(task_level_usage.get(p_id, {}).keys())
-
-        daily_usage: Dict[str, float] = {}
-        for d_str in sorted(all_dates):
-            day_total = 0.0
-            for p_id in all_pids:
-                f_proj = project_level_usage.get(p_id, {}).get(d_str, 0.0)
-                f_task = task_level_usage.get(p_id, {}).get(d_str, 0.0)
-                day_total += max(f_proj, f_task)
-            daily_usage[d_str] = round(day_total, 3)
-
-        # Deduplicated scalar total: for each project, max of project-level scalar and task-level scalar
-        total_scalar_assigned = 0.0
-        for p_id in all_pids:
-            p_scalar = sum(
-                a["fte_assigned"]
-                for a in assignments_payload
-                if int(a["project_id"]) == p_id and a["task_id"] is None
-            )
-            t_scalar = sum(
-                a["fte_assigned"]
-                for a in assignments_payload
-                if int(a["project_id"]) == p_id and a["task_id"] is not None
-            )
-            total_scalar_assigned += max(p_scalar, t_scalar)
+        # Evaluate interval boundaries once; materialize only the final daily map.
+        from src.services.capacity_timeline import demand_timeline
+        daily_usage = demand_timeline(assignments_payload)
+        scalar_by_project = {}
+        for assignment in assignments_payload:
+            values = scalar_by_project.setdefault(assignment["project_id"], [0.0, 0.0])
+            values[int(assignment["task_id"] is not None)] += assignment["fte_assigned"]
+        total_scalar_assigned = sum(max(values) for values in scalar_by_project.values())
 
         # 5. Evaluate Daily Overassignments and Peak Usage
         peak_assigned_fte = 0.0
@@ -733,45 +690,8 @@ class ResourcePoolService:
         Returns:
             Dict[str, float]: Deduplicated daily usage mapping date_str -> fte.
         """
-        pids_set = {int(p) for p in project_ids if str(p).isdigit()}
-        if not pids_set:
-            return {}
-
-        project_level_usage: Dict[int, Dict[str, float]] = {}
-        task_level_usage: Dict[int, Dict[str, float]] = {}
-
-        for a in assignments:
-            p_id = int(a["project_id"])
-            if p_id not in pids_set:
-                continue
-            t_id = a.get("task_id")
-            s_date = a["start_date"]
-            e_date = a["end_date"]
-            fte_val = float(a["fte_assigned"])
-
-            if t_id is None:
-                p_map = project_level_usage.setdefault(p_id, {})
-                cls._accumulate_daily_usage(p_map, s_date, e_date, fte_val)
-            else:
-                t_map = task_level_usage.setdefault(p_id, {})
-                cls._accumulate_daily_usage(t_map, s_date, e_date, fte_val)
-
-        all_pids = set(project_level_usage.keys()).union(set(task_level_usage.keys()))
-        all_dates: Set[str] = set()
-        for p_id in all_pids:
-            all_dates.update(project_level_usage.get(p_id, {}).keys())
-            all_dates.update(task_level_usage.get(p_id, {}).keys())
-
-        daily_usage: Dict[str, float] = {}
-        for d_str in sorted(all_dates):
-            day_total = 0.0
-            for p_id in all_pids:
-                f_proj = project_level_usage.get(p_id, {}).get(d_str, 0.0)
-                f_task = task_level_usage.get(p_id, {}).get(d_str, 0.0)
-                day_total += max(f_proj, f_task)
-            daily_usage[d_str] = round(day_total, 3)
-
-        return daily_usage
+        from src.services.capacity_timeline import demand_timeline
+        return demand_timeline(assignments, project_ids)
 
     @staticmethod
     def get_projects_consuming_pool_in_period(
