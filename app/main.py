@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from app.application.services.portfolio import PortfolioService
 from app.application.services.projects import ProjectService
 from app.application.services.project_types import ProjectTypeService
+from app.application.services.schema import SchemaService
 
 if TYPE_CHECKING:
     from app.presentation.components.project_workspace import ProjectWorkspace
@@ -22,6 +23,13 @@ def create_project_type_service(db_path: str | None = None) -> ProjectTypeServic
     from app.infrastructure.repositories.project_types import SqliteProjectTypeGateway
 
     return ProjectTypeService(SqliteProjectTypeGateway(db_path))
+
+
+def create_schema_service(db_path: str | None = None) -> SchemaService:
+    """Connect schema administration to the transactional SQLite adapter."""
+    from app.infrastructure.repositories.schema import SqliteSchemaGateway
+
+    return SchemaService(SqliteSchemaGateway(db_path))
 
 
 def create_project_service(db_path: str | None = None) -> ProjectService:

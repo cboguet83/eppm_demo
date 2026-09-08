@@ -15,3 +15,11 @@ class ProjectConflictError(ValueError):
 
 class ProjectStorageError(RuntimeError):
     """Project or portfolio storage is unavailable."""
+
+
+class SchemaConflictError(ValueError):
+    """A schema edit conflicts with a name, order, ID, or existing reference."""
+
+
+class SchemaStorageError(RuntimeError):
+    """Schema storage is unavailable or could not complete an operation."""

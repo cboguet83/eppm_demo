@@ -27,7 +27,8 @@ from src.repositories.tag_repo import TagRepository
 from src.services.organization_service import OrganizationService
 from src.services.resource_pool_service import ResourcePoolService
 from src.services.tag_service import TagService
-from src.views.schema_def_view import render_schema_definition
+from app.main import create_schema_service, create_project_type_service
+from app.presentation.pages.schema import render_schema_definition
 
 
 # Declare Interactive Table Custom Components
@@ -1920,13 +1921,15 @@ def render_settings_view(
     if st.session_state.get("settings_active_section") == "parameters":
         default_section_idx = 1
 
+    section_labels = {
+        "org_structure": f"🏢 {t('settings.section_org_structure', default='Organization Structure')}",
+        "param_def": f"🧩 {t('settings.section_param_definition', default='Parameter Definition')}",
+        "project_configuration": t("project_collaboration.configuration", default="Project configuration"),
+    }
     selected_section = st.radio(
         "Settings Section",
-        options=["org_structure", "param_def", "project_configuration"],
-        format_func=lambda s: f"🏢 {t('settings.section_org_structure', default='Organization Structure')}"
-        if s == "org_structure"
-        else (f"🧩 {t('settings.section_param_definition', default='Parameter Definition')}"
-              if s == "param_def" else t("project_collaboration.configuration", default="Project configuration")),
+        options=list(section_labels),
+        format_func=section_labels.get,
         index=default_section_idx,
         horizontal=True,
         label_visibility="collapsed",
@@ -1934,7 +1937,9 @@ def render_settings_view(
     )
 
     if selected_section == "param_def":
-        render_schema_definition(schema_repo)
+        render_schema_definition(
+            create_schema_service(schema_repo.db_path), create_project_type_service(schema_repo.db_path),
+        )
         return
 
     if selected_section == "project_configuration":

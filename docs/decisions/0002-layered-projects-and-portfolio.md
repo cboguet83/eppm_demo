@@ -1,6 +1,6 @@
 # ADR 0002: Migrate project workflows and portfolio browsing
 
-- Status: Accepted for the second migration increment
+- Status: Accepted for the second migration increment; extended by [ADR 0003](0003-layered-schema-administration.md)
 - Date: 2026-09-08
 - Parent increment: `ee08b7fd5d7877b461643c3ff988a18e43e50a66`
 - Branch: `migration/layered-project-types`
@@ -148,8 +148,8 @@ applied database migrations are unchanged.
 
 ## Next increment
 
-Migrate schema administration next: group/property/option editing and applicability
-changes should use application transactions and pure validation, while retaining
-their current compatibility contracts. Then migrate organization, resources,
+Schema administration is completed in ADR 0003: group/property/option editing and
+applicability changes use application transactions and pure validation while
+retaining their compatibility contracts. Next migrate organization, resources,
 planning, and collaboration internals, removing each bridge after its callers move.
 Develop finance features directly in the new layers once their rules are defined.
