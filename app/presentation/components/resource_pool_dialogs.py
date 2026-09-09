@@ -435,8 +435,10 @@ def _render_pool_assignments_table(
     selected_pool_id: int,
     service: ResourcePoolService,
     planning_page: str,
+    *,
+    allow_unassign: bool = True,
 ) -> None:
-    """Show open and unassign actions on each allocation row."""
+    """Show navigation and optional unassignment actions on each allocation row."""
     from app.presentation.components.action_table import action_table
 
     if not assignments:
@@ -453,13 +455,17 @@ def _render_pool_assignments_table(
         ("id", "ID"), ("project", t("settings.col_project", default="Project")),
         ("task", t("settings.col_task", default="Task / Step")),
         ("fte", "Assigned FTE"), ("period", "Effective period"), ("notes", "Notes"),
-    ], {"open": "Open", "unassign": "Unassign"}, key=f"pool_assignments_{selected_pool_id}")
+    ], {"open": t("settings.go_to", default="Go to"), **({"unassign": "Unassign"} if allow_unassign else {})},
+        key=f"pool_assignments_{selected_pool_id}")
     if event is None:
         return
     chosen = next(row for row in assignments if row["id"] == event["id"])
     if event["action"] == "unassign":
         _confirm_unassign(service, selected_pool_id, int(chosen["id"]), str(chosen["project_name"]))
     elif event["action"] == "open":
+        st.session_state.pop("active_resource_pool_filter", None)
+        st.session_state.pop("pending_resource_pool_filter", None)
+        st.session_state.pop("target_planning_task_id", None)
         st.session_state["target_planning_project_id"] = int(chosen["project_id"])
         st.session_state["ms_multi_projects"] = [int(chosen["project_id"])]
         if chosen.get("task_id"):

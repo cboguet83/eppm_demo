@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     from app.presentation.components.settings_workspace import SettingsWorkspace
     from app.presentation.components.application_workspace import ApplicationWorkspace
 
-SCHEMA_VERSION = "project-collaboration-v1"
+SCHEMA_VERSION = "project-links-v1"
 
 
 @cache
@@ -141,7 +141,7 @@ def create_project_workspace(db_path: str | None = None) -> ProjectWorkspace:
     """Assemble project screens with lazily rendered collaboration sections."""
     from functools import partial
     from app.presentation.components.project_workspace import ProjectWorkspace
-    from app.presentation.pages.collaboration import render_project_contacts, render_project_log
+    from app.presentation.pages.collaboration import render_project_contacts, render_project_log, render_project_links
 
     collaboration = create_collaboration_service(db_path)
 
@@ -152,6 +152,7 @@ def create_project_workspace(db_path: str | None = None) -> ProjectWorkspace:
         partial(render_project_contacts, service=collaboration),
         partial(render_project_log, service=collaboration),
         create_schema_service(db_path),
+        partial(render_project_links, service=collaboration),
     )
 
 

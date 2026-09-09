@@ -11,6 +11,7 @@ from contextlib import closing
 import sqlite3
 
 import pytest
+from unittest.mock import patch
 from streamlit.testing.v1 import AppTest
 
 from app.infrastructure.database.connection import get_db
@@ -208,7 +209,7 @@ def ui_app(collaboration_path, body):
         f"""
 from app.presentation.i18n import set_current_locale
 from app.main import create_collaboration_service
-from app.presentation.pages.collaboration import render_project_contacts, render_project_log, render_project_catalog, _contact_dialog, _remove_contact_dialog
+from app.presentation.pages.collaboration import render_project_contacts, render_project_log, render_project_catalog, _contact_dialog, _remove_contact_dialog, _event_dialog
 set_current_locale('en')
 service = create_collaboration_service({collaboration_path!r})
 {body}
@@ -248,6 +249,8 @@ def test_log_ui_creates_and_edits_all_fields(collaboration, collaboration_path):
     repo = collaboration
     app = ui_app(collaboration_path, "render_project_log(1, service)")
     assert not app.exception
+    assert not app.text_input
+    app.button(key="project_log_1_add").click().run()
     app.text_input[0].set_value("Approval")
     app.text_area[0].set_value("Needs approval")
     app.text_area[1].set_value("Review tomorrow")
@@ -256,7 +259,8 @@ def test_log_ui_creates_and_edits_all_fields(collaboration, collaboration_path):
     assert not app.exception
     event = repo.list_events(1)[0]
     assert event["title"] == "Approval" and event["scope"] == "global"
-    app.selectbox(key="project_log_1_selection").select(event["id"]).run()
+    with patch("app.presentation.components.action_table.action_table", return_value={"id": event["id"], "action": "edit"}):
+        app.run()
     next(w for w in app.selectbox if w.label == "State").select("completed")
     next(b for b in app.button if b.label == "Save event").click().run()
     assert not app.exception
@@ -381,13 +385,17 @@ def test_collaboration_ui_paging_and_event_date_editing(collaboration, collabora
     for index in range(52):
         collaboration.save_event(1, **{**event_values(collaboration), "title": str(index)})
     app = ui_app(collaboration_path, "render_project_log(1, service)")
-    app.button(key="project_log_1_next").click().run()
-    assert not app.exception
-    assert app.dataframe[0].value["Title"].tolist() == ["1", "0"]
+    with patch("app.presentation.components.action_table.action_table", return_value=None) as table:
+        app.button(key="project_log_1_next").click().run()
+        assert not app.exception
+        assert [row["title"] for row in table.call_args.args[0]] == ["1", "0"]
+        assert {key for key, _ in table.call_args.args[1]} >= {"description", "comment"}
+        assert table.call_args.kwargs["context_menu"] is True
     assert app.button(key="project_log_1_next").disabled
     app.button(key="project_log_1_previous").click().run()
     event_id = collaboration.list_events(1)[0]["id"]
-    app.selectbox(key="project_log_1_selection").select(event_id).run()
+    with patch("app.presentation.components.action_table.action_table", return_value={"id": event_id, "action": "edit"}):
+        app.run()
     app.date_input[0].set_value(date(2027, 3, 1))
     next(button for button in app.button if button.label == "Save event").click().run()
     assert not app.exception
@@ -395,14 +403,14 @@ def test_collaboration_ui_paging_and_event_date_editing(collaboration, collabora
 
 
 def test_collaboration_ui_reports_validation_and_read_failures(collaboration, collaboration_path):
-    app = ui_app(collaboration_path, "render_project_log(1, service)")
+    app = ui_app(collaboration_path, "_event_dialog(1, service)")
     next(button for button in app.button if button.label == "Save event").click().run()
     assert not app.exception
     assert app.error[0].value == "Title is required."
     assert collaboration.list_events(1) == []
     with closing(get_db(collaboration_path)) as connection, connection:
         connection.execute("DROP TABLE project_log_event")
-    app.run()
+    app = ui_app(collaboration_path, "render_project_log(1, service)")
     assert not app.exception
     assert "could not be accessed" in app.error[0].value
     assert "project_log_event" not in app.error[0].value

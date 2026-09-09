@@ -262,7 +262,7 @@
     "context_menu": {
       "edit_step": "Edit Step Details",
       "add_step_after": "Add Step",
-      "add_step": "Add Step",
+      "add_step": "Add step",
       "add_step_before": "Add Previous Step (Predecessor)",
       "manage_tags": "Manage Tags",
       "edit_project": "Edit Project Details",
@@ -274,7 +274,9 @@
       "view_project_diagnostics": "View Project Violations",
       "manage_project_pools": "Assign Resource Pools",
       "manage_task_pools": "Assign Resource Pools",
-      "filter_project": "Filter on this project"
+      "filter_project": "Filter on this project",
+      "export_csv_template": "Export CSV template",
+      "import_csv_template": "Import CSV template"
     },
     "resource_grid": {
       "only_overallocated": "Only overallocated pools",
@@ -286,12 +288,14 @@
       "capacity": "Capacity",
       "theoretical_capacity": "Theoretical Capacity",
       "effective_capacity": "Minimum Effective Capacity",
-      "assigned_capacity": "Assigned Capacity",
+      "assigned_capacity": "Capacity",
       "show_total": "Total Assignments",
       "show_selected": "Selected Projects",
       "filter_consuming_projects": "Filter on consuming projects",
       "clear_filter": "Clear Resource Pool Filter",
-      "active_filter": "Filter Active"
+      "active_filter": "Filter Active",
+      "underassignment": "Underassignment",
+      "show_allocations": "Show active allocations"
     },
     "modal": {
       "add_title": "➕ Add New Step ({project_id})",
@@ -527,6 +531,14 @@
     "marker_over_cap": "Overassigned Daily Demand",
     "pool_capacity_line": "Pool Capacity Limit",
     "daily_demand_chart": "Daily Capacity vs. Assigned Demand Timeline",
-    "btn_jump_to_planning": "Open in Planning"
+    "btn_jump_to_planning": "Open in Planning",
+    "go_to": "Go to"
+  },
+  "project_collaboration": {
+    "link_alias": "Display alias",
+    "add_link": "Add link",
+    "save_link": "Save link",
+    "delete_link": "Delete link",
+    "edit_event": "Edit entry"
   }
 }

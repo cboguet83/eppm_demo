@@ -11,7 +11,9 @@ from app.application.ports.collaboration import (
     FunctionContact,
     ProjectContact,
     ProjectEvent,
+    ProjectLink,
 )
+from app.domain.projects.links import LinkValues
 from app.domain.projects.collaboration import CatalogKind, EventValues
 from app.infrastructure.database.connection import get_db
 
@@ -32,6 +34,34 @@ class SqliteCollaborationStore:
     def __init__(self, connection: sqlite3.Connection) -> None:
         """Retain the connection supplied by the transaction gateway."""
         self.connection = connection
+
+    def list_links(self, project_id: int) -> list[ProjectLink]:
+        """Read the project's link collection in creation order."""
+        return [ProjectLink(**dict(row)) for row in self.connection.execute(
+            "SELECT id,url,alias FROM project_link WHERE project_id=? ORDER BY id",
+            (project_id,),
+        )]
+
+    def save_link(self, project_id: int, values: LinkValues, link_id: int | None) -> int:
+        """Insert or update a validated link, enforcing project ownership."""
+        if link_id is None:
+            return int(self.connection.execute(
+                "INSERT INTO project_link(project_id,url,alias) VALUES(?,?,?)",
+                (project_id, values["url"], values["alias"]),
+            ).lastrowid)
+        cursor = self.connection.execute(
+            "UPDATE project_link SET url=?,alias=? WHERE project_id=? AND id=?",
+            (values["url"], values["alias"], project_id, link_id),
+        )
+        if not cursor.rowcount:
+            raise ValueError("The link no longer exists in this project.")
+        return link_id
+
+    def delete_link(self, project_id: int, link_id: int) -> None:
+        """Scope removal to the owning project."""
+        self.connection.execute(
+            "DELETE FROM project_link WHERE project_id=? AND id=?", (project_id, link_id),
+        )
 
     def list_catalog(self, kind: CatalogKind, locale: str) -> list[CatalogEntry]:
         """Read translated labels with their canonical-name fallback."""

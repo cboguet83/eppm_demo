@@ -275,7 +275,9 @@
       "view_project_diagnostics": "Projektverletzungen anzeigen",
       "manage_project_pools": "Ressourcenpools zuweisen",
       "manage_task_pools": "Ressourcenpools zuweisen",
-      "filter_project": "Nach diesem Projekt filtern"
+      "filter_project": "Nach diesem Projekt filtern",
+      "export_csv_template": "CSV-Vorlage exportieren",
+      "import_csv_template": "CSV-Vorlage importieren"
     },
     "resource_grid": {
       "only_overallocated": "Nur überlastete Ressourcenpools",
@@ -287,12 +289,14 @@
       "capacity": "Kapazität",
       "theoretical_capacity": "Theoretische Kapazität",
       "effective_capacity": "Minimale effektive Kapazität",
-      "assigned_capacity": "Zugewiesene Kapazität",
+      "assigned_capacity": "Kapazität",
       "show_total": "Gesamtzuteilungen",
       "show_selected": "Ausgewählte Projekte",
       "filter_consuming_projects": "Nach verbrauchenden Projekten filtern",
       "clear_filter": "Ressourcen-Pool-Filter löschen",
-      "active_filter": "Filter aktiv"
+      "active_filter": "Filter aktiv",
+      "underassignment": "Unterbesetzung",
+      "show_allocations": "Aktive Zuweisungen anzeigen"
     },
     "modal": {
       "add_title": "➕ Neuen Schritt hinzufügen ({project_id})",
@@ -528,6 +532,14 @@
     "marker_over_cap": "Überlasteter Bedarf",
     "pool_capacity_line": "Pool-Kapazitätsgrenze",
     "daily_demand_chart": "Zeitachse Tägliche Kapazität vs. Zugewiesener Bedarf",
-    "btn_jump_to_planning": "In Planung öffnen"
+    "btn_jump_to_planning": "In Planung öffnen",
+    "go_to": "Gehe zu"
+  },
+  "project_collaboration": {
+    "link_alias": "Anzeigename",
+    "add_link": "Link hinzufügen",
+    "save_link": "Link speichern",
+    "delete_link": "Link löschen",
+    "edit_event": "Eintrag bearbeiten"
   }
 }

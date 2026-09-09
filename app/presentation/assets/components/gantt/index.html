@@ -1430,11 +1430,10 @@
       border: 1px solid #a7f3d0;
     }
 
-    .assigned-badge.capacity-under,
-    .assigned-capacity-cell.capacity-under {
-      background: #fff7ed;
-      color: #c2410c;
-      border-color: #fdba74;
+    .underassignment-badge {
+      background: #f1f5f9;
+      color: #475569;
+      border: 1px solid #cbd5e1;
     }
 
     .assigned-badge.capacity-over,
@@ -1608,11 +1607,6 @@
       border-bottom-color: #a7f3d0;
     }
 
-    .resource-left-row.assigned-capacity-row.capacity-under {
-      background: #fff7ed;
-      border-bottom-color: #fdba74;
-    }
-
     .resource-left-row.assigned-capacity-row.capacity-over {
       background: #f3e8ff;
       border-bottom-color: #c084fc;
@@ -1732,7 +1726,33 @@
       border-bottom: 1px solid var(--border);
       box-sizing: border-box;
     }
-  </style>
+
+    /* Shared EPPM context-menu standard (context_menu.py). */
+
+.context-menu {
+    position: fixed; background: var(--st-background-color, #fff);
+    color: var(--st-text-color, #1e293b); border: 1px solid #cbd5e1;
+    border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,.15);
+    z-index: 10000; min-width: 220px; padding: 6px 0;
+    box-sizing: border-box; max-width: calc(100vw - 20px);
+    max-height: calc(100vh - 20px); overflow-y: auto;
+}
+.context-menu-item {
+    display: flex; align-items: center; gap: 10px; padding: 8px 16px;
+    font: inherit; font-size: 13px; font-weight: 500; text-align: left;
+    color: inherit; background: transparent; border: 0; border-radius: 0;
+    box-sizing: border-box; width: 100%; margin: 0; cursor: pointer; transition: background .12s ease;
+}
+.context-menu-item:hover, .context-menu-item:focus-visible {
+    background: var(--st-secondary-background-color, #f1f5f9);
+    color: var(--st-primary-color, #2563eb); outline-offset: -2px;
+}
+.context-menu-item.danger {color: #dc2626;}
+.context-menu-item.danger:hover {background: #fef2f2; color: #b91c1c;}
+.context-menu-divider {height: 1px; background: #e2e8f0; margin: 4px 0;}
+.context-menu-header {padding: 8px 16px; font-size: 12px; font-weight: 600;}
+
+</style>
 </head>
 
 <body>
@@ -1789,6 +1809,15 @@
       <span>🔍</span>
       <span class="ctx-label-filter-project">Filter on this project</span>
     </div>
+    <div class="context-menu-item" onclick="openAddStepModal(selectedContextMenuProjectId)">
+      <span>＋</span><span id="ctx-project-add-step">Add step</span>
+    </div>
+    <div class="context-menu-item" onclick="triggerManageProjectTagsFromMenu('export_csv_template')">
+      <span>↓</span><span id="ctx-export-csv">Export CSV template</span>
+    </div>
+    <div class="context-menu-item" onclick="triggerManageProjectTagsFromMenu('import_csv_template')">
+      <span>↑</span><span id="ctx-import-csv">Import CSV template</span>
+    </div>
     <div class="context-menu-item" onclick="triggerManageProjectTagsFromMenu()">
       <span>🏷️</span>
       <span id="ctx-label-project-tags">Manage Tags</span>
@@ -1821,6 +1850,9 @@
     <div class="context-menu-item" onclick="triggerGoToResourcePoolDetails()">
       <span style="font-size:14px;">&#8599;</span>
       <span>Go to pool details</span>
+    </div>
+    <div class="context-menu-item" onclick="triggerGoToResourcePoolDetails('show_pool_allocations')">
+      <span>☷</span><span id="ctx-pool-allocations">Show active allocations</span>
     </div>
     <div class="context-menu-item" id="ctx-res-filter-btn" onclick="triggerFilterResourcePool(true)">
       <span style="font-size:14px;">🔍</span>
@@ -2072,7 +2104,7 @@
             <span id="lbl-only-overallocated-pools">Only overallocated pools</span>
           </label>
           <label class="resource-option-checkbox">
-            <input type="checkbox" id="chk-hide-unused-pools" onchange="onToggleResourceRows()">
+            <input type="checkbox" id="chk-hide-unused-pools" checked onchange="onToggleResourceRows()">
             <span id="lbl-hide-unused-pools">Hide pools unused by selected projects</span>
           </label>
           <label class="resource-option-checkbox">
@@ -2406,6 +2438,15 @@
       if (elShowTotal) elShowTotal.innerText = getT('resource_grid.show_total', 'Total Assignments');
       const elShowSelected = document.getElementById('lbl-show-selected');
       if (elShowSelected) elShowSelected.innerText = getT('resource_grid.show_selected', 'Selected Projects');
+      for (const [id, key, fallback] of [
+        ['ctx-project-add-step', 'context_menu.add_step', 'Add step'],
+        ['ctx-export-csv', 'context_menu.export_csv_template', 'Export CSV template'],
+        ['ctx-import-csv', 'context_menu.import_csv_template', 'Import CSV template'],
+        ['ctx-pool-allocations', 'resource_grid.show_allocations', 'Show active allocations'],
+      ]) {
+        const element = document.getElementById(id);
+        if (element) element.textContent = getT(key, fallback);
+      }
       const elCtxFilter = document.getElementById('ctx-res-filter-clear');
       if (elCtxFilter) elCtxFilter.innerText = getT('resource_grid.filter_consuming_projects', 'Filter on consuming projects');
       const elCtxClearBtn = document.getElementById('ctx-res-clear-label');
@@ -3290,6 +3331,7 @@
       hideTooltip();
 
       selectedContextMenuProjectId = projectId;
+      selectedContextMenuTask = null;
       const menu = document.getElementById('project-context-menu');
       if (!menu) return;
 
@@ -3374,6 +3416,7 @@
     // --------------------------------------------------------------------------
     function openAddStepModal(targetProjectId = null) {
       hideContextMenu();
+      hideProjectContextMenu();
       modalMode = 'add';
       addStepTargetProjectId = targetProjectId || (selectedContextMenuTask ? selectedContextMenuTask.project_id : currentProjectId);
 
@@ -3385,10 +3428,11 @@
       document.getElementById('modal-task-desc').value = '';
 
       let baseStart = '';
+      const projectTasks = (tasksData || []).filter(task => String(task.project_id || currentProjectId) === String(addStepTargetProjectId));
       if (selectedContextMenuTask && selectedContextMenuTask.end) {
         baseStart = selectedContextMenuTask.end;
-      } else if (tasksData && tasksData.length > 0) {
-        baseStart = tasksData[tasksData.length - 1].end;
+      } else if (projectTasks.length > 0) {
+        baseStart = projectTasks[projectTasks.length - 1].end;
       } else {
         baseStart = formatDate(new Date());
       }
@@ -3784,12 +3828,12 @@
     }
 
 
-    function triggerManageProjectTagsFromMenu() {
+    function triggerManageProjectTagsFromMenu(action = "manage_project_tags") {
       hideProjectContextMenu();
       if (!selectedContextMenuProjectId) return;
 
       Streamlit.setComponentValue({
-        action: "manage_project_tags",
+        action,
         project_id: selectedContextMenuProjectId,
         nonce: Date.now() + "_" + Math.random()
       });
@@ -4363,11 +4407,11 @@
       menu.style.top = `${posY}px`;
     }
 
-    function triggerGoToResourcePoolDetails() {
+    function triggerGoToResourcePoolDetails(action = "go_to_pool_details") {
       hideResourceCellContextMenu();
       if (!selectedResourceCellCtx) return;
       Streamlit.setComponentValue({
-        action: "go_to_pool_details",
+        action,
         pool_id: selectedResourceCellCtx.pool_id,
         pool_name: selectedResourceCellCtx.pool_name,
         nonce: Date.now() + "_" + Math.random()
@@ -4430,7 +4474,7 @@
       return resourcePoolIndex.get(Number(poolId));
     }
 
-    let hideUnusedPools = false;
+    let hideUnusedPools = true;
     let onlyOverallocatedPools = false;
 
     function isResourcePoolVisible(pool) {
@@ -4781,7 +4825,10 @@
         const hasAssignedResources = Boolean(pool.has_assigned_resources);
         const assignedCapacity = Number(pool.displayed_assigned_capacity ?? poolCap);
         const dailyAssignedCapacity = hasAssignedResources ? (pool.daily_assigned_capacity || {}) : {};
-        const assignedState = getCapacityState(assignedCapacity, poolCap, hasAssignedResources);
+        const visibleCapacity = getAssignedCapacityForPeriod(
+          assignedCapacity, dailyAssignedCapacity, formatDate(timelineStart), formatDate(timelineEnd)
+        );
+        const assignedState = getCapacityState(visibleCapacity.min, poolCap, hasAssignedResources);
         const isFilterActive = activeResourceFilter &&
           Number(activeResourceFilter.pool_id) === Number(pool.id);
         const rowContext = `data-pool-id="${pool.id}" data-pool-name="${escapeHtml(pool.name)}"
@@ -4797,7 +4844,8 @@
                         onclick="toggleResourceNode('${row.nodeKey}')">${toggle}</button>
                 <span class="resource-tree-icon">🏊</span>
                 <span class="r-name-text">${escapeHtml(pool.name)}</span>
-                <span class="r-badge assigned-badge ${assignedState}">${getT('resource_grid.assigned_capacity', 'Assigned Capacity')}</span>
+                ${assignedState === 'capacity-under' ? `<span class="r-badge underassignment-badge">${getT('resource_grid.underassignment', 'Underassignment')}</span>` : ''}
+                <span class="r-badge assigned-badge ${assignedState}">${getT('resource_grid.assigned_capacity', 'Capacity')}</span>
                 ${isFilterActive ? `<span class="active-filter-badge">🔍 ${getT('resource_grid.active_filter', 'Filter Active')}</span>` : ''}
               </div>
             </div>
@@ -4810,8 +4858,11 @@
             );
             const capacityState = getCapacityState(periodCapacity.min, poolCap, hasAssignedResources);
             return `<div class="resource-demand-cell assigned-capacity-cell ${capacityState}"
+                         data-pool-id="${pool.id}" data-pool-name="${escapeHtml(pool.name)}"
+                         data-start-date="${startStr}" data-end-date="${endStr}" data-period-label="${escapeHtml(c.label)}"
+                         oncontextmenu="handleCellContextMenu(event, this)"
                          style="width:${c.width}px;"
-                         title="${getT('resource_grid.assigned_capacity', 'Assigned Capacity')}: ${periodCapacity.min.toFixed(1)} FTE">
+                         title="${getT('resource_grid.assigned_capacity', 'Capacity')}: ${periodCapacity.min.toFixed(1)} FTE">
                       ${periodCapacity.min.toFixed(1)}
                     </div>`;
           }).join('');
@@ -4837,6 +4888,7 @@
                    <span class="r-name-text">${escapeHtml(pool.name)}</span>`
                 : `<span class="resource-tree-branch">↳</span>
                    <span class="r-name-text">${rowLabel}</span>`}
+              ${isCollapsedPool && assignedState === 'capacity-under' ? `<span class="r-badge underassignment-badge">${getT('resource_grid.underassignment', 'Underassignment')}</span>` : ''}
               <span class="r-badge ${isSelected ? 'scope-badge' : 'total-badge'}">${isSelected ? 'Selected' : 'Total'}</span>
               ${isCollapsedPool && isFilterActive ? `<span class="active-filter-badge">🔍 ${getT('resource_grid.active_filter', 'Filter Active')}</span>` : ''}
             </div>

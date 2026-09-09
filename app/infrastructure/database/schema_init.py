@@ -10,6 +10,7 @@ from app.infrastructure.database.connection import get_db
 from app.infrastructure.database.project_type_migration import backup_legacy_database, migrate_project_types
 from app.infrastructure.database.project_collaboration_migration import migrate_project_collaboration
 from app.infrastructure.database.project_experience_migration import migrate_project_experience
+from app.infrastructure.database.project_links_migration import migrate_project_links
 from app.shared.logging import get_logger
 
 logger = get_logger(__name__)
@@ -674,6 +675,7 @@ def init_db(db_path: Optional[str] = None) -> None:
         migrate_project_types(conn)
         migrate_project_collaboration(conn)
         migrate_project_experience(conn)
+        migrate_project_links(conn)
         conn.commit()
         conn.execute("PRAGMA foreign_keys = ON")
     logger.info("Schema initialization complete")

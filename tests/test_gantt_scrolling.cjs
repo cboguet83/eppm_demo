@@ -20,8 +20,8 @@ test('hide-unused pools preserves ancestors, respects collapsed groups, and upda
     showTotalRows: true, showSelectedRows: true, groupUsageCache: new Map()});
   const run = code => vm.runInContext(code, context);
   run(script.slice(script.indexOf('    function getResourcePoolById('), script.indexOf('    function renderResourceGrid(')));
-  assert.equal(run('getResourceDisplayRows().length'), 9);
-  run('hideUnusedPools = true');
+  assert.equal(run('hideUnusedPools'), true);
+  assert.equal(run('getResourceDisplayRows().length'), 5);
   assert.deepEqual([...run('getResourceDisplayRows().map(row => row.nodeKey)')],
     ['root', 'nested', 'pool:1', 'pool:1', 'pool:1']);
   run("collapsedResourceNodes.add('nested')");
@@ -34,7 +34,7 @@ test('hide-unused pools preserves ancestors, respects collapsed groups, and upda
   assert.equal(run('getResourceDisplayRows().length'), 0);
   run('hideUnusedPools = false');
   assert.equal(run('getResourceDisplayRows().length'), 6);
-  assert.doesNotMatch(html.match(/<input[^>]*id="chk-hide-unused-pools"[^>]*>/)[0], /\schecked/);
+  assert.match(html.match(/<input[^>]*id="chk-hide-unused-pools"[^>]*>/)[0], /\schecked/);
 });
 
 test('external links start disabled in both the toolbar and renderer', () => {
@@ -55,7 +55,7 @@ test('overallocation filter uses daily capacity and composes with the selected-p
   const run = code=>vm.runInContext(code,context);
   run(script.slice(script.indexOf('    const EMPTY_DAILY_SERIES ='),script.indexOf('    function isDisplayedPoolPeriodOverallocated(')));
   run(script.slice(script.indexOf('    function getResourcePoolById('),script.indexOf('    function renderResourceGrid(')));
-  run('resourcePoolIndex=new Map(resourcePoolsData.map(p=>[p.id,p]));onlyOverallocatedPools=true');
+  run('resourcePoolIndex=new Map(resourcePoolsData.map(p=>[p.id,p]));onlyOverallocatedPools=true;hideUnusedPools=false');
   assert.deepEqual([...run('resourcePoolsData.filter(isResourcePoolVisible).map(p=>p.id)')],[2,3]);
   assert.equal(run('getResourceDisplayRows()[0].nodeKey'),'group');
   run('hideUnusedPools=true');

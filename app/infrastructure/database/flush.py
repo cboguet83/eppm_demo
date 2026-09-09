@@ -45,6 +45,7 @@ def flush_database(db_path: str | None = None, flush_all: bool = False) -> dict[
         counts["projects_deleted"] = int(cursor.fetchone()[0])
 
         # Execute table flushes
+        cursor.execute("DELETE FROM project_link")
         cursor.execute("DELETE FROM project_contact")
         cursor.execute("DELETE FROM project_log_event")
         cursor.execute("DELETE FROM project_property_value_item")

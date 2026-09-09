@@ -263,7 +263,7 @@
     "context_menu": {
       "edit_step": "Schrëtt Detailer änneren",
       "add_step_after": "Schrëtt bäisetzen",
-      "add_step": "Schrëtt bäisetzen",
+      "add_step": "Schrëtt derbäisetzen",
       "add_step_before": "Virdrun Schrëtt bäisetzen (Virgänger)",
       "manage_tags": "Tags verwalten",
       "edit_project": "Projet Detailer änneren",
@@ -275,7 +275,9 @@
       "view_project_diagnostics": "Projetverletzungen uweisen",
       "manage_project_pools": "Ressourcenpools zouuerdnen",
       "manage_task_pools": "Ressourcenpools zouuerdnen",
-      "filter_project": "Op dëse Projet filteren"
+      "filter_project": "Op dëse Projet filteren",
+      "export_csv_template": "CSV-Virlag exportéieren",
+      "import_csv_template": "CSV-Virlag importéieren"
     },
     "resource_grid": {
       "only_overallocated": "Nëmmen iwwerbelaascht Ressourcepools",
@@ -287,12 +289,14 @@
       "capacity": "Kapazitéit",
       "theoretical_capacity": "Theoretesch Kapazitéit",
       "effective_capacity": "Minimum effektiv Kapazitéit",
-      "assigned_capacity": "Zougewisen Kapazitéit",
+      "assigned_capacity": "Kapazitéit",
       "show_total": "Gesamtallokatiounen",
       "show_selected": "Ausgewielte Projeten",
       "filter_consuming_projects": "No verbrauchende Projeten filteren",
       "clear_filter": "Ressourcen-Pool-Filter läschen",
-      "active_filter": "Filter aktiv"
+      "active_filter": "Filter aktiv",
+      "underassignment": "Ënnerbesetzung",
+      "show_allocations": "Aktiv Zouweisunge weisen"
     },
     "modal": {
       "add_title": "➕ Neie Schrëtt bäisetzen ({project_id})",
@@ -528,6 +532,14 @@
     "marker_over_cap": "Iwwerbuchte Bedarf",
     "pool_capacity_line": "Pool-Kapazitéitsgrenz",
     "daily_demand_chart": "Zäitlinn Deeglech Kapazitéit vs. Zougewisenen Bedarf",
-    "btn_jump_to_planning": "A Planung opmaachen"
+    "btn_jump_to_planning": "A Planung opmaachen",
+    "go_to": "Goen op"
+  },
+  "project_collaboration": {
+    "link_alias": "Ugewisenen Alias",
+    "add_link": "Link derbäisetzen",
+    "save_link": "Link späicheren",
+    "delete_link": "Link läschen",
+    "edit_event": "Entrée änneren"
   }
 }

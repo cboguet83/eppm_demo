@@ -157,9 +157,10 @@ schema = create_schema_service({self.path!r})
             details.session_state['project_details_tabs_1'] = tab.label
             details.run()
             self.assert_clean(details)
-            rendered += '\n'.join(w.value for w in details.markdown)
+            rendered += '\n'.join(w.proto.body for w in details.get('html'))
         for kind in SUPPORTED_PROPERTY_TYPES:
             self.assertIn(f'Alias {kind}:', rendered)
             self.assertNotIn(f'Custom {kind} (Alias {kind})', rendered)
-        self.assertIn('Unfilled property: Previously empty', rendered)
+        self.assertIn('Unfilled property:</span><span>Previously empty', rendered)
+        self.assertIn('target="_blank" rel="noopener noreferrer"', rendered)
         self.assertNotIn('Other template only:', rendered)

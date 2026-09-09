@@ -6,7 +6,9 @@ from app.application.ports.collaboration import (
     FunctionContact,
     ProjectContact,
     ProjectEvent,
+    ProjectLink,
 )
+from app.domain.projects.links import normalize_link
 from app.domain.projects.collaboration import (
     CatalogKind,
     EventValues,
@@ -28,6 +30,24 @@ class CollaborationService:
         validate_catalog(kind)
         with self._gateway.transaction() as store:
             return store.list_catalog(kind, locale)
+
+    def list_links(self, project_id: int) -> list[ProjectLink]:
+        """Read every user-defined link for the selected project."""
+        with self._gateway.transaction() as store:
+            return store.list_links(project_id)
+
+    def save_link(
+        self, project_id: int, url: str, alias: str, link_id: int | None = None,
+    ) -> int:
+        """Validate and persist a named link within its owning project."""
+        values = normalize_link(url, alias)
+        with self._gateway.transaction(write=True) as store:
+            return store.save_link(project_id, values, link_id)
+
+    def delete_link(self, project_id: int, link_id: int) -> None:
+        """Remove only a link owned by this project."""
+        with self._gateway.transaction(write=True) as store:
+            store.delete_link(project_id, link_id)
 
     def save_catalog(self, kind: CatalogKind, name: str, item_id: int | None = None) -> int:
         """Create or rename a reference and its English translation atomically."""

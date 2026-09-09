@@ -263,7 +263,7 @@
     "context_menu": {
       "edit_step": "Editar Detalhes da Etapa",
       "add_step_after": "Adicionar Etapa",
-      "add_step": "Adicionar Etapa",
+      "add_step": "Adicionar etapa",
       "add_step_before": "Adicionar Etapa Anterior (Predecessor)",
       "manage_tags": "Gerenciar Tags",
       "edit_project": "Editar Detalhes do Projeto",
@@ -275,7 +275,9 @@
       "view_project_diagnostics": "Ver Violações do Projeto",
       "manage_project_pools": "Atribuir Pools de Recursos",
       "manage_task_pools": "Atribuir Pools de Recursos",
-      "filter_project": "Filtrar por este projeto"
+      "filter_project": "Filtrar por este projeto",
+      "export_csv_template": "Exportar modelo CSV",
+      "import_csv_template": "Importar modelo CSV"
     },
     "resource_grid": {
       "only_overallocated": "Apenas pools sobrealocados",
@@ -287,12 +289,14 @@
       "capacity": "Capacidade",
       "theoretical_capacity": "Capacidade teórica",
       "effective_capacity": "Capacidade efetiva mínima",
-      "assigned_capacity": "Capacidade atribuída",
+      "assigned_capacity": "Capacidade",
       "show_total": "Alocações Totais",
       "show_selected": "Projetos Selecionados",
       "filter_consuming_projects": "Filtrar em projetos consumidores",
       "clear_filter": "Limpar filtro do pool de recursos",
-      "active_filter": "Filtro ativo"
+      "active_filter": "Filtro ativo",
+      "underassignment": "Subalocação",
+      "show_allocations": "Mostrar alocações ativas"
     },
     "modal": {
       "add_title": "➕ Adicionar Nova Etapa ({project_id})",
@@ -551,6 +555,14 @@
     "marker_over_cap": "Demanda com Sobrecarga",
     "pool_capacity_line": "Limite de Capacidade do Pool",
     "daily_demand_chart": "Linha do Tempo: Capacidade Diária vs. Demanda Atribuída",
-    "btn_jump_to_planning": "Abrir no Planejamento"
+    "btn_jump_to_planning": "Abrir no Planejamento",
+    "go_to": "Ir para"
+  },
+  "project_collaboration": {
+    "link_alias": "Nome de exibição",
+    "add_link": "Adicionar link",
+    "save_link": "Guardar link",
+    "delete_link": "Eliminar link",
+    "edit_event": "Editar entrada"
   }
 }

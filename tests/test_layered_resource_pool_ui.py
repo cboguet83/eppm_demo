@@ -177,7 +177,7 @@ render_settings_view(create_settings_workspace({database!r}))
     assert rows[0]["project"] == "<script>project</script>"
     assert rows[0]["notes"] == "<img src=x onerror=alert(1)>"
     assert rows[0]["id"] == assignment
-    assert actions == {"open": "Open", "unassign": "Unassign"}
+    assert actions == {"open": "Go to", "unassign": "Unassign"}
     assert not any(button.key == f"btn_unassign_{pool}" for button in app.button)
     assert service.get_assignment_by_id(assignment)
     app = dialog(database, f"_confirm_unassign(service, {pool}, {assignment}, 'Project')")

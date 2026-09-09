@@ -1344,6 +1344,10 @@ def _render_planning_chart(
                 )
             elif action == "clear_resource_pool_filter":
                 _handle_clear_resource_pool_filter(master_proj_ids)
+            elif action == "show_pool_allocations":
+                _pool_allocations_dialog(int(gantt_event["pool_id"]), workspace)
+            elif action in {"import_csv_template", "export_csv_template"}:
+                _schedule_csv_dialog(workspace, int(gantt_event["project_id"]), action)
             elif action == "go_to_pool_details":
                 pool_id = gantt_event.get("pool_id")
                 if pool_id:
@@ -1807,61 +1811,54 @@ def render_planning_milestones(workspace: PlanningWorkspace) -> None:
             st.session_state.get("active_resource_pool_filter"),
         ),
     )
-    st.divider()
-    manage_project_id = st.selectbox(
-        t("planning.csv_target_project", default="Select Target Project for CSV Bulk Loader"),
-        options=df_projects["id"].tolist(),
-        format_func=lambda x: f"{x} - {proj_map.get(x, '')}",
-        key="sb_manage_target_project",
+
+
+@st.dialog("Active Allocations on Projects & Tasks", width="large")
+@planning_errors
+def _pool_allocations_dialog(pool_id: int, workspace: PlanningWorkspace) -> None:
+    """Reuse the Settings allocation projection for the chosen pool."""
+    from app.presentation.components.resource_pool_dialogs import _render_pool_assignments_table
+    from app.presentation.navigation import PAGE_PLANNING
+
+    details = workspace.capacity.get_details([pool_id])
+    if not details:
+        st.info("The pool no longer exists.")
+        return
+    detail = details[0]
+    st.subheader(detail.pool_name)
+    _render_pool_assignments_table(
+        detail.assignments, pool_id, workspace.resources, PAGE_PLANNING, allow_unassign=False,
     )
-    with st.expander(t("planning.csv_section_title"), expanded=False, on_change="rerun") as csv_section:
-        if not csv_section.open:
-            return
-        st.subheader(f"{t('planning.csv_section_title')} ({manage_project_id})")
-        col_exp, col_imp = st.columns(2)
-        with col_exp:
-            st.download_button(
-                label=t("planning.csv_download_schedule", default="Download project schedule"),
-                data=workspace.planning.export_schedule(int(manage_project_id)),
-                file_name=f"project_{manage_project_id}_schedule.csv", mime="text/csv",
-            )
-            st.write(f"##### {t('planning.csv_export_title', default='Export Schedule Template')}")
-            template_csv = get_csv_template()
-            st.download_button(
-                label=t("planning.csv_download_template"),
-                data=template_csv,
-                file_name="steps_schedule_template.csv",
-                mime="text/csv",
-            )
-        with col_imp:
-            st.write(f"##### {t('planning.csv_import_title', default='Bulk Import Steps')}")
-            uploaded_file = st.file_uploader(
-                t("planning.csv_upload_label"), type=["csv"], key="uploader_steps"
-            )
-            if uploaded_file is not None:
-                try:
-                    steps_payload = [
-                        {**row, "project_id": manage_project_id}
-                        for row in parse_csv(csv_text(uploaded_file))
-                    ]
-                    st.dataframe(pd.DataFrame(steps_payload).head(), width="stretch")
-                    if st.button(t("planning.btn_import_csv")):
-                        count = workspace.planning.bulk_create_milestones(steps_payload)
-                        st.success(
-                            t(
-                                "planning.csv_import_success",
-                                count=count,
-                                project_id=manage_project_id,
-                                default=f"Successfully imported {count} steps to {manage_project_id}!",
-                            )
-                        )
-                        st.rerun()
-                except ValueError as val_err:
-                    st.error(str(val_err))
-                except (
-                    ValueError,
-                    PlanningStorageError,
-                    ResourcePoolStorageError,
-                    TagStorageError,
-                ) as e:
-                    st.error(f"Error parsing CSV: {e}")
+
+
+@st.dialog("Schedule CSV", width="large")
+@planning_errors
+def _schedule_csv_dialog(workspace: PlanningWorkspace, project_id: int, action: str) -> None:
+    """Load exports or validate an import only after its menu is invoked."""
+    project = workspace.projects.projects.get_project_by_id(project_id)
+    if project is None:
+        st.error("The selected project no longer exists.")
+        return
+    st.subheader(project.name)
+    if action == "export_csv_template":
+        st.download_button(
+            t("planning.csv_download_template"), get_csv_template(),
+            file_name="steps_schedule_template.csv", mime="text/csv", on_click="ignore",
+        )
+        st.download_button(
+            t("planning.csv_download_schedule", default="Download project schedule"),
+            workspace.planning.export_schedule(project_id),
+            file_name=f"project_{project_id}_schedule.csv", mime="text/csv", on_click="ignore",
+        )
+        return
+    uploaded_file = st.file_uploader(
+        t("planning.csv_upload_label"), type=["csv"], key=f"uploader_steps_{project_id}",
+    )
+    if uploaded_file is None:
+        return
+    steps_payload = [{**row, "project_id": project_id} for row in parse_csv(csv_text(uploaded_file))]
+    st.dataframe(pd.DataFrame(steps_payload), width="stretch", hide_index=True)
+    if st.button(t("planning.btn_import_csv"), type="primary"):
+        count = workspace.planning.bulk_create_milestones(steps_payload)
+        st.toast(t("planning.csv_import_success", count=count, project_id=project_id))
+        st.rerun()

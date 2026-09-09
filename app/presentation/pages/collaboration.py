@@ -261,46 +261,55 @@ def _event_form(
                 st.session_state[f"project_log_{project_id}_offset"] = 0
                 st.session_state[f"project_log_{project_id}_selection"] = saved_id
 
-        st.form_submit_button(
+        submitted = st.form_submit_button(
             _label("save_event", "Save event"),
             type="primary",
             on_click=_change,
             args=(save_event, prefix + "_error"),
         )
+    if submitted and not st.session_state.get(prefix + "_error"):
+        st.rerun()
     _show_error(prefix + "_error")
+
+
+@st.dialog("Project log entry", width="large")
+@collaboration_errors
+def _event_dialog(
+    project_id: int, service: CollaborationService, current: ProjectEvent | None = None,
+) -> None:
+    """Create or edit a project log entry in a modal."""
+    types = {row["id"]: row["label"] for row in service.list_catalog("event_type", get_current_locale())}
+    if not types:
+        st.info(_label("configure_events", "Create event types in Settings before logging an event."))
+        return
+    _event_form(service, project_id, current, types)
 
 
 @st.fragment
 @collaboration_errors
 def render_project_log(project_id: int, service: CollaborationService) -> None:
-    """Show a bounded event history and create/edit form, loading only this tab."""
+    """Show a bounded multiline log table with modal creation and row editing."""
     locale = get_current_locale()
     types = {row["id"]: row["label"] for row in service.list_catalog("event_type", locale)}
     prefix = f"project_log_{project_id}"
     offset = st.session_state.get(prefix + "_offset", 0)
     page = service.list_events(project_id, locale, offset=offset, limit=51)
     rows = page[:50]
+    if st.button(_label("add_event", "Add event"), icon=":material/add:", key=prefix + "_add", disabled=not types):
+        _event_dialog(project_id, service)
     if rows:
-        st.dataframe(
-            pd.DataFrame(
-                [
-                    {
-                        _label("title", "Title"): row["title"],
-                        _label("event_type", "Event type"): row["event_type"],
-                        _label("state", "State"): _label(
-                            "state_" + row["status"], row["status"].title()
-                        ),
-                        _label("deadline", "Deadline"): row["deadline"],
-                        _label("scope", "Scope"): _label(
-                            "scope_" + row["scope"], row["scope"].title()
-                        ),
-                    }
-                    for row in rows
-                ]
-            ),
-            hide_index=True,
-            width="stretch",
-        )
+        from app.presentation.components.action_table import action_table
+
+        display_rows = [dict(row, status=_label("state_" + row["status"], row["status"].title()),
+                             scope=_label("scope_" + row["scope"], row["scope"].title())) for row in rows]
+        event = action_table(display_rows, [
+            ("title", _label("title", "Title")), ("description", _label("description", "Description")),
+            ("event_type", _label("event_type", "Event type")), ("status", _label("state", "State")),
+            ("deadline", _label("deadline", "Deadline")), ("scope", _label("scope", "Scope")),
+            ("comment", _label("comment", "Comment")),
+        ], {"edit": _label("edit_event", "Edit entry")}, key=prefix + "_table", context_menu=True)
+        if event:
+            _event_dialog(project_id, service, next(row for row in rows if row["id"] == event["id"]))
     else:
         st.info(_label("no_events", "No events logged for this project."))
     if offset or len(page) > 50:
@@ -329,15 +338,35 @@ def render_project_log(project_id: int, service: CollaborationService) -> None:
             _label("configure_events", "Create event types in Settings before logging an event.")
         )
         return
-    by_id = {row["id"]: row for row in rows}
+
+
+@st.fragment
+@collaboration_errors
+def render_project_links(project_id: int, service: CollaborationService) -> None:
+    """Display named links and a reusable add/edit form with no collection limit."""
+    from app.domain.projects.links import normalize_link
+
+    links = service.list_links(project_id)
+    for link in links:
+        # Stored links pass the same boundary validation before becoming navigation.
+        values = normalize_link(link["url"], link["alias"])
+        st.link_button(values["alias"], values["url"])
+    prefix = f"project_links_{project_id}"
+    choices = {link["id"]: link for link in links}
     selected = st.selectbox(
-        _label("event", "Log event"),
-        [None, *by_id],
-        format_func=lambda value: (
-            f"#{value} — {by_id[value]['title']}"
-            if value is not None
-            else _label("add_event", "Add event")
-        ),
+        _label("link", "Link"), [None, *choices],
+        format_func=lambda value: choices[value]["alias"] if value is not None else _label("add_link", "Add link"),
         key=prefix + "_selection",
     )
-    _event_form(service, project_id, by_id.get(selected), types)
+    current = choices.get(selected, {})
+    with st.form(f"{prefix}_{selected}", clear_on_submit=selected is None):
+        url = st.text_input("URL", value=current.get("url", ""))
+        alias = st.text_input(_label("link_alias", "Display alias"), value=current.get("alias", ""))
+        if st.form_submit_button(_label("save_link", "Save link"), type="primary"):
+            service.save_link(project_id, url, alias, selected)
+            st.rerun()
+    if selected is not None:
+        if st.button(_label("delete_link", "Delete link"), key=prefix + "_delete"):
+            service.delete_link(project_id, selected)
+            st.session_state.pop(prefix + "_selection", None)
+            st.rerun()

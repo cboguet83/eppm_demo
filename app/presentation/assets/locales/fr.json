@@ -263,7 +263,7 @@
     "context_menu": {
       "edit_step": "Modifier l'Étape",
       "add_step_after": "Ajouter une Étape",
-      "add_step": "Ajouter une Étape",
+      "add_step": "Ajouter une étape",
       "add_step_before": "Ajouter l'Étape Précédente (Prédécesseur)",
       "manage_tags": "Gérer les Tags",
       "edit_project": "Modifier les Détails du Projet",
@@ -275,7 +275,9 @@
       "view_project_diagnostics": "Voir les Violations du Projet",
       "manage_project_pools": "Assigner des Pools de Ressources",
       "manage_task_pools": "Assigner des Pools de Ressources",
-      "filter_project": "Filtrer sur ce projet"
+      "filter_project": "Filtrer sur ce projet",
+      "export_csv_template": "Exporter le modèle CSV",
+      "import_csv_template": "Importer le modèle CSV"
     },
     "resource_grid": {
       "only_overallocated": "Uniquement les pools suralloués",
@@ -287,12 +289,14 @@
       "capacity": "Capacité",
       "theoretical_capacity": "Capacité théorique",
       "effective_capacity": "Capacité effective minimale",
-      "assigned_capacity": "Capacité affectée",
+      "assigned_capacity": "Capacité",
       "show_total": "Affectations Totales",
       "show_selected": "Projets Sélectionnés",
       "filter_consuming_projects": "Filtrer sur les projets consommateurs",
       "clear_filter": "Effacer le filtre du pool de ressources",
-      "active_filter": "Filtre actif"
+      "active_filter": "Filtre actif",
+      "underassignment": "Sous-affectation",
+      "show_allocations": "Afficher les allocations actives"
     },
     "modal": {
       "add_title": "➕ Ajouter une Nouvelle Étape ({project_id})",
@@ -551,6 +555,14 @@
     "marker_over_cap": "Demande Sur-assignée",
     "pool_capacity_line": "Limite de Capacité du Pool",
     "daily_demand_chart": "Chronologie Capacité Journalière vs Demande Assignée",
-    "btn_jump_to_planning": "Ouvrir dans Planning"
+    "btn_jump_to_planning": "Ouvrir dans Planning",
+    "go_to": "Aller à"
+  },
+  "project_collaboration": {
+    "link_alias": "Alias affiché",
+    "add_link": "Ajouter un lien",
+    "save_link": "Enregistrer le lien",
+    "delete_link": "Supprimer le lien",
+    "edit_event": "Modifier l’entrée"
   }
 }

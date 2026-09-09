@@ -1,6 +1,7 @@
 """Screen 1: Portfolio Overview View with Interactive Master List and Details Inspection."""
 
 import hashlib
+import html
 import json
 from typing import Any
 
@@ -10,6 +11,7 @@ import streamlit as st
 from app.application.exceptions import ProjectStorageError, ProjectTypeStorageError, SchemaStorageError
 from app.application.services.portfolio import PortfolioService
 from app.domain.projects.budgets import BudgetAmounts, analyze_budget, euro_amount
+from app.domain.projects.links import normalize_link
 from app.presentation.i18n import get_current_locale, t
 from app.presentation.components.property_labels import localize_parameters, parameter_groups, property_label
 from app.presentation.components.project_workspace import ProjectWorkspace
@@ -76,7 +78,38 @@ def _build_portfolio_table_rows(
     return rows
 
 
+@st.fragment
 def _render_project_details_panel(
+    selected_proj: pd.Series,
+    params: pd.DataFrame,
+    workspace: ProjectWorkspace,
+) -> None:
+    """Isolate detail tab reruns and preserve the page's existing scroll range."""
+    from app.presentation.components.tab_position import preserve_tab_position
+
+    key = f"project_details_panel_{selected_proj['id']}"
+    with st.container(key=key):
+        preserve_tab_position(key)
+        _render_project_details_body(selected_proj, params, workspace)
+
+
+def _property_value_html(display: str, param_type: str, label: str) -> str:
+    """Escape property values and retain navigation for valid legacy URL fields."""
+    escaped = html.escape(display or "—")
+    if param_type not in {"URL", "HYPERLINK"}:
+        return escaped
+    try:
+        link = normalize_link(display, label)
+    except ValueError:
+        # Invalid legacy URLs remain inspectable without becoming navigation.
+        return escaped
+    return (
+        f'<a href="{html.escape(link["url"], quote=True)}" '
+        f'target="_blank" rel="noopener noreferrer">{escaped}</a>'
+    )
+
+
+def _render_project_details_body(
     selected_proj: pd.Series,
     params: pd.DataFrame,
     workspace: ProjectWorkspace,
@@ -140,18 +173,29 @@ def _render_project_details_panel(
     # Render only the effective template, including user-created groups/fields.
     groups = pd.DataFrame(workspace.portfolio.get_catalog(include_managers=False).groups)
     field_groups = parameter_groups(params, groups)
-    labels = [label for label, _ in field_groups]
+    if not any(label.casefold() == "useful links" for label, _ in field_groups):
+        field_groups.append(("useful links", params.iloc[:0]))
+    labels = [t("portfolio.tab_details_links") if label.casefold() == "useful links" else label
+              for label, _ in field_groups]
     labels += [t("project_collaboration.contacts", default="Project Contacts"),
                t("project_collaboration.log", default="Project log")]
     tabs = st.tabs(labels, key=f"project_details_tabs_{proj_id}", on_change="rerun")
-    for tab, (_, fields) in zip(tabs, field_groups):
+    for tab, (group_label, fields) in zip(tabs, field_groups):
         if tab.open:
             with tab:
                 for _, prop in fields.iterrows():
                     value = dyn_dict.get(prop["param_id"])
                     display = ", ".join(map(str, value)) if isinstance(value, list) else str(value) if value is not None else "—"
                     label = property_label(prop.to_dict(), {})
-                    st.write(f"{label}{' *' if prop['mandatory'] else ''}: {display or '—'}")
+                    value_html = _property_value_html(display, prop["param_type"], label)
+                    st.html(
+                        '<div style="display:grid;grid-template-columns:minmax(10rem,25%) minmax(0,1fr);'
+                        'column-gap:2rem;padding:.25rem 0;overflow-wrap:anywhere">'
+                        f'<span>{html.escape(label)}{" *" if prop["mandatory"] else ""}:</span>'
+                        f'<span>{value_html}</span></div>'
+                    )
+                if group_label.casefold() == "useful links" and workspace.render_links:
+                    workspace.render_links(int(proj_id))
     if tabs[-2].open:
         with tabs[-2]:
             workspace.render_contacts(int(proj_id))

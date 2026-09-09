@@ -3,6 +3,7 @@
 from typing import Any
 
 import streamlit as st
+from app.presentation.components.context_menu import CONTEXT_MENU_CSS
 
 
 _TABLE_HTML = '<div id="portfolio-project-table" class="portfolio-project-table"></div>'
@@ -247,12 +248,13 @@ export default function(component) {
     const showProjectMenu = (event, row) => {
         event.preventDefault(); event.stopPropagation(); closeMenu(); closeProjectMenu();
         const menu = document.createElement('div');
-        menu.className = 'filter-menu project-context-menu'; menu.setAttribute('role', 'menu');
+        menu.className = 'context-menu project-context-menu'; menu.setAttribute('role', 'menu');
         menu.setAttribute('aria-label', 'Project actions: ' + row.name);
         menu.style.left = Math.max(8, Math.min(event.clientX || 8, window.innerWidth - 280)) + 'px';
         menu.style.top = Math.max(8, Math.min(event.clientY || 44, window.innerHeight - 120)) + 'px';
         const addAction = (label, trigger) => {
             const button = document.createElement('button'); button.type = 'button';
+            button.className = 'context-menu-item';
             button.textContent = label; button.setAttribute('role', 'menuitem');
             button.onclick = e => {e.stopPropagation(); closeProjectMenu(); setTriggerValue(trigger, row.project_id);};
             menu.appendChild(button);
@@ -508,7 +510,7 @@ def portfolio_project_table(
     _PORTFOLIO_PROJECT_TABLE = st.components.v2.component(
         "eppm_portfolio_project_table",
         html=_TABLE_HTML,
-        css=_TABLE_CSS,
+        css=_TABLE_CSS + CONTEXT_MENU_CSS,
         js=_TABLE_JS,
     )
     result = _PORTFOLIO_PROJECT_TABLE(

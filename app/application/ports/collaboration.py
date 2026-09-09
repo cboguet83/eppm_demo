@@ -4,6 +4,13 @@ from contextlib import AbstractContextManager
 from typing import Protocol, TypedDict
 
 from app.domain.projects.collaboration import CatalogKind, EventValues
+from app.domain.projects.links import LinkValues
+
+
+class ProjectLink(LinkValues):
+    """Stored link identity scoped to a project."""
+
+    id: int
 
 
 class CatalogEntry(TypedDict):
@@ -46,6 +53,9 @@ class CollaborationStore(Protocol):
     """Queries and writes that share one connection and transaction."""
 
     def list_catalog(self, kind: CatalogKind, locale: str) -> list[CatalogEntry]: ...
+    def list_links(self, project_id: int) -> list[ProjectLink]: ...
+    def save_link(self, project_id: int, values: LinkValues, link_id: int | None) -> int: ...
+    def delete_link(self, project_id: int, link_id: int) -> None: ...
     def save_catalog(self, kind: CatalogKind, name: str, item_id: int | None) -> int: ...
     def delete_catalog(self, kind: CatalogKind, item_id: int) -> None: ...
     def list_functions(self) -> list[FunctionContact]: ...
