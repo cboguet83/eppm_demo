@@ -16,6 +16,7 @@ def render_dynamic_field(
     options: pd.DataFrame,
     current_value: Any,
     key_prefix: str,
+    disabled: bool = False,
 ) -> Any:
     """Render the input matching one dynamic project-parameter type."""
     param_id = str(parameter["param_id"])
@@ -44,7 +45,7 @@ def render_dynamic_field(
         else:
             # Untouched fields follow the newly selected type's creation default.
             st.session_state.pop(key, None)
-    widget_args = {"key": key, "persist_state": "page", "on_change": remember_edit if is_creation else None}
+    widget_args = {"key": key, "persist_state": "page", "on_change": remember_edit if is_creation else None, "disabled": disabled}
 
     if param_type == "TEXT":
         return st.text_input(

@@ -6,6 +6,7 @@ from contextlib import contextmanager
 
 from app.application.ports.projects import PlanningProject, ProjectStore
 from app.domain.projects.project import Project
+from app.domain.projects.links import LinkValues
 from app.domain.projects.project_types import TemplateProperty
 from app.infrastructure.database.project_transactions import project_connection
 from app.infrastructure.database.property_store import effective_template, read_values, write_value
@@ -94,6 +95,18 @@ class SqliteProjectStore:
         )
         for key, value in project.dynamic_attributes.items():
             write_value(self._connection, project.id, key, value)
+
+    def get_links(self, project_id: int) -> list[LinkValues]:
+        """Read custom link values for the atomic project editor."""
+        return [LinkValues(url=row[0], alias=row[1]) for row in self._connection.execute(
+            "SELECT url,alias FROM project_link WHERE project_id=? ORDER BY id", (project_id,)
+        )]
+
+    def replace_links(self, project_id: int, links: list[LinkValues]) -> None:
+        """Replace validated custom links within the project save transaction."""
+        self._connection.execute("DELETE FROM project_link WHERE project_id=?", (project_id,))
+        self._connection.executemany("INSERT INTO project_link(project_id,url,alias) VALUES(?,?,?)",
+                                     [(project_id, link["url"], link["alias"]) for link in links])
 
     def exists(self, project_id: int) -> bool:
         """Check existence without reading project values."""

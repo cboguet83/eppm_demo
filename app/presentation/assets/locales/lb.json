@@ -49,7 +49,6 @@
     "seeding_in_progress": "Datebank gëtt nei initialiséiert...",
     "seed_success": "Datebank erfollegräich nei initialiséiert: {projects} Projeten, {tasks} Aufgaben an {dependencies} Ofhängegkeeten erstallt."
   },
-
   "nav": {
     "portfolio": "Portefeuille Iwwersiicht",
     "master_data": "Projet Stammdaten",
@@ -232,7 +231,9 @@
     "flex_filter_match_help": "Felder gi mat AN verbonnen. Dës Optioun steiert d'Ofgläichung an all Feld.",
     "flex_filter_all_values": "All Wäerter",
     "flex_filter_clear": "Filteren läschen",
-    "flex_filter_project_tags": "Projet-Tags"
+    "flex_filter_project_tags": "Projet-Tags",
+    "csv_replace_warning": "Den Import ersetzt de ganze Projetplang. Aufgaben, Ofhängegkeeten (och zu anere Projeten) a Ressourcenzouweisunge ginn geläscht. Projetsfelder a Weblinke bleiwen erhalen. Näischt gëtt geläscht ier d’Datei validéiert ass an Dir op Projetplang ersetzen klickt.",
+    "csv_replace_button": "Projetplang ersetzen"
   },
   "gantt": {
     "columns": {
@@ -277,7 +278,14 @@
       "manage_task_pools": "Ressourcenpools zouuerdnen",
       "filter_project": "Op dëse Projet filteren",
       "export_csv_template": "CSV-Virlag exportéieren",
-      "import_csv_template": "CSV-Virlag importéieren"
+      "import_csv_template": "CSV-Virlag importéieren",
+      "filter": "Filteren",
+      "filter_this": "Dëse Projet",
+      "filter_all": "Dëse Projet an all Ofhängegkeeten",
+      "filter_predecessors": "Dëse Projet a Virgänger",
+      "bulk_actions": "Sammelaktiounen",
+      "view_project": "Projetsdetailer weisen",
+      "assign_resource": "Ressource zouweisen"
     },
     "resource_grid": {
       "only_overallocated": "Nëmmen iwwerbelaascht Ressourcepools",
@@ -540,6 +548,8 @@
     "add_link": "Link derbäisetzen",
     "save_link": "Link späicheren",
     "delete_link": "Link läschen",
-    "edit_event": "Entrée änneren"
+    "edit_event": "Entrée änneren",
+    "enable_editing": "Beaarbechtung aktivéieren",
+    "custom_links": "Eege Linken"
   }
 }

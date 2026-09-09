@@ -272,6 +272,66 @@ class SqlitePlanningStore:
         cursor = self.connection.execute("DELETE FROM project_task WHERE id=?", (milestone_id,))
         return cursor.rowcount > 0
 
+    def project_exists(self, project_id: int) -> bool:
+        """Check a referenced project inside the current transaction."""
+        return self.connection.execute("SELECT 1 FROM project WHERE id=?", (project_id,)).fetchone() is not None
+
+    def valid_template_references(
+        self, project_id: int, task_ids: set[int], project_ids: set[int],
+    ) -> tuple[set[int], set[int]]:
+        """Validate external references in two bounded queries, without per-link reads."""
+        tasks = self.connection.execute(
+            "SELECT id FROM project_task WHERE project_id<>? AND id IN (SELECT value FROM json_each(?))",
+            (project_id, json.dumps(sorted(task_ids))),
+        )
+        projects = self.connection.execute(
+            "SELECT id FROM project WHERE id<>? AND id IN (SELECT value FROM json_each(?))",
+            (project_id, json.dumps(sorted(project_ids))),
+        )
+        return {int(row[0]) for row in tasks}, {int(row[0]) for row in projects}
+
+    def clear_project_schedule(self, project_id: int) -> None:
+        """Remove schedule links and project/task allocations in the caller's transaction."""
+        task_query = "SELECT id FROM project_task WHERE project_id=?"
+        self.connection.execute(
+            f"DELETE FROM resource_pool_assignment WHERE project_id=? OR task_id IN ({task_query})",
+            (project_id, project_id),
+        )
+        self.connection.execute(
+            f"DELETE FROM task_dependencies WHERE task_id IN ({task_query}) "
+            f"OR predecessor_task_id IN ({task_query}) OR predecessor_project_id=?",
+            (project_id, project_id, project_id),
+        )
+        self.connection.execute(
+            f"UPDATE project_task SET predecessor_id=NULL WHERE predecessor_id IN ({task_query})",
+            (project_id,),
+        )
+        self.connection.execute("DELETE FROM project_task WHERE project_id=?", (project_id,))
+
+    def related_project_ids(self, project_id: int, scope: str) -> list[int]:
+        """Traverse stored project dependencies transitively with UNION cycle termination."""
+        if scope == "this":
+            return [project_id]
+        direction = "edges.successor=selected.id"
+        next_id = "edges.predecessor"
+        if scope == "all":
+            direction = "edges.successor=selected.id OR edges.predecessor=selected.id"
+            next_id = "CASE WHEN edges.successor=selected.id THEN edges.predecessor ELSE edges.successor END"
+        rows = self.connection.execute(f"""
+            WITH RECURSIVE edges(successor, predecessor) AS (
+                SELECT task.project_id, COALESCE(pred.project_id,d.predecessor_project_id)
+                FROM task_dependencies d JOIN project_task task ON task.id=d.task_id
+                LEFT JOIN project_task pred ON pred.id=d.predecessor_task_id
+                UNION
+                SELECT task.project_id,pred.project_id FROM project_task task
+                JOIN project_task pred ON pred.id=task.predecessor_id
+            ), selected(id) AS (
+                SELECT ? UNION SELECT {next_id} FROM edges JOIN selected ON {direction}
+                WHERE edges.predecessor IS NOT NULL
+            ) SELECT id FROM selected ORDER BY id
+        """, (project_id,))
+        return [int(row[0]) for row in rows]
+
     def ensure_indexes(self) -> None:
         """Maintain the existing derived schema inside the caller's transaction."""
         ensure_planning_indexes(self.connection)

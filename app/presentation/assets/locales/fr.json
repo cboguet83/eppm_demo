@@ -49,7 +49,6 @@
     "seeding_in_progress": "Réinitialisation en cours...",
     "seed_success": "Base de données réinitialisée avec succès ({count} projets) !"
   },
-
   "nav": {
     "portfolio": "Aperçu du Portefeuille",
     "master_data": "Données de Base Projets",
@@ -232,7 +231,9 @@
     "flex_filter_match_help": "Les champs utilisent ET. Cette option contrôle la correspondance dans chaque champ.",
     "flex_filter_all_values": "Toutes les valeurs",
     "flex_filter_clear": "Effacer les filtres",
-    "flex_filter_project_tags": "Tags du projet"
+    "flex_filter_project_tags": "Tags du projet",
+    "csv_replace_warning": "L’import remplace tout le planning du projet. Les tâches, liens de dépendance (y compris avec les autres projets) et affectations de ressources au projet et aux tâches seront supprimés. Les champs du projet et les liens web utiles sont conservés. Aucune suppression avant validation du fichier et clic sur Remplacer le planning du projet.",
+    "csv_replace_button": "Remplacer le planning du projet"
   },
   "gantt": {
     "columns": {
@@ -277,7 +278,14 @@
       "manage_task_pools": "Assigner des Pools de Ressources",
       "filter_project": "Filtrer sur ce projet",
       "export_csv_template": "Exporter le modèle CSV",
-      "import_csv_template": "Importer le modèle CSV"
+      "import_csv_template": "Importer le modèle CSV",
+      "filter": "Filtrer",
+      "filter_this": "Ce projet",
+      "filter_all": "Ce projet et toutes ses dépendances",
+      "filter_predecessors": "Ce projet et ses prédécesseurs",
+      "bulk_actions": "Actions en masse",
+      "view_project": "Voir les détails du projet",
+      "assign_resource": "Affecter une ressource"
     },
     "resource_grid": {
       "only_overallocated": "Uniquement les pools suralloués",
@@ -563,6 +571,8 @@
     "add_link": "Ajouter un lien",
     "save_link": "Enregistrer le lien",
     "delete_link": "Supprimer le lien",
-    "edit_event": "Modifier l’entrée"
+    "edit_event": "Modifier l’entrée",
+    "enable_editing": "Activer la modification",
+    "custom_links": "Liens personnalisés"
   }
 }

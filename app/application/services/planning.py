@@ -11,6 +11,7 @@ from app.application.ports.planning import (
 )
 from app.domain.planning.csv_import import parse_csv
 from app.domain.planning.csv_export import export_schedule
+from app.domain.planning.schedule_template import TemplateStep, export_template, parse_template
 from app.domain.planning.records import (
     DependencyInput,
     DependencySchedule,
@@ -84,6 +85,59 @@ class PlanningService:
         """Export the project's chronological schedule with consecutive step numbers."""
         with self._gateway.transaction() as store:
             return export_schedule(store.get_milestones_by_project(project_id))
+
+    def export_project_template(self, project_id: int) -> str:
+        """Read a consistent editable task/dependency template for one project."""
+        with self._gateway.transaction() as store:
+            if not store.project_exists(project_id):
+                raise ValueError("The selected project no longer exists.")
+            return export_template(store.get_milestones_by_project(project_id), store.get_dependencies_for_project(project_id))
+
+    @staticmethod
+    def _validate_template_references(store: PlanningStore, project_id: int, steps: list[TemplateStep]) -> None:
+        """Reject stale external references before deleting any existing schedule data."""
+        if not store.project_exists(project_id):
+            raise ValueError("The selected project no longer exists.")
+        task_ids = {dep.identity for step in steps for dep in step.dependencies if dep.kind == "task"}
+        project_ids = {dep.identity for step in steps for dep in step.dependencies if dep.kind == "project"}
+        valid_tasks, valid_projects = store.valid_template_references(project_id, task_ids, project_ids)
+        for step in steps:
+            for dep in step.dependencies:
+                if dep.kind == "task" and dep.identity not in valid_tasks:
+                    raise ValueError(f"Step {step.number}: External task {dep.identity} is missing or belongs to this project; use a step reference for local tasks.")
+                if dep.kind == "project" and dep.identity not in valid_projects:
+                    raise ValueError(f"Step {step.number}: Predecessor project {dep.identity} is missing or refers to this project.")
+
+    def validate_project_template(self, project_id: int, content: str) -> list[TemplateStep]:
+        """Preview a fully validated replacement without changing stored data."""
+        steps = parse_template(content)
+        with self._gateway.transaction() as store:
+            self._validate_template_references(store, project_id, steps)
+        return steps
+
+    def replace_project_template(self, project_id: int, content: str) -> int:
+        """Validate first, then replace tasks, links and allocations atomically."""
+        steps = parse_template(content)
+        with self._gateway.transaction(write=True) as store:
+            self._validate_template_references(store, project_id, steps)
+            store.clear_project_schedule(project_id)
+            identities = {step.number: store.create_task(project_id, step.values) for step in steps}
+            for step in steps:
+                for dep in step.dependencies:
+                    values = DependencyInput(link_type=dep.link_type, lag_days=dep.lag_days)
+                    if dep.kind == "project":
+                        values["predecessor_project_id"] = dep.identity
+                    else:
+                        values["predecessor_task_id"] = identities[dep.identity] if dep.kind == "step" else dep.identity
+                    store.insert_dependency(identities[step.number], values)
+        return len(steps)
+
+    def related_project_ids(self, project_id: int, scope: str = "this") -> list[int]:
+        """Return this project, its predecessor closure, or its full dependency closure."""
+        if scope not in {"this", "predecessors", "all"}:
+            raise ValueError("Unknown project filter scope.")
+        with self._gateway.transaction() as store:
+            return store.related_project_ids(project_id, scope)
 
     def update_milestone(
         self,

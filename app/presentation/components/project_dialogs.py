@@ -15,6 +15,7 @@ from app.presentation.components.dynamic_fields import (
 )
 from app.presentation.components.project_workspace import ProjectWorkspace
 from app.presentation.components.project_type_frames import template_frame, types_frame
+from app.presentation.components.project_links import render_links_editor
 
 STATUS_LIST = list(PROJECT_STATUSES)
 _Result = TypeVar("_Result")
@@ -43,6 +44,7 @@ def _render_dynamic_fields(
     options: pd.DataFrame,
     attributes: dict[str, Any],
     key_prefix: str,
+    disabled: bool = False,
 ) -> dict[str, Any]:
     """Expose every applicable template property, including custom/ungrouped ones.
 
@@ -64,7 +66,7 @@ def _render_dynamic_fields(
             for _, parameter in fields.iterrows():
                 param_id = str(parameter["param_id"])
                 values[param_id] = _render_dynamic_field(
-                    parameter, options, attributes.get(param_id), key_prefix,
+                    parameter, options, attributes.get(param_id), key_prefix, disabled=disabled,
                 )
     if creating:
         for tab in tabs[-2:]:
@@ -133,6 +135,7 @@ def open_create_project_dialog(
             defaults,
             f"portfolio_create_{project_id}",
         )
+        custom_links = render_links_editor([], f"create_links_{project_id}")
         if st.button("Create project", icon=":material/add:", width="stretch"):
             clean_name = name.strip()
             if not clean_name:
@@ -147,6 +150,7 @@ def open_create_project_dialog(
                     dynamic_attributes=dynamic_values,
                     function_id=manager,
                     project_type_id=int(type_id),
+                    custom_links=custom_links,
                 )
                 st.session_state.pop(draft_key, None)
                 st.session_state["selected_portfolio_project_id"] = created_id
@@ -157,18 +161,25 @@ def open_create_project_dialog(
 def _dismiss_project_dialog() -> None:
     """Clear a pending confirmation when the user dismisses the project modal."""
     st.session_state.pop("project_delete_confirmation", None)
+    st.session_state.pop("project_fields_editing", None)
 
 
-@st.dialog("Edit project details", width="large", on_dismiss=_dismiss_project_dialog)
+@st.dialog("Project details", width="large", on_dismiss=_dismiss_project_dialog)
 def open_edit_project_dialog(
     project_id: int,
     workspace: ProjectWorkspace,
+    read_only: bool = False,
 ) -> None:
     """Edit or delete one project without navigating to another page."""
     project = workspace.projects.get_project_by_id(project_id)
     if project is None:
         st.error("The selected project no longer exists.")
         return
+
+    if read_only and st.session_state.get("project_fields_editing") != project_id:
+        if st.button(t("project_collaboration.enable_editing", default="Enable editing"), key=f"enable_project_edit_{project_id}"):
+            st.session_state["project_fields_editing"] = project_id
+    disabled = read_only and st.session_state.get("project_fields_editing") != project_id
 
     confirmation_key = "project_delete_confirmation"
     if st.session_state.get(confirmation_key) == project_id:
@@ -206,6 +217,7 @@ def open_edit_project_dialog(
         index=list(type_labels).index(project.project_type_id),
         format_func=type_labels.get,
         key=f"edit_type_{project_id}",
+        disabled=disabled,
     )
     params = localize_parameters(
         template_frame(workspace.types.get_template(int(type_id))),
@@ -214,10 +226,10 @@ def open_edit_project_dialog(
     with st.container():
         id_col, name_col, status_col = st.columns([1, 2, 1])
         id_col.text_input(t("master_data.field_id"), value=str(project_id), disabled=True)
-        name = name_col.text_input(t("master_data.field_name"), value=project.name)
+        name = name_col.text_input(t("master_data.field_name"), value=project.name, disabled=disabled)
         status_index = STATUS_LIST.index(project.status) if project.status in STATUS_LIST else 0
         status = status_col.selectbox(
-            t("master_data.field_status"), options=STATUS_LIST, index=status_index
+            t("master_data.field_status"), options=STATUS_LIST, index=status_index, disabled=disabled,
         )
 
         planned_col, actual_col, manager_col = st.columns(3)
@@ -225,12 +237,14 @@ def open_edit_project_dialog(
             t("master_data.field_planned"),
             min_value=0.0,
             value=float(project.planned_budget),
+            disabled=disabled,
             step=5000.0,
         )
         actual = actual_col.number_input(
             t("master_data.field_actual"),
             min_value=0.0,
             value=float(project.actual_budget),
+            disabled=disabled,
             step=5000.0,
         )
         manager = manager_col.selectbox(
@@ -239,6 +253,7 @@ def open_edit_project_dialog(
             index=manager_index,
             format_func=lambda value: manager_labels.get(value, str(value)),
             key=f"portfolio_edit_manager_{project_id}",
+            disabled=disabled,
         )
 
         st.write(f"#### {t('project_types.template')}")
@@ -248,8 +263,10 @@ def open_edit_project_dialog(
             options,
             dict(project.dynamic_attributes or {}),
             f"portfolio_edit_{project_id}",
+            disabled=disabled,
         )
-        if st.button(t("master_data.btn_update"), width="stretch"):
+        custom_links = render_links_editor(workspace.projects.get_links(project_id), f"edit_links_{project_id}", disabled=disabled)
+        if st.button(t("master_data.btn_update"), width="stretch", disabled=disabled):
             clean_name = name.strip()
             if not clean_name:
                 st.error(t("master_data.err_required_fields"))
@@ -264,13 +281,16 @@ def open_edit_project_dialog(
                     dynamic_attributes=dynamic_values,
                     function_id=manager,
                     project_type_id=int(type_id),
+                    custom_links=custom_links,
                 )
                 if not updated:
                     st.error("The selected project no longer exists.")
                     st.stop()
                 st.toast("Project details updated.", icon="✅")
+                _dismiss_project_dialog()
                 st.rerun()
 
     st.divider()
     st.button("Delete project", icon=":material/delete:", key=f"portfolio_delete_project_{project_id}",
+        disabled=disabled,
         on_click=st.session_state.__setitem__, args=(confirmation_key, project_id))

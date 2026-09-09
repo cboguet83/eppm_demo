@@ -10,7 +10,7 @@ def validate_event(event: dict[str, Any]) -> dict[str, Any]:
     ranges, and dependency rules remain authoritative in application/domain code.
     """
     result = dict(event)
-    for field in ("id", "task_id", "project_id", "pool_id", "progress", "progress_pct"):
+    for field in ("id", "task_id", "project_id", "pool_id", "group_id", "progress", "progress_pct"):
         value = result.get(field)
         if field not in result or value is None and field.endswith("id") or value == "":
             continue

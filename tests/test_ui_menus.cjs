@@ -29,15 +29,70 @@ test('project CSV menu and pool allocation menu retain the selected identity', (
   assert.match(html, /onclick="openAddStepModal\(selectedContextMenuProjectId\)"/);
 });
 
-test('capacity cells provide pool and period context and underassignment has a neutral badge', () => {
+test('capacity cells provide pool and period context and only the underassignment badge is orange', () => {
   const cell = html.slice(html.indexOf('return `<div class="resource-demand-cell assigned-capacity-cell'),
     html.indexOf('const isCollapsedPool ='));
   assert.match(cell, /data-pool-id="\$\{pool.id\}"/);
   assert.match(cell, /oncontextmenu="handleCellContextMenu\(event, this\)"/);
   const style = html.match(/\.underassignment-badge\s*\{([^}]+)\}/)[1];
-  assert.match(style, /#f1f5f9/);
+  assert.match(style, /#ffedd5/);
   assert.doesNotMatch(html, /\.assigned-capacity-cell\.capacity-under\s*\{/);
   assert.doesNotMatch(html, /\.assigned-capacity-row\.capacity-under\s*\{/);
+});
+
+test('project filter submenu forwards every scope and group menus retain group identity', () => {
+  const events = [];
+  const context = vm.createContext({
+    selectedContextMenuProjectId: '42', selectedContextMenuTask: null,
+    allProjectsData: [{id:'42', name:'Selected'}],
+    hideProjectContextMenu(){}, hideContextMenu(){}, hideResourceCellContextMenu(){},
+    selectedResourceCellCtx: {pool_id:null, group_id:7, pool_name:'Group', start_date:'', end_date:''},
+    Streamlit: {setComponentValue: value => events.push(value)},
+  });
+  for (const name of ['triggerFilterContextProject','triggerFilterResourcePool','triggerGoToResourcePoolDetails']) loadFunction(context, name);
+  for (const scope of ['this','all','predecessors']) context.triggerFilterContextProject('project', scope);
+  assert.deepEqual(events.map(event=>event.filter_scope), ['this','all','predecessors']);
+  context.triggerFilterResourcePool(true);
+  context.triggerGoToResourcePoolDetails('show_pool_allocations');
+  assert.deepEqual(events.slice(3).map(event=>[event.action,event.group_id]),
+    [['filter_by_resource_pool',7],['show_pool_allocations',7]]);
+  assert.equal((html.match(/oncontextmenu="handleGroupContextMenu\(event\)"/g)||[]).length, 2);
+  assert.match(html, /#project-context-menu\s*\{\s*overflow:visible/);
+});
+
+test('opening the project menu keeps nested submenus outside its scroll box', () => {
+  const menu = {style:{},offsetWidth:210,offsetHeight:220};
+  const context = vm.createContext({
+    document:{getElementById:id=>id === 'project-context-menu' ? menu : null},
+    window:{innerWidth:1000,innerHeight:700}, tasksData:[],
+    hideContextMenu(){},hideDepContextMenu(){},hideTooltip(){},
+  });
+  loadFunction(context,'showProjectContextMenu');
+  context.showProjectContextMenu({clientX:980,clientY:680,preventDefault(){},stopPropagation(){}},42);
+  assert.equal(menu.style.overflow,'visible');
+  assert.equal(menu.style.overflowY,undefined);
+  assert.ok(parseFloat(menu.style.left) + menu.offsetWidth <= 990);
+  assert.ok(parseFloat(menu.style.top) + menu.offsetHeight <= 690);
+});
+
+test('CSV export starts one download per nonce without displaying a modal', () => {
+  const source = read('app/presentation/components/csv_download.py');
+  const js = source.match(/_DOWNLOAD_JS = """([\s\S]*?)"""/)[1];
+  const clicks = [], released = [];
+  const root = {dataset:{}, appendChild(){}};
+  const parentElement = {querySelector:()=>root};
+  const context = vm.createContext({
+    Blob, URL: {createObjectURL:()=> 'blob:csv', revokeObjectURL:url=>released.push(url)},
+    document: {createElement:()=>({click(){clicks.push(this.download);},remove(){}})},
+    setTimeout:()=>1, clearTimeout(){},
+  });
+  vm.runInContext(js.replace('export default function', 'function mount'), context);
+  const data = {nonce:'one',filename:'project_42_template.csv',content:'step_number,task_name\n'};
+  const cleanup = context.mount({data,parentElement});
+  context.mount({data,parentElement});
+  assert.deepEqual(clicks,['project_42_template.csv']);
+  cleanup();
+  assert.deepEqual(released,['blob:csv']);
 });
 
 test('lazy-tab position guard crosses the component shadow root and retains the greatest height', () => {

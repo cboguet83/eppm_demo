@@ -49,7 +49,6 @@
     "seeding_in_progress": "Reinicializando banco de dados...",
     "seed_success": "Banco de dados reinicializado com sucesso: {projects} projetos, {tasks} tarefas e {dependencies} dependências criadas."
   },
-
   "nav": {
     "portfolio": "Visão Geral do Portfólio",
     "master_data": "Dados Mestres do Projeto",
@@ -232,7 +231,9 @@
     "flex_filter_match_help": "Os campos usam E. Esta opção controla a correspondência dentro de cada campo.",
     "flex_filter_all_values": "Todos os valores",
     "flex_filter_clear": "Limpar filtros",
-    "flex_filter_project_tags": "Tags do projeto"
+    "flex_filter_project_tags": "Tags do projeto",
+    "csv_replace_warning": "A importação substitui todo o cronograma. As tarefas, dependências (incluindo outros projetos) e alocações de recursos do projeto e das tarefas serão excluídas. Os campos do projeto e links web serão mantidos. Nada será excluído antes da validação e do clique em Substituir cronograma do projeto.",
+    "csv_replace_button": "Substituir cronograma do projeto"
   },
   "gantt": {
     "columns": {
@@ -277,7 +278,14 @@
       "manage_task_pools": "Atribuir Pools de Recursos",
       "filter_project": "Filtrar por este projeto",
       "export_csv_template": "Exportar modelo CSV",
-      "import_csv_template": "Importar modelo CSV"
+      "import_csv_template": "Importar modelo CSV",
+      "filter": "Filtrar",
+      "filter_this": "Este projeto",
+      "filter_all": "Este projeto e todas as dependências",
+      "filter_predecessors": "Este projeto e predecessores",
+      "bulk_actions": "Ações em massa",
+      "view_project": "Ver detalhes do projeto",
+      "assign_resource": "Atribuir recurso"
     },
     "resource_grid": {
       "only_overallocated": "Apenas pools sobrealocados",
@@ -563,6 +571,8 @@
     "add_link": "Adicionar link",
     "save_link": "Guardar link",
     "delete_link": "Eliminar link",
-    "edit_event": "Editar entrada"
+    "edit_event": "Editar entrada",
+    "enable_editing": "Ativar edição",
+    "custom_links": "Links personalizados"
   }
 }

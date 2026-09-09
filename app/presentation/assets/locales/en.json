@@ -49,7 +49,6 @@
     "seeding_in_progress": "Re-seeding database...",
     "seed_success": "Database successfully re-seeded: {projects} projects, {tasks} tasks, and {dependencies} dependencies created."
   },
-
   "nav": {
     "portfolio": "Portfolio Overview",
     "master_data": "Project Master Data",
@@ -231,7 +230,9 @@
     "flex_filter_match_help": "Fields use AND. This controls matching within each field.",
     "flex_filter_all_values": "All values",
     "flex_filter_clear": "Clear filters",
-    "flex_filter_project_tags": "Project Tags"
+    "flex_filter_project_tags": "Project Tags",
+    "csv_replace_warning": "Importing replaces this project's entire schedule. All existing tasks, dependency links (including links to other projects), and project/task resource allocations will be deleted. Project fields and useful web links are retained. Nothing is deleted until the template passes validation and you click Replace project schedule.",
+    "csv_replace_button": "Replace project schedule"
   },
   "gantt": {
     "columns": {
@@ -276,7 +277,14 @@
       "manage_task_pools": "Assign Resource Pools",
       "filter_project": "Filter on this project",
       "export_csv_template": "Export CSV template",
-      "import_csv_template": "Import CSV template"
+      "import_csv_template": "Import CSV template",
+      "filter": "Filter",
+      "filter_this": "This project",
+      "filter_all": "This project and all dependencies",
+      "filter_predecessors": "This project and predecessors",
+      "bulk_actions": "Bulk actions",
+      "view_project": "View project details",
+      "assign_resource": "Assign Resource"
     },
     "resource_grid": {
       "only_overallocated": "Only overallocated pools",
@@ -539,6 +547,8 @@
     "add_link": "Add link",
     "save_link": "Save link",
     "delete_link": "Delete link",
-    "edit_event": "Edit entry"
+    "edit_event": "Edit entry",
+    "enable_editing": "Enable editing",
+    "custom_links": "Custom links"
   }
 }

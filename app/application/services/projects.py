@@ -3,6 +3,7 @@
 from app.application.ports.projects import PlanningProject, ProjectGateway, ProjectStore
 from app.domain.projects.project import Project, normalize_project_name, prepare_project_values
 from app.domain.projects.project_types import PropertyValue
+from app.domain.projects.links import LinkValues, normalize_link
 
 
 def create_in_transaction(store: ProjectStore, project: Project) -> int:
@@ -46,22 +47,29 @@ class ProjectService:
         planned_budget: float = 0.0, actual_budget: float = 0.0,
         dynamic_attributes: dict[str, PropertyValue] | None = None,
         function_id: int | None = None, project_type_id: int | None = None,
+        custom_links: list[LinkValues] | None = None,
     ) -> int:
         """Atomically validate the effective template and create a project."""
         name = normalize_project_name(name)
+        links = [normalize_link(link["url"], link["alias"]) for link in custom_links or []]
         with self._gateway.transaction(write=True) as store:
             type_id = store.default_type_id() if project_type_id is None else project_type_id
-            return create_in_transaction(store, Project(
+            created_id = create_in_transaction(store, Project(
                 project_id, name, status, planned_budget, actual_budget,
                 dynamic_attributes or {}, function_id, type_id,
             ))
+            if links:
+                store.replace_links(created_id, links)
+            return created_id
 
     def update_project(
         self, project_id: int, name: str, status: str, planned_budget: float,
         actual_budget: float, dynamic_attributes: dict[str, PropertyValue],
         function_id: int | None = None, project_type_id: int | None = None,
+        custom_links: list[LinkValues] | None = None,
     ) -> bool:
         """Update active values atomically, preserving inactive values for later."""
+        links = None if custom_links is None else [normalize_link(link["url"], link["alias"]) for link in custom_links]
         with self._gateway.transaction(write=True) as store:
             existing = store.find(project_id)
             if existing is None:
@@ -74,7 +82,14 @@ class ProjectService:
             )
             store.update(Project(project_id, name, status, planned_budget,
                                  actual_budget, values, function_id, type_id))
+            if links is not None:
+                store.replace_links(project_id, links)
             return True
+
+    def get_links(self, project_id: int) -> list[LinkValues]:
+        """Read custom links for project inspection or editing."""
+        with self._gateway.transaction() as store:
+            return store.get_links(project_id)
 
     def delete_project(self, project_id: int) -> bool:
         """Remove a project and its dependent records in one transaction."""

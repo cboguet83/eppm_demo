@@ -49,7 +49,6 @@
     "seeding_in_progress": "Datenbank wird neu initialisiert...",
     "seed_success": "Datenbank erfolgreich neu initialisiert: {projects} Projekte, {tasks} Aufgaben und {dependencies} Abhängigkeiten erstellt."
   },
-
   "nav": {
     "portfolio": "Portfolio-Übersicht",
     "master_data": "Projektstammdaten",
@@ -232,7 +231,9 @@
     "flex_filter_match_help": "Felder werden mit UND verknüpft. Diese Option steuert die Übereinstimmung innerhalb eines Feldes.",
     "flex_filter_all_values": "Alle Werte",
     "flex_filter_clear": "Filter löschen",
-    "flex_filter_project_tags": "Projekt-Tags"
+    "flex_filter_project_tags": "Projekt-Tags",
+    "csv_replace_warning": "Der Import ersetzt den gesamten Projektplan. Bestehende Aufgaben, Abhängigkeiten (auch zu anderen Projekten) und Ressourcenzuweisungen an Projekt und Aufgaben werden gelöscht. Projektfelder und Weblinks bleiben erhalten. Erst nach erfolgreicher Prüfung und Klick auf Projektplan ersetzen werden Daten geändert.",
+    "csv_replace_button": "Projektplan ersetzen"
   },
   "gantt": {
     "columns": {
@@ -277,7 +278,14 @@
       "manage_task_pools": "Ressourcenpools zuweisen",
       "filter_project": "Nach diesem Projekt filtern",
       "export_csv_template": "CSV-Vorlage exportieren",
-      "import_csv_template": "CSV-Vorlage importieren"
+      "import_csv_template": "CSV-Vorlage importieren",
+      "filter": "Filtern",
+      "filter_this": "Dieses Projekt",
+      "filter_all": "Dieses Projekt und alle Abhängigkeiten",
+      "filter_predecessors": "Dieses Projekt und Vorgänger",
+      "bulk_actions": "Massenaktionen",
+      "view_project": "Projektdetails anzeigen",
+      "assign_resource": "Ressource zuweisen"
     },
     "resource_grid": {
       "only_overallocated": "Nur überlastete Ressourcenpools",
@@ -540,6 +548,8 @@
     "add_link": "Link hinzufügen",
     "save_link": "Link speichern",
     "delete_link": "Link löschen",
-    "edit_event": "Eintrag bearbeiten"
+    "edit_event": "Eintrag bearbeiten",
+    "enable_editing": "Bearbeitung aktivieren",
+    "custom_links": "Eigene Links"
   }
 }

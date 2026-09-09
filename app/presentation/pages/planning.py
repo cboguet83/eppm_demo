@@ -30,7 +30,6 @@ from app.domain.resources.capacity_rules import (
     get_projects_consuming_pool_in_period,
     project_pool_status,
 )
-from app.domain.planning.csv_import import get_csv_template, parse_csv
 from app.domain.planning.rules import normalize_progress
 from app.presentation.components.planning_imports import csv_text
 from app.presentation.components.property_labels import property_label
@@ -186,7 +185,7 @@ def _handle_gantt_component_change(widget_key: str, workspace: PlanningWorkspace
             "tasks": load_dependency_choices(workspace, workspace.revision(), project_id),
         }
     elif gantt_event.get("action") == "filter_project":
-        _focus_planning_on_project(gantt_event)
+        _focus_planning_on_project(gantt_event, workspace)
         st.session_state["planning_needs_full_rerun"] = True
     else:
         before = workspace.revision()
@@ -252,7 +251,7 @@ def _clear_planning_flex_filter_state(*, clear_tracking: bool = False) -> None:
         st.session_state.pop("planning_last_flex_signature", None)
 
 
-def _focus_planning_on_project(gantt_event: dict[str, Any]) -> bool:
+def _focus_planning_on_project(gantt_event: dict[str, Any], workspace: PlanningWorkspace | None = None) -> bool:
     """Clear competing filters and focus the planning page on one project."""
     try:
         project_id = int(gantt_event.get("project_id"))
@@ -266,7 +265,11 @@ def _focus_planning_on_project(gantt_event: dict[str, Any]) -> bool:
     st.session_state.pop("pending_clear_resource_pool_filter", None)
     st.session_state["ms_planning_tag_filter"] = []
     st.session_state["last_planning_tag_filter"] = []
-    st.session_state["ms_multi_projects"] = [project_id]
+    scope = str(gantt_event.get("filter_scope", "this"))
+    st.session_state["ms_multi_projects"] = (
+        workspace.planning.related_project_ids(project_id, scope)
+        if workspace and scope != "this" else [project_id]
+    )
     project_name = str(gantt_event.get("project_name", "")).strip()
     label = project_name or f"Project #{project_id}"
     st.toast(f"Filtered planning to {label}", icon="🔍")
@@ -984,15 +987,16 @@ def _handle_filter_by_resource_pool(
 
     Queues session state modifications via pending state keys to avoid StreamlitAPIException
     from modifying widget state after widget instantiation."""
-    pool_id = int(gantt_event.get("pool_id", 0))
-    start_date = str(gantt_event.get("start_date", "")).strip()[:10]
-    end_date = str(gantt_event.get("end_date", "")).strip()[:10]
+    pool_id = int(gantt_event.get("pool_id") or 0)
+    group_id = gantt_event.get("group_id")
+    start_date = str(gantt_event.get("start_date", "")).strip()[:10] or "0001-01-01"
+    end_date = str(gantt_event.get("end_date", "")).strip()[:10] or "9999-12-31"
     clear_other = bool(gantt_event.get("clear_other_filters", True))
     pool_name = str(gantt_event.get("pool_name", ""))
-    p_cap = pool_details_cache.get(pool_id)
-    if not p_cap:
-        p_cap = workspace.pool_details([pool_id])[0]
-    matching_pids = get_projects_consuming_pool_in_period(p_cap.assignments, start_date, end_date)
+    pool_ids = workspace.resources.get_group_descendant_pool_ids(int(group_id)) if group_id else [pool_id]
+    details = workspace.pool_details(pool_ids) if pool_ids else []
+    matching_pids = sorted({pid for detail in details for pid in
+        get_projects_consuming_pool_in_period(detail.assignments, start_date, end_date)})
     ref_proj_ids = master_proj_ids if clear_other and master_proj_ids else all_proj_ids
     if clear_other:
         target_pids = matching_pids
@@ -1003,7 +1007,9 @@ def _handle_filter_by_resource_pool(
     valid_target_pids = [p for p in target_pids if p in ref_proj_ids]
     st.session_state["active_resource_pool_filter"] = {
         "pool_id": pool_id,
-        "pool_name": pool_name or p_cap.pool_name,
+        "group_id": group_id,
+        "pool_ids": pool_ids,
+        "pool_name": pool_name or (details[0].pool_name if details else "Resource group"),
         "start_date": start_date,
         "end_date": end_date,
         "clear_other_filters": clear_other,
@@ -1040,16 +1046,15 @@ def _render_filtered_active_allocations(
     f_pool_name = str(active_rf.get("pool_name", "Pool"))
     f_start = str(active_rf.get("start_date", ""))[:10]
     f_end = str(active_rf.get("end_date", ""))[:10]
-    p_cap = pool_details_cache.get(f_pool_id)
-    if not p_cap:
-        p_cap = workspace.pool_details([f_pool_id])[0]
+    pool_ids = active_rf.get("pool_ids", [f_pool_id])
+    details = workspace.pool_details(pool_ids) if pool_ids else []
     pool_active_assignments: list[dict[str, Any]] = []
-    for a in p_cap.assignments:
+    for a in [dict(assignment, pool_name=detail.pool_name) for detail in details for assignment in detail.assignments]:
         a_start = str(a.get("start_date", ""))[:10]
         a_end = str(a.get("end_date", ""))[:10]
         fte_val = float(a.get("fte_assigned", 0.0))
         if fte_val > 0 and a_start <= f_end and (a_end >= f_start):
-            pool_active_assignments.append(dict(a, pool_name=f_pool_name))
+            pool_active_assignments.append(a)
     st.markdown("---")
     st.write(
         f"#### 📁 / 📋 {t('settings.assignments_section_title', default='Active Allocations on Projects & Tasks')} — <span style='color:#2563EB;'>{html.escape(f_pool_name)}</span>",
@@ -1345,8 +1350,14 @@ def _render_planning_chart(
             elif action == "clear_resource_pool_filter":
                 _handle_clear_resource_pool_filter(master_proj_ids)
             elif action == "show_pool_allocations":
-                _pool_allocations_dialog(int(gantt_event["pool_id"]), workspace)
-            elif action in {"import_csv_template", "export_csv_template"}:
+                _pool_allocations_dialog(int(gantt_event.get("pool_id") or 0), workspace,
+                                         group_id=gantt_event.get("group_id"))
+            elif action == "export_csv_template":
+                from app.presentation.components.csv_download import download_project_csv
+
+                project_id = int(gantt_event["project_id"])
+                download_project_csv(workspace.planning.export_project_template(project_id), project_id, nonce)
+            elif action == "import_csv_template":
                 _schedule_csv_dialog(workspace, int(gantt_event["project_id"]), action)
             elif action == "go_to_pool_details":
                 pool_id = gantt_event.get("pool_id")
@@ -1370,6 +1381,7 @@ def _render_planning_chart(
             elif action == "edit_project_details":
                 p_id = gantt_event.get("project_id")
                 if p_id:
+                    st.session_state.pop("project_fields_editing", None)
                     st.session_state["modal_edit_project"] = int(p_id)
                     st.rerun()
             elif action == "filter_project":
@@ -1581,7 +1593,7 @@ def render_planning_milestones(workspace: PlanningWorkspace) -> None:
             st.session_state["ms_multi_projects"] = pending_rf["target_pids"]
     pending_project_filter = st.session_state.pop("pending_project_context_filter", None)
     if isinstance(pending_project_filter, dict):
-        _focus_planning_on_project(pending_project_filter)
+        _focus_planning_on_project(pending_project_filter, workspace)
     active_rf = st.session_state.get("active_resource_pool_filter")
     if active_rf:
         f_pool_name = active_rf.get("pool_name", "Pool")
@@ -1798,7 +1810,7 @@ def render_planning_milestones(workspace: PlanningWorkspace) -> None:
         )
     edit_project_modal_id = st.session_state.pop("modal_edit_project", None)
     if edit_project_modal_id:
-        open_edit_project_dialog(int(edit_project_modal_id), workspace.projects)
+        open_edit_project_dialog(int(edit_project_modal_id), workspace.projects, read_only=True)
     _render_planning_chart(
         workspace,
         selected_projects,
@@ -1815,20 +1827,21 @@ def render_planning_milestones(workspace: PlanningWorkspace) -> None:
 
 @st.dialog("Active Allocations on Projects & Tasks", width="large")
 @planning_errors
-def _pool_allocations_dialog(pool_id: int, workspace: PlanningWorkspace) -> None:
+def _pool_allocations_dialog(pool_id: int, workspace: PlanningWorkspace, group_id: int | None = None) -> None:
     """Reuse the Settings allocation projection for the chosen pool."""
     from app.presentation.components.resource_pool_dialogs import _render_pool_assignments_table
     from app.presentation.navigation import PAGE_PLANNING
 
-    details = workspace.capacity.get_details([pool_id])
+    pool_ids = workspace.resources.get_group_descendant_pool_ids(group_id) if group_id else [pool_id]
+    details = workspace.capacity.get_details(pool_ids) if pool_ids else []
     if not details:
-        st.info("The pool no longer exists.")
+        st.info("No resource pools found in this selection.")
         return
-    detail = details[0]
-    st.subheader(detail.pool_name)
-    _render_pool_assignments_table(
-        detail.assignments, pool_id, workspace.resources, PAGE_PLANNING, allow_unassign=False,
-    )
+    for detail in details:
+        st.subheader(detail.pool_name)
+        _render_pool_assignments_table(
+            detail.assignments, detail.pool_id, workspace.resources, PAGE_PLANNING, allow_unassign=False,
+        )
 
 
 @st.dialog("Schedule CSV", width="large")
@@ -1840,25 +1853,26 @@ def _schedule_csv_dialog(workspace: PlanningWorkspace, project_id: int, action: 
         st.error("The selected project no longer exists.")
         return
     st.subheader(project.name)
-    if action == "export_csv_template":
-        st.download_button(
-            t("planning.csv_download_template"), get_csv_template(),
-            file_name="steps_schedule_template.csv", mime="text/csv", on_click="ignore",
-        )
-        st.download_button(
-            t("planning.csv_download_schedule", default="Download project schedule"),
-            workspace.planning.export_schedule(project_id),
-            file_name=f"project_{project_id}_schedule.csv", mime="text/csv", on_click="ignore",
-        )
-        return
+    st.warning(t("planning.csv_replace_warning", default=(
+        "Importing replaces this project's entire schedule. All existing tasks, dependency links "
+        "(including links to other projects), and project/task resource allocations will be deleted. "
+        "Project fields and useful web links are retained. Nothing is deleted until the template "
+        "passes validation and you click Replace project schedule."
+    )))
+    st.caption(t("planning.csv_dependency_help", default=(
+        "Dependencies: step:1:FS:0 refers to step 1; task:123:SS:2 refers to an external task; "
+        "project:4:FS:0 refers to a whole project. Separate multiple links with semicolons."
+    )))
     uploaded_file = st.file_uploader(
         t("planning.csv_upload_label"), type=["csv"], key=f"uploader_steps_{project_id}",
     )
     if uploaded_file is None:
         return
-    steps_payload = [{**row, "project_id": project_id} for row in parse_csv(csv_text(uploaded_file))]
+    content = csv_text(uploaded_file)
+    steps = workspace.planning.validate_project_template(project_id, content)
+    steps_payload = [{"step_number": step.number, **step.values} for step in steps]
     st.dataframe(pd.DataFrame(steps_payload), width="stretch", hide_index=True)
-    if st.button(t("planning.btn_import_csv"), type="primary"):
-        count = workspace.planning.bulk_create_milestones(steps_payload)
+    if st.button(t("planning.csv_replace_button", default="Replace project schedule"), type="primary"):
+        count = workspace.planning.replace_project_template(project_id, content)
         st.toast(t("planning.csv_import_success", count=count, project_id=project_id))
         st.rerun()

@@ -4,6 +4,7 @@ from contextlib import AbstractContextManager
 from typing import Protocol, TypedDict
 
 from app.domain.projects.project import Project
+from app.domain.projects.links import LinkValues
 from app.domain.projects.project_types import PropertyValue, TemplateProperty
 
 
@@ -31,6 +32,8 @@ class ProjectStore(Protocol):
     def delete(self, project_id: int) -> bool: ...
     def exists(self, project_id: int) -> bool: ...
     def next_id(self) -> int: ...
+    def get_links(self, project_id: int) -> list[LinkValues]: ...
+    def replace_links(self, project_id: int, links: list[LinkValues]) -> None: ...
 
 
 class ProjectGateway(Protocol):

@@ -1431,10 +1431,18 @@
     }
 
     .underassignment-badge {
-      background: #f1f5f9;
-      color: #475569;
-      border: 1px solid #cbd5e1;
+      background: #ffedd5;
+      color: #9a3412;
+      border: 1px solid #fb923c;
     }
+
+    .context-submenu-parent { position: relative; }
+    #project-context-menu { overflow:visible; }
+    .context-menu.context-submenu { display:none; position:absolute; left:100%; top:0; min-width:240px; }
+    .context-submenu-parent:hover > .context-submenu,
+    .context-submenu-parent:focus-within > .context-submenu { display:block; }
+    .context-submenu-parent.submenu-left > .context-submenu { left:auto; right:100%; }
+    .submenu-arrow { margin-left:auto; }
 
     .assigned-badge.capacity-over,
     .assigned-capacity-cell.capacity-over {
@@ -1805,30 +1813,40 @@
       <span>⚠️</span>
       <span id="ctx-proj-violation-label">View Project Violations</span>
     </div>
-    <div class="context-menu-item" onclick="triggerFilterContextProject('project')">
+    <div class="context-menu-item context-submenu-parent" tabindex="0" onmouseenter="positionSubmenu(this)" onfocus="positionSubmenu(this)">
       <span>🔍</span>
-      <span class="ctx-label-filter-project">Filter on this project</span>
+      <span id="ctx-filter-menu">Filter</span><span class="submenu-arrow">▸</span>
+      <div class="context-menu context-submenu">
+        <button class="context-menu-item" onclick="triggerFilterContextProject('project', 'this')" id="ctx-filter-this">This project</button>
+        <button class="context-menu-item" onclick="triggerFilterContextProject('project', 'all')" id="ctx-filter-all">This project and all dependencies</button>
+        <button class="context-menu-item" onclick="triggerFilterContextProject('project', 'predecessors')" id="ctx-filter-predecessors">This project and predecessors</button>
+      </div>
     </div>
     <div class="context-menu-item" onclick="openAddStepModal(selectedContextMenuProjectId)">
       <span>＋</span><span id="ctx-project-add-step">Add step</span>
     </div>
-    <div class="context-menu-item" onclick="triggerManageProjectTagsFromMenu('export_csv_template')">
+    <div class="context-menu-item context-submenu-parent" tabindex="0" onmouseenter="positionSubmenu(this)" onfocus="positionSubmenu(this)">
+      <span>☷</span><span id="ctx-bulk-actions">Bulk actions</span><span class="submenu-arrow">▸</span>
+      <div class="context-menu context-submenu">
+    <button class="context-menu-item" onclick="triggerManageProjectTagsFromMenu('export_csv_template')">
       <span>↓</span><span id="ctx-export-csv">Export CSV template</span>
-    </div>
-    <div class="context-menu-item" onclick="triggerManageProjectTagsFromMenu('import_csv_template')">
+    </button>
+    <button class="context-menu-item" onclick="triggerManageProjectTagsFromMenu('import_csv_template')">
       <span>↑</span><span id="ctx-import-csv">Import CSV template</span>
+    </button>
+      </div>
     </div>
     <div class="context-menu-item" onclick="triggerManageProjectTagsFromMenu()">
       <span>🏷️</span>
       <span id="ctx-label-project-tags">Manage Tags</span>
     </div>
     <div class="context-menu-item" onclick="triggerManageProjectPoolsFromMenu()">
-      <span>🏊</span>
-      <span id="ctx-label-project-pools">Assign Resource Pools</span>
+      <span>👤</span>
+      <span id="ctx-label-project-pools">Assign Resource</span>
     </div>
     <div class="context-menu-item" onclick="triggerEditProjectFromMenu()">
       <span>📁</span>
-      <span id="ctx-label-edit-project">Edit Project Details</span>
+      <span id="ctx-label-edit-project">View project details</span>
     </div>
   </div>
 
@@ -1847,7 +1865,7 @@
     <div id="ctx-res-header" style="padding:7px 12px; font-size:11px; font-weight:700; color:#334155; border-bottom:1px solid #e2e8f0; background:#f8fafc;">
       🏊 Resource Filter
     </div>
-    <div class="context-menu-item" onclick="triggerGoToResourcePoolDetails()">
+    <div class="context-menu-item" id="ctx-res-details-btn" onclick="triggerGoToResourcePoolDetails()">
       <span style="font-size:14px;">&#8599;</span>
       <span>Go to pool details</span>
     </div>
@@ -2418,7 +2436,9 @@
       const elProjTags = document.getElementById('ctx-label-project-tags');
       if (elProjTags) elProjTags.innerText = getT('context_menu.manage_tags', 'Manage Tags');
       const elEditProj = document.getElementById('ctx-label-edit-project');
-      if (elEditProj) elEditProj.innerText = getT('context_menu.edit_project', 'Edit Project Details');
+      if (elEditProj) elEditProj.innerText = getT('context_menu.view_project', 'View project details');
+      const elProjectPools = document.getElementById('ctx-label-project-pools');
+      if (elProjectPools) elProjectPools.innerText = getT('context_menu.assign_resource', 'Assign Resource');
       document.querySelectorAll('.ctx-label-filter-project').forEach(el => {
         el.innerText = getT('context_menu.filter_project', 'Filter on this project');
       });
@@ -2439,6 +2459,11 @@
       const elShowSelected = document.getElementById('lbl-show-selected');
       if (elShowSelected) elShowSelected.innerText = getT('resource_grid.show_selected', 'Selected Projects');
       for (const [id, key, fallback] of [
+        ['ctx-filter-menu', 'context_menu.filter', 'Filter'],
+        ['ctx-filter-this', 'context_menu.filter_this', 'This project'],
+        ['ctx-filter-all', 'context_menu.filter_all', 'This project and all dependencies'],
+        ['ctx-filter-predecessors', 'context_menu.filter_predecessors', 'This project and predecessors'],
+        ['ctx-bulk-actions', 'context_menu.bulk_actions', 'Bulk actions'],
         ['ctx-project-add-step', 'context_menu.add_step', 'Add step'],
         ['ctx-export-csv', 'context_menu.export_csv_template', 'Export CSV template'],
         ['ctx-import-csv', 'context_menu.import_csv_template', 'Import CSV template'],
@@ -3355,7 +3380,8 @@
 
       menu.style.display = 'block';
       menu.style.maxHeight = `${Math.max(120, window.innerHeight - 20)}px`;
-      menu.style.overflowY = 'auto';
+      // Nested menus must escape this box; scrolling either axis clips them.
+      menu.style.overflow = 'visible';
 
       const menuWidth = menu.offsetWidth || 210;
       const menuHeight = menu.offsetHeight || 110;
@@ -3861,7 +3887,17 @@
       });
     }
 
-    function triggerFilterContextProject(source) {
+    function positionSubmenu(parent) {
+      parent.classList.toggle('submenu-left', parent.getBoundingClientRect().right + 260 > window.innerWidth);
+      const submenu = parent.querySelector('.context-submenu');
+      if (submenu) {
+        submenu.style.top = '0px';
+        const overflow = submenu.getBoundingClientRect().bottom - window.innerHeight + 10;
+        if (overflow > 0) submenu.style.top = `${-overflow}px`;
+      }
+    }
+
+    function triggerFilterContextProject(source, scope = 'this') {
       const fromProjectMenu = source === 'project';
       const projectId = fromProjectMenu
         ? selectedContextMenuProjectId
@@ -3881,6 +3917,7 @@
       hideProjectContextMenu();
       Streamlit.setComponentValue({
         action: "filter_project",
+        filter_scope: scope,
         project_id: projectId,
         project_name: projectName,
         nonce: Date.now() + "_" + Math.random()
@@ -4345,7 +4382,7 @@
       showResourceCellTooltip(e, poolName, startStr, endStr, demand, capacity, scopeType, isOver, excess);
     }
 
-    function openResourceCellContextMenu(e, poolId, poolName, startStr, endStr, periodLabel) {
+    function openResourceCellContextMenu(e, poolId, poolName, startStr, endStr, periodLabel, groupId = null) {
       e.preventDefault();
       e.stopPropagation();
 
@@ -4355,6 +4392,7 @@
       hideTooltip();
 
       selectedResourceCellCtx = {
+        group_id: groupId,
         pool_id: poolId,
         pool_name: poolName,
         start_date: startStr,
@@ -4376,7 +4414,9 @@
       const filterBtn = document.getElementById('ctx-res-filter-btn');
       const clearDivider = document.getElementById('ctx-res-divider');
       const clearBtn = document.getElementById('ctx-res-clear-btn');
-      if (filterBtn) filterBtn.style.display = startStr && endStr ? 'flex' : 'none';
+      if (filterBtn) filterBtn.style.display = 'flex';
+      const detailsBtn = document.getElementById('ctx-res-details-btn');
+      if (detailsBtn) detailsBtn.style.display = groupId ? 'none' : 'flex';
       if (activeResourceFilter) {
         if (clearDivider) clearDivider.style.display = 'block';
         if (clearBtn) clearBtn.style.display = 'flex';
@@ -4413,6 +4453,7 @@
       Streamlit.setComponentValue({
         action,
         pool_id: selectedResourceCellCtx.pool_id,
+        group_id: selectedResourceCellCtx.group_id,
         pool_name: selectedResourceCellCtx.pool_name,
         nonce: Date.now() + "_" + Math.random()
       });
@@ -4424,12 +4465,19 @@
       Streamlit.setComponentValue({
         action: "filter_by_resource_pool",
         pool_id: selectedResourceCellCtx.pool_id,
+        group_id: selectedResourceCellCtx.group_id,
         pool_name: selectedResourceCellCtx.pool_name,
         start_date: selectedResourceCellCtx.start_date,
         end_date: selectedResourceCellCtx.end_date,
         clear_other_filters: clearOther,
         nonce: Date.now() + "_" + Math.random()
       });
+    }
+
+    function handleGroupContextMenu(e) {
+      const row = e.currentTarget;
+      openResourceCellContextMenu(e, null, row.dataset.groupName,
+        row.dataset.start || '', row.dataset.end || '', '', Number(row.dataset.groupId));
     }
 
     function triggerClearResourcePoolFilter(e) {
@@ -4786,6 +4834,8 @@
           const groupUsage = aggregatePoolUsage(descendantIds, 'daily_usage');
           leftHtml += `
             <div class="resource-left-row resource-group-row"
+                 data-group-id="${Number(group.group_id)}" data-group-name="${escapeHtml(group.name)}"
+                 oncontextmenu="handleGroupContextMenu(event)"
                  data-row-id="${escapeHtml(row.nodeKey)}"
                  title="${escapeHtml(group.description || group.name)}">
               <div class="resource-pool-name" style="padding-left:${indent}px;">
@@ -4810,6 +4860,8 @@
               ? (isOver ? 'cell-overallocated' : 'cell-normal')
               : 'cell-empty';
             return `<div class="resource-demand-cell ${cellClass} resource-group-cell"
+                         data-group-id="${Number(group.group_id)}" data-group-name="${escapeHtml(group.name)}"
+                         data-start="${startStr}" data-end="${endStr}" oncontextmenu="handleGroupContextMenu(event)"
                          style="width:${c.width}px;"
                          title="${escapeHtml(group.name)} total: ${demand.toFixed(1)} FTE">
                       ${demand > 0 ? demand.toFixed(1) : '—'}

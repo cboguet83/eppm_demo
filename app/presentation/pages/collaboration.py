@@ -344,13 +344,9 @@ def render_project_log(project_id: int, service: CollaborationService) -> None:
 @collaboration_errors
 def render_project_links(project_id: int, service: CollaborationService) -> None:
     """Display named links and a reusable add/edit form with no collection limit."""
-    from app.domain.projects.links import normalize_link
-
+    from app.presentation.components.project_links import render_link_rows
     links = service.list_links(project_id)
-    for link in links:
-        # Stored links pass the same boundary validation before becoming navigation.
-        values = normalize_link(link["url"], link["alias"])
-        st.link_button(values["alias"], values["url"])
+    render_link_rows(links)
     prefix = f"project_links_{project_id}"
     choices = {link["id"]: link for link in links}
     selected = st.selectbox(

@@ -132,9 +132,14 @@ from app.presentation.pages.planning import render_planning_milestones
 render_planning_milestones(create_planning_workspace({database!r}))
 ''', default_timeout=20).run()
     assert not app.exception and not app.error
-    assert dialog.call_args.args[1:] == (2, action)
+    if action == "import_csv_template":
+        assert dialog.call_args.args[1:] == (2, action)
+        assert "Nothing is deleted" in app.warning[0].value
+    else:
+        dialog.assert_not_called()
+        assert len(app.get("bidi_component")) > 0
     assert not any(widget.key == "sb_manage_target_project" for widget in app.selectbox)
-    assert len(app.get("download_button")) == (2 if action == "export_csv_template" else 0)
+    assert len(app.get("download_button")) == 0
     assert len(app.get("file_uploader")) == (1 if action == "import_csv_template" else 0)
 
 
