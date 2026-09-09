@@ -79,8 +79,8 @@ Release source: [V16 logging/errors](https://github.com/OWASP/ASVS/blob/v5.0.0/5
 
 ## Validation status and gaps
 
-On 2026-09-09, the complete Python suite passed **1,005 tests and 14 subtests**.
-Its single opt-in browser test was skipped in the regular run, then passed separately
+On 2026-09-10, the complete Python suite passed **1,069 tests and 14 subtests**.
+Its single opt-in browser test was skipped in the regular run and passed separately
 against real Keycloak and the rebuilt application image without source bind mounts.
 The browser workflow passed three consecutive runs after moving live audit
 inspection into the Linux container, avoiding concurrent Windows/Linux SQLite
@@ -162,10 +162,25 @@ and manager-option helper had no application callers. They and the obsolete
 converter-only test were removed; current scoped service, UI and browser workflows
 remain tested.
 
-Measured `app` statement coverage is **98.17%** (10,382 of 10,575 statements), below the
-**99%** project target. Coverage remains unfinished work; the passing workflow tests
-do not establish that target. Missing statements include legacy planning and
-organization UI branches, schema upgrades, and additional access boundary cases.
+Final workflow checks cover returned Gantt events as well as callbacks, scoped
+numeric filters and allocation popups, nested pool groups, and resource Settings
+dialogs. A project-details fragment now handles revocation/disable failures locally;
+deleted projects no longer render retained details. Empty planning portfolios now
+show a project-specific message instead of the unrelated schema-parameter message.
+
+Capacity race tests change actual persisted grants or allocations between calculation
+and cache publication. Results are recomputed for a changed scope; repeated changes
+produce a bounded retry error without caching stale data. Concurrent schema deletion,
+invalid authentication addresses/environments, legacy property inputs, tag deletion,
+and empty seed dictionaries are also exercised. The actual `main` entry point keeps
+operator seeding separate from Streamlit rendering and fails closed without OIDC
+configuration. The permission inventory was cross-checked against all 213 public
+business-service methods.
+
+Measured `app` statement coverage is **99.02%** (10,474 of 10,578 statements), meeting
+the **99%** project target. The fresh full-suite run leaves 104 uncovered statements;
+the 420 existing excluded lines are unchanged. This figure is statement coverage,
+not proof that every possible branch or deployment condition has been exercised.
 
 Additional ASVS features outside the specified implementation are not claimed:
 device/posture risk evaluation, MFA for every non-administrator, self-service session

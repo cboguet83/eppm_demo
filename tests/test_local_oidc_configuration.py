@@ -57,3 +57,16 @@ def test_local_provision_refuses_to_replace_existing_configuration(tmp_path: Pat
     with pytest.raises(ValueError):
         provision(tmp_path / "unsafe.env", "http://public.example.test")
     assert not (tmp_path / "unsafe.env").exists()
+
+
+@pytest.mark.parametrize("name,value,message", [
+    ("OIDC_ISSUER", "https://provider.example.test:invalid/realm", "Invalid authentication URL"),
+    ("APP_ORIGIN", "https://application.example.test:65536", "Invalid authentication URL"),
+    ("OIDC_ISSUER", "https://[::1/realm", "Invalid authentication URL"),
+    ("APP_ENV", "unrecognized", "Unknown application environment"),
+])
+def test_malformed_authentication_addresses_and_environments_fail_closed(name, value, message):
+    values = local_environment()
+    values[name] = value
+    with pytest.raises(ValueError, match=message):
+        AuthenticationConfig.from_environment(values)

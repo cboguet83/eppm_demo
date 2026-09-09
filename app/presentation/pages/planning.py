@@ -1591,7 +1591,7 @@ def render_planning_milestones(workspace: PlanningWorkspace) -> None:
         workspace, revision, property_ids
     )
     if df_projects.empty:
-        st.info(t("master_data.dynamic_empty", default="No projects registered yet."))
+        st.info(t("planning.no_projects_available", default="No projects available for planning."))
         return
     master_proj_ids = [int(p) for p in df_projects["id"].tolist()]
     proj_map = dict(zip(df_projects["id"], df_projects["name"]))

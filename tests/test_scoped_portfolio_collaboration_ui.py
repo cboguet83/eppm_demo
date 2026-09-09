@@ -30,6 +30,60 @@ def portfolio_app(path: str, actor: Actor) -> None:
     render_portfolio_overview(create_project_workspace(path, access=access))
 
 
+def project_details_fragment_app(path: str, actor: Actor) -> None:
+    """Rerun the production details fragment with its previously displayed row."""
+    import pandas as pd
+    from app.application.services.access import AuthorizationPolicy, SessionLimits
+    from app.application.services.business_access import BusinessAccess
+    from app.main import create_project_workspace
+    from app.presentation.i18n import set_current_locale
+    from app.presentation.pages.portfolio import _render_project_details_panel
+
+    set_current_locale("en")
+    access = BusinessAccess(actor, AuthorizationPolicy(lambda: 1000, SessionLimits()))
+    selected = pd.Series({"id": 1, "name": "Visible", "planned_budget": "0", "actual_budget": "0"})
+    _render_project_details_panel(selected, pd.DataFrame(), create_project_workspace(path, access=access))
+
+
+@pytest.mark.parametrize("change", ["disabled", "revoked"])
+def test_project_details_fragment_handles_lost_access_without_exposing_a_script_error(business, change):
+    path, service, admin, editor, _ = business
+    app = AppTest.from_function(project_details_fragment_app, args=(path, editor.actor)).run()
+    assert not app.exception and not app.error
+    if change == "disabled":
+        service.set_status(admin, editor.actor.user_id, "disabled")
+    else:
+        for assignment in service.assignments(admin, editor.actor.user_id):
+            service.revoke(admin, assignment["id"])
+    app.run()
+    assert not app.exception and "not permitted" in app.error[0].value
+    assert not app.button and not app.tabs
+
+
+def test_project_details_fragment_stops_displaying_a_deleted_project(business):
+    from app.main import create_project_service
+
+    path, _, _, _, manager = business
+    app = AppTest.from_function(project_details_fragment_app, args=(path, manager.actor)).run()
+    assert not app.exception and not app.error
+    create_project_service(path, access=manager).delete_project(1)
+    app.run()
+    assert not app.exception and not app.error
+    assert app.info[0].value == "The selected project no longer exists."
+    assert not app.button and not app.tabs
+
+
+def test_business_administrator_can_open_project_creation_from_the_scoped_portfolio(business):
+    path, _, _, _, manager = business
+    with patch("app.presentation.pages.portfolio.portfolio_project_table"):
+        app = AppTest.from_function(portfolio_app, args=(path, manager.actor), default_timeout=30).run()
+        app.button(key="btn_create_project_from_portfolio").click().run()
+    assert not app.exception and not app.error and app.get("dialog")
+    assert any(button.label == "Create project" for button in app.button)
+    with closing(get_db(path)) as connection:
+        assert connection.execute("SELECT id FROM project ORDER BY id").fetchall() == [(1,), (2,)]
+
+
 @pytest.mark.parametrize("field", ["row_click", "gantt_click"])
 @pytest.mark.parametrize("value", [[], {}, True, 1.5, "1", 0, -1, float("inf")])
 def test_malformed_portfolio_identifiers_are_ignored_before_navigation_or_details(business, field, value):

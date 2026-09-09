@@ -59,7 +59,10 @@ def _render_project_details_panel(
     key = f"project_details_panel_{selected_proj['id']}"
     with st.container(key=key):
         preserve_tab_position(key)
-        _render_project_details_body(selected_proj, params, workspace)
+        try:
+            _render_project_details_body(selected_proj, params, workspace)
+        except (ValueError, ProjectStorageError, ProjectTypeStorageError, SchemaStorageError) as exc:
+            st.error(str(exc))
 
 
 def _property_value_html(display: str, param_type: str, label: str) -> str:

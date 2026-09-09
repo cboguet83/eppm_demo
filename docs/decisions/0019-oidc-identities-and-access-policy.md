@@ -1,6 +1,6 @@
 # ADR 0019: OIDC identities, explicit grants, and persistent application sessions
 
-- Status: Accepted design; validation in progress on the feature branch
+- Status: Accepted; implemented and verified on the feature branch
 - Date: 2026-09-09
 - Specification: [OIDC and access management](../implementation/oidc-and-access-management.md)
 
@@ -235,7 +235,7 @@ See the [deployment guide](../implementation/access-deployment.md) and
 [ASVS evidence checklist](../implementation/access-security-evidence.md) for the
 verification results, limitations, and production responsibilities.
 
-## Verification so far
+## Verification
 
 - Real SQLite tests cover identity uniqueness, exact issuer/subject separation,
   role/scope separation, current property changes, deleted/reused references,
@@ -252,9 +252,13 @@ verification results, limitations, and production responsibilities.
 - Real HTTP/WebSocket tests cover authenticated download fetch, forged runtime
   identity headers, session expiry/revocation/security changes, blocked native data
   routes, and server validation of malformed/oversized CSV component payloads.
-- Current integration checkpoint: 1,005 Python tests, 14 subtests, and all 42
+- Final integration verification on 2026-09-10: 1,069 Python tests, 14 subtests, and all 42
   JavaScript tests passed. The opt-in real Keycloak browser workflow passed against
   the rebuilt image without source mounts, including grants, scoped exports,
   revocation, and logout across tabs. Three consecutive browser runs passed after
   moving live audit inspection into the Linux container. Statement coverage is
-  98.17% (10,382 of 10,575 statements), below the repository's 99% target.
+  99.02% (10,474 of 10,578 statements), meeting the repository's 99% target.
+- Final UI checks cover stale project-detail fragments, scoped Gantt events and
+  resource Settings dialogs, empty planning portfolios, and schema deletion during
+  saving. Capacity race tests verify that changed scopes/inputs cannot publish stale
+  results. The permission inventory includes all 213 public business-service methods.

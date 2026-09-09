@@ -1,6 +1,7 @@
 """Real schema administration preserves application identities and fixed grants."""
 
 from contextlib import closing
+from unittest.mock import patch
 
 import pytest
 from streamlit.testing.v1 import AppTest
@@ -78,3 +79,43 @@ def test_empty_choice_properties_render_without_fabricating_scope_values(busines
     assert any("No options configured" in item.value for item in app.caption)
     assert sum("No options defined" in item.value for item in app.markdown) == 2
     assert not [option for option in schema.get_all_options() if option.param_id in {grouped, ungrouped}]
+
+
+@pytest.mark.parametrize("entity", ["group", "property"])
+def test_schema_save_does_not_recreate_a_definition_deleted_by_another_session(business, entity):
+    from app.application.services.schema import SchemaService
+
+    path, _, _, _, manager = business
+    schema = create_schema_service(path, access=manager)
+    group_id = schema.create_group("Concurrent group", 1)
+    parameter_id = schema.create_parameter("UNUSED", group_id, "Unused property", "TEXT")
+    with closing(get_db(path)) as connection:
+        grants = connection.execute("SELECT * FROM app_role_assignment ORDER BY id").fetchall()
+        values = connection.execute("SELECT * FROM project_property_value").fetchall()
+    app = AppTest.from_function(schema_app, args=(path, manager.actor), default_timeout=30).run()
+    if entity == "property":
+        next(widget for widget in app.selectbox if widget.label == "Edit custom property").select(parameter_id).run()
+    method = "update_group" if entity == "group" else "update_parameter"
+    original = getattr(SchemaService, method)
+
+    def delete_then_save(instance, *args, **kwargs):
+        if entity == "group":
+            schema.delete_group(group_id)
+        else:
+            schema.delete_parameter(parameter_id)
+        return original(instance, *args, **kwargs)
+
+    with patch.object(SchemaService, method, autospec=True, side_effect=delete_then_save):
+        suffix = "Save Changes" if entity == "group" else "Save property"
+        next(button for button in app.button if button.label.endswith(suffix)).click().run()
+    assert not app.exception and not app.success
+    expected = "The selected group no longer exists." if entity == "group" else "Unknown property"
+    assert app.error[0].value == expected
+    with closing(get_db(path)) as connection:
+        assert connection.execute("SELECT * FROM app_role_assignment ORDER BY id").fetchall() == grants
+        assert connection.execute("SELECT * FROM project_property_value").fetchall() == values
+    if entity == "group":
+        assert schema.get_all_groups() == []
+        assert next(item for item in schema.get_all_parameters() if item.param_id == parameter_id).group_id is None
+    else:
+        assert parameter_id not in {item.param_id for item in schema.get_all_parameters()}

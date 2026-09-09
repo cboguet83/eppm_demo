@@ -4,7 +4,10 @@ Source inventory: application service public methods on `feature/oidc-access-man
 This matrix records the service and transport contract implemented on the feature
 branch. Project, Gantt, and collaboration controls reflect current permission scopes.
 The real Keycloak browser workflow passed on the rebuilt application image; current
-results and remaining coverage work are recorded in [verification evidence](access-security-evidence.md).
+results are recorded in [verification evidence](access-security-evidence.md).
+On 2026-09-10, the inventory was cross-checked against all 213 current public
+business-service methods; authentication and access-administration boundaries are
+listed separately below.
 
 An application caller supplies a server-resolved actor. A deployment operator uses
 an explicit, separate operator context. There is no anonymous/superuser default.

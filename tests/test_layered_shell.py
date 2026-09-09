@@ -193,12 +193,12 @@ def test_retired_startup_flags_fail_without_initializing_storage(tmp_path, flag)
 
 
 def test_cli_seed_count_uses_the_composed_maintenance_service(database, monkeypatch):
-    from app.main import _run_cli
+    from app.main import _run_cli, main
     from app.shared.config import config
 
     monkeypatch.setattr("app.shared.config.config", replace(config, db_path=database))
     monkeypatch.setattr(sys, "argv", ["streamlit_app.py", "--projects", "2"])
-    assert _run_cli()
+    main()
     assert create_maintenance_service(database).counts()["projects"] == 2
     monkeypatch.setattr(sys, "argv", ["streamlit_app.py"])
     assert not _run_cli()
@@ -208,3 +208,21 @@ def test_cli_seed_count_uses_the_composed_maintenance_service(database, monkeypa
     ):
         with pytest.raises(SystemExit, match="1"):
             _run_cli()
+
+
+def test_streamlit_main_ignores_operator_arguments_and_gates_unconfigured_business_access(tmp_path, monkeypatch):
+    from app.shared.config import config
+
+    database = tmp_path / "never-opened.db"
+    monkeypatch.setattr("app.shared.config.config", replace(config, db_path=str(database)))
+    monkeypatch.delenv("APP_ENV", raising=False)
+    monkeypatch.setattr(sys, "argv", ["streamlit_app.py", "--force-reseed", "--projects", "2"])
+
+    def main_app():
+        from app.main import main
+        main()
+
+    app = AppTest.from_function(main_app).run()
+    assert not app.exception and app.error
+    assert not app.radio and not app.dataframe and not app.metric
+    assert not database.exists()
