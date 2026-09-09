@@ -1,6 +1,6 @@
 """Project contacts, reference catalogs, and log use cases."""
 
-from app.domain.access.models import Permission
+from app.domain.access.models import AccessDenied, Permission
 from app.application.ports.collaboration import FunctionChoice
 
 
@@ -72,6 +72,14 @@ class CollaborationService:
             return [FunctionChoice(function_id=row["function_id"],
                                    function_name=row["function_name"], person=row["person"])
                     for row in store.list_functions()]
+
+    def can_edit(self, project_id: int) -> bool:
+        """Describe current contact/log edit controls; mutations independently reauthorize."""
+        try:
+            with self._gateway.transaction(permission=Permission.EDIT, project_ids=[project_id]):
+                return True
+        except AccessDenied:
+            return False
 
     def list_functions(self) -> list[FunctionContact]:
         """Read current occupants, using the function name when vacant."""

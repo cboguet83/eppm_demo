@@ -8,6 +8,7 @@ import streamlit as st
 
 from app.application.exceptions import ProjectStorageError
 from app.domain.projects.project import PROJECT_STATUSES
+from app.domain.access.models import Permission
 from app.presentation.i18n import get_current_locale, t
 from app.presentation.components.property_labels import localize_parameters, parameter_groups
 from app.presentation.components.dynamic_fields import (
@@ -45,6 +46,7 @@ def _render_dynamic_fields(
     attributes: dict[str, Any],
     key_prefix: str,
     disabled: bool = False,
+    protected_disabled: bool = False,
 ) -> dict[str, Any]:
     """Expose every applicable template property, including custom/ungrouped ones.
 
@@ -66,7 +68,8 @@ def _render_dynamic_fields(
             for _, parameter in fields.iterrows():
                 param_id = str(parameter["param_id"])
                 values[param_id] = _render_dynamic_field(
-                    parameter, options, attributes.get(param_id), key_prefix, disabled=disabled,
+                    parameter, options, attributes.get(param_id), key_prefix,
+                    disabled=disabled or (protected_disabled and str(parameter.get("param_type")) == "ENUM"),
                 )
     if creating:
         for tab in tabs[-2:]:
@@ -80,6 +83,9 @@ def open_create_project_dialog(
     workspace: ProjectWorkspace,
 ) -> None:
     """Create a project without leaving the Portfolio Overview."""
+    if not workspace.projects.permissions().allows(Permission.CREATE):
+        st.error(t("access.create_denied", default="You do not have permission to create projects."))
+        return
     draft_key = "portfolio_create_draft_id"
     if draft_key not in st.session_state:
         st.session_state[draft_key] = workspace.projects.generate_project_id()
@@ -176,15 +182,19 @@ def open_edit_project_dialog(
         st.error("The selected project no longer exists.")
         return
 
-    if read_only and st.session_state.get("project_fields_editing") != project_id:
+    permissions = workspace.projects.permissions()
+    can_edit = permissions.allows(Permission.EDIT, project_id)
+    can_delete = permissions.allows(Permission.DELETE, project_id)
+    can_change_scope = permissions.allows(Permission.PROPERTIES, project_id)
+    if can_edit and read_only and st.session_state.get("project_fields_editing") != project_id:
         with st.container(horizontal=True, horizontal_alignment="right"):
             if st.button(t("project_collaboration.edit_project", default="Edit project"),
                          key=f"enable_project_edit_{project_id}", type="primary"):
                 st.session_state["project_fields_editing"] = project_id
-    disabled = read_only and st.session_state.get("project_fields_editing") != project_id
+    disabled = not can_edit or (read_only and st.session_state.get("project_fields_editing") != project_id)
 
     confirmation_key = "project_delete_confirmation"
-    if st.session_state.get(confirmation_key) == project_id:
+    if can_delete and st.session_state.get(confirmation_key) == project_id:
         st.subheader("Confirm project deletion")
         st.warning(f"Delete {project.name}? Its tasks, dependencies, contacts, and log entries will also be removed.")
         with st.container(horizontal=True):
@@ -219,7 +229,7 @@ def open_edit_project_dialog(
         index=list(type_labels).index(project.project_type_id),
         format_func=type_labels.get,
         key=f"edit_type_{project_id}",
-        disabled=disabled,
+        disabled=disabled or not can_change_scope,
     )
     params = localize_parameters(
         template_frame(workspace.types.template_reference(int(type_id))),
@@ -266,6 +276,7 @@ def open_edit_project_dialog(
             dict(project.dynamic_attributes or {}),
             f"portfolio_edit_{project_id}",
             disabled=disabled,
+            protected_disabled=not can_change_scope,
         )
         custom_links = render_links_editor(workspace.projects.get_links(project_id), f"edit_links_{project_id}", disabled=disabled)
         if st.button(t("master_data.btn_update"), width="stretch", disabled=disabled):
@@ -292,7 +303,8 @@ def open_edit_project_dialog(
                 _dismiss_project_dialog()
                 st.rerun()
 
-    st.divider()
-    st.button("Delete project", icon=":material/delete:", key=f"portfolio_delete_project_{project_id}",
-        disabled=disabled,
-        on_click=st.session_state.__setitem__, args=(confirmation_key, project_id))
+    if can_delete:
+        st.divider()
+        st.button("Delete project", icon=":material/delete:", key=f"portfolio_delete_project_{project_id}",
+            disabled=disabled,
+            on_click=st.session_state.__setitem__, args=(confirmation_key, project_id))

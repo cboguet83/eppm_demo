@@ -2,6 +2,8 @@
 
 from collections.abc import Collection
 from app.domain.access.models import Permission
+from app.application.ports.business_permissions import PermissionSnapshot
+from app.infrastructure.repositories.access import SqliteAccessStore
 
 
 from app.application.services.business_access import BusinessAccess
@@ -153,6 +155,11 @@ class SqliteProjectGateway:
         """Retain the database identity without opening a connection."""
         self._db_path = db_path
         self.access = access
+
+    def permission_snapshot(self) -> PermissionSnapshot:
+        """Resolve all permission scopes in one consistent, actor-bound transaction."""
+        with project_connection(self._db_path, access=self.access) as connection:
+            return self.access.describe(SqliteAccessStore(connection))
 
     @contextmanager
     def transaction(self, *, write: bool = False, permission: Permission | None = None, project_ids: Collection[int] | None = None) -> Iterator[ProjectStore]:

@@ -2,7 +2,8 @@
 
 Source inventory: application service public methods on `feature/oidc-access-management`.
 This matrix records the service and transport contract implemented on the feature
-branch. Per-action UI visibility and end-to-end provider verification remain in progress.
+branch. Project, Gantt, and collaboration controls reflect current permission scopes;
+end-to-end provider verification remains in progress.
 
 An application caller supplies a server-resolved actor. A deployment operator uses
 an explicit, separate operator context. There is no anonymous/superuser default.
@@ -21,6 +22,7 @@ remain `shared`; project workflow callers use separate reference projections.
 | Service | Entry points | Required policy |
 | --- | --- | --- |
 | ProjectService | `get_project_by_id`, `exists`, `get_links`, `get_planning_catalog` | read |
+| ProjectService | `permissions` | current read context; projects remain separate for each permission; visibility projection never authorizes a mutation |
 | ProjectService | `generate_project_id`, `create_project` | global `project.create` |
 | ProjectService | `update_project` | edit; changed scope-eligible values/type additionally require `project.protected_properties` and audit |
 | ProjectService | `delete_project` | global `project.delete`; all dependent mutations authorized in the transaction |
@@ -39,6 +41,7 @@ remain `shared`; project workflow callers use separate reference projections.
 | ProjectOverallocationService | `overallocated_project_ids` | read; only authorized demand may influence returned project indicators |
 | PoolCapacityService | `calculate_many`, `get_summaries`, `get_details` | read for project demand; shared for full employee/mapping contributions; project workflows receive minimal capacity projections |
 | CollaborationService | `list_links`, `list_contacts`, `list_events` | read |
+| CollaborationService | `can_edit` | current edit permission for the selected project; false after disabling or revocation; visibility only |
 | CollaborationService | `save_link`, `delete_link`, `save_contact`, `delete_contact`, `reassign_contact`, `save_event` | edit; existing child ownership and both projects for reassignment |
 | CollaborationService | `list_catalog`, `function_choices` | reference for authorized collaboration workflows; function choices omit phone numbers |
 | CollaborationService | `list_functions` | shared; full occupant/contact projection |

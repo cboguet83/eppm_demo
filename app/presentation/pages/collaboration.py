@@ -115,7 +115,8 @@ def render_project_contacts(project_id: int, service: CollaborationService) -> N
     from app.presentation.components.action_table import action_table
 
     contacts = service.list_contacts(project_id, get_current_locale())
-    if st.button(_label("add_contact", "Add contact"), icon=":material/person_add:", key=f"add_contact_{project_id}"):
+    can_edit = service.can_edit(project_id)
+    if can_edit and st.button(_label("add_contact", "Add contact"), icon=":material/person_add:", key=f"add_contact_{project_id}"):
         _contact_dialog(project_id, service)
     if not contacts:
         st.info(_label("no_contacts", "No project contacts assigned."))
@@ -125,7 +126,7 @@ def render_project_contacts(project_id: int, service: CollaborationService) -> N
         ("role", _label("role", "Role")), ("person", _label("person", "Person")),
         ("function_name", _label("function", "Function")),
         ("mobile", _label("mobile", "Mobile")), ("landline", _label("landline", "Landline")),
-    ], {"reassign": _label("reassign", "Reassign"), "remove": _label("remove_contact", "Remove contact")},
+    ], {"reassign": _label("reassign", "Reassign"), "remove": _label("remove_contact", "Remove contact")} if can_edit else {},
         key=f"project_contacts_table_{project_id}")
     if event:
         if event["action"] == "reassign":
@@ -138,6 +139,9 @@ def render_project_contacts(project_id: int, service: CollaborationService) -> N
 @collaboration_errors
 def _contact_dialog(project_id: int, service: CollaborationService, contact_id: int | None = None) -> None:
     """Create a role assignment or reassign its function while retaining the role."""
+    if not service.can_edit(project_id):
+        st.info(t("access.read_only", default="You have read-only access to this project."))
+        return
     locale = get_current_locale()
     roles = {row["id"]: row["label"] for row in service.list_catalog("role", locale)}
     functions = {row["function_id"]: row for row in service.function_choices()}
@@ -169,6 +173,9 @@ def _contact_dialog(project_id: int, service: CollaborationService, contact_id: 
 @collaboration_errors
 def _remove_contact_dialog(project_id: int, service: CollaborationService, contact_id: int) -> None:
     """Confirm removal of an assignment without deleting its employee or function."""
+    if not service.can_edit(project_id):
+        st.info(t("access.read_only", default="You have read-only access to this project."))
+        return
     contact = next((row for row in service.list_contacts(project_id, get_current_locale()) if row["id"] == contact_id), None)
     if contact is None:
         st.info("The contact assignment no longer exists.")
@@ -278,6 +285,9 @@ def _event_dialog(
     project_id: int, service: CollaborationService, current: ProjectEvent | None = None,
 ) -> None:
     """Create or edit a project log entry in a modal."""
+    if not service.can_edit(project_id):
+        st.info(t("access.read_only", default="You have read-only access to this project."))
+        return
     types = {row["id"]: row["label"] for row in service.list_catalog("event_type", get_current_locale())}
     if not types:
         st.info(_label("configure_events", "Create event types in Settings before logging an event."))
@@ -295,7 +305,8 @@ def render_project_log(project_id: int, service: CollaborationService) -> None:
     offset = st.session_state.get(prefix + "_offset", 0)
     page = service.list_events(project_id, locale, offset=offset, limit=51)
     rows = page[:50]
-    if st.button(_label("add_event", "Add event"), icon=":material/add:", key=prefix + "_add", disabled=not types):
+    can_edit = service.can_edit(project_id)
+    if can_edit and st.button(_label("add_event", "Add event"), icon=":material/add:", key=prefix + "_add", disabled=not types):
         _event_dialog(project_id, service)
     if rows:
         from app.presentation.components.action_table import action_table
@@ -307,7 +318,7 @@ def render_project_log(project_id: int, service: CollaborationService) -> None:
             ("event_type", _label("event_type", "Event type")), ("status", _label("state", "State")),
             ("deadline", _label("deadline", "Deadline")), ("scope", _label("scope", "Scope")),
             ("comment", _label("comment", "Comment")),
-        ], {"edit": _label("edit_event", "Edit entry")}, key=prefix + "_table", context_menu=True)
+        ], {"edit": _label("edit_event", "Edit entry")} if can_edit else {}, key=prefix + "_table", context_menu=True)
         if event:
             _event_dialog(project_id, service, next(row for row in rows if row["id"] == event["id"]))
     else:

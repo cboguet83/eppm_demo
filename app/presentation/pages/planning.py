@@ -15,6 +15,7 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 from app.presentation.components.authorized_cache import authorized_cache
+from app.domain.access.models import Permission
 import streamlit.components.v1 as components
 from app.application.exceptions import (
     OrganizationStorageError,
@@ -411,6 +412,9 @@ def _manage_project_tags_dialog(
     project_id: int, project_name: str, workspace: PlanningWorkspace
 ) -> None:
     """Modal dialog for attaching, editing, and deleting tags on a project."""
+    if not workspace.projects.projects.permissions().allows(Permission.EDIT, project_id):
+        st.info(t("access.read_only", default="You have read-only access to this project."))
+        return
     st.markdown(f"#### 📁 {project_name} `[#{project_id}]`")
     df_current_tags = get_project_tags_by_project_frame(
         workspace.tags.get_project_tags_by_project(project_id)
@@ -499,6 +503,11 @@ def _manage_project_tags_dialog(
 @planning_errors
 def _manage_task_tags_dialog(task_id: int, task_name: str, workspace: PlanningWorkspace) -> None:
     """Modal dialog for adding, editing, and deleting tags on a task."""
+    task = workspace.planning.get_milestone_by_id(task_id)
+    if task is None or not workspace.projects.projects.permissions().allows(Permission.EDIT, task["project_id"]):
+        st.info(t("access.read_only", default="You have read-only access to this project."))
+        return
+    task_name = task["task_name"]
     st.markdown(f"#### 📋 {task_name} `[Task #{task_id}]`")
     df_current_tags = get_task_tags_by_task_frame(workspace.tags.get_task_tags_by_task(task_id))
     st.markdown(f"##### {t('planning.current_tags', default='Current Assigned Tags')}")
@@ -588,6 +597,9 @@ def _manage_project_resource_pools_dialog(
     project_id: int, project_name: str, workspace: PlanningWorkspace
 ) -> None:
     """Modal dialog for viewing, allocating, and unassigning resource pools at project level."""
+    if not workspace.projects.projects.permissions().allows(Permission.EDIT, project_id):
+        st.info(t("access.read_only", default="You have read-only access to this project."))
+        return
     st.markdown(f"#### 📁 {project_name} `[Project #{project_id}]`")
     proj_bounds = workspace.planning.get_all_project_date_bounds()
     p_bound = proj_bounds.get(project_id) or proj_bounds.get(str(project_id)) or (None, None)
@@ -790,8 +802,12 @@ def _manage_task_resource_pools_dialog(
     task_id: int, task_name: str, project_id: int | str, workspace: PlanningWorkspace
 ) -> None:
     """Manage task assignments using cached summaries, not full pool timelines."""
-    st.markdown(f"#### 📋 {task_name} `[Task #{task_id}]` (Project #{project_id})")
     step_info = workspace.planning.get_milestone_by_id(task_id)
+    if step_info is None or not workspace.projects.projects.permissions().allows(Permission.EDIT, step_info["project_id"]):
+        st.info(t("access.read_only", default="You have read-only access to this project."))
+        return
+    project_id, task_name = step_info["project_id"], step_info["task_name"]
+    st.markdown(f"#### 📋 {task_name} `[Task #{task_id}]` (Project #{project_id})")
     task_start_str = step_info.get("start_date") if step_info else None
     task_end_str = step_info.get("end_date") if step_info else None
     if task_start_str and task_end_str:
@@ -1348,8 +1364,12 @@ def _render_planning_chart(
     if response:
         args["dependency_response"] = response
     pool_details_cache = snapshot["details"]
+    permissions = workspace.projects.projects.permissions()
     gantt_event = _interactive_gantt(
         **args,
+        permissions={"edit_all": permissions.allows(Permission.EDIT),
+                     "editable_projects": sorted(permissions.project_permissions.get(Permission.EDIT, frozenset())),
+                     "manage_shared": permissions.allows(Permission.SHARED)},
         filter_reset=st.session_state.get("planning_filter_reset", 0),
         key=widget_key,
         on_change=lambda: _handle_gantt_component_change(widget_key, workspace),
@@ -1833,6 +1853,9 @@ def _pool_allocations_dialog(pool_id: int, workspace: PlanningWorkspace, group_i
 @planning_errors
 def _schedule_csv_dialog(workspace: PlanningWorkspace, project_id: int, action: str) -> None:
     """Load exports or validate an import only after its menu is invoked."""
+    if not workspace.projects.projects.permissions().allows(Permission.EDIT, project_id):
+        st.info(t("access.read_only", default="You have read-only access to this project."))
+        return
     project = workspace.projects.projects.get_project_by_id(project_id)
     if project is None:
         st.error("The selected project no longer exists.")

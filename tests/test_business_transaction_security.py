@@ -292,3 +292,122 @@ def test_planning_fragment_replaces_retained_capacity_from_a_more_privileged_sco
         assert {item["project_id"] for item in retained[1].assignments} == {1}
     finally:
         _load_planning_pool_payload.clear()
+
+
+def project_permission_dialog(path, actor):
+    """Render the actual project popup with a current application identity."""
+    from app.application.services.access import AuthorizationPolicy, SessionLimits
+    from app.application.services.business_access import BusinessAccess
+    from app.main import create_project_workspace
+    from app.presentation.components.project_dialogs import open_edit_project_dialog
+
+    workspace = create_project_workspace(path, access=BusinessAccess(actor, AuthorizationPolicy(lambda: 1000, SessionLimits())))
+    open_edit_project_dialog(1, workspace, read_only=True)
+
+
+def test_project_viewer_cannot_enable_editing_through_popup_state(business):
+    from streamlit.testing.v1 import AppTest
+
+    path, service, admin, _, _ = business
+    actor = service.actor(service.sign_in(VerifiedIdentity(service.issuer, "viewer", "", "Viewer", 1000, 100000, True)))
+    service.set_status(admin, actor.user_id, "active")
+    service.grant(admin, actor.user_id, "project_viewer", {"kind": "projects", "project_ids": [1]})
+    app = AppTest.from_function(project_permission_dialog, args=(path, actor))
+    app.session_state["project_fields_editing"] = 1
+    app.session_state["project_delete_confirmation"] = 1
+    app.run()
+    assert not app.exception and not app.error
+    assert all(item.disabled for item in app.text_input)
+    assert all(item.disabled for item in app.selectbox)
+    assert not any(item.key in {"enable_project_edit_1", "portfolio_delete_project_1", "confirm_delete_project_1"}
+                   for item in app.button)
+
+
+def test_project_editor_can_save_details_but_scope_fields_stay_disabled(business):
+    from streamlit.testing.v1 import AppTest
+
+    path, _, _, editor, _ = business
+    app = AppTest.from_function(project_permission_dialog, args=(path, editor.actor)).run()
+    assert not app.exception
+    app.button(key="enable_project_edit_1").click().run()
+    assert not app.exception and not app.error
+    assert app.selectbox(key="edit_type_1").disabled
+    assert next(item for item in app.selectbox if "DEPT" in str(item.key)).disabled
+    name = next(item for item in app.text_input if item.value == "Visible")
+    assert not name.disabled
+    assert not any(item.key == "portfolio_delete_project_1" for item in app.button)
+    name.set_value("Updated within scope")
+    next(item for item in app.button if "Update" in item.label).click().run()
+    assert not app.exception and not app.error
+    with closing(get_db(path)) as connection:
+        assert connection.execute("SELECT name FROM project WHERE id=1").fetchone()[0] == "Updated within scope"
+        assert connection.execute("SELECT text_value FROM project_property_value WHERE project_id=1").fetchone()[0] == "Finance"
+
+
+def test_permission_projection_keeps_the_edit_scope_distinct_from_the_read_scope(business):
+    from app.main import create_project_service
+    from app.domain.access.models import Permission
+
+    path, service, admin, editor, _ = business
+    service.grant(admin, editor.actor.user_id, "project_viewer", {"kind": "projects", "project_ids": [2]})
+    permissions = create_project_service(path, access=editor).permissions()
+    assert permissions.allows(Permission.READ, 2)
+    assert permissions.allows(Permission.EDIT, 1)
+    assert not permissions.allows(Permission.EDIT, 2)
+    assert not permissions.allows(Permission.PROPERTIES, 1)
+    assert not permissions.allows(Permission.CREATE)
+    assert not permissions.allows(Permission.DELETE, 1)
+
+
+def permission_control_app(path, actor, surface):
+    """Render real services, including direct modal entry after a stale browser event."""
+    from app.application.services.access import AuthorizationPolicy, SessionLimits
+    from app.application.services.business_access import BusinessAccess
+    from app.main import create_collaboration_service, create_planning_workspace
+    from app.presentation.pages import collaboration, planning
+
+    access = BusinessAccess(actor, AuthorizationPolicy(lambda: 1000, SessionLimits()))
+    service = create_collaboration_service(path, access=access)
+    workspace = create_planning_workspace(path, access=access)
+    surfaces = {
+        "contacts": lambda: collaboration.render_project_contacts(1, service),
+        "log": lambda: collaboration.render_project_log(1, service),
+        "add_contact": lambda: collaboration._contact_dialog(1, service),
+        "remove_contact": lambda: collaboration._remove_contact_dialog(1, service, 1),
+        "edit_event": lambda: collaboration._event_dialog(1, service),
+        "project_tags": lambda: planning._manage_project_tags_dialog(1, "Visible", workspace),
+        "task_tags": lambda: planning._manage_task_tags_dialog(10, "Forged label", workspace),
+        "project_pools": lambda: planning._manage_project_resource_pools_dialog(1, "Visible", workspace),
+        "task_pools": lambda: planning._manage_task_resource_pools_dialog(10, "Forged label", 2, workspace),
+        "import": lambda: planning._schedule_csv_dialog(workspace, 1, "import_csv_template"),
+    }
+    surfaces[surface]()
+
+
+@pytest.mark.parametrize("surface", [
+    "contacts", "log", "add_contact", "remove_contact", "edit_event", "project_tags",
+    "task_tags", "project_pools", "task_pools", "import",
+])
+def test_viewer_panels_and_direct_modal_actions_offer_no_editing_controls(business, surface):
+    from streamlit.testing.v1 import AppTest
+
+    path, service, admin, _, _ = business
+    actor = service.actor(service.sign_in(VerifiedIdentity(service.issuer, "viewer", "", "Viewer", 1000, 100000, True)))
+    service.set_status(admin, actor.user_id, "active")
+    service.grant(admin, actor.user_id, "project_viewer", {"kind": "projects", "project_ids": [1]})
+    app = AppTest.from_function(permission_control_app, args=(path, actor, surface)).run()
+    assert not app.exception and not app.error
+    assert not app.button and not app.text_input and not app.selectbox
+    if surface not in {"contacts", "log"}:
+        assert "read-only" in app.info[0].value
+
+
+def test_collaboration_edit_controls_recheck_current_status(business):
+    from app.main import create_collaboration_service
+
+    path, access, admin, editor, _ = business
+    service = create_collaboration_service(path, access=editor)
+    assert service.can_edit(1)
+    assert not service.can_edit(2)
+    access.set_status(admin, editor.actor.user_id, "disabled")
+    assert not service.can_edit(1)

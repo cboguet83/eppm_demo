@@ -2,8 +2,10 @@
 
 from collections.abc import Collection
 from dataclasses import dataclass
+from types import MappingProxyType
 
 from app.application.ports.access import AccessStore
+from app.application.ports.business_permissions import PermissionSnapshot
 from app.application.services.access import AuthorizationPolicy
 from app.domain.access.models import AccessDenied, Actor, DeploymentActor, Permission, ProjectScope
 
@@ -43,6 +45,17 @@ class BusinessAccess:
         except AccessDenied:
             return False
         return True
+
+    def describe(self, store: AccessStore) -> PermissionSnapshot:
+        """Read one current UI projection without mixing permission scopes or trusting components."""
+        self.projects(store)
+        global_permissions = frozenset(permission for permission in Permission
+                                       if self.global_permission(store, permission))
+        scoped = {}
+        if isinstance(self.actor, Actor):
+            scoped = {permission: frozenset(self.policy.projects(store, self.actor, permission))
+                      for permission in Permission if permission not in global_permissions}
+        return PermissionSnapshot(global_permissions, MappingProxyType(scoped))
 
     @property
     def audit_actor(self) -> str:

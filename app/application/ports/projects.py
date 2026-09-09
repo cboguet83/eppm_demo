@@ -2,6 +2,7 @@
 
 from collections.abc import Collection
 from app.domain.access.models import Permission
+from app.application.ports.business_permissions import PermissionSnapshot
 
 
 from contextlib import AbstractContextManager
@@ -45,3 +46,4 @@ class ProjectGateway(Protocol):
 
     def transaction(self, *, write: bool = False, permission: Permission | None = None, project_ids: Collection[int] | None = None) -> AbstractContextManager[ProjectStore]: ...
     def read_planning_catalog(self, property_ids: tuple[str, ...]) -> list[PlanningProject]: ...
+    def permission_snapshot(self) -> PermissionSnapshot: ...

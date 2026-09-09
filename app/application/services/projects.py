@@ -1,6 +1,7 @@
 """Project creation, editing, and deletion use cases."""
 
 from app.domain.access.models import Permission
+from app.application.ports.business_permissions import PermissionSnapshot
 
 
 from app.application.ports.projects import PlanningProject, ProjectGateway, ProjectStore
@@ -25,6 +26,10 @@ class ProjectService:
     def __init__(self, gateway: ProjectGateway) -> None:
         """Inject the transaction boundary."""
         self._gateway = gateway
+
+    def permissions(self) -> PermissionSnapshot:
+        """Describe current UI capabilities; writes independently reauthorize in their transaction."""
+        return self._gateway.permission_snapshot()
 
     def get_project_by_id(self, project_id: int) -> Project | None:
         """Read a project's complete values, including inactive properties."""

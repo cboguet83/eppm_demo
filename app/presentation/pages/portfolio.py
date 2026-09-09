@@ -8,6 +8,7 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 from app.presentation.components.authorized_cache import authorized_cache
+from app.domain.access.models import Permission
 
 from app.application.exceptions import ProjectStorageError, ProjectTypeStorageError, SchemaStorageError
 from app.application.services.portfolio import PortfolioService
@@ -150,11 +151,11 @@ def _render_project_details_body(
         st.subheader(f"📌 {t('portfolio.details_title', default='Project Details')}: #{proj_id} — {proj_name}")
     with head_c2:
         if st.button(
-            "✏️ Edit project details",
+            "View project details",
             key=f"btn_edit_details_{proj_id}",
             width="stretch",
         ):
-            open_edit_project_dialog(int(proj_id), workspace)
+            open_edit_project_dialog(int(proj_id), workspace, read_only=True)
 
     # Labels and values deliberately use the same native caption font size.
     summary = [
@@ -249,7 +250,7 @@ def _render_portfolio_browser(workspace: ProjectWorkspace) -> None:
     search = st.text_input(t("portfolio.filter_search"), placeholder=t("portfolio.filter_search_placeholder"))
     with st.container(horizontal=True, horizontal_alignment="distribute", vertical_alignment="center"):
         st.subheader(t("portfolio.table_header"))
-        if st.button("Create new project", icon=":material/add:", type="primary",
+        if workspace.projects.permissions().allows(Permission.CREATE) and st.button("Create new project", icon=":material/add:", type="primary",
                      key="btn_create_project_from_portfolio"):
             open_create_project_dialog(workspace)
     st.caption("Click a project to see its details. Scroll to load more projects automatically.")
