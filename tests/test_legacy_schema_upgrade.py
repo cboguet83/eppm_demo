@@ -139,7 +139,7 @@ def test_legacy_directory_and_pool_mappings_survive_access_upgrade_without_becom
     with closing(sqlite3.connect(path)) as connection, connection:
         connection.execute("CREATE TABLE project(id INTEGER PRIMARY KEY,name TEXT,status TEXT)")
         connection.execute("INSERT INTO project VALUES(11,'Existing project','Draft')")
-        connection.execute("CREATE TABLE function_type(function_type_id INTEGER PRIMARY KEY,type_name TEXT NOT NULL UNIQUE)")
+        connection.execute("CREATE TABLE function_type(function_type_id INTEGER PRIMARY KEY,function_type TEXT NOT NULL UNIQUE)")
         connection.execute("INSERT INTO function_type VALUES(10,'Engineering')")
         connection.execute("CREATE TABLE hierarchy_level(id INTEGER PRIMARY KEY)")
         connection.execute("INSERT INTO hierarchy_level VALUES(3)")
@@ -189,3 +189,10 @@ def test_legacy_directory_and_pool_mappings_survive_access_upgrade_without_becom
         assert connection.execute("SELECT count(*) FROM app_user").fetchone()[0] == 0
         assert connection.execute("SELECT count(*) FROM app_identity").fetchone()[0] == 0
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
+    from app.operator_services import create_organization_service, create_resource_pool_service
+
+    organization = create_organization_service(path)
+    assert [item.name for item in organization.get_all_functions()] == ["Delivery"]
+    assert [item.firstname for item in organization.get_all_employees()] == ["Rae"]
+    assert [item.function_type_id for item in organization.get_all_function_types()] == [10]
+    assert len(create_resource_pool_service(path).get_all_mappings()) == 2

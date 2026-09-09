@@ -42,6 +42,79 @@ def identity(subject: str, *, issuer: str = "https://identity.example.test/realm
     return VerifiedIdentity(issuer, subject, "same@example.test", "Test Account", auth_time, 100000, True)
 
 
+@pytest.mark.parametrize("operation", [
+    "list_users", "register", "set_status", "grant", "revoke", "assignments",
+    "scope_catalog", "scope_project_choices", "effective_access", "audit",
+])
+def test_administration_denials_emit_one_safe_event_and_leave_security_data_unchanged(security, caplog, operation):
+    import logging
+
+    _, _, gateway, _, service, _ = security
+    admin = administrator(security)
+    cookie = service.sign_in(identity("ordinary-user"))
+    user = service.actor(cookie)
+    service.set_status(admin, user.user_id, "active")
+    before = service.audit(admin)
+    args = {
+        "list_users": ("Private search",),
+        "register": (service.issuer, "Private subject", "Private profile"),
+        "set_status": (admin.user_id, "disabled"),
+        "grant": (user.user_id, "business_admin", {"kind": "all"}),
+        "revoke": (1,), "assignments": (admin.user_id,), "scope_catalog": (),
+        "scope_project_choices": ("Private project search",),
+        "effective_access": (admin.user_id, 1), "audit": (),
+    }[operation]
+    with caplog.at_level(logging.WARNING, logger="app.application.services.access"):
+        with pytest.raises(AccessDenied):
+            getattr(service, operation)(user, *args)
+    records = [record for record in caplog.records if record.name == "app.application.services.access"]
+    assert len(records) == 1
+    message = records[0].getMessage()
+    assert json.loads(message.removeprefix("security.event ")) == {
+        "action": "access.authorization_denied", "outcome": "denied", "actor": str(user.user_id),
+        "correlation": user.correlation_id, "permission": "access.manage", "reauthentication_required": False,
+    }
+    assert "Private" not in message and cookie not in message and user.session_hash not in message
+    assert service.audit(admin) == before
+    assert service.assignments(admin, user.user_id) == []
+    with gateway.transaction() as store:
+        assert store.active_admin_count() == 1
+        assert len(store.list_users("", 100)) == 2
+
+
+@pytest.mark.parametrize("failure", ["last_admin", "invalid_scope", "reauthentication", "invalid_profile"])
+def test_rejected_administration_changes_log_failure_category_after_atomic_rollback(security, caplog, failure):
+    import logging
+
+    _, now, gateway, _, service, _ = security
+    admin = replace(administrator(security), correlation_id="request-reference\nforged.event")
+    before = service.audit(admin)
+    if failure == "reauthentication":
+        now[0] += 300
+    with caplog.at_level(logging.WARNING, logger="app.application.services.access"):
+        with pytest.raises(ValueError):
+            if failure == "last_admin":
+                service.set_status(admin, admin.user_id, "disabled")
+            elif failure == "invalid_scope":
+                service.grant(admin, admin.user_id, "project_editor", {"kind": "projects", "project_ids": []})
+            elif failure == "invalid_profile":
+                service.register(admin, service.issuer, "Private subject", "Private profile\nInjected")
+            else:
+                service.grant(admin, admin.user_id, "business_admin", {"kind": "all"})
+    records = [record for record in caplog.records if record.name == "app.application.services.access"]
+    assert len(records) == 1
+    message = records[0].getMessage()
+    event = json.loads(message.removeprefix("security.event "))
+    assert event["action"] == ("access.authorization_denied" if failure == "reauthentication" else "access.validation_failed")
+    assert event["reauthentication_required"] == (failure == "reauthentication")
+    assert event["correlation"] == admin.correlation_id and len(message.splitlines()) == 1
+    assert "Private" not in message and "Injected" not in message and admin.session_hash not in message
+    assert service.audit(admin) == before
+    with gateway.transaction() as store:
+        assert store.active_admin_count() == 1
+        assert len(store.list_users("", 100)) == 1
+
+
 @pytest.mark.parametrize("corrupt_scope", [
     {"kind": "unsupported"}, {"kind": "projects", "project_ids": [999]},
 ])

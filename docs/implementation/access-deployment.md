@@ -151,6 +151,11 @@ permission category and denied outcome. These records survive transaction rollba
 in the operational log; they contain no SQL, row values or session hashes. Normal
 UI permission probes do not emit failed-operation events. Include these operational
 events in the deployment's protected log collection and retention policy.
+Access-administration operations use the same JSON event format, with actions
+`access.authorization_denied` or `access.validation_failed`. The event records
+whether fresh authentication is required; it omits submitted scope/profile values
+and exception text. Administration permission is checked before validating changes,
+and rejected changes are rolled back before their operational event is recorded.
 Do not re-enable OAuth/HTTP-client debug logs or raw callback query logging in the
 application or reverse proxy. Demo business reset operations preserve application
 users, grants, security audit, and bootstrap state.

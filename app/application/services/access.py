@@ -1,9 +1,11 @@
 """Current-session authorization and transactional access administration."""
 
-from collections.abc import Callable, Collection
+from collections.abc import Callable, Collection, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 import hashlib
 import json
+import logging
 
 from app.application.ports.access import AccessGateway, AccessStore, AssignmentRecord, SessionRecord, UserRecord
 from app.domain.access.models import (
@@ -11,6 +13,9 @@ from app.domain.access.models import (
     Permission, ProjectScope, ReauthenticationRequired, VerifiedIdentity,
     normalize_scope, validate_assignment,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -173,28 +178,25 @@ class AccessService:
 
     def list_users(self, actor: Actor, search: str = "") -> list[UserRecord]:
         """Access administrators can search application accounts independently of employees."""
-        with self.gateway.transaction() as store:
-            self.policy.require(store, actor, Permission.ACCESS)
+        with self._administration(actor) as store:
             return store.list_users(_safe_text(search, 256))
 
     def register(self, actor: Actor, issuer: str, subject: str, display_name: str) -> int:
         """Pre-register an exact configured issuer/subject without an email invitation."""
-        if issuer != self.issuer:
-            raise ValueError("Use the configured OIDC issuer.")
-        _safe_text(subject, 512, required=True)
-        _safe_text(display_name, 256)
-        with self.gateway.transaction(write=True) as store:
-            self.policy.require(store, actor, Permission.ACCESS, recent=True)
+        with self._administration(actor, write=True, recent=True) as store:
+            if issuer != self.issuer:
+                raise ValueError("Use the configured OIDC issuer.")
+            _safe_text(subject, 512, required=True)
+            _safe_text(display_name, 256)
             user_id = store.register_user(issuer, subject, display_name, self.policy.clock())
             store.audit(self.policy.clock(), str(actor.user_id), str(user_id), "user.register", actor.correlation_id, {"status": "pending"})
             return user_id
 
     def set_status(self, actor: Actor, user_id: int, status: str) -> None:
         """Change current state atomically without allowing the last administrator to disappear."""
-        if status not in USER_STATES:
-            raise ValueError("Unknown user status.")
-        with self.gateway.transaction(write=True) as store:
-            self.policy.require(store, actor, Permission.ACCESS, recent=True)
+        with self._administration(actor, write=True, recent=True) as store:
+            if status not in USER_STATES:
+                raise ValueError("Unknown user status.")
             user = store.find_user(user_id)
             if user is None:
                 raise AccessDenied()
@@ -206,10 +208,9 @@ class AccessService:
 
     def grant(self, actor: Actor, user_id: int, role: str, scope_data: object) -> int:
         """Grant one fixed role and its own fully resolved scope, with recent authentication."""
-        scope = normalize_scope(scope_data)
-        validate_assignment(role, scope)
-        with self.gateway.transaction(write=True) as store:
-            self.policy.require(store, actor, Permission.ACCESS, recent=True)
+        with self._administration(actor, write=True, recent=True) as store:
+            scope = normalize_scope(scope_data)
+            validate_assignment(role, scope)
             if store.find_user(user_id) is None:
                 raise AccessDenied()
             store.scope_projects(scope)
@@ -223,8 +224,7 @@ class AccessService:
 
     def revoke(self, actor: Actor, assignment_id: int) -> None:
         """Remove a persisted grant and enforce continuity within the writer transaction."""
-        with self.gateway.transaction(write=True) as store:
-            self.policy.require(store, actor, Permission.ACCESS, recent=True)
+        with self._administration(actor, write=True, recent=True) as store:
             assignment = store.assignment(assignment_id)
             if assignment is None:
                 raise AccessDenied()
@@ -236,8 +236,7 @@ class AccessService:
 
     def assignments(self, actor: Actor, user_id: int) -> list[dict[str, object]]:
         """Summarize grants and expose broken references for administrator repair."""
-        with self.gateway.transaction() as store:
-            self.policy.require(store, actor, Permission.ACCESS)
+        with self._administration(actor) as store:
             result = []
             for row in store.assignments(user_id):
                 item: dict[str, object] = dict(row)
@@ -256,14 +255,12 @@ class AccessService:
 
     def scope_catalog(self, actor: Actor) -> list[dict[str, object]]:
         """Read only categorical reference labels needed to configure a scope."""
-        with self.gateway.transaction() as store:
-            self.policy.require(store, actor, Permission.ACCESS)
+        with self._administration(actor) as store:
             return store.scope_catalog()
 
     def scope_project_choices(self, actor: Actor, search: str = "") -> list[dict[str, object]]:
         """Access administrators may search project labels solely for scope configuration."""
-        with self.gateway.transaction() as store:
-            self.policy.require(store, actor, Permission.ACCESS)
+        with self._administration(actor) as store:
             return store.scope_project_choices(_safe_text(search, 256))
 
     def capabilities(self, actor: Actor) -> frozenset[Permission]:
@@ -283,8 +280,7 @@ class AccessService:
 
     def effective_access(self, actor: Actor, user_id: int, project_id: int) -> list[dict[str, object]]:
         """Explain which current assignments grant access without returning project details."""
-        with self.gateway.transaction() as store:
-            self.policy.require(store, actor, Permission.ACCESS)
+        with self._administration(actor) as store:
             user = store.find_user(user_id)
             if user is None:
                 raise AccessDenied()
@@ -307,9 +303,26 @@ class AccessService:
 
     def audit(self, actor: Actor) -> list[dict[str, object]]:
         """Read append-only security events with an explicit access-management grant."""
-        with self.gateway.transaction() as store:
-            self.policy.require(store, actor, Permission.ACCESS)
+        with self._administration(actor) as store:
             return store.list_audit()
+
+    @contextmanager
+    def _administration(self, actor: Actor, *, write: bool = False, recent: bool = False) -> Iterator[AccessStore]:
+        """Reauthorize administration and record safe failure metadata after rollback."""
+        try:
+            with self.gateway.transaction(write=write) as store:
+                self.policy.require(store, actor, Permission.ACCESS, recent=recent)
+                yield store
+        except ValueError as error:
+            denied = isinstance(error, AccessDenied)
+            logger.warning("security.event %s", json.dumps({
+                "action": "access.authorization_denied" if denied else "access.validation_failed",
+                "outcome": "denied" if denied else "rejected",
+                "actor": str(actor.user_id), "correlation": actor.correlation_id,
+                "permission": Permission.ACCESS.value,
+                "reauthentication_required": isinstance(error, ReauthenticationRequired),
+            }))
+            raise
 
 
 class DeploymentAccessService:

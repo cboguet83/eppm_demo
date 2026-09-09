@@ -1768,7 +1768,7 @@ def render_planning_milestones(workspace: PlanningWorkspace) -> None:
             format_func=lambda x: f"{x} - {proj_map.get(x, '')}",
             key="ms_multi_projects",
         )
-        if not selected_projects:
+        if not selected_projects and not cur_active_rf:
             selected_projects = all_proj_ids
     if not selected_projects:
         if active_rf:

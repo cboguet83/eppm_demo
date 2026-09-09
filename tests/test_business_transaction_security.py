@@ -613,6 +613,97 @@ def scoped_planning_app(path, actor):
     render_planning_milestones(workspace)
 
 
+@pytest.mark.parametrize("mode,expected", [("Any", [1, 3]), ("All", [1])])
+def test_flexible_filters_offer_only_visible_values_and_clear_without_widening_authorization(business, mode, expected):
+    import json
+    from unittest.mock import patch
+    from streamlit.testing.v1 import AppTest
+
+    path, service, admin, editor, _ = business
+    with closing(get_db(path)) as connection, connection:
+        connection.execute("INSERT INTO project(id,name) VALUES(3,'Visible alternative')")
+        connection.execute("INSERT INTO project_property_value(project_id,param_id,kind,text_value) VALUES(3,'DEPT','text','Finance')")
+        connection.execute("INSERT INTO project_tag(project_id,free_tag) VALUES(1,'Alpha'),(1,'Beta'),(3,'Alpha'),(2,'Private tag')")
+    service.grant(admin, editor.actor.user_id, "project_viewer", {"kind": "projects", "project_ids": [3]})
+    with patch("app.presentation.pages.planning._interactive_gantt", return_value=None) as component:
+        app = AppTest.from_function(scoped_planning_app, args=(path, editor.actor), default_timeout=30)
+        app.session_state["planning_flex_fields"] = ["DEPT", "_project_tags"]
+        app.session_state["planning_flex_values::DEPT"] = ["Finance"]
+        app.session_state["planning_flex_values::_project_tags"] = ["Alpha", "Beta"]
+        app.session_state["planning_flex_match_mode"] = mode
+        app.run()
+        assert not app.exception and not app.error
+        assert app.multiselect(key="planning_flex_values::DEPT").options == ["Finance"]
+        assert app.multiselect(key="planning_flex_values::_project_tags").options == ["Alpha", "Beta"]
+        assert [int(item["id"]) for item in component.call_args.kwargs["all_projects"]] == expected
+        assert "Private tag" not in json.dumps(component.call_args.kwargs, default=str)
+        app.button(key="clear_all_planning_filters").click().run()
+        assert not app.exception and not app.error
+        assert app.multiselect(key="planning_flex_fields").value == []
+        assert [int(item["id"]) for item in component.call_args.kwargs["all_projects"]] == [1, 3]
+        assert "Hidden" not in json.dumps(component.call_args.kwargs, default=str)
+
+
+@pytest.mark.parametrize("project_id", [1, 2, 999])
+def test_gantt_dependency_choices_reauthorize_the_requested_project_before_browser_delivery(business, project_id):
+    import json
+    from unittest.mock import patch
+    from streamlit.testing.v1 import AppTest
+
+    path, _, _, editor, _ = business
+    with patch("app.presentation.pages.planning._interactive_gantt", return_value=None) as component:
+        app = AppTest.from_function(scoped_planning_app, args=(path, editor.actor), default_timeout=30).run()
+        assert not app.exception and not app.error
+        app.session_state["before_event"] = {"action": "load_dependency_tasks", "project_id": project_id, "nonce": "choices"}
+        app.run()
+        assert not app.exception
+        assert "Hidden" not in json.dumps(component.call_args.kwargs, default=str)
+        response = component.call_args.kwargs.get("dependency_response")
+        if project_id == 1:
+            assert not app.error and response["project_id"] == "1"
+            assert response["nonce"] == "choices"
+            assert len(response["tasks"]) == 1 and "Visible task" in json.dumps(response["tasks"])
+        else:
+            assert not response or not response["tasks"]
+
+
+@pytest.mark.parametrize("target", [2, 999, "invalid-reference"])
+def test_planning_navigation_cannot_restore_a_hidden_or_invalid_project_selection(business, target):
+    import json
+    from unittest.mock import patch
+    from streamlit.testing.v1 import AppTest
+
+    path, _, _, editor, _ = business
+    with patch("app.presentation.pages.planning._interactive_gantt", return_value=None) as component:
+        app = AppTest.from_function(scoped_planning_app, args=(path, editor.actor), default_timeout=30)
+        app.session_state["target_planning_project_id"] = target
+        app.run()
+    assert not app.exception and not app.error
+    assert set(app.session_state["ms_multi_projects"]) <= {1}
+    assert "Hidden" not in json.dumps(component.call_args.kwargs, default=str)
+    assert [int(item["id"]) for item in component.call_args.kwargs["all_projects"]] == [1]
+
+
+def test_empty_pool_consumption_filter_does_not_fall_back_to_the_entire_portfolio(business):
+    from unittest.mock import patch
+    from streamlit.testing.v1 import AppTest
+
+    path, _, _, editor, _ = business
+    event = {"action": "filter_by_resource_pool", "pool_id": 1, "start_date": "2080-01-01",
+             "end_date": "2080-01-02", "nonce": "empty-period"}
+    with patch("app.presentation.pages.planning._interactive_gantt", return_value=event) as component:
+        app = AppTest.from_function(scoped_planning_app, args=(path, editor.actor), default_timeout=30).run()
+        assert not app.exception and not app.error
+        assert app.session_state["active_resource_pool_filter"]["count"] == 0
+        assert any("No projects consume" in item.value for item in app.warning)
+        assert component.call_count == 1
+        component.return_value = None
+        app.button(key="btn_clear_empty_rf_filter").click().run()
+        assert not app.exception and not app.error
+        assert "active_resource_pool_filter" not in app.session_state
+        assert app.session_state["ms_multi_projects"] == [1]
+
+
 @pytest.mark.parametrize("group", [False, True])
 @pytest.mark.parametrize("scope,expected", [("this", [1]), ("all", [1, 3]), ("predecessors", [1])])
 def test_pool_context_filters_and_allocation_totals_remain_inside_current_read_scope(business, group, scope, expected):

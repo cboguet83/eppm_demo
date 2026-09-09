@@ -73,13 +73,13 @@ Release source: [V16 logging/errors](https://github.com/OWASP/ASVS/blob/v5.0.0/5
 | v5.0.0-16.1.1 | Logging inventory | [Deployment guide](access-deployment.md): persistent audit plus sanitized operational output | Retention, log collection, access policy, and archive procedures are deployment responsibilities |
 | v5.0.0-16.2.1 | Audit metadata | Actor/operator, target, action, outcome, timestamp, correlation, safe changes; real SQLite audit tests | Infrastructure logging must supply its own relevant context |
 | v5.0.0-16.2.5 | Sensitive-value exclusion | Tokens/credentials excluded from audit; OAuth/client debug and raw callback access logs disabled; negative logging tests | Verify reverse proxy, IdP, and deployment log configuration |
-| v5.0.0-16.3.1, v5.0.0-16.3.3 | Security events | Login/security changes and failure categories; bootstrap, recovery, grant, revoke, status and protected-property audit tests; correlated operational events for propagated business authorization denials | Broader business-validation and access-administration denial coverage remains to be reviewed |
+| v5.0.0-16.3.1, v5.0.0-16.3.3 | Security events | Login/security changes and failure categories; bootstrap, recovery, grant, revoke, status and protected-property audit tests; correlated operational events for propagated business and access-administration denials | Ordinary business-validation errors outside access administration are not all operationally logged |
 | v5.0.0-16.4.1, v5.0.0-16.4.2 | Injection and tampering | Safe text validation, JSON audit details, append-only triggers and access-admin-only audit inspection | OS administrators can alter database files; separate protected collection is not implemented by the application |
 | v5.0.0-16.5.1, v5.0.0-16.5.2, v5.0.0-16.5.3 | Safe failures | Bounded HTTP problems, sanitized script errors, fail-closed configuration, transaction rollback on failed authorization/audit | Test deployment proxy failures and infrastructure outages before rollout |
 
 ## Validation status and gaps
 
-On 2026-09-09, the complete Python suite passed **859 tests and 14 subtests**.
+On 2026-09-09, the complete Python suite passed **916 tests and 14 subtests**.
 Its single opt-in browser test was skipped in the regular run, then passed separately
 against real Keycloak and the rebuilt application image without source bind mounts.
 The browser workflow passed three consecutive runs after moving live audit
@@ -123,7 +123,20 @@ with actor, correlation, permission category and outcome. Tests cover denied rea
 shared-catalog access, rolled-back writes and log-line injection. They verify that
 session hashes, business payloads and routine negative UI permission hints are absent.
 
-Measured `app` statement coverage is **96.56%** (10,234 of 10,599 statements), below the
+Access-administration tests cover denied reads and changes through every public
+administration operation, stale reauthentication, invalid scope/profile data and
+last-administrator rejection. Operational events omit submitted values and escape
+control characters; failed writes leave security records unchanged.
+
+Additional Settings workflows cover storage failures, duplicate employee identifiers,
+calendar validation and creation, missing-record editing, resource mapping changes,
+stale unassignment confirmations and project-catalog CRUD without modifying application
+roles or identities. Streamlit 1.63 AppTest does not serialize native tab containers;
+tests supply the selected tab explicitly while keeping widgets and services real.
+Flexible-filter and dependency-selector tests preserve current read scopes. An empty
+resource-consumption filter now renders no projects until it is cleared.
+
+Measured `app` statement coverage is **97.32%** (10,318 of 10,602 statements), below the
 **99%** project target. Coverage remains unfinished work; the passing workflow tests
 do not establish that target. Missing statements include legacy planning and
 organization UI branches, schema upgrades, and additional access boundary cases.
