@@ -1,24 +1,34 @@
 services:
   app:
+    image: ${EPPM_APP_IMAGE:-eppm-demo:local}
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: ppm-studio-pro
     restart: unless-stopped
     ports:
-      - "8501:8501"
+      - "127.0.0.1:8501:8501"
     environment:
       - DB_NAME=/app/data/ppm_mock.db
       - LOG_LEVEL=INFO
-      - APP_ENV=${APP_ENV:-development}
-      - FORCE_RESEED=${FORCE_RESEED:-false}
-      - SEED_PROJECTS_COUNT=${SEED_PROJECTS_COUNT:-0}
+      - APP_ENV=${APP_ENV:-production}
+      - APP_ORIGIN=${APP_ORIGIN:?Configure the application origin}
+      - APP_COOKIE_SECRET=${APP_COOKIE_SECRET:?Configure a random cookie secret}
+      - OIDC_ISSUER=${OIDC_ISSUER:?Configure the exact provider issuer}
+      - OIDC_CLIENT_ID=${OIDC_CLIENT_ID:?Configure the registered client ID}
+      - OIDC_CLIENT_SECRET=${OIDC_CLIENT_SECRET:?Configure the client secret}
+      - OIDC_ALLOW_LOCAL_HTTP=${OIDC_ALLOW_LOCAL_HTTP:-false}
+      - OIDC_SIGNING_ALGORITHMS=${OIDC_SIGNING_ALGORITHMS:-RS256}
+      - OIDC_MFA_ACR_VALUES=${OIDC_MFA_ACR_VALUES:-}
+      - SESSION_IDLE_SECONDS=${SESSION_IDLE_SECONDS:-900}
+      - SESSION_ABSOLUTE_SECONDS=${SESSION_ABSOLUTE_SECONDS:-28800}
+      - SESSION_REAUTHENTICATION_SECONDS=${SESSION_REAUTHENTICATION_SECONDS:-300}
     volumes:
       # Persist the development SQLite database directly in the project folder.
-      - ./data:/app/data
+      - ${EPPM_DATA_DIRECTORY:-./data}:/app/data
       # Development bind mounts: Streamlit hot-reloads application changes
       # without rebuilding the image. Dependencies remain image-managed.
       - ./streamlit_app.py:/app/streamlit_app.py:ro
+      - ./asgi_app.py:/app/asgi_app.py:ro
       - ./app:/app/app:ro
       - ./scripts:/app/scripts:ro
       - ./.streamlit:/app/.streamlit:ro

@@ -63,3 +63,24 @@ def test_operator_missing_unmigrated_or_broken_database_fails_safely(tmp_path: P
     with closing(get_db(path)):
         pass
     assert run(["--database", path, "pending-accounts"]) == 1
+
+
+def test_pending_account_pages_filter_before_limiting_and_continue_without_omissions(tmp_path, capsys):
+    path = str(tmp_path / "pages.db")
+    command = ["--database", path]
+    assert run([*command, "migrate"]) == 0
+    gateway = SqliteAccessGateway(path)
+    with gateway.transaction(write=True) as store:
+        for index in range(205):
+            user_id = store.register_user("https://issuer.example.test", f"subject-{index}", f"Account {index}", 1000)
+            if index < 202:
+                store.set_status(user_id, "active", 1000)
+    assert run([*command, "pending-accounts", "--limit", "2"]) == 0
+    first = json.loads(capsys.readouterr().out)
+    assert [row["id"] for row in first] == [203, 204]
+    assert run([*command, "pending-accounts", "--after-id", "204", "--limit", "2"]) == 0
+    assert [row["id"] for row in json.loads(capsys.readouterr().out)] == [205]
+    assert run([*command, "pending-accounts", "--after-id", "205"]) == 0
+    assert json.loads(capsys.readouterr().out) == []
+    assert run([*command, "pending-accounts", "--after-id", "-1"]) == 1
+    assert run([*command, "pending-accounts", "--limit", "201"]) == 1

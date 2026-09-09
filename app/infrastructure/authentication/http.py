@@ -64,9 +64,9 @@ class AuthenticationRoutes:
             identity = await verified_identity(self.client, request)
             previous = request.cookies.get(SESSION_COOKIE)
             cookie = await run_in_threadpool(self.access.sign_in, identity, previous)
-        except Exception:
+        except Exception as error:
             request.session.clear()
-            return self._failure("oidc.callback_failed")
+            return self._failure("oidc.callback_failed", error_type=type(error))
         request.session.clear()
         response = RedirectResponse(self.config.origin + "/", status_code=303)
         response.headers["Cache-Control"] = "no-store"
@@ -114,7 +114,9 @@ class AuthenticationRoutes:
             return self._failure("session.expired")
 
     @staticmethod
-    def _failure(event: str, *, status: int = 401) -> Response:
+    def _failure(event: str, *, status: int = 401, error_type: type[Exception] | None = None) -> Response:
         correlation = token_urlsafe(16)
-        logger.warning("%s reference=%s", event, correlation)
+        # Python exception class names aid diagnosis; messages and payloads never leave the boundary.
+        logger.warning("%s reference=%s failure_type=%s", event, correlation,
+                       error_type.__name__ if error_type is not None else "unspecified")
         return failure_response(correlation, status=status)

@@ -53,6 +53,17 @@ required application idle/absolute limits and cross-tab revocation; its document
 identity cookie lifetime is 30 days. This is the concrete reason for custom routes,
 not a replacement frontend framework.
 
+The launcher assigns `app = st.App(...)` directly at module level. Streamlit 1.63
+discovers ASGI applications through constructor assignments in the module's AST;
+an application returned only by a factory is not discovered. A test calls the
+installed discovery implementation to protect this startup contract.
+
+Local Keycloak and EPPM share a Compose network namespace and expose loopback
+ports. Browser and server use the same `http://localhost:<provider-port>` issuer.
+The imported client retains Keycloak's `basic` scope to supply `auth_time` alongside
+the profile, email, and ACR mappings. Credentials are generated into ignored local
+configuration, never committed in the realm or image build context.
+
 Authlib 1.8.0 performs discovery, authorization-code exchange, S256 PKCE, nonce and
 state verification, JOSE signature checks, claim validation, and JWKS rotation.
 The adapter fixes the configured issuer, callback and algorithm allowlist. It rejects
@@ -204,9 +215,13 @@ C4Component
 ```
 
 The authenticated shell, business transaction guards, scoped caches and download
-routes are connected. This increment is not a deployment milestone: per-action UI
-permissions, live Keycloak browser verification, localization, deployment guidance,
-and the final OWASP evidence checklist remain part of the same feature before rollout.
+routes are connected. Project dialogs, collaboration actions, and planning controls
+use current permission projections; their callbacks still reauthorize stored targets.
+Account/access screens use the five existing language catalogs. Public and pending
+screens provide the same session-local language selector as the application shell.
+See the [deployment guide](../implementation/access-deployment.md) and
+[ASVS evidence checklist](../implementation/access-security-evidence.md) for the
+verification results, limitations, and production responsibilities.
 
 ## Verification so far
 
@@ -225,5 +240,8 @@ and the final OWASP evidence checklist remain part of the same feature before ro
 - Real HTTP/WebSocket tests cover authenticated download fetch, forged runtime
   identity headers, session expiry/revocation/security changes, blocked native data
   routes, and server validation of malformed/oversized CSV component payloads.
-- Integration checkpoint: 697 tests and 14 subtests passed. Measured statement
-  coverage is 90.29% (9,550 of 10,577 statements), below the repository's 99% target.
+- Current integration checkpoint: 724 Python tests, 14 subtests, and all 42
+  JavaScript tests passed. The opt-in real Keycloak browser workflow passed against
+  the rebuilt image without source mounts, including grants, scoped exports,
+  revocation, and logout across tabs. Statement coverage is 90.35%
+  (9,631 of 10,660 statements), below the repository's 99% target.

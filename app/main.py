@@ -240,6 +240,7 @@ def run_app() -> None:
     import streamlit as st
     from app.presentation.components.authentication import account_gate
     from app.presentation.shell import render_application
+    from app.presentation.i18n import t
     from app.security import create_access_service
     from app.shared.config import config
     from app.shared.config.authentication import AuthenticationConfig
@@ -249,7 +250,7 @@ def run_app() -> None:
     try:
         settings = AuthenticationConfig.from_environment(os.environ)
     except ValueError:
-        st.error("Application authentication is not configured. Contact the deployment operator.")
+        st.error(t("auth.not_configured"))
         return
     authentication = create_access_service(config.db_path, settings)
     actor = account_gate(authentication, st.context.cookies.get("eppm_session", ""))
@@ -260,7 +261,7 @@ def run_app() -> None:
     current, status, revision = authentication.browser_identity(st.context.cookies.get("eppm_session", ""))
     if not hmac.compare_digest(st.context.headers.get("x-eppm-browser-session", ""),
                                settings.session_binding(current.session_hash, status, revision)):
-        st.error("Start this application using the configured ASGI authentication launcher.")
+        st.error(t("auth.invalid_transport"))
         return
     access = BusinessAccess(actor, authentication.policy)
     render_application(create_application_workspace(config.db_path, access=access, authentication=authentication))

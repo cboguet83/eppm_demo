@@ -45,14 +45,26 @@ def test_anonymous_pending_and_disabled_screens_do_not_render_administration(acc
     anonymous = AppTest.from_function(access_screen, args=(path, settings, "")).run()
     assert not anonymous.exception
     assert anonymous.title[0].value == "Sign in to EPPM"
-    assert not anonymous.selectbox
+    assert [item.key for item in anonymous.selectbox] == ["app_language_selector"]
     pending = AppTest.from_function(access_screen, args=(path, settings, cookie)).run()
     assert not pending.exception and "awaiting activation" in pending.info[0].value
-    assert not pending.selectbox
+    assert [item.key for item in pending.selectbox] == ["app_language_selector"]
     with service.gateway.transaction(write=True) as store:
         store.set_status(service.actor(cookie).user_id, "disabled", int(time.time()))
     pending.run()
-    assert "disabled" in pending.info[0].value and not pending.selectbox
+    assert "disabled" in pending.info[0].value
+    assert [item.key for item in pending.selectbox] == ["app_language_selector"]
+
+
+def test_public_and_pending_accounts_can_choose_french_without_business_access(access_ui):
+    path, settings, service, cookie = access_ui
+    anonymous = AppTest.from_function(access_screen, args=(path, settings, "")).run()
+    anonymous.selectbox(key="app_language_selector").set_value("fr").run()
+    assert not anonymous.exception and anonymous.title[0].value == "Connexion à EPPM"
+    pending = AppTest.from_function(access_screen, args=(path, settings, cookie)).run()
+    pending.selectbox(key="app_language_selector").set_value("fr").run()
+    assert not pending.exception and "attend son activation" in pending.info[0].value
+    assert not pending.header and not pending.button
 
 
 def test_administration_ui_exposes_fixed_roles_and_keeps_bootstrap_out_of_browser(access_ui):
@@ -87,3 +99,62 @@ def test_active_user_cannot_render_access_administration_without_access_role(acc
     assert not app.exception
     assert "not permitted" in app.error[0].value
     assert not app.selectbox
+
+
+def test_administrator_can_retain_a_named_project_selection_and_grant_its_scope(access_ui):
+    from contextlib import closing
+    import json
+    from app.infrastructure.database.connection import get_db
+
+    path, settings, service, cookie = access_ui
+    actor = service.actor(cookie)
+    DeploymentAccessService(service.gateway, lambda: int(time.time()), "ui-test",
+                            lambda: secrets.token_urlsafe(16)).bootstrap(actor.user_id)
+    with closing(get_db(path)) as connection, connection:
+        connection.execute("INSERT INTO project(id,name) VALUES(1,'Visible project'),(2,'Other project')")
+    target = service.register(actor, settings.issuer, "named-scope", "Scope User")
+    service.set_status(actor, target, "active")
+    app = AppTest.from_function(access_screen, args=(path, settings, cookie)).run()
+    app.selectbox(key="access_selected_user").set_value(target).run()
+    assert not app.exception and not app.error
+    app.multiselect[0].set_value([1]).run()
+    assert not app.exception and not app.error
+    assert app.multiselect[0].value == [1]
+    app.button(key="access_grant").click().run()
+    assert not app.exception and not app.error
+    assignments = service.assignments(actor, target)
+    assert len(assignments) == 1 and assignments[0]["role"] == "project_viewer"
+    assert json.loads(assignments[0]["scope_json"]) == {"kind": "projects", "project_ids": [1], "conditions": []}
+
+
+@pytest.fixture
+def french_locale():
+    """AppTest also formats widget values outside the Streamlit script context."""
+    from app.presentation.i18n import get_current_locale, set_current_locale
+
+    previous = get_current_locale()
+    set_current_locale("fr")
+    try:
+        yield
+    finally:
+        set_current_locale(previous)
+
+
+def test_french_administration_explains_last_admin_and_empty_scope_errors(access_ui, french_locale):
+    path, settings, service, cookie = access_ui
+    actor = service.actor(cookie)
+    DeploymentAccessService(service.gateway, lambda: int(time.time()), "ui-test",
+                            lambda: secrets.token_urlsafe(16)).bootstrap(actor.user_id)
+    app = AppTest.from_function(access_screen, args=(path, settings, cookie))
+    app.session_state["locale"] = "fr"
+    app.run()
+    app.selectbox(key="access_selected_user").set_value(actor.user_id).run()
+    assert app.header[0].value == "Accès à l'application"
+    assert "Lecteur de projet" in app.selectbox(key="access_new_role").options
+    app.button(key="access_revoke_1").click().run()
+    assert not app.exception
+    assert app.error[0].value == "Au moins un administrateur des accès actif doit être conservé."
+    app.run()
+    app.button(key="access_grant").click().run()
+    assert not app.exception
+    assert app.error[0].value == "Sélectionnez au moins une valeur de référence."

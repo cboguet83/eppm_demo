@@ -7,6 +7,7 @@ from time import time
 
 from starlette.middleware import Middleware
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.routing import BaseRoute
 import streamlit as st
 
 from app.infrastructure.authentication.http import AuthenticationRoutes, OIDC_COOKIE
@@ -15,6 +16,7 @@ from app.infrastructure.authentication.session_middleware import ApplicationSess
 from app.application.services.business_access import BusinessAccess
 from app.domain.access.models import Actor
 from app.main import create_planning_service
+from app.presentation.i18n import t
 from app.infrastructure.authentication.middleware import BrowserSecurityMiddleware
 from app.infrastructure.authentication.oidc import create_oidc_client
 from app.security import create_access_service
@@ -27,11 +29,11 @@ def script_error(error: Exception) -> bool:
     """Suppress internal exception details in browser-rendered scripts and callbacks."""
     reference = token_urlsafe(16)
     get_logger(__name__).error("application.operation_failed reference=%s", reference)
-    st.error(f"The operation could not complete. Reference: {reference}")
+    st.error(t("auth.operation_failed", reference=reference))
     return True
 
 
-def create_application() -> st.App:
+def application_security() -> tuple[list[BaseRoute], list[Middleware]]:
     """Fail closed on missing configuration and compose supported Streamlit ASGI routes."""
     setup_logging()
     settings = AuthenticationConfig.from_environment(os.environ)
@@ -46,16 +48,16 @@ def create_application() -> st.App:
         service = create_planning_service(config.db_path, access=BusinessAccess(actor, access.policy))
         return service.export_project_template(project_id)
 
-    return st.App(
-        Path(__file__).with_name("streamlit_app.py"),
-        routes=AuthenticationRoutes(client, access).routes() + DownloadRoutes(access, export_template).routes(),
-        middleware=[Middleware(BrowserSecurityMiddleware, config=settings),
-                    Middleware(ApplicationSessionMiddleware, access=access, config=settings),
-                    Middleware(SessionMiddleware, secret_key=settings.cookie_secret,
-                               session_cookie=OIDC_COOKIE, max_age=600, same_site="lax",
-                               https_only=settings.secure_cookies)],
-        on_script_error=script_error,
-    )
+    routes = AuthenticationRoutes(client, access).routes() + DownloadRoutes(access, export_template).routes()
+    middleware = [Middleware(BrowserSecurityMiddleware, config=settings),
+                  Middleware(ApplicationSessionMiddleware, access=access, config=settings),
+                  Middleware(SessionMiddleware, secret_key=settings.cookie_secret,
+                             session_cookie=OIDC_COOKIE, max_age=600, same_site="lax",
+                             https_only=settings.secure_cookies)]
+    return routes, middleware
 
 
-app = create_application()
+routes, middleware = application_security()
+# Streamlit's AST-based launcher discovery requires a direct constructor assignment.
+app = st.App(Path(__file__).with_name("streamlit_app.py"), routes=routes,
+             middleware=middleware, on_script_error=script_error)

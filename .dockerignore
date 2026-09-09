@@ -9,9 +9,14 @@ ENV/
 .git/
 .gitignore
 .env
+.env.*
+.local/
+.streamlit/secrets.toml
+data/
+*.db
+*.sqlite*
 .pytest_cache/
 .coverage
 htmlcov/
 *.log
 scratch/
-

@@ -11,6 +11,35 @@ from app.presentation.components.action_table import action_table
 from app.presentation.i18n import t
 
 
+_VALIDATION_KEYS = {
+    "At least one active access administrator must remain.": "last_admin",
+    "This operation is unavailable or not permitted.": "denied",
+    "Select at least one reference value.": "empty",
+    "Reference IDs must be positive integers.": "ids",
+    "Invalid scope structure.": "structure",
+    "Choose all projects, named projects, or nonempty property conditions.": "kind",
+    "Invalid property condition.": "condition",
+    "Invalid property identifier.": "property_id",
+    "Use equality with one value or membership in a nonempty set.": "operator",
+    "Unknown fixed role.": "role",
+    "Application administrator roles require explicit all-project scope.": "admin_scope",
+    "Scope contains a missing project reference.": "project_missing",
+    "Property is not in the scope allowlist.": "property_forbidden",
+    "Scope contains a missing or unsupported property.": "property_missing",
+    "Scope contains a missing categorical value.": "value_missing",
+    "Revoke the invalid assignment before granting its replacement.": "replacement",
+    "Use the configured OIDC issuer.": "issuer",
+    "Unknown user status.": "status",
+    "Invalid text value.": "text",
+    "A nonempty value is required.": "required",
+}
+
+
+def _validation_message(message: str) -> str:
+    key = _VALIDATION_KEYS.get(message)
+    return _label("errors." + key, message) if key else message
+
+
 def _label(key: str, default: str) -> str:
     return t("access." + key, default=default)
 
@@ -68,7 +97,7 @@ def render_access_management(service: AccessService, actor: Actor) -> None:
         st.warning(_label("reauthenticate", "Sign in again before changing application access."))
         st.link_button(_label("sign_in_again", "Sign in again"), "/auth/login", type="primary")
     except ValueError as error:
-        st.error(str(error))
+        st.error(_validation_message(str(error)))
 
 
 def _users(service: AccessService, actor: Actor) -> None:
@@ -76,7 +105,8 @@ def _users(service: AccessService, actor: Actor) -> None:
     users = service.list_users(actor, search)
     choices = {user["id"]: user for user in users}
     user_id = st.selectbox(_label("account", "Application account"), list(choices), index=None,
-                          format_func=lambda value: f'{value} · {choices[value]["display_name"]} · {choices[value]["status"]}',
+                          format_func=lambda value: f'{value} · {choices[value]["display_name"]} · '
+                          + _label("states." + choices[value]["status"], choices[value]["status"]),
                           key="access_selected_user")
     with st.expander(_label("preregister", "Pre-register a provider identity")):
         with st.form("access_preregister"):
@@ -102,7 +132,7 @@ def _users(service: AccessService, actor: Actor) -> None:
         st.write(f'#{assignment["id"]} · {_role_label(str(assignment["role"]))}')
         st.caption(_scope_summary(str(assignment["scope_json"]), catalog))
         if assignment["problem"]:
-            st.warning(str(assignment["problem"]))
+            st.warning(_validation_message(str(assignment["problem"])))
         if st.button(_label("revoke", "Revoke assignment"), key=f'access_revoke_{assignment["id"]}'):
             service.revoke(actor, int(assignment["id"]))
             st.rerun()
@@ -137,15 +167,21 @@ def _scope_editor(service: AccessService, actor: Actor, role: str) -> dict[str, 
     if kind == "projects":
         search = st.text_input(_label("search_projects", "Search project names or references"), key="access_project_search")
         choices = {int(item["id"]): item["name"] for item in service.scope_project_choices(actor, search)}
-        selected = st.multiselect(_label("projects", "Projects"), list(choices), format_func=lambda value: f"{value} · {choices[value]}")
+        selected = st.multiselect(_label("projects", "Projects"), list(choices),
+                                  format_func=lambda value: f"{value} · {choices[value]}",
+                                  key="access_scope_projects")
         return {"kind": kind, "project_ids": selected}
     st.caption(_label("protected", "Scope-eligible properties are protected. All conditions must match; add separate assignments for alternatives."))
     catalog = {str(item["property_id"]): item for item in service.scope_catalog(actor)}
-    selected = st.multiselect(_label("conditions", "Properties to match"), list(catalog), format_func=lambda value: str(catalog[value]["label"]))
+    selected = st.multiselect(_label("conditions", "Properties to match"), list(catalog),
+                              format_func=lambda value: str(catalog[value]["label"]),
+                              key="access_scope_properties")
     conditions = []
     for property_id in selected:
         values = {int(item["id"]): str(item["label"]) for item in catalog[property_id]["values"]}
-        operator = st.selectbox(_label("operator", "Operator"), ["eq", "in"], key=f"access_operator_{property_id}")
+        operator = st.selectbox(_label("operator", "Operator"), ["eq", "in"],
+                                format_func=lambda value: _label("operators." + value, value),
+                                key=f"access_operator_{property_id}")
         chosen = st.multiselect(str(catalog[property_id]["label"]), list(values), format_func=values.get,
                                 max_selections=1 if operator == "eq" else None, key=f"access_values_{property_id}")
         conditions.append({"property_id": property_id, "operator": operator, "value_ids": chosen})

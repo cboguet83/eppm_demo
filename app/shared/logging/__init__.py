@@ -22,7 +22,7 @@ def setup_logging(*, stream: TextIO | None = None) -> None:
     )
     # OAuth client debug output includes PKCE verifiers; HTTP access logs include
     # authorization codes in callback query strings. Emit our safe security events.
-    for name in ("authlib", "httpx", "httpx2", "httpcore"):
+    for name in ("authlib", "httpx", "httpx2", "httpcore", "httpcore2"):
         logging.getLogger(name).setLevel(logging.WARNING)
     logging.getLogger("uvicorn.access").disabled = True
 

@@ -96,26 +96,7 @@ def render_application(workspace: ApplicationWorkspace) -> None:
         unsafe_allow_html=True,
     )
 
-    # Language Switcher at top of sidebar
-    current_loc = get_current_locale()
-    locale_codes = list(SUPPORTED_LOCALES.keys())
-    current_idx = locale_codes.index(current_loc) if current_loc in locale_codes else 0
-
-    def on_language_change() -> None:
-        new_loc = st.session_state.get("app_language_selector", "en")
-        set_current_locale(new_loc)
-
-    selected_loc = st.sidebar.selectbox(
-        t("app.language_selector", default="🌐 Language"),
-        options=locale_codes,
-        format_func=lambda c: SUPPORTED_LOCALES.get(c, c),
-        index=current_idx,
-        key="app_language_selector",
-        on_change=on_language_change,
-    )
-    if selected_loc != current_loc:
-        set_current_locale(selected_loc)
-        st.rerun()
+    render_language_selector()
 
     st.sidebar.title(f"📌 {t('app.title', default='PPM Demo Portal')}")
 
@@ -178,6 +159,24 @@ def render_application(workspace: ApplicationWorkspace) -> None:
                 right.caption(f"{t('planning_totals.' + second, default=second.title())}  \n{totals[second]:,}")
 
     workspace.pages[page]()
+
+
+def render_language_selector() -> None:
+    """Offer the same session-local language choice on public and protected screens."""
+    current = get_current_locale()
+    codes = list(SUPPORTED_LOCALES)
+
+    def on_change() -> None:
+        set_current_locale(st.session_state.get("app_language_selector", "en"))
+
+    selected = st.sidebar.selectbox(
+        t("app.language_selector", default="🌐 Language"), codes,
+        format_func=SUPPORTED_LOCALES.get, index=codes.index(current),
+        key="app_language_selector", on_change=on_change,
+    )
+    if selected != current:
+        set_current_locale(selected)
+        st.rerun()
 
 
 def _positive_identifier(value: str | None) -> int | None:

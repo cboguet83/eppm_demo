@@ -321,10 +321,12 @@ class DeploymentAccessService:
         self.operator = _safe_text(operator, 256, required=True)
         self.correlation_factory = correlation_factory
 
-    def pending_accounts(self) -> list[UserRecord]:
-        """Inspect bounded pending profiles through trusted deployment access only."""
+    def pending_accounts(self, *, after_id: int = 0, limit: int = 200) -> list[UserRecord]:
+        """Inspect pending profiles in reference order through deployment access only."""
+        if type(after_id) is not int or after_id < 0 or type(limit) is not int or not 1 <= limit <= 200:
+            raise ValueError("Use a nonnegative continuation reference and a limit between 1 and 200.")
         with self.gateway.transaction() as store:
-            return [user for user in store.list_users("", 200) if user["status"] == "pending"]
+            return store.list_users("", limit, after_id=after_id, status="pending")
 
     def bootstrap(self, user_id: int) -> None:
         """Grant only access administration exactly once to a verified existing account."""

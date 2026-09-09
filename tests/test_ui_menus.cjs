@@ -12,6 +12,13 @@ function loadFunction(context, name) {
   vm.runInContext(script.slice(start, end), context);
 }
 
+function loadPermissions(context, projectIds) {
+  context.editAllProjects = false;
+  context.editableProjectIds = new Set(projectIds.map(String));
+  context.canManageShared = false;
+  for (const name of ['canEditProject', 'canEditTask', 'setMenuActionsVisible']) loadFunction(context, name);
+}
+
 test('project CSV menu and pool allocation menu retain the selected identity', () => {
   const events = [];
   const context = vm.createContext({
@@ -19,6 +26,7 @@ test('project CSV menu and pool allocation menu retain the selected identity', (
     selectedResourceCellCtx: {pool_id: 8, pool_name: 'Delivery'},
     Streamlit: {setComponentValue: value => events.push(value)},
   });
+  loadPermissions(context, [42]);
   loadFunction(context, 'triggerManageProjectTagsFromMenu');
   loadFunction(context, 'triggerGoToResourcePoolDetails');
   vm.runInContext(`triggerManageProjectTagsFromMenu('import_csv_template');
@@ -67,6 +75,7 @@ test('opening project and task menus keeps nested submenus outside their scroll 
     window:{innerWidth:1000,innerHeight:700}, tasksData:[],
     hideContextMenu(){},hideDepContextMenu(){},hideTooltip(){},
   });
+  loadPermissions(context, [42]);
   loadFunction(context,'showProjectContextMenu');
   context.showProjectContextMenu({clientX:980,clientY:680,preventDefault(){},stopPropagation(){}},42);
   assert.equal(menu.style.overflow,'visible');
@@ -74,10 +83,10 @@ test('opening project and task menus keeps nested submenus outside their scroll 
   assert.ok(parseFloat(menu.style.left) + menu.offsetWidth <= 990);
   assert.ok(parseFloat(menu.style.top) + menu.offsetHeight <= 690);
   const taskMenu = {style:{},offsetWidth:230,offsetHeight:300};
-  context.document.getElementById = id => id === 'context-menu' ? taskMenu : {style:{}};
+  context.document.getElementById = id => id === 'context-menu' ? taskMenu : {style:{}, closest(){return this;}};
   context.hideProjectContextMenu = () => {};
   loadFunction(context,'showContextMenu');
-  context.showContextMenu({clientX:980,clientY:680,preventDefault(){},stopPropagation(){}}, {id:1});
+  context.showContextMenu({clientX:980,clientY:680,preventDefault(){},stopPropagation(){}}, {id:1,project_id:42});
   assert.equal(taskMenu.style.overflow,'visible');
   assert.equal(taskMenu.style.overflowY,undefined);
   assert.ok(parseFloat(taskMenu.style.left) + taskMenu.offsetWidth <= 990);
@@ -118,6 +127,7 @@ test('task Assign Resource action uses a person icon and retains the clicked tas
   const context = vm.createContext({hideContextMenu(){},
     selectedContextMenuTask:{id:'17',name:'Design',project_id:4},
     Streamlit:{setComponentValue:value=>events.push(value)}});
+  loadPermissions(context, [4]);
   loadFunction(context,'triggerManageTaskPools');
   context.triggerManageTaskPools();
   assert.equal(events[0].action,'manage_task_pools');
@@ -138,24 +148,26 @@ test('resource hover card contains only the escaped concise assignment summary',
   assert.equal(tooltips.length,1);
 });
 
-test('CSV export starts one download per nonce without displaying a modal', () => {
+test('CSV export fetches the access-controlled endpoint once per nonce without a modal or cached blob', () => {
   const source = read('app/presentation/components/csv_download.py');
   const js = source.match(/_DOWNLOAD_JS = """([\s\S]*?)"""/)[1];
-  const clicks = [], released = [];
+  const clicks = [];
   const root = {dataset:{}, appendChild(){}};
   const parentElement = {querySelector:()=>root};
   const context = vm.createContext({
-    Blob, URL: {createObjectURL:()=> 'blob:csv', revokeObjectURL:url=>released.push(url)},
-    document: {createElement:()=>({click(){clicks.push(this.download);},remove(){}})},
-    setTimeout:()=>1, clearTimeout(){},
+    document: {createElement:tag=>{
+      assert.equal(tag, 'a');
+      return {click(){clicks.push([this.href, this.download]);},remove(){}};
+    }},
   });
   vm.runInContext(js.replace('export default function', 'function mount'), context);
-  const data = {nonce:'one',filename:'project_42_template.csv',content:'step_number,task_name\n'};
-  const cleanup = context.mount({data,parentElement});
+  const data = {nonce:'one',filename:'project_42_template.csv',url:'/downloads/projects/42/template.csv'};
   context.mount({data,parentElement});
-  assert.deepEqual(clicks,['project_42_template.csv']);
-  cleanup();
-  assert.deepEqual(released,['blob:csv']);
+  context.mount({data,parentElement});
+  assert.deepEqual(clicks,[['/downloads/projects/42/template.csv','project_42_template.csv']]);
+  context.mount({data:{...data, nonce:'two'},parentElement});
+  assert.equal(clicks.length, 2);
+  assert.equal(clicks[1][0], '/downloads/projects/42/template.csv');
 });
 
 test('lazy-tab position guard crosses the component shadow root and retains the greatest height', () => {

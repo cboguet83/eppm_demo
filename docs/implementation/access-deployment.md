@@ -1,0 +1,173 @@
+# Deploying OIDC and application access
+
+This feature uses Python 3.14, Streamlit 1.63.0, Authlib 1.8.0, and the existing
+SQLite database. Read [ADR 0019](../decisions/0019-oidc-identities-and-access-policy.md)
+and the [permission inventory](access-permission-matrix.md) before rollout.
+A successful local login does not replace the production checks below.
+
+## Deployment order
+
+1. Stop application writers and make a restorable SQLite backup, including any
+   committed WAL contents. Use SQLite's backup API or an existing deployment backup
+   procedure, not a copy of the main database while writers are active. Retain the
+   pre-upgrade application image and verify the backup in a separate directory.
+2. Apply the idempotent migrations to the intended database using the deployment
+   account: `python -m scripts.access_admin --database /absolute/path/eppm.db migrate`.
+   Security tables, audit protection, scope identities, and bootstrap state are
+   installed alongside the existing business schema. Application startup does not
+   migrate, seed, reset, or restore administrator assignments.
+3. Register one confidential OIDC client with the provider. Enable authorization
+   code with PKCE S256, use only the exact `${APP_ORIGIN}/auth/callback` redirect,
+   and disable implicit, password, and service-account grants for this client.
+   Ensure ID tokens include the verified subject, issuer, audience, nonce,
+   authentication time, issue time, and expiry. Keycloak's `basic` client scope
+   supplies `auth_time`; retain it along with `profile`, `email`, and `acr`.
+4. Configure the environment shown in `.env.example`. Use deployment secret storage
+   for the confidential client secret and an independent random cookie secret.
+   Set `APP_ENV=production`, an HTTPS application origin and exact issuer, and
+   `OIDC_ALLOW_LOCAL_HTTP=false`. The `OIDC_MFA_ACR_VALUES` allowlist must name ACR
+   values whose provider policy actually enforces MFA. Requesting an ACR alone
+   does not configure provider MFA. Provider roles/groups do not grant EPPM roles.
+5. Start the ASGI launcher: `streamlit run asgi_app.py`. The Docker image uses this
+   entry point. Keep the supplied origin/XSRF and trusted-session-header settings.
+   Plain `streamlit_app.py` cannot compose authenticated business services.
+6. Have the intended first administrator sign in. The pending screen displays only
+   that account's reference. Verify the identity through the trusted deployment
+   process, then bootstrap that exact reference as described below.
+7. Refresh the administrator's browser. Explicitly activate users and grant each
+   fixed role with its own scope. Bootstrap gives access administration only.
+   Assign business administration separately if the operator is also meant to
+   manage projects or shared configuration.
+
+With an HTTPS reverse proxy, preserve the public Host and Origin, support WebSocket
+upgrades, and configure trusted proxy handling so the application reconstructs the
+exact HTTPS callback URL. Restrict direct access to the backend. Verify this with
+the actual deployment proxy; do not relax callback/origin checks to fix routing.
+The supplied Compose port binding is loopback-only.
+
+## Bootstrap and recovery
+
+Run commands as the trusted deployment account against the explicit database:
+
+```text
+python -m scripts.access_admin --database /absolute/path/eppm.db pending-accounts
+python -m scripts.access_admin --database /absolute/path/eppm.db bootstrap-admin --user-id 17
+python -m scripts.access_admin --database /absolute/path/eppm.db recover-admin --user-id 17 --reason "Verified recovery ticket INC-123"
+```
+
+Replace `17` with the verified account reference. Neither email nor the first login
+selects an administrator. Bootstrap permanently closes after initial setup or any
+access-administrator grant. Disabling/revoking administrators does not reopen it.
+Recovery is a separate audited operation requiring an existing verified identity,
+explicit target, nonempty reason, and deployment filesystem authority. There is no
+public bootstrap/recovery route or local password bypass. Ordinary administration
+cannot remove the last active access administrator.
+
+Account inspection returns up to 200 pending accounts in reference order. Use
+`pending-accounts --after-id 217 --limit 100` to continue after the last returned
+reference. The pending-status filter is applied before pagination.
+
+## Local Keycloak
+
+Docker Compose must support `!reset` overrides. Generate new ignored credentials:
+
+```text
+python -m scripts.configure_local_oidc
+docker compose --env-file .local/oidc.env -f docker-compose.yml -f docker-compose.oidc.yml build app
+python -m scripts.access_admin --database data/ppm_mock.db migrate
+docker compose --env-file .local/oidc.env -f docker-compose.yml -f docker-compose.oidc.yml up -d
+```
+
+Open `http://localhost:8501`. Keycloak 26.7.2 runs at `http://localhost:8080` and imports
+the `eppm` realm. Both containers share a network namespace so the application
+process and host browser use the same issuer; no custom DNS or hosts-file entry is
+needed. These HTTP settings are confined to explicit local development.
+
+The generated file contains independent random passwords for the fictional users
+`alex.admin`, `sam.editor`, and `robin.viewer`, the local provider operator, the
+client, and the application cookie. Obtain the relevant local password directly
+from that private file; do not paste it into chat, commit it, or print an expanded
+Compose configuration. Restrict its parent directory with the operating system's
+file permissions/ACLs. Provisioning refuses to overwrite an existing file.
+
+Use `--origin http://localhost:8502 --provider-port 8082 --output .local/other.env`
+for different local ports. A separate Compose project name, environment file, and
+`EPPM_DATA_DIRECTORY` are required for an isolated database/provider deployment.
+
+Keycloak imports only a realm that does not already exist. Editing the realm JSON
+or generating new passwords does not alter an existing provider volume. Change
+test users through Keycloak administration or recreate only the intended disposable
+provider volume. Never delete the application database to reset the provider.
+Deleting/recreating a provider realm may change identity subjects: verify mappings
+before reusing an application database. Changing the issuer creates distinct
+identities, even when emails or usernames are unchanged.
+
+## Sessions, logs, and audit operations
+
+Defaults are 900 seconds idle, 28,800 seconds absolute, and the earlier verified
+ID-token expiry. Access-administration writes require provider authentication within
+300 seconds. Refreshing, reconnecting, and background status polling do not extend
+authentication time. User interaction extends idle time only within the remaining
+absolute/token lifetime. Each protected operation reads current account state and
+permissions, including downloads and long-lived Streamlit connections.
+
+Application logout revokes the browser's EPPM session across its open tabs. It does
+not end the provider's SSO session; the next EPPM login nevertheless requests fresh
+authentication. Provider-side disabling is not continuously introspected and has
+no back-channel logout integration in this version. Its maximum remaining EPPM
+access is bounded by the earlier application absolute/idle/ID-token deadlines.
+Disable the EPPM account to deny its next protected operation independently.
+Disabling leaves session rows in place so the browser can display its own disabled
+account status. Reactivating the account can restore access through an otherwise
+unexpired session. This version does not provide an administrator action to
+permanently terminate every session; use provider reauthentication/session lifetime
+policy and the documented recovery process when handling compromised identities.
+
+Security audit entries are append-only through application interfaces and database
+triggers. Required audit insertion is part of the same transaction as a security
+change. Deployment administrators can still access database files; protect them and
+their backups through OS permissions and the deployment's storage controls.
+The application does not purge security audit records. Define retention, backup,
+archive access, and legal deletion procedures in the deployment policy. Expired
+transient OIDC state is pruned when new login state is created.
+Application session records also require a deployment retention policy; the runtime
+does not currently prune expired session rows or limit independent concurrent logins.
+
+Operational security events contain an event category, reference, and sometimes
+an exception class, never token/cookie/credential values or raw provider errors.
+Do not re-enable OAuth/HTTP-client debug logs or raw callback query logging in the
+application or reverse proxy. Demo business reset operations preserve application
+users, grants, security audit, and bootstrap state.
+
+## Verification before production
+
+Run the regular pytest suite and the Gantt JavaScript tests. The real-provider
+browser test is opt-in and uses independent generated credentials, Compose resources,
+and a database under `.local/oidc-e2e/`; it never reads the development database.
+Its additional `!override` Compose file removes development source bind mounts,
+so this workflow exercises the built image. Rebuild the image after source changes.
+
+```text
+python -m pip install -e ".[dev,browser-tests]"
+```
+
+Set `EPPM_RUN_OIDC_E2E=1`, then run
+`python -m pytest tests/test_oidc_browser_e2e.py -q --tb=short` after building the image.
+The default browser channel is installed Chrome; `EPPM_BROWSER_CHANNEL` can select
+another installed Playwright-supported channel. No traces, HARs, passwords, or
+tokens are written to test output. Disposable containers/volumes are removed after
+the run; ignored fixture files remain for controlled local cleanup.
+The test binds only localhost ports 18501 and 18080. Run it separately from another
+copy using these ports. `EPPM_KEEP_E2E=1` retains its uniquely named disposable
+resources for diagnosis; remove only that named Compose project afterwards.
+
+Verify production MFA, actual token expiry, reauthentication, Secure/HttpOnly cookies,
+proxy origin handling, multi-tab logout, disabling, revocation, scoped export fetching,
+and audit-failure rollback in the deployment environment. Report actual coverage and
+remaining gaps; the project target is 99% statement coverage. Authentication and
+authorization must remain enabled during rollback or incident recovery.
+
+References: [Keycloak 26.7.2 upgrade notes](https://www.keycloak.org/docs/26.7.2/upgrading/),
+[realm import](https://www.keycloak.org/server/importExport),
+[Compose merge/reset rules](https://docs.docker.com/reference/compose-file/merge/),
+[Playwright browser channels](https://playwright.dev/python/docs/browsers).

@@ -26,7 +26,7 @@
       "redirectUris": ["${APP_ORIGIN}/auth/callback"],
       "webOrigins": ["${APP_ORIGIN}"],
       "attributes": {"pkce.code.challenge.method": "S256"},
-      "defaultClientScopes": ["profile", "email", "acr"],
+      "defaultClientScopes": ["basic", "profile", "email", "acr"],
       "optionalClientScopes": []
     }
   ],

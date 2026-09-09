@@ -5,6 +5,7 @@ import streamlit as st
 from app.application.services.access import AccessService
 from app.domain.access.models import AccessDenied, Actor
 from app.presentation.i18n import t
+from app.presentation.shell import render_language_selector
 
 
 _SESSION_JS = """
@@ -83,6 +84,7 @@ def account_gate(service: AccessService, cookie: str) -> Actor | None:
         actor = service.actor(cookie)
         account = service.account(actor)
     except AccessDenied:
+        render_language_selector()
         st.title(t("auth.title", default="Sign in to EPPM"))
         st.link_button(t("auth.sign_in", default="Sign in"), "/auth/login", type="primary")
         return None
@@ -97,6 +99,7 @@ def account_gate(service: AccessService, cookie: str) -> Actor | None:
         component(data={"logout": t("auth.sign_out", default="Sign out"), "status": account["status"]},
                   key="eppm_session_controls", height="content")
     if account["status"] != "active":
+        render_language_selector()
         message = (t("auth.disabled", default="Your application account is disabled. Contact an access administrator.")
                    if account["status"] == "disabled" else
                    t("auth.pending", default="Your account is awaiting activation. Give your application user reference to an access administrator."))

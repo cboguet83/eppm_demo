@@ -23,7 +23,9 @@ def parser() -> ArgumentParser:
     result.add_argument("--database", default=config.db_path, help="Deployment SQLite database path.")
     commands = result.add_subparsers(dest="command", required=True)
     commands.add_parser("migrate", help="Apply idempotent database migrations before starting the application.")
-    commands.add_parser("pending-accounts", help="List pending application user references for verification.")
+    pending = commands.add_parser("pending-accounts", help="List pending application user references for verification.")
+    pending.add_argument("--after-id", type=int, default=0, help="Continue after this application user reference.")
+    pending.add_argument("--limit", type=int, default=200, help="Maximum accounts to return, from 1 to 200.")
     bootstrap = commands.add_parser("bootstrap-admin", help="Appoint the first verified access administrator once.")
     bootstrap.add_argument("--user-id", type=int, required=True)
     recovery = commands.add_parser("recover-admin", help="Recover a verified administrator with an audit reason.")
@@ -50,7 +52,8 @@ def run(argv: list[str] | None = None) -> int:
                                           lambda: secrets.token_urlsafe(16))
         if args.command == "pending-accounts":
             # Structured command output, not application diagnostics or identity tokens.
-            sys.stdout.write(json.dumps(service.pending_accounts(), ensure_ascii=True) + "\n")
+            sys.stdout.write(json.dumps(service.pending_accounts(after_id=args.after_id, limit=args.limit),
+                                       ensure_ascii=True) + "\n")
         elif args.command == "bootstrap-admin":
             service.bootstrap(args.user_id)
             logger.info("Initial access administrator appointed: user_id=%d", args.user_id)

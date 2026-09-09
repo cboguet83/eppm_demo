@@ -27,12 +27,14 @@ class SqliteAccessStore:
         row = self._execute("SELECT * FROM app_user WHERE id=?", (user_id,)).fetchone()
         return UserRecord(**dict(row)) if row else None
 
-    def list_users(self, search: str, limit: int = 100) -> list[UserRecord]:
-        """Return a bounded literal-substring account search."""
+    def list_users(self, search: str, limit: int = 100, *, after_id: int = 0,
+                   status: str | None = None) -> list[UserRecord]:
+        """Filter account status and continuation reference before bounding results."""
         rows = self._execute(
-            "SELECT * FROM app_user WHERE instr(lower(display_name),lower(?))>0 "
-            "OR instr(lower(email),lower(?))>0 OR CAST(id AS TEXT)=? ORDER BY id LIMIT ?",
-            (search, search, search, min(max(limit, 1), 200)),
+            "SELECT * FROM app_user WHERE id>? AND (? IS NULL OR status=?) AND "
+            "(instr(lower(display_name),lower(?))>0 OR instr(lower(email),lower(?))>0 "
+            "OR CAST(id AS TEXT)=?) ORDER BY id LIMIT ?",
+            (after_id, status, status, search, search, search, min(max(limit, 1), 200)),
         )
         return [UserRecord(**dict(row)) for row in rows]
 
