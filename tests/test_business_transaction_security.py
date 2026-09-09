@@ -425,3 +425,290 @@ def test_collaboration_edit_controls_recheck_current_status(business):
     assert not service.can_edit(2)
     access.set_status(admin, editor.actor.user_id, "disabled")
     assert not service.can_edit(1)
+
+
+@pytest.mark.parametrize("entity", ["project", "task"])
+def test_scoped_editor_attaches_and_removes_free_and_dictionary_tags_without_changing_hidden_owners(business, entity):
+    from streamlit.testing.v1 import AppTest
+
+    path, _, _, editor, _ = business
+    prefix = "proj" if entity == "project" else "task"
+    owner, hidden_owner = (1, 2) if entity == "project" else (10, 20)
+    table, owner_column = entity + "_tag", entity + "_id"
+    with closing(get_db(path)) as connection, connection:
+        group = connection.execute("INSERT INTO tag_group(tag_group_name) VALUES(?)", (entity + "_tag",)).lastrowid
+        dictionary = connection.execute(
+            "INSERT INTO tag_dictionnary(tag,tag_group_id) VALUES('Scoped dictionary tag',?)", (group,),
+        ).lastrowid
+        connection.execute(f"INSERT INTO {table}({owner_column},free_tag) VALUES(?,'Hidden tag')", (hidden_owner,))
+    app = AppTest.from_function(
+        permission_control_app, args=(path, editor.actor, entity + "_tags"), default_timeout=30,
+    ).run()
+    assert not app.exception and not app.error
+    assert not any("Hidden tag" in item.value for item in app.markdown)
+    app.button(key=f"btn_confirm_attach_{prefix}_tag").click().run()
+    assert not app.exception and app.error
+    app.text_input(key=f"ti_attach_{prefix}_free_tag").set_value("  Scoped free tag  ")
+    app.button(key=f"btn_confirm_attach_{prefix}_tag").click().run()
+    assert not app.exception and not app.error
+    app.text_input(key=f"ti_attach_{prefix}_free_tag").set_value("")
+    app.selectbox(key=f"sb_attach_{prefix}_tag").set_value((dictionary, "Scoped dictionary tag"))
+    app.button(key=f"btn_confirm_attach_{prefix}_tag").click().run()
+    assert not app.exception and not app.error
+    with closing(get_db(path)) as connection:
+        attached = connection.execute(
+            f"SELECT id,tag_id,free_tag FROM {table} WHERE {owner_column}=? ORDER BY id", (owner,),
+        ).fetchall()
+    assert [(row[1], row[2]) for row in attached] == [(None, "Scoped free tag"), (dictionary, None)]
+    assert any("Scoped dictionary tag" in item.value for item in app.markdown)
+    delete_prefix = "pt" if entity == "project" else "tt"
+    for assignment in attached:
+        app.button(key=f"btn_del_{delete_prefix}_{assignment[0]}").click().run()
+        assert not app.exception and not app.error
+    app.button(key=f"btn_close_{prefix}_dialog").click().run()
+    with closing(get_db(path)) as connection:
+        assert connection.execute(f"SELECT {owner_column},free_tag FROM {table}").fetchall() == [(hidden_owner, "Hidden tag")]
+
+
+@pytest.mark.parametrize("entity", ["project", "task"])
+def test_scoped_editor_validates_dates_and_manages_custom_and_full_period_pool_assignments(business, entity):
+    from datetime import date
+    from streamlit.testing.v1 import AppTest
+
+    path, _, _, editor, _ = business
+    prefix = "proj" if entity == "project" else "task"
+    app = AppTest.from_function(
+        permission_control_app, args=(path, editor.actor, entity + "_pools"), default_timeout=30,
+    ).run()
+    assert not app.exception and not app.error
+    if entity == "task":
+        assert any("Visible task" in item.value and "Project #1" in item.value for item in app.markdown)
+        assert not any("Forged label" in item.value for item in app.markdown)
+        app.button(key="btn_del_assign_task_1").click().run()
+    app.radio(key=f"rb_assign_{prefix}_period_mode").set_value("custom").run()
+    app.date_input(key=f"di_assign_{prefix}_s").set_value(date(2026, 1, 4))
+    app.date_input(key=f"di_assign_{prefix}_e").set_value(date(2026, 1, 3))
+    app.number_input(key=f"ni_assign_{prefix}_fte").set_value(4.0)
+    app.text_input(key=f"ti_assign_{prefix}_notes").set_value("  Scoped allocation  ")
+    app.button(key=f"btn_confirm_assign_{prefix}_pool").click().run()
+    assert not app.exception and app.error
+    with closing(get_db(path)) as connection:
+        assert connection.execute("SELECT count(*) FROM resource_pool_assignment WHERE notes='Scoped allocation'").fetchone()[0] == 0
+    app.date_input(key=f"di_assign_{prefix}_e").set_value(date(2026, 1, 5))
+    app.button(key=f"btn_confirm_assign_{prefix}_pool").click().run()
+    assert not app.exception and not app.error
+    with closing(get_db(path)) as connection:
+        assignment = connection.execute(
+            "SELECT id,project_id,task_id,fte_assigned,start_date,end_date FROM resource_pool_assignment WHERE notes='Scoped allocation'",
+        ).fetchone()
+    assert assignment[1:] == (1, None if entity == "project" else 10, 4.0, "2026-01-04", "2026-01-05")
+    assert any("Custom Period" in item.value and "Overassigned" in item.value for item in app.markdown)
+    app.button(key=f"btn_del_assign_{prefix}_{assignment[0]}").click().run()
+    assert not app.exception and not app.error
+    app.radio(key=f"rb_assign_{prefix}_period_mode").set_value("full").run()
+    app.number_input(key=f"ni_assign_{prefix}_fte").set_value(0.5)
+    app.text_input(key=f"ti_assign_{prefix}_notes").set_value("Full period")
+    app.button(key=f"btn_confirm_assign_{prefix}_pool").click().run()
+    assert not app.exception and not app.error
+    assert any("Full " + entity.title() + " Duration" in item.value and "OK" in item.value for item in app.markdown)
+    app.button(key=f"btn_close_{prefix}_pool_dialog").click().run()
+    with closing(get_db(path)) as connection:
+        assert connection.execute(
+            "SELECT project_id,task_id,fte_assigned,start_date,end_date FROM resource_pool_assignment WHERE notes='Full period'",
+        ).fetchone() == (1, None if entity == "project" else 10, 0.5, None, None)
+        assert connection.execute(
+            "SELECT pool_id,project_id,task_id,fte_assigned FROM resource_pool_assignment WHERE id=2",
+        ).fetchone() == (1, 2, 20, 2.0)
+
+
+@pytest.mark.parametrize("entity", ["project", "task"])
+def test_open_assignment_dialog_cannot_save_after_edit_permission_is_revoked(business, entity):
+    from streamlit.testing.v1 import AppTest
+
+    path, service, admin, editor, _ = business
+    service.grant(admin, editor.actor.user_id, "project_viewer", {"kind": "projects", "project_ids": [1]})
+    editor_grant = next(row["id"] for row in service.assignments(admin, editor.actor.user_id) if row["role"] == "project_editor")
+    prefix = "proj" if entity == "project" else "task"
+    app = AppTest.from_function(
+        permission_control_app, args=(path, editor.actor, entity + "_pools"), default_timeout=30,
+    ).run()
+    assert not app.exception and not app.error
+    app.text_input(key=f"ti_assign_{prefix}_notes").set_value("Stale pending assignment")
+    service.revoke(admin, editor_grant)
+    app.button(key=f"btn_confirm_assign_{prefix}_pool").click().run()
+    assert not app.exception and not app.error and not app.button
+    assert "read-only" in app.info[0].value
+    with closing(get_db(path)) as connection:
+        assert connection.execute("SELECT id,project_id,task_id,fte_assigned FROM resource_pool_assignment ORDER BY id").fetchall() == [
+            (1, 1, 10, 1.0), (2, 2, 20, 2.0),
+        ]
+
+
+@pytest.mark.parametrize("entity", ["project", "task"])
+def test_assignment_dialog_with_no_configured_pools_explains_why_assignment_is_unavailable(business, entity):
+    from streamlit.testing.v1 import AppTest
+
+    path, _, _, editor, _ = business
+    with closing(get_db(path)) as connection, connection:
+        connection.execute("DELETE FROM resource_pool")
+    app = AppTest.from_function(
+        permission_control_app, args=(path, editor.actor, entity + "_pools"), default_timeout=30,
+    ).run()
+    assert not app.exception and not app.error and not app.button and not app.selectbox
+    assert "No resource pools configured" in app.warning[0].value
+
+
+def shared_catalog_app(path, actor, surface):
+    """Render a shared catalog through the actual actor-required composition root."""
+    from app.application.services.access import AuthorizationPolicy, SessionLimits
+    from app.application.services.business_access import BusinessAccess
+    from app.main import create_organization_service
+    from app.presentation.pages import organization
+
+    access = BusinessAccess(actor, AuthorizationPolicy(lambda: 1000, SessionLimits()))
+    getattr(organization, "render_" + surface)(create_organization_service(path, access=access))
+
+
+@pytest.mark.parametrize("surface,entity,display", [
+    ("function_types", "function_type", "Engineering"),
+    ("functions", "function", "Engineer"),
+    ("teams", "team", "Delivery"),
+    ("employees", "employee", "Rae"),
+])
+@pytest.mark.parametrize("action", ["add", "edit", "delete"])
+def test_business_admin_catalog_menu_opens_the_requested_record_and_consumes_the_event_once(
+    business, surface, entity, display, action,
+):
+    from unittest.mock import patch
+    from streamlit.testing.v1 import AppTest
+
+    path, _, _, _, manager = business
+    with closing(get_db(path)) as connection, connection:
+        connection.execute("INSERT INTO function_type(function_type_id,function_type) VALUES(10,'Engineering')")
+        connection.execute("INSERT INTO function(function_id,name,hierarchy_level,function_type_id) VALUES(10,'Engineer',3,10)")
+        connection.execute("INSERT INTO team(team_id,team_name,manager_function_id,leader_function_id) VALUES(10,'Delivery',10,10)")
+        connection.execute("INSERT INTO team_function(team_id,function_id) VALUES(10,10)")
+        connection.execute("INSERT INTO employee(employee_id,firstname,lastname,email,employee_code,function_id) VALUES(10,'Rae','Example','rae@example.test','EX10',10)")
+    event = {
+        "action": action + "_" + entity, entity + "_id": 10,
+        entity + "_name": display, "nonce": "open-record",
+    }
+    with patch("app.presentation.pages.organization._table", return_value=event) as component:
+        app = AppTest.from_function(
+            shared_catalog_app, args=(path, manager.actor, surface), default_timeout=30,
+        ).run()
+        assert not app.exception and not app.error
+        payload = component.call_args.kwargs
+        assert len(payload["types" if surface == "function_types" else surface]) == 1
+        if action == "edit":
+            assert any(item.value == display for item in app.text_input)
+        assert app.button
+        app.run()
+        assert not app.exception and not app.error and not app.button and not app.text_input
+    with closing(get_db(path)) as connection:
+        assert connection.execute("SELECT count(*) FROM function").fetchone()[0] == 1
+        assert connection.execute("SELECT count(*) FROM employee").fetchone()[0] == 1
+        assert connection.execute("SELECT count(*) FROM team").fetchone()[0] == 1
+        assert connection.execute("SELECT count(*) FROM app_user").fetchone()[0] == 2
+
+
+@pytest.mark.parametrize("surface", ["function_types", "functions", "teams", "employees"])
+def test_project_editor_cannot_render_shared_directory_payloads_or_open_forged_catalog_actions(business, surface):
+    from unittest.mock import patch
+    from streamlit.testing.v1 import AppTest
+
+    path, _, _, editor, _ = business
+    with patch("app.presentation.pages.organization._table", return_value={"action": "add_employee", "nonce": "forged"}) as component:
+        app = AppTest.from_function(
+            shared_catalog_app, args=(path, editor.actor, surface), default_timeout=30,
+        ).run()
+    assert not app.exception and app.error and not app.button and not app.text_input
+    component.assert_not_called()
+
+
+def shared_directory_dialog_app(path, actor, surface, record_id=0):
+    """Keep a real directory dialog open while AppTest submits its widgets."""
+    from app.application.services.access import AuthorizationPolicy, SessionLimits
+    from app.application.services.business_access import BusinessAccess
+    from app.main import create_organization_service
+    from app.presentation.components import organization_dialogs as dialogs
+    from app.presentation.components.organization_frames import functions_frame
+    from app.presentation.i18n import set_current_locale
+
+    set_current_locale("en")
+    access = BusinessAccess(actor, AuthorizationPolicy(lambda: 1000, SessionLimits()))
+    service = create_organization_service(path, access=access)
+    functions = functions_frame(service.get_all_functions())
+    if surface == "type_add":
+        dialogs._open_add_function_type_dialog(service)
+    elif surface == "type_edit":
+        record = service.get_function_type_by_id(record_id)
+        dialogs._open_edit_function_type_dialog(service, record_id, record.function_type)
+    elif surface == "type_delete":
+        dialogs._open_delete_function_type_dialog(service, record_id, "Reviewed type")
+    elif surface == "employee_add":
+        dialogs._open_add_employee_dialog(service, functions)
+    elif surface == "employee_edit":
+        dialogs._open_edit_employee_dialog(service, record_id, functions)
+    elif surface == "employee_delete":
+        dialogs._open_delete_employee_dialog(service, record_id, "Reviewed employee")
+
+
+@pytest.mark.parametrize("entity", ["type", "employee"])
+def test_business_only_administrator_can_manage_directory_records_without_changing_application_identities(business, entity):
+    from streamlit.testing.v1 import AppTest
+    from app.main import create_organization_service
+
+    path, service, admin, _, _ = business
+    manager = service.actor(service.sign_in(VerifiedIdentity(
+        service.issuer, "directory-manager", "directory@example.test", "Directory Manager", 1000, 100000, True,
+    )))
+    service.set_status(admin, manager.user_id, "active")
+    service.grant(admin, manager.user_id, "business_admin", {"kind": "all"})
+    organization = create_organization_service(path, access=BusinessAccess(manager, service.policy))
+    before_account = service.account(manager)
+    with pytest.raises(AccessDenied):
+        service.list_users(manager)
+
+    def open_dialog(action, record_id=0):
+        return AppTest.from_function(
+            shared_directory_dialog_app, args=(path, manager, entity + "_" + action, record_id), default_timeout=30,
+        ).run()
+
+    app = open_dialog("add")
+    assert not app.exception and not app.error
+    if entity == "type":
+        app.text_input[0].set_value("Reviewed type")
+    else:
+        next(item for item in app.text_input if "First Name" in item.label).set_value("Rae")
+        next(item for item in app.text_input if "Last Name" in item.label).set_value("Record")
+        next(item for item in app.text_input if "Email" in item.label).set_value("directory@example.test")
+    next(item for item in app.button if "Save" in item.label).click().run()
+    assert not app.exception and not app.error
+    record_id = (organization.get_all_function_types()[0].function_type_id if entity == "type"
+                 else organization.get_all_employees()[0].employee_id)
+    assert service.account(manager) == before_account
+
+    app = open_dialog("edit", record_id)
+    if entity == "type":
+        app.text_input[0].set_value("Renamed type")
+    else:
+        next(item for item in app.text_input if "First Name" in item.label).set_value("Robin")
+        next(item for item in app.number_input if "Occupation" in item.label).set_value(60.0)
+    next(item for item in app.button if "Save Changes" in item.label).click().run()
+    assert not app.exception and not app.error
+    if entity == "type":
+        assert organization.get_function_type_by_id(record_id).function_type == "Renamed type"
+    else:
+        employee = organization.get_employee_by_id(record_id)
+        assert employee.firstname == "Robin" and employee.occupation_percentage == 60.0
+    app = open_dialog("delete", record_id)
+    next(item for item in app.button if "Yes, Delete" in item.label).click().run()
+    assert not app.exception and not app.error
+    assert (organization.get_all_function_types() if entity == "type" else organization.get_all_employees()) == []
+    assert service.account(manager) == before_account
+    assert [assignment["role"] for assignment in service.assignments(admin, manager.user_id)] == ["business_admin"]
+    with closing(get_db(path)) as connection:
+        assert connection.execute("SELECT count(*) FROM app_user").fetchone()[0] == 3
+        assert connection.execute("SELECT count(*) FROM app_identity").fetchone()[0] == 3
+        assert connection.execute("PRAGMA foreign_key_check").fetchall() == []

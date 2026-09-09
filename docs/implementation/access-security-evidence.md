@@ -79,7 +79,7 @@ Release source: [V16 logging/errors](https://github.com/OWASP/ASVS/blob/v5.0.0/5
 
 ## Validation status and gaps
 
-On 2026-09-09, the complete Python suite passed **775 tests and 14 subtests**.
+On 2026-09-09, the complete Python suite passed **801 tests and 14 subtests**.
 Its single opt-in browser test was skipped in the regular run, then passed separately
 against real Keycloak and the rebuilt application image without source bind mounts.
 The browser workflow passed three consecutive runs after moving live audit
@@ -102,7 +102,15 @@ diagnostics contain code location/category without exception payloads or browser
 disclosure. Legacy-upgrade tests preserve projects, dependency owners, parameter
 identifiers and constraints, retain a recoverable backup, and create no accounts.
 
-Measured `app` statement coverage is **92.26%** (9,770 of 10,590 statements), below the
+Scoped planning-dialog workflows exercise dictionary/free tags, custom/full-period
+resource assignments, invalid-date rejection, persisted task ownership despite a
+forged browser label/project, preservation of hidden owners, and revocation while
+an assignment form is open. Shared directory pages deny project editors before
+producing browser payloads. Business-only administrators can create, edit and
+delete directory records without receiving access administration or changing
+application accounts, identities or grants, including when employee/user emails match.
+
+Measured `app` statement coverage is **94.53%** (10,011 of 10,590 statements), below the
 **99%** project target. Coverage remains unfinished work; the passing workflow tests
 do not establish that target. Missing statements include legacy planning and
 organization UI branches, schema upgrades, and additional access boundary cases.
