@@ -168,6 +168,7 @@
     "schedule_title": "Timeline Schedule: {project_id}",
     "no_steps_defined": "No steps defined for the selected project(s) yet. Add steps below or upload a schedule CSV.",
     "csv_section_title": "📥 Bulk Step CSV Loader & Exporter",
+    "csv_download_schedule": "Download project schedule",
     "csv_download_template": "📄 Download CSV Template",
     "csv_upload_label": "Upload Steps CSV",
     "btn_import_csv": "📥 Import Steps from CSV",
@@ -276,6 +277,7 @@
       "filter_project": "Filter on this project"
     },
     "resource_grid": {
+      "only_overallocated": "Only overallocated pools",
       "title": "Resource Pools & Capacity Usage",
       "within_capacity": "Within Capacity",
       "overallocated": "Overallocated",
@@ -407,6 +409,7 @@
     "filter_by_type": "Filter by Type",
     "col_emp_code": "Code",
     "col_full_name": "Full Name",
+    "col_landline": "Landline",
     "col_mobile": "Mobile",
     "col_sigle": "Sigle",
     "col_function": "Function",

@@ -1,11 +1,13 @@
 """Explicit database startup, demo generation, and maintenance use cases."""
 
 from app.application.ports.maintenance import (
+    AllocationSeedReport,
     DatabaseCounts,
     MaintenanceGateway,
     PoolSeedReport,
     SeedRequest,
 )
+from app.domain.resources.allocation_generation import AllocationGenerationRequest, validate_generation_request
 
 
 class MaintenanceService:
@@ -48,6 +50,20 @@ class MaintenanceService:
     def counts(self) -> DatabaseCounts:
         """Read navigation and post-seed counts without loading project records."""
         return self._gateway.counts()
+
+    def clear_pool_allocations(self) -> int:
+        """Clear project/task demand after a backup, preserving resource membership."""
+        return self._gateway.clear_pool_allocations()
+
+    def generate_pool_allocations(
+        self, request: AllocationGenerationRequest, *, apply: bool = False,
+        expected_fingerprint: str | None = None,
+    ) -> AllocationSeedReport:
+        """Preview a validated allocation mix or apply it against a reviewed snapshot."""
+        validate_generation_request(request)
+        return self._gateway.generate_pool_allocations(
+            request, apply=apply, expected_fingerprint=expected_fingerprint,
+        )
 
     def seed_pool_scenarios(
         self, *, year: int | None = None, seed: int = 20260908, apply: bool = False

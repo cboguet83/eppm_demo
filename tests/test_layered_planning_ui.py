@@ -106,6 +106,32 @@ def test_gantt_create_edit_progress_and_delete_use_real_application_transactions
         assert len(service.get_milestones_by_project(1)) == 1
 
 
+def test_adding_task_keeps_multi_project_scope_and_focuses_the_created_project(database: str) -> None:
+    with closing(sqlite3.connect(database)) as connection, connection:
+        connection.execute("INSERT INTO project(id,name) VALUES(2,'Second project')")
+    app = AppTest.from_function(planning_app, args=(database,), default_timeout=30)
+    app.session_state["ms_multi_projects"] = [1, 2]
+    with patch("app.presentation.pages.planning._interactive_gantt", return_value=None) as component:
+        app.run()
+        token = app.session_state["planning_chart_snapshot"]["token"]
+        app.session_state["before_event"] = {"action": "load_project_tasks", "project_ids": [1], "scope_token": token, "nonce": "load-one"}
+        app.run()
+        component.return_value = {
+            "action": "create_step_full", "project_id": 2, "task_name": "Added here",
+            "phase": "Build", "start_date": "2026-01-03", "end_date": "2026-01-05",
+            "progress_pct": 0, "dependencies": [], "nonce": "create-two",
+        }
+        app.run()
+        assert not app.exception and not app.error
+        snapshot = app.session_state["planning_chart_snapshot"]
+        assert snapshot["token"] == token and set(snapshot["loaded"]) == {1, 2}
+        payloads = [call.kwargs["patch"] for call in component.call_args_list if "patch" in call.kwargs]
+        created = next(payload for payload in payloads if payload.get("focus_project_id") == 2)
+        assert created["scope_token"] == token
+        assert created["replace_projects"] == [2]
+        assert any(task["name"] == "Added here" for task in created["tasks"])
+
+
 @pytest.mark.parametrize(
     "change,message",
     [

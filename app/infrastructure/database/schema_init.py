@@ -9,6 +9,7 @@ from app.shared.config import config
 from app.infrastructure.database.connection import get_db
 from app.infrastructure.database.project_type_migration import backup_legacy_database, migrate_project_types
 from app.infrastructure.database.project_collaboration_migration import migrate_project_collaboration
+from app.infrastructure.database.project_experience_migration import migrate_project_experience
 from app.shared.logging import get_logger
 
 logger = get_logger(__name__)
@@ -672,6 +673,7 @@ def init_db(db_path: Optional[str] = None) -> None:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_planning_dependency_task ON task_dependencies(task_id)")
         migrate_project_types(conn)
         migrate_project_collaboration(conn)
+        migrate_project_experience(conn)
         conn.commit()
         conn.execute("PRAGMA foreign_keys = ON")
     logger.info("Schema initialization complete")

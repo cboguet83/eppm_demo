@@ -20,6 +20,8 @@ class FunctionContact(TypedDict):
     function_id: int
     function_name: str
     person: str
+    mobile: str
+    landline: str
 
 
 class ProjectContact(FunctionContact):
@@ -52,6 +54,7 @@ class CollaborationStore(Protocol):
         self, project_id: int, role_id: int, function_id: int, contact_id: int | None
     ) -> int: ...
     def delete_contact(self, project_id: int, contact_id: int) -> None: ...
+    def reassign_contact(self, project_id: int, contact_id: int, function_id: int) -> None: ...
     def list_events(
         self, project_id: int, locale: str, *, offset: int, limit: int
     ) -> list[ProjectEvent]: ...

@@ -10,7 +10,7 @@ from app.application.exceptions import SchemaStorageError, ProjectTypeStorageErr
 from app.application.services.schema import SchemaService
 from app.application.services.project_types import ProjectTypeService
 from app.domain.projects.property_values import SUPPORTED_PROPERTY_TYPES
-from app.presentation.i18n import t
+from app.presentation.i18n import SUPPORTED_LOCALES, get_current_locale, t
 from app.presentation.components.schema_frames import groups_frame, parameters_frame, options_frame
 from app.presentation.pages.project_types import applicability_input, render_project_types
 
@@ -59,10 +59,31 @@ def _render_schema_definition(service: SchemaService, type_service: ProjectTypeS
         _render_groups(service, groups)
     with tab_params:
         _render_parameters(service, type_service, groups, params)
+        _render_alias_translations(service, params)
     with tab_options:
         _render_options(service, params, options)
     with tab_preview:
         _render_schema_tree(groups, params, options)
+
+
+def _render_alias_translations(service: SchemaService, params: pd.DataFrame) -> None:
+    """Maintain localized aliases separately from stable IDs and default labels."""
+    if params.empty:
+        return
+    with st.expander("Parameter alias translations"):
+        labels = dict(zip(params["param_id"], params["param_name"]))
+        param_id = st.selectbox("Parameter", list(labels), format_func=labels.get,
+            key="schema_alias_property")
+        locale = st.selectbox("Translation language", list(SUPPORTED_LOCALES),
+            format_func=SUPPORTED_LOCALES.get,
+            index=list(SUPPORTED_LOCALES).index(get_current_locale()), key="schema_alias_locale")
+        translations = service.get_alias_translations(locale)
+        with st.form(f"schema_alias_form_{param_id}_{locale}"):
+            alias = st.text_input("Translated alias", value=translations.get(param_id, ""))
+            st.caption("Leave blank to use the default alias, or the parameter name when no alias is set.")
+            if st.form_submit_button("Save alias translation"):
+                _save(service.set_alias_translation, param_id, locale, alias)
+                st.rerun()
 
 
 def _render_groups(service: SchemaService, groups: pd.DataFrame) -> None:

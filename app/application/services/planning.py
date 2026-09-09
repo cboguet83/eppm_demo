@@ -10,6 +10,7 @@ from app.application.ports.planning import (
     TaskRow,
 )
 from app.domain.planning.csv_import import parse_csv
+from app.domain.planning.csv_export import export_schedule
 from app.domain.planning.records import (
     DependencyInput,
     DependencySchedule,
@@ -78,6 +79,11 @@ class PlanningService:
             task_id = store.create_task(project_id, values)
             _replace_dependencies(store, task_id, dependencies, predecessor_id)
             return task_id
+
+    def export_schedule(self, project_id: int) -> str:
+        """Export the project's chronological schedule with consecutive step numbers."""
+        with self._gateway.transaction() as store:
+            return export_schedule(store.get_milestones_by_project(project_id))
 
     def update_milestone(
         self,

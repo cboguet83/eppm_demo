@@ -2,7 +2,6 @@
 
 from collections.abc import Callable
 from functools import wraps
-from html import escape
 
 import pandas as pd
 import streamlit as st
@@ -437,73 +436,53 @@ def _render_pool_assignments_table(
     service: ResourcePoolService,
     planning_page: str,
 ) -> None:
-    """Render active pool allocations table with clickable hyperlinks to Planning view.
+    """Show open and unassign actions on each allocation row."""
+    from app.presentation.components.action_table import action_table
 
-    Args:
-        assignments: List of pool assignment dictionaries.
-        selected_pool_id: ID of currently selected resource pool.
-        service: Application service for removing assignments.
-        planning_page: Existing navigation label supplied by the Settings shell.
-    """
     if not assignments:
-        st.info(
-            t(
-                "settings.no_assignments_for_pool",
-                default="This pool is not currently assigned to any project or task.",
-            )
-        )
+        st.info(t("settings.no_assignments_for_pool", default="This pool is not currently assigned to any project or task."))
         return
-    table_rows: list[str] = []
-    for a in assignments:
-        p_id = a["project_id"]
-        p_name = escape(str(a["project_name"]))
-        t_id = a["task_id"]
-        t_name = escape(str(a["task_name"]))
-        fte = a["fte_assigned"]
-        s_date = escape(str(a["start_date"]))
-        e_date = escape(str(a["end_date"]))
-        is_custom = a.get("is_custom_period", False)
-        notes = escape(str(a.get("notes") or ""))
-        proj_link = f'<a href="?nav=planning&project_id={p_id}" target="_self" style="color:#0284C7; font-weight:700; text-decoration:underline;" title="Open {p_name} in Planning & Milestones">📁 {p_name} [#{p_id}]</a>'
-        if t_id:
-            task_link = f'<a href="?nav=planning&project_id={p_id}&task_id={t_id}" target="_self" style="color:#0284C7; text-decoration:underline;" title="Open Task #{t_id} in Planning">📋 {t_name} [#{t_id}]</a>'
-        else:
-            task_link = '<span style="color:#64748B; font-style:italic;">— Project Level</span>'
-        period_badge = f"""<span style="font-size:12px; color:#334155;">{s_date} → {e_date}</span> <span style="font-size:10.5px; background:#E2E8F0; color:#475569; padding:1px 5px; border-radius:3px;">{('Custom' if is_custom else 'Full Project')}</span>"""
-        jump_btn = f"""<a href="?nav=planning&project_id={p_id}{(f'&task_id={t_id}' if t_id else '')}" target="_self" style="background:#0284C7; color:#FFFFFF; padding:4px 8px; border-radius:4px; font-size:11.5px; font-weight:600; text-decoration:none; display:inline-block; white-space:nowrap;">📅 Open ➔</a>"""
-        table_rows.append(
-            f"""<tr style="border-bottom:1px solid #E2E8F0;"><td style="padding:8px 10px; font-weight:600; color:#475569;">#{a['id']}</td><td style="padding:8px 10px;">{proj_link}</td><td style="padding:8px 10px;">{task_link}</td><td style="padding:8px 10px;"><span style="font-weight:700; color:#0F172A; background:#F1F5F9; padding:2px 7px; border-radius:4px;">{fte:.2f} FTE</span></td><td style="padding:8px 10px;">{period_badge}</td><td style="padding:8px 10px; color:#64748B; font-size:12px;">{notes or '—'}</td><td style="padding:8px 10px; text-align:center;">{jump_btn}</td></tr>"""
-        )
-    header_html = f"""<tr style="background:#F8FAFC; border-bottom:2px solid #CBD5E1; color:#475569; font-weight:700; font-size:12px; text-transform:uppercase;"><th style="padding:8px 10px; text-align:left;">ID</th><th style="padding:8px 10px; text-align:left;">{t('settings.col_project', default='Project')}</th><th style="padding:8px 10px; text-align:left;">{t('settings.col_task', default='Task / Step')}</th><th style="padding:8px 10px; text-align:left;">{t('master_data.field_fte', default='Assigned FTE')}</th><th style="padding:8px 10px; text-align:left;">{t('master_data.field_period', default='Effective Period')}</th><th style="padding:8px 10px; text-align:left;">{t('master_data.field_notes', default='Notes')}</th><th style="padding:8px 10px; text-align:center;">{t('settings.col_action', default='Action')}</th></tr>"""
-    full_table_html = f"""<div style="overflow-x:auto; border:1px solid #E2E8F0; border-radius:6px; margin-bottom:12px;"><table style="width:100%; border-collapse:collapse; font-size:12.5px; text-align:left; background:#FFFFFF;"><thead>{header_html}</thead><tbody>{''.join(table_rows)}</tbody></table></div>"""
-    c_tbl, c_del_assign = st.columns([5, 1])
-    with c_tbl:
-        st.markdown(full_table_html, unsafe_allow_html=True)
-    with c_del_assign:
-        del_a_id = st.selectbox(
-            "Unassign ID",
-            options=[a["id"] for a in assignments],
-            key=f"sb_del_assign_{selected_pool_id}",
-            label_visibility="collapsed",
-        )
-        if st.button(
-            t("settings.btn_unassign", default="🗑️ Unassign"),
-            key=f"btn_unassign_{selected_pool_id}",
-            width="stretch",
-        ):
-            require_change(service.delete_assignment(del_a_id))
-            st.toast(f"Assignment #{del_a_id} removed.", icon="🗑️")
+    rows = [{
+        "id": int(row["id"]), "project": row["project_name"],
+        "task": row["task_name"] if row["task_id"] else "Project level",
+        "fte": f"{row['fte_assigned']:.2f}",
+        "period": f"{row['start_date']} → {row['end_date']}",
+        "notes": row.get("notes") or "—", "accessible_name": row["project_name"],
+    } for row in assignments]
+    event = action_table(rows, [
+        ("id", "ID"), ("project", t("settings.col_project", default="Project")),
+        ("task", t("settings.col_task", default="Task / Step")),
+        ("fte", "Assigned FTE"), ("period", "Effective period"), ("notes", "Notes"),
+    ], {"open": "Open", "unassign": "Unassign"}, key=f"pool_assignments_{selected_pool_id}")
+    if event is None:
+        return
+    chosen = next(row for row in assignments if row["id"] == event["id"])
+    if event["action"] == "unassign":
+        _confirm_unassign(service, selected_pool_id, int(chosen["id"]), str(chosen["project_name"]))
+    elif event["action"] == "open":
+        st.session_state["target_planning_project_id"] = int(chosen["project_id"])
+        st.session_state["ms_multi_projects"] = [int(chosen["project_id"])]
+        if chosen.get("task_id"):
+            st.session_state["target_planning_task_id"] = int(chosen["task_id"])
+        st.session_state["nav_redirect"] = planning_page
+        st.rerun()
+
+
+@st.dialog("Confirm unassignment")
+@pool_errors
+def _confirm_unassign(
+    service: ResourcePoolService, pool_id: int, assignment_id: int, project_name: str,
+) -> None:
+    """Require explicit confirmation before removing the selected allocation."""
+    st.write(f"Unassign allocation #{assignment_id} from {project_name}?")
+    with st.container(horizontal=True):
+        if st.button("Confirm unassign", type="primary", key=f"confirm_unassign_{assignment_id}"):
+            current = service.get_assignment_by_id(assignment_id)
+            if current is None or current.pool_id != pool_id:
+                st.error("The allocation no longer exists in this pool.")
+                return
+            require_change(service.delete_assignment(assignment_id))
+            st.toast("Allocation removed.")
             st.rerun()
-        if st.button(
-            "📅 " + t("settings.btn_jump_to_planning", default="Open in Planning"),
-            key=f"btn_jump_{selected_pool_id}",
-            width="stretch",
-        ):
-            chosen = next((a for a in assignments if a["id"] == del_a_id), None)
-            if chosen:
-                st.session_state["target_planning_project_id"] = int(chosen["project_id"])
-                st.session_state["ms_multi_projects"] = [int(chosen["project_id"])]
-                if chosen.get("task_id"):
-                    st.session_state["target_planning_task_id"] = int(chosen["task_id"])
-                st.session_state["nav_redirect"] = planning_page
-                st.rerun()
+        if st.button("Cancel", key=f"cancel_unassign_{assignment_id}"):
+            st.rerun()

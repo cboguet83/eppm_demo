@@ -69,7 +69,8 @@ class Employee:
         firstname: First / given name.
         lastname: Last / family name.
         email: Work email address (must be unique).
-        mobile: Contact telephone or mobile number.
+        mobile: Mobile telephone number.
+        landline: Landline telephone number.
         sigle: Trigram / initials acronym (e.g. 'JDO', 'ASM').
         employee_code: Unique employee badge/code (e.g. 'EMP-001').
         function_id: Associated function role ID.
@@ -85,6 +86,7 @@ class Employee:
     sigle: str = ""
     function_id: int | None = None
     occupation_percentage: float = 100.0
+    landline: str = ""
 
 
 @dataclass

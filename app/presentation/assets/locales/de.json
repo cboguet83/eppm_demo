@@ -169,6 +169,7 @@
     "schedule_title": "Zeitplan: {project_id}",
     "no_steps_defined": "Noch keine Schritte für die ausgewählten Projekte definiert. Fügen Sie unten Schritte hinzu oder laden Sie eine CSV-Datei hoch.",
     "csv_section_title": "📥 Massen-CSV-Import & -Export von Schritten",
+    "csv_download_schedule": "Projektzeitplan herunterladen",
     "csv_download_template": "📄 CSV-Vorlage herunterladen",
     "csv_upload_label": "Schritte-CSV-Datei hochladen",
     "btn_import_csv": "📥 Schritte aus CSV importieren",
@@ -277,6 +278,7 @@
       "filter_project": "Nach diesem Projekt filtern"
     },
     "resource_grid": {
+      "only_overallocated": "Nur überlastete Ressourcenpools",
       "title": "Ressourcen-Pools & Kapazitätsauslastung",
       "within_capacity": "Im Rahmen der Kapazität",
       "overallocated": "Überlastet",
@@ -408,6 +410,7 @@
     "filter_by_type": "Nach Typ filtern",
     "col_emp_code": "Code",
     "col_full_name": "Vollständiger Name",
+    "col_landline": "Festnetz",
     "col_mobile": "Mobil",
     "col_sigle": "Kürzel",
     "col_function": "Funktion",

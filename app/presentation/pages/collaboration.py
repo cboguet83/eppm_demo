@@ -111,102 +111,75 @@ def render_project_catalog(service: CollaborationService, kind: CatalogKind) -> 
 @st.fragment
 @collaboration_errors
 def render_project_contacts(project_id: int, service: CollaborationService) -> None:
-    """Display and edit role-to-function assignments for one selected project."""
+    """Show current contact details with row actions and a separate add dialog."""
+    from app.presentation.components.action_table import action_table
+
+    contacts = service.list_contacts(project_id, get_current_locale())
+    if st.button(_label("add_contact", "Add contact"), icon=":material/person_add:", key=f"add_contact_{project_id}"):
+        _contact_dialog(project_id, service)
+    if not contacts:
+        st.info(_label("no_contacts", "No project contacts assigned."))
+        return
+    rows = [dict(row, accessible_name=f"{row['role']} — {row['person']}") for row in contacts]
+    event = action_table(rows, [
+        ("role", _label("role", "Role")), ("person", _label("person", "Person")),
+        ("function_name", _label("function", "Function")),
+        ("mobile", _label("mobile", "Mobile")), ("landline", _label("landline", "Landline")),
+    ], {"reassign": _label("reassign", "Reassign"), "remove": _label("remove_contact", "Remove contact")},
+        key=f"project_contacts_table_{project_id}")
+    if event:
+        if event["action"] == "reassign":
+            _contact_dialog(project_id, service, event["id"])
+        elif event["action"] == "remove":
+            _remove_contact_dialog(project_id, service, event["id"])
+
+
+@st.dialog("Project contact")
+@collaboration_errors
+def _contact_dialog(project_id: int, service: CollaborationService, contact_id: int | None = None) -> None:
+    """Create a role assignment or reassign its function while retaining the role."""
     locale = get_current_locale()
-    contacts = service.list_contacts(project_id, locale)
     roles = {row["id"]: row["label"] for row in service.list_catalog("role", locale)}
     functions = {row["function_id"]: row for row in service.list_functions()}
-    prefix = f"project_contacts_{project_id}"
-    if contacts:
-        st.dataframe(
-            pd.DataFrame(
-                [
-                    {
-                        _label("role", "Role"): row["role"],
-                        _label("person", "Person"): row["person"],
-                        _label("function", "Function"): row["function_name"],
-                    }
-                    for row in contacts
-                ]
-            ),
-            hide_index=True,
-            width="stretch",
-        )
-    else:
-        st.info(_label("no_contacts", "No project contacts assigned."))
-    st.caption(
-        _label(
-            "function_help",
-            "Assignments belong to functions. The current occupant is displayed first; vacant functions show their name.",
-        )
-    )
-    if not roles or not functions:
-        st.info(
-            _label(
-                "configure_contacts",
-                "Create project roles and functions in Settings before assigning contacts.",
-            )
-        )
+    contacts = {row["id"]: row for row in service.list_contacts(project_id, locale)}
+    if contact_id is not None and contact_id not in contacts:
+        st.error("The contact assignment no longer exists.")
         return
-    by_id = {row["id"]: row for row in contacts}
-    selected = st.selectbox(
-        _label("contact", "Contact assignment"),
-        [None, *by_id],
-        format_func=lambda value: (
-            by_id[value]["role"] + " — " + by_id[value]["person"]
-            if value is not None
-            else _label("add_contact", "Add contact")
-        ),
-        key=prefix + "_selection",
-    )
-    current = by_id.get(selected, {})
-    form_key = f"{prefix}_form_{selected}"
-    with st.form(form_key):
-        st.selectbox(
-            _label("role", "Role"),
-            list(roles),
-            format_func=roles.get,
-            key=form_key + "_role",
+    if not roles or not functions:
+        st.info(_label("configure_contacts", "Create project roles and functions in Settings before assigning contacts."))
+        return
+    current = contacts.get(contact_id, {})
+    prefix = f"project_contact_{project_id}_{contact_id}"
+    with st.form(prefix):
+        role_id = st.selectbox(_label("role", "Role"), list(roles), format_func=roles.get,
             index=list(roles).index(current.get("role_id", next(iter(roles)))),
-        )
-        st.selectbox(
-            _label("function", "Function"),
-            list(functions),
-            key=form_key + "_function",
-            format_func=lambda value: (
-                f"{functions[value]['person']} — {functions[value]['function_name']} (#{value})"
-                if functions[value]["person"] != functions[value]["function_name"]
-                else f"{functions[value]['function_name']} (#{value})"
-            ),
-            index=list(functions).index(current.get("function_id", next(iter(functions)))),
-        )
-        st.form_submit_button(
-            _label("save_contact", "Save contact"),
-            type="primary",
-            on_click=_change,
-            args=(
-                lambda: service.save_contact(
-                    project_id,
-                    st.session_state[form_key + "_role"],
-                    st.session_state[form_key + "_function"],
-                    selected,
-                ),
-                prefix + "_error",
-            ),
-        )
-    if selected is not None:
+            disabled=contact_id is not None, key=prefix + "_role")
+        function_id = st.selectbox(_label("function", "Function"), list(functions),
+            format_func=lambda value: f"{functions[value]['person']} — {functions[value]['function_name']} (#{value})",
+            index=list(functions).index(current.get("function_id", next(iter(functions)))), key=prefix + "_function")
+        if st.form_submit_button(_label("save_contact", "Save contact"), type="primary"):
+            if contact_id is None:
+                service.save_contact(project_id, role_id, function_id)
+            else:
+                service.reassign_contact(project_id, contact_id, function_id)
+            st.rerun()
 
-        def remove_contact() -> None:
-            service.delete_contact(project_id, selected)
-            st.session_state[prefix + "_selection"] = None
 
-        st.button(
-            _label("remove_contact", "Remove contact"),
-            key=prefix + "_remove",
-            on_click=_change,
-            args=(remove_contact, prefix + "_error"),
-        )
-    _show_error(prefix + "_error")
+@st.dialog("Confirm contact removal")
+@collaboration_errors
+def _remove_contact_dialog(project_id: int, service: CollaborationService, contact_id: int) -> None:
+    """Confirm removal of an assignment without deleting its employee or function."""
+    contact = next((row for row in service.list_contacts(project_id, get_current_locale()) if row["id"] == contact_id), None)
+    if contact is None:
+        st.info("The contact assignment no longer exists.")
+        return
+    st.write(f"Remove {contact['person']} from the role {contact['role']}?")
+    with st.container(horizontal=True):
+        if st.button("Confirm removal", type="primary", key=f"confirm_contact_remove_{contact_id}"):
+            service.delete_contact(project_id, contact_id)
+            st.rerun()
+        if st.button("Cancel", key=f"cancel_contact_remove_{contact_id}"):
+            st.rerun()
 
 
 def _event_form(

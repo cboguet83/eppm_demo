@@ -37,6 +37,9 @@ The application, commands, and tests use the owning `app` modules directly.
 [ADR 0015](docs/decisions/0015-retire-compatibility-interfaces.md) removes `src`,
 the `app.py` launcher, lazy package exports, and compatibility-only helpers.
 Existing SQLite data and applied database migrations are preserved.
+[ADR 0016](docs/decisions/0016-project-experience-and-allocation-generation.md)
+covers project/contact dialogs, translated property aliases, numbered schedule
+exports, and configurable allocation generation.
 
 ### C4 level 2: runtime containers
 
@@ -138,6 +141,62 @@ the migration verifies it introduces no new violations.
 ## 🗄️ Database Seeding & Mock Data Generation
 
 PPM Studio Pro supports two complementary database seeding workflows:
+
+### Pool allocation controls
+
+The sidebar's **Database Seeding** section has **Generate pool allocations** and
+**Clear pool allocations**. Clearing requires confirmation and removes project/task
+demand while preserving pools and staffing. Both operations back up the database
+before applying changes.
+
+Generation first previews the mix without changing the database. Configure:
+
+- Allocated pools as a percentage of all pools.
+- Average allocation as the mean capacity percentage of selected pools.
+- Overallocated and underallocated pools as percentages of the selected pools;
+  the remaining selected pools receive exactly 100% allocation.
+- Maximum overallocation as excess above 100%: `20` permits up to 120% usage.
+- Pools without employees or teams as a percentage of all pools.
+
+Counts round to whole pools. An impossible average/category combination is rejected
+with its feasible range. Generated demand follows available staffing capacity and
+calendar changes; unstaffed pools use defined capacity. At 0.001-FTE precision,
+achieved percentages can be slightly below their targets; the preview reports both.
+Combinations too small to preserve their category at this precision are rejected.
+
+Applying replaces current allocations and adjusts staffing to achieve the requested
+unstaffed share. It removes mappings from unstaffed pools and adds an employee to
+other pools when needed. Unstaffed pools without positive defined capacity receive
+their previous available capacity, or 1 FTE. Existing projects and task dates remain.
+The preview reports these changes; a changed database requires a fresh preview.
+
+Equivalent CLI commands (add `--apply` only when ready to change data):
+
+```powershell
+python -m scripts.pool_allocations generate --db-path data/ppm_mock.db --allocated-pools 80 --average-allocation 80 --overallocated-pools 20 --max-overallocation 50 --underallocated-pools 50 --unstaffed-pools 10
+python -m scripts.pool_allocations clear --db-path data/ppm_mock.db --apply
+```
+
+### Project and contact workflows
+
+Project creation uses the same property tabs as the details panel. Property labels
+resolve in this order: selected-language alias, default alias, parameter name.
+Maintain translations in **Parameters Definition → Parameters → Parameter alias
+translations**. Translations use a relational table; parameter IDs and stored values
+remain unchanged.
+
+The contacts tab shows mobile and landline numbers, with **Add contact**, **Reassign**,
+and confirmed **Remove contact** actions. Reassignment changes the function while
+keeping the role. Employee forms include landlines, and fresh demo seeding supplies
+them. Existing employee records receive an empty landline during additive migration.
+Deleting a project from its edit popup now requires a separate confirmation view.
+
+Adding a Gantt task retains project focus. The capacity panel can show only
+overallocated pools, combined with its selected-project filter. Portfolio rows offer
+overallocation navigation through their context menu or ellipsis button. Settings
+allocation rows expose **Open** and confirmed **Unassign** actions directly.
+The CSV section exports the selected project's schedule and offers an import
+template; both start with `step_number`, numbered from 1.
 
 ### A. Automatic Bootstrap Seeding (`app/infrastructure/database/seeder.py`)
 On initial application launch, if the database is empty, the system automatically bootstraps:

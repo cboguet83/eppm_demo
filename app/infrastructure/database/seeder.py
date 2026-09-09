@@ -1047,8 +1047,8 @@ def _seed_default_data(
                 ),
             ]
             cursor.executemany(
-                "INSERT INTO employee (employee_id, firstname, lastname, email, mobile, sigle, employee_code, function_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                sample_employees,
+                "INSERT INTO employee (employee_id, firstname, lastname, email, mobile, sigle, employee_code, function_id, landline) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                [(*employee, f"+352 27 000 {employee[0]:03d}") for employee in sample_employees],
             )
 
         # Check and ensure project_tag and Task_Tag groups exist

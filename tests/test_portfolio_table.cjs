@@ -129,18 +129,29 @@ test('facet search is debounced and searches the server, not only cached rows', 
   assert.equal(app.requests.at(-1).kind, 'facet');
 });
 
-test('overallocation icon navigates with a stable project ID without selecting another row', () => {
+test('overallocation is an indicator and navigation uses the project context menu', () => {
   const app = harness(); app.render();
-  const warning = app.root.querySelector('.overallocation-button');
+  const warning = app.root.querySelector('.overallocation-indicator');
+  assert.equal(warning.onclick, undefined);
+  assert.equal(warning.tag, 'span');
   let stopped = 0;
-  warning.onclick({stopPropagation() {stopped++;}});
+  app.root.querySelector('.project-menu-button').onclick({preventDefault() {}, stopPropagation() {stopped++;}});
+  assert.deepEqual(app.ganttClicks, []);
+  app.button('View resource overallocation in Gantt').onclick({stopPropagation() {stopped++;}});
   assert.deepEqual(app.ganttClicks, [1]);
   assert.deepEqual(app.clicks, []);
-  assert.equal(stopped, 1);
-  assert.match(warning.attributes['aria-label'], /Project 1$/);
+  assert.equal(stopped, 2);
   app.scroll(80); app.render(100); app.scroll(100);
-  app.root.querySelector('.overallocation-button').onclick({stopPropagation() {}});
+  const row = app.root.querySelectorAll('tr').find(r => r.dataset.projectId === '101');
+  row.oncontextmenu({preventDefault() {}, stopPropagation() {}});
+  app.button('View resource overallocation in Gantt').onclick({stopPropagation() {}});
   assert.deepEqual(app.ganttClicks, [1, 101]);
+  const ordinaryRow = app.root.querySelectorAll('tr').find(r => r.dataset.projectId === '102');
+  ordinaryRow.onkeydown({key: 'F10', shiftKey: true, preventDefault() {}, stopPropagation() {}});
+  assert.equal(app.button('View resource overallocation in Gantt'), undefined);
+  assert.ok(app.button('Open project details'));
+  app.root.onkeydown({key: 'Escape'});
+  assert.equal(app.root.querySelector('.project-context-menu'), undefined);
 });
 
 test('master-list height is one header and eight rows, with no numbered paging controls', () => {

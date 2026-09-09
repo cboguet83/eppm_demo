@@ -24,7 +24,7 @@ def teams_frame(records: list[Team]) -> pd.DataFrame:
 
 def employees_frame(records: list[Employee]) -> pd.DataFrame:
     """Retain the existing employees columns, including empty catalogs."""
-    return pd.DataFrame([asdict(record) for record in records], columns=['employee_id', 'firstname', 'lastname', 'email', 'mobile', 'sigle', 'employee_code', 'function_id', 'occupation_percentage'])
+    return pd.DataFrame([asdict(record) for record in records], columns=['employee_id', 'firstname', 'lastname', 'email', 'mobile', 'landline', 'sigle', 'employee_code', 'function_id', 'occupation_percentage'])
 
 
 def exceptions_frame(records: list[CalendarExceptionRow]) -> pd.DataFrame:

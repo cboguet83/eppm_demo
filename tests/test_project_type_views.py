@@ -159,6 +159,7 @@ schema = create_schema_service({self.path!r})
             self.assert_clean(details)
             rendered += '\n'.join(w.value for w in details.markdown)
         for kind in SUPPORTED_PROPERTY_TYPES:
-            self.assertIn(f'Custom {kind} (Alias {kind}):', rendered)
+            self.assertIn(f'Alias {kind}:', rendered)
+            self.assertNotIn(f'Custom {kind} (Alias {kind})', rendered)
         self.assertIn('Unfilled property: Previously empty', rendered)
         self.assertNotIn('Other template only:', rendered)

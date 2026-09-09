@@ -1,6 +1,7 @@
 """Transactional use cases for groups, property definitions, and choices."""
 
 from dataclasses import replace
+import re
 
 from app.application.ports.schema import SchemaGateway, SchemaSnapshot
 from app.domain.projects.project_types import make_applicability
@@ -37,6 +38,21 @@ class SchemaService:
         """Read choices ordered by display order and ID."""
         with self._gateway.transaction() as store:
             return store.options()
+
+    def get_alias_translations(self, locale: str) -> dict[str, str]:
+        """Read explicit translations; presentation supplies default alias fallbacks."""
+        with self._gateway.transaction() as store:
+            return store.alias_translations(locale.strip().lower())
+
+    def set_alias_translation(self, param_id: str, locale: str, alias: str) -> None:
+        """Save a localized alias, or remove it when blank, for an existing property."""
+        locale = locale.strip().lower()
+        if not re.fullmatch(r"[a-z]{2,3}(?:-[a-z0-9]{2,8})*", locale):
+            raise ValueError("Use a language code such as en, fr, or de.")
+        with self._gateway.transaction(write=True) as store:
+            if store.find_parameter(param_id) is None:
+                raise ValueError("Unknown property")
+            store.set_alias_translation(param_id, locale, alias.strip())
 
     def get_next_available_group_order(self) -> int:
         """Suggest the first unused positive group order."""

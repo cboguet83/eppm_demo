@@ -169,6 +169,7 @@
     "schedule_title": "Cronograma: {project_id}",
     "no_steps_defined": "Nenhuma etapa definida para os projetos selecionados. Adicione etapas abaixo ou importe um CSV.",
     "csv_section_title": "📥 Importador & Exportador de Etapas em Lote (CSV)",
+    "csv_download_schedule": "Baixar cronograma do projeto",
     "csv_download_template": "📄 Baixar Modelo CSV",
     "csv_upload_label": "Carregar Arquivo CSV de Etapas",
     "btn_import_csv": "📥 Importar Etapas do CSV",
@@ -277,6 +278,7 @@
       "filter_project": "Filtrar por este projeto"
     },
     "resource_grid": {
+      "only_overallocated": "Apenas pools sobrealocados",
       "title": "Pools de Recursos & Utilização de Capacidade",
       "within_capacity": "Dentro da Capacidade",
       "overallocated": "Superalocado",
@@ -429,6 +431,7 @@
     "filter_by_type": "Filtrar por Tipo",
     "col_emp_code": "Código",
     "col_full_name": "Nome Completo",
+    "col_landline": "Telefone fixo",
     "col_mobile": "Celular",
     "col_sigle": "Sigla",
     "col_function": "Função",

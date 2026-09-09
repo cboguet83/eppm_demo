@@ -8,7 +8,8 @@ import streamlit as st
 
 from app.application.exceptions import ProjectStorageError
 from app.domain.projects.project import PROJECT_STATUSES
-from app.presentation.i18n import t
+from app.presentation.i18n import get_current_locale, t
+from app.presentation.components.property_labels import localize_parameters, parameter_groups
 from app.presentation.components.dynamic_fields import (
     render_dynamic_field as _render_dynamic_field,
 )
@@ -49,38 +50,26 @@ def _render_dynamic_fields(
     editable widgets, and required/default rules come from the effective template.
     """
     values: dict[str, Any] = {}
-    known_group_ids = set(groups["id"].tolist()) if not groups.empty else set()
-
-    if not groups.empty and not params.empty:
-        for _, group in groups.iterrows():
-            group_params = params[params["group_id"] == group["id"]]
-            if group_params.empty:
-                continue
-            with st.expander(f":material/folder: {group['group_name']}", expanded=True):
-                for _, parameter in group_params.iterrows():
-                    param_id = str(parameter["param_id"])
-                    values[param_id] = _render_dynamic_field(
-                        parameter,
-                        options,
-                        attributes.get(str(parameter["param_id"])),
-                        key_prefix,
-                    )
-
-    if not params.empty:
-        ungrouped = params[params["group_id"].isna() | ~params["group_id"].isin(known_group_ids)]
-        if not ungrouped.empty:
-            with st.expander(
-                f":material/push_pin: {t('schema.param_group_none')}",
-                expanded=True,
-            ):
-                for _, parameter in ungrouped.iterrows():
-                    param_id = str(parameter["param_id"])
-                    values[param_id] = _render_dynamic_field(
-                        parameter,
-                        options,
-                        attributes.get(str(parameter["param_id"])),
-                        key_prefix,
-                    )
+    field_groups = parameter_groups(params, groups)
+    labels = [label for label, _ in field_groups]
+    creating = key_prefix.startswith("portfolio_create_")
+    if creating:
+        labels += [t("project_collaboration.contacts", default="Project Contacts"),
+                   t("project_collaboration.log", default="Project log")]
+    if not labels:
+        return values
+    tabs = st.tabs(labels)
+    for tab, (_, fields) in zip(tabs, field_groups):
+        with tab:
+            for _, parameter in fields.iterrows():
+                param_id = str(parameter["param_id"])
+                values[param_id] = _render_dynamic_field(
+                    parameter, options, attributes.get(param_id), key_prefix,
+                )
+    if creating:
+        for tab in tabs[-2:]:
+            with tab:
+                st.info("Create the project to add contacts and log entries.")
     return values
 
 
@@ -109,7 +98,10 @@ def open_create_project_dialog(
         format_func=type_labels.get,
         key=f"create_type_{project_id}",
     )
-    params = template_frame(workspace.types.get_template(int(type_id)))
+    params = localize_parameters(
+        template_frame(workspace.types.get_template(int(type_id))),
+        workspace.schema.get_alias_translations(get_current_locale()),
+    )
     defaults = {
         p["param_id"]: p["default_value"] for _, p in params.iterrows() if p["has_default"]
     }
@@ -162,7 +154,12 @@ def open_create_project_dialog(
                 st.rerun()
 
 
-@st.dialog("Edit project details", width="large")
+def _dismiss_project_dialog() -> None:
+    """Clear a pending confirmation when the user dismisses the project modal."""
+    st.session_state.pop("project_delete_confirmation", None)
+
+
+@st.dialog("Edit project details", width="large", on_dismiss=_dismiss_project_dialog)
 def open_edit_project_dialog(
     project_id: int,
     workspace: ProjectWorkspace,
@@ -171,6 +168,22 @@ def open_edit_project_dialog(
     project = workspace.projects.get_project_by_id(project_id)
     if project is None:
         st.error("The selected project no longer exists.")
+        return
+
+    confirmation_key = "project_delete_confirmation"
+    if st.session_state.get(confirmation_key) == project_id:
+        st.subheader("Confirm project deletion")
+        st.warning(f"Delete {project.name}? Its tasks, dependencies, contacts, and log entries will also be removed.")
+        with st.container(horizontal=True):
+            if st.button("Confirm delete project", type="primary", key=f"confirm_delete_project_{project_id}"):
+                _save_project(workspace.projects.delete_project, project_id=project_id)
+                st.session_state.pop(confirmation_key, None)
+                if str(st.session_state.get("selected_portfolio_project_id")) == str(project_id):
+                    st.session_state.pop("selected_portfolio_project_id", None)
+                st.toast("Project deleted.")
+                st.rerun()
+            st.button("Cancel", key=f"cancel_delete_project_{project_id}",
+                on_click=_dismiss_project_dialog)
         return
 
     catalog = workspace.portfolio.get_catalog()
@@ -194,7 +207,10 @@ def open_edit_project_dialog(
         format_func=type_labels.get,
         key=f"edit_type_{project_id}",
     )
-    params = template_frame(workspace.types.get_template(int(type_id)))
+    params = localize_parameters(
+        template_frame(workspace.types.get_template(int(type_id))),
+        workspace.schema.get_alias_translations(get_current_locale()),
+    )
     with st.container():
         id_col, name_col, status_col = st.columns([1, 2, 1])
         id_col.text_input(t("master_data.field_id"), value=str(project_id), disabled=True)
@@ -256,21 +272,5 @@ def open_edit_project_dialog(
                 st.rerun()
 
     st.divider()
-    with st.expander("Delete project"):
-        st.warning("Deleting a project also removes its tasks and dependencies.")
-        confirmed = st.checkbox(
-            f"I confirm deletion of {project.name}",
-            key=f"portfolio_confirm_delete_{project_id}",
-        )
-        if st.button(
-            "Delete project",
-            icon=":material/delete:",
-            type="primary",
-            disabled=not confirmed,
-            key=f"portfolio_delete_project_{project_id}",
-        ):
-            _save_project(workspace.projects.delete_project, project_id=project_id)
-            if str(st.session_state.get("selected_portfolio_project_id")) == str(project_id):
-                st.session_state.pop("selected_portfolio_project_id", None)
-            st.toast("Project deleted.", icon="✅")
-            st.rerun()
+    st.button("Delete project", icon=":material/delete:", key=f"portfolio_delete_project_{project_id}",
+        on_click=st.session_state.__setitem__, args=(confirmation_key, project_id))

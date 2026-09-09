@@ -42,6 +42,28 @@ test('external links start disabled in both the toolbar and renderer', () => {
   assert.match(script, /let showExternalLinks = false;/);
 });
 
+test('overallocation filter uses daily capacity and composes with the selected-project filter', () => {
+  const pools = [
+    {id:1, used_by_selected_projects:true, capacity:4, daily_usage:{'2026-01-02':3}},
+    {id:2, used_by_selected_projects:false, capacity:4, daily_usage:{'2026-01-02':1}, daily_assigned_capacity:{'2026-01-02':0}},
+    {id:3, used_by_selected_projects:true, capacity:4, daily_usage:{'2026-01-02':5}},
+  ];
+  const context = vm.createContext({resourcePoolIndex:new Map(pools.map(p=>[p.id,p])),
+    resourcePoolHierarchy:[{key:'group',node_type:'group',children:pools.map(p=>({key:'pool:'+p.id,node_type:'pool',pool_id:p.id}))}],
+    resourcePoolsData:pools, collapsedResourceNodes:new Set(), groupUsageCache:new Map(),
+    showTotalRows:true, showSelectedRows:true, timelineStart:'2026-01-01',timelineEnd:'2026-01-03',formatDate:d=>d});
+  const run = code=>vm.runInContext(code,context);
+  run(script.slice(script.indexOf('    const EMPTY_DAILY_SERIES ='),script.indexOf('    function isDisplayedPoolPeriodOverallocated(')));
+  run(script.slice(script.indexOf('    function getResourcePoolById('),script.indexOf('    function renderResourceGrid(')));
+  run('resourcePoolIndex=new Map(resourcePoolsData.map(p=>[p.id,p]));onlyOverallocatedPools=true');
+  assert.deepEqual([...run('resourcePoolsData.filter(isResourcePoolVisible).map(p=>p.id)')],[2,3]);
+  assert.equal(run('getResourceDisplayRows()[0].nodeKey'),'group');
+  run('hideUnusedPools=true');
+  assert.deepEqual([...run('resourcePoolsData.filter(isResourcePoolVisible).map(p=>p.id)')],[3]);
+  run("timelineStart='2026-02-01';timelineEnd='2026-02-02'");
+  assert.equal(run('getResourceDisplayRows().length'),0);
+});
+
 function dependencyWindow() {
   function node() {
     return {children: [], attributes: {}, events: {}, style: {}, writes: 0,

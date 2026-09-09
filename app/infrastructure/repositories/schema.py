@@ -49,6 +49,26 @@ class SqliteSchemaStore:
             )
         ]
 
+    def alias_translations(self, locale: str) -> dict[str, str]:
+        """Read all property labels for one language in one query."""
+        return dict(self._connection.execute(
+            "SELECT param_id,alias FROM schema_parameter_translation WHERE locale=?", (locale,),
+        ))
+
+    def set_alias_translation(self, param_id: str, locale: str, alias: str) -> None:
+        """Store a nonblank alias or delete an explicit translation atomically."""
+        if not alias:
+            self._connection.execute(
+                "DELETE FROM schema_parameter_translation WHERE param_id=? AND locale=?",
+                (param_id, locale),
+            )
+            return
+        self._connection.execute(
+            "INSERT INTO schema_parameter_translation(param_id,locale,alias) VALUES (?,?,?) "
+            "ON CONFLICT(param_id,locale) DO UPDATE SET alias=excluded.alias",
+            (param_id, locale, alias),
+        )
+
     def parameter_identifiers(self) -> list[str]:
         """Read property identities from the initialized schema."""
         return [

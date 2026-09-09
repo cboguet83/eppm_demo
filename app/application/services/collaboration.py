@@ -64,6 +64,11 @@ class CollaborationService:
         with self._gateway.transaction(write=True) as store:
             store.delete_contact(project_id, contact_id)
 
+    def reassign_contact(self, project_id: int, contact_id: int, function_id: int) -> None:
+        """Change a contact's function atomically while preserving role and ownership."""
+        with self._gateway.transaction(write=True) as store:
+            store.reassign_contact(project_id, contact_id, function_id)
+
     def list_events(
         self, project_id: int, locale: str = "en", *, offset: int = 0, limit: int = 50
     ) -> list[ProjectEvent]:

@@ -84,6 +84,7 @@ def flush_database(db_path: str | None = None, flush_all: bool = False) -> dict[
             cursor.execute("DELETE FROM function")
             cursor.execute("DELETE FROM function_type")
             cursor.execute("DELETE FROM schema_param_options")
+            cursor.execute("DELETE FROM schema_parameter_translation")
             cursor.execute("DELETE FROM schema_parameters")
             cursor.execute("DELETE FROM schema_groups")
             cursor.execute("DELETE FROM schema_migration WHERE version='demo-bootstrap-v1'")

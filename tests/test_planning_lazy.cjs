@@ -62,3 +62,18 @@ test('interval transport restores zero capacity and missing-day gaps exactly',()
   assert.deepEqual({...result.daily_assigned_capacity},{'2026-03-28':0,'2026-03-29':0,'2026-03-30':0,'2026-04-02':4});
   assert.equal(result.daily_assigned_capacity_intervals,undefined);
 });
+
+test('creating a task retains viewport focus and expands only its own project',()=>{
+  const h=harness(), viewport={scrollTop:1800,scrollLeft:920};
+  h.context.document={getElementById:()=>viewport};
+  h.context.collapsedProjects=new Set(['2','3']);
+  h.context.renderTimeline=()=>{viewport.scrollTop=0;viewport.scrollLeft=0;};
+  h.run(`planningScopeToken='current';
+    applyPlanningPatch({scope_token:'current', focus_project_id:2,
+      project_summaries:[],replace_projects:[2],loaded_project_ids:[1,2],tasks:[
+        {id:'22',project_id:'2',start:'2026-01-01',end:'2026-01-02'}]});`);
+  assert.deepEqual(viewport,{scrollTop:1800,scrollLeft:920});
+  assert.deepEqual([...h.context.collapsedProjects],['3']);
+  assert.equal(h.run('planningScopeToken'),'current');
+  assert.equal(h.run('tasksData[0].id'),'22');
+});

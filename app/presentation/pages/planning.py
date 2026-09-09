@@ -33,6 +33,7 @@ from app.domain.resources.capacity_rules import (
 from app.domain.planning.csv_import import get_csv_template, parse_csv
 from app.domain.planning.rules import normalize_progress
 from app.presentation.components.planning_imports import csv_text
+from app.presentation.components.property_labels import property_label
 from app.presentation.components.planning_events import validate_event
 from app.presentation.components.planning_workspace import PlanningWorkspace
 from app.presentation.components.project_dialogs import open_edit_project_dialog
@@ -1274,6 +1275,11 @@ def _render_planning_chart(
                     {d.pool_id: d for d in workspace.pool_details(list(pool_ids))}
                 )
             refresh = changed.intersection(snapshot["loaded"])
+            if event["action"] == "create_step_full":
+                created_project = int(event["project_id"])
+                if created_project in ids:
+                    refresh.add(created_project)
+                    snapshot["loaded"] = list(dict.fromkeys([*snapshot["loaded"], created_project]))
             patch = {
                 "replace_projects": sorted(refresh),
                 "tasks": build_task_payload(
@@ -1283,6 +1289,8 @@ def _render_planning_chart(
                     workspace, workspace.revision(), tuple(sorted(changed.intersection(ids)))
                 ),
             }
+            if event["action"] == "create_step_full":
+                patch["focus_project_id"] = int(event["project_id"])
             if pool_ids:
                 patch["resource_pools"], _ = _load_planning_pool_payload(
                     workspace,
@@ -1412,6 +1420,7 @@ def _render_planning_chart(
                 t_desc = str(gantt_event.get("description", "")).strip()
                 t_deps = gantt_event.get("dependencies", [])
                 if t_name and t_start and t_end:
+                    before = workspace.revision()
                     new_step_id = workspace.planning.create_milestone(
                         project_id=int(t_proj),
                         task_name=t_name,
@@ -1422,6 +1431,12 @@ def _render_planning_chart(
                         dependencies=t_deps,
                         description=t_desc,
                     )
+                    st.session_state["planning_pending_change"] = {
+                        **gantt_event,
+                        "id": new_step_id,
+                        "project_id": int(t_proj),
+                        "before_revision": before,
+                    }
                     st.toast(
                         t("planning.toast_step_created", name=t_name, project_id=t_proj), icon="➕"
                     )
@@ -1502,14 +1517,14 @@ def render_planning_milestones(workspace: PlanningWorkspace) -> None:
     workspace.planning.ensure_indexes()
     revision = workspace.revision()
     params = parameters_frame(workspace.schema.get_all_parameters())
+    alias_translations = workspace.schema.get_alias_translations(get_current_locale())
     chosen_fields = set(st.session_state.get("planning_flex_fields", []))
     property_ids = tuple(
         sorted(
             (
                 str(p["param_id"])
                 for p in params.to_dict("records")
-                if p["param_name"] in chosen_fields
-                or f"{p['param_name']} ({p['param_id']})" in chosen_fields
+                if str(p["param_id"]) in chosen_fields
             )
         )
     )
@@ -1581,26 +1596,26 @@ def render_planning_milestones(workspace: PlanningWorkspace) -> None:
         lambda project_id: project_tags_by_id.get(int(project_id), [])
     )
     flex_filter_fields: dict[str, str] = {
-        t("portfolio.col_name", default="Project name"): "name",
-        t("portfolio.col_status", default="Status"): "status",
-        t("master_data.field_project_manager", default="Project Manager"): "project_manager",
-        t(
+        "name": t("portfolio.col_name", default="Project name"),
+        "status": t("portfolio.col_status", default="Status"),
+        "project_manager": t("master_data.field_project_manager", default="Project Manager"),
+        "level_3_manager_name": t(
             "portfolio.filter_level_3_manager", default="Managing Function (Level 3)"
-        ): "level_3_manager_name",
-        t("planning.flex_filter_project_tags", default="Project Tags"): "_project_tags",
+        ),
+        "_project_tags": t("planning.flex_filter_project_tags", default="Project Tags"),
     }
     if not params.empty and "param_id" in params.columns:
         for _, parameter in params.iterrows():
             param_id = str(parameter["param_id"])
-            param_name = str(parameter.get("param_name", param_id))
+            param_name = property_label(parameter.to_dict(), alias_translations)
             target_column = param_id
             if param_id not in project_filter_frame.columns:
                 project_filter_frame[param_id] = None
             if target_column is not None:
                 field_label = param_name
-                if field_label in flex_filter_fields:
+                if field_label in flex_filter_fields.values():
                     field_label = f"{param_name} ({param_id})"
-                flex_filter_fields[field_label] = target_column
+                flex_filter_fields[target_column] = field_label
     top_filter_col, top_flex_col, top_sel_col = st.columns([2, 1.2, 3])
     with top_filter_col:
         selected_tag_filters = st.multiselect(
@@ -1619,6 +1634,7 @@ def render_planning_milestones(workspace: PlanningWorkspace) -> None:
             selected_flex_fields = st.multiselect(
                 t("planning.flex_filter_fields", default="Filter fields"),
                 options=list(flex_filter_fields),
+                format_func=flex_filter_fields.get,
                 placeholder=t(
                     "planning.flex_filter_fields_placeholder", default="Choose one or more fields"
                 ),
@@ -1634,8 +1650,8 @@ def render_planning_milestones(workspace: PlanningWorkspace) -> None:
                     default="Fields use AND. This controls matching within each field.",
                 ),
             )
-            for field_label in selected_flex_fields:
-                target_column = flex_filter_fields[field_label]
+            for target_column in selected_flex_fields:
+                field_label = flex_filter_fields[target_column]
                 filter_options = _unique_planning_filter_options(
                     project_filter_frame[target_column]
                 )
@@ -1798,10 +1814,17 @@ def render_planning_milestones(workspace: PlanningWorkspace) -> None:
         format_func=lambda x: f"{x} - {proj_map.get(x, '')}",
         key="sb_manage_target_project",
     )
-    with st.expander(t("planning.csv_section_title"), expanded=False):
+    with st.expander(t("planning.csv_section_title"), expanded=False, on_change="rerun") as csv_section:
+        if not csv_section.open:
+            return
         st.subheader(f"{t('planning.csv_section_title')} ({manage_project_id})")
         col_exp, col_imp = st.columns(2)
         with col_exp:
+            st.download_button(
+                label=t("planning.csv_download_schedule", default="Download project schedule"),
+                data=workspace.planning.export_schedule(int(manage_project_id)),
+                file_name=f"project_{manage_project_id}_schedule.csv", mime="text/csv",
+            )
             st.write(f"##### {t('planning.csv_export_title', default='Export Schedule Template')}")
             template_csv = get_csv_template()
             st.download_button(

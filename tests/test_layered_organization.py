@@ -98,7 +98,7 @@ def test_application_crud_and_display_frames_handle_missing_records(database: st
     assert service.get_employee_calendar_exceptions() == []
     assert service.generate_next_employee_code() == "EMP-001"
     assert list(organization_frames.employees_frame(other_service.get_all_employees()).columns) == [
-        "employee_id", "firstname", "lastname", "email", "mobile", "sigle",
+        "employee_id", "firstname", "lastname", "email", "mobile", "landline", "sigle",
         "employee_code", "function_id", "occupation_percentage",
     ]
     for getter in (service.get_function_type_by_id, service.get_function_by_id,

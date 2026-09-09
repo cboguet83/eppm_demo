@@ -139,6 +139,7 @@ def normalize_employee(value: Employee) -> Employee:
                       value.employee_code, value.occupation_percentage)
     return replace(value, firstname=value.firstname.strip(), lastname=value.lastname.strip(),
                    email=value.email.strip().lower(), mobile=value.mobile.strip(),
+                   landline=value.landline.strip(),
                    sigle=value.sigle.strip().upper(), employee_code=value.employee_code.strip().upper())
 
 

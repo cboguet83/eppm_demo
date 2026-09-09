@@ -7,10 +7,11 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 
-from app.application.exceptions import ProjectStorageError, ProjectTypeStorageError
+from app.application.exceptions import ProjectStorageError, ProjectTypeStorageError, SchemaStorageError
 from app.application.services.portfolio import PortfolioService
 from app.domain.projects.budgets import BudgetAmounts, analyze_budget, euro_amount
-from app.presentation.i18n import t
+from app.presentation.i18n import get_current_locale, t
+from app.presentation.components.property_labels import localize_parameters, parameter_groups, property_label
 from app.presentation.components.project_workspace import ProjectWorkspace
 from app.presentation.components.project_type_frames import template_frame
 from app.presentation.components.portfolio_table import portfolio_project_table
@@ -102,7 +103,10 @@ def _render_project_details_panel(
     if proj_obj is None:
         st.info("The selected project no longer exists.")
         return
-    params = template_frame(workspace.types.get_template(proj_obj.project_type_id))
+    params = localize_parameters(
+        template_frame(workspace.types.get_template(proj_obj.project_type_id)),
+        workspace.schema.get_alias_translations(get_current_locale()),
+    )
     allowed = set(params["param_id"]) if not params.empty else set()
     dyn_dict = {pid: value for pid, value in proj_obj.dynamic_attributes.items() if pid in allowed}
     st.caption(f"{t('project_types.label')}: {selected_proj.get('project_template', '')}")
@@ -135,9 +139,8 @@ def _render_project_details_panel(
 
     # Render only the effective template, including user-created groups/fields.
     groups = pd.DataFrame(workspace.portfolio.get_catalog(include_managers=False).groups)
-    group_names = dict(zip(groups["id"], groups["group_name"])) if not groups.empty else {}
-    field_groups = list(params.groupby("group_id", dropna=False, sort=False)) if not params.empty else []
-    labels = [group_names.get(group_id, t("schema.param_group_none")) for group_id, _ in field_groups]
+    field_groups = parameter_groups(params, groups)
+    labels = [label for label, _ in field_groups]
     labels += [t("project_collaboration.contacts", default="Project Contacts"),
                t("project_collaboration.log", default="Project log")]
     tabs = st.tabs(labels, key=f"project_details_tabs_{proj_id}", on_change="rerun")
@@ -147,10 +150,7 @@ def _render_project_details_panel(
                 for _, prop in fields.iterrows():
                     value = dyn_dict.get(prop["param_id"])
                     display = ", ".join(map(str, value)) if isinstance(value, list) else str(value) if value is not None else "—"
-                    alias = prop.get('alias')
-                    label = str(prop['param_name'])
-                    if pd.notna(alias) and alias:
-                        label += f" ({alias})"
+                    label = property_label(prop.to_dict(), {})
                     st.write(f"{label}{' *' if prop['mandatory'] else ''}: {display or '—'}")
     if tabs[-2].open:
         with tabs[-2]:
@@ -192,7 +192,7 @@ def _portfolio_columns(params: pd.DataFrame) -> list[dict]:
         fmt = "number" if ptype == "NUMBER" else (
             "url" if ptype in ("URL", "HYPERLINK") else "text")
         columns.append({"key": "property:" + str(prop["param_id"]), "param_id": str(prop["param_id"]),
-                        "label": prop["param_name"], "format": fmt})
+                        "label": property_label(prop, {}), "format": fmt})
     return columns
 
 
@@ -200,7 +200,7 @@ def _portfolio_columns(params: pd.DataFrame) -> list[dict]:
 def _render_portfolio_browser(workspace: ProjectWorkspace) -> None:
     """Scroll requests rerun only this fragment, not navigation or global KPIs."""
     params = pd.DataFrame(workspace.portfolio.get_catalog(include_managers=False).parameters)
-    columns = _portfolio_columns(params)
+    columns = _portfolio_columns(localize_parameters(params, workspace.schema.get_alias_translations(get_current_locale())))
     search = st.text_input(t("portfolio.filter_search"), placeholder=t("portfolio.filter_search_placeholder"))
     with st.container(horizontal=True, horizontal_alignment="distribute", vertical_alignment="center"):
         st.subheader(t("portfolio.table_header"))
@@ -262,5 +262,5 @@ def render_portfolio_overview(workspace: ProjectWorkspace) -> None:
     """Render the compact project list; shared totals remain in navigation."""
     try:
         _render_portfolio_browser(workspace)
-    except (ValueError, ProjectStorageError, ProjectTypeStorageError) as exc:
+    except (ValueError, ProjectStorageError, ProjectTypeStorageError, SchemaStorageError) as exc:
         st.error(str(exc))

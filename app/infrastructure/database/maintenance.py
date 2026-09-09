@@ -7,7 +7,9 @@ import logging
 import sqlite3
 
 from app.application.exceptions import DatabaseMaintenanceError
-from app.application.ports.maintenance import DatabaseCounts, PoolSeedReport, SeedRequest
+from app.application.ports.maintenance import AllocationSeedReport, DatabaseCounts, PoolSeedReport, SeedRequest
+from app.domain.resources.allocation_generation import AllocationGenerationRequest
+from app.infrastructure.database.allocation_seed import clear_pool_allocations, generate_pool_allocations
 from app.infrastructure.database.connection import get_db
 from app.infrastructure.database.schema_init import init_db
 from app.infrastructure.database.seeder import seed_default_data_if_empty
@@ -86,6 +88,20 @@ class SqliteMaintenanceGateway:
             project_types=row[3],
             property_values=row[4],
             pools=row[5],
+        )
+
+    @maintenance_errors
+    def clear_pool_allocations(self) -> int:
+        """Back up and clear demand without deleting resource mappings."""
+        return clear_pool_allocations(self.db_path)
+
+    @maintenance_errors
+    def generate_pool_allocations(
+        self, request: AllocationGenerationRequest, *, apply: bool, expected_fingerprint: str | None,
+    ) -> AllocationSeedReport:
+        """Validate on an isolated snapshot and replay only on explicit application."""
+        return generate_pool_allocations(
+            self.db_path, request, apply=apply, expected_fingerprint=expected_fingerprint,
         )
 
     @maintenance_errors

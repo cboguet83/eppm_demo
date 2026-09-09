@@ -2,6 +2,39 @@
 
 from dataclasses import dataclass
 from typing import NotRequired, Protocol, TypedDict
+from app.domain.resources.allocation_generation import AllocationGenerationRequest
+
+
+class AllocationPreviewRow(TypedDict):
+    """One pool's generated usage and staffing in a seed preview."""
+
+    pool_id: int
+    pool_name: str
+    allocation_pct: float
+    target_allocation_pct: float
+    maximum_allocation_pct: float
+    unstaffed: bool
+    capacity_fte: float
+
+
+class AllocationSeedReport(TypedDict):
+    """Validated distribution, changes, and source identity for explicit application."""
+
+    fingerprint: str
+    applied: bool
+    total_pools: int
+    allocated_pools: int
+    overallocated_pools: int
+    underallocated_pools: int
+    fully_allocated_pools: int
+    unstaffed_pools: int
+    average_allocation_pct: float
+    assignments_removed: int
+    assignments_created: int
+    mappings_removed: int
+    mappings_created: int
+    capacity_limits_initialized: int
+    rows: list[AllocationPreviewRow]
 
 
 class PoolScenario(TypedDict):
@@ -66,6 +99,10 @@ class MaintenanceGateway(Protocol):
     def seed_projects(self, request: SeedRequest) -> dict[str, int]: ...
     def flush(self, *, flush_all: bool) -> dict[str, int]: ...
     def counts(self) -> DatabaseCounts: ...
+    def clear_pool_allocations(self) -> int: ...
+    def generate_pool_allocations(
+        self, request: AllocationGenerationRequest, *, apply: bool, expected_fingerprint: str | None,
+    ) -> AllocationSeedReport: ...
     def seed_pool_scenarios(
         self, *, year: int | None, seed: int, apply: bool
     ) -> PoolSeedReport: ...

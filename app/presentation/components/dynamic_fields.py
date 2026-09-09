@@ -27,7 +27,7 @@ def render_dynamic_field(
         if pd.notna(parameter.get("alias"))
         else ""
     )
-    label = f"{param_name}{f' ({alias})' if alias else ''}{' *' if mandatory else ''}"
+    label = f"{alias or param_name}{' *' if mandatory else ''}"
     key = f"{key_prefix}_{param_id}"
     draft_key = f"{key_prefix}_draft"
     is_creation = key_prefix.startswith("portfolio_create_")

@@ -449,6 +449,7 @@ def _open_add_employee_dialog(
     c_m1, c_m2 = st.columns(2)
     new_email = c_m1.text_input(t("settings.field_email", default="Email *"), placeholder="sconnor@enterprise.com")
     new_mobile = c_m2.text_input(t("settings.field_mobile", default="Mobile / Phone"), placeholder="+1-555-0101")
+    new_landline = st.text_input(t("settings.field_landline", default="Landline"), placeholder="+352 27 000 001")
 
     func_opts = [None] + (df_funcs["function_id"].tolist() if not df_funcs.empty else [])
     func_map = dict(zip(df_funcs["function_id"], df_funcs["name"])) if not df_funcs.empty else {}
@@ -544,7 +545,7 @@ def _open_add_employee_dialog(
                 new_eid = service.create_employee(
                     Employee(
                         firstname=new_first, lastname=new_last, email=new_email,
-                        mobile=new_mobile, sigle=new_sigle, employee_code=new_code,
+                        mobile=new_mobile, landline=new_landline, sigle=new_sigle, employee_code=new_code,
                         function_id=new_func, occupation_percentage=new_occupation,
                     ), initial_exception=initial_exception,
                 )
@@ -788,6 +789,7 @@ def _open_edit_employee_dialog(
     c_m1, c_m2 = st.columns(2)
     edit_email = c_m1.text_input(t("settings.field_email", default="Email *"), value=emp_obj.email)
     edit_mobile = c_m2.text_input(t("settings.field_mobile", default="Mobile / Phone"), value=emp_obj.mobile)
+    edit_landline = st.text_input(t("settings.field_landline", default="Landline"), value=emp_obj.landline)
 
     emp_f_idx = func_opts.index(emp_obj.function_id) if emp_obj.function_id in func_opts else 0
     c_role, c_occupation = st.columns([2, 1])
@@ -829,6 +831,7 @@ def _open_edit_employee_dialog(
                         lastname=edit_last,
                         email=edit_email,
                         mobile=edit_mobile,
+                        landline=edit_landline,
                         sigle=edit_sigle,
                         employee_code=edit_code,
                         function_id=edit_func,

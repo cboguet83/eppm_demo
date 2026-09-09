@@ -208,7 +208,7 @@ def ui_app(collaboration_path, body):
         f"""
 from app.presentation.i18n import set_current_locale
 from app.main import create_collaboration_service
-from app.presentation.pages.collaboration import render_project_contacts, render_project_log, render_project_catalog
+from app.presentation.pages.collaboration import render_project_contacts, render_project_log, render_project_catalog, _contact_dialog, _remove_contact_dialog
 set_current_locale('en')
 service = create_collaboration_service({collaboration_path!r})
 {body}
@@ -222,16 +222,24 @@ def test_contact_ui_adds_edits_and_removes_function_assignments(collaboration, c
     role = repo.save_catalog("role", "Sponsor")
     app = ui_app(collaboration_path, "render_project_contacts(1, service)")
     assert not app.exception
+    assert not app.selectbox
+    next(b for b in app.button if b.label == "Add contact").click().run()
+    assert not app.exception and app.get("dialog")
+    app = ui_app(collaboration_path, "_contact_dialog(1, service)")
     next(b for b in app.button if b.label == "Save contact").click().run()
     assert not app.exception
     contact = repo.list_contacts(1)[0]
     assert contact["role_id"] == role and contact["person"] == "Alice Smith"
-    app.selectbox(key="project_contacts_1_selection").select(contact["id"]).run()
+    app = ui_app(collaboration_path, f"_contact_dialog(1, service, {contact['id']})")
+    assert next(w for w in app.selectbox if w.label == "Role").disabled
     next(w for w in app.selectbox if w.label == "Function").select(2)
     next(b for b in app.button if b.label == "Save contact").click().run()
     assert not app.exception
     assert repo.list_contacts(1)[0]["person"] == "Bob Jones"
-    next(b for b in app.button if b.label == "Remove contact").click().run()
+    app = ui_app(collaboration_path, f"_remove_contact_dialog(1, service, {contact['id']})")
+    next(b for b in app.button if b.label == "Cancel").click().run()
+    assert repo.list_contacts(1)
+    next(b for b in app.button if b.label == "Confirm removal").click().run()
     assert not app.exception
     assert repo.list_contacts(1) == []
 
@@ -416,6 +424,7 @@ def test_collaboration_ui_handles_failed_write_without_success_state(collaborati
 def test_collaboration_ui_explains_missing_configuration(collaboration, collaboration_path):
     contacts = ui_app(collaboration_path, "render_project_contacts(1, service)")
     assert not contacts.exception
+    next(b for b in contacts.button if b.label == "Add contact").click().run()
     assert any("Create project roles" in message.value for message in contacts.info)
     for entry in collaboration.list_catalog("event_type"):
         collaboration.delete_catalog("event_type", entry["id"])

@@ -230,6 +230,10 @@ def render_application(workspace: ApplicationWorkspace) -> None:
                 )
                 st.rerun()
 
+        from app.presentation.components.allocation_seeding import render_pool_allocation_controls
+
+        render_pool_allocation_controls(workspace.maintenance)
+
     if "seeding_status_message" in st.session_state:
         st.sidebar.success(st.session_state.pop("seeding_status_message"))
 

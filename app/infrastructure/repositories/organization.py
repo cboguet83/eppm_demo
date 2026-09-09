@@ -203,7 +203,7 @@ class SqliteOrganizationStore:
         conn = self.connection
         return [Employee(**dict(row)) for row in conn.execute("""
             SELECT employee_id, firstname, lastname, email, mobile, sigle, employee_code,
-                   function_id, occupation_percentage
+                   function_id, occupation_percentage, landline
             FROM employee
             ORDER BY lastname ASC, firstname ASC
         """, ()).fetchall()]
@@ -214,7 +214,7 @@ class SqliteOrganizationStore:
         cursor = conn.cursor()
         cursor.execute("""
             SELECT employee_id, firstname, lastname, email, mobile, sigle, employee_code,
-                   function_id, occupation_percentage
+                   function_id, occupation_percentage, landline
             FROM employee
             WHERE employee_id = ?
         """, (emp_id,))
@@ -224,7 +224,7 @@ class SqliteOrganizationStore:
         return Employee(
             employee_id=row[0], firstname=row[1], lastname=row[2], email=row[3],
             mobile=row[4] or "", sigle=row[5] or "", employee_code=row[6],
-            function_id=row[7], occupation_percentage=float(row[8]),
+            function_id=row[7], occupation_percentage=float(row[8]), landline=row[9],
         )
 
     def create_employee(self, emp: Employee) -> int:
@@ -234,12 +234,12 @@ class SqliteOrganizationStore:
         cursor.execute("""
             INSERT INTO employee (
                 firstname, lastname, email, mobile, sigle, employee_code,
-                function_id, occupation_percentage
+                function_id, occupation_percentage, landline
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             emp.firstname, emp.lastname, emp.email, emp.mobile, emp.sigle,
-            emp.employee_code, emp.function_id, emp.occupation_percentage,
+            emp.employee_code, emp.function_id, emp.occupation_percentage, emp.landline,
         ))
         return int(cursor.lastrowid)
 
@@ -250,11 +250,11 @@ class SqliteOrganizationStore:
         cursor.execute("""
             UPDATE employee
             SET firstname = ?, lastname = ?, email = ?, mobile = ?, sigle = ?,
-                employee_code = ?, function_id = ?, occupation_percentage = ?
+                employee_code = ?, function_id = ?, occupation_percentage = ?, landline = ?
             WHERE employee_id = ?
         """, (
             emp.firstname, emp.lastname, emp.email, emp.mobile, emp.sigle,
-            emp.employee_code, emp.function_id, emp.occupation_percentage,
+            emp.employee_code, emp.function_id, emp.occupation_percentage, emp.landline,
             emp.employee_id,
         ))
         return cursor.rowcount > 0

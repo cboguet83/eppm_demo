@@ -42,15 +42,20 @@ th, td {
     text-overflow: ellipsis;
 }
 td { height: 40px; }
-.overallocation-button {
+.overallocation-indicator {
     background: transparent;
     border: 0;
     color: var(--st-red-color, #d32f2f);
-    cursor: pointer;
+    cursor: default;
     font: inherit;
     margin-right: 0.4rem;
     padding: 0 0.15rem;
 }
+.project-menu-button {
+    float: right; background: transparent; color: var(--st-text-color);
+    border: 0; cursor: pointer; font-size: 18px; line-height: 20px;
+}
+.project-context-menu button {display: block; width: 100%; text-align: left;}
 th { height: 44px; }
 .virtual-spacer td { padding: 0; border: 0; }
 .virtual-spacer, .loading-row { pointer-events: none; }
@@ -238,6 +243,27 @@ export default function(component) {
         drawRows();
     };
     const closeMenu = () => root.querySelector('.filter-menu')?.remove();
+    const closeProjectMenu = () => root.querySelector('.project-context-menu')?.remove();
+    const showProjectMenu = (event, row) => {
+        event.preventDefault(); event.stopPropagation(); closeMenu(); closeProjectMenu();
+        const menu = document.createElement('div');
+        menu.className = 'filter-menu project-context-menu'; menu.setAttribute('role', 'menu');
+        menu.setAttribute('aria-label', 'Project actions: ' + row.name);
+        menu.style.left = Math.max(8, Math.min(event.clientX || 8, window.innerWidth - 280)) + 'px';
+        menu.style.top = Math.max(8, Math.min(event.clientY || 44, window.innerHeight - 120)) + 'px';
+        const addAction = (label, trigger) => {
+            const button = document.createElement('button'); button.type = 'button';
+            button.textContent = label; button.setAttribute('role', 'menuitem');
+            button.onclick = e => {e.stopPropagation(); closeProjectMenu(); setTriggerValue(trigger, row.project_id);};
+            menu.appendChild(button);
+        };
+        addAction('Open project details', 'row_click');
+        if (row.is_overallocated) addAction('View resource overallocation in Gantt', 'gantt_click');
+        root.appendChild(menu); menu.querySelector('button')?.focus();
+    };
+    root.onclick = closeProjectMenu;
+    root.onkeydown = event => {if (event.key === 'Escape') closeProjectMenu();};
+
 
     // Keep scroll offsets and the bounded row cache across component updates.
     root.replaceChildren();
@@ -316,8 +342,10 @@ export default function(component) {
                     setTriggerValue('row_click', row.project_id);
                 };
                 tr.onclick = select;
+                tr.oncontextmenu = event => showProjectMenu(event, row);
                 tr.onkeydown = e => {
-                    if (e.key === 'Enter' || e.key === ' ') {e.preventDefault(); select();}
+                    if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) showProjectMenu(e, row);
+                    else if (e.key === 'Enter' || e.key === ' ') {e.preventDefault(); select();}
                 };
                 columns.forEach(column => {
                     const td = document.createElement('td');
@@ -328,16 +356,23 @@ export default function(component) {
                         link.href = row[column.key]; link.target = '_blank'; link.rel = 'noopener noreferrer';
                         link.textContent = text; link.onclick = e => e.stopPropagation(); td.appendChild(link);
                     } else if (column.key === 'name' && row.is_overallocated) {
-                        const warning = document.createElement('button');
-                        warning.type = 'button'; warning.className = 'overallocation-button';
+                        const warning = document.createElement('span');
+                        warning.className = 'overallocation-indicator';
                         warning.textContent = '⚠';
-                        warning.title = 'Resource overallocation — open project Gantt';
+                        warning.title = 'Resource overallocation';
                         warning.setAttribute('aria-label', warning.title + ': ' + row.name);
-                        warning.onclick = e => {e.stopPropagation(); setTriggerValue('gantt_click', row.project_id);};
-                        warning.onkeydown = e => e.stopPropagation();
                         const name = document.createElement('span'); name.textContent = text;
                         td.append(warning, name);
                     } else td.textContent = text;
+                    if (column.key === 'name') {
+                        const menuButton = document.createElement('button'); menuButton.type = 'button';
+                        menuButton.className = 'project-menu-button'; menuButton.textContent = '⋯';
+                        menuButton.setAttribute('aria-label', 'Project actions: ' + row.name);
+                        menuButton.setAttribute('aria-haspopup', 'menu');
+                        menuButton.onclick = event => showProjectMenu(event, row);
+                        menuButton.onkeydown = event => event.stopPropagation();
+                        td.appendChild(menuButton);
+                    }
                     tr.appendChild(td);
                 });
             }

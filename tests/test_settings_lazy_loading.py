@@ -52,7 +52,8 @@ class SettingsLazyLoadingTests(unittest.TestCase):
                         self.assertIn("Active Allocations on Projects & Tasks", markup)
                         self.assertIn("Deduplicated Assigned Capacity Breakdown", markup)
                         if pool_id == assigned_pool_id:
-                            self.assertIn("?nav=planning&project_id=", markup)
+                            self.assertTrue(app.get("bidi_component"), "Allocations expose row action buttons")
+                            self.assertNotIn(f"btn_unassign_{pool_id}", button_keys)
 
     def test_pool_data_is_loaded_only_in_pool_tab_and_selection_survives_rerun(self):
         with tempfile.TemporaryDirectory() as directory:

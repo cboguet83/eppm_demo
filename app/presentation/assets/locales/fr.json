@@ -169,6 +169,7 @@
     "schedule_title": "Calendrier du Projet : {project_id}",
     "no_steps_defined": "Aucune étape définie pour le(s) projet(s) sélectionné(s). Ajoutez des étapes ci-dessous ou importez un CSV.",
     "csv_section_title": "📥 Importation & Exportation CSV en Masse",
+    "csv_download_schedule": "Télécharger le planning du projet",
     "csv_download_template": "📄 Télécharger le Modèle CSV",
     "csv_upload_label": "Importer un Fichier CSV d'Étapes",
     "btn_import_csv": "📥 Importer les Étapes depuis le CSV",
@@ -277,6 +278,7 @@
       "filter_project": "Filtrer sur ce projet"
     },
     "resource_grid": {
+      "only_overallocated": "Uniquement les pools suralloués",
       "title": "Pools de Ressources & Utilisation de la Capacité",
       "within_capacity": "Capacité Respectée",
       "overallocated": "Suraloué",
@@ -429,6 +431,7 @@
     "filter_by_type": "Filtrer par Type",
     "col_emp_code": "Code",
     "col_full_name": "Nom Complet",
+    "col_landline": "Téléphone fixe",
     "col_mobile": "Mobile",
     "col_sigle": "Sigle",
     "col_function": "Fonction",

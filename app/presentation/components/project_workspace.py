@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from app.application.services.projects import ProjectService
 from app.application.services.project_types import ProjectTypeService
 from app.application.services.portfolio import PortfolioService
+from app.application.services.schema import SchemaService
 
 
 @dataclass(frozen=True)
@@ -21,3 +22,4 @@ class ProjectWorkspace:
     portfolio: PortfolioService
     render_contacts: Callable[[int], None]
     render_log: Callable[[int], None]
+    schema: SchemaService

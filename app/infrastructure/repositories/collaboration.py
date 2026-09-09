@@ -71,13 +71,21 @@ class SqliteCollaborationStore:
 
     def list_functions(self) -> list[FunctionContact]:
         """Resolve current occupants in stable order with vacant-name fallback."""
-        rows = self.connection.execute("""SELECT f.function_id, f.name AS function_name,
-            COALESCE((SELECT group_concat(full_name, ', ') FROM (
-                SELECT trim(e.firstname || ' ' || e.lastname) AS full_name
-                FROM employee e WHERE e.function_id=f.function_id
-                ORDER BY e.lastname, e.firstname, e.employee_id
-            )), f.name) AS person
-            FROM function f ORDER BY person COLLATE NOCASE, f.function_id""")
+        rows = self.connection.execute("""WITH occupants AS (
+                SELECT function_id, trim(firstname || ' ' || lastname) AS person,
+                       mobile, landline FROM employee
+                ORDER BY lastname, firstname, employee_id
+            ), contacts AS (
+                SELECT function_id, group_concat(person, ', ') AS person,
+                    group_concat(NULLIF(mobile, ''), ', ') AS mobile,
+                    group_concat(NULLIF(landline, ''), ', ') AS landline
+                FROM occupants GROUP BY function_id
+            )
+            SELECT f.function_id, f.name AS function_name,
+                COALESCE(c.person, f.name) AS person,
+                COALESCE(c.mobile, '') AS mobile, COALESCE(c.landline, '') AS landline
+            FROM function f LEFT JOIN contacts c ON c.function_id=f.function_id
+            ORDER BY person COLLATE NOCASE, f.function_id""")
         return [FunctionContact(**dict(row)) for row in rows]
 
     def list_contacts(self, project_id: int, locale: str) -> list[ProjectContact]:
@@ -111,6 +119,15 @@ class SqliteCollaborationStore:
         if not cursor.rowcount:
             raise ValueError("The contact no longer exists in this project.")
         return contact_id
+
+    def reassign_contact(self, project_id: int, contact_id: int, function_id: int) -> None:
+        """Update only the function; retain role, project, and reference constraints."""
+        cursor = self.connection.execute(
+            "UPDATE project_contact SET function_id=? WHERE project_id=? AND id=?",
+            (function_id, project_id, contact_id),
+        )
+        if not cursor.rowcount:
+            raise ValueError("The contact assignment no longer exists in this project.")
 
     def delete_contact(self, project_id: int, contact_id: int) -> None:
         """Delete only the matching project's assignment, preserving no-op deletes."""

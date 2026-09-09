@@ -151,6 +151,7 @@ def create_project_workspace(db_path: str | None = None) -> ProjectWorkspace:
         create_portfolio_service(db_path),
         partial(render_project_contacts, service=collaboration),
         partial(render_project_log, service=collaboration),
+        create_schema_service(db_path),
     )
 
 

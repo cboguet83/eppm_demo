@@ -169,6 +169,7 @@
     "schedule_title": "Zäitplang: {project_id}",
     "no_steps_defined": "Keng Schrëtt fir d'ausgewielte Projeten definéiert. Setzt Schrëtt hei drënner bäi oder lued eng CSV erop.",
     "csv_section_title": "📥 Masse-Schrëtt CSV Import & Export",
+    "csv_download_schedule": "Projetsplang eroflueden",
     "csv_download_template": "📄 CSV Schabloun eroflueden",
     "csv_upload_label": "Schrëtt CSV-Datei eroplueden",
     "btn_import_csv": "📥 Schrëtt aus CSV importéieren",
@@ -277,6 +278,7 @@
       "filter_project": "Op dëse Projet filteren"
     },
     "resource_grid": {
+      "only_overallocated": "Nëmmen iwwerbelaascht Ressourcepools",
       "title": "Ressource-Pools & Kapazitéitsnotzung",
       "within_capacity": "Bannent der Kapazitéit",
       "overallocated": "Iwwerallokéiert",
@@ -408,6 +410,7 @@
     "filter_by_type": "Filteren no Typ",
     "col_emp_code": "Code",
     "col_full_name": "Ganzen Numm",
+    "col_landline": "Festnetz",
     "col_mobile": "Handy",
     "col_sigle": "Kierzel",
     "col_function": "Funktioun",

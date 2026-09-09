@@ -2068,6 +2068,10 @@
         </div>
         <div class="resource-panel-options">
           <label class="resource-option-checkbox">
+            <input type="checkbox" id="chk-only-overallocated-pools" onchange="onToggleResourceRows()">
+            <span id="lbl-only-overallocated-pools">Only overallocated pools</span>
+          </label>
+          <label class="resource-option-checkbox">
             <input type="checkbox" id="chk-hide-unused-pools" onchange="onToggleResourceRows()">
             <span id="lbl-hide-unused-pools">Hide pools unused by selected projects</span>
           </label>
@@ -2232,6 +2236,10 @@
 
     function applyPlanningPatch(patch) {
       if (patch.scope_token !== planningScopeToken) return;
+      const focusProject = patch.focus_project_id == null ? null : String(patch.focus_project_id);
+      const viewport = focusProject ? document.getElementById('timeline-body-scroller') : null;
+      const position = viewport ? {top: viewport.scrollTop, left: viewport.scrollLeft} : null;
+      if (focusProject) collapsedProjects.delete(focusProject);
       planningPendingRequest = null;
       const replaced = new Set([...(patch.replace_projects || []), ...(patch.evict_project_ids || [])].map(String));
       tasksData = tasksData.filter(task => !replaced.has(String(task.project_id))).concat(patch.tasks || []);
@@ -2258,6 +2266,11 @@
       }
       if (patch.project_summaries || patch.resource_pools || !updateLoadedProjectWindows(replaced)) {
         renderTimeline({resourcesChanged:Boolean(patch.resource_pools)});
+      }
+      if (viewport && position) {
+        viewport.scrollTop = position.top;
+        viewport.scrollLeft = position.left;
+        renderVirtualWindow();
       }
       if (planningPendingDiagnostics && loadedProjectIds.has(planningPendingDiagnostics)) {
         const pid = planningPendingDiagnostics; planningPendingDiagnostics = null;
@@ -2383,6 +2396,8 @@
       if (elResTitle) elResTitle.innerText = getT('resource_grid.title', 'Resource Pools & Capacity Usage');
       const elHideUnused = document.getElementById('lbl-hide-unused-pools');
       if (elHideUnused) elHideUnused.innerText = getT('resource_grid.hide_unused', 'Hide pools unused by selected projects');
+      const elOnlyOverallocated = document.getElementById('lbl-only-overallocated-pools');
+      if (elOnlyOverallocated) elOnlyOverallocated.innerText = getT('resource_grid.only_overallocated', 'Only overallocated pools');
       const elWithin = document.getElementById('lbl-within-cap');
       if (elWithin) elWithin.innerText = getT('resource_grid.within_capacity', 'Within Capacity');
       const elOver = document.getElementById('lbl-overallocated');
@@ -4391,6 +4406,7 @@
 
     function onToggleResourceRows() {
       hideUnusedPools = Boolean(document.getElementById('chk-hide-unused-pools')?.checked);
+      onlyOverallocatedPools = Boolean(document.getElementById('chk-only-overallocated-pools')?.checked);
       const chkTotal = document.getElementById('chk-show-total-demand');
       const chkSelected = document.getElementById('chk-show-selected-demand');
       showTotalRows = chkTotal ? chkTotal.checked : true;
@@ -4415,13 +4431,18 @@
     }
 
     let hideUnusedPools = false;
+    let onlyOverallocatedPools = false;
 
     function isResourcePoolVisible(pool) {
-      return !hideUnusedPools || Boolean(pool.used_by_selected_projects);
+      return (!hideUnusedPools || Boolean(pool.used_by_selected_projects)) &&
+        (!onlyOverallocatedPools || getDemandCapacityStatusForPeriod(
+          pool.daily_usage, pool.displayed_assigned_capacity ?? pool.capacity ?? 0,
+          pool.daily_assigned_capacity || {}, formatDate(timelineStart), formatDate(timelineEnd)
+        ).isOverallocated);
     }
 
     function isResourceNodeVisible(node) {
-      if (!hideUnusedPools) return true;
+      if (!hideUnusedPools && !onlyOverallocatedPools) return true;
       if (node.node_type === 'group') return (node.children || []).some(isResourceNodeVisible);
       const pool = getResourcePoolById(node.pool_id);
       return Boolean(pool && isResourcePoolVisible(pool));

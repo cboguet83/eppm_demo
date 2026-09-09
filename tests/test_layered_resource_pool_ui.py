@@ -151,7 +151,7 @@ def test_concurrent_delete_and_read_failures_do_not_report_success(database: str
     assert app.error and "private file path" not in app.error[0].value
 
 
-def test_settings_pool_route_escapes_assignment_labels_and_retains_actions(database: str) -> None:
+def test_settings_pool_route_supplies_safe_row_data_and_individual_actions(database: str) -> None:
     service = create_resource_pool_service(database)
     pool = service.create_pool(ResourcePool("Delivery", capacity_fte=2))
     assignment = service.create_assignment(
@@ -170,15 +170,18 @@ render_settings_view(create_settings_workspace({database!r}))
     with patch(
         "app.application.services.resource_pools.ResourcePoolService.get_all_pool_groups",
         side_effect=AssertionError("Closed groups loaded"),
-    ):
+    ), patch("app.presentation.components.action_table.action_table", return_value=None) as table:
         app.run()
     assert not app.exception and len(app.metric) == 5
-    markup = "\n".join(item.value for item in app.markdown)
-    assert "&lt;script&gt;project&lt;/script&gt;" in markup
-    assert "&lt;img src=x onerror=alert(1)&gt;" in markup
-    assert "<script>project</script>" not in markup
-    assert "?nav=planning&project_id=1" in markup
-    app.button(key=f"btn_unassign_{pool}").click().run()
+    rows, columns, actions = table.call_args.args
+    assert rows[0]["project"] == "<script>project</script>"
+    assert rows[0]["notes"] == "<img src=x onerror=alert(1)>"
+    assert rows[0]["id"] == assignment
+    assert actions == {"open": "Open", "unassign": "Unassign"}
+    assert not any(button.key == f"btn_unassign_{pool}" for button in app.button)
+    assert service.get_assignment_by_id(assignment)
+    app = dialog(database, f"_confirm_unassign(service, {pool}, {assignment}, 'Project')")
+    app.button(key=f"confirm_unassign_{assignment}").click().run()
     assert not app.exception and service.get_assignment_by_id(assignment) is None
 
 
