@@ -1,5 +1,9 @@
 """Resource-pool use cases and atomic catalog/group/tag operations."""
 
+from app.domain.access.models import Permission
+from app.application.ports.references import PoolReference, PoolGroupReference
+
+
 from dataclasses import asdict
 
 from app.application.ports.resource_pools import ResourcePoolGateway, ResourcePoolStore
@@ -35,20 +39,40 @@ class ResourcePoolService:
         """Inject persistence without acquiring a database connection."""
         self._gateway = gateway
 
+    def pool_choices(self) -> list[PoolReference]:
+        """Read allocation-selector labels without pool configuration details."""
+        with self._gateway.transaction() as store:
+            return [PoolReference(row.id, row.name, row.capacity_fte) for row in store.get_all_pools()]
+
+    def group_choices(self) -> list[PoolGroupReference]:
+        """Read group labels for planning filters and allocation selectors."""
+        with self._gateway.transaction() as store:
+            return [PoolGroupReference(row.id, row.name) for row in store.groups()]
+
+    def group_membership(self) -> list[ResourcePoolGroupMember]:
+        """Read only graph identities needed to render recursive planning groups."""
+        with self._gateway.transaction() as store:
+            return store.get_all_group_members()
+
+    def group_pool_ids(self, group_id: int) -> list[int]:
+        """Resolve selected group membership with deliberate cycle termination."""
+        with self._gateway.transaction() as store:
+            return descendant_pools(group_id, store.get_all_group_members())
+
     def get_all_pools(self) -> list[ResourcePool]:
         """Get all pools within one application transaction."""
-        with self._gateway.transaction() as store:
+        with self._gateway.transaction(permission=Permission.SHARED) as store:
             return store.get_all_pools()
 
     def get_pool_by_id(self, pool_id: int) -> ResourcePool | None:
         """Get pool by id within one application transaction."""
-        with self._gateway.transaction() as store:
+        with self._gateway.transaction(permission=Permission.SHARED) as store:
             return store.get_pool_by_id(pool_id)
 
     def create_pool(self, pool: ResourcePool, *, tag_ids: list[int] | None = None) -> int:
         """Create pool within one application transaction."""
         pool = normalize_pool(pool)
-        with self._gateway.transaction(write=True) as store:
+        with self._gateway.transaction(write=True, permission=Permission.SHARED) as store:
             result = store.create_pool(pool)
             if result and tag_ids is not None:
                 self._set_tags(store, result, tag_ids)
@@ -59,7 +83,7 @@ class ResourcePoolService:
         if pool.id is None:
             return False
         pool = normalize_pool(pool)
-        with self._gateway.transaction(write=True) as store:
+        with self._gateway.transaction(write=True, permission=Permission.SHARED) as store:
             result = store.update_pool(pool)
             if result and tag_ids is not None:
                 self._set_tags(store, pool.id, tag_ids)
@@ -67,17 +91,17 @@ class ResourcePoolService:
 
     def delete_pool(self, pool_id: int) -> bool:
         """Delete pool within one application transaction."""
-        with self._gateway.transaction(write=True) as store:
+        with self._gateway.transaction(write=True, permission=Permission.SHARED) as store:
             return store.delete_pool(pool_id)
 
     def get_all_group_members(self) -> list[ResourcePoolGroupMember]:
         """Get all group members within one application transaction."""
-        with self._gateway.transaction() as store:
+        with self._gateway.transaction(permission=Permission.SHARED) as store:
             return store.get_all_group_members()
 
     def get_pool_group_by_id(self, group_id: int) -> ResourcePoolGroup | None:
         """Get pool group by id within one application transaction."""
-        with self._gateway.transaction() as store:
+        with self._gateway.transaction(permission=Permission.SHARED) as store:
             return store.get_pool_group_by_id(group_id)
 
     def create_pool_group(
@@ -89,7 +113,7 @@ class ResourcePoolService:
     ) -> int:
         """Create pool group within one application transaction."""
         group = normalize_group(group)
-        with self._gateway.transaction(write=True) as store:
+        with self._gateway.transaction(write=True, permission=Permission.SHARED) as store:
             result = store.create_pool_group(group)
             if result and (pool_ids is not None or child_group_ids is not None):
                 self._replace_members(store, result, pool_ids or [], child_group_ids or [])
@@ -106,7 +130,7 @@ class ResourcePoolService:
         if group.id is None:
             return False
         group = normalize_group(group)
-        with self._gateway.transaction(write=True) as store:
+        with self._gateway.transaction(write=True, permission=Permission.SHARED) as store:
             result = store.update_pool_group(group)
             if result and (pool_ids is not None or child_group_ids is not None):
                 self._replace_members(store, group.id, pool_ids or [], child_group_ids or [])
@@ -114,39 +138,39 @@ class ResourcePoolService:
 
     def delete_pool_group(self, group_id: int) -> bool:
         """Delete pool group within one application transaction."""
-        with self._gateway.transaction(write=True) as store:
+        with self._gateway.transaction(write=True, permission=Permission.SHARED) as store:
             return store.delete_pool_group(group_id)
 
     def get_group_members(self, group_id: int) -> list[PoolGroupMemberRow]:
         """Get group members within one application transaction."""
-        with self._gateway.transaction() as store:
+        with self._gateway.transaction(permission=Permission.SHARED) as store:
             return store.get_group_members(group_id)
 
     def get_mappings_by_pool(self, pool_id: int) -> list[PoolMapping]:
         """Get mappings by pool within one application transaction."""
-        with self._gateway.transaction() as store:
+        with self._gateway.transaction(permission=Permission.SHARED) as store:
             return store.get_mappings_by_pool(pool_id)
 
     def get_all_mappings(self) -> list[PoolMapping]:
         """Get all mappings within one application transaction."""
-        with self._gateway.transaction() as store:
+        with self._gateway.transaction(permission=Permission.SHARED) as store:
             return store.get_all_mappings()
 
     def create_mapping(self, mapping: PoolMapping) -> int:
         """Create mapping within one application transaction."""
         mapping = normalize_mapping(mapping)
-        with self._gateway.transaction(write=True) as store:
+        with self._gateway.transaction(write=True, permission=Permission.SHARED) as store:
             return store.create_mapping(mapping)
 
     def update_mapping(self, mapping_id: int, allocation_pct: float) -> bool:
         """Update mapping within one application transaction."""
         validate_allocation_pct(allocation_pct)
-        with self._gateway.transaction(write=True) as store:
+        with self._gateway.transaction(write=True, permission=Permission.SHARED) as store:
             return store.update_mapping(mapping_id, allocation_pct)
 
     def delete_mapping(self, mapping_id: int) -> bool:
         """Delete mapping within one application transaction."""
-        with self._gateway.transaction(write=True) as store:
+        with self._gateway.transaction(write=True, permission=Permission.SHARED) as store:
             return store.delete_mapping(mapping_id)
 
     def get_assignments(
@@ -198,17 +222,17 @@ class ResourcePoolService:
 
     def get_tag_choices(self) -> list[PoolTagChoice]:
         """Get tag choices within one application transaction."""
-        with self._gateway.transaction() as store:
+        with self._gateway.transaction(permission=Permission.SHARED) as store:
             return store.get_tag_choices()
 
     def get_pool_tags(self, pool_id: int) -> list[PoolTag]:
         """Get pool tags within one application transaction."""
-        with self._gateway.transaction() as store:
+        with self._gateway.transaction(permission=Permission.SHARED) as store:
             return store.get_pool_tags(pool_id)
 
     def get_all_pool_groups(self) -> list[PoolGroupSummary]:
         """Read counts and the complete graph in one consistent snapshot."""
-        with self._gateway.transaction() as store:
+        with self._gateway.transaction(permission=Permission.SHARED) as store:
             groups, members = store.groups(), store.get_all_group_members()
             return [
                 PoolGroupSummary(
@@ -234,19 +258,19 @@ class ResourcePoolService:
 
     def get_group_descendant_pool_ids(self, group_id: int) -> list[int]:
         """Resolve the full graph with deliberate cycle termination."""
-        with self._gateway.transaction() as store:
+        with self._gateway.transaction(permission=Permission.SHARED) as store:
             return descendant_pools(group_id, store.get_all_group_members())
 
     def would_create_group_cycle(self, group_id: int, child_group_id: int) -> bool:
         """Preview whether a proposed child can already reach its parent."""
-        with self._gateway.transaction() as store:
+        with self._gateway.transaction(permission=Permission.SHARED) as store:
             return int(group_id) in descendant_groups(
                 int(child_group_id), store.get_all_group_members()
             )
 
     def get_allowed_child_group_ids(self, group_id: int) -> list[int]:
         """Read the graph once for the editor's child-group choices."""
-        with self._gateway.transaction() as store:
+        with self._gateway.transaction(permission=Permission.SHARED) as store:
             members = store.get_all_group_members()
             return [
                 group.id
@@ -258,7 +282,7 @@ class ResourcePoolService:
         self, group_id: int, pool_ids: list[int], child_group_ids: list[int]
     ) -> None:
         """Validate all new edges while holding the SQLite writer reservation."""
-        with self._gateway.transaction(write=True) as store:
+        with self._gateway.transaction(write=True, permission=Permission.SHARED) as store:
             self._replace_members(store, group_id, pool_ids, child_group_ids)
 
     @staticmethod
@@ -279,7 +303,7 @@ class ResourcePoolService:
 
     def set_pool_tags(self, pool_id: int, tag_ids: list[int]) -> None:
         """Replace tags atomically after checking their current references."""
-        with self._gateway.transaction(write=True) as store:
+        with self._gateway.transaction(write=True, permission=Permission.SHARED) as store:
             self._set_tags(store, pool_id, tag_ids)
 
     @staticmethod

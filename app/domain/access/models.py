@@ -52,6 +52,18 @@ class Actor:
 
 
 @dataclass(frozen=True)
+class DeploymentActor:
+    """Explicit filesystem-authorized deployment/test caller, never a browser identity."""
+
+    operator: str
+    correlation_id: str
+
+    def __post_init__(self) -> None:
+        if not self.operator.strip() or not self.correlation_id.strip():
+            raise ValueError("Deployment operations require an explicit operator and correlation reference.")
+
+
+@dataclass(frozen=True)
 class VerifiedIdentity:
     """Minimal identity after a maintained OIDC library verifies the ID token."""
 

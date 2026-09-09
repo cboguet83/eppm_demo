@@ -14,6 +14,7 @@ from app.presentation.assets import component_path
 from typing import Any
 import pandas as pd
 import streamlit as st
+from app.presentation.components.authorized_cache import authorized_cache
 import streamlit.components.v1 as components
 from app.application.exceptions import (
     OrganizationStorageError,
@@ -33,7 +34,6 @@ from app.domain.resources.capacity_rules import (
     project_pool_status,
 )
 from app.domain.planning.rules import normalize_progress
-from app.presentation.components.planning_imports import csv_text
 from app.presentation.components.property_labels import property_label
 from app.presentation.components.planning_events import validate_event
 from app.presentation.components.planning_workspace import PlanningWorkspace
@@ -297,7 +297,7 @@ def _build_resource_pool_hierarchy(
 ) -> list[dict[str, Any]]:
     """Build a loop-safe tree of pool groups and ungrouped pools for the Gantt."""
     pool_by_id = {int(pool["id"]): pool for pool in pools}
-    groups = resource_groups_frame(workspace.resources.get_all_pool_groups())
+    groups = resource_groups_frame(workspace.resources.group_choices())
     if groups.empty:
         return [
             {
@@ -320,7 +320,7 @@ def _build_resource_pool_hierarchy(
     members_by_group: dict[int, tuple[list[int], list[int]]] = {}
     child_group_ids: set[int] = set()
     grouped_pool_ids: set[int] = set()
-    for row in all_members_frame(workspace.resources.get_all_group_members()).to_dict("records"):
+    for row in all_members_frame(workspace.resources.group_membership()).to_dict("records"):
         pool_ids, child_ids = members_by_group.setdefault(int(row["group_id"]), ([], []))
         if pd.notna(row["pool_id"]):
             pool_ids.append(int(row["pool_id"]))
@@ -442,7 +442,7 @@ def _manage_project_tags_dialog(
                 st.rerun()
     st.divider()
     st.markdown(f"##### ➕ {t('planning.attach_new_tag', default='Attach New Tag')}")
-    df_tags = get_project_tag_group_tags_frame(workspace.tags.get_project_tag_group_tags())
+    df_tags = get_project_tag_group_tags_frame(workspace.tags.project_tag_choices())
     tag_options = [
         (
             None,
@@ -527,7 +527,7 @@ def _manage_task_tags_dialog(task_id: int, task_name: str, workspace: PlanningWo
                 st.rerun()
     st.divider()
     st.markdown(f"##### ➕ {t('planning.attach_new_task_tag', default='Attach New Tag to Task')}")
-    df_tags = get_task_tag_group_tags_frame(workspace.tags.get_task_tag_group_tags())
+    df_tags = get_task_tag_group_tags_frame(workspace.tags.task_tag_choices())
     tag_options = [
         (
             None,
@@ -653,7 +653,7 @@ def _manage_project_resource_pools_dialog(
                     st.rerun()
     st.divider()
     st.markdown(f"##### ➕ {t('planning.assign_new_pool', default='Assign Resource Pool')}")
-    df_all_pools = pools_frame(workspace.resources.get_all_pools())
+    df_all_pools = pools_frame(workspace.resources.pool_choices())
     if df_all_pools.empty:
         st.warning(
             t(
@@ -797,7 +797,7 @@ def _manage_task_resource_pools_dialog(
     if task_start_str and task_end_str:
         st.caption(f"📅 **Task Schedule:** `{task_start_str}` ➔ `{task_end_str}`")
     df_current_assigns = assignments_frame(workspace.resources.get_assignments(task_id=task_id))
-    df_all_pools = pools_frame(workspace.resources.get_all_pools())
+    df_all_pools = pools_frame(workspace.resources.pool_choices())
     pool_rows = df_all_pools.to_dict("records")
     summary_ids = set(df_current_assigns["pool_id"].astype(int))
     summary_ids.update((int(row["id"]) for row in pool_rows if pd.isna(row["capacity_fte"])))
@@ -1009,7 +1009,7 @@ def _handle_filter_by_resource_pool(
     end_date = str(gantt_event.get("end_date", "")).strip()[:10] or "9999-12-31"
     clear_other = bool(gantt_event.get("clear_other_filters", True))
     pool_name = str(gantt_event.get("pool_name", ""))
-    pool_ids = workspace.resources.get_group_descendant_pool_ids(int(group_id)) if group_id else [pool_id]
+    pool_ids = workspace.resources.group_pool_ids(int(group_id)) if group_id else [pool_id]
     details = workspace.pool_details(pool_ids) if pool_ids else []
     matching_pids = sorted({pid for detail in details for pid in
         get_projects_consuming_pool_in_period(detail.assignments, start_date, end_date)})
@@ -1117,7 +1117,7 @@ def _render_filtered_active_allocations(
     st.markdown(full_table_html, unsafe_allow_html=True)
 
 
-@st.cache_data(ttl=60, max_entries=8, show_spinner=False, hash_funcs={tuple: repr})
+@authorized_cache(ttl=60, max_entries=8, show_spinner=False, hash_funcs={tuple: repr})
 def _load_planning_pool_payload(
     _workspace: PlanningWorkspace,
     revision: tuple,
@@ -1131,16 +1131,20 @@ def _load_planning_pool_payload(
     pool_details_cache = _pool_details_cache
     scope_pids = [int(p) for p in selected_projects if str(p).isdigit()]
     scope_pid_set = set(scope_pids)
-    df_all_pools = pools_frame(workspace.resources.get_all_pools())
+    df_all_pools = pools_frame(workspace.resources.pool_choices())
     if pool_ids is not None:
         df_all_pools = df_all_pools[df_all_pools.id.isin(pool_ids)]
+    # A fragment can retain a dictionary from an older scope. Refresh it through
+    # the actor-bound capacity cache before using any allocation records.
+    pool_details_cache.clear()
+    pool_details_cache.update({detail.pool_id: detail for detail in workspace.pool_details(
+        [int(value) for value in df_all_pools.id]
+    )})
     resource_pools_payload: list[dict[str, Any]] = []
     if not df_all_pools.empty:
         for _, p_row in df_all_pools.iterrows():
             p_id = int(p_row["id"])
             p_name = str(p_row["name"])
-            if p_id not in pool_details_cache:
-                pool_details_cache[p_id] = workspace.pool_details([p_id])[0]
             p_cap = pool_details_cache[p_id]
             effective_daily_capacity = (
                 p_cap.daily_assigned_capacity if p_cap.has_assigned_resources else {}
@@ -1376,7 +1380,7 @@ def _render_planning_chart(
                 from app.presentation.components.csv_download import download_project_csv
 
                 project_id = int(gantt_event["project_id"])
-                download_project_csv(workspace.planning.export_project_template(project_id), project_id, nonce)
+                download_project_csv(project_id, nonce)
             elif action == "import_csv_template":
                 _schedule_csv_dialog(workspace, int(gantt_event["project_id"]), action)
             elif action == "go_to_pool_details":
@@ -1550,10 +1554,9 @@ def render_planning_milestones(workspace: PlanningWorkspace) -> None:
         """,
         unsafe_allow_html=True,
     )
-    workspace.planning.ensure_indexes()
     revision = workspace.revision()
-    params = parameters_frame(workspace.schema.get_all_parameters())
-    alias_translations = workspace.schema.get_alias_translations(get_current_locale())
+    params = parameters_frame(workspace.schema.property_references())
+    alias_translations = workspace.schema.alias_references(get_current_locale())
     chosen_fields = set(st.session_state.get("planning_flex_fields", []))
     property_ids = tuple(
         sorted(
@@ -1814,7 +1817,7 @@ def _pool_allocations_dialog(pool_id: int, workspace: PlanningWorkspace, group_i
     from app.presentation.components.resource_pool_dialogs import _render_pool_assignments_table
     from app.presentation.navigation import PAGE_PLANNING
 
-    pool_ids = workspace.resources.get_group_descendant_pool_ids(group_id) if group_id else [pool_id]
+    pool_ids = workspace.resources.group_pool_ids(group_id) if group_id else [pool_id]
     details = workspace.capacity.get_details(pool_ids) if pool_ids else []
     if not details:
         st.info("No resource pools found in this selection.")
@@ -1850,10 +1853,12 @@ def _schedule_csv_dialog(workspace: PlanningWorkspace, project_id: int, action: 
         "separate each column's values with semicolons in matching order (1;2 / FS;SS / 0;2). "
         "External references use task:123 or project:4 in preceding_step."
     )))
-    uploaded_file = st.file_uploader(
-        t("planning.csv_upload_label"), type=["csv"], key=f"uploader_steps_{project_id}",
+    from app.presentation.components.csv_upload import project_csv_upload
+
+    content = project_csv_upload(
+        t("planning.csv_upload_label"), key=f"uploader_steps_{project_id}",
     )
-    if uploaded_file is None:
+    if content is None:
         return
     date_format = st.selectbox(
         t("planning.csv_date_format", default="Date format in the CSV"),
@@ -1863,7 +1868,6 @@ def _schedule_csv_dialog(workspace: PlanningWorkspace, project_id: int, action: 
             "The preview shows the dates that will be saved."
         )),
     )
-    content = csv_text(uploaded_file)
     steps = workspace.planning.validate_project_template(project_id, content, date_format=date_format)
     steps_payload = list(csv.DictReader(io.StringIO(content.lstrip("\ufeff"))))
     for row, step in zip(steps_payload, steps, strict=True):

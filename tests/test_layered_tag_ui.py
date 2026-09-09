@@ -9,7 +9,7 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 from app.domain.tags.models import ProjectTag, TagDictionary, TagGroup, TaskTag
-from app.main import create_tag_service
+from app.operator_services import create_tag_service
 from app.infrastructure.database.schema_init import init_db
 
 
@@ -32,7 +32,7 @@ def dialog(path: str, invocation: str) -> AppTest:
         f"""
 from dataclasses import asdict
 import pandas as pd
-from app.main import create_tag_service
+from app.operator_services import create_tag_service
 from app.presentation.components import tag_dialogs as dialogs
 from app.presentation.components.tag_frames import get_all_tag_groups_frame, get_all_tags_frame
 from app.presentation.i18n import set_current_locale
@@ -168,7 +168,7 @@ def test_catalog_component_routes_create_events_to_migrated_dialogs(
     ) as component:
         app = AppTest.from_string(
             f"""
-from app.main import create_tag_service
+from app.operator_services import create_tag_service
 from app.presentation.pages.tags import {render}
 {render}(create_tag_service({database!r}))
 """,

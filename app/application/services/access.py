@@ -136,14 +136,18 @@ class AccessService:
 
     def actor(self, cookie: str) -> Actor:
         """Resolve an opaque browser reference, never a user ID supplied by the browser."""
+        return self.browser_identity(cookie)[0]
+
+    def browser_identity(self, cookie: str) -> tuple[Actor, str, int]:
+        """Validate a connection's current identity/status without extending its lifetime."""
         digest = session_digest(cookie)
         with self.gateway.transaction() as store:
             session = store.session(digest)
             if session is None:
                 raise AccessDenied()
             actor = Actor(session["user_id"], digest, self.token_factory())
-            self.policy.session(store, actor, active=False)
-            return actor
+            current = self.policy.session(store, actor, active=False)
+            return actor, current["status"], store.security_revision()
 
     def account(self, actor: Actor) -> UserRecord:
         """Pending/disabled screens may read only their own profile and status."""

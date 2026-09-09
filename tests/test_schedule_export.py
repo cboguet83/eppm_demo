@@ -7,7 +7,7 @@ from pathlib import Path
 from app.domain.planning.csv_export import export_schedule
 from app.domain.planning.csv_import import get_csv_template, parse_csv
 from app.infrastructure.database.schema_init import init_db
-from app.main import create_planning_service, create_project_service
+from app.operator_services import create_planning_service, create_project_service
 
 
 def test_project_schedule_exports_actual_tasks_in_order_numbered_from_one(tmp_path: Path) -> None:

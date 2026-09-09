@@ -11,8 +11,8 @@ from unittest.mock import patch
 from streamlit.testing.v1 import AppTest
 from app.infrastructure.database.schema_init import init_db
 from app.domain.tags.models import TaskTag
-from app.main import create_tag_service
-from app.main import create_planning_service
+from app.operator_services import create_tag_service
+from app.operator_services import create_planning_service
 from tests.test_settings_lazy_loading import settings_app
 from app.application.services.tags import TagService
 from app.application.services.planning import PlanningService
@@ -20,7 +20,7 @@ from app.presentation.components.tag_frames import page_frame
 
 
 def add_tag_app(path):
-    from app.main import create_tag_service
+    from app.operator_services import create_tag_service
     from app.presentation.components.tag_dialogs import _open_add_task_tag_dialog
     _open_add_task_tag_dialog(create_tag_service(path))
 

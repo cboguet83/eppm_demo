@@ -1,8 +1,8 @@
 """Integration tests for PPM Studio Pro."""
 
-from app.main import create_budget_service
-from app.main import create_project_service
-from app.main import create_schema_service
+from app.operator_services import create_budget_service
+from app.operator_services import create_project_service
+from app.operator_services import create_schema_service
 
 from app.presentation.components.planning_catalog import flatten_dynamic_attributes
 
@@ -16,7 +16,7 @@ import unittest
 
 from app.infrastructure.database.schema_init import init_db
 from app.infrastructure.database.seeder import seed_default_data_if_empty
-from app.main import create_planning_service
+from app.operator_services import create_planning_service
 
 
 class TestIntegration(unittest.TestCase):

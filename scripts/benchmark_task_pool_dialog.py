@@ -20,7 +20,7 @@ def modal_app(db_path: str, task_id: int) -> None:
     import streamlit as st
     from time import perf_counter
 
-    from app.main import create_planning_workspace
+    from app.operator_services import create_planning_workspace
     from app.presentation.pages.planning import _manage_task_resource_pools_dialog
 
     workspace = create_planning_workspace(db_path)

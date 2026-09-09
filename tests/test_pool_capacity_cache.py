@@ -1,6 +1,6 @@
 """Cache correctness: daily exceptions, targeted invalidation and durable reads."""
 
-from app.main import create_pool_capacity_service
+from app.operator_services import create_pool_capacity_service
 
 from contextlib import closing
 
@@ -12,7 +12,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from app.infrastructure.database.schema_init import init_db
-from app.main import create_resource_pool_service
+from app.operator_services import create_resource_pool_service
 from app.main import capacity_cache_state
 
 

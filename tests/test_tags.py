@@ -12,10 +12,10 @@ from app.infrastructure.database.schema_init import init_db
 from app.domain.resources.models import ResourcePool
 from app.domain.tags.rules import validate_tag_group, validate_assignment
 from app.domain.tags.models import ProjectTag, ResourcePoolTag, TagDictionary, TagGroup, TaskTag
-from app.main import create_planning_service
-from app.main import create_project_service
-from app.main import create_resource_pool_service
-from app.main import create_tag_service
+from app.operator_services import create_planning_service
+from app.operator_services import create_project_service
+from app.operator_services import create_resource_pool_service
+from app.operator_services import create_tag_service
 
 
 class TestTagsSystem(unittest.TestCase):

@@ -20,7 +20,7 @@ from datetime import date
 from app.infrastructure.database.schema_init import init_db
 from app.domain.organization.rules import validate_employee_calendar_exception
 from app.domain.organization.models import Employee, EmployeeCalendarException, FunctionType, OrgFunction, Team
-from app.main import create_organization_service
+from app.operator_services import create_organization_service
 
 
 class TestOrganization(unittest.TestCase):

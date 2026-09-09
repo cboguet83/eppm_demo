@@ -1,5 +1,8 @@
 """Project creation, editing, and deletion use cases."""
 
+from app.domain.access.models import Permission
+
+
 from app.application.ports.projects import PlanningProject, ProjectGateway, ProjectStore
 from app.domain.projects.project import Project, normalize_project_name, prepare_project_values
 from app.domain.projects.project_types import PropertyValue
@@ -39,7 +42,7 @@ class ProjectService:
 
     def generate_project_id(self) -> int:
         """Suggest the next ID for display; the database allocates IDs on save."""
-        with self._gateway.transaction() as store:
+        with self._gateway.transaction(permission=Permission.CREATE) as store:
             return store.next_id()
 
     def create_project(
@@ -52,7 +55,7 @@ class ProjectService:
         """Atomically validate the effective template and create a project."""
         name = normalize_project_name(name)
         links = [normalize_link(link["url"], link["alias"]) for link in custom_links or []]
-        with self._gateway.transaction(write=True) as store:
+        with self._gateway.transaction(write=True, permission=Permission.CREATE) as store:
             type_id = store.default_type_id() if project_type_id is None else project_type_id
             created_id = create_in_transaction(store, Project(
                 project_id, name, status, planned_budget, actual_budget,
@@ -70,7 +73,7 @@ class ProjectService:
     ) -> bool:
         """Update active values atomically, preserving inactive values for later."""
         links = None if custom_links is None else [normalize_link(link["url"], link["alias"]) for link in custom_links]
-        with self._gateway.transaction(write=True) as store:
+        with self._gateway.transaction(write=True, permission=Permission.EDIT, project_ids=[project_id]) as store:
             existing = store.find(project_id)
             if existing is None:
                 return False
@@ -93,5 +96,5 @@ class ProjectService:
 
     def delete_project(self, project_id: int) -> bool:
         """Remove a project and its dependent records in one transaction."""
-        with self._gateway.transaction(write=True) as store:
+        with self._gateway.transaction(write=True, permission=Permission.DELETE) as store:
             return store.delete(project_id)

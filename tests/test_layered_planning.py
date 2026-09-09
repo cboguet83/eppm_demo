@@ -1,5 +1,6 @@
 """Task use-case integrity, scheduling rules, and real SQLite transaction behavior."""
 
+from app.operator_services import deployment_access
 from app.application.exceptions import PlanningConflictError
 
 from contextlib import closing
@@ -16,7 +17,7 @@ from app.domain.planning.csv_import import get_csv_template, parse_csv
 from app.domain.planning.rules import normalize_dependency, normalize_task
 from app.infrastructure.database.connection import get_db
 from app.infrastructure.repositories.planning import SqlitePlanningGateway
-from app.main import create_planning_service
+from app.operator_services import create_planning_service
 from app.presentation.components.planning_imports import csv_text
 from app.infrastructure.database.schema_init import init_db
 
@@ -125,7 +126,7 @@ def test_deletion_rollback_restores_links_and_legacy_predecessor_columns(databas
 def test_planning_gateway_reserves_writes_and_hides_storage_details(database: str) -> None:
     held = get_db(database)
     with patch("app.infrastructure.repositories.planning.get_db", return_value=held):
-        with SqlitePlanningGateway(database).transaction(write=True) as store:
+        with SqlitePlanningGateway(database, access=deployment_access()).transaction(write=True) as store:
             assert store.connection.in_transaction
             with closing(sqlite3.connect(database, timeout=0)) as competitor:
                 with pytest.raises(sqlite3.OperationalError, match="locked"):
@@ -152,7 +153,7 @@ def test_batched_tasks_and_dependencies_share_a_stable_read_snapshot(database: s
     service = create_planning_service(database)
     first = service.create_milestone(1, "First", "", "2026-01-01", "2026-01-02", 0)
     second = service.create_milestone(2, "Second", "", "2026-01-03", "2026-01-04", 0)
-    with SqlitePlanningGateway(database).transaction() as store:
+    with SqlitePlanningGateway(database, access=deployment_access()).transaction() as store:
         assert len(store.get_milestones_for_projects([1, 2])) == 2
         service.add_dependency(second, first)
         assert store.get_dependencies_for_projects([1, 2]) == []

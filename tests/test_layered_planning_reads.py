@@ -13,7 +13,7 @@ from app.domain.planning.constraints import evaluate_constraints
 from app.domain.resources.models import DailyOverassignment, PoolCapacityDetail
 from app.domain.resources.overallocation import overloaded_consumers
 from app.infrastructure.database.connection import get_db
-from app.main import create_planning_service, create_project_overallocation_service
+from app.operator_services import create_planning_service, create_project_overallocation_service
 from app.infrastructure.database.schema_init import init_db
 
 
@@ -39,7 +39,6 @@ def test_sql_summary_warnings_match_domain_rules_at_date_boundaries(
     whole_project: bool,
 ) -> None:
     service = create_planning_service(database)
-    service.ensure_indexes()
     predecessor = service.create_milestone(1, "Source task", "", "2026-01-10", "2026-01-20", 0)
     base = date(2026, 1, 10 if link_type in ("SS", "SF") else 20)
     for project_id, early in ((2, 1), (3, 0)):
@@ -81,7 +80,6 @@ def test_failed_summary_fill_rolls_back_all_cache_rows_and_closes_connection(
     database: str,
 ) -> None:
     service = create_planning_service(database)
-    service.ensure_indexes()
     with closing(sqlite3.connect(database)) as connection, connection:
         connection.execute("""CREATE TRIGGER reject_summary BEFORE INSERT ON planning_summary_cache
             WHEN NEW.project_id=2 BEGIN SELECT RAISE(ABORT,'internal cache error'); END""")
@@ -98,7 +96,6 @@ def test_failed_summary_fill_rolls_back_all_cache_rows_and_closes_connection(
 
 def test_summary_fill_reserves_writer_until_projection_is_published(database: str) -> None:
     service = create_planning_service(database)
-    service.ensure_indexes()
     attempts = []
     held = get_db(database)
 
@@ -124,7 +121,6 @@ def test_failed_task_edit_restores_summary_cache_and_reports_only_affected_proje
     database: str,
 ) -> None:
     service = create_planning_service(database)
-    service.ensure_indexes()
     first = service.create_milestone(1, "Source", "", "2026-01-01", "2026-01-10", 0)
     service.create_milestone(
         2,
@@ -167,13 +163,15 @@ def test_failed_task_edit_restores_summary_cache_and_reports_only_affected_proje
 
 
 def test_summary_schema_installs_idempotently_on_an_existing_database(database: str) -> None:
+    from app.infrastructure.database.schema_init import init_db
+
+    init_db(database)
+    init_db(database)
     with closing(sqlite3.connect(database)) as connection:
-        assert not connection.execute(
+        assert connection.execute(
             "SELECT 1 FROM sqlite_master WHERE name='planning_summary_cache'"
         ).fetchall()
     service = create_planning_service(database)
-    service.ensure_indexes()
-    service.ensure_indexes()
     assert len(service.get_project_summaries([1, 2, 3])) == 3
     with closing(sqlite3.connect(database)) as connection:
         assert (

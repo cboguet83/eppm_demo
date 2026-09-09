@@ -2,7 +2,6 @@
 
 import streamlit as st
 
-from app.application.exceptions import DatabaseMaintenanceError
 from app.presentation.components.application_workspace import ApplicationWorkspace
 from app.presentation.i18n import SUPPORTED_LOCALES, get_current_locale, set_current_locale, t
 from app.presentation.navigation import (
@@ -10,26 +9,12 @@ from app.presentation.navigation import (
     PAGE_PLANNING,
     PAGE_SETTINGS,
     PAGE_SCHEMA_DEF,
+    PAGE_ACCESS,
 )
-from app.presentation.startup import bootstrap_database
 
 
 def render_application(workspace: ApplicationWorkspace) -> None:
     """Main routing and execution entrypoint for Streamlit UI."""
-    # Pass the version explicitly: default argument changes do not invalidate
-    # Streamlit's cached startup result on a development hot reload.
-    try:
-        bootstrap_database(
-            database_identity=workspace.database_identity,
-            schema_version=workspace.schema_version,
-            force=workspace.force_reseed,
-            projects=workspace.seed_projects,
-            _service=workspace.maintenance,
-        )
-    except (DatabaseMaintenanceError, ValueError) as error:
-        st.error(str(error))
-        return
-
     st.set_page_config(
         page_title=t("app.title", default="PPM Studio Pro"),
         page_icon="🏗️",
@@ -140,7 +125,11 @@ def render_application(workspace: ApplicationWorkspace) -> None:
         PAGE_SETTINGS: f"3. ⚙️ {t('nav.settings', default='Settings')}",
     }
 
-    page_keys = [PAGE_PORTFOLIO, PAGE_PLANNING, PAGE_SETTINGS]
+    nav_map[PAGE_ACCESS] = t("access.title", default="Application access")
+    page_keys = [page for page in (PAGE_PORTFOLIO, PAGE_PLANNING, PAGE_SETTINGS, PAGE_ACCESS) if page in workspace.pages]
+    if not page_keys:
+        st.info(t("auth.no_access", default="Your account has no assigned application access. Contact an access administrator."))
+        return
 
     # Deep-link routing via URL query parameters (e.g. ?nav=planning&project_id=123)
     if "nav" in st.query_params:
@@ -169,7 +158,7 @@ def render_application(workspace: ApplicationWorkspace) -> None:
     if "nav_redirect" in st.session_state and st.session_state["nav_redirect"]:
         st.session_state["app_sidebar_nav"] = st.session_state.pop("nav_redirect")
     if st.session_state.get("app_sidebar_nav") not in page_keys:
-        st.session_state["app_sidebar_nav"] = PAGE_PORTFOLIO
+        st.session_state["app_sidebar_nav"] = page_keys[0]
 
     page = st.sidebar.radio(
         t("app.sidebar_nav", default="Navigation"),
@@ -178,74 +167,15 @@ def render_application(workspace: ApplicationWorkspace) -> None:
         key="app_sidebar_nav",
     )
 
-    try:
-        totals = workspace.maintenance.counts()
-    except DatabaseMaintenanceError as error:
-        st.error(str(error))
-        return
-    with st.sidebar:
-        st.divider()
-        st.caption(t("planning_totals.title", default="Planning totals · entire portfolio"))
-        projects_col, tasks_col = st.columns(2)
-        projects_col.caption(
-            f"{t('planning_totals.projects', default='Total projects')}  \n{totals['projects']:,}"
-        )
-        tasks_col.caption(
-            f"{t('planning_totals.tasks', default='Total tasks')}  \n{totals['tasks']:,}"
-        )
-        dependencies_col, pools_col = st.columns(2)
-        dependencies_col.caption(
-            f"{t('planning_totals.dependencies', default='Total dependencies')}  \n{totals['dependencies']:,}"
-        )
-        pools_col.caption(
-            f"{t('planning_totals.pools', default='Total pools')}  \n{totals['pools']:,}"
-        )
-
-    st.sidebar.markdown("---")
-    with st.sidebar.expander(
-        f"⚡ {t('app.seeding_options', default='Database Seeding')}", expanded=False
-    ):
-        ui_num_projects = st.number_input(
-            t("app.seed_projects_count", default="Projects to generate (0 = demo)"),
-            min_value=0,
-            max_value=10000,
-            value=50,
-            step=10,
-            key="sb_num_projects_input",
-            help=t(
-                "app.seed_projects_help",
-                default="Number of mock projects to generate. Set to 0 to seed only default core templates.",
-            ),
-        )
-        if st.button(
-            f"🔄 {t('app.btn_force_reseed', default='Force Re-seed Database')}",
-            key="btn_sidebar_force_reseed",
-            width="stretch",
-        ):
-            with st.spinner(t("app.seeding_in_progress", default="Re-seeding database...")):
-                try:
-                    workspace.maintenance.startup(force=True, projects=int(ui_num_projects))
-                    seed_counts = workspace.maintenance.counts()
-                except (DatabaseMaintenanceError, ValueError) as error:
-                    st.error(str(error))
-                    return
-                st.cache_data.clear()
-                st.session_state["seeding_status_message"] = t(
-                    "project_types.seed_success",
-                    default=(
-                        "Database successfully re-seeded: {projects} projects, "
-                        "{tasks} tasks, and {dependencies} dependencies created."
-                    ),
-                    **seed_counts,
-                )
-                st.rerun()
-
-        from app.presentation.components.allocation_seeding import render_pool_allocation_controls
-
-        render_pool_allocation_controls(workspace.maintenance)
-
-    if "seeding_status_message" in st.session_state:
-        st.sidebar.success(st.session_state.pop("seeding_status_message"))
+    if workspace.totals is not None:
+        totals = workspace.totals()
+        with st.sidebar:
+            st.divider()
+            st.caption(t("planning_totals.visible", default="Planning totals: accessible projects"))
+            for first, second in (("projects", "tasks"), ("dependencies", "pools")):
+                left, right = st.columns(2)
+                left.caption(f"{t('planning_totals.' + first, default=first.title())}  \n{totals[first]:,}")
+                right.caption(f"{t('planning_totals.' + second, default=second.title())}  \n{totals[second]:,}")
 
     workspace.pages[page]()
 

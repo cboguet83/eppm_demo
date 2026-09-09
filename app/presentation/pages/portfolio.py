@@ -7,6 +7,7 @@ from typing import Any
 
 import pandas as pd
 import streamlit as st
+from app.presentation.components.authorized_cache import authorized_cache
 
 from app.application.exceptions import ProjectStorageError, ProjectTypeStorageError, SchemaStorageError
 from app.application.services.portfolio import PortfolioService
@@ -137,8 +138,8 @@ def _render_project_details_body(
         st.info("The selected project no longer exists.")
         return
     params = localize_parameters(
-        template_frame(workspace.types.get_template(proj_obj.project_type_id)),
-        workspace.schema.get_alias_translations(get_current_locale()),
+        template_frame(workspace.types.template_reference(proj_obj.project_type_id)),
+        workspace.schema.alias_references(get_current_locale()),
     )
     allowed = set(params["param_id"]) if not params.empty else set()
     dyn_dict = {pid: value for pid, value in proj_obj.dynamic_attributes.items() if pid in allowed}
@@ -203,14 +204,14 @@ def _render_project_details_body(
         with tabs[-1]:
             workspace.render_log(int(proj_id))
 
-@st.cache_data(ttl=60, max_entries=128, show_spinner=False)
+@authorized_cache(ttl=60, max_entries=128, show_spinner=False)
 def _load_portfolio_page(revision: tuple, columns: list[dict], query: dict, offset: int,
                          _service: PortfolioService) -> dict:
     """Cache by source identity/revision; injected service instances are not hashed."""
     return _service.get_page(columns, query, offset)
 
 
-@st.cache_data(ttl=60, max_entries=64, show_spinner=False)
+@authorized_cache(ttl=60, max_entries=64, show_spinner=False)
 def _load_portfolio_facet(revision: tuple, columns: list[dict], query: dict, column: str,
                           search: str, _service: PortfolioService) -> dict:
     """Keep global facet results bounded independently from row pages."""
@@ -244,7 +245,7 @@ def _portfolio_columns(params: pd.DataFrame) -> list[dict]:
 def _render_portfolio_browser(workspace: ProjectWorkspace) -> None:
     """Scroll requests rerun only this fragment, not navigation or global KPIs."""
     params = pd.DataFrame(workspace.portfolio.get_catalog(include_managers=False).parameters)
-    columns = _portfolio_columns(localize_parameters(params, workspace.schema.get_alias_translations(get_current_locale())))
+    columns = _portfolio_columns(localize_parameters(params, workspace.schema.alias_references(get_current_locale())))
     search = st.text_input(t("portfolio.filter_search"), placeholder=t("portfolio.filter_search_placeholder"))
     with st.container(horizontal=True, horizontal_alignment="distribute", vertical_alignment="center"):
         st.subheader(t("portfolio.table_header"))

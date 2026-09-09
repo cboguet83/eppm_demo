@@ -1,5 +1,10 @@
 """SQLite collaboration persistence with explicit transaction ownership."""
 
+from collections.abc import Collection
+from app.domain.access.models import Permission
+
+
+from app.application.services.business_access import BusinessAccess
 from collections.abc import Iterator
 from contextlib import closing, contextmanager
 import logging
@@ -16,6 +21,7 @@ from app.application.ports.collaboration import (
 from app.domain.projects.links import LinkValues
 from app.domain.projects.collaboration import CatalogKind, EventValues
 from app.infrastructure.database.connection import get_db
+from app.infrastructure.database.business_security import authorized_business_transaction
 
 logger = logging.getLogger(__name__)
 
@@ -46,11 +52,11 @@ class SqliteCollaborationStore:
         """Insert or update a validated link, enforcing project ownership."""
         if link_id is None:
             return int(self.connection.execute(
-                "INSERT INTO project_link(project_id,url,alias) VALUES(?,?,?)",
+                "INSERT INTO main.project_link(project_id,url,alias) VALUES(?,?,?)",
                 (project_id, values["url"], values["alias"]),
             ).lastrowid)
         cursor = self.connection.execute(
-            "UPDATE project_link SET url=?,alias=? WHERE project_id=? AND id=?",
+            "UPDATE main.project_link SET url=?,alias=? WHERE project_id=? AND id=?",
             (values["url"], values["alias"], project_id, link_id),
         )
         if not cursor.rowcount:
@@ -60,7 +66,7 @@ class SqliteCollaborationStore:
     def delete_link(self, project_id: int, link_id: int) -> None:
         """Scope removal to the owning project."""
         self.connection.execute(
-            "DELETE FROM project_link WHERE project_id=? AND id=?", (project_id, link_id),
+            "DELETE FROM main.project_link WHERE project_id=? AND id=?", (project_id, link_id),
         )
 
     def list_catalog(self, kind: CatalogKind, locale: str) -> list[CatalogEntry]:
@@ -79,16 +85,16 @@ class SqliteCollaborationStore:
         table = _catalog_table(kind)
         if item_id is None:
             item_id = int(
-                self.connection.execute(f"INSERT INTO {table}(name) VALUES (?)", (name,)).lastrowid
+                self.connection.execute(f"INSERT INTO main.{table}(name) VALUES (?)", (name,)).lastrowid
             )
         else:
             cursor = self.connection.execute(
-                f"UPDATE {table} SET name=? WHERE id=?", (name, item_id)
+                f"UPDATE main.{table} SET name=? WHERE id=?", (name, item_id)
             )
             if not cursor.rowcount:
                 raise ValueError("The catalog entry no longer exists.")
         self.connection.execute(
-            f"INSERT INTO {table}_translation VALUES (?, 'en', ?) "
+            f"INSERT INTO main.{table}_translation VALUES (?, 'en', ?) "
             "ON CONFLICT(catalog_id,locale) DO UPDATE SET label=excluded.label",
             (item_id, name),
         )
@@ -97,7 +103,7 @@ class SqliteCollaborationStore:
     def delete_catalog(self, kind: CatalogKind, item_id: int) -> None:
         """Delete an unused catalog entry; foreign keys protect existing usage."""
         table = _catalog_table(kind)
-        self.connection.execute(f"DELETE FROM {table} WHERE id=?", (item_id,))
+        self.connection.execute(f"DELETE FROM main.{table} WHERE id=?", (item_id,))
 
     def list_functions(self) -> list[FunctionContact]:
         """Resolve current occupants in stable order with vacant-name fallback."""
@@ -137,13 +143,13 @@ class SqliteCollaborationStore:
         if contact_id is None:
             return int(
                 self.connection.execute(
-                    "INSERT INTO project_contact(project_id,role_id,function_id) "
+                    "INSERT INTO main.project_contact(project_id,role_id,function_id) "
                     "VALUES (?,?,?)",
                     (project_id, role_id, function_id),
                 ).lastrowid
             )
         cursor = self.connection.execute(
-            "UPDATE project_contact SET role_id=?, function_id=? WHERE id=? AND project_id=?",
+            "UPDATE main.project_contact SET role_id=?, function_id=? WHERE id=? AND project_id=?",
             (role_id, function_id, contact_id, project_id),
         )
         if not cursor.rowcount:
@@ -153,7 +159,7 @@ class SqliteCollaborationStore:
     def reassign_contact(self, project_id: int, contact_id: int, function_id: int) -> None:
         """Update only the function; retain role, project, and reference constraints."""
         cursor = self.connection.execute(
-            "UPDATE project_contact SET function_id=? WHERE project_id=? AND id=?",
+            "UPDATE main.project_contact SET function_id=? WHERE project_id=? AND id=?",
             (function_id, project_id, contact_id),
         )
         if not cursor.rowcount:
@@ -162,7 +168,7 @@ class SqliteCollaborationStore:
     def delete_contact(self, project_id: int, contact_id: int) -> None:
         """Delete only the matching project's assignment, preserving no-op deletes."""
         self.connection.execute(
-            "DELETE FROM project_contact WHERE id=? AND project_id=?", (contact_id, project_id)
+            "DELETE FROM main.project_contact WHERE id=? AND project_id=?", (contact_id, project_id)
         )
 
     def list_events(
@@ -197,14 +203,14 @@ class SqliteCollaborationStore:
         if event_id is None:
             return int(
                 self.connection.execute(
-                    """INSERT INTO project_log_event
+                    """INSERT INTO main.project_log_event
                 (title,description,deadline,scope,comment,event_type_id,status,project_id)
                 VALUES (?,?,?,?,?,?,?,?)""",
                     (*parameters, project_id),
                 ).lastrowid
             )
         cursor = self.connection.execute(
-            """UPDATE project_log_event SET title=?,description=?,deadline=?,scope=?,
+            """UPDATE main.project_log_event SET title=?,description=?,deadline=?,scope=?,
             comment=?,event_type_id=?,status=?,updated_at=CURRENT_TIMESTAMP WHERE id=? AND project_id=?""",
             (*parameters, event_id, project_id),
         )
@@ -216,19 +222,21 @@ class SqliteCollaborationStore:
 class SqliteCollaborationGateway:
     """Own connections, transaction completion, and safe storage errors."""
 
-    def __init__(self, db_path: str | None = None) -> None:
+    def __init__(self, db_path: str | None = None, *, access: BusinessAccess) -> None:
         """Retain the configured database path without opening a connection."""
         self.db_path = db_path
+        self.access = access
 
     @contextmanager
-    def transaction(self, *, write: bool = False) -> Iterator[SqliteCollaborationStore]:
+    def transaction(self, *, write: bool = False, permission: Permission | None = None, project_ids: Collection[int] | None = None) -> Iterator[SqliteCollaborationStore]:
         """Read one snapshot or commit all writes atomically, closing on every exit."""
         try:
             with closing(get_db(self.db_path)) as connection:
                 connection.row_factory = sqlite3.Row
                 with connection:
                     connection.execute("BEGIN IMMEDIATE" if write else "BEGIN")
-                    yield SqliteCollaborationStore(connection)
+                    with authorized_business_transaction(connection, self.access, permission=permission, project_ids=project_ids):
+                        yield SqliteCollaborationStore(connection)
         except sqlite3.IntegrityError as exc:
             raise CollaborationConflictError(
                 "Cannot save: this entry is duplicated, missing, or still in use."

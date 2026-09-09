@@ -1,5 +1,9 @@
 """Plain-data persistence contracts for organization transactions."""
 
+from collections.abc import Collection
+from app.domain.access.models import Permission
+
+
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import date
@@ -65,4 +69,4 @@ class OrganizationStore(Protocol):
 class OrganizationGateway(Protocol):
     """Supply a consistent reader or reserved writer through the storage port."""
 
-    def transaction(self, *, write: bool = False) -> AbstractContextManager[OrganizationStore]: ...
+    def transaction(self, *, write: bool = False, permission: Permission | None = None, project_ids: Collection[int] | None = None) -> AbstractContextManager[OrganizationStore]: ...

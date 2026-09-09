@@ -10,6 +10,7 @@ from typing import Any
 
 import pandas as pd
 import streamlit as st
+from app.presentation.components.authorized_cache import authorized_cache
 
 from app.application.ports.planning import ProjectSummary
 from app.application.ports.tag_records import TagLink
@@ -27,14 +28,13 @@ from app.presentation.components.planning_workspace import PlanningWorkspace
 from app.presentation.components.schema_frames import parameters_frame
 
 
-@st.cache_data(ttl=60, max_entries=8, show_spinner=False)
+@authorized_cache(ttl=60, max_entries=8, show_spinner=False)
 def load_planning_catalog(
     _workspace: PlanningWorkspace,
     revision: tuple,
     property_ids: tuple[str, ...] = (),
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, list[dict[str, Any]]]:
     """Cache minimal project identities and only currently selected filter values."""
-    _workspace.planning.ensure_indexes()
     projects = pd.DataFrame(
         _workspace.projects.projects.get_planning_catalog(property_ids),
         columns=[
@@ -47,7 +47,7 @@ def load_planning_catalog(
             "dynamic_attributes",
         ],
     )
-    params = parameters_frame(_workspace.schema.get_all_parameters())
+    params = parameters_frame(_workspace.schema.property_references())
     frame = (
         flatten_dynamic_attributes(projects, params[params.param_id.isin(property_ids)])
         if property_ids
@@ -55,14 +55,14 @@ def load_planning_catalog(
     )
     frame = enrich_projects_with_organization(
         frame,
-        functions_frame(_workspace.organization.get_all_functions()),
-        employees_frame(_workspace.organization.get_all_employees()),
+        functions_frame(_workspace.organization.function_references()),
+        employees_frame(_workspace.organization.employee_references()),
     )
     tags = [asdict(row) for row in _workspace.tags.get_all_project_tags()]
     return projects, frame, params, tags
 
 
-@st.cache_data(ttl=60, max_entries=8, show_spinner=False)
+@authorized_cache(ttl=60, max_entries=8, show_spinner=False)
 def load_planning_steps(
     _workspace: PlanningWorkspace,
     revision: tuple,
@@ -78,7 +78,7 @@ def load_planning_steps(
     return tasks_frame(bundle.tasks), bundle.dependencies, bundle.tags, bundle.pools
 
 
-@st.cache_data(ttl=60, max_entries=8, show_spinner=False)
+@authorized_cache(ttl=60, max_entries=8, show_spinner=False)
 def load_planning_project_metadata(
     _workspace: PlanningWorkspace,
     revision: tuple,
@@ -91,7 +91,7 @@ def load_planning_project_metadata(
     )
 
 
-@st.cache_data(ttl=60, max_entries=16, show_spinner=False)
+@authorized_cache(ttl=60, max_entries=16, show_spinner=False)
 def load_dependency_choices(
     _workspace: PlanningWorkspace,
     revision: tuple,
@@ -104,7 +104,7 @@ def load_dependency_choices(
     ]
 
 
-@st.cache_data(ttl=60, max_entries=8, show_spinner=False, hash_funcs={tuple: repr})
+@authorized_cache(ttl=60, max_entries=8, show_spinner=False, hash_funcs={tuple: repr})
 def load_project_summaries(
     _workspace: PlanningWorkspace,
     revision: tuple,

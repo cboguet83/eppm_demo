@@ -4,8 +4,8 @@ from contextlib import closing
 
 from app.infrastructure.database.connection import get_db
 from app.infrastructure.database.schema_init import init_db
-from app.main import create_project_service
-from app.main import create_project_overallocation_service
+from app.operator_services import create_project_service
+from app.operator_services import create_project_overallocation_service
 
 
 def test_only_positive_consumers_overlapping_an_overloaded_day_are_flagged(tmp_path):

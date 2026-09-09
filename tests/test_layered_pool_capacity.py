@@ -1,5 +1,6 @@
 """Pure capacity boundaries, batched snapshots, and concurrent cache publication."""
 
+from app.operator_services import deployment_access
 from contextlib import closing
 from dataclasses import asdict
 from datetime import date
@@ -172,10 +173,10 @@ def test_snapshot_reader_uses_constant_queries_and_keeps_concurrent_versions_sep
         return connection
 
     with patch("app.infrastructure.repositories.resource_pools.get_db", traced_connection):
-        snapshot = SqliteCapacityReader(database).read([1, 2])
+        snapshot = SqliteCapacityReader(database, access=deployment_access()).read([1, 2])
         two_pool_queries = len(queries)
         queries.clear()
-        next_snapshot = SqliteCapacityReader(database).read([1])
+        next_snapshot = SqliteCapacityReader(database, access=deployment_access()).read([1])
     assert len(queries) == two_pool_queries
     assert snapshot[1].pool.name == "A" and snapshot[1].assignments[0]["fte_assigned"] == 1
     assert (
@@ -189,8 +190,8 @@ def test_cache_rejects_stale_publication_and_preserves_explicit_calculation_day(
     database: str,
 ) -> None:
     state = CapacityCacheState()
-    cache = SqliteCapacityCache(database, state, lambda: DAY)
-    service = PoolCapacityService(SqliteCapacityReader(database), cache, lambda: DAY)
+    cache = SqliteCapacityCache(database, state, lambda: DAY, access=deployment_access())
+    service = PoolCapacityService(SqliteCapacityReader(database, access=deployment_access()), cache, lambda: DAY)
     calls = []
 
     def calculate(ids: list[int], day: date):
@@ -215,14 +216,14 @@ def test_cache_rejects_stale_publication_and_preserves_explicit_calculation_day(
         assert asdict(service.get_details([1])[0]) == asdict(detail)
         assert service.get_summaries([1])[0].is_overassigned
         assert service.get_summaries([]) == []
-    next_cache = SqliteCapacityCache(database, state, lambda: date(2026, 9, 9))
+    next_cache = SqliteCapacityCache(database, state, lambda: date(2026, 9, 9), access=deployment_access())
     tomorrow = next_cache.load(service.calculate_many, details=True, pool_ids=[1])[0]
     assert tomorrow.daily_usage == {"2026-09-09": 4}
 
 
 def test_cache_reports_repeated_edits_safely_without_publishing_stale_rows(database: str) -> None:
-    cache = SqliteCapacityCache(database, CapacityCacheState(), lambda: DAY)
-    service = PoolCapacityService(SqliteCapacityReader(database), cache, lambda: DAY)
+    cache = SqliteCapacityCache(database, CapacityCacheState(), lambda: DAY, access=deployment_access())
+    service = PoolCapacityService(SqliteCapacityReader(database, access=deployment_access()), cache, lambda: DAY)
 
     def changing(ids: list[int], day: date):
         details = service.calculate_many(ids, day)
@@ -238,8 +239,8 @@ def test_cache_reports_repeated_edits_safely_without_publishing_stale_rows(datab
 
 def test_cache_translates_storage_failures_and_bounds_process_memory(database: str) -> None:
     state = CapacityCacheState()
-    cache = SqliteCapacityCache(database, state, lambda: DAY)
-    service = PoolCapacityService(SqliteCapacityReader(database), cache, lambda: DAY)
+    cache = SqliteCapacityCache(database, state, lambda: DAY, access=deployment_access())
+    service = PoolCapacityService(SqliteCapacityReader(database, access=deployment_access()), cache, lambda: DAY)
     for day in range(1, 11):
         cache.today = lambda day=day: date(2026, 9, day)
         service.get_summaries([1])

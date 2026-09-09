@@ -4,6 +4,7 @@ The storage model retains the legacy project_type names. The public grid calls
 them project templates. No portfolio query loads all project property records.
 """
 
+from app.application.services.business_access import BusinessAccess
 import json
 from pathlib import Path
 from typing import Any
@@ -49,13 +50,14 @@ class SqlitePortfolioReader:
     PAGE_SIZE = 100
     FACET_SIZE = 200
 
-    def __init__(self, db_path: str | None = None) -> None:
+    def __init__(self, db_path: str | None = None, *, access: BusinessAccess) -> None:
         """Retain the database path without opening a connection."""
         self.db_path = db_path
+        self.access = access
 
     def get_metrics(self) -> PortfolioMetrics:
         """Read decimal totals with constant-memory streaming of amount columns."""
-        return read_budget_totals(self.db_path)
+        return read_budget_totals(self.db_path, access=self.access)
 
     @staticmethod
     def _source(columns: list[PortfolioColumn]) -> tuple[str, list, set[str]]:
@@ -129,7 +131,7 @@ class SqlitePortfolioReader:
         key = sort.get('column') if sort.get('column') in keys else 'project_id'
         direction = 'DESC' if sort.get('direction') == 'desc' else 'ASC'
         order = '"' + key.replace('"', '""') + '" COLLATE NOCASE ' + direction + ', project_id ASC'
-        with project_connection(self.db_path) as conn:
+        with project_connection(self.db_path, access=self.access) as conn:
             total = conn.execute(sql + 'SELECT COUNT(*) FROM portfolio' + where, args + where_args).fetchone()[0]
             offset = min(max(0, int(offset)), max(0, (total - 1) // self.PAGE_SIZE * self.PAGE_SIZE))
             cursor = conn.execute(sql + 'SELECT * FROM portfolio' + where + ' ORDER BY ' + order + ' LIMIT ? OFFSET ?',
@@ -151,7 +153,7 @@ class SqlitePortfolioReader:
         value = 'COALESCE("' + column.replace('"', '""') + '",\'\')'
         sql += ', facet AS (SELECT ' + value + ' AS value FROM portfolio' + where + ') '
         args += where_args
-        with project_connection(self.db_path) as conn:
+        with project_connection(self.db_path, access=self.access) as conn:
             count, filled, unique = conn.execute(sql + "SELECT COUNT(*), COUNT(NULLIF(value,'')), COUNT(DISTINCT NULLIF(value,'')) FROM facet", args).fetchone()
             stats: list = [['Rows', count], ['Filled', filled], ['Unique', unique], ['Empty', count - filled]]
             fmt = next((c.get('format') for c in columns if c['key'] == column), 'text')
@@ -174,20 +176,27 @@ class SqlitePortfolioReader:
                 'has_more': len(choices) > self.FACET_SIZE}
 
     def revision(self) -> tuple:
-        """Include the database identity, file revision, and WAL revision."""
-        return portfolio_revision(self.db_path)
+        """Reauthorize before cache lookup and isolate revisions by trusted actor/scope."""
+        from app.domain.access.models import Actor
+        from app.infrastructure.repositories.access import SqliteAccessStore
+
+        with project_connection(self.db_path, access=self.access) as conn:
+            projects = self.access.projects(SqliteAccessStore(conn))
+            actor = self.access.actor
+            identity = (actor.user_id, actor.session_hash) if isinstance(actor, Actor) else ("deployment",)
+            return portfolio_revision(self.db_path) + (identity, tuple(sorted(projects)))
 
     def get_detail(self, project_id: int) -> PortfolioRow | None:
         """Read one project summary using the same manager labels as the grid."""
         sql, args, _ = self._source([])
-        with project_connection(self.db_path) as conn:
+        with project_connection(self.db_path, access=self.access) as conn:
             cursor = conn.execute(sql + 'SELECT * FROM portfolio WHERE project_id=?', args + [project_id])
             row = cursor.fetchone()
             return dict(zip([c[0] for c in cursor.description], row)) if row else None
 
     def get_catalog(self, *, include_managers: bool = True) -> ProjectCatalog:
         """Read schema; load occupant labels only when rendering a project editor."""
-        with project_connection(self.db_path) as conn:
+        with project_connection(self.db_path, access=self.access) as conn:
             def records(sql: str) -> list[dict]:
                 cursor = conn.execute(sql)
                 names = [column[0] for column in cursor.description]

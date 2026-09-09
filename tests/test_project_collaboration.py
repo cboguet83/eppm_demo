@@ -1,7 +1,8 @@
 """Real database and Streamlit regression tests for project contacts and logs."""
 
-from app.main import create_project_service
-from app.main import create_schema_service
+from app.operator_services import deployment_access
+from app.operator_services import create_project_service
+from app.operator_services import create_schema_service
 
 from app.application.exceptions import CollaborationConflictError
 
@@ -22,7 +23,7 @@ from app.infrastructure.repositories.collaboration import (
     SqliteCollaborationGateway,
     SqliteCollaborationStore,
 )
-from app.main import create_collaboration_service
+from app.operator_services import create_collaboration_service
 
 
 @pytest.fixture
@@ -65,7 +66,7 @@ def event_values(repo):
 
 def test_cached_startup_distinguishes_database_identity_and_schema_version(tmp_path):
     """Startup cannot reuse another database's result or ignore a changed version."""
-    from app.main import create_maintenance_service
+    from app.operator_services import create_maintenance_service
     from app.presentation.startup import bootstrap_database
 
     first, second = (str(tmp_path / name) for name in ("first.db", "second.db"))
@@ -208,7 +209,7 @@ def ui_app(collaboration_path, body):
     return AppTest.from_string(
         f"""
 from app.presentation.i18n import set_current_locale
-from app.main import create_collaboration_service
+from app.operator_services import create_collaboration_service
 from app.presentation.pages.collaboration import render_project_contacts, render_project_log, render_project_catalog, _contact_dialog, _remove_contact_dialog, _event_dialog
 set_current_locale('en')
 service = create_collaboration_service({collaboration_path!r})
@@ -303,7 +304,7 @@ def test_layered_catalog_rename_rolls_back_when_translation_write_fails(collabor
 
 
 def test_collaboration_adapter_rejects_untrusted_catalog_identifiers(collaboration, collaboration_path):
-    with SqliteCollaborationGateway(collaboration_path).transaction() as store:
+    with SqliteCollaborationGateway(collaboration_path, access=deployment_access()).transaction() as store:
         with pytest.raises(ValueError, match="Unknown project catalog"):
             store.list_catalog("role; DROP TABLE project", "en")
     assert len(pd.DataFrame(create_project_service(collaboration_path).get_planning_catalog(tuple(parameter.param_id for parameter in create_schema_service(collaboration_path).get_all_parameters())))) == 2
@@ -333,7 +334,7 @@ def test_layered_contacts_use_one_snapshot_during_concurrent_deletion(collaborat
 
 
 def test_layered_gateway_rolls_back_all_writes_and_closes_on_caller_error(collaboration, collaboration_path):
-    gateway = SqliteCollaborationGateway(collaboration_path)
+    gateway = SqliteCollaborationGateway(collaboration_path, access=deployment_access())
     with pytest.raises(ValueError, match="Abort operation"):
         with gateway.transaction(write=True) as store:
             store.save_catalog("role", "Partial", None)
@@ -367,7 +368,7 @@ def test_layered_event_boundary_rejects_malformed_fields_before_writes(
 def test_layered_event_paging_is_bounded_and_rejects_malformed_offsets(collaboration, collaboration_path):
     service = create_collaboration_service(collaboration_path)
     values = event_values(collaboration)
-    gateway = SqliteCollaborationGateway(collaboration_path)
+    gateway = SqliteCollaborationGateway(collaboration_path, access=deployment_access())
     with gateway.transaction(write=True) as store:
         for index in range(105):
             store.save_event(1, {**values, "title": str(index), "status": "new"}, None)

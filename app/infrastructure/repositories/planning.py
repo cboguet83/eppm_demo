@@ -1,5 +1,10 @@
 """SQLite task persistence with caller-owned transactions and typed projections."""
 
+from collections.abc import Collection
+from app.domain.access.models import Permission
+
+
+from app.application.services.business_access import BusinessAccess
 from collections.abc import Iterator, Sequence
 from contextlib import closing, contextmanager
 import json
@@ -9,6 +14,7 @@ from app.application.exceptions import PlanningConflictError, PlanningStorageErr
 from app.application.ports.planning import (
     ExternalTask,
     PlanningTaskBundle,
+    PlanningTotals,
     ProjectSummary,
     TaskChoice,
     TaskRow,
@@ -21,10 +27,10 @@ from app.domain.planning.records import (
     TaskValues,
 )
 from app.infrastructure.database.connection import get_db
+from app.infrastructure.database.business_security import authorized_business_transaction
 from app.infrastructure.repositories.tags import SqliteTagStore
 from app.infrastructure.repositories.resource_pools import SqliteResourcePoolStore
 from app.infrastructure.database.planning_summary_cache import (
-    ensure_planning_indexes,
     read_project_summaries,
 )
 from app.shared.logging import get_logger
@@ -33,7 +39,7 @@ logger = get_logger(__name__)
 
 _TASK_COLUMNS = """m.id, m.project_id, m.task_name, m.phase, m.start_date,
                    m.end_date, m.progress_pct, m.description, m.predecessor_id"""
-_INSERT_TASK = """INSERT INTO project_task
+_INSERT_TASK = """INSERT INTO main.project_task
     (project_id, task_name, phase, start_date, end_date, progress_pct, description, predecessor_id)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)"""
 
@@ -56,6 +62,14 @@ class SqlitePlanningStore:
     def __init__(self, connection: sqlite3.Connection) -> None:
         """Use the supplied transaction; do not commit or close it here."""
         self.connection = connection
+
+    def get_totals(self) -> PlanningTotals:
+        """Count only visible business rows, including pools consuming visible projects."""
+        row = self.connection.execute("""SELECT
+            (SELECT count(*) FROM project), (SELECT count(*) FROM project_task),
+            (SELECT count(*) FROM task_dependencies),
+            (SELECT count(DISTINCT pool_id) FROM resource_pool_assignment)""").fetchone()
+        return PlanningTotals(projects=int(row[0]), tasks=int(row[1]), dependencies=int(row[2]), pools=int(row[3]))
 
     def _tasks(self, where: str = "", params: Sequence[object] = ()) -> list[TaskRow]:
         rows = self.connection.execute(
@@ -206,7 +220,7 @@ class SqlitePlanningStore:
         """Write normalized details, returning false for a deleted task."""
         cursor = self.connection.execute(
             """
-            UPDATE project_task SET task_name=?, phase=?, start_date=?, end_date=?,
+            UPDATE main.project_task SET task_name=?, phase=?, start_date=?, end_date=?,
                 progress_pct=?, description=?, predecessor_id=? WHERE id=?
         """,
             (*_task_params(values), task_id),
@@ -217,7 +231,7 @@ class SqlitePlanningStore:
         """Insert one application-normalized link."""
         self.connection.execute(
             """
-            INSERT INTO task_dependencies
+            INSERT INTO main.task_dependencies
                 (task_id,predecessor_task_id,predecessor_project_id,link_type,lag_days)
             VALUES (?,?,?,?,?)
         """,
@@ -232,14 +246,14 @@ class SqlitePlanningStore:
 
     def replace_dependencies(self, task_id: int, dependencies: list[DependencyInput]) -> None:
         """Replace normalized links in the caller's transaction."""
-        self.connection.execute("DELETE FROM task_dependencies WHERE task_id=?", (task_id,))
+        self.connection.execute("DELETE FROM main.task_dependencies WHERE task_id=?", (task_id,))
         for dependency in dependencies:
             self.insert_dependency(task_id, dependency)
 
     def update_dates(self, milestone_id: int, start_date: str, end_date: str) -> bool:
         """Store validated drag dates."""
         cursor = self.connection.execute(
-            "UPDATE project_task SET start_date=?, end_date=? WHERE id=?",
+            "UPDATE main.project_task SET start_date=?, end_date=? WHERE id=?",
             (start_date, end_date, milestone_id),
         )
         return cursor.rowcount > 0
@@ -247,7 +261,7 @@ class SqlitePlanningStore:
     def update_progress(self, milestone_id: int, progress_pct: int) -> bool:
         """Store the progress value normalized by the domain."""
         cursor = self.connection.execute(
-            "UPDATE project_task SET progress_pct=? WHERE id=?",
+            "UPDATE main.project_task SET progress_pct=? WHERE id=?",
             (progress_pct, milestone_id),
         )
         return cursor.rowcount > 0
@@ -262,14 +276,14 @@ class SqlitePlanningStore:
     def delete_milestone(self, milestone_id: int) -> bool:
         """Clean incoming/outgoing links and legacy predecessor references atomically."""
         self.connection.execute(
-            "DELETE FROM task_dependencies WHERE task_id=? OR predecessor_task_id=?",
+            "DELETE FROM main.task_dependencies WHERE task_id=? OR predecessor_task_id=?",
             (milestone_id, milestone_id),
         )
         self.connection.execute(
-            "UPDATE project_task SET predecessor_id=NULL WHERE predecessor_id=?",
+            "UPDATE main.project_task SET predecessor_id=NULL WHERE predecessor_id=?",
             (milestone_id,),
         )
-        cursor = self.connection.execute("DELETE FROM project_task WHERE id=?", (milestone_id,))
+        cursor = self.connection.execute("DELETE FROM main.project_task WHERE id=?", (milestone_id,))
         return cursor.rowcount > 0
 
     def project_exists(self, project_id: int) -> bool:
@@ -294,19 +308,19 @@ class SqlitePlanningStore:
         """Remove schedule links and project/task allocations in the caller's transaction."""
         task_query = "SELECT id FROM project_task WHERE project_id=?"
         self.connection.execute(
-            f"DELETE FROM resource_pool_assignment WHERE project_id=? OR task_id IN ({task_query})",
+            f"DELETE FROM main.resource_pool_assignment WHERE project_id=? OR task_id IN ({task_query})",
             (project_id, project_id),
         )
         self.connection.execute(
-            f"DELETE FROM task_dependencies WHERE task_id IN ({task_query}) "
+            f"DELETE FROM main.task_dependencies WHERE task_id IN ({task_query}) "
             f"OR predecessor_task_id IN ({task_query}) OR predecessor_project_id=?",
             (project_id, project_id, project_id),
         )
         self.connection.execute(
-            f"UPDATE project_task SET predecessor_id=NULL WHERE predecessor_id IN ({task_query})",
+            f"UPDATE main.project_task SET predecessor_id=NULL WHERE predecessor_id IN ({task_query})",
             (project_id,),
         )
-        self.connection.execute("DELETE FROM project_task WHERE project_id=?", (project_id,))
+        self.connection.execute("DELETE FROM main.project_task WHERE project_id=?", (project_id,))
 
     def related_project_ids(self, project_id: int | list[int], scope: str) -> list[int]:
         """Traverse stored project dependencies transitively with UNION cycle termination."""
@@ -333,9 +347,6 @@ class SqlitePlanningStore:
         """, (json.dumps(seeds),))
         return [int(row[0]) for row in rows]
 
-    def ensure_indexes(self) -> None:
-        """Maintain the existing derived schema inside the caller's transaction."""
-        ensure_planning_indexes(self.connection)
 
     def get_project_summaries(self, project_ids: list[int]) -> list[ProjectSummary]:
         """Read compact project headers, filling cache misses atomically."""
@@ -396,19 +407,21 @@ class SqlitePlanningStore:
 class SqlitePlanningGateway:
     """Own transaction scope, connection cleanup, and safe error translation."""
 
-    def __init__(self, db_path: str | None = None) -> None:
+    def __init__(self, db_path: str | None = None, *, access: BusinessAccess) -> None:
         """Retain configuration without opening storage."""
         self.db_path = db_path
+        self.access = access
 
     @contextmanager
-    def transaction(self, *, write: bool = False) -> Iterator[SqlitePlanningStore]:
+    def transaction(self, *, write: bool = False, permission: Permission | None = None, project_ids: Collection[int] | None = None) -> Iterator[SqlitePlanningStore]:
         """Reserve writes before dependent changes and close on every exit."""
         try:
             with closing(get_db(self.db_path)) as connection:
                 connection.row_factory = sqlite3.Row
                 with connection:
                     connection.execute("BEGIN IMMEDIATE" if write else "BEGIN")
-                    yield SqlitePlanningStore(connection)
+                    with authorized_business_transaction(connection, self.access, permission=permission, project_ids=project_ids):
+                        yield SqlitePlanningStore(connection)
         except sqlite3.IntegrityError as exc:
             raise PlanningConflictError(
                 "The task change conflicts with an existing reference or constraint."

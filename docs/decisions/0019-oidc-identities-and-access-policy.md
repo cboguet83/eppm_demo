@@ -89,6 +89,86 @@ References: [Streamlit authentication](https://docs.streamlit.io/develop/concept
 [st.App](https://docs.streamlit.io/develop/api-reference/server/st.app),
 [Authlib Starlette integration](https://docs.authlib.org/en/latest/oauth2/client/web/starlette.html).
 
+## Business operations and transport integration
+
+Application composition now requires an explicit `BusinessAccess` with the
+server-resolved actor. Deployment/fixture callers use the separate
+`app.operator_services` entry points and an identified `DeploymentActor`.
+The running shell no longer initializes, seeds, resets, or counts the entire
+database. Database initialization installs planning indexes and summary storage.
+Navigation exposes only authorized business, settings, or access-management pages.
+
+Each existing SQLite business gateway begins its transaction before installing
+`SqliteBusinessSecurity`. Connection-local read views filter ownership before
+queries paginate, join, group, or total results. Scoped task dependencies hide
+unreadable endpoints. Business writes explicitly address the main schema;
+temporary triggers check persisted old/new owners in the same transaction,
+including upserts, replacements, indirect dependency writes, and foreign-key
+cascades. Required protected-property audit failure rolls back the business write.
+Full shared-data APIs require business administration before reading or validating
+catalog data; project screens receive separate minimal reference projections.
+
+Display cache lookup always calls the injected service's current authorization
+revision, including the actor and effective scope. Application capacity caching
+never reuses the global deployment cache or employee-contribution payloads for
+project-only readers. Scoped planning summaries do not reuse global dependency
+warning flags that could reveal hidden projects.
+
+`ApplicationSessionMiddleware` overwrites `x-eppm-browser-session` with a signed
+binding of the validated session digest, account status, and security revision.
+The pinned Streamlit 1.63 `server.trustedUserHeaders` configuration maps this
+server-controlled value into the runtime owner identity; its session manager
+compares complete identities before reusing a reconnect ID. This configuration
+API is experimental and version-pinned; upgrades must verify reconnect ownership.
+The application refuses business composition without the matching middleware
+binding. Both WebSocket message directions revalidate session/status/revision.
+Security changes require a fresh runtime; reconnecting never resets the persisted
+authentication or activity deadlines. No background transport check records activity.
+
+Native Streamlit upload routes check an active runtime ID, not application
+ownership, so they are disabled. A custom component transfers a bounded UTF-8
+CSV payload through the authenticated WebSocket instead. The server independently
+validates its shape/size and the existing application parser validates the template
+before replacement. Native media and metrics routes are also denied. CSV export
+uses `/downloads/projects/{id}/template.csv`, which checks the current cookie and
+project permission on every fetch, then returns a no-store attachment. Components
+receive the endpoint, never a preauthorized CSV blob or reusable data URL.
+
+## C4 level 1: system context
+
+```mermaid
+C4Context
+    title EPPM access context
+    Person(user, "Portfolio user", "Reads or changes authorized projects")
+    Person(admin, "Access administrator", "Manages accounts and scoped grants")
+    Person(operator, "Deployment operator", "Configures, migrates, bootstraps and recovers")
+    System(eppm, "EPPM", "Portfolio planning and application access management")
+    System_Ext(idp, "OIDC identity provider", "Authenticates identities and attests MFA")
+    Rel(user, eppm, "Uses authorized workflows", "HTTPS")
+    Rel(admin, eppm, "Administers application access", "HTTPS")
+    Rel(operator, eppm, "Runs deployment commands", "Local CLI")
+    Rel(eppm, idp, "Verifies authentication", "OIDC authorization code with PKCE")
+```
+
+## C4 level 2: containers
+
+```mermaid
+C4Container
+    title EPPM application containers
+    Person(user, "Browser user")
+    System_Boundary(system, "EPPM deployment") {
+        Container(app, "EPPM application", "Python / Streamlit / Starlette", "Authenticated UI, policy and business services")
+        Container(cli, "Deployment commands", "Python CLI", "Migrations, maintenance, bootstrap and recovery")
+        ContainerDb(db, "Application database", "SQLite", "Business data, identities, grants, sessions and immutable audit")
+    }
+    System_Ext(provider, "OIDC provider", "Keycloak in local development")
+    Rel(user, app, "Uses pages and components", "HTTPS / WebSocket")
+    Rel(user, provider, "Authenticates", "Browser redirect")
+    Rel(app, provider, "Exchanges and validates authorization code", "OIDC")
+    Rel(app, db, "Uses authorized transactions", "SQL")
+    Rel(cli, db, "Runs explicit deployment operations", "SQL")
+```
+
 ## C4 level 3: implemented security components
 
 ```mermaid
@@ -102,6 +182,8 @@ C4Component
         Component(policy, "AuthorizationPolicy", "Application policy", "Permission-specific scopes and current account/session checks")
         Component(operator, "DeploymentAccessService", "Application service", "One-time bootstrap and reasoned recovery")
         Component(storage, "SqliteAccessGateway / SqliteOidcState", "SQLite adapters", "Atomic security transactions and single-use OIDC state")
+        Component(business, "Business services and gateways", "Python / SQLite", "Explicit actors, scoped read views and transactional write guards")
+        Component(transport, "ApplicationSessionMiddleware / DownloadRoutes", "ASGI", "Bound runtime identities, live-session checks and authenticated attachments")
     }
     System_Ext(provider, "OIDC provider", "Local Keycloak during development")
     ContainerDb(db, "Application database", "SQLite", "Business data, identities, grants, sessions and audit")
@@ -109,6 +191,11 @@ C4Component
     Rel(oidc, provider, "Discovers and exchanges code", "OIDC")
     Rel(routes, service, "Resolves sessions")
     Rel(ui, service, "Calls explicit actor operations")
+    Rel(ui, business, "Calls authorized business operations")
+    Rel(business, policy, "Checks current permissions in the business transaction")
+    Rel(business, db, "Filters reads and guards writes", "SQL")
+    Rel(transport, service, "Revalidates session and security revision")
+    Rel(transport, business, "Generates authorized downloads")
     Rel(service, policy, "Checks authorization")
     Rel(service, storage, "Uses injected transaction port")
     Rel(operator, storage, "Uses writer transaction")
@@ -116,10 +203,10 @@ C4Component
     Rel(storage, db, "Reads and writes", "SQL")
 ```
 
-The ASGI wrapper and security screens exist but are not yet connected to the business
-shell. This increment is not a secure deployment milestone. Business-service guards,
-filtered queries/downloads, live Keycloak browser verification, and the final OWASP
-evidence checklist remain part of the same feature before rollout.
+The authenticated shell, business transaction guards, scoped caches and download
+routes are connected. This increment is not a deployment milestone: per-action UI
+permissions, live Keycloak browser verification, localization, deployment guidance,
+and the final OWASP evidence checklist remain part of the same feature before rollout.
 
 ## Verification so far
 
@@ -132,5 +219,11 @@ evidence checklist remain part of the same feature before rollout.
   PKCE, JWKS rotation, origin checks and token-free browser cookies.
 - Streamlit AppTest covers public/pending/disabled screens, fixed role assignment,
   unauthorized access administration and last-administrator validation.
-- Latest full run before the final screen additions: 639 tests and 14 subtests passed;
-  measured statement coverage was 90%. This does not meet the repository's 99% target.
+- Business boundary tests cover public-service denial, authoritative old/new child
+  ownership, cross-project dependencies, cascades, replacement writes, protected
+  property auditing, scoped summaries, employee redaction and stale fragment caches.
+- Real HTTP/WebSocket tests cover authenticated download fetch, forged runtime
+  identity headers, session expiry/revocation/security changes, blocked native data
+  routes, and server validation of malformed/oversized CSV component payloads.
+- Integration checkpoint: 697 tests and 14 subtests passed. Measured statement
+  coverage is 90.29% (9,550 of 10,577 statements), below the repository's 99% target.

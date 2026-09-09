@@ -1,5 +1,9 @@
 """Typed persistence contracts for project-schema administration."""
 
+from collections.abc import Collection
+from app.domain.access.models import Permission
+
+
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from typing import Protocol
@@ -45,4 +49,4 @@ class SchemaStore(Protocol):
 class SchemaGateway(Protocol):
     """Own connection lifetime and a consistent read or guarded write snapshot."""
 
-    def transaction(self, *, write: bool = False) -> AbstractContextManager[SchemaStore]: ...
+    def transaction(self, *, write: bool = False, permission: Permission | None = None, project_ids: Collection[int] | None = None) -> AbstractContextManager[SchemaStore]: ...

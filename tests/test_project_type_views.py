@@ -12,9 +12,9 @@ from streamlit.testing.v1 import AppTest
 from app.infrastructure.database.schema_init import init_db
 from app.presentation.i18n import t, set_current_locale
 from app.infrastructure.database.seeder import seed_default_data_if_empty
-from app.main import create_project_service
-from app.main import create_project_type_service
-from app.main import create_schema_service
+from app.operator_services import create_project_service
+from app.operator_services import create_project_type_service
+from app.operator_services import create_schema_service
 
 
 class ProjectTypeViewTests(unittest.TestCase):
@@ -32,9 +32,9 @@ class ProjectTypeViewTests(unittest.TestCase):
         return AppTest.from_string(f'''
 import streamlit as st
 from app.presentation.i18n import set_current_locale
-from app.main import create_project_service
-from app.main import create_schema_service
-from app.main import create_project_workspace
+from app.operator_services import create_project_service
+from app.operator_services import create_schema_service
+from app.operator_services import create_project_workspace
 from app.presentation.components.project_dialogs import open_create_project_dialog, open_edit_project_dialog
 set_current_locale("en")
 workspace = create_project_workspace({self.path!r})

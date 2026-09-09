@@ -1,7 +1,8 @@
 """Project use-case, transaction integrity, and new UI regressions."""
 
-from app.main import create_project_service
-from app.main import create_schema_service
+from app.operator_services import deployment_access
+from app.operator_services import create_project_service
+from app.operator_services import create_schema_service
 
 from app.application.exceptions import ProjectConflictError, ProjectStorageError
 
@@ -19,7 +20,7 @@ from app.application.services.projects import ProjectService
 from app.domain.projects.project import normalize_project_name, prepare_project_values
 from app.infrastructure.database.connection import get_db
 from app.infrastructure.database.seed_projects import create_seed_project
-from app.main import create_project_type_service, create_portfolio_service
+from app.operator_services import create_project_type_service, create_portfolio_service
 from app.infrastructure.database.schema_init import init_db
 
 
@@ -148,7 +149,7 @@ def test_gateway_closes_connections_and_reserves_the_writer_before_reads(
     service.create_project(name="Valid")
     with pytest.raises(ValueError, match="Unknown project type"):
         service.create_project(name="Invalid", project_type_id=999)
-    with SqliteProjectGateway(database).transaction(write=True) as store:
+    with SqliteProjectGateway(database, access=deployment_access()).transaction(write=True) as store:
         assert store.exists(1)
         with closing(sqlite3.connect(database, timeout=0)) as other:
             with pytest.raises(sqlite3.OperationalError, match="locked"):
@@ -173,7 +174,7 @@ def test_project_storage_errors_are_safe_across_services_and_readers(tmp_path: P
 def test_create_dialog_retains_draft_when_another_user_takes_the_preview_id(database: str) -> None:
     create_schema_service(database).create_parameter("p", None, "Notes", "TEXT")
     app = AppTest.from_string(f'''
-from app.main import create_project_workspace
+from app.operator_services import create_project_workspace
 from app.presentation.components.project_dialogs import open_create_project_dialog
 from app.presentation.i18n import set_current_locale
 set_current_locale("en")

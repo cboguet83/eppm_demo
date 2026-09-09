@@ -1,5 +1,10 @@
 """SQLite project-type storage, with explicit transaction and error boundaries."""
 
+from collections.abc import Collection
+from app.domain.access.models import Permission
+
+
+from app.application.services.business_access import BusinessAccess
 import sqlite3
 from collections.abc import Iterator
 from contextlib import closing, contextmanager
@@ -11,6 +16,7 @@ from app.domain.projects.project_types import (
     ProjectType, PropertyApplicability, PropertyDefinition, PropertyValue,
 )
 from app.infrastructure.database.connection import get_db
+from app.infrastructure.database.business_security import authorized_business_transaction
 from app.shared.logging import get_logger
 
 from app.infrastructure.database.property_store import parameters, read_values, write_value
@@ -44,7 +50,7 @@ class SqliteProjectTypeStore:
     def insert_type(self, name: str, description: str) -> int:
         """Insert normalized details; database constraints remain authoritative."""
         cursor = self._connection.execute(
-            "INSERT INTO project_type(name, description) VALUES (?, ?)", (name, description),
+            "INSERT INTO main.project_type(name, description) VALUES (?, ?)", (name, description),
         )
         assert cursor.lastrowid is not None
         return cursor.lastrowid
@@ -52,13 +58,13 @@ class SqliteProjectTypeStore:
     def update_type(self, type_id: int, name: str, description: str) -> None:
         """Persist validated details in the current transaction."""
         self._connection.execute(
-            "UPDATE project_type SET name=?, description=? WHERE id=?",
+            "UPDATE main.project_type SET name=?, description=? WHERE id=?",
             (name, description, type_id),
         )
 
     def delete_type(self, type_id: int) -> None:
         """Delete a type after the application's reference checks."""
-        self._connection.execute("DELETE FROM project_type WHERE id=?", (type_id,))
+        self._connection.execute("DELETE FROM main.project_type WHERE id=?", (type_id,))
 
     def has_projects(self, type_id: int) -> bool:
         """Check for projects that still reference this type."""
@@ -114,14 +120,14 @@ class SqliteProjectTypeStore:
     def set_applicability(self, param_id: str, scope: PropertyApplicability) -> None:
         """Replace membership without committing the caller's transaction."""
         updated = self._connection.execute(
-            "UPDATE schema_parameters SET applies_to_all=? WHERE param_id=?",
+            "UPDATE main.schema_parameters SET applies_to_all=? WHERE param_id=?",
             (int(scope.applies_to_all), param_id),
         )
         if not updated.rowcount:
             raise ValueError("Unknown property")
-        self._connection.execute("DELETE FROM project_type_property WHERE param_id=?", (param_id,))
+        self._connection.execute("DELETE FROM main.project_type_property WHERE param_id=?", (param_id,))
         self._connection.executemany(
-            "INSERT INTO project_type_property(project_type_id,param_id) VALUES (?,?)",
+            "INSERT INTO main.project_type_property(project_type_id,param_id) VALUES (?,?)",
             [(type_id, param_id) for type_id in scope.type_ids],
         )
 
@@ -131,7 +137,7 @@ class SqliteProjectTypeStore:
     ) -> None:
         """Persist the override and typed default on the same connection."""
         self._connection.execute(
-            """INSERT INTO project_type_property_rule
+            """INSERT INTO main.project_type_property_rule
             (project_type_id,param_id,mandatory_override) VALUES (?,?,?)
             ON CONFLICT(project_type_id,param_id) DO UPDATE
             SET mandatory_override=excluded.mandatory_override""",
@@ -141,7 +147,7 @@ class SqliteProjectTypeStore:
             write_value(self._connection, type_id, param_id, default_value, defaults=True)
         else:
             self._connection.execute(
-                "DELETE FROM project_type_property_default WHERE project_type_id=? AND param_id=?",
+                "DELETE FROM main.project_type_property_default WHERE project_type_id=? AND param_id=?",
                 (type_id, param_id),
             )
 
@@ -149,12 +155,13 @@ class SqliteProjectTypeStore:
 class SqliteProjectTypeGateway:
     """Open, commit/roll back, and close one connection per application operation."""
 
-    def __init__(self, db_path: str | None = None) -> None:
+    def __init__(self, db_path: str | None = None, *, access: BusinessAccess) -> None:
         """Retain the configured path; no connection is opened at construction."""
         self._db_path = db_path
+        self.access = access
 
     @contextmanager
-    def transaction(self, *, write: bool = False) -> Iterator[ProjectTypeStore]:
+    def transaction(self, *, write: bool = False, permission: Permission | None = None, project_ids: Collection[int] | None = None) -> Iterator[ProjectTypeStore]:
         """Hold a consistent snapshot and protect write guards from races.
 
         A write reserves SQLite's writer lock before reading deletion/rename
@@ -165,7 +172,8 @@ class SqliteProjectTypeGateway:
             with closing(get_db(self._db_path)) as connection:
                 with connection:
                     connection.execute("BEGIN IMMEDIATE" if write else "BEGIN")
-                    yield SqliteProjectTypeStore(connection)
+                    with authorized_business_transaction(connection, self.access, permission=permission, project_ids=project_ids):
+                        yield SqliteProjectTypeStore(connection)
         except sqlite3.IntegrityError as exc:
             if "project_type.name" in str(exc):
                 message = "A project type with this name already exists"

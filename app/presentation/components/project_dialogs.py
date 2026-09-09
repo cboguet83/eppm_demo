@@ -92,7 +92,7 @@ def open_create_project_dialog(
     manager_options = [None, *catalog.managers]
     manager_labels = {None: "— None —", **catalog.managers}
 
-    type_options = types_frame(workspace.types.get_all_types())
+    type_options = types_frame(workspace.types.type_choices())
     type_labels = dict(zip(type_options["id"], type_options["name"]))
     type_id = st.selectbox(
         t("project_types.label"),
@@ -101,8 +101,8 @@ def open_create_project_dialog(
         key=f"create_type_{project_id}",
     )
     params = localize_parameters(
-        template_frame(workspace.types.get_template(int(type_id))),
-        workspace.schema.get_alias_translations(get_current_locale()),
+        template_frame(workspace.types.template_reference(int(type_id))),
+        workspace.schema.alias_references(get_current_locale()),
     )
     defaults = {
         p["param_id"]: p["default_value"] for _, p in params.iterrows() if p["has_default"]
@@ -211,7 +211,7 @@ def open_edit_project_dialog(
         manager_options.index(current_manager) if current_manager in manager_options else 0
     )
 
-    type_options = types_frame(workspace.types.get_all_types())
+    type_options = types_frame(workspace.types.type_choices())
     type_labels = dict(zip(type_options["id"], type_options["name"]))
     type_id = st.selectbox(
         t("project_types.label"),
@@ -222,8 +222,8 @@ def open_edit_project_dialog(
         disabled=disabled,
     )
     params = localize_parameters(
-        template_frame(workspace.types.get_template(int(type_id))),
-        workspace.schema.get_alias_translations(get_current_locale()),
+        template_frame(workspace.types.template_reference(int(type_id))),
+        workspace.schema.alias_references(get_current_locale()),
     )
     with st.container():
         id_col, name_col, status_col = st.columns([1, 2, 1])

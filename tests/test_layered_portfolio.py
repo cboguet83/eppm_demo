@@ -1,5 +1,6 @@
 """Portfolio service contracts, bounded enrichment, and cache isolation."""
 
+from app.operator_services import deployment_access
 from contextlib import closing
 from pathlib import Path
 
@@ -9,7 +10,7 @@ from app.application.services.portfolio import PortfolioService
 from app.infrastructure.database.connection import get_db
 from app.infrastructure.repositories.portfolio import SqlitePortfolioReader
 from app.infrastructure.database.seed_projects import create_seed_project
-from app.main import create_project_service, create_portfolio_service
+from app.operator_services import create_project_service, create_portfolio_service
 from app.presentation.pages.portfolio import _load_portfolio_page
 from app.infrastructure.database.schema_init import init_db
 
@@ -26,7 +27,7 @@ def test_portfolio_enrichment_is_bounded_and_component_input_is_normalized(tmp_p
         calls.append(project_ids)
         return {project_ids[-1]} if project_ids else set()
 
-    service = PortfolioService(SqlitePortfolioReader(path), allocations)
+    service = PortfolioService(SqlitePortfolioReader(path, access=deployment_access()), allocations)
     columns = [{"key": "name", "format": "text"}]
     page = service.get_page(columns, {"filters": [], "sort": {"column": []}, "templates": {}}, "bad")
     assert len(page["rows"]) == len(calls[0]) == 100

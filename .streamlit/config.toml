@@ -1,6 +1,12 @@
 [client]
-showDeployButton = false
 toolbarMode = "minimal"
+
+[server]
+enableCORS = true
+enableXsrfProtection = true
+
+[server.trustedUserHeaders]
+x-eppm-browser-session = "eppm_browser_session"
 
 [theme]
 primaryColor = "#C41039"

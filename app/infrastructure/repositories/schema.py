@@ -1,5 +1,10 @@
 """SQLite persistence for project-schema administration."""
 
+from collections.abc import Collection
+from app.domain.access.models import Permission
+
+
+from app.application.services.business_access import BusinessAccess
 import sqlite3
 from collections.abc import Iterator
 from contextlib import closing, contextmanager
@@ -9,6 +14,7 @@ from app.application.ports.schema import SchemaStore
 from app.domain.projects.project_types import PropertyApplicability
 from app.domain.projects.schema import SchemaGroup, SchemaParameter, SchemaParamOption
 from app.infrastructure.database.connection import get_db
+from app.infrastructure.database.business_security import authorized_business_transaction
 from app.infrastructure.repositories.project_types import SqliteProjectTypeStore
 from app.shared.logging import get_logger
 
@@ -59,12 +65,12 @@ class SqliteSchemaStore:
         """Store a nonblank alias or delete an explicit translation atomically."""
         if not alias:
             self._connection.execute(
-                "DELETE FROM schema_parameter_translation WHERE param_id=? AND locale=?",
+                "DELETE FROM main.schema_parameter_translation WHERE param_id=? AND locale=?",
                 (param_id, locale),
             )
             return
         self._connection.execute(
-            "INSERT INTO schema_parameter_translation(param_id,locale,alias) VALUES (?,?,?) "
+            "INSERT INTO main.schema_parameter_translation(param_id,locale,alias) VALUES (?,?,?) "
             "ON CONFLICT(param_id,locale) DO UPDATE SET alias=excluded.alias",
             (param_id, locale, alias),
         )
@@ -116,7 +122,7 @@ class SqliteSchemaStore:
     def insert_group(self, group_name: str, display_order: int) -> int:
         """Persist normalized group details; unique constraints stay authoritative."""
         cursor = self._connection.execute(
-            "INSERT INTO schema_groups(group_name,display_order) VALUES (?,?)",
+            "INSERT INTO main.schema_groups(group_name,display_order) VALUES (?,?)",
             (group_name, display_order),
         )
         assert cursor.lastrowid is not None
@@ -126,7 +132,7 @@ class SqliteSchemaStore:
         """Persist normalized group details in the caller's transaction."""
         return (
             self._connection.execute(
-                "UPDATE schema_groups SET group_name=?,display_order=? WHERE id=?",
+                "UPDATE main.schema_groups SET group_name=?,display_order=? WHERE id=?",
                 (group_name, display_order, group_id),
             ).rowcount
             > 0
@@ -135,20 +141,20 @@ class SqliteSchemaStore:
     def ungroup_parameters(self, group_id: int) -> None:
         """Detach properties without deleting them or their values."""
         self._connection.execute(
-            "UPDATE schema_parameters SET group_id=NULL WHERE group_id=?", (group_id,)
+            "UPDATE main.schema_parameters SET group_id=NULL WHERE group_id=?", (group_id,)
         )
 
     def delete_group(self, group_id: int) -> bool:
         """Delete a group after the application has detached its properties."""
         return (
-            self._connection.execute("DELETE FROM schema_groups WHERE id=?", (group_id,)).rowcount
+            self._connection.execute("DELETE FROM main.schema_groups WHERE id=?", (group_id,)).rowcount
             > 0
         )
 
     def insert_parameter(self, parameter: SchemaParameter) -> None:
         """Insert details before applying selected-type membership on this connection."""
         self._connection.execute(
-            "INSERT INTO schema_parameters(param_id,group_id,param_name,param_type,mandatory,alias) VALUES (?,?,?,?,?,?)",
+            "INSERT INTO main.schema_parameters(param_id,group_id,param_name,param_type,mandatory,alias) VALUES (?,?,?,?,?,?)",
             (
                 parameter.param_id,
                 parameter.group_id,
@@ -163,7 +169,7 @@ class SqliteSchemaStore:
         """Update details without implicitly changing applicability."""
         return (
             self._connection.execute(
-                "UPDATE schema_parameters SET group_id=?,param_name=?,param_type=?,mandatory=?,alias=? WHERE param_id=?",
+                "UPDATE main.schema_parameters SET group_id=?,param_name=?,param_type=?,mandatory=?,alias=? WHERE param_id=?",
                 (
                     parameter.group_id,
                     parameter.param_name,
@@ -182,10 +188,10 @@ class SqliteSchemaStore:
 
     def delete_parameter(self, param_id: str) -> bool:
         """Delete unused options and the guarded property as one unit."""
-        self._connection.execute("DELETE FROM schema_param_options WHERE param_id=?", (param_id,))
+        self._connection.execute("DELETE FROM main.schema_param_options WHERE param_id=?", (param_id,))
         return (
             self._connection.execute(
-                "DELETE FROM schema_parameters WHERE param_id=?", (param_id,)
+                "DELETE FROM main.schema_parameters WHERE param_id=?", (param_id,)
             ).rowcount
             > 0
         )
@@ -193,7 +199,7 @@ class SqliteSchemaStore:
     def insert_option(self, param_id: str, option_value: str, display_order: int) -> int:
         """Insert one ordered choice without committing the outer operation."""
         cursor = self._connection.execute(
-            "INSERT INTO schema_param_options(param_id,option_value,display_order) VALUES (?,?,?)",
+            "INSERT INTO main.schema_param_options(param_id,option_value,display_order) VALUES (?,?,?)",
             (param_id, option_value, display_order),
         )
         assert cursor.lastrowid is not None
@@ -203,7 +209,7 @@ class SqliteSchemaStore:
         """Delete a choice after the application reference guard."""
         return (
             self._connection.execute(
-                "DELETE FROM schema_param_options WHERE id=?", (option_id,)
+                "DELETE FROM main.schema_param_options WHERE id=?", (option_id,)
             ).rowcount
             > 0
         )
@@ -212,18 +218,20 @@ class SqliteSchemaStore:
 class SqliteSchemaGateway:
     """Provide consistent reads, guarded writes, and safe schema error messages."""
 
-    def __init__(self, db_path: str | None = None) -> None:
+    def __init__(self, db_path: str | None = None, *, access: BusinessAccess) -> None:
         """Store the database identity without opening a connection."""
         self._db_path = db_path
+        self.access = access
 
     @contextmanager
-    def transaction(self, *, write: bool = False) -> Iterator[SchemaStore]:
+    def transaction(self, *, write: bool = False, permission: Permission | None = None, project_ids: Collection[int] | None = None) -> Iterator[SchemaStore]:
         """Reserve writes before guards, commit or roll back, and always close."""
         try:
             with closing(get_db(self._db_path)) as connection:
                 with connection:
                     connection.execute("BEGIN IMMEDIATE" if write else "BEGIN")
-                    yield SqliteSchemaStore(connection)
+                    with authorized_business_transaction(connection, self.access, permission=permission, project_ids=project_ids):
+                        yield SqliteSchemaStore(connection)
         except sqlite3.IntegrityError as exc:
             messages = {
                 "schema_groups.group_name": "A group with this name already exists.",

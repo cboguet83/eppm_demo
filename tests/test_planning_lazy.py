@@ -10,17 +10,17 @@ from unittest.mock import patch
 
 from streamlit.testing.v1 import AppTest
 from app.infrastructure.database.seeder import seed_default_data_if_empty
-from app.main import create_project_service
-from app.main import create_planning_service
+from app.operator_services import create_project_service
+from app.operator_services import create_planning_service
 from app.application.services.planning import PlanningService
 from app.infrastructure.repositories.portfolio import portfolio_revision
-from app.main import create_planning_workspace
+from app.operator_services import create_planning_workspace
 from app.presentation.components.planning_data import load_project_summaries
 
 
 def lazy_app(db_path):
     import streamlit as st
-    from app.main import create_planning_workspace
+    from app.operator_services import create_planning_workspace
     from app.presentation.pages.planning import render_planning_milestones, _handle_gantt_component_change
     workspace = create_planning_workspace(db_path)
     event = st.session_state.pop('test_event', None)
@@ -46,7 +46,6 @@ class LazyPlanningTests(TestCase):
         self.c = self.tasks.create_milestone(self.pids[2], 'Unrelated', 'General', '2026-02-01', '2026-02-02', 0)
 
     def test_persistent_summaries_invalidate_the_project_and_linked_successors(self):
-        self.tasks.ensure_indexes()
         rows = load_project_summaries(create_planning_workspace(self.path), portfolio_revision(self.path), tuple(self.pids))
         self.assertTrue(next(p for p in rows if p['id']==self.pids[1])['hasViolations'])
         self.tasks.update_dates(self.a, '2026-01-01', '2026-01-03')

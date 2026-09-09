@@ -12,7 +12,7 @@ from streamlit.testing.v1 import AppTest
 
 from app.application.exceptions import DatabaseMaintenanceError
 from app.infrastructure.database.connection import get_db
-from app.main import create_maintenance_service
+from app.operator_services import create_maintenance_service
 from app.presentation.navigation import PAGE_PLANNING, PAGE_PORTFOLIO, PAGE_SETTINGS
 from app.presentation.startup import bootstrap_database
 
@@ -21,7 +21,7 @@ def shell_app(database: str, force: bool = False) -> None:
     """Exercise shell behavior with real storage and a small route recorder."""
     from functools import partial
     import streamlit as st
-    from app.main import create_maintenance_service
+    from app.operator_services import create_maintenance_service
     from app.presentation.components.application_workspace import ApplicationWorkspace
     from app.presentation.navigation import PAGE_PLANNING, PAGE_PORTFOLIO, PAGE_SETTINGS
     from app.presentation.shell import render_application
@@ -29,21 +29,18 @@ def shell_app(database: str, force: bool = False) -> None:
     render_application(
         ApplicationWorkspace(
             database,
-            "shell-test-v1",
-            force,
-            1,
-            create_maintenance_service(database),
             {
                 page: partial(st.write, page)
                 for page in (PAGE_PLANNING, PAGE_PORTFOLIO, PAGE_SETTINGS)
             },
+            None,
         )
     )
 
 
 def application_app(database: str) -> None:
     """Render the actual composed pages against an isolated SQLite database."""
-    from app.main import create_application_workspace
+    from app.operator_services import create_application_workspace
     from app.presentation.shell import render_application
 
     render_application(create_application_workspace(database))
@@ -53,27 +50,24 @@ def application_app(database: str) -> None:
 def database(tmp_path: Path):
     """Give each UI session an independent startup cache key and database."""
     bootstrap_database.clear()
-    yield str(tmp_path / "shell.db")
+    database = str(tmp_path / "shell.db")
+    create_maintenance_service(database).startup(force=True, projects=1)
+    yield database
     bootstrap_database.clear()
 
 
-def test_sidebar_reseed_runs_once_and_preserves_edits_on_following_reruns(database):
+def test_shell_never_exposes_deployment_maintenance_or_reseeds_on_rerun(database):
     app = AppTest.from_function(shell_app, args=(database, True)).run()
     assert not app.exception
-    assert create_maintenance_service(database).counts()["projects"] == 1
-    app.number_input(key="sb_num_projects_input").set_value(2)
-    app.button(key="btn_sidebar_force_reseed").click().run()
-    assert not app.exception
-    assert create_maintenance_service(database).counts()["projects"] == 2
-    assert app.success and "2 projects" in app.success[0].value
+    assert not any('reseed' in str(button.key) for button in app.button)
+    assert not any('seed' in str(item.key) for item in app.number_input)
     with closing(get_db(database)) as connection, connection:
-        connection.execute("UPDATE project SET name = 'Preserved after reseed'")
+        connection.execute("UPDATE project SET name = 'Preserved on rerun'")
     app.run()
     assert not app.exception
-    assert not app.success
     with closing(get_db(database)) as connection:
         assert connection.execute("SELECT DISTINCT name FROM project").fetchall() == [
-            ("Preserved after reseed",)
+            ("Preserved on rerun",)
         ]
 
 
@@ -124,20 +118,6 @@ def test_schema_deep_link_selects_parameters_after_settings_was_already_open(dat
     assert app.radio(key="rb_settings_section").value == "param_def"
 
 
-@pytest.mark.parametrize("operation", ["startup", "counts", "reseed"])
-def test_shell_renders_safe_maintenance_errors_without_a_traceback(database, operation):
-    app = AppTest.from_function(shell_app, args=(database,))
-    if operation == "reseed":
-        app.run()
-        app.button(key="btn_sidebar_force_reseed").click()
-    method = "startup" if operation == "reseed" else operation
-    with patch(
-        f"app.application.services.maintenance.MaintenanceService.{method}",
-        side_effect=DatabaseMaintenanceError("Database operation could not be completed."),
-    ):
-        app.run()
-    assert not app.exception
-    assert app.error[0].value == "Database operation could not be completed."
 
 
 def test_real_application_pages_run_without_importing_legacy_modules(tmp_path):
@@ -147,9 +127,11 @@ def test_real_application_pages_run_without_importing_legacy_modules(tmp_path):
 import sys
 from streamlit.testing.v1 import AppTest
 from app.presentation.navigation import PAGE_PLANNING, PAGE_SETTINGS
+from app.operator_services import create_maintenance_service
+create_maintenance_service(sys.argv[1]).startup(force=True, projects=1)
 
 def render(database):
-    from app.main import create_application_workspace
+    from app.operator_services import create_application_workspace
     from app.presentation.shell import render_application
     render_application(create_application_workspace(database))
 

@@ -1,17 +1,51 @@
 """Fixed-role access administration, explicit scopes and immutable audit inspection."""
 
 from datetime import UTC, datetime
+import json
 
 import streamlit as st
 
 from app.application.services.access import AccessService
-from app.domain.access.models import APPLICATION_ROLES, ROLE_PERMISSIONS, USER_STATES, Actor, ReauthenticationRequired
+from app.domain.access.models import APPLICATION_ROLES, ROLE_PERMISSIONS, USER_STATES, Actor, ReauthenticationRequired, normalize_scope
 from app.presentation.components.action_table import action_table
 from app.presentation.i18n import t
 
 
 def _label(key: str, default: str) -> str:
     return t("access." + key, default=default)
+
+
+def _role_label(role: str) -> str:
+    labels = {"project_viewer": "Project viewer", "project_editor": "Project editor",
+              "project_approver": "Project approver", "access_admin": "Access administrator",
+              "business_admin": "Business administrator"}
+    return _label("roles." + role, labels.get(role, role))
+
+
+def _permission_label(permission: str) -> str:
+    labels = {"project.read": "View projects", "project.edit": "Edit projects", "project.approve": "Approve projects",
+              "project.create": "Create projects", "project.delete": "Delete projects",
+              "project.protected_properties": "Edit protected properties", "business.manage": "Manage shared business data",
+              "access.manage": "Manage application access"}
+    return _label("permissions." + permission.replace(".", "_"), labels.get(permission, permission))
+
+
+def _scope_summary(encoded: str, catalog: dict[str, dict[str, object]]) -> str:
+    try:
+        scope = normalize_scope(json.loads(encoded))
+    except (ValueError, TypeError):
+        return _label("invalid_scope", "Invalid scope")
+    if scope.kind == "all":
+        return _label("all", "All projects")
+    if scope.kind == "projects":
+        return _label("projects", "Projects") + ": " + ", ".join(f"#{value}" for value in scope.project_ids)
+    conditions = []
+    for condition in scope.conditions:
+        property_info = catalog.get(condition.property_id, {})
+        values = {item["id"]: item["label"] for item in property_info.get("values", [])}
+        selected = ", ".join(str(values.get(value, f"#{value}")) for value in condition.value_ids)
+        conditions.append(str(property_info.get("label", condition.property_id)) + " = " + selected)
+    return (" " + _label("and", "and") + " ").join(conditions)
 
 
 def render_access_management(service: AccessService, actor: Actor) -> None:
@@ -57,22 +91,24 @@ def _users(service: AccessService, actor: Actor) -> None:
     with st.form("access_status"):
         states = sorted(USER_STATES)
         status = st.selectbox(_label("status", "Account status"), states,
+                              format_func=lambda value: _label("states." + value, value),
                               index=states.index(choices[user_id]["status"]))
         if st.form_submit_button(_label("save_status", "Save account status")):
             service.set_status(actor, user_id, status)
             st.rerun()
     assignments = service.assignments(actor, user_id)
+    catalog = {str(item["property_id"]): item for item in service.scope_catalog(actor)}
     for assignment in assignments:
-        st.write(f'#{assignment["id"]} · {assignment["role"]}')
-        st.caption(assignment["scope_json"])
+        st.write(f'#{assignment["id"]} · {_role_label(str(assignment["role"]))}')
+        st.caption(_scope_summary(str(assignment["scope_json"]), catalog))
         if assignment["problem"]:
             st.warning(str(assignment["problem"]))
         if st.button(_label("revoke", "Revoke assignment"), key=f'access_revoke_{assignment["id"]}'):
             service.revoke(actor, int(assignment["id"]))
             st.rerun()
     st.subheader(_label("grant", "Assign a role"))
-    role = st.selectbox(_label("role", "Fixed role"), list(ROLE_PERMISSIONS), key="access_new_role")
-    st.caption(" · ".join(sorted(ROLE_PERMISSIONS[role])))
+    role = st.selectbox(_label("role", "Fixed role"), list(ROLE_PERMISSIONS), format_func=_role_label, key="access_new_role")
+    st.caption(" · ".join(_permission_label(value) for value in sorted(ROLE_PERMISSIONS[role])))
     scope = _scope_editor(service, actor, role)
     if st.button(_label("save_grant", "Grant access"), key="access_grant"):
         service.grant(actor, user_id, role, scope)
@@ -84,7 +120,7 @@ def _users(service: AccessService, actor: Actor) -> None:
         if not explanation:
             st.info(_label("no_access", "No assignment grants access to this project."))
         for item in explanation:
-            st.write(f'#{item["assignment_id"]} · {item["role"]}: ' + ", ".join(item["permissions"]))
+            st.write(f'#{item["assignment_id"]} · {_role_label(str(item["role"]))}: ' + ", ".join(_permission_label(value) for value in item["permissions"]))
             if item["requires_mfa"]:
                 st.caption(_label("mfa", "Administrator permissions also require a provider-verified MFA session."))
 

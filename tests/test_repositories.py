@@ -1,7 +1,7 @@
 """Unit tests for Data Access Repositories."""
 
-from app.main import create_project_service
-from app.main import create_schema_service
+from app.operator_services import create_project_service
+from app.operator_services import create_schema_service
 
 from app.presentation.components import planning_frames
 from app.presentation.components import schema_frames
@@ -16,7 +16,7 @@ import unittest
 
 from app.infrastructure.database.connection import get_db
 from app.infrastructure.database.schema_init import init_db
-from app.main import create_planning_service
+from app.operator_services import create_planning_service
 
 
 class TestRepositories(unittest.TestCase):

@@ -1,5 +1,10 @@
 """SQLite persistence for tag catalogs and assignments."""
 
+from collections.abc import Collection
+from app.domain.access.models import Permission
+
+
+from app.application.services.business_access import BusinessAccess
 from collections.abc import Iterator, Sequence
 from contextlib import closing, contextmanager
 import sqlite3
@@ -17,6 +22,7 @@ from app.application.ports.tag_records import (
 )
 from app.domain.tags.models import ProjectTag, ResourcePoolTag, TagDictionary, TagGroup, TaskTag
 from app.infrastructure.database.connection import get_db
+from app.infrastructure.database.business_security import authorized_business_transaction
 from app.shared.logging import get_logger
 
 logger = get_logger(__name__)
@@ -75,7 +81,7 @@ class SqliteTagStore:
         conn = self.connection
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT INTO tag_group (tag_group_name) VALUES (?)", (group.tag_group_name.strip(),)
+            "INSERT INTO main.tag_group (tag_group_name) VALUES (?)", (group.tag_group_name.strip(),)
         )
         return int(cursor.lastrowid)
 
@@ -91,14 +97,14 @@ class SqliteTagStore:
         conn = self.connection
         cursor = conn.cursor()
         cursor.execute(
-            "UPDATE tag_group SET tag_group_name = ? WHERE id = ?",
+            "UPDATE main.tag_group SET tag_group_name = ? WHERE id = ?",
             (group.tag_group_name.strip(), group.id),
         )
         return cursor.rowcount > 0
 
     def delete_tag_group(self, group_id: int) -> bool:
         """Delete a group after the application checks its references."""
-        cursor = self.connection.execute("DELETE FROM tag_group WHERE id=?", (group_id,))
+        cursor = self.connection.execute("DELETE FROM main.tag_group WHERE id=?", (group_id,))
         return cursor.rowcount > 0
 
     def count_tags_by_group(self, group_id: int) -> int:
@@ -216,7 +222,7 @@ class SqliteTagStore:
         conn = self.connection
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT INTO tag_dictionnary (tag, tag_group_id) VALUES (?, ?)",
+            "INSERT INTO main.tag_dictionnary (tag, tag_group_id) VALUES (?, ?)",
             (tag_item.tag.strip(), tag_item.tag_group_id),
         )
         return int(cursor.lastrowid)
@@ -233,7 +239,7 @@ class SqliteTagStore:
         conn = self.connection
         cursor = conn.cursor()
         cursor.execute(
-            "UPDATE tag_dictionnary SET tag = ?, tag_group_id = ? WHERE id = ?",
+            "UPDATE main.tag_dictionnary SET tag = ?, tag_group_id = ? WHERE id = ?",
             (tag_item.tag.strip(), tag_item.tag_group_id, tag_item.id),
         )
         return cursor.rowcount > 0
@@ -249,10 +255,10 @@ class SqliteTagStore:
         """
         conn = self.connection
         cursor = conn.cursor()
-        cursor.execute("DELETE FROM project_tag WHERE tag_id = ?", (tag_id,))
-        cursor.execute("DELETE FROM task_tag WHERE tag_id = ?", (tag_id,))
-        cursor.execute("DELETE FROM resource_pool_tag WHERE tag_id = ?", (tag_id,))
-        cursor.execute("DELETE FROM tag_dictionnary WHERE id = ?", (tag_id,))
+        cursor.execute("DELETE FROM main.project_tag WHERE tag_id = ?", (tag_id,))
+        cursor.execute("DELETE FROM main.task_tag WHERE tag_id = ?", (tag_id,))
+        cursor.execute("DELETE FROM main.resource_pool_tag WHERE tag_id = ?", (tag_id,))
+        cursor.execute("DELETE FROM main.tag_dictionnary WHERE id = ?", (tag_id,))
         return cursor.rowcount > 0
 
     def count_tag_usages(self, tag_id: int) -> int:
@@ -326,7 +332,7 @@ class SqliteTagStore:
         cursor = conn.cursor()
         cursor.execute(
             """
-                INSERT INTO resource_pool_tag (pool_id, tag_id)
+                INSERT INTO main.resource_pool_tag (pool_id, tag_id)
                 VALUES (?, ?)
                 ON CONFLICT(pool_id, tag_id) DO NOTHING
                 """,
@@ -343,7 +349,7 @@ class SqliteTagStore:
         """Delete one resource-pool tag assignment."""
         conn = self.connection
         cursor = conn.cursor()
-        cursor.execute("DELETE FROM resource_pool_tag WHERE id = ?", (pool_tag_id,))
+        cursor.execute("DELETE FROM main.resource_pool_tag WHERE id = ?", (pool_tag_id,))
         return cursor.rowcount > 0
 
     def get_all_project_tags(self) -> list[ProjectTagRow]:
@@ -423,7 +429,7 @@ class SqliteTagStore:
         cursor = conn.cursor()
         free_tag_val = pt.free_tag.strip() if pt.free_tag and pt.free_tag.strip() else None
         cursor.execute(
-            "INSERT INTO project_tag (project_id, tag_id, free_tag) VALUES (?, ?, ?)",
+            "INSERT INTO main.project_tag (project_id, tag_id, free_tag) VALUES (?, ?, ?)",
             (pt.project_id, pt.tag_id, free_tag_val),
         )
         return int(cursor.lastrowid)
@@ -441,7 +447,7 @@ class SqliteTagStore:
         cursor = conn.cursor()
         free_tag_val = pt.free_tag.strip() if pt.free_tag and pt.free_tag.strip() else None
         cursor.execute(
-            "UPDATE project_tag SET project_id = ?, tag_id = ?, free_tag = ? WHERE id = ?",
+            "UPDATE main.project_tag SET project_id = ?, tag_id = ?, free_tag = ? WHERE id = ?",
             (pt.project_id, pt.tag_id, free_tag_val, pt.id),
         )
         return cursor.rowcount > 0
@@ -457,7 +463,7 @@ class SqliteTagStore:
         """
         conn = self.connection
         cursor = conn.cursor()
-        cursor.execute("DELETE FROM project_tag WHERE id = ?", (pt_id,))
+        cursor.execute("DELETE FROM main.project_tag WHERE id = ?", (pt_id,))
         return cursor.rowcount > 0
 
     def get_task_tags_page(
@@ -598,7 +604,7 @@ class SqliteTagStore:
         cursor = conn.cursor()
         free_tag_val = tt.free_tag.strip() if tt.free_tag and tt.free_tag.strip() else None
         cursor.execute(
-            "INSERT INTO task_tag (task_id, tag_id, free_tag) VALUES (?, ?, ?)",
+            "INSERT INTO main.task_tag (task_id, tag_id, free_tag) VALUES (?, ?, ?)",
             (tt.task_id, tt.tag_id, free_tag_val),
         )
         return int(cursor.lastrowid)
@@ -616,7 +622,7 @@ class SqliteTagStore:
         cursor = conn.cursor()
         free_tag_val = tt.free_tag.strip() if tt.free_tag and tt.free_tag.strip() else None
         cursor.execute(
-            "UPDATE task_tag SET task_id = ?, tag_id = ?, free_tag = ? WHERE id = ?",
+            "UPDATE main.task_tag SET task_id = ?, tag_id = ?, free_tag = ? WHERE id = ?",
             (tt.task_id, tt.tag_id, free_tag_val, tt.id),
         )
         return cursor.rowcount > 0
@@ -632,7 +638,7 @@ class SqliteTagStore:
         """
         conn = self.connection
         cursor = conn.cursor()
-        cursor.execute("DELETE FROM task_tag WHERE id = ?", (tt_id,))
+        cursor.execute("DELETE FROM main.task_tag WHERE id = ?", (tt_id,))
         return cursor.rowcount > 0
 
     def get_task_tags_by_task_ids(self, task_ids: list[int]) -> dict[int, list[TagLink]]:
@@ -752,19 +758,21 @@ class SqliteTagStore:
 class SqliteTagGateway:
     """Own connection cleanup, transaction boundaries, and safe errors."""
 
-    def __init__(self, db_path: str | None = None) -> None:
+    def __init__(self, db_path: str | None = None, *, access: BusinessAccess) -> None:
         """Retain the path without opening a connection."""
         self.db_path = db_path
+        self.access = access
 
     @contextmanager
-    def transaction(self, *, write: bool = False) -> Iterator[SqliteTagStore]:
+    def transaction(self, *, write: bool = False, permission: Permission | None = None, project_ids: Collection[int] | None = None) -> Iterator[SqliteTagStore]:
         """Reserve writes before reference checks and commit or roll back once."""
         try:
             with closing(get_db(self.db_path)) as connection:
                 connection.row_factory = sqlite3.Row
                 with connection:
                     connection.execute("BEGIN IMMEDIATE" if write else "BEGIN")
-                    yield SqliteTagStore(connection)
+                    with authorized_business_transaction(connection, self.access, permission=permission, project_ids=project_ids):
+                        yield SqliteTagStore(connection)
         except sqlite3.IntegrityError as exc:
             raise TagConflictError(
                 "The tag change conflicts with an existing reference or constraint."

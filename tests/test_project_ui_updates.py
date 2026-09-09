@@ -15,7 +15,7 @@ from app.infrastructure.database.connection import get_db
 from app.infrastructure.database.flush import flush_database
 from app.infrastructure.database.project_links_migration import migrate_project_links
 from app.infrastructure.database.schema_init import init_db
-from app.main import create_collaboration_service, create_project_service, create_resource_pool_service
+from app.operator_services import create_collaboration_service, create_project_service, create_resource_pool_service
 from app.presentation.components.context_menu import CONTEXT_MENU_CSS
 
 
@@ -89,7 +89,7 @@ def test_links_inspection_has_no_management_widgets(database: str) -> None:
     service = create_collaboration_service(database)
     service.save_link(1, "https://example.test", "Custom reference")
     app = AppTest.from_string(f'''
-from app.main import create_collaboration_service
+from app.operator_services import create_collaboration_service
 from app.presentation.pages.collaboration import render_project_links
 render_project_links(1, create_collaboration_service({database!r}))
 ''').run()
@@ -107,7 +107,7 @@ def test_pool_popup_reuses_settings_fields_and_go_to_action(database: str) -> No
     service.create_assignment(PoolAssignment(other, 2, 1))
     with patch("app.presentation.components.action_table.action_table", return_value=None) as table:
         app = AppTest.from_string(f'''
-from app.main import create_planning_workspace
+from app.operator_services import create_planning_workspace
 from app.presentation.pages.planning import _pool_allocations_dialog
 _pool_allocations_dialog({pool}, create_planning_workspace({database!r}))
 ''').run()
@@ -127,7 +127,7 @@ def test_csv_menu_opens_only_the_requested_project_dialog(database: str, action:
         "action": action, "project_id": 2, "nonce": action,
     }), patch("app.presentation.pages.planning._schedule_csv_dialog", wraps=_schedule_csv_dialog) as dialog:
         app = AppTest.from_string(f'''
-from app.main import create_planning_workspace
+from app.operator_services import create_planning_workspace
 from app.presentation.pages.planning import render_planning_milestones
 render_planning_milestones(create_planning_workspace({database!r}))
 ''', default_timeout=20).run()
@@ -135,12 +135,13 @@ render_planning_milestones(create_planning_workspace({database!r}))
     if action == "import_csv_template":
         assert dialog.call_args.args[1:] == (2, action)
         assert "Nothing is deleted" in app.warning[0].value
+        assert any("eppm_csv_upload" in str(widget.proto) for widget in app.get("bidi_component"))
     else:
         dialog.assert_not_called()
         assert len(app.get("bidi_component")) > 0
     assert not any(widget.key == "sb_manage_target_project" for widget in app.selectbox)
     assert len(app.get("download_button")) == 0
-    assert len(app.get("file_uploader")) == (1 if action == "import_csv_template" else 0)
+    assert not app.get("file_uploader")
 
 
 def test_every_existing_context_menu_uses_the_shared_visual_standard() -> None:

@@ -1,5 +1,9 @@
 """Typed storage contracts for resource-pool use cases."""
 
+from collections.abc import Collection
+from app.domain.access.models import Permission
+
+
 from contextlib import AbstractContextManager
 from typing import Protocol
 
@@ -63,4 +67,4 @@ class ResourcePoolStore(Protocol):
 class ResourcePoolGateway(Protocol):
     """Supply a consistent reader or reserved writer."""
 
-    def transaction(self, *, write: bool = False) -> AbstractContextManager[ResourcePoolStore]: ...
+    def transaction(self, *, write: bool = False, permission: Permission | None = None, project_ids: Collection[int] | None = None) -> AbstractContextManager[ResourcePoolStore]: ...

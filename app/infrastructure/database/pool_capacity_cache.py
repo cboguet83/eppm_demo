@@ -3,6 +3,7 @@
 from collections import OrderedDict
 from collections.abc import Callable
 from contextlib import closing
+from copy import deepcopy
 from dataclasses import asdict, fields
 from datetime import date
 import json
@@ -13,6 +14,8 @@ from uuid import uuid4
 
 from app.application.exceptions import ResourcePoolStorageError
 from app.application.ports.pool_capacity import CapacityCalculation, CapacityResult
+from app.application.services.business_access import BusinessAccess
+from app.domain.access.models import Actor
 from app.domain.resources.models import (
     DailyOverassignment,
     PoolCapacityDetail,
@@ -20,6 +23,8 @@ from app.domain.resources.models import (
     PoolResourceContribution,
 )
 from app.infrastructure.database.connection import get_db
+from app.infrastructure.repositories.access import SqliteAccessStore
+from app.infrastructure.repositories.portfolio import portfolio_revision
 from app.shared.config import config
 from app.shared.logging import get_logger
 
@@ -137,11 +142,14 @@ class SqliteCapacityCache:
         db_path: str | None,
         state: CapacityCacheState,
         today: Callable[[], date],
+        *,
+        access: BusinessAccess,
     ) -> None:
         """Inject the database path, shared process state, and clock."""
         self.db_path = db_path
         self.state = state
         self.today = today
+        self.access = access
 
     def load(
         self,
@@ -152,10 +160,50 @@ class SqliteCapacityCache:
     ) -> CapacityResult:
         """Return current summaries/details, translating storage errors safely."""
         try:
+            if isinstance(self.access.actor, Actor):
+                return self._load_for_actor(calculate, details=details, pool_ids=pool_ids)
             return self._load(calculate, details=details, pool_ids=pool_ids)
         except sqlite3.DatabaseError as exc:
             logger.error("Resource-pool capacity storage failed (%s)", type(exc).__name__)
             raise ResourcePoolStorageError("Resource pool capacity could not be loaded.") from exc
+
+    def _load_for_actor(self, calculate: CapacityCalculation, *, details: bool,
+                        pool_ids: list[int] | None) -> CapacityResult:
+        """Isolate derived results by current actor/scope and never reuse global JSON blobs."""
+        path = str(Path(self.db_path or config.db_path).resolve())
+        subset = tuple(sorted(set(pool_ids))) if pool_ids is not None else None
+        day = self.today()
+        with self.state.lock:
+            for _ in range(3):
+                with closing(get_db(path)) as conn, conn:
+                    conn.execute("BEGIN")
+                    allowed = self.access.projects(SqliteAccessStore(conn))
+                    selected = [row[0] for row in conn.execute("SELECT id FROM resource_pool ORDER BY name,id")]
+                    if subset is not None:
+                        selected = [value for value in selected if value in subset]
+                    revision = portfolio_revision(path)
+                key = (path, revision, self.access.actor.user_id, self.access.actor.session_hash,
+                       tuple(sorted(allowed)), day.isoformat(), details, subset)
+                if key in self.state.entries:
+                    self.state.entries.move_to_end(key)
+                    return deepcopy(self.state.entries[key])
+                calculated = calculate(selected, day)
+                with closing(get_db(path)) as conn, conn:
+                    conn.execute("BEGIN")
+                    current = self.access.projects(SqliteAccessStore(conn))
+                    if current != allowed or portfolio_revision(path) != revision:
+                        continue
+                if details:
+                    result = calculated
+                else:
+                    columns = {field.name for field in fields(PoolCapacitySummary)}
+                    result = [PoolCapacitySummary(**{key: value for key, value in asdict(item).items() if key in columns})
+                              for item in calculated]
+                self.state.entries[key] = deepcopy(result)
+                while len(self.state.entries) > 8:
+                    self.state.entries.popitem(last=False)
+                return result
+        raise ResourcePoolStorageError("Pool data changed while calculating capacity; please retry.")
 
     def _load(
         self,

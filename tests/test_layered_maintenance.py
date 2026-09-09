@@ -13,7 +13,7 @@ from app.application.ports.maintenance import SeedRequest
 from app.infrastructure.database.connection import get_db
 from app.infrastructure.database.schema_init import init_db
 from app.infrastructure.database.seeder import seed_default_data_if_empty
-from app.main import create_maintenance_service
+from app.operator_services import create_maintenance_service
 
 
 @pytest.fixture

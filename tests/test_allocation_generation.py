@@ -14,7 +14,7 @@ from app.domain.resources.allocation_generation import (
 from app.infrastructure.database.allocation_seed import _apply_plan
 from app.infrastructure.database.pool_scenarios import fingerprint
 from app.infrastructure.database.schema_init import init_db
-from app.main import create_maintenance_service, create_pool_capacity_service
+from app.operator_services import create_maintenance_service, create_pool_capacity_service
 
 
 @pytest.fixture
@@ -36,7 +36,7 @@ def test_generation_dialog_previews_without_writing_then_applies_reviewed_mix(al
     from streamlit.testing.v1 import AppTest
 
     app = AppTest.from_string(f'''
-from app.main import create_maintenance_service
+from app.operator_services import create_maintenance_service
 from app.presentation.components.allocation_seeding import _generate_allocations_dialog
 _generate_allocations_dialog(create_maintenance_service({allocation_database!r}))
 ''', default_timeout=30).run()
@@ -57,7 +57,7 @@ def test_clear_dialog_waits_for_confirmation_and_cancel_keeps_allocations(alloca
     from streamlit.testing.v1 import AppTest
 
     app = AppTest.from_string(f'''
-from app.main import create_maintenance_service
+from app.operator_services import create_maintenance_service
 from app.presentation.components.allocation_seeding import _clear_allocations_dialog
 _clear_allocations_dialog(create_maintenance_service({allocation_database!r}))
 ''').run()

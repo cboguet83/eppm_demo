@@ -1,5 +1,9 @@
 """Transactional task storage and bounded planning query contracts."""
 
+from collections.abc import Collection
+from app.domain.access.models import Permission
+
+
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from typing import NotRequired, Protocol, TypedDict
@@ -63,6 +67,15 @@ class PlanningTaskBundle:
     pools: dict[int, list[AssignmentLink]]
 
 
+class PlanningTotals(TypedDict):
+    """Totals derived only from projects visible to the current actor."""
+
+    projects: int
+    tasks: int
+    dependencies: int
+    pools: int
+
+
 class PlanningStore(Protocol):
     """Task operations sharing the gateway's connection and snapshot."""
 
@@ -94,14 +107,16 @@ class PlanningStore(Protocol):
     def project_exists(self, project_id: int) -> bool: ...
     def valid_template_references(self, project_id: int, task_ids: set[int], project_ids: set[int]) -> tuple[set[int], set[int]]: ...
     def related_project_ids(self, project_id: int | list[int], scope: str) -> list[int]: ...
-    def ensure_indexes(self) -> None: ...
     def get_project_summaries(self, project_ids: list[int]) -> list[ProjectSummary]: ...
     def affected_task_projects(self, task_id: int) -> tuple[set[int], set[int]]: ...
     def consuming_pool_ids(self, project_ids: list[int]) -> list[int]: ...
     def read_task_bundle(self, project_ids: list[int]) -> PlanningTaskBundle: ...
 
 
+    def get_totals(self) -> PlanningTotals: ...
+
+
 class PlanningGateway(Protocol):
     """Provide a consistent reader or reserve the writer before related changes."""
 
-    def transaction(self, *, write: bool = False) -> AbstractContextManager[PlanningStore]: ...
+    def transaction(self, *, write: bool = False, permission: Permission | None = None, project_ids: Collection[int] | None = None) -> AbstractContextManager[PlanningStore]: ...

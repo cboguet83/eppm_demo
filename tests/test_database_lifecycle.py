@@ -13,7 +13,7 @@ import pytest
 
 from app.infrastructure.database.connection import get_db
 from app.infrastructure.database.seeder import seed_default_data_if_empty
-from app.main import create_planning_service
+from app.operator_services import create_planning_service
 from app.infrastructure.repositories.portfolio import portfolio_revision
 
 

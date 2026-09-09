@@ -1,7 +1,7 @@
 """Behavioral coverage for templates, relational storage, and safe migration."""
 
-from app.main import create_project_service
-from app.main import create_schema_service
+from app.operator_services import create_project_service
+from app.operator_services import create_schema_service
 
 from app.presentation.components.planning_catalog import flatten_dynamic_attributes
 
@@ -25,7 +25,7 @@ from app.infrastructure.repositories.projects import SqliteProjectStore
 from app.domain.projects.project import prepare_project_values
 from app.infrastructure.database.schema_init import init_db
 from app.infrastructure.database.seeder import seed_default_data_if_empty
-from app.main import create_project_type_service
+from app.operator_services import create_project_type_service
 
 
 class ProjectTypesTests(unittest.TestCase):

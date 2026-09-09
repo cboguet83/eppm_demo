@@ -3,7 +3,7 @@
 from app.domain.planning.constraints import evaluate_constraints
 from app.domain.planning.csv_import import get_csv_template
 from app.domain.planning.csv_import import parse_csv
-from app.main import create_schema_service
+from app.operator_services import create_schema_service
 from app.domain.projects.budgets import BudgetAmounts, euro_amount, summarize_budgets
 from app.presentation.components.planning_catalog import enrich_projects_with_organization
 from app.presentation.components.planning_catalog import flatten_dynamic_attributes

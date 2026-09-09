@@ -16,7 +16,7 @@ from app.domain.planning.schedule_template import parse_template
 from app.domain.resources.models import PoolAssignment, ResourcePool, ResourcePoolGroup
 from app.infrastructure.database.connection import get_db
 from app.infrastructure.database.schema_init import init_db
-from app.main import create_planning_service, create_project_service, create_resource_pool_service
+from app.operator_services import create_planning_service, create_project_service, create_resource_pool_service
 
 
 HEADER = "step_number,task_name,start_date,end_date,progress_pct,preceding_step,dependency_type,dependency_lag\n"
@@ -155,9 +155,9 @@ def test_ambiguous_dates_follow_selected_format_and_invalid_dates_preserve_sched
 
 def test_import_defaults_to_day_first_and_previews_normalized_dates(database: str) -> None:
     content = VALID.replace("2026-01-01", "01/01/2026").encode()
-    with patch("streamlit.file_uploader", side_effect=lambda *args, **kwargs: io.BytesIO(content)):
+    with patch("app.presentation.components.csv_upload.project_csv_upload", return_value=content.decode()):
         app = AppTest.from_string(f'''
-from app.main import create_planning_workspace
+from app.operator_services import create_planning_workspace
 from app.presentation.pages.planning import _schedule_csv_dialog
 _schedule_csv_dialog(create_planning_workspace({database!r}), 1, "import_csv_template")
 ''').run()
@@ -197,7 +197,7 @@ def test_project_creation_and_update_save_custom_links_atomically(database: str)
 
 def test_project_view_starts_read_only_and_explicit_button_enables_editing(database: str) -> None:
     app = AppTest.from_string(f'''
-from app.main import create_project_workspace
+from app.operator_services import create_project_workspace
 from app.presentation.components.project_dialogs import open_edit_project_dialog
 open_edit_project_dialog(1, create_project_workspace({database!r}), read_only=True)
 ''').run()
@@ -216,7 +216,7 @@ def test_group_popup_includes_allocations_from_descendants(database: str) -> Non
     group = resources.create_pool_group(ResourcePoolGroup(name="Group"), pool_ids=[1])
     with patch("app.presentation.components.action_table.action_table", return_value=None) as table:
         app = AppTest.from_string(f'''
-from app.main import create_planning_workspace
+from app.operator_services import create_planning_workspace
 from app.presentation.pages.planning import _pool_allocations_dialog
 _pool_allocations_dialog(0, create_planning_workspace({database!r}), group_id={group})
 ''').run()
@@ -228,9 +228,9 @@ _pool_allocations_dialog(0, create_planning_workspace({database!r}), group_id={g
 def test_import_dialog_explains_invalid_upload_without_changing_data(database: str) -> None:
     before = snapshot(database)
     invalid = VALID.replace("1,FS,0", "999,FS,0").encode()
-    with patch("streamlit.file_uploader", side_effect=lambda *args, **kwargs: io.BytesIO(invalid)):
+    with patch("app.presentation.components.csv_upload.project_csv_upload", return_value=invalid.decode()):
         app = AppTest.from_string(f'''
-from app.main import create_planning_workspace
+from app.operator_services import create_planning_workspace
 from app.presentation.pages.planning import _schedule_csv_dialog
 _schedule_csv_dialog(create_planning_workspace({database!r}), 1, "import_csv_template")
 ''').run()
@@ -269,7 +269,7 @@ def test_clear_all_filters_resets_selection_and_resource_filter_state(database: 
     with patch("app.presentation.pages.planning._interactive_gantt", return_value=None) as chart:
         app = AppTest.from_string(f'''
 import streamlit as st
-from app.main import create_planning_workspace
+from app.operator_services import create_planning_workspace
 from app.presentation.pages.planning import render_planning_milestones
 if "initialized" not in st.session_state:
     st.session_state.initialized = True

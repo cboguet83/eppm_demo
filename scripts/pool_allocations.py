@@ -5,7 +5,7 @@ import json
 import sys
 
 from app.domain.resources.allocation_generation import AllocationGenerationRequest
-from app.main import create_maintenance_service
+from app.operator_services import create_maintenance_service
 from app.shared.logging import setup_logging
 from scripts.maintenance_cli import cli_errors
 

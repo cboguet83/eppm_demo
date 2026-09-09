@@ -1,9 +1,14 @@
 """Batched capacity inputs read through one SQLite snapshot."""
 
+from app.application.services.business_access import BusinessAccess
 from datetime import date
+from dataclasses import replace
 
 from app.domain.organization.models import EmployeeCalendarException
 from app.domain.resources.inputs import CapacityInputs
+from app.domain.resources.models import PoolCapacityDetail
+from app.domain.access.models import Permission
+from app.infrastructure.repositories.access import SqliteAccessStore
 from app.infrastructure.repositories.organization import SqliteOrganizationStore
 from app.infrastructure.repositories.resource_pools import SqliteResourcePoolGateway
 
@@ -11,9 +16,17 @@ from app.infrastructure.repositories.resource_pools import SqliteResourcePoolGat
 class SqliteCapacityReader:
     """Read shared catalogs once regardless of the number of requested pools."""
 
-    def __init__(self, db_path: str | None = None) -> None:
+    def __init__(self, db_path: str | None = None, *, access: BusinessAccess) -> None:
         """Retain the database gateway without opening a connection."""
-        self._gateway = SqliteResourcePoolGateway(db_path)
+        self._gateway = SqliteResourcePoolGateway(db_path, access=access)
+        self._access = access
+
+    def visible_details(self, details: list[PoolCapacityDetail]) -> list[PoolCapacityDetail]:
+        """Recheck current access and hide employee staffing from project-only readers."""
+        with self._gateway.transaction() as store:
+            if self._access.global_permission(SqliteAccessStore(store.connection), Permission.SHARED):
+                return details
+            return [replace(detail, contributing_resources=[]) for detail in details]
 
     def read(self, pool_ids: list[int]) -> dict[int, CapacityInputs]:
         """Collect pool, organization, and task inputs within one read transaction."""

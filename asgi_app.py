@@ -10,6 +10,11 @@ from starlette.middleware.sessions import SessionMiddleware
 import streamlit as st
 
 from app.infrastructure.authentication.http import AuthenticationRoutes, OIDC_COOKIE
+from app.infrastructure.authentication.downloads import DownloadRoutes
+from app.infrastructure.authentication.session_middleware import ApplicationSessionMiddleware, TRUSTED_USER_HEADERS
+from app.application.services.business_access import BusinessAccess
+from app.domain.access.models import Actor
+from app.main import create_planning_service
 from app.infrastructure.authentication.middleware import BrowserSecurityMiddleware
 from app.infrastructure.authentication.oidc import create_oidc_client
 from app.security import create_access_service
@@ -30,12 +35,22 @@ def create_application() -> st.App:
     """Fail closed on missing configuration and compose supported Streamlit ASGI routes."""
     setup_logging()
     settings = AuthenticationConfig.from_environment(os.environ)
+    if (st.get_option("server.trustedUserHeaders") != TRUSTED_USER_HEADERS
+            or not st.get_option("server.enableCORS") or not st.get_option("server.enableXsrfProtection")
+            or st.get_option("server.baseUrlPath")):
+        raise ValueError("Enable the required Streamlit origin, XSRF, and session-binding configuration.")
     access = create_access_service(config.db_path, settings)
     client = create_oidc_client(settings, config.db_path, lambda: int(time()))
+
+    def export_template(actor: Actor, project_id: int) -> str:
+        service = create_planning_service(config.db_path, access=BusinessAccess(actor, access.policy))
+        return service.export_project_template(project_id)
+
     return st.App(
         Path(__file__).with_name("streamlit_app.py"),
-        routes=AuthenticationRoutes(client, access).routes(),
+        routes=AuthenticationRoutes(client, access).routes() + DownloadRoutes(access, export_template).routes(),
         middleware=[Middleware(BrowserSecurityMiddleware, config=settings),
+                    Middleware(ApplicationSessionMiddleware, access=access, config=settings),
                     Middleware(SessionMiddleware, secret_key=settings.cookie_secret,
                                session_cookie=OIDC_COOKIE, max_age=600, same_site="lax",
                                https_only=settings.secure_cookies)],

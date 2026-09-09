@@ -9,7 +9,7 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 from app.infrastructure.database.connection import get_db
-from app.main import create_planning_service, create_planning_workspace
+from app.operator_services import create_planning_service, create_planning_workspace
 from app.presentation.components.planning_data import load_planning_catalog
 from app.presentation.components.planning_events import validate_event
 from app.infrastructure.database.schema_init import init_db
@@ -18,7 +18,7 @@ from app.infrastructure.database.schema_init import init_db
 def planning_app(path: str) -> None:
     """Run the real planner with optional pre-rerun component callbacks."""
     import streamlit as st
-    from app.main import create_planning_workspace
+    from app.operator_services import create_planning_workspace
     from app.presentation.pages.planning import (
         render_planning_milestones,
         _handle_gantt_component_change,
@@ -278,7 +278,7 @@ def catalog_failure_app(error_name: str) -> None:
 
 def project_tag_dialog_app(path: str) -> None:
     """Render the real Gantt project-tag editor."""
-    from app.main import create_planning_workspace
+    from app.operator_services import create_planning_workspace
     from app.presentation.pages.planning import _manage_project_tags_dialog
 
     _manage_project_tags_dialog(1, "Project", create_planning_workspace(path))
@@ -286,7 +286,7 @@ def project_tag_dialog_app(path: str) -> None:
 
 def test_project_tag_dialog_escapes_free_tag_labels(database: str) -> None:
     from app.domain.tags.models import ProjectTag
-    from app.main import create_tag_service
+    from app.operator_services import create_tag_service
 
     create_tag_service(database).create_project_tag(
         ProjectTag(project_id=1, free_tag="<b>literal & tag</b>")

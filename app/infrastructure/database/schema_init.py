@@ -678,6 +678,9 @@ def init_db(db_path: Optional[str] = None) -> None:
         migrate_project_experience(conn)
         migrate_project_links(conn)
         migrate_access(conn)
+        from app.infrastructure.database.planning_summary_cache import ensure_planning_indexes
+
+        ensure_planning_indexes(conn)
         conn.commit()
         conn.execute("PRAGMA foreign_keys = ON")
     logger.info("Schema initialization complete")

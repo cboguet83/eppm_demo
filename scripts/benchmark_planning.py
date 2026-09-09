@@ -15,7 +15,7 @@ def planning_app(profile=True, capture=False):
     from unittest.mock import patch
 
     import streamlit as st
-    from app.main import create_planning_workspace
+    from app.operator_services import create_planning_workspace
     from app.presentation.pages.planning import render_planning_milestones
     workspace = create_planning_workspace()
     from app.infrastructure.database.connection import get_db

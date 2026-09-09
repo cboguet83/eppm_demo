@@ -140,7 +140,7 @@ def _contact_dialog(project_id: int, service: CollaborationService, contact_id: 
     """Create a role assignment or reassign its function while retaining the role."""
     locale = get_current_locale()
     roles = {row["id"]: row["label"] for row in service.list_catalog("role", locale)}
-    functions = {row["function_id"]: row for row in service.list_functions()}
+    functions = {row["function_id"]: row for row in service.function_choices()}
     contacts = {row["id"]: row for row in service.list_contacts(project_id, locale)}
     if contact_id is not None and contact_id not in contacts:
         st.error("The contact assignment no longer exists.")

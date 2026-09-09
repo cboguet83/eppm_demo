@@ -69,7 +69,9 @@ def _prepare_plan(
         projects = [row[0] for row in connection.execute("SELECT id FROM project ORDER BY id")]
         if rates and not projects:
             raise ValueError("Create projects before generating pool allocations.")
-        before = SqliteCapacityReader(str(path)).read(pool_ids)
+        from app.infrastructure.database.operator_context import deployment_access
+
+        before = SqliteCapacityReader(str(path), access=deployment_access()).read(pool_ids)
         previous = {pid: calculate_capacity(value, today) for pid, value in before.items()}
         eligible = [row[0] for row in connection.execute(
             "SELECT employee_id FROM employee WHERE occupation_percentage>0 ORDER BY employee_id"
@@ -112,7 +114,7 @@ def _prepare_plan(
                             execute("INSERT INTO resource_pool_mapping(pool_id,target_type,target_id,allocation_pct) "
                                     "VALUES (?,'employee',?,100)", (pid, employee_id))
                             mappings_created += 1
-        inputs = SqliteCapacityReader(str(path)).read(pool_ids)
+        inputs = SqliteCapacityReader(str(path), access=deployment_access()).read(pool_ids)
         details = {pid: calculate_capacity(value, today) for pid, value in inputs.items()}
         tasks = connection.execute(
             "SELECT id,project_id,start_date,end_date FROM project_task "
@@ -145,7 +147,7 @@ def _prepare_plan(
                     created += 1
             if {tuple(row) for row in connection.execute("PRAGMA foreign_key_check")} - baseline:
                 raise ValueError("Generated allocations would violate database references.")
-        realized = SqliteCapacityReader(str(path)).read(pool_ids)
+        realized = SqliteCapacityReader(str(path), access=deployment_access()).read(pool_ids)
         rows = []
         for pool in pools:
             detail = calculate_capacity(realized[pool[0]], today)

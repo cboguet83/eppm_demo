@@ -2,6 +2,7 @@
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+import hmac
 from urllib.parse import urlsplit
 
 
@@ -37,6 +38,11 @@ class AuthenticationConfig:
     reauthentication_seconds: int = 300
     algorithms: tuple[str, ...] = ("RS256",)
     mfa_acr_values: tuple[str, ...] = ()
+
+    def session_binding(self, session_hash: str, status: str, revision: int) -> str:
+        """Sign the server-only connection identity used to bind Streamlit reconnects."""
+        message = f"eppm-streamlit-session:{session_hash}:{status}:{revision}".encode("utf-8")
+        return hmac.digest(self.cookie_secret.encode("utf-8"), message, "sha256").hex()
 
     def __post_init__(self) -> None:
         if self.environment not in {"development", "staging", "production"}:

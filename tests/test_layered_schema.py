@@ -1,8 +1,9 @@
 """Schema domain contracts, real SQLite integrity, and display projections."""
 
+from app.operator_services import deployment_access
 from app.application.exceptions import SchemaStorageError
 
-from app.main import create_schema_service
+from app.operator_services import create_schema_service
 
 from app.presentation.components import schema_frames
 
@@ -18,7 +19,7 @@ from app.application.services.schema import SchemaService
 from app.domain.projects.schema import next_group_order, next_parameter_id
 from app.infrastructure.database.connection import get_db
 from app.infrastructure.repositories.schema import SqliteSchemaGateway
-from app.main import create_project_service, create_project_type_service
+from app.operator_services import create_project_service, create_project_type_service
 from app.infrastructure.database.schema_init import init_db
 
 
@@ -224,7 +225,7 @@ def test_gateway_closes_connections_and_holds_writer_before_reference_guards(
     create_project_type_service(database).save_rule(1, "p", has_default=True, default_value="A")
     with pytest.raises(ValueError):
         service.delete_parameter("p")
-    with SqliteSchemaGateway(database).transaction(write=True) as store:
+    with SqliteSchemaGateway(database, access=deployment_access()).transaction(write=True) as store:
         assert store.has_property_values("p")
         with closing(sqlite3.connect(database, timeout=0)) as other:
             with pytest.raises(sqlite3.OperationalError, match="locked"):
