@@ -125,9 +125,12 @@ def action_table(
         key=key, width="stretch", height="content", on_action_change=lambda: None,
     )
     event = getattr(result, "action", None)
-    if not isinstance(event, dict) or event.get("action") not in actions:
+    if not isinstance(event, dict):
+        return None
+    action = event.get("action")
+    if not isinstance(action, str) or action not in actions:
         return None
     identity = event.get("id")
     if type(identity) is not int or identity not in {row["id"] for row in rows}:
         return None
-    return TableAction(id=identity, action=event["action"])
+    return TableAction(id=identity, action=action)

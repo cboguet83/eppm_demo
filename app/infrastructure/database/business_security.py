@@ -8,6 +8,10 @@ import sqlite3
 from app.application.services.business_access import BusinessAccess
 from app.domain.access.models import AccessDenied, DeploymentActor, Permission
 from app.infrastructure.repositories.access import SqliteAccessStore
+from app.shared.logging import get_logger
+
+
+logger = get_logger(__name__)
 
 
 _OWNED_TABLES = {
@@ -39,14 +43,24 @@ def authorized_business_transaction(
 ) -> Iterator[None]:
     """Install enforcement and translate trigger denials before normal adapter errors."""
     security = SqliteBusinessSecurity(connection, access)
-    if permission is not None:
-        access.require(security.store, permission, project_ids)
-    security.install()
     try:
-        yield
-    except sqlite3.Error:
-        if security.denial is not None:
-            raise security.denial from None
+        if permission is not None:
+            access.require(security.store, permission, project_ids)
+        security.install()
+        try:
+            yield
+        except sqlite3.Error:
+            if security.denial is not None:
+                raise security.denial from None
+            raise
+    except AccessDenied:
+        # Log only a propagated operation failure, not routine UI permission probes.
+        # JSON encoding prevents operator/correlation text from injecting log lines.
+        logger.warning("security.event %s", json.dumps({
+            "action": "business.authorization_denied", "outcome": "denied",
+            "actor": access.audit_actor, "correlation": access.actor.correlation_id,
+            "permission": permission.value if permission is not None else "scoped_operation",
+        }))
         raise
 
 

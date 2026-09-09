@@ -73,13 +73,13 @@ Release source: [V16 logging/errors](https://github.com/OWASP/ASVS/blob/v5.0.0/5
 | v5.0.0-16.1.1 | Logging inventory | [Deployment guide](access-deployment.md): persistent audit plus sanitized operational output | Retention, log collection, access policy, and archive procedures are deployment responsibilities |
 | v5.0.0-16.2.1 | Audit metadata | Actor/operator, target, action, outcome, timestamp, correlation, safe changes; real SQLite audit tests | Infrastructure logging must supply its own relevant context |
 | v5.0.0-16.2.5 | Sensitive-value exclusion | Tokens/credentials excluded from audit; OAuth/client debug and raw callback access logs disabled; negative logging tests | Verify reverse proxy, IdP, and deployment log configuration |
-| v5.0.0-16.3.1, v5.0.0-16.3.3 | Security events | Login/security changes and failure categories; bootstrap, recovery, grant, revoke, status and protected-property audit tests | Broader business-validation/authorization-denial event coverage remains to be reviewed |
+| v5.0.0-16.3.1, v5.0.0-16.3.3 | Security events | Login/security changes and failure categories; bootstrap, recovery, grant, revoke, status and protected-property audit tests; correlated operational events for propagated business authorization denials | Broader business-validation and access-administration denial coverage remains to be reviewed |
 | v5.0.0-16.4.1, v5.0.0-16.4.2 | Injection and tampering | Safe text validation, JSON audit details, append-only triggers and access-admin-only audit inspection | OS administrators can alter database files; separate protected collection is not implemented by the application |
 | v5.0.0-16.5.1, v5.0.0-16.5.2, v5.0.0-16.5.3 | Safe failures | Bounded HTTP problems, sanitized script errors, fail-closed configuration, transaction rollback on failed authorization/audit | Test deployment proxy failures and infrastructure outages before rollout |
 
 ## Validation status and gaps
 
-On 2026-09-09, the complete Python suite passed **801 tests and 14 subtests**.
+On 2026-09-09, the complete Python suite passed **859 tests and 14 subtests**.
 Its single opt-in browser test was skipped in the regular run, then passed separately
 against real Keycloak and the rebuilt application image without source bind mounts.
 The browser workflow passed three consecutive runs after moving live audit
@@ -110,7 +110,20 @@ producing browser payloads. Business-only administrators can create, edit and
 delete directory records without receiving access administration or changing
 application accounts, identities or grants, including when employee/user emails match.
 
-Measured `app` statement coverage is **94.53%** (10,011 of 10,590 statements), below the
+Allocation popup and Gantt filter tests verify scoped rows, totals, related projects,
+owner resolution, and safe rejection of malformed action values. CSV import tests
+exercise day/month/year previews, invalid-template preservation, permission changes,
+and atomic replacement requiring edit permission on every affected project.
+Shared tag menus and scoped task-tag deletion tests retain the same boundaries.
+Additional real legacy migrations preserve directory relationships, employee
+occupation, pool mappings and demand without creating application identities.
+
+Propagated business authorization denials emit one structured operational event
+with actor, correlation, permission category and outcome. Tests cover denied reads,
+shared-catalog access, rolled-back writes and log-line injection. They verify that
+session hashes, business payloads and routine negative UI permission hints are absent.
+
+Measured `app` statement coverage is **96.56%** (10,234 of 10,599 statements), below the
 **99%** project target. Coverage remains unfinished work; the passing workflow tests
 do not establish that target. Missing statements include legacy planning and
 organization UI branches, schema upgrades, and additional access boundary cases.

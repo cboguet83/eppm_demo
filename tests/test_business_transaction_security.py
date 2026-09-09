@@ -133,6 +133,46 @@ def test_business_administrator_can_update_shared_capacity_through_the_guarded_t
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
 
 
+@pytest.mark.parametrize("boundary", ["read", "shared", "write", "correlation"])
+def test_rejected_business_operations_log_safe_correlated_events_without_payloads(business, caplog, boundary):
+    import json
+    import logging
+    from dataclasses import replace
+    from app.main import create_organization_service, create_project_service
+
+    path, service, admin, editor, _ = business
+    if boundary == "correlation":
+        editor = BusinessAccess(replace(editor.actor, correlation_id="trace-reference\nforged.event"), editor.policy)
+    with caplog.at_level(logging.WARNING, logger="app.infrastructure.database.business_security"):
+        # Expected negative permission hints do not produce failed-operation events.
+        create_project_service(path, access=editor).permissions()
+        assert not caplog.records
+        if boundary == "read":
+            service.set_status(admin, editor.actor.user_id, "disabled")
+        with pytest.raises(AccessDenied):
+            if boundary == "read":
+                create_project_service(path, access=editor).get_project_by_id(1)
+            elif boundary in {"shared", "correlation"}:
+                create_organization_service(path, access=editor).get_all_employees()
+            else:
+                with transaction(path, editor) as connection:
+                    connection.execute("UPDATE main.project SET name='Private candidate change' WHERE id=1")
+                    connection.execute("UPDATE main.project_task SET description='Private task payload' WHERE id=20")
+    messages = [record.getMessage() for record in caplog.records if record.name == "app.infrastructure.database.business_security"]
+    assert len(messages) == 1
+    event = json.loads(messages[0].removeprefix("security.event "))
+    assert event == {
+        "action": "business.authorization_denied", "outcome": "denied",
+        "actor": str(editor.actor.user_id), "correlation": editor.actor.correlation_id,
+        "permission": "business.manage" if boundary in {"shared", "correlation"} else "scoped_operation",
+    }
+    assert editor.actor.session_hash not in messages[0]
+    assert len(messages[0].splitlines()) == 1
+    assert "Private" not in messages[0] and "Hidden" not in messages[0]
+    with closing(get_db(path)) as connection:
+        assert connection.execute("SELECT name FROM project WHERE id=1").fetchone()[0] == "Visible"
+
+
 def test_business_admin_protected_changes_are_audited_and_audit_failure_rolls_back(business):
     path, service, admin, _, manager = business
     with transaction(path, manager) as conn:
@@ -394,6 +434,8 @@ def permission_control_app(path, actor, surface):
         "project_pools": lambda: planning._manage_project_resource_pools_dialog(1, "Visible", workspace),
         "task_pools": lambda: planning._manage_task_resource_pools_dialog(10, "Forged label", 2, workspace),
         "import": lambda: planning._schedule_csv_dialog(workspace, 1, "import_csv_template"),
+        "allocations": lambda: planning._pool_allocations_dialog(1, workspace),
+        "group_allocations": lambda: planning._pool_allocations_dialog(0, workspace, group_id=1),
     }
     surfaces[surface]()
 
@@ -425,6 +467,309 @@ def test_collaboration_edit_controls_recheck_current_status(business):
     assert not service.can_edit(2)
     access.set_status(admin, editor.actor.user_id, "disabled")
     assert not service.can_edit(1)
+
+
+@pytest.mark.parametrize("surface", ["allocations", "group_allocations"])
+@pytest.mark.parametrize("event", [
+    None, {"id": 2, "action": "open"}, {"id": True, "action": "open"},
+    {"id": 1, "action": "unassign"}, {"id": 1, "action": ["open"]},
+    {"id": 1, "action": "open"},
+])
+def test_scoped_allocation_popups_accept_only_visible_navigation_actions(business, surface, event):
+    from types import SimpleNamespace
+    from unittest.mock import Mock, patch
+    from streamlit.testing.v1 import AppTest
+    from app.domain.resources.models import ResourcePoolGroup
+    from app.main import create_resource_pool_service
+    from app.presentation.navigation import PAGE_PLANNING
+
+    path, service, admin, editor, manager = business
+    assignment = service.assignments(admin, editor.actor.user_id)[0]
+    service.grant(admin, editor.actor.user_id, "project_viewer", {"kind": "projects", "project_ids": [1]})
+    service.revoke(admin, assignment["id"])
+    resources = create_resource_pool_service(path, access=manager)
+    resources.create_pool_group(ResourcePoolGroup("Visible group"), pool_ids=[1])
+    component = Mock(side_effect=[SimpleNamespace(action=event), SimpleNamespace(action=None)])
+    with patch("streamlit.components.v2.component", return_value=component):
+        app = AppTest.from_function(
+            permission_control_app, args=(path, editor.actor, surface), default_timeout=30,
+        )
+        app.session_state["active_resource_pool_filter"] = {"pool_id": 1}
+        app.session_state["pending_resource_pool_filter"] = {"pool_id": 1}
+        app.run()
+    assert not app.exception and not app.error
+    for call in component.call_args_list:
+        payload = call.kwargs["data"]
+        assert payload["actions"] == {"open": "Go to"}
+        assert [(row["id"], row["project"], row["task"], row["fte"]) for row in payload["rows"]] == [
+            (1, "Visible", "Visible task", "1.00"),
+        ]
+    if event == {"id": 1, "action": "open"} and type(event["id"]) is int:
+        assert app.session_state["nav_redirect"] == PAGE_PLANNING
+        assert app.session_state["target_planning_project_id"] == 1
+        assert app.session_state["target_planning_task_id"] == 10
+        assert app.session_state["ms_multi_projects"] == [1]
+        assert "active_resource_pool_filter" not in app.session_state
+        assert "pending_resource_pool_filter" not in app.session_state
+    else:
+        assert "nav_redirect" not in app.session_state
+    with closing(get_db(path)) as connection:
+        assert connection.execute("SELECT id,fte_assigned FROM resource_pool_assignment ORDER BY id").fetchall() == [(1, 1), (2, 2)]
+
+
+@pytest.mark.parametrize("surface", ["allocations", "group_allocations"])
+def test_allocation_popups_explain_when_the_selection_has_no_pools(business, surface):
+    from streamlit.testing.v1 import AppTest
+
+    path, _, _, editor, _ = business
+    with closing(get_db(path)) as connection, connection:
+        connection.execute("DELETE FROM resource_pool")
+    app = AppTest.from_function(
+        permission_control_app, args=(path, editor.actor, surface), default_timeout=30,
+    ).run()
+    assert not app.exception and not app.error
+    assert app.info[0].value == "No resource pools found in this selection."
+
+
+@pytest.mark.parametrize("scenario", ["invalid", "preview", "cross_project", "revoked", "replace"])
+def test_csv_import_validates_preview_and_rechecks_every_affected_project_before_replacement(business, scenario):
+    from types import SimpleNamespace
+    from unittest.mock import patch
+    from streamlit.testing.v1 import AppTest
+
+    path, service, admin, editor, _ = business
+    header = "step_number,task_name,start_date,end_date,progress_pct,preceding_step,dependency_type,dependency_lag\n"
+    content = header + "1,Replacement first,13/02/2026,14/02/2026,0,,,\n2,Replacement second,15/02/2026,16/02/2026,50,1,FS,0\n"
+    if scenario == "invalid":
+        content = content.replace("13/02/2026", "31/02/2026")
+    service.grant(admin, editor.actor.user_id, "project_viewer", {"kind": "all"})
+    if scenario == "replace":
+        service.grant(admin, editor.actor.user_id, "project_editor", {"kind": "projects", "project_ids": [2]})
+
+    def snapshot():
+        with closing(get_db(path)) as connection:
+            return {table: connection.execute(f"SELECT * FROM {table} ORDER BY id").fetchall()
+                    for table in ("project_task", "task_dependencies", "resource_pool_assignment")}
+
+    before = snapshot()
+    with patch("streamlit.components.v2.component") as factory:
+        factory.return_value.return_value = SimpleNamespace(upload={"name": "edited.csv", "content": content})
+        app = AppTest.from_function(
+            permission_control_app, args=(path, editor.actor, "import"), default_timeout=30,
+        ).run()
+        assert not app.exception
+        assert snapshot() == before
+        assert app.selectbox(key="template_date_format_1").value == "DD/MM/YYYY"
+        assert "Nothing is deleted" in app.warning[0].value
+        if scenario == "invalid":
+            assert "Row 2" in app.error[0].value and "start_date" in app.error[0].value
+            assert not app.dataframe and not app.button
+            return
+        assert not app.error
+        preview = app.dataframe[0].value
+        assert preview["start_date"].tolist() == ["2026-02-13", "2026-02-15"]
+        assert preview["end_date"].tolist() == ["2026-02-14", "2026-02-16"]
+        if scenario == "preview":
+            return
+        if scenario == "revoked":
+            assignment = next(item for item in service.assignments(admin, editor.actor.user_id) if item["role"] == "project_editor")
+            service.revoke(admin, assignment["id"])
+        app.button[0].click().run()
+    assert not app.exception
+    if scenario == "replace":
+        assert not app.error
+        with closing(get_db(path)) as connection:
+            assert connection.execute("SELECT task_name,start_date,end_date FROM project_task WHERE project_id=1 ORDER BY id").fetchall() == [
+                ("Replacement first", "2026-02-13", "2026-02-14"), ("Replacement second", "2026-02-15", "2026-02-16"),
+            ]
+            assert connection.execute("SELECT id FROM resource_pool_assignment").fetchall() == [(2,)]
+            assert connection.execute("SELECT count(*) FROM task_dependencies").fetchone()[0] == 1
+            assert connection.execute("SELECT text_value FROM project_property_value WHERE project_id=1 AND param_id='DEPT'").fetchone()[0] == "Finance"
+            assert connection.execute("SELECT task_name FROM project_task WHERE id=20").fetchone()[0] == "Hidden task"
+            assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
+    else:
+        assert snapshot() == before
+        if scenario == "revoked":
+            assert "read-only" in app.info[0].value and not app.button
+        else:
+            assert app.error and "Hidden task" not in app.error[0].value
+
+
+def scoped_planning_app(path, actor):
+    """Run the complete planner with real scoped services and component event input."""
+    import streamlit as st
+    from app.application.services.access import AuthorizationPolicy, SessionLimits
+    from app.application.services.business_access import BusinessAccess
+    from app.main import create_planning_workspace
+    from app.presentation.i18n import set_current_locale
+    from app.presentation.pages.planning import render_planning_milestones, _handle_gantt_component_change
+
+    set_current_locale("en")
+    workspace = create_planning_workspace(path, access=BusinessAccess(actor, AuthorizationPolicy(lambda: 1000, SessionLimits())))
+    event = st.session_state.pop("before_event", None)
+    if event:
+        st.session_state["planning_lazy_gantt"] = event
+        _handle_gantt_component_change("planning_lazy_gantt", workspace)
+    render_planning_milestones(workspace)
+
+
+@pytest.mark.parametrize("group", [False, True])
+@pytest.mark.parametrize("scope,expected", [("this", [1]), ("all", [1, 3]), ("predecessors", [1])])
+def test_pool_context_filters_and_allocation_totals_remain_inside_current_read_scope(business, group, scope, expected):
+    import json
+    from unittest.mock import patch
+    from streamlit.testing.v1 import AppTest
+    from app.domain.resources.models import ResourcePoolGroup
+    from app.main import create_resource_pool_service
+
+    path, service, admin, editor, manager = business
+    with closing(get_db(path)) as connection, connection:
+        connection.execute("INSERT INTO project(id,name) VALUES(3,'Visible successor')")
+        connection.execute("INSERT INTO project_task(id,project_id,task_name,start_date,end_date) VALUES(30,3,'Successor task','2026-01-06','2026-01-07')")
+        connection.execute("INSERT INTO task_dependencies(task_id,predecessor_task_id,link_type,lag_days) VALUES(30,10,'FS',0)")
+        connection.execute("INSERT INTO resource_pool_assignment(id,pool_id,project_id,fte_assigned,notes) VALUES(3,1,1,0.25,'<script>visible notes</script>')")
+    service.grant(admin, editor.actor.user_id, "project_viewer", {"kind": "projects", "project_ids": [3]})
+    create_resource_pool_service(path, access=manager).create_pool_group(ResourcePoolGroup("Delivery group"), pool_ids=[1])
+    event = {
+        "action": "filter_by_resource_pool", "pool_id": 1, "group_id": 1 if group else None,
+        "filter_scope": scope, "start_date": "2026-01-01", "end_date": "2026-01-05", "nonce": "scope-filter",
+    }
+    with patch("app.presentation.pages.planning._interactive_gantt", return_value=event) as component:
+        app = AppTest.from_function(scoped_planning_app, args=(path, editor.actor), default_timeout=30).run()
+        assert not app.exception and not app.error
+        assert app.session_state["ms_multi_projects"] == expected
+        active = app.session_state["active_resource_pool_filter"]
+        assert active["project_ids"] == expected and active["count"] == len(expected)
+        rendered = "\n".join(item.value for item in app.markdown)
+        assert "1.25 FTE" in rendered and "Project Level" in rendered
+        assert "&lt;script&gt;visible notes&lt;/script&gt;" in rendered
+        assert "<script>visible notes</script>" not in rendered and "Hidden" not in rendered
+        assert "Hidden" not in json.dumps([call.kwargs for call in component.call_args_list], default=str)
+        component.return_value = None
+        app.button(key="btn_clear_pool_filter_top").click().run()
+        assert not app.exception and not app.error
+        assert "active_resource_pool_filter" not in app.session_state
+        assert app.session_state["ms_multi_projects"] == [1, 3]
+        assert not any("Total Active Allocation" in item.value for item in app.markdown)
+
+
+@pytest.mark.parametrize("action", ["manage_project_tags", "manage_project_pools", "manage_task_tags", "manage_task_pools", "edit_project_details"])
+@pytest.mark.parametrize("visible", [True, False])
+def test_gantt_context_menu_dialogs_resolve_owners_using_the_current_scope(business, action, visible):
+    import json
+    from unittest.mock import patch
+    from streamlit.testing.v1 import AppTest
+
+    path, _, _, editor, _ = business
+    project_id, task_id = (1, 10) if visible else (2, 20)
+    event = {
+        "action": action, "project_id": project_id, "id": task_id, "task_id": task_id,
+        "task_name": "Forged task title", "nonce": "modal-event",
+    }
+    with patch("app.presentation.pages.planning._interactive_gantt", return_value=event) as component:
+        app = AppTest.from_function(scoped_planning_app, args=(path, editor.actor), default_timeout=30).run()
+    assert not app.exception
+    assert "Hidden" not in json.dumps([call.kwargs for call in component.call_args_list], default=str)
+    displayed = "\n".join(item.value for item in app.markdown)
+    assert "Hidden" not in displayed and "Forged task title" not in displayed
+    if visible:
+        assert not app.error
+        if action == "edit_project_details":
+            assert all(item.disabled for item in app.text_input)
+            assert any(item.label == "Edit project" for item in app.button)
+        elif "tags" in action:
+            assert any(item.key and item.key.startswith("ti_attach_") for item in app.text_input)
+        else:
+            assert any(item.key and item.key.startswith("ni_assign_") for item in app.number_input)
+    else:
+        assert app.error or any("read-only" in item.value for item in app.info)
+        assert not app.text_input and not app.number_input
+
+
+def tag_catalog_app(path, actor, surface):
+    """Render one tag catalog with an explicit application actor."""
+    from app.application.services.access import AuthorizationPolicy, SessionLimits
+    from app.application.services.business_access import BusinessAccess
+    from app.main import create_tag_service
+    from app.presentation.i18n import set_current_locale
+    from app.presentation.pages import tags
+
+    set_current_locale("en")
+    service = create_tag_service(path, access=BusinessAccess(actor, AuthorizationPolicy(lambda: 1000, SessionLimits())))
+    {
+        "group": tags.render_tag_groups, "dictionary": tags.render_tag_dictionary,
+        "project": tags.render_project_tags, "task": tags.render_task_tags,
+    }[surface](service)
+
+
+@pytest.mark.parametrize("surface", ["group", "dictionary", "project", "task"])
+@pytest.mark.parametrize("action", ["add", "edit", "delete"])
+def test_business_admin_tag_catalog_actions_consume_the_component_event_once(business, surface, action):
+    from unittest.mock import patch
+    from streamlit.testing.v1 import AppTest
+
+    path, _, _, _, manager = business
+    with closing(get_db(path)) as connection, connection:
+        connection.execute("INSERT INTO tag_group(id,tag_group_name) VALUES(10,'Classification')")
+        connection.execute("INSERT INTO tag_dictionnary(id,tag) VALUES(10,'Priority')")
+        connection.execute("INSERT INTO project_tag(id,project_id,free_tag) VALUES(10,1,'Visible project tag'),(20,2,'Hidden project tag')")
+        connection.execute("INSERT INTO task_tag(id,task_id,free_tag) VALUES(10,10,'Visible task tag'),(20,20,'Hidden task tag')")
+    kind = {"group": "tag_group", "dictionary": "tag", "project": "project_tag", "task": "task_tag"}[surface]
+    event = {
+        "action": f"{action}_{kind}", "nonce": "tag-event", "group_id": 10, "tag_group_name": "Classification",
+        "tag_id": 10 if surface == "dictionary" else None, "tag": "Priority", "pt_id": 10, "project_id": 1,
+        "tt_id": 10, "task_id": 10, "free_tag": f"Visible {surface} tag", "tag_label": "Selected tag",
+    }
+    with patch("streamlit.components.v1.declare_component") as factory:
+        factory.return_value.return_value = event
+        app = AppTest.from_function(tag_catalog_app, args=(path, manager.actor, surface), default_timeout=30).run()
+        assert not app.exception and not app.error
+        assert app.button
+        if surface in {"project", "task"}:
+            payload = factory.return_value.call_args.kwargs
+            assert {item["id"] for item in payload[f"{surface}_tags"]} == {10, 20}
+        app.run()
+        assert not app.exception and not app.error
+        assert not app.button and not app.text_input
+    with closing(get_db(path)) as connection:
+        assert connection.execute("SELECT id FROM project_tag ORDER BY id").fetchall() == [(10,), (20,)]
+        assert connection.execute("SELECT id FROM task_tag ORDER BY id").fetchall() == [(10,), (20,)]
+
+
+@pytest.mark.parametrize("surface", ["group", "dictionary", "project"])
+def test_project_editor_cannot_render_shared_tag_catalogs_or_invoke_their_component_actions(business, surface):
+    from unittest.mock import patch
+    from streamlit.testing.v1 import AppTest
+
+    path, _, _, editor, _ = business
+    with patch("streamlit.components.v1.declare_component") as factory:
+        app = AppTest.from_function(tag_catalog_app, args=(path, editor.actor, surface), default_timeout=30).run()
+    assert not app.exception and app.error
+    factory.assert_not_called()
+
+
+def test_scoped_task_tag_page_filters_totals_and_rejects_deletion_of_a_hidden_assignment(business):
+    import json
+    from unittest.mock import patch
+    from streamlit.testing.v1 import AppTest
+
+    path, _, _, editor, _ = business
+    with closing(get_db(path)) as connection, connection:
+        connection.execute("INSERT INTO task_tag(id,task_id,free_tag) VALUES(10,10,'Visible tag'),(20,20,'Hidden tag')")
+    with patch("streamlit.components.v1.declare_component") as factory:
+        factory.return_value.return_value = {"action": "delete_task_tag", "tt_id": 20, "nonce": "forged-delete"}
+        app = AppTest.from_function(tag_catalog_app, args=(path, editor.actor, "task"), default_timeout=30).run()
+        assert not app.exception and not app.error
+        payload = factory.return_value.call_args.kwargs
+        assert payload["page_info"]["total"] == 1
+        assert [item["id"] for item in payload["task_tags"]] == [10]
+        assert "Hidden" not in json.dumps(payload, default=str)
+        # AppTest reruns the full page; reopen the production dialog for its submit.
+        factory.return_value.return_value = {"action": "delete_task_tag", "tt_id": 20, "nonce": "forged-confirm"}
+        app.button[0].click().run()
+        assert not app.exception and app.error
+    with closing(get_db(path)) as connection:
+        assert connection.execute("SELECT id FROM task_tag ORDER BY id").fetchall() == [(10,), (20,)]
 
 
 @pytest.mark.parametrize("entity", ["project", "task"])

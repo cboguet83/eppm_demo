@@ -145,6 +145,12 @@ Operational security events contain an event category, reference, and sometimes
 an exception class. Script failures also record the source basename and line number;
 they never record exception messages, source text, local variables, or full traces.
 No token/cookie/credential values or raw provider errors belong in these events.
+Rejected business transactions also emit `security.event` followed by a JSON
+record with action `business.authorization_denied`, actor reference, correlation,
+permission category and denied outcome. These records survive transaction rollback
+in the operational log; they contain no SQL, row values or session hashes. Normal
+UI permission probes do not emit failed-operation events. Include these operational
+events in the deployment's protected log collection and retention policy.
 Do not re-enable OAuth/HTTP-client debug logs or raw callback query logging in the
 application or reverse proxy. Demo business reset operations preserve application
 users, grants, security audit, and bootstrap state.

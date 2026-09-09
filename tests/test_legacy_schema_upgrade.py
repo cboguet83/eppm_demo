@@ -131,3 +131,61 @@ def test_legacy_parameter_identity_and_required_fields_survive_migration(
                 "INSERT INTO schema_parameters(param_id,param_name,param_type) VALUES (?,'Duplicate','ENUM')",
                 (expected[0],),
             )
+
+
+@pytest.mark.parametrize("hierarchy", ["legacy_id", "foreign_key", "current"])
+def test_legacy_directory_and_pool_mappings_survive_access_upgrade_without_becoming_users(tmp_path: Path, hierarchy: str):
+    path = str(tmp_path / "legacy-directory.db")
+    with closing(sqlite3.connect(path)) as connection, connection:
+        connection.execute("CREATE TABLE project(id INTEGER PRIMARY KEY,name TEXT,status TEXT)")
+        connection.execute("INSERT INTO project VALUES(11,'Existing project','Draft')")
+        connection.execute("CREATE TABLE function_type(function_type_id INTEGER PRIMARY KEY,type_name TEXT NOT NULL UNIQUE)")
+        connection.execute("INSERT INTO function_type VALUES(10,'Engineering')")
+        connection.execute("CREATE TABLE hierarchy_level(id INTEGER PRIMARY KEY)")
+        connection.execute("INSERT INTO hierarchy_level VALUES(3)")
+        level = "hierarchy_level_id" if hierarchy == "legacy_id" else "hierarchy_level"
+        fields = ",function_type_id INTEGER,fte_percentage INTEGER,has_reports INTEGER" if hierarchy == "foreign_key" else ""
+        foreign_key = f",FOREIGN KEY({level}) REFERENCES hierarchy_level(id)" if hierarchy == "foreign_key" else ""
+        connection.execute(f"""CREATE TABLE function(
+            function_id INTEGER PRIMARY KEY,name TEXT,{level} INTEGER,
+            manager_function_id INTEGER,dual_manager_function_id INTEGER{fields}{foreign_key})""")
+        values = ",10,75,1" if hierarchy == "foreign_key" else ""
+        connection.execute(f"INSERT INTO function VALUES(10,'Delivery',3,NULL,NULL{values})")
+        employee_fk = ",FOREIGN KEY(function_type_id) REFERENCES function_type(function_type_id)" if hierarchy != "current" else ""
+        connection.execute(f"""CREATE TABLE employee(
+            employee_id INTEGER PRIMARY KEY,firstname TEXT,lastname TEXT,email TEXT UNIQUE,
+            mobile TEXT,sigle TEXT,employee_code TEXT UNIQUE,function_id INTEGER,function_type_id INTEGER,
+            FOREIGN KEY(function_id) REFERENCES function(function_id){employee_fk})""")
+        connection.execute("INSERT INTO employee VALUES(10,'Rae','Legacy','legacy@example.test','123','RL','LEG10',10,10)")
+        connection.execute("CREATE TABLE resource_pool(id INTEGER PRIMARY KEY,name TEXT,description TEXT,created_at TEXT)")
+        connection.execute("INSERT INTO resource_pool VALUES(1,'Legacy pool','Retained','2026-01-01')")
+        connection.execute("""CREATE TABLE resource_pool_mapping(
+            id INTEGER PRIMARY KEY,pool_id INTEGER,target_type TEXT CHECK(target_type IN ('team','function')),
+            target_id INTEGER,allocation_pct REAL,FOREIGN KEY(pool_id) REFERENCES resource_pool(id))""")
+        connection.execute("INSERT INTO resource_pool_mapping VALUES(1,1,'function',10,75)")
+        connection.execute("""CREATE TABLE resource_pool_assignment(
+            id INTEGER PRIMARY KEY,pool_id INTEGER,project_id INTEGER,task_id INTEGER,fte_assigned REAL,notes TEXT,
+            FOREIGN KEY(pool_id) REFERENCES resource_pool(id),FOREIGN KEY(project_id) REFERENCES project(id))""")
+        connection.execute("INSERT INTO resource_pool_assignment VALUES(1,1,11,NULL,0.5,'Existing demand')")
+
+    init_db(path)
+    init_db(path)
+
+    with closing(get_db(path)) as connection, connection:
+        assert connection.execute("SELECT function_id,name,hierarchy_level,function_type_id,fte_percentage,has_reports FROM function").fetchall() == [
+            (10, "Delivery", 3, 10, 75, 1) if hierarchy == "foreign_key" else (10, "Delivery", 3, None, 100, 0),
+        ]
+        assert connection.execute("SELECT employee_id,email,employee_code,function_id,occupation_percentage FROM employee").fetchall() == [
+            (10, "legacy@example.test", "LEG10", 10, 100),
+        ]
+        assert "function_type_id" not in {row[1] for row in connection.execute("PRAGMA table_info(employee)")}
+        assert connection.execute("SELECT planned_budget,actual_budget FROM project WHERE id=11").fetchone() == (0, 0)
+        assert connection.execute("SELECT capacity_fte FROM resource_pool WHERE id=1").fetchone() == (None,)
+        assert connection.execute("SELECT id,target_type,target_id,allocation_pct FROM resource_pool_mapping").fetchall() == [(1, "function", 10, 75)]
+        connection.execute("INSERT INTO resource_pool_mapping(pool_id,target_type,target_id,allocation_pct) VALUES(1,'employee',10,25)")
+        with pytest.raises(sqlite3.IntegrityError):
+            connection.execute("INSERT INTO resource_pool_mapping(pool_id,target_type,target_id,allocation_pct) VALUES(1,'employee',10,25)")
+        assert connection.execute("SELECT project_id,fte_assigned,start_date,end_date,notes FROM resource_pool_assignment").fetchall() == [(11, 0.5, None, None, "Existing demand")]
+        assert connection.execute("SELECT count(*) FROM app_user").fetchone()[0] == 0
+        assert connection.execute("SELECT count(*) FROM app_identity").fetchone()[0] == 0
+        assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
