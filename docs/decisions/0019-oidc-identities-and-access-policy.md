@@ -252,9 +252,9 @@ verification results, limitations, and production responsibilities.
 - Real HTTP/WebSocket tests cover authenticated download fetch, forged runtime
   identity headers, session expiry/revocation/security changes, blocked native data
   routes, and server validation of malformed/oversized CSV component payloads.
-- Current integration checkpoint: 969 Python tests, 14 subtests, and all 42
+- Current integration checkpoint: 1,005 Python tests, 14 subtests, and all 42
   JavaScript tests passed. The opt-in real Keycloak browser workflow passed against
   the rebuilt image without source mounts, including grants, scoped exports,
   revocation, and logout across tabs. Three consecutive browser runs passed after
   moving live audit inspection into the Linux container. Statement coverage is
-  97.75% (10,363 of 10,602 statements), below the repository's 99% target.
+  98.17% (10,382 of 10,575 statements), below the repository's 99% target.

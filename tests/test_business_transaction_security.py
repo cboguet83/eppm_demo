@@ -348,15 +348,20 @@ def test_planning_fragment_replaces_retained_capacity_from_a_more_privileged_sco
         _load_planning_pool_payload.clear()
 
 
-def project_permission_dialog(path, actor):
+def project_permission_dialog(path, actor, action="edit"):
     """Render the actual project popup with a current application identity."""
     from app.application.services.access import AuthorizationPolicy, SessionLimits
     from app.application.services.business_access import BusinessAccess
     from app.main import create_project_workspace
-    from app.presentation.components.project_dialogs import open_edit_project_dialog
+    from app.presentation.components.project_dialogs import open_create_project_dialog, open_edit_project_dialog
+    from app.presentation.i18n import set_current_locale
 
+    set_current_locale("en")
     workspace = create_project_workspace(path, access=BusinessAccess(actor, AuthorizationPolicy(lambda: 1000, SessionLimits())))
-    open_edit_project_dialog(1, workspace, read_only=True)
+    if action == "create":
+        open_create_project_dialog(workspace)
+    else:
+        open_edit_project_dialog(1, workspace, read_only=True)
 
 
 def test_project_viewer_cannot_enable_editing_through_popup_state(business):
@@ -411,6 +416,60 @@ def test_permission_projection_keeps_the_edit_scope_distinct_from_the_read_scope
     assert not permissions.allows(Permission.PROPERTIES, 1)
     assert not permissions.allows(Permission.CREATE)
     assert not permissions.allows(Permission.DELETE, 1)
+
+
+def test_direct_project_create_dialog_denies_an_ordinary_editor(business):
+    from streamlit.testing.v1 import AppTest
+
+    path, _, _, editor, _ = business
+    app = AppTest.from_function(project_permission_dialog, args=(path, editor.actor, "create")).run()
+    assert not app.exception and "permission to create" in app.error[0].value
+    assert not app.text_input and not app.button and not app.selectbox
+    assert "portfolio_create_draft_id" not in app.session_state
+    with closing(get_db(path)) as connection:
+        assert connection.execute("SELECT id,name FROM project ORDER BY id").fetchall() == [(1, "Visible"), (2, "Hidden")]
+
+
+@pytest.mark.parametrize("action", ["create", "edit"])
+def test_project_dialogs_reject_empty_names_without_mutating_projects_or_assignments(business, action):
+    from streamlit.testing.v1 import AppTest
+
+    path, _, _, editor, manager = business
+    actor = manager.actor if action == "create" else editor.actor
+    with closing(get_db(path)) as connection:
+        projects = connection.execute("SELECT * FROM project ORDER BY id").fetchall()
+        assignments = connection.execute("SELECT * FROM resource_pool_assignment ORDER BY id").fetchall()
+    app = AppTest.from_function(project_permission_dialog, args=(path, actor, action)).run()
+    if action == "edit":
+        app.button(key="enable_project_edit_1").click().run()
+    app.text_input[1].set_value(" ")
+    next(button for button in app.button if button.label == "Create project" or "Update" in button.label).click().run()
+    assert not app.exception and app.error and not app.toast
+    with closing(get_db(path)) as connection:
+        assert connection.execute("SELECT * FROM project ORDER BY id").fetchall() == projects
+        assert connection.execute("SELECT * FROM resource_pool_assignment ORDER BY id").fetchall() == assignments
+
+
+def test_business_administrator_project_deletion_clears_selected_project_and_retains_other_owners(business):
+    from streamlit.testing.v1 import AppTest
+
+    path, _, _, _, manager = business
+    app = AppTest.from_function(project_permission_dialog, args=(path, manager.actor))
+    app.session_state["selected_portfolio_project_id"] = 1
+    app.run()
+    app.button(key="enable_project_edit_1").click().run()
+    app.button(key="portfolio_delete_project_1").click().run()
+    assert not app.exception and not app.error
+    app.button(key="confirm_delete_project_1").click().run()
+    assert not app.exception
+    assert "selected_portfolio_project_id" not in app.session_state
+    assert "project_delete_confirmation" not in app.session_state
+    with closing(get_db(path)) as connection:
+        assert connection.execute("SELECT id FROM project").fetchall() == [(2,)]
+        assert connection.execute("SELECT id,project_id FROM project_task").fetchall() == [(20, 2)]
+        assert connection.execute("SELECT id,project_id FROM resource_pool_assignment").fetchall() == [(2, 2)]
+        assert connection.execute("SELECT * FROM task_dependencies").fetchall() == []
+        assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
 
 
 def permission_control_app(path, actor, surface):

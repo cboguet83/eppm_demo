@@ -3,7 +3,6 @@
 import hashlib
 import html
 import json
-from typing import Any
 
 import pandas as pd
 import streamlit as st
@@ -46,38 +45,6 @@ def _sync_portfolio_project_selection(
         project_id = getattr(component_state, "row_click", None)
     if type(project_id) is int and project_id > 0:
         st.session_state[selection_key] = project_id
-
-
-def _portfolio_table_value(value: Any) -> Any:
-    """Convert pandas and collection values to JSON-safe component values."""
-    if isinstance(value, (list, tuple, set)):
-        return [str(item) for item in value]
-    if isinstance(value, pd.Timestamp):
-        return value.isoformat()
-    try:
-        if pd.isna(value):
-            return None
-    except (TypeError, ValueError):
-        pass
-    if hasattr(value, "item"):
-        try:
-            return value.item()
-        except (TypeError, ValueError):
-            pass
-    return value
-
-
-def _build_portfolio_table_rows(
-    frame: pd.DataFrame,
-    display_columns: list[str],
-) -> list[dict[str, Any]]:
-    """Build the safe row payload while retaining a hidden project identifier."""
-    rows: list[dict[str, Any]] = []
-    for _, source in frame.iterrows():
-        row = {column: _portfolio_table_value(source.get(column)) for column in display_columns}
-        row["project_id"] = _portfolio_table_value(source.get("id"))
-        rows.append(row)
-    return rows
 
 
 @st.fragment

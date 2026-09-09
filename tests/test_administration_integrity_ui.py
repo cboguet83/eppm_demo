@@ -81,12 +81,13 @@ def directory_snapshot(path: str) -> dict[str, list[tuple[object, ...]]]:
 
 @pytest.mark.parametrize("entity,table", [("function", "function"), ("team", "team"), ("type", "function_type"), ("employee", "employee")])
 @pytest.mark.parametrize("action", ["add", "edit"])
-def test_shared_directory_storage_failure_leaves_no_partial_changes_or_private_error_details(directory, entity, table, action):
+@pytest.mark.parametrize("failure", ["SELECT RAISE(ABORT,'private storage diagnostics')", "SELECT * FROM private_unavailable_storage"])
+def test_shared_directory_storage_failure_leaves_no_partial_changes_or_private_error_details(directory, entity, table, action, failure):
     path, _ = directory
     before = directory_snapshot(path)
     sql_action = "INSERT" if action == "add" else "UPDATE"
     with closing(get_db(path)) as connection, connection:
-        connection.execute(f"CREATE TRIGGER storage_failure BEFORE {sql_action} ON {table} BEGIN SELECT RAISE(ABORT,'private storage diagnostics'); END")
+        connection.execute(f"CREATE TRIGGER storage_failure BEFORE {sql_action} ON {table} BEGIN {failure}; END")
     app = open_dialog(directory, entity, action)
     assert not app.exception and not app.error
     if entity == "employee":
@@ -99,6 +100,7 @@ def test_shared_directory_storage_failure_leaves_no_partial_changes_or_private_e
     save(app).click().run()
     assert not app.exception and app.error
     assert "private storage diagnostics" not in app.error[0].value
+    assert "private_unavailable_storage" not in app.error[0].value
     assert not app.toast
     assert directory_snapshot(path) == before
 
@@ -140,7 +142,8 @@ def test_missing_directory_or_pool_record_cannot_open_an_editable_form(directory
     assert not app.text_input and not app.button
 
 
-def test_employee_calendar_creation_rejects_invalid_periods_and_storage_failure_then_saves_atomically(directory):
+@pytest.mark.parametrize("failure", ["SELECT RAISE(ABORT,'private calendar diagnostics')", "SELECT * FROM private_calendar_storage"])
+def test_employee_calendar_creation_rejects_invalid_periods_and_storage_failure_then_saves_atomically(directory, failure):
     path, _ = directory
     before = directory_snapshot(path)
     app = open_dialog(directory, "employee", "edit")
@@ -153,9 +156,10 @@ def test_employee_calendar_creation_rejects_invalid_periods_and_storage_failure_
     app.number_input(key="employee_exception_percentage_10_add").set_value(50.0)
     app.text_input(key="employee_exception_reason_10_add").input("Reduced capacity")
     with closing(get_db(path)) as connection, connection:
-        connection.execute("CREATE TRIGGER reject_calendar BEFORE INSERT ON employee_calendar_exception BEGIN SELECT RAISE(ABORT,'private calendar diagnostics'); END")
+        connection.execute(f"CREATE TRIGGER reject_calendar BEFORE INSERT ON employee_calendar_exception BEGIN {failure}; END")
     app.button(key="save_employee_exception_10_add").click().run()
     assert not app.exception and app.error and "private calendar" not in app.error[0].value
+    assert "private_calendar_storage" not in app.error[0].value
     assert directory_snapshot(path) == before
     with closing(get_db(path)) as connection, connection:
         connection.execute("DROP TRIGGER reject_calendar")

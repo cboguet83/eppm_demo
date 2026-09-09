@@ -79,7 +79,7 @@ Release source: [V16 logging/errors](https://github.com/OWASP/ASVS/blob/v5.0.0/5
 
 ## Validation status and gaps
 
-On 2026-09-09, the complete Python suite passed **969 tests and 14 subtests**.
+On 2026-09-09, the complete Python suite passed **1,005 tests and 14 subtests**.
 Its single opt-in browser test was skipped in the regular run, then passed separately
 against real Keycloak and the rebuilt application image without source bind mounts.
 The browser workflow passed three consecutive runs after moving live audit
@@ -146,7 +146,23 @@ fragment. Task-tag callbacks allowlist query arguments and retain scoped totals.
 Gantt update tests verify scoped hydration, pool-demand refresh, project-filter reruns,
 and unchanged tasks/allocations after invalid or unauthorized updates.
 
-Measured `app` statement coverage is **97.75%** (10,363 of 10,602 statements), below the
+Template replacement tests reject malformed headers, row widths, quoting and
+out-of-range references/lags before deleting existing records. Legacy predecessor
+exports retain portable references and give explicit dependencies precedence.
+Operator allocation tests exercise the fingerprint check under the writer lock,
+unfulfillable generation, reuse of existing mappings, and capacity periods that
+retain absences. Schema administration tests distinguish business administration
+from editing/access administration and preserve fixed grants while translating aliases.
+Directory/calendar tests cover both SQLite constraint conflicts and operational
+failures without private error details or partial writes. Project dialog tests
+cover denied creation, blank names and deletion that retains unrelated owners.
+
+A caller audit of Python sources confirmed that the former portfolio row converter
+and manager-option helper had no application callers. They and the obsolete
+converter-only test were removed; current scoped service, UI and browser workflows
+remain tested.
+
+Measured `app` statement coverage is **98.17%** (10,382 of 10,575 statements), below the
 **99%** project target. Coverage remains unfinished work; the passing workflow tests
 do not establish that target. Missing statements include legacy planning and
 organization UI branches, schema upgrades, and additional access boundary cases.

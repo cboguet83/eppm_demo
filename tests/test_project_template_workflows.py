@@ -12,7 +12,7 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 from app.application.exceptions import PlanningConflictError
-from app.domain.planning.schedule_template import parse_template
+from app.domain.planning.schedule_template import export_template, parse_template
 from app.domain.resources.models import PoolAssignment, ResourcePool, ResourcePoolGroup
 from app.infrastructure.database.connection import get_db
 from app.infrastructure.database.schema_init import init_db
@@ -64,12 +64,40 @@ def snapshot(path: str) -> dict[str, list[tuple]]:
     (VALID.replace("1,FS,0", "1,FS,bad"), "lag"),
     (VALID.replace("1,FS,0", "bad,FS,0"), "positive integer"),
     (VALID.replace("1,FS,0", "1;1,FS;FS,0;0"), "Duplicate dependency"),
+    (VALID.replace("step_number,", "step_number,step_number,"), "Duplicate or unsupported columns"),
+    (VALID.replace("step_number,", "step_number,unexpected,"), "Duplicate or unsupported columns"),
+    (VALID.replace("1,New first,", "1,New,first,"), "Row 2: Column count"),
+    (VALID.replace("1,New first,", "1,"), "Row 2: Column count"),
+    (HEADER + '1,"Unclosed task,2026-01-01,2026-01-02,0,,,', "Invalid CSV quoting"),
+    (VALID.replace("1,New first,", "0,New first,"), "Row 2: Step number must be a positive 64-bit integer"),
+    (VALID.replace("1,New first,", "9223372036854775808,New first,"), "positive 64-bit integer"),
+    (VALID.replace("1,FS,0", "step:1:extra,FS,0"), "Preceding step must"),
+    (VALID.replace("1,FS,0", "sql:1,FS,0"), "Preceding step must"),
+    (VALID.replace("1,FS,0", "task:0,FS,0"), "Dependency reference must be a positive 64-bit integer"),
+    (VALID.replace("1,FS,0", "1,FS,9223372036854775808"), "lag is outside"),
+    (VALID.replace("1,FS,0", "1,FS,-9223372036854775809"), "lag is outside"),
 ])
 def test_invalid_replacement_preserves_tasks_links_and_allocations(database: str, content: str, problem: str) -> None:
     before = snapshot(database)
     with pytest.raises(ValueError, match=problem):
         create_planning_service(database).replace_project_template(1, content)
     assert snapshot(database) == before
+
+
+@pytest.mark.parametrize("predecessor,kind,identity", [(10, "step", 1), (99, "task", 99)])
+def test_legacy_predecessor_exports_preserve_local_and_external_dependency_references(predecessor, kind, identity):
+    tasks = [
+        {"id": 10, "task_name": "First", "start_date": "2026-01-01", "end_date": "2026-01-02"},
+        {"id": 20, "task_name": "Second", "start_date": "2026-01-03", "end_date": "2026-01-04", "predecessor_id": predecessor},
+    ]
+    content = export_template(tasks, [])
+    steps = parse_template(content)
+    assert len(steps[1].dependencies) == 1
+    dependency = steps[1].dependencies[0]
+    assert (dependency.kind, dependency.identity, dependency.link_type, dependency.lag_days) == (kind, identity, "FS", 0)
+    modern = export_template(tasks, [{"task_id": 20, "predecessor_project_id": 3, "link_type": "SS", "lag_days": -2}])
+    dependency, = parse_template(modern)[1].dependencies
+    assert (dependency.kind, dependency.identity, dependency.link_type, dependency.lag_days) == ("project", 3, "SS", -2)
 
 
 def test_replacement_clears_old_schedule_and_allocations_but_preserves_project_links(database: str) -> None:

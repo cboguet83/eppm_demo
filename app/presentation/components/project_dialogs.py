@@ -31,14 +31,6 @@ def _save_project(save: Callable[..., _Result], **kwargs: Any) -> _Result:
         st.stop()
 
 
-def _manager_options(
-    workspace: ProjectWorkspace,
-) -> tuple[list[int | None], dict[int | None, str]]:
-    """Use injected editor reference data with the existing vacant-position label."""
-    names = workspace.portfolio.get_catalog().managers
-    return [None, *names], {None: "— None —", **names}
-
-
 def _render_dynamic_fields(
     params: pd.DataFrame,
     groups: pd.DataFrame,
