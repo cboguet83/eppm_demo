@@ -41,6 +41,16 @@ def render_application(workspace: ApplicationWorkspace) -> None:
     st.markdown(
         """
         <style>
+        button[data-testid^="stBaseButton-primary"],
+        button[data-testid^="stBaseButton-secondary"],
+        [data-testid="stDownloadButton"] button,
+        [data-testid="stFormSubmitButton"] button,
+        [data-testid="stPopoverButton"] {
+            background-color: #C41039 !important;
+            border-color: #C41039 !important;
+            color: white !important;
+        }
+        button:disabled { opacity: .5; }
         .stDeployButton, [data-testid="stDeployButton"], .stAppDeployButton, [data-testid="stDecoration"] {
             display: none !important;
             visibility: hidden !important;

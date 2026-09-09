@@ -57,10 +57,10 @@ test('project filter submenu forwards every scope and group menus retain group i
   assert.deepEqual(events.slice(3).map(event=>[event.action,event.group_id]),
     [['filter_by_resource_pool',7],['show_pool_allocations',7]]);
   assert.equal((html.match(/oncontextmenu="handleGroupContextMenu\(event\)"/g)||[]).length, 2);
-  assert.match(html, /#project-context-menu\s*\{\s*overflow:visible/);
+  assert.match(html, /#project-context-menu[^{}]*\{\s*overflow:visible/);
 });
 
-test('opening the project menu keeps nested submenus outside its scroll box', () => {
+test('opening project and task menus keeps nested submenus outside their scroll boxes', () => {
   const menu = {style:{},offsetWidth:210,offsetHeight:220};
   const context = vm.createContext({
     document:{getElementById:id=>id === 'project-context-menu' ? menu : null},
@@ -73,6 +73,69 @@ test('opening the project menu keeps nested submenus outside its scroll box', ()
   assert.equal(menu.style.overflowY,undefined);
   assert.ok(parseFloat(menu.style.left) + menu.offsetWidth <= 990);
   assert.ok(parseFloat(menu.style.top) + menu.offsetHeight <= 690);
+  const taskMenu = {style:{},offsetWidth:230,offsetHeight:300};
+  context.document.getElementById = id => id === 'context-menu' ? taskMenu : {style:{}};
+  context.hideProjectContextMenu = () => {};
+  loadFunction(context,'showContextMenu');
+  context.showContextMenu({clientX:980,clientY:680,preventDefault(){},stopPropagation(){}}, {id:1});
+  assert.equal(taskMenu.style.overflow,'visible');
+  assert.equal(taskMenu.style.overflowY,undefined);
+  assert.ok(parseFloat(taskMenu.style.left) + taskMenu.offsetWidth <= 990);
+  assert.ok(parseFloat(taskMenu.style.top) + taskMenu.offsetHeight <= 690);
+});
+
+test('pool hover details show both assignment extremes while purple stays on a badge', () => {
+  const context = vm.createContext({getT:(_, fallback)=>fallback,
+    getAssignedCapacityForPeriod:()=>({min:1,max:4})});
+  loadFunction(context,'poolAssignmentDetails');
+  loadFunction(context,'poolAssignmentBadges');
+  const pool={name:'Full pool name',theoretical_capacity:2,has_assigned_resources:true};
+  const details=context.poolAssignmentDetails(pool,'2026-01-01','2026-01-31');
+  assert.match(details,/Full pool name/);
+  assert.equal(details,'Full pool name\nDefined capacity: 2.00 FTE\nMin assigned capacity: 1.00 FTE\nMax assigned capacity: 4.00 FTE');
+  context.getAssignedCapacityForPeriod = () => ({min:2,max:2});
+  assert.equal(context.poolAssignmentDetails(pool,'2026-01-01','2026-01-31'),'Full pool name');
+  context.getAssignedCapacityForPeriod = () => ({min:1,max:2});
+  assert.equal(context.poolAssignmentDetails(pool,'2026-01-01','2026-01-31'),
+    'Full pool name\nDefined capacity: 2.00 FTE\nMin assigned capacity: 1.00 FTE');
+  context.getAssignedCapacityForPeriod = () => ({min:2,max:4});
+  assert.equal(context.poolAssignmentDetails(pool,'2026-01-01','2026-01-31'),
+    'Full pool name\nDefined capacity: 2.00 FTE\nMax assigned capacity: 4.00 FTE');
+  const badges=context.poolAssignmentBadges(pool,{min:1,max:4},2);
+  assert.match(badges,/underassignment-badge/);
+  assert.match(badges,/overassignment-badge/);
+  assert.doesNotMatch(html,/\.assigned-capacity-cell\.capacity-over\s*\{/);
+  assert.doesNotMatch(html,/\.assigned-capacity-row\.capacity-over\s*\{/);
+  assert.match(html,/\.overassignment-badge\s*\{[^}]*#f3e8ff/);
+  assert.equal((html.match(/data-resource-filter=/g)||[]).length,3);
+  assert.equal((html.match(/data-filter-label=/g)||[]).length,3);
+});
+
+test('task Assign Resource action uses a person icon and retains the clicked task', () => {
+  assert.match(html, /onclick="triggerManageTaskPools\(\)">\s*<span>👤<\/span>\s*<span id="ctx-label-task-pools">Assign Resource<\/span>/);
+  assert.match(script, /elTaskPools\.innerText = getT\('context_menu.assign_resource', 'Assign Resource'\)/);
+  const events = [];
+  const context = vm.createContext({hideContextMenu(){},
+    selectedContextMenuTask:{id:'17',name:'Design',project_id:4},
+    Streamlit:{setComponentValue:value=>events.push(value)}});
+  loadFunction(context,'triggerManageTaskPools');
+  context.triggerManageTaskPools();
+  assert.equal(events[0].action,'manage_task_pools');
+  assert.equal(events[0].id,17);
+  assert.equal(events[0].project_id,4);
+});
+
+test('resource hover card contains only the escaped concise assignment summary', () => {
+  const tooltips = [];
+  const context = vm.createContext({showHoverOverlay:true,
+    escapeHtml:value=>value.replaceAll('<','&lt;').replaceAll('>','&gt;'),
+    showTooltip:(_,value)=>tooltips.push(value)});
+  loadFunction(context,'showResourceCellTooltip');
+  context.showResourceCellTooltip({},'Pool <A>');
+  assert.equal(tooltips[0],'<div style="font-size:12px;line-height:1.45;white-space:pre-wrap">Pool &lt;A&gt;</div>');
+  context.showHoverOverlay = false;
+  context.showResourceCellTooltip({},'Hidden');
+  assert.equal(tooltips.length,1);
 });
 
 test('CSV export starts one download per nonce without displaying a modal', () => {

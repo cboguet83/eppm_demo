@@ -9,6 +9,27 @@ const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 
 test('entire Gantt script parses', () => new vm.Script(script));
 
+test('scale buttons keep exactly one red selection and gray alternatives', () => {
+  const buttons = ['day','week','month','quarter','year'].map(id => {
+    const classes = new Set(id === 'quarter' ? ['active'] : []);
+    return {id, classes, classList:{add:value=>classes.add(value),remove:value=>classes.delete(value)}};
+  });
+  let renders = 0;
+  const context = vm.createContext({document:{querySelectorAll:()=>buttons,
+    getElementById:id=>buttons.find(button=>'btn-mode-'+button.id===id)},renderTimeline:()=>renders++});
+  vm.runInContext(script.slice(script.lastIndexOf('    function setViewMode('),
+    script.indexOf('    function toggleLinkVisibility(')),context);
+  for (const button of buttons) {
+    context.setViewMode(button.id,button);
+    assert.deepEqual(buttons.filter(b=>b.classes.has('active')).map(b=>b.id),[button.id]);
+  }
+  context.setViewMode('Quarter');
+  assert.deepEqual(buttons.filter(b=>b.classes.has('active')).map(b=>b.id),['quarter']);
+  assert.equal(renders,6);
+  assert.match(html,/\.view-modes \.btn-mode\s*\{[^}]*background-color: #e2e8f0 !important/);
+  assert.match(html,/\.view-modes \.btn-mode\.active\s*\{[^}]*background-color: #C41039 !important/);
+});
+
 test('hide-unused pools preserves ancestors, respects collapsed groups, and updates on project changes', () => {
   const pools = [{id: 1, used_by_selected_projects: true}, {id: 2, used_by_selected_projects: false}];
   const hierarchy = [{key: 'root', node_type: 'group', children: [

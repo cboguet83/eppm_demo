@@ -7,7 +7,8 @@ const source = fs.readFileSync(path.join(__dirname, '../app/presentation/compone
 const script = source.match(/_TABLE_JS = r"""([\s\S]*?)"""/)[1].replace('export default function', 'function mount');
 
 function harness() {
-  const requests = [], clicks = [], ganttClicks = [], timers = new Map();
+  const requests = [], clicks = [], ganttClicks = [], timers = new Map(), listeners = new Map();
+  let cleanup;
   let sequence = 0;
   function element(tag = 'div') {
     const el = {tag, children: [], style: {}, dataset: {}, attributes: {}, className: '',
@@ -35,7 +36,12 @@ function harness() {
   }
   const parent = element(), root = element(); root.id = 'portfolio-project-table'; parent.appendChild(root);
   const frames = new Map();
-  const context = vm.createContext({document: {createElement: element},
+  const context = vm.createContext({document: {createElement: element,
+    addEventListener(type, handler) {
+      if (!listeners.has(type)) listeners.set(type, new Set());
+      listeners.get(type).add(handler);
+    },
+    removeEventListener(type, handler) {listeners.get(type)?.delete(handler);}},
     window: {innerWidth: 1400, innerHeight: 900},
     setTimeout: f => {timers.set(++sequence, f); return sequence;}, clearTimeout: id => timers.delete(id),
     requestAnimationFrame: f => {frames.set(++sequence, f); return sequence;}, cancelAnimationFrame: id => frames.delete(id),
@@ -49,14 +55,45 @@ function harness() {
         is_overallocated: i === 0})),
       selected_id: null,
       page_info: {context: 'db-v1', total: 10000, offset, query: request?.query || {}, request_id: request?.nonce, ...extra}};
-    context.mount({data, parentElement: parent, setStateValue: (key, payload) => requests.push(payload),
+    cleanup?.();
+    cleanup = context.mount({data, parentElement: parent, setStateValue: (key, payload) => requests.push(payload),
       setTriggerValue: (key, payload) => (key === 'gantt_click' ? ganttClicks : clicks).push(payload)});
     flushFrames();
   }
   function scroll(index) {const scroller = root.querySelector('.table-scroll'); scroller.scrollTop = index * 40 + 44; scroller.onscroll(); flushFrames();}
   function button(text) {return root.querySelectorAll('button').find(b => b.textContent === text);}
-  return {root, requests, clicks, ganttClicks, timers, render, scroll, button, flushFrames};
+  const dispatch = (type, event) => [...(listeners.get(type) || [])].forEach(handler => handler(event));
+  return {root, requests, clicks, ganttClicks, timers, render, scroll, button, flushFrames,
+    dispatch, listeners, unmount: () => cleanup?.()};
 }
+
+test('header filters dismiss outside the shadow root without applying drafts or reopening on late responses', () => {
+  const app = harness(); app.render();
+  app.root.querySelector('.filter-button').onclick();
+  const menu = app.root.querySelector('.filter-menu');
+  const search = menu.querySelector('input');
+  // Document listeners see the shadow host as target, but the composed path includes the menu.
+  app.dispatch('pointerdown', {target: {}, composedPath: () => [search, menu, app.root]});
+  assert.equal(app.root.querySelector('.filter-menu'), menu);
+  search.value = 'pending search'; search.oninput();
+  assert.equal(app.timers.size, 1);
+  app.dispatch('pointerdown', {composedPath: () => [{}]});
+  assert.equal(app.root.querySelector('.filter-menu'), undefined);
+  assert.equal(app.root._portfolio.menu, null);
+  assert.equal(app.timers.size, 0);
+  assert.equal(app.requests.length, 1);
+  assert.equal(app.root._portfolio.query.filters, undefined);
+  app.render(0, {facet: {column:'name', search:'', stats:[], values:[]}});
+  assert.equal(app.root.querySelector('.filter-menu'), undefined);
+  assert.equal(app.listeners.get('pointerdown').size, 1);
+  app.root.querySelector('.filter-button').onclick();
+  app.render(0, {request_id:'stale'});
+  app.dispatch('keydown', {key:'Escape'});
+  assert.equal(app.root.querySelector('.filter-menu'), undefined);
+  app.unmount();
+  assert.equal(app.listeners.get('pointerdown').size, 0);
+  assert.equal(app.listeners.get('keydown').size, 0);
+});
 
 test('virtual scrolling renders a small window, prefetches, preserves position, and ignores stale responses', () => {
   const app = harness(); app.render();

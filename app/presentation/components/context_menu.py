@@ -1,6 +1,8 @@
 """Shared context-menu styling based on the planning Gantt menu."""
 
 CONTEXT_MENU_CSS = """
+button:not(.context-menu-item) {background-color:#C41039 !important;color:#fff !important;border-color:#C41039 !important;}
+button:not(.context-menu-item):disabled {opacity:.5;}
 .context-menu {
     position: fixed; background: var(--st-background-color, #fff);
     color: var(--st-text-color, #1e293b); border: 1px solid #cbd5e1;

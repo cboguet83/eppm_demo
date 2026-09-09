@@ -161,6 +161,8 @@
     "msg_opt_created": "Optioun '{value}' zum Parameter bäigesat."
   },
   "planning": {
+    "csv_date_format": "Datumsformat an der CSV",
+    "csv_date_help": "Exporter benotzen YYYY-MM-DD. Wann Är Tabelle d’Datumer ëmformatéiert huet, wielt dat passend Format. D’Virschau weist d’Datumer déi gespäichert ginn.",
     "title": "Interaktiv Planung & Meilesteng",
     "toggle_multi_project": "🌐 Multi-Projet Portefeuille Zäitplang Usiicht aktivéieren",
     "select_single_proj": "Projet fir d'Planung auswielen",
@@ -233,7 +235,8 @@
     "flex_filter_clear": "Filteren läschen",
     "flex_filter_project_tags": "Projet-Tags",
     "csv_replace_warning": "Den Import ersetzt de ganze Projetplang. Aufgaben, Ofhängegkeeten (och zu anere Projeten) a Ressourcenzouweisunge ginn geläscht. Projetsfelder a Weblinke bleiwen erhalen. Näischt gëtt geläscht ier d’Datei validéiert ass an Dir op Projetplang ersetzen klickt.",
-    "csv_replace_button": "Projetplang ersetzen"
+    "csv_replace_button": "Projetplang ersetzen",
+    "clear_all_filters": "All Filtere läschen"
   },
   "gantt": {
     "columns": {
@@ -304,7 +307,14 @@
       "clear_filter": "Ressourcen-Pool-Filter läschen",
       "active_filter": "Filter aktiv",
       "underassignment": "Ënnerbesetzung",
-      "show_allocations": "Aktiv Zouweisunge weisen"
+      "show_allocations": "Aktiv Zouweisunge weisen",
+      "overassignment": "Iwwerzouweisung",
+      "min_assigned_capacity": "Min. zougedeelt Kapazitéit",
+      "max_assigned_capacity": "Max. zougedeelt Kapazitéit",
+      "defined_capacity": "Definéiert Kapazitéit",
+      "consuming": "Verbrauchend Projeten",
+      "consuming_all": "Verbrauchend Projeten an all Ofhängegkeeten",
+      "consuming_predecessors": "Verbrauchend Projeten a Virgänger"
     },
     "modal": {
       "add_title": "➕ Neie Schrëtt bäisetzen ({project_id})",
@@ -550,6 +560,7 @@
     "delete_link": "Link läschen",
     "edit_event": "Entrée änneren",
     "enable_editing": "Beaarbechtung aktivéieren",
-    "custom_links": "Eege Linken"
+    "custom_links": "Eege Linken",
+    "edit_project": "Projet änneren"
   }
 }

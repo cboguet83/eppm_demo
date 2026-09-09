@@ -161,6 +161,8 @@
     "msg_opt_created": "Opção '{value}' adicionada ao parâmetro."
   },
   "planning": {
+    "csv_date_format": "Formato das datas no CSV",
+    "csv_date_help": "As exportações usam YYYY-MM-DD. Se a folha de cálculo alterou as datas, selecione o formato correspondente. A pré-visualização mostra as datas que serão guardadas.",
     "title": "Planejamento Interativo & Marcos",
     "toggle_multi_project": "🌐 Ativar Visão de Cronograma Multi-Projetos do Portfólio",
     "select_single_proj": "Selecionar Projeto para Planejar",
@@ -233,7 +235,8 @@
     "flex_filter_clear": "Limpar filtros",
     "flex_filter_project_tags": "Tags do projeto",
     "csv_replace_warning": "A importação substitui todo o cronograma. As tarefas, dependências (incluindo outros projetos) e alocações de recursos do projeto e das tarefas serão excluídas. Os campos do projeto e links web serão mantidos. Nada será excluído antes da validação e do clique em Substituir cronograma do projeto.",
-    "csv_replace_button": "Substituir cronograma do projeto"
+    "csv_replace_button": "Substituir cronograma do projeto",
+    "clear_all_filters": "Limpar todos os filtros"
   },
   "gantt": {
     "columns": {
@@ -304,7 +307,14 @@
       "clear_filter": "Limpar filtro do pool de recursos",
       "active_filter": "Filtro ativo",
       "underassignment": "Subalocação",
-      "show_allocations": "Mostrar alocações ativas"
+      "show_allocations": "Mostrar alocações ativas",
+      "overassignment": "Sobre-atribuição",
+      "min_assigned_capacity": "Capacidade atribuída mín.",
+      "max_assigned_capacity": "Capacidade atribuída máx.",
+      "defined_capacity": "Capacidade definida",
+      "consuming": "Projetos consumidores",
+      "consuming_all": "Projetos consumidores e todas as dependências",
+      "consuming_predecessors": "Projetos consumidores e predecessores"
     },
     "modal": {
       "add_title": "➕ Adicionar Nova Etapa ({project_id})",
@@ -573,6 +583,7 @@
     "delete_link": "Eliminar link",
     "edit_event": "Editar entrada",
     "enable_editing": "Ativar edição",
-    "custom_links": "Links personalizados"
+    "custom_links": "Links personalizados",
+    "edit_project": "Editar projeto"
   }
 }

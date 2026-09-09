@@ -4,8 +4,10 @@ Any marks existing custom-component JSON and DataFrame values at the display
 boundary. Authoritative validation and persistence live in application services.
 """
 
+import csv
 import datetime
 import html
+import io
 from collections.abc import Callable
 from functools import wraps
 from app.presentation.assets import component_path
@@ -249,6 +251,20 @@ def _clear_planning_flex_filter_state(*, clear_tracking: bool = False) -> None:
             del st.session_state[key]
     if clear_tracking:
         st.session_state.pop("planning_last_flex_signature", None)
+
+
+def _clear_all_planning_filters() -> None:
+    """Reset project, resource and flexible filters before widgets are rendered."""
+    _clear_planning_flex_filter_state(clear_tracking=True)
+    for key in ("active_resource_pool_filter", "pending_resource_pool_filter",
+                "pending_clear_resource_pool_filter", "pending_project_context_filter",
+                "target_planning_project_id", "target_planning_task_id"):
+        st.session_state.pop(key, None)
+    st.session_state["ms_multi_projects"] = []
+    st.session_state["ms_planning_tag_filter"] = []
+    st.session_state["last_planning_tag_filter"] = []
+    st.session_state["planning_filter_reset"] = st.session_state.get("planning_filter_reset", 0) + 1
+    st.session_state.pop("planning_chart_snapshot", None)
 
 
 def _focus_planning_on_project(gantt_event: dict[str, Any], workspace: PlanningWorkspace | None = None) -> bool:
@@ -997,6 +1013,9 @@ def _handle_filter_by_resource_pool(
     details = workspace.pool_details(pool_ids) if pool_ids else []
     matching_pids = sorted({pid for detail in details for pid in
         get_projects_consuming_pool_in_period(detail.assignments, start_date, end_date)})
+    scope = str(gantt_event.get("filter_scope", "this"))
+    if matching_pids and scope != "this":
+        matching_pids = workspace.planning.related_project_ids(matching_pids, scope)
     ref_proj_ids = master_proj_ids if clear_other and master_proj_ids else all_proj_ids
     if clear_other:
         target_pids = matching_pids
@@ -1327,6 +1346,7 @@ def _render_planning_chart(
     pool_details_cache = snapshot["details"]
     gantt_event = _interactive_gantt(
         **args,
+        filter_reset=st.session_state.get("planning_filter_reset", 0),
         key=widget_key,
         on_change=lambda: _handle_gantt_component_change(widget_key, workspace),
     )
@@ -1553,7 +1573,6 @@ def render_planning_milestones(workspace: PlanningWorkspace) -> None:
     master_proj_ids = [int(p) for p in df_projects["id"].tolist()]
     proj_map = dict(zip(df_projects["id"], df_projects["name"]))
     df_all_proj_tags = pd.DataFrame(project_tag_records)
-    available_tags_set: set[str] = set()
     project_tags_by_id: dict[int, list[str]] = {}
     if not df_all_proj_tags.empty:
         for r in project_tag_records:
@@ -1561,13 +1580,10 @@ def render_planning_milestones(workspace: PlanningWorkspace) -> None:
             f_name = r.get("free_tag")
             if pd.notna(t_name) and str(t_name).strip():
                 tag_name = str(t_name).strip()
-                available_tags_set.add(tag_name)
                 project_tags_by_id.setdefault(int(r["project_id"]), []).append(tag_name)
             if pd.notna(f_name) and str(f_name).strip():
                 free_tag = str(f_name).strip()
-                available_tags_set.add(free_tag)
                 project_tags_by_id.setdefault(int(r["project_id"]), []).append(free_tag)
-    available_tags_list = sorted(list(available_tags_set))
     target_pid = st.session_state.pop("target_planning_project_id", None)
     if target_pid is not None:
         try:
@@ -1632,14 +1648,11 @@ def render_planning_milestones(workspace: PlanningWorkspace) -> None:
                 if field_label in flex_filter_fields.values():
                     field_label = f"{param_name} ({param_id})"
                 flex_filter_fields[target_column] = field_label
-    top_filter_col, top_flex_col, top_sel_col = st.columns([2, 1.2, 3])
-    with top_filter_col:
-        selected_tag_filters = st.multiselect(
-            f"🏷️ {t('planning.filter_by_tags', default='Filter Projects by Tag')}",
-            options=available_tags_list,
-            help="Filter project list to projects assigned any of the chosen tags.",
-            key="ms_planning_tag_filter",
-        )
+    top_flex_col, top_sel_col, top_clear_col = st.columns([1.2, 3, 1.2], vertical_alignment="bottom")
+    with top_clear_col:
+        st.button(t("planning.clear_all_filters", default="Clear all filters"),
+                  on_click=_clear_all_planning_filters, key="clear_all_planning_filters",
+                  width="stretch", icon=":material/filter_alt_off:")
     active_flex_filters: dict[str, list[str]] = {}
     with top_flex_col:
         with st.popover(
@@ -1703,33 +1716,6 @@ def render_planning_milestones(workspace: PlanningWorkspace) -> None:
         st.caption(
             f"{len(active_flex_filters)} active flexible filter{('s' if len(active_flex_filters) != 1 else '')} · {len(df_projects)} matching projects"
         )
-    prev_tag_filters = st.session_state.get("last_planning_tag_filter", None)
-    tag_filters_cleared = bool(prev_tag_filters and (not selected_tag_filters))
-    tag_filters_changed = bool(
-        prev_tag_filters is not None and set(prev_tag_filters) != set(selected_tag_filters)
-    )
-    st.session_state["last_planning_tag_filter"] = list(selected_tag_filters)
-    if selected_tag_filters and (not df_all_proj_tags.empty):
-        matching_proj_ids = set()
-        for r in project_tag_records:
-            t_name = str(r.get("tag_name", "")).strip()
-            f_name = str(r.get("free_tag", "")).strip()
-            if (
-                t_name
-                and t_name in selected_tag_filters
-                or (f_name and f_name in selected_tag_filters)
-            ):
-                matching_proj_ids.add(int(r["project_id"]))
-        df_filtered_projects = df_projects[df_projects["id"].isin(matching_proj_ids)]
-        if df_filtered_projects.empty:
-            st.warning(
-                t(
-                    "planning.no_projects_matching_tags",
-                    default="No projects match the selected tag filter.",
-                )
-            )
-        else:
-            df_projects = df_filtered_projects
     if df_projects.empty:
         st.info(
             t(
@@ -1744,10 +1730,6 @@ def render_planning_milestones(workspace: PlanningWorkspace) -> None:
         rf_pids = [p for p in cur_active_rf["project_ids"] if p in all_proj_ids]
         st.session_state["ms_multi_projects"] = rf_pids
     elif flex_filters_changed:
-        st.session_state["ms_multi_projects"] = all_proj_ids
-    elif tag_filters_cleared:
-        st.session_state["ms_multi_projects"] = all_proj_ids
-    elif tag_filters_changed and selected_tag_filters:
         st.session_state["ms_multi_projects"] = all_proj_ids
     elif "ms_multi_projects" in st.session_state:
         st.session_state["ms_multi_projects"] = [
@@ -1819,7 +1801,7 @@ def render_planning_milestones(workspace: PlanningWorkspace) -> None:
         master_proj_ids,
         (
             flex_signature,
-            selected_tag_filters,
+            [],
             st.session_state.get("active_resource_pool_filter"),
         ),
     )
@@ -1853,26 +1835,42 @@ def _schedule_csv_dialog(workspace: PlanningWorkspace, project_id: int, action: 
         st.error("The selected project no longer exists.")
         return
     st.subheader(project.name)
-    st.warning(t("planning.csv_replace_warning", default=(
-        "Importing replaces this project's entire schedule. All existing tasks, dependency links "
-        "(including links to other projects), and project/task resource allocations will be deleted. "
-        "Project fields and useful web links are retained. Nothing is deleted until the template "
-        "passes validation and you click Replace project schedule."
-    )))
+    with st.container(key="schedule_import_warning"):
+        st.html('<style>.st-key-schedule_import_warning [data-testid="stAlert"], '
+                '.st-key-schedule_import_warning [data-testid="stAlertContainer"] '
+                '{background-color:#ffedd5;color:#9a3412;border:1px solid #fb923c;}</style>')
+        st.warning(t("planning.csv_replace_warning", default=(
+            "Importing replaces this project's entire schedule. All existing tasks, dependency links "
+            "(including links to other projects), and project/task resource allocations will be deleted. "
+            "Project fields and useful web links are retained. Nothing is deleted until the template "
+            "passes validation and you click Replace project schedule."
+        )), icon="⚠️")
     st.caption(t("planning.csv_dependency_help", default=(
-        "Dependencies: step:1:FS:0 refers to step 1; task:123:SS:2 refers to an external task; "
-        "project:4:FS:0 refers to a whole project. Separate multiple links with semicolons."
+        "Use preceding_step, dependency_type and dependency_lag. For multiple predecessors, "
+        "separate each column's values with semicolons in matching order (1;2 / FS;SS / 0;2). "
+        "External references use task:123 or project:4 in preceding_step."
     )))
     uploaded_file = st.file_uploader(
         t("planning.csv_upload_label"), type=["csv"], key=f"uploader_steps_{project_id}",
     )
     if uploaded_file is None:
         return
+    date_format = st.selectbox(
+        t("planning.csv_date_format", default="Date format in the CSV"),
+        ["YYYY-MM-DD", "DD/MM/YYYY", "MM/DD/YYYY"], index=1, key=f"template_date_format_{project_id}",
+        help=t("planning.csv_date_help", default=(
+            "Exports use YYYY-MM-DD. If your spreadsheet changed the dates, select its format. "
+            "The preview shows the dates that will be saved."
+        )),
+    )
     content = csv_text(uploaded_file)
-    steps = workspace.planning.validate_project_template(project_id, content)
-    steps_payload = [{"step_number": step.number, **step.values} for step in steps]
+    steps = workspace.planning.validate_project_template(project_id, content, date_format=date_format)
+    steps_payload = list(csv.DictReader(io.StringIO(content.lstrip("\ufeff"))))
+    for row, step in zip(steps_payload, steps, strict=True):
+        row["start_date"] = step.values["start_date"]
+        row["end_date"] = step.values["end_date"]
     st.dataframe(pd.DataFrame(steps_payload), width="stretch", hide_index=True)
     if st.button(t("planning.csv_replace_button", default="Replace project schedule"), type="primary"):
-        count = workspace.planning.replace_project_template(project_id, content)
+        count = workspace.planning.replace_project_template(project_id, content, date_format=date_format)
         st.toast(t("planning.csv_import_success", count=count, project_id=project_id))
         st.rerun()

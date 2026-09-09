@@ -1,9 +1,11 @@
 """Real transaction regressions for schedule replacement and project link drafts."""
 
 from contextlib import closing
+from datetime import date
 from pathlib import Path
 import sqlite3
 import io
+import csv
 from unittest.mock import patch
 
 import pytest
@@ -17,8 +19,8 @@ from app.infrastructure.database.schema_init import init_db
 from app.main import create_planning_service, create_project_service, create_resource_pool_service
 
 
-HEADER = "step_number,task_name,start_date,end_date,progress_pct,dependencies\n"
-VALID = HEADER + "1,New first,2026-01-01,2026-01-02,0,\n2,New second,2026-01-03,2026-01-04,50,step:1:FS:0\n"
+HEADER = "step_number,task_name,start_date,end_date,progress_pct,preceding_step,dependency_type,dependency_lag\n"
+VALID = HEADER + "1,New first,2026-01-01,2026-01-02,0,,,\n2,New second,2026-01-03,2026-01-04,50,1,FS,0\n"
 
 
 @pytest.fixture
@@ -52,16 +54,16 @@ def snapshot(path: str) -> dict[str, list[tuple]]:
     (VALID.replace("2026-01-03", "2026-02-03"), "Row 3"),
     (VALID.replace(",50,", ",150,"), "Progress"),
     (VALID.replace("2,New", "1,New"), "unique"),
-    (VALID.replace("step:1", "step:9"), "Unknown predecessor"),
-    (VALID.replace("step:1", "step:2"), "self-link"),
-    (VALID.replace("step:1:FS:0", "task:999:FS:0"), "External task"),
-    (VALID.replace("step:1:FS:0", "task:1:FS:0"), "use a step reference"),
-    (VALID.replace("step:1:FS:0", "project:1:FS:0"), "refers to this project"),
-    (VALID.replace("step:1:FS:0", "project:999:FS:0"), "missing"),
-    (VALID.replace("step:1:FS:0", "step:1:XX:0"), "Dependency type"),
-    (VALID.replace("step:1:FS:0", "step:1:FS:bad"), "lag"),
-    (VALID.replace("step:1:FS:0", "bad"), "Dependencies must use"),
-    (VALID.replace("step:1:FS:0", "step:1:FS:0;step:1:FS:0"), "Duplicate dependency"),
+    (VALID.replace("1,FS,0", "9,FS,0"), "Unknown predecessor"),
+    (VALID.replace("1,FS,0", "2,FS,0"), "self-link"),
+    (VALID.replace("1,FS,0", "task:999,FS,0"), "External task"),
+    (VALID.replace("1,FS,0", "task:1,FS,0"), "use a step reference"),
+    (VALID.replace("1,FS,0", "project:1,FS,0"), "refers to this project"),
+    (VALID.replace("1,FS,0", "project:999,FS,0"), "missing"),
+    (VALID.replace("1,FS,0", "1,XX,0"), "Dependency type"),
+    (VALID.replace("1,FS,0", "1,FS,bad"), "lag"),
+    (VALID.replace("1,FS,0", "bad,FS,0"), "positive integer"),
+    (VALID.replace("1,FS,0", "1;1,FS;FS,0;0"), "Duplicate dependency"),
 ])
 def test_invalid_replacement_preserves_tasks_links_and_allocations(database: str, content: str, problem: str) -> None:
     before = snapshot(database)
@@ -112,6 +114,61 @@ def test_export_round_trips_multiline_text_multiple_link_types_and_lags(database
     assert service.get_milestone_by_id(task) is None
 
 
+@pytest.mark.parametrize("date_format,pattern", [("DD/MM/YYYY", "%d/%m/%Y"), ("MM/DD/YYYY", "%m/%d/%Y")])
+def test_spreadsheet_reformatted_export_preserves_dates_on_reimport(database: str, date_format: str, pattern: str) -> None:
+    service = create_planning_service(database)
+    exported = service.export_project_template(1)
+    rows = list(csv.DictReader(io.StringIO(exported)))
+    # Simulate a spreadsheet changing the start-date cell while retaining ISO end dates.
+    rows[0]["start_date"] = date.fromisoformat(rows[0]["start_date"]).strftime(pattern)
+    rows[0]["task_name"] = "Edited in spreadsheet"
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=list(rows[0]))
+    writer.writeheader()
+    writer.writerows(rows)
+    edited = output.getvalue()
+    before = snapshot(database)
+    with pytest.raises(ValueError, match="Row 2: Invalid start_date"):
+        service.replace_project_template(1, edited)
+    assert snapshot(database) == before
+    preview = service.validate_project_template(1, edited, date_format=date_format)
+    assert preview[0].values["start_date"] == "2026-01-01"
+    service.replace_project_template(1, edited, date_format=date_format)
+    assert service.export_project_template(1) == exported.replace("Task 1", "Edited in spreadsheet")
+
+
+def test_ambiguous_dates_follow_selected_format_and_invalid_dates_preserve_schedule(database: str) -> None:
+    content = VALID.replace("2026-01-01", "02/01/2026").replace("2026-01-02", "03/02/2026")
+    # Use one task so later task chronology does not obscure the date-order check.
+    content = "\n".join(content.splitlines()[:2]) + "\n"
+    assert parse_template(content, date_format="DD/MM/YYYY")[0].values["start_date"] == "2026-01-02"
+    assert parse_template(content, date_format="MM/DD/YYYY")[0].values["start_date"] == "2026-02-01"
+    service = create_planning_service(database)
+    before = snapshot(database)
+    for bad in ("31/02/2026", "", "01/02/26"):
+        with pytest.raises(ValueError, match="Row 2: Invalid start_date"):
+            service.replace_project_template(1, content.replace("02/01/2026", bad), date_format="DD/MM/YYYY")
+        assert snapshot(database) == before
+    with pytest.raises(ValueError, match="Unsupported CSV date format"):
+        parse_template(content, date_format="guess")
+
+
+def test_import_defaults_to_day_first_and_previews_normalized_dates(database: str) -> None:
+    content = VALID.replace("2026-01-01", "01/01/2026").encode()
+    with patch("streamlit.file_uploader", side_effect=lambda *args, **kwargs: io.BytesIO(content)):
+        app = AppTest.from_string(f'''
+from app.main import create_planning_workspace
+from app.presentation.pages.planning import _schedule_csv_dialog
+_schedule_csv_dialog(create_planning_workspace({database!r}), 1, "import_csv_template")
+''').run()
+        assert app.selectbox(key="template_date_format_1").value == "DD/MM/YYYY"
+        assert not app.exception
+        assert not app.error
+        assert app.dataframe[0].value.iloc[0]["start_date"] == "2026-01-01"
+        app.selectbox(key="template_date_format_1").select("YYYY-MM-DD").run()
+        assert "Invalid start_date" in app.error[0].value
+
+
 def test_project_filter_uses_transitive_dependencies_and_terminates_on_cycles(database: str) -> None:
     service = create_planning_service(database)
     assert service.related_project_ids(1, "this") == [1]
@@ -147,7 +204,7 @@ open_edit_project_dialog(1, create_project_workspace({database!r}), read_only=Tr
     assert not app.exception
     assert all(widget.disabled for widget in app.text_input)
     assert all(widget.disabled for widget in app.number_input)
-    next(button for button in app.button if button.label == "Enable editing").click().run()
+    next(button for button in app.button if button.label == "Edit project").click().run()
     assert not app.exception
     assert any(not widget.disabled for widget in app.text_input)
     assert any(not widget.disabled for widget in app.number_input)
@@ -170,7 +227,7 @@ _pool_allocations_dialog(0, create_planning_workspace({database!r}), group_id={g
 
 def test_import_dialog_explains_invalid_upload_without_changing_data(database: str) -> None:
     before = snapshot(database)
-    invalid = VALID.replace("step:1", "step:999").encode()
+    invalid = VALID.replace("1,FS,0", "999,FS,0").encode()
     with patch("streamlit.file_uploader", side_effect=lambda *args, **kwargs: io.BytesIO(invalid)):
         app = AppTest.from_string(f'''
 from app.main import create_planning_workspace
@@ -185,7 +242,46 @@ _schedule_csv_dialog(create_planning_workspace({database!r}), 1, "import_csv_tem
 
 
 def test_template_preserves_existing_multi_task_cycle_warning_behavior(database: str) -> None:
-    content = VALID.replace("2026-01-02,0,", "2026-01-02,0,step:2:FS:0")
+    content = VALID.replace("2026-01-02,0,,,", "2026-01-02,0,2,FS,0")
     service = create_planning_service(database)
     assert service.replace_project_template(1, content) == 2
     assert len(service.get_dependencies_for_project(1)) == 2
+
+
+def test_split_dependency_columns_round_trip_and_reject_mismatched_lists(database: str) -> None:
+    service = create_planning_service(database)
+    content = VALID.replace("1,FS,0", "1;task:2,FS;SS,0;-2")
+    service.replace_project_template(1, content)
+    exported = service.export_project_template(1)
+    rows = list(csv.DictReader(io.StringIO(exported)))
+    assert rows[1]["preceding_step"] == "1;task:2"
+    assert rows[1]["dependency_type"] == "FS;SS"
+    assert rows[1]["dependency_lag"] == "0;-2"
+    assert "dependencies" not in rows[1]
+    before = snapshot(database)
+    for invalid in (content.replace("FS;SS", "FS"), content.replace("0;-2", "0;")):
+        with pytest.raises(ValueError, match="same number"):
+            service.replace_project_template(1, invalid)
+        assert snapshot(database) == before
+
+
+def test_clear_all_filters_resets_selection_and_resource_filter_state(database: str) -> None:
+    with patch("app.presentation.pages.planning._interactive_gantt", return_value=None) as chart:
+        app = AppTest.from_string(f'''
+import streamlit as st
+from app.main import create_planning_workspace
+from app.presentation.pages.planning import render_planning_milestones
+if "initialized" not in st.session_state:
+    st.session_state.initialized = True
+    st.session_state.ms_multi_projects = [1]
+    st.session_state.ms_planning_tag_filter = ["Stale tag"]
+render_planning_milestones(create_planning_workspace({database!r}))
+''', default_timeout=15).run()
+        assert not app.exception
+        assert not any(widget.key == "ms_planning_tag_filter" for widget in app.multiselect)
+        next(button for button in app.button if button.label == "Clear all filters").click().run()
+        assert not app.exception
+        assert app.session_state["ms_multi_projects"] == []
+        assert app.session_state["ms_planning_tag_filter"] == []
+        assert chart.call_args.kwargs["filter_reset"] == 1
+    assert create_planning_service(database).related_project_ids([1, 4], "all") == [1, 2, 3, 4]

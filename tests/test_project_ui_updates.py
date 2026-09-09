@@ -85,18 +85,18 @@ def test_link_migration_failure_rolls_back_table_and_version(database: str) -> N
         assert not connection.execute("SELECT 1 FROM schema_migration WHERE version='project-links-v1'").fetchone()
 
 
-def test_link_form_creates_a_named_link_and_can_add_another(database: str) -> None:
+def test_links_inspection_has_no_management_widgets(database: str) -> None:
+    service = create_collaboration_service(database)
+    service.save_link(1, "https://example.test", "Custom reference")
     app = AppTest.from_string(f'''
 from app.main import create_collaboration_service
 from app.presentation.pages.collaboration import render_project_links
 render_project_links(1, create_collaboration_service({database!r}))
 ''').run()
-    for alias in ("First link", "Second link"):
-        app.text_input[0].set_value("https://example.test/" + alias.split()[0])
-        app.text_input[1].set_value(alias)
-        next(button for button in app.button if button.label == "Save link").click().run()
-        assert not app.exception and not app.error
-    assert [row["alias"] for row in create_collaboration_service(database).list_links(1)] == ["First link", "Second link"]
+    assert not app.exception
+    assert not app.text_input and not app.selectbox and not app.button
+    assert "Custom reference" in app.get("html")[0].proto.body
+    assert len(app.get("divider")) == 1
 
 
 def test_pool_popup_reuses_settings_fields_and_go_to_action(database: str) -> None:

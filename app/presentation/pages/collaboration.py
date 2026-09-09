@@ -343,26 +343,8 @@ def render_project_log(project_id: int, service: CollaborationService) -> None:
 @st.fragment
 @collaboration_errors
 def render_project_links(project_id: int, service: CollaborationService) -> None:
-    """Display named links and a reusable add/edit form with no collection limit."""
+    """Inspect custom links; editing is available in the project dialog."""
     from app.presentation.components.project_links import render_link_rows
     links = service.list_links(project_id)
+    st.divider()
     render_link_rows(links)
-    prefix = f"project_links_{project_id}"
-    choices = {link["id"]: link for link in links}
-    selected = st.selectbox(
-        _label("link", "Link"), [None, *choices],
-        format_func=lambda value: choices[value]["alias"] if value is not None else _label("add_link", "Add link"),
-        key=prefix + "_selection",
-    )
-    current = choices.get(selected, {})
-    with st.form(f"{prefix}_{selected}", clear_on_submit=selected is None):
-        url = st.text_input("URL", value=current.get("url", ""))
-        alias = st.text_input(_label("link_alias", "Display alias"), value=current.get("alias", ""))
-        if st.form_submit_button(_label("save_link", "Save link"), type="primary"):
-            service.save_link(project_id, url, alias, selected)
-            st.rerun()
-    if selected is not None:
-        if st.button(_label("delete_link", "Delete link"), key=prefix + "_delete"):
-            service.delete_link(project_id, selected)
-            st.session_state.pop(prefix + "_selection", None)
-            st.rerun()

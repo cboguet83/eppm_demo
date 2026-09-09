@@ -108,16 +108,16 @@ class PlanningService:
                 if dep.kind == "project" and dep.identity not in valid_projects:
                     raise ValueError(f"Step {step.number}: Predecessor project {dep.identity} is missing or refers to this project.")
 
-    def validate_project_template(self, project_id: int, content: str) -> list[TemplateStep]:
+    def validate_project_template(self, project_id: int, content: str, *, date_format: str = "YYYY-MM-DD") -> list[TemplateStep]:
         """Preview a fully validated replacement without changing stored data."""
-        steps = parse_template(content)
+        steps = parse_template(content, date_format=date_format)
         with self._gateway.transaction() as store:
             self._validate_template_references(store, project_id, steps)
         return steps
 
-    def replace_project_template(self, project_id: int, content: str) -> int:
+    def replace_project_template(self, project_id: int, content: str, *, date_format: str = "YYYY-MM-DD") -> int:
         """Validate first, then replace tasks, links and allocations atomically."""
-        steps = parse_template(content)
+        steps = parse_template(content, date_format=date_format)
         with self._gateway.transaction(write=True) as store:
             self._validate_template_references(store, project_id, steps)
             store.clear_project_schedule(project_id)
@@ -132,7 +132,7 @@ class PlanningService:
                     store.insert_dependency(identities[step.number], values)
         return len(steps)
 
-    def related_project_ids(self, project_id: int, scope: str = "this") -> list[int]:
+    def related_project_ids(self, project_id: int | list[int], scope: str = "this") -> list[int]:
         """Return this project, its predecessor closure, or its full dependency closure."""
         if scope not in {"this", "predecessors", "all"}:
             raise ValueError("Unknown project filter scope.")

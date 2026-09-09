@@ -319,6 +319,8 @@
 
     /* Shared EPPM context-menu standard (context_menu.py). */
 
+button:not(.context-menu-item) {background-color:#C41039 !important;color:#fff !important;border-color:#C41039 !important;}
+button:not(.context-menu-item):disabled {opacity:.5;}
 .context-menu {
     position: fixed; background: var(--st-background-color, #fff);
     color: var(--st-text-color, #1e293b); border: 1px solid #cbd5e1;
@@ -342,7 +344,7 @@
 .context-menu-divider {height: 1px; background: #e2e8f0; margin: 4px 0;}
 .context-menu-header {padding: 8px 16px; font-size: 12px; font-weight: 600;}
 
-</style>
+  </style>
 </head>
 <body>
   <div class="table-container" id="main-container">

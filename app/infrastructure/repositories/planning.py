@@ -308,10 +308,11 @@ class SqlitePlanningStore:
         )
         self.connection.execute("DELETE FROM project_task WHERE project_id=?", (project_id,))
 
-    def related_project_ids(self, project_id: int, scope: str) -> list[int]:
+    def related_project_ids(self, project_id: int | list[int], scope: str) -> list[int]:
         """Traverse stored project dependencies transitively with UNION cycle termination."""
+        seeds = project_id if isinstance(project_id, list) else [project_id]
         if scope == "this":
-            return [project_id]
+            return sorted(set(seeds))
         direction = "edges.successor=selected.id"
         next_id = "edges.predecessor"
         if scope == "all":
@@ -326,10 +327,10 @@ class SqlitePlanningStore:
                 SELECT task.project_id,pred.project_id FROM project_task task
                 JOIN project_task pred ON pred.id=task.predecessor_id
             ), selected(id) AS (
-                SELECT ? UNION SELECT {next_id} FROM edges JOIN selected ON {direction}
+                SELECT value FROM json_each(?) UNION SELECT {next_id} FROM edges JOIN selected ON {direction}
                 WHERE edges.predecessor IS NOT NULL
             ) SELECT id FROM selected ORDER BY id
-        """, (project_id,))
+        """, (json.dumps(seeds),))
         return [int(row[0]) for row in rows]
 
     def ensure_indexes(self) -> None:
