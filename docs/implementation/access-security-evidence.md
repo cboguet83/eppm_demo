@@ -79,7 +79,7 @@ Release source: [V16 logging/errors](https://github.com/OWASP/ASVS/blob/v5.0.0/5
 
 ## Validation status and gaps
 
-On 2026-09-09, the complete Python suite passed **916 tests and 14 subtests**.
+On 2026-09-09, the complete Python suite passed **969 tests and 14 subtests**.
 Its single opt-in browser test was skipped in the regular run, then passed separately
 against real Keycloak and the rebuilt application image without source bind mounts.
 The browser workflow passed three consecutive runs after moving live audit
@@ -136,7 +136,17 @@ tests supply the selected tab explicitly while keeping widgets and services real
 Flexible-filter and dependency-selector tests preserve current read scopes. An empty
 resource-consumption filter now renders no projects until it is cleared.
 
-Measured `app` statement coverage is **97.32%** (10,318 of 10,602 statements), below the
+Portfolio and collaboration regressions exercise scoped numeric facets, malformed
+component identifiers, authorized navigation, read-only detail dialogs, disabled-user
+cache rejection, contact row actions, stale contact ownership and multiline log creation.
+They reproduced two portfolio failures: malformed IDs could raise during conversion,
+and an error handler outside the Streamlit fragment did not handle fragment failures.
+Portfolio IDs now require positive integers, and safe error handling runs inside the
+fragment. Task-tag callbacks allowlist query arguments and retain scoped totals.
+Gantt update tests verify scoped hydration, pool-demand refresh, project-filter reruns,
+and unchanged tasks/allocations after invalid or unauthorized updates.
+
+Measured `app` statement coverage is **97.75%** (10,363 of 10,602 statements), below the
 **99%** project target. Coverage remains unfinished work; the passing workflow tests
 do not establish that target. Missing statements include legacy planning and
 organization UI branches, schema upgrades, and additional access boundary cases.

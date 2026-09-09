@@ -44,7 +44,7 @@ def _sync_portfolio_project_selection(
         project_id = component_state.get("row_click")
     else:
         project_id = getattr(component_state, "row_click", None)
-    if project_id is not None:
+    if type(project_id) is int and project_id > 0:
         st.session_state[selection_key] = project_id
 
 
@@ -242,7 +242,6 @@ def _portfolio_columns(params: pd.DataFrame) -> list[dict]:
     return columns
 
 
-@st.fragment
 def _render_portfolio_browser(workspace: ProjectWorkspace) -> None:
     """Scroll requests rerun only this fragment, not navigation or global KPIs."""
     params = pd.DataFrame(workspace.portfolio.get_catalog(include_managers=False).parameters)
@@ -279,7 +278,8 @@ def _render_portfolio_browser(workspace: ProjectWorkspace) -> None:
     _sync_portfolio_project_selection()
     gantt_project = (component_state.get("gantt_click") if isinstance(component_state, dict)
                      else getattr(component_state, "gantt_click", None))
-    if gantt_project is not None and workspace.projects.get_project_by_id(gantt_project) is not None:
+    if (type(gantt_project) is int and gantt_project > 0
+            and workspace.projects.get_project_by_id(gantt_project) is not None):
         st.session_state["target_planning_project_id"] = int(gantt_project)
         st.session_state.pop("active_resource_pool_filter", None)
         st.session_state.pop("pending_resource_pool_filter", None)
@@ -304,8 +304,9 @@ def _render_portfolio_browser(workspace: ProjectWorkspace) -> None:
             _render_project_details_panel(selected, params, workspace)
 
 
+@st.fragment
 def render_portfolio_overview(workspace: ProjectWorkspace) -> None:
-    """Render the compact project list; shared totals remain in navigation."""
+    """Handle safe failures inside each fragment run of the compact project list."""
     try:
         _render_portfolio_browser(workspace)
     except (ValueError, ProjectStorageError, ProjectTypeStorageError, SchemaStorageError) as exc:

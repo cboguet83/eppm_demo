@@ -2,8 +2,9 @@
 
 Source inventory: application service public methods on `feature/oidc-access-management`.
 This matrix records the service and transport contract implemented on the feature
-branch. Project, Gantt, and collaboration controls reflect current permission scopes;
-end-to-end provider verification remains in progress.
+branch. Project, Gantt, and collaboration controls reflect current permission scopes.
+The real Keycloak browser workflow passed on the rebuilt application image; current
+results and remaining coverage work are recorded in [verification evidence](access-security-evidence.md).
 
 An application caller supplies a server-resolved actor. A deployment operator uses
 an explicit, separate operator context. There is no anonymous/superuser default.
