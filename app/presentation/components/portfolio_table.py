@@ -204,8 +204,25 @@ export default function(component) {
         model = root._portfolio = {context: info.context, pages: new Map(), pending: null,
             query: info.query || {}, total: info.total, top: 0, left: 0, menu: null, sequence: 0};
     }
+    const dismissFilterMenu = () => {
+        model.menu = null;
+        clearTimeout(model.searchTimer);
+        root.querySelector('.filter-menu')?.remove();
+    };
+    const outsideFilterMenu = event => {
+        const menu = root.querySelector('.filter-menu');
+        if (menu && !event.composedPath().includes(menu)) dismissFilterMenu();
+    };
+    const filterKeydown = event => {if (event.key === 'Escape') dismissFilterMenu();};
+    // Composed paths retain the menu identity across Streamlit's shadow root.
+    document.addEventListener('pointerdown', outsideFilterMenu, true);
+    document.addEventListener('keydown', filterKeydown);
+    const removeFilterListeners = () => {
+        document.removeEventListener('pointerdown', outsideFilterMenu, true);
+        document.removeEventListener('keydown', filterKeydown);
+    };
     // A late page/filter response must never replace a newer request's rows.
-    if (model.pending && info.request_id !== model.pending.nonce) return;
+    if (model.pending && info.request_id !== model.pending.nonce) return removeFilterListeners;
     const pending = model.pending;
     model.pending = null;
     model.query = info.query || {};
@@ -238,15 +255,14 @@ export default function(component) {
         model.pages.clear();
         model.top = 0;
         scroll.scrollTop = 0;
-        model.menu = null;
-        closeMenu();
+        dismissFilterMenu();
         request('page', {offset: 0});
         drawRows();
     };
     const closeMenu = () => root.querySelector('.filter-menu')?.remove();
     const closeProjectMenu = () => root.querySelector('.project-context-menu')?.remove();
     const showProjectMenu = (event, row) => {
-        event.preventDefault(); event.stopPropagation(); closeMenu(); closeProjectMenu();
+        event.preventDefault(); event.stopPropagation(); dismissFilterMenu(); closeProjectMenu();
         const menu = document.createElement('div');
         menu.className = 'context-menu project-context-menu'; menu.setAttribute('role', 'menu');
         menu.setAttribute('aria-label', 'Project actions: ' + row.name);
@@ -463,7 +479,7 @@ export default function(component) {
         }
         const actions = document.createElement('div'); actions.className = 'filter-actions';
         const cancel = document.createElement('button'); cancel.type = 'button'; cancel.textContent = 'Cancel';
-        cancel.onclick = () => {model.menu = null; clearTimeout(model.searchTimer); closeMenu();};
+        cancel.onclick = dismissFilterMenu;
         const apply = document.createElement('button'); apply.type = 'button'; apply.className = 'primary'; apply.textContent = 'Apply';
         apply.onclick = () => {
             clearTimeout(model.searchTimer);
@@ -493,7 +509,10 @@ export default function(component) {
         Math.max(0, (scroll.offsetHeight || 0) - (scroll.clientHeight || 0))) + 'px';
     scroll.scrollTop = model.top; scroll.scrollLeft = model.left;
     showMenu();
-    return () => {if (frame) cancelAnimationFrame(frame);};
+    return () => {
+        removeFilterListeners();
+        if (frame) cancelAnimationFrame(frame);
+    };
 }
 """
 

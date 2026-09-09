@@ -177,8 +177,10 @@ def open_edit_project_dialog(
         return
 
     if read_only and st.session_state.get("project_fields_editing") != project_id:
-        if st.button(t("project_collaboration.enable_editing", default="Enable editing"), key=f"enable_project_edit_{project_id}"):
-            st.session_state["project_fields_editing"] = project_id
+        with st.container(horizontal=True, horizontal_alignment="right"):
+            if st.button(t("project_collaboration.edit_project", default="Edit project"),
+                         key=f"enable_project_edit_{project_id}", type="primary"):
+                st.session_state["project_fields_editing"] = project_id
     disabled = read_only and st.session_state.get("project_fields_editing") != project_id
 
     confirmation_key = "project_delete_confirmation"

@@ -161,6 +161,8 @@
     "msg_opt_created": "Option '{value}' zum Parameter hinzugefügt."
   },
   "planning": {
+    "csv_date_format": "Datumsformat in der CSV",
+    "csv_date_help": "Exporte verwenden YYYY-MM-DD. Wenn Ihre Tabellenkalkulation die Daten umformatiert hat, wählen Sie das passende Format. Die Vorschau zeigt die zu speichernden Daten.",
     "title": "Interaktive Planung & Meilensteine",
     "toggle_multi_project": "🌐 Multi-Projekt-Portfolio-Terminplanansicht aktivieren",
     "select_single_proj": "Zu planendes Projekt auswählen",
@@ -233,7 +235,8 @@
     "flex_filter_clear": "Filter löschen",
     "flex_filter_project_tags": "Projekt-Tags",
     "csv_replace_warning": "Der Import ersetzt den gesamten Projektplan. Bestehende Aufgaben, Abhängigkeiten (auch zu anderen Projekten) und Ressourcenzuweisungen an Projekt und Aufgaben werden gelöscht. Projektfelder und Weblinks bleiben erhalten. Erst nach erfolgreicher Prüfung und Klick auf Projektplan ersetzen werden Daten geändert.",
-    "csv_replace_button": "Projektplan ersetzen"
+    "csv_replace_button": "Projektplan ersetzen",
+    "clear_all_filters": "Alle Filter löschen"
   },
   "gantt": {
     "columns": {
@@ -304,7 +307,14 @@
       "clear_filter": "Ressourcen-Pool-Filter löschen",
       "active_filter": "Filter aktiv",
       "underassignment": "Unterbesetzung",
-      "show_allocations": "Aktive Zuweisungen anzeigen"
+      "show_allocations": "Aktive Zuweisungen anzeigen",
+      "overassignment": "Überzuweisung",
+      "min_assigned_capacity": "Min. zugewiesene Kapazität",
+      "max_assigned_capacity": "Max. zugewiesene Kapazität",
+      "defined_capacity": "Definierte Kapazität",
+      "consuming": "Verbrauchende Projekte",
+      "consuming_all": "Verbrauchende Projekte und alle Abhängigkeiten",
+      "consuming_predecessors": "Verbrauchende Projekte und Vorgänger"
     },
     "modal": {
       "add_title": "➕ Neuen Schritt hinzufügen ({project_id})",
@@ -550,6 +560,7 @@
     "delete_link": "Link löschen",
     "edit_event": "Eintrag bearbeiten",
     "enable_editing": "Bearbeitung aktivieren",
-    "custom_links": "Eigene Links"
+    "custom_links": "Eigene Links",
+    "edit_project": "Projekt bearbeiten"
   }
 }

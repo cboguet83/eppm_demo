@@ -161,6 +161,8 @@
     "msg_opt_created": "Option '{value}' ajoutée au paramètre."
   },
   "planning": {
+    "csv_date_format": "Format des dates dans le CSV",
+    "csv_date_help": "Les exports utilisent YYYY-MM-DD. Si votre tableur a modifié les dates, sélectionnez son format. L’aperçu affiche les dates qui seront enregistrées.",
     "title": "Planning Interactif & Jalons",
     "toggle_multi_project": "🌐 Activer la Vue Multi-Projets du Portefeuille",
     "select_single_proj": "Sélectionner le Projet à Planifier",
@@ -233,7 +235,8 @@
     "flex_filter_clear": "Effacer les filtres",
     "flex_filter_project_tags": "Tags du projet",
     "csv_replace_warning": "L’import remplace tout le planning du projet. Les tâches, liens de dépendance (y compris avec les autres projets) et affectations de ressources au projet et aux tâches seront supprimés. Les champs du projet et les liens web utiles sont conservés. Aucune suppression avant validation du fichier et clic sur Remplacer le planning du projet.",
-    "csv_replace_button": "Remplacer le planning du projet"
+    "csv_replace_button": "Remplacer le planning du projet",
+    "clear_all_filters": "Effacer tous les filtres"
   },
   "gantt": {
     "columns": {
@@ -304,7 +307,14 @@
       "clear_filter": "Effacer le filtre du pool de ressources",
       "active_filter": "Filtre actif",
       "underassignment": "Sous-affectation",
-      "show_allocations": "Afficher les allocations actives"
+      "show_allocations": "Afficher les allocations actives",
+      "overassignment": "Suraffectation",
+      "min_assigned_capacity": "Capacité affectée min.",
+      "max_assigned_capacity": "Capacité affectée max.",
+      "defined_capacity": "Capacité définie",
+      "consuming": "Projets consommateurs",
+      "consuming_all": "Projets consommateurs et toutes leurs dépendances",
+      "consuming_predecessors": "Projets consommateurs et leurs prédécesseurs"
     },
     "modal": {
       "add_title": "➕ Ajouter une Nouvelle Étape ({project_id})",
@@ -573,6 +583,7 @@
     "delete_link": "Supprimer le lien",
     "edit_event": "Modifier l’entrée",
     "enable_editing": "Activer la modification",
-    "custom_links": "Liens personnalisés"
+    "custom_links": "Liens personnalisés",
+    "edit_project": "Modifier le projet"
   }
 }

@@ -97,10 +97,10 @@ _TABLE_CSS = """
     th, td {padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--st-border-color);}
     th {position: sticky; top: 0; background: var(--st-background-color);}
     .actions {white-space: normal;}
-    button {font: inherit; color: var(--st-text-color); background: var(--st-background-color);
+    button {font: inherit; color: white; background: #C41039;
         border: 1px solid var(--st-border-color); border-radius: 5px; padding: 4px 8px;
         margin-right: 5px; cursor: pointer;}
-    button:hover {border-color: var(--st-primary-color); color: var(--st-primary-color);}
+    button:hover {border-color: #C41039; filter: brightness(.92);}
     button:focus-visible {outline: 2px solid var(--st-primary-color); outline-offset: 2px;}
     """
 

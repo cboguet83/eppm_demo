@@ -160,6 +160,8 @@
     "msg_opt_created": "Option '{value}' added to parameter."
   },
   "planning": {
+    "csv_date_format": "Date format in the CSV",
+    "csv_date_help": "Exports use YYYY-MM-DD. If your spreadsheet changed the dates, select its format. The preview shows the dates that will be saved.",
     "title": "Interactive Planning & Milestones",
     "toggle_multi_project": "🌐 Enable Multi-Project Portfolio Schedule View",
     "select_single_proj": "Select Project to Plan",
@@ -232,7 +234,8 @@
     "flex_filter_clear": "Clear filters",
     "flex_filter_project_tags": "Project Tags",
     "csv_replace_warning": "Importing replaces this project's entire schedule. All existing tasks, dependency links (including links to other projects), and project/task resource allocations will be deleted. Project fields and useful web links are retained. Nothing is deleted until the template passes validation and you click Replace project schedule.",
-    "csv_replace_button": "Replace project schedule"
+    "csv_replace_button": "Replace project schedule",
+    "clear_all_filters": "Clear all filters"
   },
   "gantt": {
     "columns": {
@@ -303,7 +306,14 @@
       "clear_filter": "Clear Resource Pool Filter",
       "active_filter": "Filter Active",
       "underassignment": "Underassignment",
-      "show_allocations": "Show active allocations"
+      "show_allocations": "Show active allocations",
+      "overassignment": "Overassignment",
+      "min_assigned_capacity": "Min assigned capacity",
+      "max_assigned_capacity": "Max assigned capacity",
+      "defined_capacity": "Defined capacity",
+      "consuming": "Consuming projects",
+      "consuming_all": "Consuming projects and all dependencies",
+      "consuming_predecessors": "Consuming projects and predecessors"
     },
     "modal": {
       "add_title": "➕ Add New Step ({project_id})",
@@ -549,6 +559,7 @@
     "delete_link": "Delete link",
     "edit_event": "Edit entry",
     "enable_editing": "Enable editing",
-    "custom_links": "Custom links"
+    "custom_links": "Custom links",
+    "edit_project": "Edit project"
   }
 }

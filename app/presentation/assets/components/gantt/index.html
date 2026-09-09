@@ -112,16 +112,21 @@
       transition: all 0.15s ease;
     }
 
-    .btn-mode:hover {
-      background: #e2e8f0;
-      color: var(--text);
+    .view-modes .btn-mode {
+      background-color: #e2e8f0 !important;
+      border-color: #cbd5e1 !important;
+      color: #475569 !important;
     }
 
-    .btn-mode.active {
-      background: var(--primary);
-      color: #ffffff;
-      border-color: var(--primary);
-      box-shadow: 0 1px 2px rgba(37, 99, 235, 0.25);
+    .view-modes .btn-mode:hover {
+      background-color: #cbd5e1 !important;
+    }
+
+    .view-modes .btn-mode.active {
+      background-color: #C41039 !important;
+      color: #ffffff !important;
+      border-color: #C41039 !important;
+      box-shadow: 0 1px 2px rgba(196, 16, 57, 0.25);
     }
 
     /* Main Gantt Layout Structure */
@@ -1437,15 +1442,14 @@
     }
 
     .context-submenu-parent { position: relative; }
-    #project-context-menu { overflow:visible; }
+    #project-context-menu, #context-menu, #resource-cell-context-menu { overflow:visible; }
     .context-menu.context-submenu { display:none; position:absolute; left:100%; top:0; min-width:240px; }
     .context-submenu-parent:hover > .context-submenu,
     .context-submenu-parent:focus-within > .context-submenu { display:block; }
     .context-submenu-parent.submenu-left > .context-submenu { left:auto; right:100%; }
     .submenu-arrow { margin-left:auto; }
 
-    .assigned-badge.capacity-over,
-    .assigned-capacity-cell.capacity-over {
+    .overassignment-badge {
       background: #f3e8ff;
       color: #7e22ce;
       border-color: #c084fc;
@@ -1615,11 +1619,6 @@
       border-bottom-color: #a7f3d0;
     }
 
-    .resource-left-row.assigned-capacity-row.capacity-over {
-      background: #f3e8ff;
-      border-bottom-color: #c084fc;
-    }
-
     .resource-left-row.assigned-capacity-row.capacity-unassigned {
       background: #f1f5f9;
       border-bottom-color: #cbd5e1;
@@ -1737,6 +1736,8 @@
 
     /* Shared EPPM context-menu standard (context_menu.py). */
 
+button:not(.context-menu-item) {background-color:#C41039 !important;color:#fff !important;border-color:#C41039 !important;}
+button:not(.context-menu-item):disabled {opacity:.5;}
 .context-menu {
     position: fixed; background: var(--st-background-color, #fff);
     color: var(--st-text-color, #1e293b); border: 1px solid #cbd5e1;
@@ -1760,7 +1761,7 @@
 .context-menu-divider {height: 1px; background: #e2e8f0; margin: 4px 0;}
 .context-menu-header {padding: 8px 16px; font-size: 12px; font-weight: 600;}
 
-</style>
+  </style>
 </head>
 
 <body>
@@ -1776,9 +1777,14 @@
       <span>🔗</span>
       <span id="ctx-view-pred-label">View Predecessors</span>
     </div>
-    <div class="context-menu-item" onclick="triggerFilterContextProject('task')">
+    <div class="context-menu-item context-submenu-parent" tabindex="0" onmouseenter="positionSubmenu(this)" onfocus="positionSubmenu(this)">
       <span>🔍</span>
-      <span class="ctx-label-filter-project">Filter on this project</span>
+      <span class="ctx-label-filter">Filter</span><span class="submenu-arrow">▸</span>
+      <div class="context-menu context-submenu">
+        <button class="context-menu-item" onclick="triggerFilterContextProject('task','this')" data-filter-label="filter_this">This project</button>
+        <button class="context-menu-item" onclick="triggerFilterContextProject('task','all')" data-filter-label="filter_all">This project and all dependencies</button>
+        <button class="context-menu-item" onclick="triggerFilterContextProject('task','predecessors')" data-filter-label="filter_predecessors">This project and predecessors</button>
+      </div>
     </div>
     <div class="context-menu-item" onclick="openAddStepModal()">
       <span>➕</span>
@@ -1793,8 +1799,8 @@
       <span id="ctx-label-task-tags">Manage Tags</span>
     </div>
     <div class="context-menu-item" onclick="triggerManageTaskPools()">
-      <span>🏊</span>
-      <span id="ctx-label-task-pools">Assign Resource Pools</span>
+      <span>👤</span>
+      <span id="ctx-label-task-pools">Assign Resource</span>
     </div>
     <div class="context-menu-item" onclick="markComplete()">
       <span>✅</span>
@@ -1872,9 +1878,14 @@
     <div class="context-menu-item" onclick="triggerGoToResourcePoolDetails('show_pool_allocations')">
       <span>☷</span><span id="ctx-pool-allocations">Show active allocations</span>
     </div>
-    <div class="context-menu-item" id="ctx-res-filter-btn" onclick="triggerFilterResourcePool(true)">
+    <div class="context-menu-item context-submenu-parent" id="ctx-res-filter-btn" tabindex="0" onmouseenter="positionSubmenu(this)" onfocus="positionSubmenu(this)">
       <span style="font-size:14px;">🔍</span>
-      <span id="ctx-res-filter-clear">Filter on consuming projects</span>
+      <span class="ctx-label-filter">Filter</span><span class="submenu-arrow">▸</span>
+      <div class="context-menu context-submenu">
+        <button class="context-menu-item" onclick="triggerFilterResourcePool(true,'this')" data-resource-filter="consuming">Consuming projects</button>
+        <button class="context-menu-item" onclick="triggerFilterResourcePool(true,'all')" data-resource-filter="consuming_all">Consuming projects and all dependencies</button>
+        <button class="context-menu-item" onclick="triggerFilterResourcePool(true,'predecessors')" data-resource-filter="consuming_predecessors">Consuming projects and predecessors</button>
+      </div>
     </div>
     <div class="context-menu-divider" id="ctx-res-divider" style="display:none;"></div>
     <div class="context-menu-item danger" id="ctx-res-clear-btn" onclick="triggerClearResourcePoolFilter(event)" style="display:none;">
@@ -2439,10 +2450,15 @@
       if (elEditProj) elEditProj.innerText = getT('context_menu.view_project', 'View project details');
       const elProjectPools = document.getElementById('ctx-label-project-pools');
       if (elProjectPools) elProjectPools.innerText = getT('context_menu.assign_resource', 'Assign Resource');
+      const elTaskPools = document.getElementById('ctx-label-task-pools');
+      if (elTaskPools) elTaskPools.innerText = getT('context_menu.assign_resource', 'Assign Resource');
       document.querySelectorAll('.ctx-label-filter-project').forEach(el => {
         el.innerText = getT('context_menu.filter_project', 'Filter on this project');
       });
 
+      document.querySelectorAll('.ctx-label-filter').forEach(el => {el.textContent = getT('context_menu.filter', 'Filter');});
+      document.querySelectorAll('[data-filter-label]').forEach(el => {el.textContent = getT('context_menu.' + el.dataset.filterLabel, el.textContent);});
+      document.querySelectorAll('[data-resource-filter]').forEach(el => {el.textContent = getT('resource_grid.' + el.dataset.resourceFilter, el.textContent);});
       // Resource grid labels
       const elResTitle = document.getElementById('lbl-resource-panel-title');
       if (elResTitle) elResTitle.innerText = getT('resource_grid.title', 'Resource Pools & Capacity Usage');
@@ -3296,7 +3312,7 @@
 
       menu.style.display = 'block';
       menu.style.maxHeight = `${Math.max(180, window.innerHeight - 20)}px`;
-      menu.style.overflowY = 'auto';
+      menu.style.overflow = 'visible';
 
       // Ensure menu is fully within viewport boundaries and not clipped at top/bottom/sides
       const menuWidth = menu.offsetWidth || 230;
@@ -4260,11 +4276,41 @@
       return result;
     }
 
+    let lastFilterReset = 0;
+
     function getCapacityState(capacity, theoreticalCapacity, hasAssignedResources) {
       if (!hasAssignedResources) return 'capacity-unassigned';
       if (capacity < theoreticalCapacity - 0.0001) return 'capacity-under';
       if (capacity > theoreticalCapacity + 0.0001) return 'capacity-over';
       return 'capacity-balanced';
+    }
+
+    function poolAssignmentDetails(pool, start, end) {
+      const defined = Number(pool.theoretical_capacity ?? pool.capacity ?? 0);
+      const assigned = getAssignedCapacityForPeriod(Number(pool.displayed_assigned_capacity ?? defined),
+        pool.has_assigned_resources ? pool.daily_assigned_capacity || {} : {}, start, end);
+      const under = pool.has_assigned_resources && assigned.min < defined - .0001;
+      const over = pool.has_assigned_resources && assigned.max > defined + .0001;
+      if (!under && !over) return pool.name;
+      const lines = [pool.name,
+        `${getT('resource_grid.defined_capacity', 'Defined capacity')}: ${defined.toFixed(2)} FTE`];
+      if (under) lines.push(`${getT('resource_grid.min_assigned_capacity', 'Min assigned capacity')}: ${assigned.min.toFixed(2)} FTE`);
+      if (over) lines.push(`${getT('resource_grid.max_assigned_capacity', 'Max assigned capacity')}: ${assigned.max.toFixed(2)} FTE`);
+      return lines.join('\n');
+    }
+
+    function poolAssignmentBadges(pool, range, defined) {
+      if (!pool.has_assigned_resources) return '';
+      let badges = '';
+      if (range.min < defined - .0001) badges += `<span class="r-badge underassignment-badge">${getT('resource_grid.underassignment', 'Underassignment')}</span>`;
+      if (range.max > defined + .0001) badges += `<span class="r-badge overassignment-badge">${getT('resource_grid.overassignment', 'Overassignment')}</span>`;
+      return badges;
+    }
+
+    function groupAssignmentDetails(group, poolIds, start, end) {
+      return [group.name, ...poolIds.map(id => getResourcePoolById(id)).filter(Boolean)
+        .map(pool => ({pool, details: poolAssignmentDetails(pool, start, end)}))
+        .filter(({pool, details}) => details !== pool.name).map(({details}) => details)].join('\n\n');
     }
 
     function getDemandCapacityStatusForPeriod(dailyUsage, baseCapacity, dailyCapacity, startStr, endStr) {
@@ -4307,47 +4353,9 @@
       return totalIsOver || selectedIsOver;
     }
 
-    function showResourceCellTooltip(e, poolName, startStr, endStr, demand, capacity, scopeType, isOver, excess) {
+    function showResourceCellTooltip(e, details) {
       if (!showHoverOverlay) return;
-      let statusHtml = '';
-      if (isOver) {
-        statusHtml = `<span style="color:#ef4444; font-weight:700;">⚠️ ${getT('resource_grid.overallocated', 'Overallocated')} (+${excess.toFixed(2)} FTE excess)</span>`;
-      } else if (demand > 0) {
-        statusHtml = `<span style="color:#10b981; font-weight:600;">✅ ${getT('resource_grid.within_capacity', 'Within Capacity')}</span>`;
-      } else {
-        statusHtml = `<span style="color:#94a3b8;">No Active Allocation</span>`;
-      }
-
-      const scopeLabel = scopeType === 'selected' 
-        ? `<span style="color:#2563eb; font-size:10.5px; font-weight:700; background:#eff6ff; padding:1px 6px; border-radius:4px; border:1px solid #bfdbfe;">${getT('resource_grid.show_selected', 'Selected Projects')}</span>`
-        : `<span style="color:#475569; font-size:10.5px; font-weight:700; background:#f1f5f9; padding:1px 6px; border-radius:4px; border:1px solid #cbd5e1;">${getT('resource_grid.show_total', 'Total Assignments')}</span>`;
-
-      const html = `
-        <div style="font-size:12px; line-height:1.45; min-width:240px;">
-          <div style="font-weight:700; color:#0f172a; margin-bottom:5px; border-bottom:1px solid #e2e8f0; padding-bottom:4px; display:flex; align-items:center; justify-content:space-between; gap:6px;">
-            <span>🏊 ${escapeHtml(poolName)}</span>
-            ${scopeLabel}
-          </div>
-          <div style="color:#64748b; font-size:11px; margin-bottom:5px;">
-            📅 <b>Period:</b> ${startStr} → ${endStr}
-          </div>
-          <div style="display:flex; justify-content:space-between; margin-bottom:3px;">
-            <span style="color:#475569;">${getT('resource_grid.max_demand', 'Max Demand')}:</span>
-            <strong style="color:${isOver ? '#dc2626' : (demand > 0 ? '#2563eb' : '#64748b')};">${demand.toFixed(2)} FTE</strong>
-          </div>
-          <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
-            <span style="color:#475569;">${getT('resource_grid.effective_capacity', 'Minimum Effective Capacity')}:</span>
-            <strong>${capacity.toFixed(2)} FTE</strong>
-          </div>
-          <div style="margin-top:4px; border-top:1px solid #e2e8f0; padding-top:4px;">
-            ${statusHtml}
-          </div>
-          <div style="margin-top:6px; font-size:10px; color:#94a3b8; font-style:italic; border-top:1px dashed #f1f5f9; padding-top:3px;">
-            Right-click cell to filter on consuming projects
-          </div>
-        </div>
-      `;
-      showTooltip(e, html);
+      showTooltip(e, `<div style="font-size:12px;line-height:1.45;white-space:pre-wrap">${escapeHtml(details)}</div>`);
     }
 
     function handleCellContextMenu(e, el) {
@@ -4373,13 +4381,8 @@
       const poolName = el.dataset.poolName || '';
       const startStr = el.dataset.startDate || '';
       const endStr = el.dataset.endDate || '';
-      const demand = parseFloat(el.dataset.demand || '0');
-      const capacity = parseFloat(el.dataset.capacity || '0');
-      const scopeType = el.dataset.scope || 'total';
-      const isOver = el.dataset.overallocated === 'true';
-      const excess = parseFloat(el.dataset.excess || '0');
-
-      showResourceCellTooltip(e, poolName, startStr, endStr, demand, capacity, scopeType, isOver, excess);
+      const pool = getResourcePoolById(el.dataset.poolId);
+      showResourceCellTooltip(e, pool ? poolAssignmentDetails(pool, startStr, endStr) : poolName);
     }
 
     function openResourceCellContextMenu(e, poolId, poolName, startStr, endStr, periodLabel, groupId = null) {
@@ -4459,11 +4462,12 @@
       });
     }
 
-    function triggerFilterResourcePool(clearOther) {
+    function triggerFilterResourcePool(clearOther, scope = 'this') {
       hideResourceCellContextMenu();
       if (!selectedResourceCellCtx) return;
       Streamlit.setComponentValue({
         action: "filter_by_resource_pool",
+        filter_scope: scope,
         pool_id: selectedResourceCellCtx.pool_id,
         group_id: selectedResourceCellCtx.group_id,
         pool_name: selectedResourceCellCtx.pool_name,
@@ -4837,7 +4841,7 @@
                  data-group-id="${Number(group.group_id)}" data-group-name="${escapeHtml(group.name)}"
                  oncontextmenu="handleGroupContextMenu(event)"
                  data-row-id="${escapeHtml(row.nodeKey)}"
-                 title="${escapeHtml(group.description || group.name)}">
+                 title="${escapeHtml(groupAssignmentDetails(group, group.descendant_pool_ids || [], formatDate(timelineStart), formatDate(timelineEnd)))}">
               <div class="resource-pool-name" style="padding-left:${indent}px;">
                 <button class="resource-tree-toggle" type="button"
                         aria-label="${row.collapsed ? 'Expand' : 'Collapse'} ${escapeHtml(group.name)}"
@@ -4863,7 +4867,7 @@
                          data-group-id="${Number(group.group_id)}" data-group-name="${escapeHtml(group.name)}"
                          data-start="${startStr}" data-end="${endStr}" oncontextmenu="handleGroupContextMenu(event)"
                          style="width:${c.width}px;"
-                         title="${escapeHtml(group.name)} total: ${demand.toFixed(1)} FTE">
+                         title="${escapeHtml(groupAssignmentDetails(group, group.descendant_pool_ids || [], startStr, endStr))}">
                       ${demand > 0 ? demand.toFixed(1) : '—'}
                     </div>`;
           }).join('');
@@ -4884,6 +4888,7 @@
         const isFilterActive = activeResourceFilter &&
           Number(activeResourceFilter.pool_id) === Number(pool.id);
         const rowContext = `data-pool-id="${pool.id}" data-pool-name="${escapeHtml(pool.name)}"
+                            title="${escapeHtml(poolAssignmentDetails(pool, formatDate(timelineStart), formatDate(timelineEnd)))}"
                             oncontextmenu="handlePoolRowContextMenu(event, this)"`;
 
         if (row.rowType === 'pool_assigned') {
@@ -4896,7 +4901,7 @@
                         onclick="toggleResourceNode('${row.nodeKey}')">${toggle}</button>
                 <span class="resource-tree-icon">🏊</span>
                 <span class="r-name-text">${escapeHtml(pool.name)}</span>
-                ${assignedState === 'capacity-under' ? `<span class="r-badge underassignment-badge">${getT('resource_grid.underassignment', 'Underassignment')}</span>` : ''}
+                ${poolAssignmentBadges(pool, visibleCapacity, poolCap)}
                 <span class="r-badge assigned-badge ${assignedState}">${getT('resource_grid.assigned_capacity', 'Capacity')}</span>
                 ${isFilterActive ? `<span class="active-filter-badge">🔍 ${getT('resource_grid.active_filter', 'Filter Active')}</span>` : ''}
               </div>
@@ -4914,7 +4919,7 @@
                          data-start-date="${startStr}" data-end-date="${endStr}" data-period-label="${escapeHtml(c.label)}"
                          oncontextmenu="handleCellContextMenu(event, this)"
                          style="width:${c.width}px;"
-                         title="${getT('resource_grid.assigned_capacity', 'Capacity')}: ${periodCapacity.min.toFixed(1)} FTE">
+                         title="${escapeHtml(poolAssignmentDetails(pool, startStr, endStr))}">
                       ${periodCapacity.min.toFixed(1)}
                     </div>`;
           }).join('');
@@ -4940,7 +4945,7 @@
                    <span class="r-name-text">${escapeHtml(pool.name)}</span>`
                 : `<span class="resource-tree-branch">↳</span>
                    <span class="r-name-text">${rowLabel}</span>`}
-              ${isCollapsedPool && assignedState === 'capacity-under' ? `<span class="r-badge underassignment-badge">${getT('resource_grid.underassignment', 'Underassignment')}</span>` : ''}
+              ${isCollapsedPool ? poolAssignmentBadges(pool, visibleCapacity, poolCap) : ''}
               <span class="r-badge ${isSelected ? 'scope-badge' : 'total-badge'}">${isSelected ? 'Selected' : 'Total'}</span>
               ${isCollapsedPool && isFilterActive ? `<span class="active-filter-badge">🔍 ${getT('resource_grid.active_filter', 'Filter Active')}</span>` : ''}
             </div>
@@ -6309,6 +6314,13 @@
     window.addEventListener("message", function (event) {
       if (event.data && event.data.type === "streamlit:render") {
         const args = event.data.args || {};
+        if ((args.filter_reset || 0) !== lastFilterReset) {
+          lastFilterReset = args.filter_reset || 0;
+          onlyOverallocatedPools = false;
+          hideUnusedPools = true;
+          document.getElementById('chk-only-overallocated-pools').checked = false;
+          document.getElementById('chk-hide-unused-pools').checked = true;
+        }
         if (!args.tasks && lastDataRevision === null && !requestingInitialPlanning) {
           requestingInitialPlanning = true;
           Streamlit.setComponentValue({action:'initialize_planning',nonce:Date.now()+'_initialize'});
