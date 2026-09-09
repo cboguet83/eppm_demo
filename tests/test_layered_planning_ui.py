@@ -12,7 +12,7 @@ from app.infrastructure.database.connection import get_db
 from app.main import create_planning_service, create_planning_workspace
 from app.presentation.components.planning_data import load_planning_catalog
 from app.presentation.components.planning_events import validate_event
-from src.database.schema_init import init_db
+from app.infrastructure.database.schema_init import init_db
 
 
 def planning_app(path: str) -> None:

@@ -1285,6 +1285,3 @@ def _seed_default_data(
         from app.infrastructure.database.pool_scenarios import seed_pool_scenarios
 
         seed_pool_scenarios(target_path)
-
-
-seed_database_data = seed_default_data_if_empty

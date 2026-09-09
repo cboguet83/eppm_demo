@@ -8,9 +8,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from scripts.seed_database import seed_database
-from scripts.seed_pool_scenarios import MARKER, seed_pool_scenarios
-from src.database.seeder import seed_default_data_if_empty
+from app.infrastructure.database.bulk_seed import seed_database
+from app.infrastructure.database.pool_scenarios import MARKER, seed_pool_scenarios
+from app.infrastructure.database.seeder import seed_default_data_if_empty
 
 
 class PoolScenarioSeedTests(unittest.TestCase):

@@ -1,5 +1,14 @@
 """Behavioral coverage for templates, relational storage, and safe migration."""
 
+from app.main import create_project_service
+from app.main import create_schema_service
+
+from app.presentation.components.planning_catalog import flatten_dynamic_attributes
+
+from app.presentation.components import project_type_frames
+from app.presentation.components import schema_frames
+import pandas as pd
+
 from contextlib import closing
 
 import json
@@ -8,16 +17,15 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from scripts.flush_database import flush_database
-from scripts.seed_database import seed_database
-from src.database.connection import get_db
-from src.database.property_store import effective_template, prepare_values, read_values
-from src.database.schema_init import init_db
-from src.database.seeder import seed_default_data_if_empty
-from src.repositories.project_repo import ProjectRepository
-from src.repositories.project_type_repo import ProjectTypeRepository
-from src.repositories.schema_repo import SchemaRepository
-from src.services.portfolio_service import PortfolioService
+from app.infrastructure.database.flush import flush_database
+from app.infrastructure.database.bulk_seed import seed_database
+from app.infrastructure.database.connection import get_db
+from app.infrastructure.database.property_store import read_values
+from app.infrastructure.repositories.projects import SqliteProjectStore
+from app.domain.projects.project import prepare_project_values
+from app.infrastructure.database.schema_init import init_db
+from app.infrastructure.database.seeder import seed_default_data_if_empty
+from app.main import create_project_type_service
 
 
 class ProjectTypesTests(unittest.TestCase):
@@ -26,20 +34,20 @@ class ProjectTypesTests(unittest.TestCase):
         self.addCleanup(self.directory.cleanup)
         self.path = str(Path(self.directory.name) / "test.db")
         init_db(self.path)
-        self.types = ProjectTypeRepository(self.path)
-        self.schema = SchemaRepository(self.path)
-        self.projects = ProjectRepository(self.path)
+        self.types = create_project_type_service(self.path)
+        self.schema = create_schema_service(self.path)
+        self.projects = create_project_service(self.path)
 
     def test_all_future_types_and_selected_membership(self):
         a = self.types.create_type("A")
         self.schema.create_parameter("global", None, "Shared", "TEXT")
         self.schema.create_parameter("local", None, "Local", "TEXT", applies_to_all=False, project_type_ids=[a])
         b = self.types.create_type("B")
-        self.assertEqual(set(self.types.get_template(a).param_id), {"global", "local"})
-        self.assertEqual(set(self.types.get_template(b).param_id), {"global"})
+        self.assertEqual(set([item['param_id'] for item in self.types.get_template(a)]), {"global", "local"})
+        self.assertEqual(set([item['param_id'] for item in self.types.get_template(b)]), {"global"})
         with self.assertRaises(ValueError):
             self.schema.create_parameter("invalid", None, "Bad", "TEXT", applies_to_all=False)
-        self.assertNotIn("invalid", set(self.schema.get_all_parameters().param_id))
+        self.assertNotIn("invalid", set(schema_frames.parameters_frame(self.schema.get_all_parameters()).param_id))
         with self.assertRaises(ValueError):
             self.types.delete_type(a)
 
@@ -55,7 +63,7 @@ class ProjectTypesTests(unittest.TestCase):
         self.projects.create_project(name="Inherited optional")
         with self.assertRaises(ValueError):
             self.projects.create_project(name="Explicitly required", project_type_id=a)
-        self.assertEqual(len(self.projects.get_all_projects()), 2)
+        self.assertEqual(len(pd.DataFrame(create_project_service(self.path).get_planning_catalog(tuple(parameter.param_id for parameter in create_schema_service(self.path).get_all_parameters())))), 2)
 
     def test_defaults_only_creation_preserve_clear_and_edit(self):
         a = self.types.create_type("A")
@@ -78,17 +86,17 @@ class ProjectTypesTests(unittest.TestCase):
         pid = self.projects.create_project(name="Project", project_type_id=a, dynamic_attributes={"p": "Keep me"})
         self.projects.update_project(pid, "Project", "Draft", 0, 0, {}, project_type_id=1)
         self.assertEqual(self.projects.get_project_by_id(pid).dynamic_attributes, {"p": "Keep me"})
-        rows = self.projects.get_all_projects()
+        rows = pd.DataFrame(create_project_service(self.path).get_planning_catalog(tuple(parameter.param_id for parameter in create_schema_service(self.path).get_all_parameters())))
         self.assertEqual(rows.iloc[0].dynamic_attributes, {})
-        flattened = PortfolioService.flatten_dynamic_attributes(rows, self.schema.get_all_parameters())
+        flattened = flatten_dynamic_attributes(rows, schema_frames.parameters_frame(self.schema.get_all_parameters()))
         self.assertIsNone(flattened.iloc[0]["p"])
         with self.assertRaises(ValueError):
             self.projects.update_project(pid, "Should roll back", "Draft", 0, 0, {"p": "No"})
         self.assertEqual(self.projects.get_project_by_id(pid).name, "Project")
         self.projects.update_project(pid, "Project", "Draft", 0, 0, {}, project_type_id=a)
-        self.assertEqual(self.projects.get_all_projects().iloc[0].dynamic_attributes, {"p": "Keep me"})
+        self.assertEqual(pd.DataFrame(create_project_service(self.path).get_planning_catalog(tuple(parameter.param_id for parameter in create_schema_service(self.path).get_all_parameters()))).iloc[0].dynamic_attributes, {"p": "Keep me"})
         self.types.set_applicability("p", False, [1])
-        self.assertEqual(self.projects.get_all_projects().iloc[0].dynamic_attributes, {})
+        self.assertEqual(pd.DataFrame(create_project_service(self.path).get_planning_catalog(tuple(parameter.param_id for parameter in create_schema_service(self.path).get_all_parameters()))).iloc[0].dynamic_attributes, {})
 
     def test_all_property_types_and_empty_distinctions(self):
         values = {"TEXT": "Text", "NUMBER": 0, "DATE": "2026-09-08", "ENUM": "A", "MULTI_ENUM": ["B", "A"], "TAGS": ["free", "tag"], "URL": "https://example.org", "HYPERLINK": "https://example.org/a"}
@@ -132,39 +140,40 @@ class ProjectTypesTests(unittest.TestCase):
         with closing(get_db(self.path)) as conn, conn:
             values = read_values(conn)
             for pid, type_id in conn.execute("SELECT id,project_type_id FROM project"):
-                prepare_values(conn, type_id, values.get(pid, {}), creating=False)
+                store = SqliteProjectStore(conn)
+                prepare_project_values(store.template(type_id), store.choices(), values.get(pid, {}), creating=False)
             self.assertEqual(conn.execute("PRAGMA foreign_key_check").fetchall(), [])
 
     def test_demo_catalog_and_ordinary_startup_preservation(self):
         seed_default_data_if_empty(self.path)
-        self.assertEqual(len(self.projects.get_all_projects()), 5)
-        self.assertEqual(self.projects.get_all_projects().project_type.nunique(), 5)
+        self.assertEqual(len(pd.DataFrame(create_project_service(self.path).get_planning_catalog(tuple(parameter.param_id for parameter in create_schema_service(self.path).get_all_parameters())))), 5)
+        self.assertEqual(pd.DataFrame(create_project_service(self.path).get_planning_catalog(tuple(parameter.param_id for parameter in create_schema_service(self.path).get_all_parameters()))).project_template.nunique(), 5)
         self.assert_seed_valid()
         self.types.save_rule(1, "PRM_011", True, has_default=True, default_value="User default")
         self.types.set_applicability("PRM_015", True)
         self.types.create_type("User type")
         seed_default_data_if_empty(self.path)
-        self.assertEqual(len(self.types.get_all_types()), 6)
-        self.assertTrue(self.types.get_applicability("PRM_015")[0])
-        self.assertEqual(self.types.get_template(1).set_index("param_id").loc["PRM_011", "default_value"], "User default")
+        self.assertEqual(len(project_type_frames.types_frame(self.types.get_all_types())), 6)
+        self.assertTrue(self.types.get_applicability("PRM_015").applies_to_all)
+        self.assertEqual(next(item["default_value"] for item in self.types.get_template(1) if item["param_id"] == "PRM_011"), "User default")
 
     def test_bulk_append_counts_reproducibility_and_flush(self):
         first = seed_database(7, 2, 4, self.path, random_seed=17)
-        snapshot = self.projects.get_all_projects().to_dict("records")
+        snapshot = pd.DataFrame(create_project_service(self.path).get_planning_catalog(tuple(parameter.param_id for parameter in create_schema_service(self.path).get_all_parameters()))).to_dict("records")
         self.assertEqual(first["projects_created"], 7)
         self.assertGreater(first["property_values_created"], 0)
         self.assert_seed_valid()
         seed_database(3, 1, 3, self.path, clean_first=False, random_seed=18)
-        self.assertEqual(self.projects.get_all_projects().iloc[:7].to_dict("records"), snapshot)
-        self.assertEqual(len(self.projects.get_all_projects()), 10)
+        self.assertEqual(pd.DataFrame(create_project_service(self.path).get_planning_catalog(tuple(parameter.param_id for parameter in create_schema_service(self.path).get_all_parameters()))).iloc[:7].to_dict("records"), snapshot)
+        self.assertEqual(len(pd.DataFrame(create_project_service(self.path).get_planning_catalog(tuple(parameter.param_id for parameter in create_schema_service(self.path).get_all_parameters())))), 10)
         self.assert_seed_valid()
         seed_database(7, 2, 4, self.path, random_seed=17)
-        self.assertEqual(self.projects.get_all_projects().to_dict("records"), snapshot)
+        self.assertEqual(pd.DataFrame(create_project_service(self.path).get_planning_catalog(tuple(parameter.param_id for parameter in create_schema_service(self.path).get_all_parameters()))).to_dict("records"), snapshot)
         flush_database(self.path)
         with closing(get_db(self.path)) as conn, conn:
             self.assertEqual(read_values(conn), {})
             self.assertTrue(read_values(conn, defaults=True))
-        self.assertEqual(len(self.types.get_all_types()), 5)
+        self.assertEqual(len(project_type_frames.types_frame(self.types.get_all_types())), 5)
         flush_database(self.path, flush_all=True)
         seed_default_data_if_empty(self.path)
         self.assert_seed_valid()
@@ -173,7 +182,7 @@ class ProjectTypesTests(unittest.TestCase):
         summary = seed_database(0, 0, 0, self.path)
         self.assertEqual(summary["projects_created"], 0)
         seed_default_data_if_empty(self.path)
-        self.assertTrue(self.projects.get_all_projects().empty)
+        self.assertTrue(pd.DataFrame(create_project_service(self.path).get_planning_catalog(tuple(parameter.param_id for parameter in create_schema_service(self.path).get_all_parameters()))).empty)
         seed_database(2, 0, 0, self.path, clean_first=False)
         with closing(get_db(self.path)) as conn, conn:
             self.assertEqual(conn.execute("SELECT COUNT(*) FROM project_task").fetchone()[0], 0)
@@ -184,7 +193,7 @@ class ProjectTypesTests(unittest.TestCase):
             self.assertEqual(conn.execute("SELECT COUNT(*) FROM project_task GROUP BY project_id").fetchall(), [(20,), (20,)])
         self.projects.delete_project(2)
         seed_database(2, 2, 4, self.path, clean_first=False)
-        self.assertEqual(self.projects.get_all_projects().id.tolist(), [1, 3, 4])
+        self.assertEqual(pd.DataFrame(create_project_service(self.path).get_planning_catalog(tuple(parameter.param_id for parameter in create_schema_service(self.path).get_all_parameters()))).id.tolist(), [1, 3, 4])
         self.assert_seed_valid()
 
     def test_custom_catalog_append_and_reference_only_initialization(self):
@@ -192,7 +201,7 @@ class ProjectTypesTests(unittest.TestCase):
         self.schema.create_parameter("p", None, "Choice", "ENUM", mandatory=True)
         self.schema.add_option("p", "User choice", 1)
         seed_database(3, 0, 0, self.path, clean_first=False)
-        self.assertEqual(len(self.types.get_all_types()), 2)
+        self.assertEqual(len(project_type_frames.types_frame(self.types.get_all_types())), 2)
         self.assert_seed_valid()
         with closing(get_db(self.path)) as conn, conn:
             self.assertEqual(conn.execute("SELECT DISTINCT text_value FROM project_property_value").fetchall(), [("User choice",)])
@@ -219,7 +228,7 @@ class ProjectTypeMigrationTests(unittest.TestCase):
     def test_migration_preserves_values_backup_and_idempotency(self):
         self.legacy(json.dumps({"Alias": "Preserved"}))
         init_db(self.path)
-        project = ProjectRepository(self.path).get_project_by_id(10)
+        project = create_project_service(self.path).get_project_by_id(10)
         self.assertEqual(project.project_type_id, 1)
         self.assertEqual(project.dynamic_attributes, {"p": "Preserved"})
         backup = Path(self.path + ".before-project-types.bak")

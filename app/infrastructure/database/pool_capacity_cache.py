@@ -17,13 +17,13 @@ from app.domain.resources.models import (
     DailyOverassignment,
     PoolCapacityDetail,
     PoolCapacitySummary,
-    PoolFunctionContribution,
+    PoolResourceContribution,
 )
 from app.infrastructure.database.connection import get_db
 from app.shared.config import config
 from app.shared.logging import get_logger
 
-_VERSION = 1
+_VERSION = 2
 logger = get_logger(__name__)
 
 
@@ -120,8 +120,8 @@ def install_capacity_cache(conn: sqlite3.Connection) -> None:
 
 def _decode_detail(raw: str) -> PoolCapacityDetail:
     payload = json.loads(raw)
-    payload["contributing_functions"] = [
-        PoolFunctionContribution(**v) for v in payload["contributing_functions"]
+    payload["contributing_resources"] = [
+        PoolResourceContribution(**v) for v in payload["contributing_resources"]
     ]
     payload["daily_overassignments"] = [
         DailyOverassignment(**v) for v in payload["daily_overassignments"]
@@ -240,7 +240,7 @@ class SqliteCapacityCache:
                                 "INSERT OR IGNORE INTO pool_capacity_employee VALUES(?,?)",
                                 [
                                     (detail.pool_id, c.employee_id)
-                                    for c in detail.contributing_functions
+                                    for c in detail.contributing_resources
                                     if c.employee_id is not None
                                 ],
                             )

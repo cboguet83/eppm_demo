@@ -1,4 +1,4 @@
-"""Format plain organization records for Streamlit and compatibility callers."""
+"""Format plain organization records for Streamlit."""
 
 from dataclasses import asdict
 

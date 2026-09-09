@@ -8,8 +8,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from scripts.seed_database import seed_database
-from src.database.seeder import seed_default_data_if_empty
+from app.infrastructure.database.bulk_seed import seed_database
+from app.infrastructure.database.seeder import seed_default_data_if_empty
 
 
 class SeedBackupTests(unittest.TestCase):

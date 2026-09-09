@@ -1,7 +1,7 @@
 """Pure capacity boundaries, batched snapshots, and concurrent cache publication."""
 
 from contextlib import closing
-from dataclasses import asdict, replace
+from dataclasses import asdict
 from datetime import date
 from pathlib import Path
 import sqlite3
@@ -29,7 +29,7 @@ from app.domain.resources.models import DailyOverassignment, PoolMapping, Resour
 from app.infrastructure.database.connection import get_db
 from app.infrastructure.database.pool_capacity_cache import CapacityCacheState, SqliteCapacityCache
 from app.infrastructure.repositories.pool_capacity import SqliteCapacityReader
-from src.database.schema_init import init_db
+from app.infrastructure.database.schema_init import init_db
 
 DAY = date(2026, 9, 8)
 
@@ -44,7 +44,7 @@ def test_capacity_keeps_historical_rounding_order_at_half_millifte_boundary() ->
     # Reordering multiplication/division changes this result to 0.004.
     detail = calculate_capacity(inputs, DAY)
     assert detail.assigned_capacity_fte == 0.003
-    assert detail.contributing_functions[0].effective_fte == 0.003
+    assert detail.contributing_resources[0].effective_fte == 0.003
 
 
 @pytest.fixture
@@ -91,11 +91,11 @@ def test_direct_override_zero_capacity_and_vacant_function_fallback() -> None:
         and contributions[0].source_name == "Direct Employee Mapping"
     )
     detail = calculate_capacity(inputs, DAY)
-    assert detail.total_capacity == 10 and detail.effective_capacity_fte == 1
+    assert detail.total_capacity_fte == 10 and detail.effective_capacity_fte == 1
     inputs.mappings = [PoolMapping(1, "employee", 1, 0)]
     detail = calculate_capacity(inputs, DAY)
     assert detail.has_assigned_resources and detail.effective_capacity_fte == 0
-    assert detail.peak_daily_fte == 0
+    assert detail.peak_assigned_fte == 0
 
 
 def test_assignment_dates_resolve_each_endpoint_before_today_fallback() -> None:

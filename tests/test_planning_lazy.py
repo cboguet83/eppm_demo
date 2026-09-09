@@ -9,12 +9,13 @@ from unittest import TestCase
 from unittest.mock import patch
 
 from streamlit.testing.v1 import AppTest
-from src.database.seeder import seed_default_data_if_empty
-from src.repositories.project_repo import ProjectRepository
-from src.repositories.milestone_repo import MilestoneRepository
+from app.infrastructure.database.seeder import seed_default_data_if_empty
+from app.main import create_project_service
+from app.main import create_planning_service
 from app.application.services.planning import PlanningService
-from src.repositories.portfolio_repo import portfolio_revision
-from src.services.planning_data import ensure_planning_indexes, load_project_summaries
+from app.infrastructure.repositories.portfolio import portfolio_revision
+from app.main import create_planning_workspace
+from app.presentation.components.planning_data import load_project_summaries
 
 
 def lazy_app(db_path):
@@ -36,8 +37,8 @@ class LazyPlanningTests(TestCase):
         self.addCleanup(self.directory.cleanup)
         self.path = str(Path(self.directory.name) / 'test.db')
         seed_default_data_if_empty(self.path)
-        self.projects = ProjectRepository(self.path)
-        self.tasks = MilestoneRepository(self.path)
+        self.projects = create_project_service(self.path)
+        self.tasks = create_planning_service(self.path)
         self.pids = [self.projects.create_project(name='Lazy '+str(i), dynamic_attributes={}) for i in range(3)]
         self.a = self.tasks.create_milestone(self.pids[0], 'Predecessor', 'General', '2026-01-01', '2026-01-10', 0)
         self.b = self.tasks.create_milestone(self.pids[1], 'Successor', 'General', '2026-01-05', '2026-01-06', 0,
@@ -45,13 +46,13 @@ class LazyPlanningTests(TestCase):
         self.c = self.tasks.create_milestone(self.pids[2], 'Unrelated', 'General', '2026-02-01', '2026-02-02', 0)
 
     def test_persistent_summaries_invalidate_the_project_and_linked_successors(self):
-        ensure_planning_indexes(self.path)
-        rows = load_project_summaries(self.path, portfolio_revision(self.path), tuple(self.pids))
+        self.tasks.ensure_indexes()
+        rows = load_project_summaries(create_planning_workspace(self.path), portfolio_revision(self.path), tuple(self.pids))
         self.assertTrue(next(p for p in rows if p['id']==self.pids[1])['hasViolations'])
         self.tasks.update_dates(self.a, '2026-01-01', '2026-01-03')
         with closing(sqlite3.connect(self.path)) as conn, conn:
             self.assertEqual(conn.execute('SELECT project_id FROM planning_summary_cache').fetchall(), [(self.pids[2],)])
-        rows = load_project_summaries(self.path, portfolio_revision(self.path), tuple(self.pids))
+        rows = load_project_summaries(create_planning_workspace(self.path), portfolio_revision(self.path), tuple(self.pids))
         self.assertFalse(next(p for p in rows if p['id']==self.pids[1])['hasViolations'])
 
     def test_summary_first_hydration_and_edit_patch_never_resend_unrelated_projects(self):
@@ -70,7 +71,7 @@ class LazyPlanningTests(TestCase):
             payload = component.call_args.kwargs['patch']
             self.assertEqual(len(payload['tasks']), 3)
             app.session_state['test_event'] = {'action':'update_dates','id':self.a,'start_date':'2026-01-01','end_date':'2026-01-03','nonce':'move'}
-            with patch.object(PlanningService,'read_task_bundle', wraps=self.tasks.service.read_task_bundle) as reads:
+            with patch.object(PlanningService,'read_task_bundle', wraps=self.tasks.read_task_bundle) as reads:
                 app.run()
                 self.assertEqual(list(app.exception), [])
                 touched = {pid for call in reads.call_args_list for pid in call.args[0]}

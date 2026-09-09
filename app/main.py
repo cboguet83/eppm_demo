@@ -176,7 +176,7 @@ def create_maintenance_service(db_path: str | None = None) -> MaintenanceService
 
 
 def main() -> None:
-    """Run the existing CLI behavior or compose the Streamlit application."""
+    """Run a startup command or compose the Streamlit application."""
     import streamlit as st
 
     if not st.runtime.exists() and _run_cli():
@@ -191,19 +191,15 @@ def parse_cli_args(argv: list[str] | None = None) -> tuple[bool, int]:
 
 
 def _startup_parser(*, add_help: bool = False) -> ArgumentParser:
-    """Build the source launchers' shared command-line parser."""
-    parser = ArgumentParser(description="PPM Studio Pro", add_help=add_help)
+    """Build the command-line parser for the application entry point."""
+    parser = ArgumentParser(description="PPM Studio Pro", add_help=add_help, allow_abbrev=False)
     parser.add_argument(
         "--force-reseed",
-        "--force",
-        "-f",
         action="store_true",
         help="Force re-seeding the database on startup.",
     )
     parser.add_argument(
         "--projects",
-        "-n",
-        "--seed-projects",
         type=int,
         default=0,
         help="Number of mock projects to generate when seeding.",
@@ -213,14 +209,12 @@ def _startup_parser(*, add_help: bool = False) -> ArgumentParser:
 
 def _run_cli() -> bool:
     """Handle explicit help or seeding requests without rendering a bare UI."""
-    import sys
     from app.application.exceptions import DatabaseMaintenanceError
     from app.shared.config import config
     from app.shared.logging import get_logger, setup_logging
 
-    if "--help" in sys.argv or "-h" in sys.argv:
-        _startup_parser(add_help=True).parse_known_args()
-    force, projects = parse_cli_args()
+    args = _startup_parser(add_help=True).parse_args()
+    force, projects = bool(args.force_reseed), int(args.projects)
     if not force and projects <= 0:
         return False
     setup_logging()

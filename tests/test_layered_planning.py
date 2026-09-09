@@ -1,5 +1,7 @@
 """Task use-case integrity, scheduling rules, and real SQLite transaction behavior."""
 
+from app.application.exceptions import PlanningConflictError
+
 from contextlib import closing
 import io
 from pathlib import Path
@@ -8,17 +10,15 @@ from unittest.mock import patch
 
 import pytest
 
-from app.application.exceptions import PlanningConflictError, PlanningStorageError
+from app.application.exceptions import PlanningStorageError
 from app.domain.planning.constraints import evaluate_constraints
 from app.domain.planning.csv_import import get_csv_template, parse_csv
-from app.domain.planning.models import LinkType
 from app.domain.planning.rules import normalize_dependency, normalize_task
 from app.infrastructure.database.connection import get_db
 from app.infrastructure.repositories.planning import SqlitePlanningGateway
 from app.main import create_planning_service
 from app.presentation.components.planning_imports import csv_text
-from src.database.schema_init import init_db
-from src.repositories.milestone_repo import MilestoneRepository
+from app.infrastructure.database.schema_init import init_db
 
 
 @pytest.fixture
@@ -140,8 +140,8 @@ def test_planning_gateway_reserves_writes_and_hides_storage_details(database: st
             create_planning_service(database).get_all_milestones()
     assert "internal" not in str(failure.value)
     assert isinstance(failure.value.__cause__, sqlite3.OperationalError)
-    with pytest.raises(sqlite3.IntegrityError):
-        MilestoneRepository(database).create_milestone(
+    with pytest.raises(PlanningConflictError):
+        create_planning_service(database).create_milestone(
             999, "Unknown project", "", "2026-01-01", "2026-01-01", 0
         )
 
@@ -222,8 +222,6 @@ def test_normalization_preserves_existing_dependency_defaults_and_progress_clamp
     service.add_dependency(1)
     assert not service.update_progress(999, -20)
     assert not service.update_dates(999, "2026-01-01", "2026-01-01")
-    assert LinkType.get_display_name("FS") == "Finish-to-Start (FS)"
-    assert LinkType.get_display_name("new") == "new"
 
 
 def test_constraint_evaluation_terminates_for_cycles_and_incomplete_historical_dates() -> None:
@@ -317,6 +315,6 @@ def test_task_choice_search_is_bounded_literal_and_supports_exact_identity(datab
     ]
     assert service.search_task_choices("%") == []
     assert len(service.search_task_choices("Task", limit=0)) == 1
-    assert MilestoneRepository(database).search_task_choices("#1") == service.search_task_choices(
+    assert create_planning_service(database).search_task_choices("#1") == service.search_task_choices(
         "#1"
     )

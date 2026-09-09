@@ -1,5 +1,7 @@
 """Exercise real Streamlit reruns to ensure hidden tabs do not load data."""
 
+from app.presentation.components import resource_pool_frames
+
 import tempfile
 import unittest
 from pathlib import Path
@@ -7,7 +9,7 @@ from unittest.mock import patch
 
 from streamlit.testing.v1 import AppTest
 
-from src.database.seeder import seed_default_data_if_empty
+from app.infrastructure.database.seeder import seed_default_data_if_empty
 
 
 def settings_app(db_path):
@@ -19,14 +21,14 @@ def settings_app(db_path):
 class SettingsLazyLoadingTests(unittest.TestCase):
     def test_resource_pool_details_keep_controls_without_daily_chart(self) -> None:
         """Pools with and without demand retain details but never render a chart."""
-        from src.models.resource_pool import ResourcePool
-        from src.repositories.resource_pool_repo import ResourcePoolRepository
+        from app.domain.resources.models import ResourcePool
+        from app.main import create_resource_pool_service
 
         with tempfile.TemporaryDirectory() as directory:
             db_path = str(Path(directory) / "test.db")
             seed_default_data_if_empty(db_path)
-            pools = ResourcePoolRepository(db_path)
-            assigned_pool_id = int(pools.get_assignments().iloc[0]["pool_id"])
+            pools = create_resource_pool_service(db_path)
+            assigned_pool_id = int(resource_pool_frames.assignments_frame(pools.get_assignments()).iloc[0]["pool_id"])
             empty_pool_id = pools.create_pool(
                 ResourcePool(name="Pool without demand", capacity_fte=3.0)
             )

@@ -8,13 +8,13 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 from app.main import create_schema_service, create_project_service, create_project_type_service
-from src.database.schema_init import init_db
+from app.infrastructure.database.schema_init import init_db
 
 
 @pytest.fixture
 def french_host_locale():
     """Protect callbacks when an English app is driven from a French host."""
-    from src.i18n import get_current_locale, set_current_locale
+    from app.presentation.i18n import get_current_locale, set_current_locale
 
     previous = get_current_locale()
     set_current_locale("fr")
@@ -29,7 +29,7 @@ def editor(path: str) -> AppTest:
     app = AppTest.from_string(f'''
 from app.main import create_schema_service, create_project_type_service
 from app.presentation.pages.schema import render_schema_definition
-from src.i18n import set_current_locale
+from app.presentation.i18n import set_current_locale
 set_current_locale("en")
 render_schema_definition(create_schema_service({path!r}), create_project_type_service({path!r}))
 ''', default_timeout=15).run()
@@ -128,20 +128,21 @@ def test_schema_editor_shows_safe_errors_and_keeps_failed_creation_atomic(tmp_pa
     assert snapshot.parameters == snapshot.options == []
 
 
-def test_legacy_settings_route_composes_the_new_schema_screen(
+def test_settings_route_composes_the_schema_screen(
     tmp_path: Path, french_host_locale: None,
 ) -> None:
     path = str(tmp_path / "settings.db")
     init_db(path)
     app = AppTest.from_string(f'''
 import streamlit as st
-from src.i18n import set_current_locale
-from src.repositories.organization_repo import OrganizationRepository
-from src.repositories.schema_repo import SchemaRepository
-from src.views.settings_view import render_settings_view
+from app.presentation.i18n import set_current_locale
+from app.main import create_organization_service
+from app.main import create_schema_service
+from app.presentation.pages.settings import render_settings_view
+from app.main import create_settings_workspace
 set_current_locale("en")
 st.session_state["rb_settings_section"] = "param_def"
-render_settings_view(OrganizationRepository({path!r}), schema_repo=SchemaRepository({path!r}))
+render_settings_view(create_settings_workspace({path!r}))
 ''', default_timeout=15).run()
     assert not app.exception, [error.message for error in app.exception]
     assert "Project templates" in [tab.label for tab in app.tabs]

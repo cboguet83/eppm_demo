@@ -4,12 +4,9 @@ from dataclasses import asdict
 import pandas as pd
 from app.application.ports.tag_records import (
     DictionaryRow,
-    EntityChoice,
     PoolTagRow,
     ProjectTagRow,
     TagGroupRow,
-    TagLink,
-    TaskChoice,
     TaskTagPage,
     TaskTagRow,
 )
@@ -115,7 +112,7 @@ def get_task_tags_by_task_frame(records: list[TaskTagRow]) -> pd.DataFrame:
 
 
 def page_frame(page: TaskTagPage) -> dict[str, object]:
-    """Convert only one requested page at the component/legacy boundary."""
+    """Convert one requested page for display in the task-tag component."""
     data = asdict(page)
     data["rows"] = get_all_task_tags_frame(page.rows)
     return data

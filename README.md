@@ -33,9 +33,10 @@ translations and component assets into presentation and isolates locale state.
 backups, database maintenance, and seed commands.
 [ADR 0014](docs/decisions/0014-layered-application-shell.md) completes the application
 shell, Settings navigation, startup composition, and developer command imports.
-The application and active scripts no longer import `src`. That package retains
-compatibility adapters for historical imports and regression tests; it no longer
-owns feature implementations. Existing SQLite data and migration versions are preserved.
+The application, commands, and tests use the owning `app` modules directly.
+[ADR 0015](docs/decisions/0015-retire-compatibility-interfaces.md) removes `src`,
+the `app.py` launcher, lazy package exports, and compatibility-only helpers.
+Existing SQLite data and applied database migrations are preserved.
 
 ### C4 level 2: runtime containers
 
@@ -55,8 +56,7 @@ C4Container
 
 | Location | Purpose |
 | --- | --- |
-| `streamlit_app.py` | Preferred Streamlit launcher |
-| `app.py` | Compatibility launcher for existing commands |
+| `streamlit_app.py` | Streamlit launcher |
 | `app/main.py` | Dependency construction and startup |
 | `app/presentation/` | Application shell, pages, components, locale state, and bundled assets |
 | `app/application/` | Project/type/schema/organization/pool use cases, capacity services, portfolio queries, ports, and boundary errors |
@@ -65,7 +65,6 @@ C4Container
 | `app/domain/resources/` | Pool/group records, validation, deduplication, and daily capacity rules |
 | `app/infrastructure/` | SQLite transactions, typed queries, capacity snapshots/cache, and paged reads |
 | `app/shared/` | Configuration and logging |
-| `src/` | Compatibility adapters for historical imports; unused by the active application |
 | `scripts/` | Seeding, database maintenance, and benchmarks |
 | `tests/` | Existing regressions, layer checks, and migration tests |
 | `docs/decisions/` | Architecture decisions and migration status |
@@ -98,8 +97,8 @@ cp .env.example .env
 ```powershell
 streamlit run streamlit_app.py
 ```
-Open `http://localhost:8501` in your browser. Existing `streamlit run app.py` and
-`python app.py` seeding/help commands remain supported.
+Open `http://localhost:8501` in your browser. Use `python -m app.main --help` for
+startup options and `python -m scripts.seed_defaults` for default-data seeding.
 
 ### 4. Run Automated Tests
 ```powershell
@@ -308,7 +307,7 @@ To populate or reset mock projects inside a running Docker container on-demand, 
 
 ```powershell
 # Force re-seed default taxonomy, schema, and sample projects
-docker compose exec app python -m src.database.seeder --force
+docker compose exec app python -m scripts.seed_defaults --force
 
 # Reseed 50 generated projects inside the active container
 docker compose exec app python scripts/seed_database.py --projects 50
@@ -316,9 +315,10 @@ docker compose exec app python scripts/seed_database.py --projects 50
 # Reseed 250 projects with custom task bounds
 docker compose exec app python scripts/seed_database.py --projects 250 --min-tasks 3 --max-tasks 12
 
-# Run the automated unit tests inside the container environment
-docker compose exec app python -m unittest discover tests
 ```
+
+Run the regression suite from the local development environment with
+`python -m pytest -q`; the runtime image does not include tests or test dependencies.
 
 ---
 
@@ -469,7 +469,7 @@ Scroll requests rerun only the portfolio browser fragment. Bounded server caches
 are invalidated by SQLite database/WAL file revisions.
 
 The UI calls project types **project templates**; existing SQLite table/column
-names remain unchanged for compatibility. Details and create/edit dialogs expose
+names use `project_type`. Details and create/edit dialogs expose
 every applicable template property, including unfilled, ungrouped, and custom
 properties. Defaults apply only on creation, and effective required-field rules
 remain enforced. Portfolio regression checks:

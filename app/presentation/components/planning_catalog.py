@@ -1,10 +1,9 @@
 """Project catalog formatting for planning's dynamic filters.
 
-Any marks the presentation DataFrame/JSON boundary. Hierarchy traversal delegates
+Any marks the presentation DataFrame boundary. Hierarchy traversal delegates
 to the existing cycle-aware domain rule.
 """
 
-import json
 from typing import Any
 import pandas as pd
 from app.domain.organization.rules import find_level_3_function as _find_level_3_function
@@ -54,7 +53,7 @@ def _build_function_lookup(df_functions: pd.DataFrame) -> dict[int, dict[str, An
                 "hierarchy_level": lvl,
                 "manager_function_id": mgr,
             }
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             continue
     return func_lookup
 
@@ -126,7 +125,7 @@ def get_function_occupant_names(
         for _, row in df_functions.iterrows():
             try:
                 labels[int(row["function_id"])] = str(row.get("name") or "—")
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 continue
     if df_employees is None or df_employees.empty or "function_id" not in df_employees.columns:
         return labels
@@ -137,7 +136,7 @@ def get_function_occupant_names(
             continue
         try:
             function_id_int = int(function_id)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             continue
         if function_id_int in occupied or function_id_int not in labels:
             continue
@@ -171,17 +170,7 @@ def flatten_dynamic_attributes(df_projects: pd.DataFrame, params: pd.DataFrame) 
         return df_projects
     flattened_rows: list[dict[str, Any]] = []
     for _, row in df_projects.iterrows():
-        raw_json = row.get("dynamic_attributes")
-        attrs: dict[str, Any] = {}
-        if isinstance(raw_json, dict):
-            attrs = dict(raw_json)
-        elif isinstance(raw_json, str) and raw_json.strip():
-            try:
-                parsed = json.loads(raw_json)
-                if isinstance(parsed, dict):
-                    attrs = parsed
-            except json.JSONDecodeError:
-                attrs = {}
+        attrs = dict(row["dynamic_attributes"])
         attrs["id"] = row["id"]
         flattened_rows.append(attrs)
     df_dyn = pd.DataFrame(flattened_rows)
@@ -190,14 +179,9 @@ def flatten_dynamic_attributes(df_projects: pd.DataFrame, params: pd.DataFrame) 
         for _, p in params.iterrows():
             pid = str(p["param_id"])
             pname = str(p.get("param_name", pid))
-            alias = str(p.get("alias", "")).strip() if pd.notna(p.get("alias")) else ""
             ptype = str(p.get("param_type", "TEXT"))
             if pid not in df_merged.columns:
                 df_merged[pid] = None
-            if pname in df_merged.columns and pname != pid:
-                df_merged[pid] = df_merged[pid].combine_first(df_merged[pname])
-            if alias and alias in df_merged.columns and (alias != pid):
-                df_merged[pid] = df_merged[pid].combine_first(df_merged[alias])
             if ptype in ("MULTI_ENUM", "TAGS"):
                 df_merged[pid] = df_merged[pid].apply(
                     lambda x: x if isinstance(x, list) else [x] if pd.notna(x) and x != "" else []

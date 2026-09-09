@@ -6,7 +6,7 @@ from app.domain.resources.inputs import CapacityInputs
 from app.domain.resources.models import (
     CapacityAssignment,
     PoolCapacityDetail,
-    PoolFunctionContribution,
+    PoolResourceContribution,
 )
 from app.domain.resources.timeline import demand_timeline
 from app.domain.resources.capacity_rules import (
@@ -76,7 +76,7 @@ def _direct_resources(
     return resources, occurrences
 
 
-def resource_contributions(inputs: CapacityInputs) -> list[PoolFunctionContribution]:
+def resource_contributions(inputs: CapacityInputs) -> list[PoolResourceContribution]:
     """Count each employee once, falling back to vacant legacy functions."""
     functions = {function.function_id: function for function in inputs.functions}
     employees = {employee.employee_id: employee for employee in inputs.employees}
@@ -86,7 +86,7 @@ def resource_contributions(inputs: CapacityInputs) -> list[PoolFunctionContribut
             occupants.setdefault(employee.function_id, []).append(employee.employee_id)
     teams, team_counts = _team_resources(inputs, occupants)
     direct, direct_counts = _direct_resources(inputs, occupants)
-    result: list[PoolFunctionContribution] = []
+    result: list[PoolResourceContribution] = []
     for kind, identity in sorted(teams.keys() | direct.keys()):
         key = (kind, identity)
         employee = employees.get(identity) if kind == "employee" else None
@@ -98,7 +98,7 @@ def resource_contributions(inputs: CapacityInputs) -> list[PoolFunctionContribut
         nominal = (percentage if percentage is not None else 100.0) / 100.0
         source, allocation = direct[key] if key in direct else teams[key]
         result.append(
-            PoolFunctionContribution(
+            PoolResourceContribution(
                 function_id=function_id,
                 function_name=function.name if function else "Unassigned function",
                 nominal_fte=nominal,
@@ -123,7 +123,7 @@ def resource_contributions(inputs: CapacityInputs) -> list[PoolFunctionContribut
 
 def _calendar_capacity(
     inputs: CapacityInputs,
-    contributions: list[PoolFunctionContribution],
+    contributions: list[PoolResourceContribution],
     base: float,
 ) -> dict[str, float]:
     """Apply inclusive employee overrides as sparse changes to normal capacity."""
@@ -210,7 +210,7 @@ def calculate_capacity(inputs: CapacityInputs, today: date) -> PoolCapacityDetai
         defined_capacity_fte=defined,
         effective_capacity_fte=effective,
         has_assigned_resources=bool(contributions),
-        contributing_functions=contributions,
+        contributing_resources=contributions,
         daily_assigned_capacity=daily_capacity,
         assignments=assignments,
         daily_usage=daily_usage,

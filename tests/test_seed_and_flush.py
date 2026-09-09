@@ -1,5 +1,11 @@
 """Unit tests for Database Seeding and Database Flushing scripts."""
 
+from app.main import create_project_service
+from app.main import create_schema_service
+
+from app.presentation.components import planning_frames
+import pandas as pd
+
 from contextlib import closing
 
 import gc
@@ -8,11 +14,10 @@ import shutil
 import tempfile
 import unittest
 
-from scripts.flush_database import flush_database
-from scripts.seed_database import seed_database
-from src.database.connection import get_db
-from src.repositories.milestone_repo import MilestoneRepository
-from src.repositories.project_repo import ProjectRepository
+from app.infrastructure.database.flush import flush_database
+from app.infrastructure.database.bulk_seed import seed_database
+from app.infrastructure.database.connection import get_db
+from app.main import create_planning_service
 
 
 class TestSeedAndFlush(unittest.TestCase):
@@ -23,8 +28,8 @@ class TestSeedAndFlush(unittest.TestCase):
         self.test_dir = tempfile.mkdtemp()
         self.db_path = os.path.join(self.test_dir, "test_seed_flush.db")
 
-        self.project_repo = ProjectRepository(db_path=self.db_path)
-        self.milestone_repo = MilestoneRepository(db_path=self.db_path)
+        self.project_repo = create_project_service(db_path=self.db_path)
+        self.milestone_repo = create_planning_service(db_path=self.db_path)
 
     def tearDown(self) -> None:
         """Cleans up the temporary database directory."""
@@ -48,13 +53,13 @@ class TestSeedAndFlush(unittest.TestCase):
         self.assertGreater(res["dependencies_created"], 0)
 
         # Verify projects in database
-        df_projects = self.project_repo.get_all_projects()
+        df_projects = pd.DataFrame(create_project_service(self.db_path).get_planning_catalog(tuple(parameter.param_id for parameter in create_schema_service(self.db_path).get_all_parameters())))
         self.assertEqual(len(df_projects), 15)
         self.assertTrue(all(isinstance(p_id, int) for p_id in df_projects["id"]))
 
         # Verify tasks per project
         for p_id in df_projects["id"]:
-            tasks_df = self.milestone_repo.get_milestones_by_project(p_id)
+            tasks_df = planning_frames.tasks_frame(self.milestone_repo.get_milestones_by_project(p_id))
             self.assertGreaterEqual(len(tasks_df), 3)
             self.assertLessEqual(len(tasks_df), 8)
 
@@ -85,7 +90,7 @@ class TestSeedAndFlush(unittest.TestCase):
         )
 
         # Verify data is present
-        self.assertEqual(len(self.project_repo.get_all_projects()), 10)
+        self.assertEqual(len(pd.DataFrame(create_project_service(self.db_path).get_planning_catalog(tuple(parameter.param_id for parameter in create_schema_service(self.db_path).get_all_parameters())))), 10)
 
         # Flush
         flush_res = flush_database(db_path=self.db_path)
@@ -94,7 +99,7 @@ class TestSeedAndFlush(unittest.TestCase):
         self.assertGreater(flush_res["dependencies_deleted"], 0)
 
         # Verify database is now completely empty
-        self.assertEqual(len(self.project_repo.get_all_projects()), 0)
+        self.assertEqual(len(pd.DataFrame(create_project_service(self.db_path).get_planning_catalog(tuple(parameter.param_id for parameter in create_schema_service(self.db_path).get_all_parameters())))), 0)
         with closing(get_db(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) FROM project_task")
@@ -117,10 +122,10 @@ class TestSeedAndFlush(unittest.TestCase):
         self.assertEqual(res["tasks_created"], 0)
         self.assertEqual(res["dependencies_created"], 0)
 
-        df_projects = self.project_repo.get_all_projects()
+        df_projects = pd.DataFrame(create_project_service(self.db_path).get_planning_catalog(tuple(parameter.param_id for parameter in create_schema_service(self.db_path).get_all_parameters())))
         self.assertEqual(len(df_projects), 5)
         for p_id in df_projects["id"]:
-            tasks_df = self.milestone_repo.get_milestones_by_project(p_id)
+            tasks_df = planning_frames.tasks_frame(self.milestone_repo.get_milestones_by_project(p_id))
             self.assertEqual(len(tasks_df), 0)
 
 

@@ -1,1 +1,0 @@
-"""PPM Studio Pro package."""

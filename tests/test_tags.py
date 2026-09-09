@@ -1,19 +1,21 @@
 """Unit tests for Tag domain models, repository, and validation service."""
 
+from app.domain.tags.rules import validate_tag
+
+from app.presentation.components import tag_frames
+
 import os
 import tempfile
 import unittest
 
-from src.database.schema_init import init_db
-from src.models.milestone import Milestone
-from src.models.project import Project
-from src.models.resource_pool import ResourcePool
-from src.models.tag import ProjectTag, ResourcePoolTag, TagDictionary, TagGroup, TaskTag
-from src.repositories.milestone_repo import MilestoneRepository
-from src.repositories.project_repo import ProjectRepository
-from src.repositories.resource_pool_repo import ResourcePoolRepository
-from src.repositories.tag_repo import TagRepository
-from src.services.tag_service import TagService
+from app.infrastructure.database.schema_init import init_db
+from app.domain.resources.models import ResourcePool
+from app.domain.tags.rules import validate_tag_group, validate_assignment
+from app.domain.tags.models import ProjectTag, ResourcePoolTag, TagDictionary, TagGroup, TaskTag
+from app.main import create_planning_service
+from app.main import create_project_service
+from app.main import create_resource_pool_service
+from app.main import create_tag_service
 
 
 class TestTagsSystem(unittest.TestCase):
@@ -26,10 +28,10 @@ class TestTagsSystem(unittest.TestCase):
         self.temp_db.close()
 
         init_db(self.db_path)
-        self.tag_repo = TagRepository(self.db_path)
-        self.project_repo = ProjectRepository(self.db_path)
-        self.milestone_repo = MilestoneRepository(self.db_path)
-        self.pool_repo = ResourcePoolRepository(self.db_path)
+        self.tag_repo = create_tag_service(self.db_path)
+        self.project_repo = create_project_service(self.db_path)
+        self.milestone_repo = create_planning_service(self.db_path)
+        self.pool_repo = create_resource_pool_service(self.db_path)
 
         # Create a sample project and task for tagging tests
         self.project_id = self.project_repo.create_project(
@@ -68,7 +70,7 @@ class TestTagsSystem(unittest.TestCase):
         self.assertIsNotNone(group)
         self.assertEqual(group.tag_group_name, "Architecture")
 
-        df = self.tag_repo.get_all_tag_groups()
+        df = tag_frames.get_all_tag_groups_frame(self.tag_repo.get_all_tag_groups())
         self.assertEqual(len(df), 1)
         self.assertEqual(df.iloc[0]["tag_group_name"], "Architecture")
 
@@ -102,7 +104,7 @@ class TestTagsSystem(unittest.TestCase):
         self.assertEqual(tag.tag, "Microservices")
         self.assertEqual(tag.tag_group_id, group_id)
 
-        df = self.tag_repo.get_all_tags()
+        df = tag_frames.get_all_tags_frame(self.tag_repo.get_all_tags())
         self.assertEqual(len(df), 1)
         self.assertEqual(df.iloc[0]["tag"], "Microservices")
         self.assertEqual(df.iloc[0]["tag_group_name"], "Tech")
@@ -137,13 +139,13 @@ class TestTagsSystem(unittest.TestCase):
         )
         self.assertEqual(assignment_id, duplicate_id)
 
-        self.tag_repo.set_resource_pool_tags(pool_id, [first_tag, second_tag, second_tag])
-        assigned = self.tag_repo.get_resource_pool_tags(pool_id)
+        self.pool_repo.set_pool_tags(pool_id, [first_tag, second_tag, second_tag])
+        assigned = tag_frames.get_resource_pool_tags_frame(self.tag_repo.get_resource_pool_tags(pool_id))
         self.assertEqual(set(assigned["tag_id"].astype(int)), {first_tag, second_tag})
         self.assertEqual(self.tag_repo.count_tag_usages(first_tag), 1)
 
         self.tag_repo.delete_tag(first_tag)
-        remaining = self.tag_repo.get_resource_pool_tags(pool_id)
+        remaining = tag_frames.get_resource_pool_tags_frame(self.tag_repo.get_resource_pool_tags(pool_id))
         self.assertEqual(remaining["tag_id"].astype(int).tolist(), [second_tag])
 
     # -------------------------------------------------------------------------
@@ -163,7 +165,7 @@ class TestTagsSystem(unittest.TestCase):
         self.assertEqual(pt.tag_id, tag_id)
         self.assertEqual(pt.free_tag, "Priority-1")
 
-        df = self.tag_repo.get_all_project_tags()
+        df = tag_frames.get_all_project_tags_frame(self.tag_repo.get_all_project_tags())
         self.assertEqual(len(df), 1)
         self.assertEqual(df.iloc[0]["project_name"], "Cloud Platform Alpha")
         self.assertEqual(df.iloc[0]["tag_name"], "Strategic")
@@ -200,7 +202,7 @@ class TestTagsSystem(unittest.TestCase):
         self.assertEqual(tt.tag_id, tag_id)
         self.assertEqual(tt.free_tag, "Urgent-Fix")
 
-        df = self.tag_repo.get_all_task_tags()
+        df = tag_frames.get_all_task_tags_frame(self.tag_repo.get_all_task_tags())
         self.assertEqual(len(df), 1)
         self.assertEqual(df.iloc[0]["task_name"], "Architecture Blueprint")
         self.assertEqual(df.iloc[0]["tag_name"], "Frontend")
@@ -253,32 +255,32 @@ class TestTagsSystem(unittest.TestCase):
     def test_tag_service_validation(self) -> None:
         """Test TagService validation rules."""
         # Tag Group
-        TagService.validate_tag_group("Valid Name")
+        validate_tag_group("Valid Name")
         with self.assertRaises(ValueError):
-            TagService.validate_tag_group("")
+            validate_tag_group("")
         with self.assertRaises(ValueError):
-            TagService.validate_tag_group("   ")
+            validate_tag_group("   ")
 
         # Tag Dictionary
-        TagService.validate_tag("Valid Tag")
+        validate_tag("Valid Tag")
         with self.assertRaises(ValueError):
-            TagService.validate_tag("")
+            validate_tag("")
 
         # Project Tag
-        TagService.validate_project_tag(1, tag_id=2)
-        TagService.validate_project_tag(1, free_tag="FreeTag")
+        validate_assignment(1, 2, None, entity='Project')
+        validate_assignment(1, None, 'FreeTag', entity='Project')
         with self.assertRaises(ValueError):
-            TagService.validate_project_tag(None, tag_id=2)
+            validate_assignment(None, 2, None, entity='Project')
         with self.assertRaises(ValueError):
-            TagService.validate_project_tag(1, tag_id=None, free_tag="")
+            validate_assignment(1, None, '', entity='Project')
 
         # Task Tag
-        TagService.validate_task_tag(1, tag_id=2)
-        TagService.validate_task_tag(1, free_tag="TaskTag")
+        validate_assignment(1, 2, None, entity='Task')
+        validate_assignment(1, None, 'TaskTag', entity='Task')
         with self.assertRaises(ValueError):
-            TagService.validate_task_tag(None, tag_id=2)
+            validate_assignment(None, 2, None, entity='Task')
         with self.assertRaises(ValueError):
-            TagService.validate_task_tag(1, tag_id=None, free_tag="")
+            validate_assignment(1, None, '', entity='Task')
 
     # -------------------------------------------------------------------------
     # Batch Tag Queries Tests
@@ -317,33 +319,33 @@ class TestTagsSystem(unittest.TestCase):
         other_tag_id = self.tag_repo.create_tag(TagDictionary(tag="OtherTag", tag_group_id=other_group_id))
 
         # 1. Project Tag Group query
-        df_pt = self.tag_repo.get_project_tag_group_tags()
+        df_pt = tag_frames.get_project_tag_group_tags_frame(self.tag_repo.get_project_tag_group_tags())
         self.assertEqual(len(df_pt), 1)
         self.assertEqual(df_pt.iloc[0]["id"], pt_tag_id)
         self.assertEqual(df_pt.iloc[0]["tag"], "ProjectSpecificTag")
 
         # 2. Task Tag Group query
-        df_tt = self.tag_repo.get_task_tag_group_tags()
+        df_tt = tag_frames.get_task_tag_group_tags_frame(self.tag_repo.get_task_tag_group_tags())
         self.assertEqual(len(df_tt), 1)
         self.assertEqual(df_tt.iloc[0]["id"], tt_tag_id)
         self.assertEqual(df_tt.iloc[0]["tag"], "TaskSpecificTag")
 
         # 3. Validation Service Enforcement
         # Valid Project Tag (from project_tag group)
-        TagService.validate_project_tag(self.project_id, tag_id=pt_tag_id, tag_repo=self.tag_repo)
+        validate_assignment(self.project_id, pt_tag_id, None, entity='Project', group=self.tag_repo.get_tag_group_for_tag(pt_tag_id))
         # Invalid Project Tag (from Task_Tag or Other group)
         with self.assertRaises(ValueError):
-            TagService.validate_project_tag(self.project_id, tag_id=tt_tag_id, tag_repo=self.tag_repo)
+            validate_assignment(self.project_id, tt_tag_id, None, entity='Project', group=self.tag_repo.get_tag_group_for_tag(tt_tag_id))
         with self.assertRaises(ValueError):
-            TagService.validate_project_tag(self.project_id, tag_id=other_tag_id, tag_repo=self.tag_repo)
+            validate_assignment(self.project_id, other_tag_id, None, entity='Project', group=self.tag_repo.get_tag_group_for_tag(other_tag_id))
 
         # Valid Task Tag (from Task_Tag group)
-        TagService.validate_task_tag(self.task_id, tag_id=tt_tag_id, tag_repo=self.tag_repo)
+        validate_assignment(self.task_id, tt_tag_id, None, entity='Task', group=self.tag_repo.get_tag_group_for_tag(tt_tag_id))
         # Invalid Task Tag (from project_tag or Other group)
         with self.assertRaises(ValueError):
-            TagService.validate_task_tag(self.task_id, tag_id=pt_tag_id, tag_repo=self.tag_repo)
+            validate_assignment(self.task_id, pt_tag_id, None, entity='Task', group=self.tag_repo.get_tag_group_for_tag(pt_tag_id))
         with self.assertRaises(ValueError):
-            TagService.validate_task_tag(self.task_id, tag_id=other_tag_id, tag_repo=self.tag_repo)
+            validate_assignment(self.task_id, other_tag_id, None, entity='Task', group=self.tag_repo.get_tag_group_for_tag(other_tag_id))
 
 
 if __name__ == "__main__":

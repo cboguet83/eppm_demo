@@ -1,5 +1,7 @@
 """Regression tests for lazy, current task-resource-pool dialogs."""
 
+from app.presentation.components import resource_pool_frames
+
 from contextlib import closing
 
 import datetime
@@ -11,8 +13,8 @@ from unittest.mock import patch
 
 from streamlit.testing.v1 import AppTest
 
-from src.database.schema_init import init_db
-from src.repositories.resource_pool_repo import ResourcePoolRepository
+from app.infrastructure.database.schema_init import init_db
+from app.main import create_resource_pool_service
 
 
 def task_pool_app(db_path: str, task_id: int = 1) -> None:
@@ -32,7 +34,7 @@ class TaskPoolDialogTests(unittest.TestCase):
         self.addCleanup(directory.cleanup)
         self.path = str(Path(directory.name) / 'dialog.db')
         init_db(self.path)
-        self.repo = ResourcePoolRepository(self.path)
+        self.repo = create_resource_pool_service(self.path)
         with closing(sqlite3.connect(self.path)) as conn, conn:
             conn.execute("INSERT INTO project(id,name) VALUES(1,'Project')")
             conn.executemany(
@@ -147,7 +149,7 @@ class TaskPoolDialogTests(unittest.TestCase):
         app.text_input(key='ti_assign_task_notes').set_value('  Test assignment  ')
         app.button(key='btn_confirm_assign_task_pool').click().run()
         self.assert_healthy(app)
-        assignments = self.repo.get_assignments(task_id=1)
+        assignments = resource_pool_frames.assignments_frame(self.repo.get_assignments(task_id=1))
         self.assertEqual(len(assignments), 3)
         saved = assignments[assignments.pool_id == 2].iloc[0]
         self.assertEqual(saved.fte_assigned, 2.5)
@@ -156,7 +158,7 @@ class TaskPoolDialogTests(unittest.TestCase):
         self.assertIsNone(saved.custom_end_date)
         app.button(key=f'btn_del_assign_task_{int(saved.id)}').click().run()
         self.assert_healthy(app)
-        self.assertEqual(len(self.repo.get_assignments(task_id=1)), 2)
+        self.assertEqual(len(resource_pool_frames.assignments_frame(self.repo.get_assignments(task_id=1))), 2)
 
     def test_custom_dates_are_validated_and_saved(self) -> None:
         """Invalid ranges do not silently become full-duration assignments."""
@@ -167,11 +169,11 @@ class TaskPoolDialogTests(unittest.TestCase):
         app.button(key='btn_confirm_assign_task_pool').click().run()
         self.assert_healthy(app)
         self.assertTrue(app.error)
-        self.assertEqual(len(self.repo.get_assignments(task_id=1)), 2)
+        self.assertEqual(len(resource_pool_frames.assignments_frame(self.repo.get_assignments(task_id=1))), 2)
         app.date_input(key='di_assign_task_e').set_value(datetime.date(2026, 6, 30))
         app.button(key='btn_confirm_assign_task_pool').click().run()
         self.assert_healthy(app)
-        assignments = self.repo.get_assignments(task_id=1)
+        assignments = resource_pool_frames.assignments_frame(self.repo.get_assignments(task_id=1))
         self.assertEqual(len(assignments), 3)
         saved = assignments.iloc[-1]
         self.assertEqual(saved.custom_start_date, '2026-06-20')

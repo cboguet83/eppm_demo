@@ -1,15 +1,17 @@
 """Comprehensive Unit Tests for Task Dependencies and Constraint Validation."""
 
+from app.domain.planning.constraints import evaluate_constraints
+
+from app.presentation.components import planning_frames
+
 import os
 import shutil
 import tempfile
 import unittest
 
-from src.database.schema_init import init_db
-from src.models.dependency import LinkType, TaskDependency, DependencyViolation
-from src.repositories.milestone_repo import MilestoneRepository
-from src.repositories.project_repo import ProjectRepository
-from src.services.milestone_service import MilestoneService
+from app.infrastructure.database.schema_init import init_db
+from app.main import create_planning_service
+from app.main import create_project_service
 
 
 class TestTaskDependencies(unittest.TestCase):
@@ -21,8 +23,8 @@ class TestTaskDependencies(unittest.TestCase):
         self.db_path = os.path.join(self.test_dir, "test_dependencies.db")
         init_db(self.db_path)
 
-        self.project_repo = ProjectRepository(self.db_path)
-        self.milestone_repo = MilestoneRepository(self.db_path)
+        self.project_repo = create_project_service(self.db_path)
+        self.milestone_repo = create_planning_service(self.db_path)
 
         self.project_repo.create_project(1, "Alpha Core", "Active", 100000.0, 50000.0, {})
         self.project_repo.create_project(2, "Beta Subsystem", "Active", 80000.0, 20000.0, {})
@@ -58,7 +60,7 @@ class TestTaskDependencies(unittest.TestCase):
             {"task_id": 6, "predecessor_task_id": 1, "link_type": "FS", "lag_days": -2},
         ]
 
-        evaluated, violations = MilestoneService.evaluate_constraints(tasks, deps)
+        evaluated, violations = evaluate_constraints(tasks, deps)
 
         self.assertFalse(evaluated[0]["is_violated"])
         self.assertFalse(evaluated[1]["is_violated"])
@@ -95,7 +97,7 @@ class TestTaskDependencies(unittest.TestCase):
             {"task_id": 4, "predecessor_task_id": 1, "link_type": "FF", "lag_days": 3},
         ]
 
-        evaluated, violations = MilestoneService.evaluate_constraints(tasks, deps)
+        evaluated, violations = evaluate_constraints(tasks, deps)
 
         self.assertFalse(evaluated[0]["is_violated"])
         self.assertFalse(evaluated[1]["is_violated"])
@@ -126,7 +128,7 @@ class TestTaskDependencies(unittest.TestCase):
             {"task_id": 4, "predecessor_task_id": 1, "link_type": "SS", "lag_days": 5},
         ]
 
-        evaluated, violations = MilestoneService.evaluate_constraints(tasks, deps)
+        evaluated, violations = evaluate_constraints(tasks, deps)
 
         self.assertFalse(evaluated[0]["is_violated"])
         self.assertFalse(evaluated[1]["is_violated"])
@@ -157,7 +159,7 @@ class TestTaskDependencies(unittest.TestCase):
             {"task_id": 4, "predecessor_task_id": 1, "link_type": "SF", "lag_days": 4},
         ]
 
-        evaluated, violations = MilestoneService.evaluate_constraints(tasks, deps)
+        evaluated, violations = evaluate_constraints(tasks, deps)
 
         self.assertFalse(evaluated[0]["is_violated"])
         self.assertFalse(evaluated[1]["is_violated"])
@@ -185,7 +187,7 @@ class TestTaskDependencies(unittest.TestCase):
             {"task_id": 40, "predecessor_task_id": 30, "link_type": "SS", "lag_days": 0},
         ]
 
-        evaluated, violations = MilestoneService.evaluate_constraints(tasks, deps)
+        evaluated, violations = evaluate_constraints(tasks, deps)
 
         self.assertEqual(len(evaluated), 3)
         self.assertFalse(evaluated[0]["is_violated"])
@@ -210,7 +212,7 @@ class TestTaskDependencies(unittest.TestCase):
             {"task_id": 100, "predecessor_task_id": None, "predecessor_project_id": "PRJ-BETA", "link_type": "FS", "lag_days": 0},
         ]
 
-        evaluated, violations = MilestoneService.evaluate_constraints([internal_task], deps, project_bounds)
+        evaluated, violations = evaluate_constraints([internal_task], deps, project_bounds)
 
         self.assertEqual(len(evaluated), 1)
         self.assertTrue(evaluated[0]["is_violated"])
@@ -280,27 +282,27 @@ class TestTaskDependencies(unittest.TestCase):
     def test_multiproject_constraint_evaluation(self) -> None:
         """Verify evaluating tasks and dependencies across multiple projects in a single combined timeline."""
         tasks = [
-            {"id": 1, "task_name": "P1 Task 1", "start_date": "2026-01-01", "end_date": "2026-01-10", "project_id": "PRJ-1"},
-            {"id": 2, "task_name": "P1 Task 2", "start_date": "2026-01-11", "end_date": "2026-01-20", "project_id": "PRJ-1"},
-            {"id": 3, "task_name": "P2 Task 1", "start_date": "2026-01-15", "end_date": "2026-01-25", "project_id": "PRJ-2"},
-            {"id": 4, "task_name": "P2 Task 2", "start_date": "2026-01-05", "end_date": "2026-01-12", "project_id": "PRJ-2"},
+            {"id": 1, "task_name": "P1 Task 1", "start_date": "2026-01-01", "end_date": "2026-01-10", "project_id": 1},
+            {"id": 2, "task_name": "P1 Task 2", "start_date": "2026-01-11", "end_date": "2026-01-20", "project_id": 1},
+            {"id": 3, "task_name": "P2 Task 1", "start_date": "2026-01-15", "end_date": "2026-01-25", "project_id": 2},
+            {"id": 4, "task_name": "P2 Task 2", "start_date": "2026-01-05", "end_date": "2026-01-12", "project_id": 2},
         ]
 
         deps = [
             # P1 Task 2 depends on P1 Task 1 (Internal: respected)
             {"task_id": 2, "predecessor_task_id": 1, "predecessor_project_id": None, "link_type": "FS", "lag_days": 0},
             # P2 Task 1 depends on P1 Task 2 (Cross-project: violated because P2 Task 1 starts on Jan 15 < P1 Task 2 ends Jan 20)
-            {"task_id": 3, "predecessor_task_id": 2, "predecessor_project_id": "PRJ-1", "link_type": "FS", "lag_days": 0},
+            {"task_id": 3, "predecessor_task_id": 2, "predecessor_project_id": 1, "link_type": "FS", "lag_days": 0},
             # P2 Task 2 depends on whole PRJ-1 (Cross-project whole: violated because PRJ-1 ends Jan 20, but P2 Task 2 starts Jan 5)
-            {"task_id": 4, "predecessor_task_id": None, "predecessor_project_id": "PRJ-1", "link_type": "FS", "lag_days": 0},
+            {"task_id": 4, "predecessor_task_id": None, "predecessor_project_id": 1, "link_type": "FS", "lag_days": 0},
         ]
 
         project_bounds = {
-            "PRJ-1": ("2026-01-01", "2026-01-20"),
-            "PRJ-2": ("2026-01-05", "2026-01-25"),
+            1: ("2026-01-01", "2026-01-20"),
+            2: ("2026-01-05", "2026-01-25"),
         }
 
-        evaluated, violations = MilestoneService.evaluate_constraints(tasks, deps, project_bounds)
+        evaluated, violations = evaluate_constraints(tasks, deps, project_bounds)
 
         self.assertEqual(len(evaluated), 3)
         self.assertFalse(evaluated[0]["is_violated"]) # Task 2 -> Task 1
@@ -381,7 +383,7 @@ class TestTaskDependencies(unittest.TestCase):
         )
         self.assertGreater(step_id, 0)
 
-        df = self.milestone_repo.get_milestones_by_project(1)
+        df = planning_frames.tasks_frame(self.milestone_repo.get_milestones_by_project(1))
         row = df[df["id"] == step_id].iloc[0]
         self.assertEqual(row["description"], "Detailed scoping document deliverables")
 
@@ -396,11 +398,10 @@ class TestTaskDependencies(unittest.TestCase):
             description="Updated scope specifications",
         )
 
-        df_updated = self.milestone_repo.get_milestones_by_project(1)
+        df_updated = planning_frames.tasks_frame(self.milestone_repo.get_milestones_by_project(1))
         row_updated = df_updated[df_updated["id"] == step_id].iloc[0]
         self.assertEqual(row_updated["description"], "Updated scope specifications")
 
 
 if __name__ == "__main__":
     unittest.main()
-

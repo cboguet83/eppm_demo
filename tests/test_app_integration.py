@@ -1,17 +1,22 @@
 """Integration tests for PPM Studio Pro."""
 
+from app.main import create_budget_service
+from app.main import create_project_service
+from app.main import create_schema_service
+
+from app.presentation.components.planning_catalog import flatten_dynamic_attributes
+
+from app.presentation.components import schema_frames
+import pandas as pd
+
 import os
 import shutil
 import tempfile
 import unittest
 
-from src.database.connection import get_db
-from src.database.schema_init import init_db
-from src.database.seeder import seed_default_data_if_empty
-from src.repositories.milestone_repo import MilestoneRepository
-from src.repositories.project_repo import ProjectRepository
-from src.repositories.schema_repo import SchemaRepository
-from src.services.portfolio_service import PortfolioService
+from app.infrastructure.database.schema_init import init_db
+from app.infrastructure.database.seeder import seed_default_data_if_empty
+from app.main import create_planning_service
 
 
 class TestIntegration(unittest.TestCase):
@@ -24,9 +29,9 @@ class TestIntegration(unittest.TestCase):
         init_db(self.temp_db_path)
         seed_default_data_if_empty(self.temp_db_path)
 
-        self.schema_repo = SchemaRepository(self.temp_db_path)
-        self.project_repo = ProjectRepository(self.temp_db_path)
-        self.milestone_repo = MilestoneRepository(self.temp_db_path)
+        self.schema_repo = create_schema_service(self.temp_db_path)
+        self.project_repo = create_project_service(self.temp_db_path)
+        self.milestone_repo = create_planning_service(self.temp_db_path)
 
     def tearDown(self) -> None:
         """Clean up test directory."""
@@ -62,10 +67,10 @@ class TestIntegration(unittest.TestCase):
         )
 
         # 4. Fetch projects and verify metrics & attribute flattening
-        df_projects = self.project_repo.get_all_projects()
-        df_params = self.schema_repo.get_all_parameters()
-        metrics = PortfolioService.calculate_portfolio_metrics(df_projects)
-        df_flattened = PortfolioService.flatten_dynamic_attributes(df_projects, df_params)
+        df_projects = pd.DataFrame(create_project_service(self.temp_db_path).get_planning_catalog(tuple(parameter.param_id for parameter in create_schema_service(self.temp_db_path).get_all_parameters())))
+        df_params = schema_frames.parameters_frame(self.schema_repo.get_all_parameters())
+        metrics = create_budget_service(self.temp_db_path).get_report().metrics
+        df_flattened = flatten_dynamic_attributes(df_projects, df_params)
 
         self.assertIn("PRM_CLD", df_flattened.columns)
         self.assertEqual(
@@ -78,13 +83,13 @@ class TestIntegration(unittest.TestCase):
         self.project_repo.delete_project(new_pid)
         self.assertFalse(self.project_repo.exists(new_pid))
 
-    def test_all_src_modules_import_cleanly(self) -> None:
-        """Verify that all src modules and their type annotations import without NameError."""
+    def test_all_application_modules_import_cleanly(self) -> None:
+        """Verify application modules import without unresolved dependencies."""
         import importlib
         import pkgutil
-        import src
+        import app
 
-        for module_info in pkgutil.walk_packages(src.__path__, prefix="src."):
+        for module_info in pkgutil.walk_packages(app.__path__, prefix="app."):
             mod = importlib.import_module(module_info.name)
             self.assertIsNotNone(mod)
 
@@ -97,11 +102,11 @@ class TestIntegration(unittest.TestCase):
         import re
         from pathlib import Path
 
-        views_dir = Path("src/views")
+        views_dir = Path("app/presentation/pages")
         pattern = re.compile(r'st\.session_state\[(["\'])app_sidebar_nav\1\]\s*=')
 
         violations = []
-        for py_file in views_dir.glob("*.py"):
+        for py_file in views_dir.rglob("*.py"):
             content = py_file.read_text(encoding="utf-8")
             for line_num, line in enumerate(content.splitlines(), start=1):
                 if pattern.search(line):
@@ -115,7 +120,7 @@ class TestIntegration(unittest.TestCase):
 
     def test_allowed_dynamic_params_excludes_code_station(self) -> None:
         """Verify code_station is excluded from project master list grid but allowed params remain."""
-        from src.views.portfolio_view import ALLOWED_DYNAMIC_PARAMS
+        from app.presentation.pages.portfolio import ALLOWED_DYNAMIC_PARAMS
 
         self.assertNotIn("code_station", ALLOWED_DYNAMIC_PARAMS)
         expected_allowed = {
@@ -132,7 +137,7 @@ class TestIntegration(unittest.TestCase):
         """The custom table payload must not expose the project-code column."""
         import pandas as pd
 
-        from src.views.portfolio_view import _build_portfolio_table_rows
+        from app.presentation.pages.portfolio import _build_portfolio_table_rows
 
         frame = pd.DataFrame([
             {"id": 42, "name": "Apollo", "status": "Draft", "tags": ["Strategic"]},
@@ -147,7 +152,7 @@ class TestIntegration(unittest.TestCase):
         """The component event must synchronize the stable project ID before mounting."""
         import streamlit as st
 
-        from src.views.portfolio_view import _sync_portfolio_project_selection
+        from app.presentation.pages.portfolio import _sync_portfolio_project_selection
 
         component_key = "test_portfolio_master_table"
         selection_key = "test_selected_portfolio_project_id"
@@ -166,29 +171,28 @@ class TestIntegration(unittest.TestCase):
         """Verify parsing of CLI arguments for database force-reseeding and project count."""
         import sys
         from unittest.mock import patch
-        from app import parse_cli_args
+        from app.main import parse_cli_args
 
         # Case 1: Long flags
-        with patch.object(sys, "argv", ["app.py", "--force-reseed", "--projects", "75"]):
+        with patch.object(sys, "argv", ["streamlit_app.py", "--force-reseed", "--projects", "75"]):
             force, count = parse_cli_args()
             self.assertTrue(force)
             self.assertEqual(count, 75)
 
-        # Case 2: Short flags
-        with patch.object(sys, "argv", ["app.py", "-f", "-n", "30"]):
+        # Streamlit options do not hide the application's project-count flag.
+        with patch.object(sys, "argv", ["streamlit_app.py", "--server.port", "8501", "--projects", "30"]):
             force, count = parse_cli_args()
-            self.assertTrue(force)
+            self.assertFalse(force)
             self.assertEqual(count, 30)
 
         # Case 3: Defaults
-        with patch.object(sys, "argv", ["app.py"]):
+        with patch.object(sys, "argv", ["streamlit_app.py"]):
             force, count = parse_cli_args()
             self.assertFalse(force)
             self.assertEqual(count, 0)
 
     def test_flatten_dynamic_attributes_preserves_raw_column(self) -> None:
-        """Verify PortfolioService.flatten_dynamic_attributes preserves dynamic_attributes column."""
-        import json
+        """Verify flatten_dynamic_attributes preserves dynamic_attributes column."""
         import pandas as pd
 
         df_proj = pd.DataFrame([
@@ -198,7 +202,7 @@ class TestIntegration(unittest.TestCase):
                 "status": "Active",
                 "planned_budget": 1000.0,
                 "actual_budget": 500.0,
-                "dynamic_attributes": json.dumps({"code_courrier": "CC-001", "lot": "Lot A"}),
+                "dynamic_attributes": {"code_courrier": "CC-001", "lot": "Lot A"},
             }
         ])
         df_params = pd.DataFrame([
@@ -206,7 +210,7 @@ class TestIntegration(unittest.TestCase):
             {"param_id": "lot", "param_name": "Lot", "param_type": "TEXT"},
         ])
 
-        df_flat = PortfolioService.flatten_dynamic_attributes(df_proj, df_params)
+        df_flat = flatten_dynamic_attributes(df_proj, df_params)
         self.assertIn("dynamic_attributes", df_flat.columns)
         self.assertIn("code_courrier", df_flat.columns)
         self.assertEqual(df_flat.iloc[0]["code_courrier"], "CC-001")

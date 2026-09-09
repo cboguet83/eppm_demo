@@ -12,7 +12,7 @@ from streamlit.testing.v1 import AppTest
 from app.domain.organization.models import Employee, Team
 from app.domain.resources.models import PoolAssignment, ResourcePool, ResourcePoolGroup
 from app.main import create_organization_service, create_resource_pool_service
-from src.database.schema_init import init_db
+from app.infrastructure.database.schema_init import init_db
 
 
 @pytest.fixture
@@ -32,7 +32,7 @@ def dialog(path: str, invocation: str) -> AppTest:
 from app.main import create_resource_pool_service, create_organization_service
 from app.presentation.components import resource_pool_dialogs as dialogs
 from app.presentation.components.organization_frames import teams_frame, employees_frame
-from src.i18n import set_current_locale
+from app.presentation.i18n import set_current_locale
 set_current_locale('en')
 service = create_resource_pool_service({path!r})
 org = create_organization_service({path!r})
@@ -159,9 +159,10 @@ def test_settings_pool_route_escapes_assignment_labels_and_retains_actions(datab
     )
     app = AppTest.from_string(
         f"""
-from src.repositories.organization_repo import OrganizationRepository
-from src.views.settings_view import render_settings_view
-render_settings_view(OrganizationRepository({database!r}))
+from app.main import create_organization_service
+from app.presentation.pages.settings import render_settings_view
+from app.main import create_settings_workspace
+render_settings_view(create_settings_workspace({database!r}))
 """,
         default_timeout=15,
     )

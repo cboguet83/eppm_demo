@@ -8,7 +8,7 @@ from app.domain.projects.project_types import ProjectType, TemplateProperty
 
 
 def types_frame(project_types: list[ProjectType]) -> pd.DataFrame:
-    """Preserve the legacy type-table columns, ordering, and integer flag."""
+    """Build the type-table columns, ordering, and integer flag for display."""
     return pd.DataFrame([
         {**asdict(project_type), "is_general": int(project_type.is_general)}
         for project_type in project_types

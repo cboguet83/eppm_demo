@@ -8,10 +8,10 @@ import pytest
 from app.application.services.portfolio import PortfolioService
 from app.infrastructure.database.connection import get_db
 from app.infrastructure.repositories.portfolio import SqlitePortfolioReader
+from app.infrastructure.database.seed_projects import create_seed_project
 from app.main import create_project_service, create_portfolio_service
 from app.presentation.pages.portfolio import _load_portfolio_page
-from src.database.schema_init import init_db
-from src.repositories.project_repo import ProjectRepository
+from app.infrastructure.database.schema_init import init_db
 
 
 def test_portfolio_enrichment_is_bounded_and_component_input_is_normalized(tmp_path: Path) -> None:
@@ -19,7 +19,7 @@ def test_portfolio_enrichment_is_bounded_and_component_input_is_normalized(tmp_p
     init_db(path)
     with closing(get_db(path)) as conn, conn:
         for index in range(105):
-            ProjectRepository.create_on_connection(conn, name=f"Project {index:03d}")
+            create_seed_project(conn, name=f"Project {index:03d}")
     calls = []
 
     def allocations(project_ids):

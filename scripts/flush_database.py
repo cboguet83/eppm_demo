@@ -1,4 +1,4 @@
-"""Compatibility exports for database utilities now owned by infrastructure."""
+"""Command-line interface for the database reset use case."""
 
 import argparse
 import os
@@ -6,11 +6,6 @@ import sys
 
 if __package__ in (None, ""):
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from app.infrastructure.database.flush import (
-    flush_database,
-)
-
 
 from app.main import create_maintenance_service
 from scripts.maintenance_cli import cli_errors

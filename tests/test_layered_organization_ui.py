@@ -9,9 +9,9 @@ import pytest
 import streamlit as st
 from streamlit.testing.v1 import AppTest
 
-from app.domain.organization.models import Employee, FunctionType, OrgFunction, Team
+from app.domain.organization.models import FunctionType, OrgFunction
 from app.main import create_organization_service
-from src.database.schema_init import init_db
+from app.infrastructure.database.schema_init import init_db
 
 
 @pytest.fixture
@@ -28,7 +28,7 @@ import streamlit as st
 from app.main import create_organization_service
 from app.presentation.components import organization_dialogs as dialogs
 from app.presentation.components.organization_frames import functions_frame, function_types_frame
-from src.i18n import set_current_locale
+from app.presentation.i18n import set_current_locale
 set_current_locale("en")
 service = create_organization_service({path!r})
 functions = functions_frame(service.get_all_functions())
@@ -143,15 +143,15 @@ def test_function_and_type_dialogs_preserve_validation_and_reference_errors(data
 
 def test_settings_organization_tabs_use_services_and_keep_other_tabs_lazy(database: str) -> None:
     app = AppTest.from_string(f'''
-from src.i18n import set_current_locale
-from src.repositories.organization_repo import OrganizationRepository
-from src.views.settings_view import render_settings_view
+from app.presentation.i18n import set_current_locale
+from app.main import create_organization_service
+from app.presentation.pages.settings import render_settings_view
+from app.main import create_settings_workspace
 set_current_locale("en")
-render_settings_view(OrganizationRepository({database!r}))
+render_settings_view(create_settings_workspace({database!r}))
 ''', default_timeout=15)
-    with patch("src.repositories.organization_repo.OrganizationRepository.get_all_functions",
-               side_effect=AssertionError("Migrated UI called legacy repository")), patch(
-        "src.services.pool_capacity_cache.load_pool_capacities",
+    with patch(
+        "app.application.services.pool_capacity.PoolCapacityService.get_summaries",
         side_effect=AssertionError("Hidden resource pools loaded"),
     ):
         for label in ("💼 Functions", "🏷️ Function Types", "🛡️ Teams", "👥 Employees"):

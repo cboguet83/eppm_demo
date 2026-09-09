@@ -1,5 +1,16 @@
 """Unit tests for Resource Pools, partial mappings, de-duplication, and daily overassignment detection."""
 
+from app.domain.resources.capacity_rules import accumulate_daily_usage
+from app.domain.resources.capacity_rules import calculate_pool_scope_daily_usage
+from app.domain.resources.capacity_rules import get_projects_consuming_pool_in_period
+from app.domain.resources.capacity_rules import project_pool_status
+from app.domain.resources.rules import validate_allocation_pct
+from app.domain.resources.rules import validate_fte
+from app.domain.resources.rules import validate_pool_name
+from app.main import create_pool_capacity_service
+
+from app.presentation.components import resource_pool_frames
+
 from contextlib import closing
 
 import os
@@ -9,26 +20,24 @@ import unittest
 from datetime import date
 from unittest.mock import MagicMock, patch
 
-from src.database.connection import get_db
-from src.database.schema_init import init_db
-from src.models.organization import Employee, EmployeeCalendarException, OrgFunction, Team
-from src.models.project import Project
-from src.models.resource_pool import (
+from app.infrastructure.database.connection import get_db
+from app.infrastructure.database.schema_init import init_db
+from app.domain.organization.models import Employee, EmployeeCalendarException, OrgFunction, Team
+from app.domain.resources.models import (
     PoolAssignment,
     PoolMapping,
     ResourcePool,
     ResourcePoolGroup,
 )
-from src.i18n import set_current_locale
-from src.repositories.milestone_repo import MilestoneRepository
-from src.repositories.organization_repo import OrganizationRepository
-from src.repositories.project_repo import ProjectRepository
-from src.repositories.resource_pool_repo import ResourcePoolRepository
-from src.services.resource_pool_service import ResourcePoolService
+from app.presentation.i18n import set_current_locale
+from app.main import create_planning_service
+from app.main import create_organization_service
+from app.main import create_project_service
+from app.main import create_resource_pool_service
 
 
 class TestResourcePools(unittest.TestCase):
-    """Test suite covering ResourcePoolRepository and ResourcePoolService."""
+    """Test suite covering create_resource_pool_service and ResourcePoolService."""
 
     def setUp(self) -> None:
         """Sets up a temporary SQLite database for test isolation."""
@@ -38,10 +47,10 @@ class TestResourcePools(unittest.TestCase):
         self.temp_db.close()
         init_db(self.db_path)
 
-        self.pool_repo = ResourcePoolRepository(self.db_path)
-        self.org_repo = OrganizationRepository(self.db_path)
-        self.project_repo = ProjectRepository(self.db_path)
-        self.milestone_repo = MilestoneRepository(self.db_path)
+        self.pool_repo = create_resource_pool_service(self.db_path)
+        self.org_repo = create_organization_service(self.db_path)
+        self.project_repo = create_project_service(self.db_path)
+        self.milestone_repo = create_planning_service(self.db_path)
 
     def tearDown(self) -> None:
         """Cleans up the temporary SQLite database."""
@@ -74,7 +83,7 @@ class TestResourcePools(unittest.TestCase):
         self.assertEqual(p_mod.name, "Frontend & Mobile Pool")
 
         # 4. List
-        df_pools = self.pool_repo.get_all_pools()
+        df_pools = resource_pool_frames.pools_frame(self.pool_repo.get_all_pools())
         self.assertEqual(len(df_pools), 1)
 
         # 5. Delete
@@ -116,7 +125,7 @@ class TestResourcePools(unittest.TestCase):
                     (leaf, top),
                 )
 
-        groups = self.pool_repo.get_all_pool_groups().set_index("name")
+        groups = resource_pool_frames.groups_frame(self.pool_repo.get_all_pool_groups()).set_index("name")
         self.assertEqual(int(groups.loc["Top", "recursive_pool_count"]), 2)
 
         from app.presentation.pages.planning import _build_resource_pool_hierarchy
@@ -124,7 +133,7 @@ class TestResourcePools(unittest.TestCase):
         pool_c = self.pool_repo.create_pool(ResourcePool(name="Ungrouped Pool"))
         from app.main import create_planning_workspace
         hierarchy = _build_resource_pool_hierarchy(
-            create_planning_workspace(self.pool_repo.db_path),
+            create_planning_workspace(self.db_path),
             [
                 {"id": pool_a, "name": "Pool A"},
                 {"id": pool_b, "name": "Pool B"},
@@ -155,18 +164,18 @@ class TestResourcePools(unittest.TestCase):
         )
         self.assertGreater(m2_id, 0)
 
-        df_maps = self.pool_repo.get_mappings_by_pool(p_id)
+        df_maps = resource_pool_frames.mappings_frame(self.pool_repo.get_mappings_by_pool(p_id))
         self.assertEqual(len(df_maps), 2)
 
         # Update mapping allocation
         self.pool_repo.update_mapping(m1_id, 80.0)
-        df_maps_after = self.pool_repo.get_mappings_by_pool(p_id)
+        df_maps_after = resource_pool_frames.mappings_frame(self.pool_repo.get_mappings_by_pool(p_id))
         fn_row = df_maps_after[df_maps_after["target_type"] == "function"].iloc[0]
         self.assertEqual(fn_row["allocation_pct"], 80.0)
 
         # Delete mapping
         self.assertTrue(self.pool_repo.delete_mapping(m1_id))
-        self.assertEqual(len(self.pool_repo.get_mappings_by_pool(p_id)), 1)
+        self.assertEqual(len(resource_pool_frames.mappings_frame(self.pool_repo.get_mappings_by_pool(p_id))), 1)
 
     def test_pool_capacity_deduplication(self) -> None:
         """Verify that a function mapped directly AND through an assigned team is considered strictly once."""
@@ -176,7 +185,7 @@ class TestResourcePools(unittest.TestCase):
 
         # 2. Create Team and assign both F1 and F2 to Team
         t_id = self.org_repo.create_team(Team(team_name="Infrastructure Team", manager_function_id=f1_id))
-        self.pool_repo.set_team_functions(t_id, [f1_id, f2_id])
+        self.org_repo.set_team_functions(t_id, [f1_id, f2_id])
 
         # 3. Create Pool
         p_id = self.pool_repo.create_pool(ResourcePool(name="Hybrid Pool"))
@@ -191,17 +200,17 @@ class TestResourcePools(unittest.TestCase):
         )
 
         # 4. Calculate capacity
-        cap_detail = ResourcePoolService.calculate_pool_capacity(p_id, self.org_repo, self.pool_repo)
+        cap_detail = create_pool_capacity_service(self.db_path).calculate_many([p_id])[0]
 
         # F1 must be counted strictly ONCE!
         # If counted twice, total capacity would be: 1.0 (team) + 1.0 (team) + 0.5 (direct) = 2.5 FTE.
         # With deduplication: F1 is 0.5 FTE (direct override), F2 is 1.0 FTE (team). Total = 1.5 FTE!
-        self.assertEqual(len(cap_detail.contributing_functions), 2)
+        self.assertEqual(len(cap_detail.contributing_resources), 2)
         self.assertEqual(cap_detail.total_capacity_fte, 1.5)
 
         # Check deduplication flag
-        f1_contrib = next(c for c in cap_detail.contributing_functions if c.function_id == f1_id)
-        f2_contrib = next(c for c in cap_detail.contributing_functions if c.function_id == f2_id)
+        f1_contrib = next(c for c in cap_detail.contributing_resources if c.function_id == f1_id)
+        f2_contrib = next(c for c in cap_detail.contributing_resources if c.function_id == f2_id)
 
         self.assertTrue(f1_contrib.is_deduplicated)
         self.assertEqual(f1_contrib.effective_allocation_pct, 50.0)
@@ -228,8 +237,8 @@ class TestResourcePools(unittest.TestCase):
         )
         team_a = self.org_repo.create_team(Team(team_name="Team A"))
         team_b = self.org_repo.create_team(Team(team_name="Team B"))
-        self.pool_repo.set_team_functions(team_a, [function_id])
-        self.pool_repo.set_team_functions(team_b, [function_id])
+        self.org_repo.set_team_functions(team_a, [function_id])
+        self.org_repo.set_team_functions(team_b, [function_id])
 
         pool_id = self.pool_repo.create_pool(
             ResourcePool(name="Defined Pool", capacity_fte=2.5)
@@ -258,9 +267,7 @@ class TestResourcePools(unittest.TestCase):
             )
         )
 
-        detail = ResourcePoolService.calculate_pool_capacity(
-            pool_id, self.org_repo, self.pool_repo
-        )
+        detail = create_pool_capacity_service(self.db_path).calculate_many([pool_id])[0]
 
         self.assertEqual(detail.defined_capacity_fte, 2.5)
         self.assertEqual(detail.total_capacity_fte, 2.5)
@@ -302,9 +309,7 @@ class TestResourcePools(unittest.TestCase):
             )
         )
 
-        detail = ResourcePoolService.calculate_pool_capacity(
-            pool_id, self.org_repo, self.pool_repo, self.milestone_repo
-        )
+        detail = create_pool_capacity_service(self.db_path).calculate_many([pool_id])[0]
 
         self.assertFalse(detail.has_assigned_resources)
         self.assertEqual(detail.assigned_capacity_fte, 0.0)
@@ -376,9 +381,7 @@ class TestResourcePools(unittest.TestCase):
             )
         )
 
-        detail = ResourcePoolService.calculate_pool_capacity(
-            pool_id, self.org_repo, self.pool_repo, self.milestone_repo
-        )
+        detail = create_pool_capacity_service(self.db_path).calculate_many([pool_id])[0]
 
         self.assertEqual(detail.total_capacity_fte, 2.0)
         self.assertEqual(detail.effective_capacity_fte, 1.0)
@@ -390,9 +393,7 @@ class TestResourcePools(unittest.TestCase):
         self.assertEqual(detail.daily_overassignments[0].assigned_fte, 0.75)
         self.assertEqual(detail.peak_excess_fte, 0.25)
 
-        project_status = ResourcePoolService.calculate_project_pool_status(
-            11, pool_id, self.org_repo, self.pool_repo, self.milestone_repo
-        )
+        project_status = project_pool_status(11, create_pool_capacity_service(self.db_path).calculate_many([pool_id])[0])
         self.assertTrue(project_status["is_overassigned"])
         self.assertEqual(project_status["overallocated_dates"], ["2026-04-15"])
         self.assertEqual(project_status["minimum_capacity_fte"], 0.5)
@@ -446,9 +447,7 @@ class TestResourcePools(unittest.TestCase):
         )
 
         # First evaluation: Only Assignment 1 -> 1.5 FTE <= 2.0 FTE -> NOT overassigned
-        cap_detail_1 = ResourcePoolService.calculate_pool_capacity(
-            p_id, self.org_repo, self.pool_repo, self.milestone_repo
-        )
+        cap_detail_1 = create_pool_capacity_service(self.db_path).calculate_many([p_id])[0]
         self.assertFalse(cap_detail_1.is_overassigned)
         self.assertEqual(cap_detail_1.peak_assigned_fte, 1.5)
         self.assertEqual(len(cap_detail_1.daily_overassignments), 0)
@@ -466,9 +465,7 @@ class TestResourcePools(unittest.TestCase):
         )
 
         # Second evaluation: Overassigned on overlapping days!
-        cap_detail_2 = ResourcePoolService.calculate_pool_capacity(
-            p_id, self.org_repo, self.pool_repo, self.milestone_repo
-        )
+        cap_detail_2 = create_pool_capacity_service(self.db_path).calculate_many([p_id])[0]
         self.assertTrue(cap_detail_2.is_overassigned)
         self.assertEqual(cap_detail_2.peak_assigned_fte, 2.5)
         self.assertEqual(cap_detail_2.peak_excess_fte, 0.5)
@@ -521,9 +518,7 @@ class TestResourcePools(unittest.TestCase):
             )
         )
 
-        cap_detail = ResourcePoolService.calculate_pool_capacity(
-            p_id, self.org_repo, self.pool_repo, self.milestone_repo
-        )
+        cap_detail = create_pool_capacity_service(self.db_path).calculate_many([p_id])[0]
         self.assertTrue(cap_detail.is_overassigned)
         self.assertEqual(len(cap_detail.daily_overassignments), 15)
         self.assertEqual(cap_detail.daily_overassignments[0].date, "2026-06-01")
@@ -556,9 +551,7 @@ class TestResourcePools(unittest.TestCase):
             )
         )
 
-        proj_status = ResourcePoolService.calculate_project_pool_status(
-            project_id=30, pool_id=p_id, org_repo=self.org_repo, pool_repo=self.pool_repo, milestone_repo=self.milestone_repo
-        )
+        proj_status = project_pool_status(30, create_pool_capacity_service(self.db_path).calculate_many([p_id])[0])
         self.assertTrue(proj_status["is_overassigned"])
         self.assertEqual(proj_status["project_peak_assigned_fte"], 1.5)
         self.assertEqual(proj_status["excess_fte"], 0.5)
@@ -566,17 +559,17 @@ class TestResourcePools(unittest.TestCase):
     def test_validation_rules(self) -> None:
         """Verify ResourcePoolService validation constraints."""
         with self.assertRaises(ValueError):
-            ResourcePoolService.validate_pool_name("")
+            validate_pool_name("")
         with self.assertRaises(ValueError):
-            ResourcePoolService.validate_pool_name("   ")
+            validate_pool_name("   ")
 
         with self.assertRaises(ValueError):
-            ResourcePoolService.validate_allocation_pct(-5.0)
+            validate_allocation_pct(-5.0)
         with self.assertRaises(ValueError):
-            ResourcePoolService.validate_allocation_pct(105.0)
+            validate_allocation_pct(105.0)
 
         with self.assertRaises(ValueError):
-            ResourcePoolService.validate_fte(-1.0)
+            validate_fte(-1.0)
 
     def test_get_task_assignments_map_and_milestone_by_id(self) -> None:
         """Verify get_task_assignments_map and get_milestone_by_id methods."""
@@ -644,16 +637,14 @@ class TestResourcePools(unittest.TestCase):
         p_id = self.pool_repo.create_pool(ResourcePool(name="QA Pool"))
         self.pool_repo.create_mapping(PoolMapping(pool_id=p_id, target_type="function", target_id=f_id, allocation_pct=100.0))
 
-        summary = ResourcePoolService.get_portfolio_pools_summary(
-            self.org_repo, self.pool_repo, self.milestone_repo
-        )
+        summary = create_pool_capacity_service(self.db_path).get_details([pool.id for pool in self.pool_repo.get_all_pools()])
         self.assertIsInstance(summary, list)
         self.assertGreaterEqual(len(summary), 1)
         self.assertEqual(summary[0].pool_name, "QA Pool")
         self.assertGreaterEqual(summary[0].total_capacity_fte, 1.0)
 
-    def test_pool_repo_capacity_detail_and_aliases(self) -> None:
-        """Verify get_all_resource_pools, get_pool_capacity_detail, and property aliases."""
+    def test_capacity_detail_matches_pool_catalog(self) -> None:
+        """Verify the pool catalog and calculated detail describe the same pool."""
         f_id = self.org_repo.create_function(
             OrgFunction(name="DevOps Lead", hierarchy_level=2, fte_percentage=100)
         )
@@ -662,13 +653,13 @@ class TestResourcePools(unittest.TestCase):
             PoolMapping(pool_id=p_id, target_type="function", target_id=f_id, allocation_pct=100.0)
         )
 
-        # 1. Test get_all_resource_pools alias
-        df_all = self.pool_repo.get_all_resource_pools()
+        # 1. Read the pool catalog
+        df_all = resource_pool_frames.pools_frame(self.pool_repo.get_all_pools())
         self.assertEqual(len(df_all), 1)
         self.assertEqual(df_all.iloc[0]["name"], "DevOps Pool")
 
-        # 2. Test get_pool_capacity_detail directly on repo
-        detail = self.pool_repo.get_pool_capacity_detail(p_id)
+        # 2. Calculate the pool detail through the capacity service
+        detail = create_pool_capacity_service(self.db_path).calculate_many([p_id])[0]
         self.assertEqual(detail.pool_id, p_id)
         self.assertEqual(detail.total_capacity_fte, 1.0)
 
@@ -691,7 +682,7 @@ class TestResourcePools(unittest.TestCase):
             dynamic_attributes={},
         )
         # Capacity = 2.0 FTE
-        cap_detail = self.pool_repo.get_pool_capacity_detail(p_id)
+        cap_detail = create_pool_capacity_service(self.db_path).calculate_many([p_id])[0]
         self.assertEqual(cap_detail.total_capacity_fte, 2.0)
 
         # Create tasks on project 50
@@ -746,12 +737,7 @@ class TestResourcePools(unittest.TestCase):
         )
 
         # Calculate pool status
-        detail = ResourcePoolService.calculate_pool_capacity(
-            pool_id=p_id,
-            org_repo=self.org_repo,
-            pool_repo=self.pool_repo,
-            milestone_repo=self.milestone_repo,
-        )
+        detail = create_pool_capacity_service(self.db_path).calculate_many([p_id])[0]
 
         # In interval 1 (07-01 to 07-05): max(1.5, 1.0) = 1.5 FTE (NOT 2.5!)
         self.assertEqual(detail.daily_usage["2026-07-01"], 1.5)
@@ -775,12 +761,7 @@ class TestResourcePools(unittest.TestCase):
             )
         )
 
-        detail_over = ResourcePoolService.calculate_pool_capacity(
-            pool_id=p_id,
-            org_repo=self.org_repo,
-            pool_repo=self.pool_repo,
-            milestone_repo=self.milestone_repo,
-        )
+        detail_over = create_pool_capacity_service(self.db_path).calculate_many([p_id])[0]
         # Task level = 2.0 + 0.5 = 2.5 FTE. Project level = 1.5 FTE. max(1.5, 2.5) = 2.5 FTE.
         self.assertEqual(detail_over.daily_usage["2026-07-06"], 2.5)
         self.assertTrue(detail_over.is_overassigned)
@@ -829,7 +810,7 @@ class TestResourcePools(unittest.TestCase):
         )
 
         # only_project_level=True
-        df_proj_only = self.pool_repo.get_assignments(only_project_level=True)
+        df_proj_only = resource_pool_frames.assignments_frame(self.pool_repo.get_assignments(only_project_level=True))
         self.assertEqual(len(df_proj_only), 1)
         self.assertIsNone(df_proj_only.iloc[0]["task_id"])
 
@@ -885,12 +866,7 @@ class TestResourcePools(unittest.TestCase):
             )
         )
 
-        detail = ResourcePoolService.calculate_pool_capacity(
-            pool_id=p_id,
-            org_repo=self.org_repo,
-            pool_repo=self.pool_repo,
-            milestone_repo=self.milestone_repo,
-        )
+        detail = create_pool_capacity_service(self.db_path).calculate_many([p_id])[0]
 
         self.assertEqual(detail.daily_usage, {
             "2026-01-01": 0.5, "2026-01-02": 0.5, "2026-01-03": 0.5,
@@ -949,12 +925,7 @@ class TestResourcePools(unittest.TestCase):
             )
         )
 
-        detail = ResourcePoolService.calculate_pool_capacity(
-            pool_id=p_id,
-            org_repo=self.org_repo,
-            pool_repo=self.pool_repo,
-            milestone_repo=self.milestone_repo,
-        )
+        detail = create_pool_capacity_service(self.db_path).calculate_many([p_id])[0]
 
         self.assertEqual(len(detail.assignments), 1)
         assign = detail.assignments[0]
@@ -1027,12 +998,7 @@ class TestResourcePools(unittest.TestCase):
             )
         )
 
-        detail = ResourcePoolService.calculate_pool_capacity(
-            pool_id=p_id,
-            org_repo=self.org_repo,
-            pool_repo=self.pool_repo,
-            milestone_repo=self.milestone_repo,
-        )
+        detail = create_pool_capacity_service(self.db_path).calculate_many([p_id])[0]
 
         self.assertEqual(detail.total_capacity_fte, 2.0)
 
@@ -1086,13 +1052,13 @@ class TestResourcePools(unittest.TestCase):
         ]
 
         # Test calculate_pool_scope_daily_usage for project 101
-        scope_usage_101 = ResourcePoolService.calculate_pool_scope_daily_usage(assignments, [101])
+        scope_usage_101 = calculate_pool_scope_daily_usage(assignments, [101])
         self.assertEqual(scope_usage_101.get("2026-05-05"), 2.0)
         self.assertNotIn("2026-05-18", scope_usage_101)
         self.assertNotIn("2026-06-05", scope_usage_101)
 
         # Test calculate_pool_scope_daily_usage for projects 101 and 102
-        scope_usage_both = ResourcePoolService.calculate_pool_scope_daily_usage(assignments, [101, 102])
+        scope_usage_both = calculate_pool_scope_daily_usage(assignments, [101, 102])
         self.assertEqual(scope_usage_both.get("2026-05-12"), 3.5)
         self.assertEqual(scope_usage_both.get("2026-05-05"), 2.0)
         self.assertEqual(scope_usage_both.get("2026-05-18"), 1.5)
@@ -1100,15 +1066,15 @@ class TestResourcePools(unittest.TestCase):
 
         # Test get_projects_consuming_pool_in_period
         # Slot May 2026: projects 101 and 102 overlap
-        pids_may = ResourcePoolService.get_projects_consuming_pool_in_period(assignments, "2026-05-01", "2026-05-31")
+        pids_may = get_projects_consuming_pool_in_period(assignments, "2026-05-01", "2026-05-31")
         self.assertEqual(sorted(pids_may), [101, 102])
 
         # Slot June 2026: only project 103 overlaps
-        pids_june = ResourcePoolService.get_projects_consuming_pool_in_period(assignments, "2026-06-01", "2026-06-30")
+        pids_june = get_projects_consuming_pool_in_period(assignments, "2026-06-01", "2026-06-30")
         self.assertEqual(sorted(pids_june), [103])
 
         # Slot July 2026: no project
-        pids_july = ResourcePoolService.get_projects_consuming_pool_in_period(assignments, "2026-07-01", "2026-07-31")
+        pids_july = get_projects_consuming_pool_in_period(assignments, "2026-07-01", "2026-07-31")
         self.assertEqual(pids_july, [])
 
         # Test timestamp strings with HH:MM:SS and zero-FTE filtering
@@ -1133,18 +1099,18 @@ class TestResourcePools(unittest.TestCase):
             },
         ]
         # September period: 201 and 202 overlap on 2026-09-30, 203 has 0 FTE
-        pids_sep = ResourcePoolService.get_projects_consuming_pool_in_period(assignments_ts, "2026-09-01", "2026-09-30")
+        pids_sep = get_projects_consuming_pool_in_period(assignments_ts, "2026-09-01", "2026-09-30")
         self.assertEqual(sorted(pids_sep), [201, 202])
 
         # Boundary test on single day
-        pids_single_day = ResourcePoolService.get_projects_consuming_pool_in_period(assignments_ts, "2026-09-30", "2026-09-30")
+        pids_single_day = get_projects_consuming_pool_in_period(assignments_ts, "2026-09-30", "2026-09-30")
         self.assertEqual(sorted(pids_single_day), [201, 202])
 
     def test_multi_year_assignment_daily_usage(self) -> None:
         """Verify that multi-year assignments continue to accumulate daily usage beyond 366 days."""
         daily_map: dict[str, float] = {}
         # Multi-year assignment spanning 2026 to 2034 (e.g. Project 6 / Project 9)
-        ResourcePoolService._accumulate_daily_usage(
+        accumulate_daily_usage(
             daily_map=daily_map,
             start_str="2026-02-18",
             end_str="2034-08-18",

@@ -1,20 +1,25 @@
 """Application and real SQLite regressions for the first migrated feature."""
 
+from app.application.exceptions import ProjectTypeConflictError, ProjectTypeStorageError, SchemaConflictError
+
+from app.presentation.components import project_type_frames
+from app.presentation.components import schema_frames
+
 import sqlite3
 from contextlib import closing
 from pathlib import Path
 
 import pytest
 
-from app.application.exceptions import ProjectTypeConflictError, ProjectTypeStorageError
 from app.application.services.project_types import ProjectTypeService
 from app.infrastructure.repositories.project_types import SqliteProjectTypeGateway
+from app.infrastructure.repositories.project_types import SqliteProjectTypeStore
+from app.domain.projects.project_types import make_applicability
 from app.main import create_project_type_service
-from src.database.connection import get_db
-from src.database.schema_init import init_db
-from src.repositories.project_repo import ProjectRepository
-from src.repositories.project_type_repo import ProjectTypeRepository
-from src.repositories.schema_repo import SchemaRepository
+from app.infrastructure.database.connection import get_db
+from app.infrastructure.database.schema_init import init_db
+from app.main import create_project_service
+from app.main import create_schema_service
 
 
 @pytest.fixture
@@ -38,22 +43,22 @@ def test_application_validates_inputs_before_opening_storage() -> None:
         service.set_applicability("p", False, [])
 
 
-def test_application_and_legacy_callers_share_crud_and_error_behavior(database: str) -> None:
+def test_independent_services_share_persisted_state_and_error_contracts(database: str) -> None:
     """New use cases coexist with the old dataframe and SQLite-exception API."""
     service = create_project_type_service(database)
-    legacy = ProjectTypeRepository(database)
+    other_service = create_project_type_service(database)
     type_id = service.create_type("  Rail  ", "  Initial  ")
-    row = legacy.get_all_types().set_index("id").loc[type_id]
+    row = project_type_frames.types_frame(other_service.get_all_types()).set_index("id").loc[type_id]
     assert (row["name"], row["description"]) == ("Rail", "Initial")
-    legacy.update_type(type_id, "Road", "Updated")
+    other_service.update_type(type_id, "Road", "Updated")
     assert service.get_all_types()[1].name == "Road"
     with pytest.raises(ProjectTypeConflictError, match="already exists"):
         service.create_type("road")
-    with pytest.raises(sqlite3.IntegrityError):
-        legacy.create_type("ROAD")
+    with pytest.raises(ProjectTypeConflictError):
+        other_service.create_type("ROAD")
     service.delete_type(type_id)
     service.delete_type(type_id)  # Missing-ID deletion remains idempotent.
-    assert legacy.get_all_types().name.tolist() == ["General"]
+    assert project_type_frames.types_frame(other_service.get_all_types()).name.tolist() == ["General"]
     with pytest.raises(ValueError, match="Unknown project type"):
         service.update_type(type_id, "Deleted")
     with pytest.raises(ValueError, match="Unknown project type"):
@@ -62,7 +67,7 @@ def test_application_and_legacy_callers_share_crud_and_error_behavior(database: 
 
 def test_invalid_default_rolls_back_the_required_override_and_previous_default(database: str) -> None:
     """A failure after the rule write must not leave a partially updated template."""
-    schema = SchemaRepository(database)
+    schema = create_schema_service(database)
     schema.create_parameter("p", None, "Choice", "ENUM")
     schema.add_option("p", "A", 1)
     service = create_project_type_service(database)
@@ -80,7 +85,7 @@ def test_invalid_default_rolls_back_the_required_override_and_previous_default(d
 
 def test_failed_membership_change_restores_the_original_scope(database: str) -> None:
     """A foreign-key failure rolls back both the flag and membership deletion."""
-    schema = SchemaRepository(database)
+    schema = create_schema_service(database)
     schema.create_parameter("p", None, "Scope", "TEXT")
     service = create_project_type_service(database)
     with pytest.raises(ProjectTypeConflictError):
@@ -98,21 +103,21 @@ def test_failed_membership_change_restores_the_original_scope(database: str) -> 
         service.save_rule(1, "missing")
 
 
-def test_schema_compatibility_helper_keeps_the_outer_transaction_atomic(database: str) -> None:
+def test_schema_and_type_store_share_the_outer_transaction(database: str) -> None:
     """Schema edits must not commit before their applicability update succeeds."""
-    schema = SchemaRepository(database)
+    schema = create_schema_service(database)
     schema.create_parameter("p", None, "Original", "TEXT")
-    with pytest.raises(sqlite3.IntegrityError):
+    with pytest.raises(SchemaConflictError):
         schema.update_parameter(
             "p", None, "Must roll back", "TEXT",
             applies_to_all=False, project_type_ids=[999],
         )
-    row = schema.get_all_parameters().set_index("param_id").loc["p"]
+    row = schema_frames.parameters_frame(schema.get_all_parameters()).set_index("param_id").loc["p"]
     assert row["param_name"] == "Original"
     assert row["applies_to_all"] == 1
     with closing(get_db(database)) as connection:
         with connection:
-            ProjectTypeRepository.set_applicability_on_connection(connection, "p", False, [1])
+            SqliteProjectTypeStore(connection).set_applicability("p", make_applicability(False, [1]))
             assert connection.in_transaction
             connection.rollback()
     assert create_project_type_service(database).get_applicability("p").applies_to_all
@@ -127,16 +132,16 @@ def test_deletion_guards_preserve_types_and_their_project_data(database: str) ->
         service.update_type(1, "Other")
     service.update_type(1, "General", "Updated description")
     type_id = service.create_type("Rail")
-    schema = SchemaRepository(database)
+    schema = create_schema_service(database)
     schema.create_parameter("p", None, "Rail detail", "TEXT", applies_to_all=False,
                             project_type_ids=[type_id])
     with pytest.raises(ValueError, match="exclusive properties"):
         service.delete_type(type_id)
     service.set_applicability("p", True)
-    project_id = ProjectRepository(database).create_project(name="Line", project_type_id=type_id)
+    project_id = create_project_service(database).create_project(name="Line", project_type_id=type_id)
     with pytest.raises(ValueError, match="Reassign"):
         service.delete_type(type_id)
-    assert ProjectRepository(database).get_project_by_id(project_id).project_type_id == type_id
+    assert create_project_service(database).get_project_by_id(project_id).project_type_id == type_id
 
 
 def test_gateway_closes_connections_on_success_and_validation_failure(
@@ -174,12 +179,12 @@ def test_guarded_write_holds_the_sqlite_writer_reservation(database: str) -> Non
     assert create_project_type_service(database).get_all_types()[0].description == "after commit"
 
 
-def test_storage_failures_are_translated_but_legacy_sqlite_errors_remain(tmp_path: Path) -> None:
-    """The new UI receives a safe error while old callers retain their contract."""
+def test_storage_failures_are_safe_across_service_and_display_reads(tmp_path: Path) -> None:
+    """Services and display reads expose safe errors and preserve their storage cause."""
     missing = str(tmp_path / "missing-directory" / "private.db")
     with pytest.raises(ProjectTypeStorageError) as error:
         create_project_type_service(missing).get_all_types()
     assert missing not in str(error.value)
     assert isinstance(error.value.__cause__, sqlite3.OperationalError)
-    with pytest.raises(sqlite3.OperationalError):
-        ProjectTypeRepository(missing).get_all_types()
+    with pytest.raises(ProjectTypeStorageError):
+        project_type_frames.types_frame(create_project_type_service(missing).get_all_types())

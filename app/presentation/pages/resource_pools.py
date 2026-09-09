@@ -228,11 +228,11 @@ def render_resource_pools(
                     default="Shows unique employees contributing to assigned capacity. Employees reached through several teams or assigned directly and through a team are counted once.",
                 )
             )
-            if not current_detail.contributing_functions:
+            if not current_detail.contributing_resources:
                 st.caption("No contributing functions found.")
             else:
                 dedup_table_data = []
-                for cf in current_detail.contributing_functions:
+                for cf in current_detail.contributing_resources:
                     status_str = (
                         "✅ Considered Once (Direct Override)"
                         if cf.is_deduplicated

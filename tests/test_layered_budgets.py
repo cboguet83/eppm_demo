@@ -3,7 +3,6 @@
 from contextlib import closing
 from decimal import Decimal
 
-import pandas as pd
 import pytest
 from streamlit.testing.v1 import AppTest
 
@@ -17,8 +16,8 @@ from app.domain.projects.budgets import (
 from app.infrastructure.database.connection import get_db
 from app.infrastructure.repositories.portfolio import SqlitePortfolioReader
 from app.main import create_budget_service, create_portfolio_service, create_project_service
-from app.presentation.components.budget_frames import budget_frame, calculate_frame_metrics
-from src.database.schema_init import init_db
+from app.presentation.components.budget_frames import budget_frame
+from app.infrastructure.database.schema_init import init_db
 
 
 @pytest.fixture
@@ -48,7 +47,7 @@ def test_decimal_budget_totals_preserve_fractional_euros():
     "value,expected",
     [(None, "0"), (0.1, "0.1"), (3, "3"), ("12.3400", "12.3400"), (Decimal("0.01"), "0.01")],
 )
-def test_budget_boundary_converts_compatibility_values_before_arithmetic(value, expected):
+def test_budget_boundary_converts_storage_and_widget_values_before_arithmetic(value, expected):
     assert euro_amount(value) == Decimal(expected)
 
 
@@ -136,11 +135,6 @@ def test_budget_report_rows_and_totals_share_a_concurrent_snapshot(database, mon
     assert create_budget_service(database).get_report().metrics.total_actual == Decimal(201)
 
 
-def test_legacy_budget_frame_metrics_skip_missing_values_without_float_sums():
-    frame = pd.DataFrame({"planned_budget": [0.1, 0.2, None], "actual_budget": [None, 0.1, 0.2]})
-    assert calculate_frame_metrics(frame).variance == Decimal(0)
-    assert calculate_frame_metrics(frame).total_projects == 3
-    assert calculate_frame_metrics(pd.DataFrame()).total_projects == 0
 
 
 def render_budget(database):
@@ -148,7 +142,7 @@ def render_budget(database):
         f"""
 from app.main import create_budget_service
 from app.presentation.pages.budgets import render_budget_tracking
-from src.i18n import set_current_locale
+from app.presentation.i18n import set_current_locale
 set_current_locale('en')
 render_budget_tracking(create_budget_service({database!r}))
 """,

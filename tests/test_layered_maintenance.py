@@ -217,7 +217,7 @@ def test_seed_and_flush_commands_use_the_migrated_service(database):
 def test_default_and_pool_commands_keep_existing_entrypoint_behavior(database):
     import json
 
-    seeded = run_cli("-m", "src.database.seeder", "--db-path", database)
+    seeded = run_cli("-m", "scripts.seed_defaults", "--db-path", database)
     assert seeded.returncode == 0, seeded.stdout + seeded.stderr
     assert create_maintenance_service(database).counts()["projects"] == 5
     preview = run_cli("scripts/seed_pool_scenarios.py", "--db", database)

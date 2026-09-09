@@ -65,21 +65,6 @@ class ProjectPoolStatus(TypedDict):
 
 
 @dataclass
-class TeamFunction:
-    """Association linking a function to a team.
-
-    Attributes:
-        team_id: Associated team ID.
-        function_id: Associated job function ID.
-        id: Unique primary key identifier.
-    """
-
-    team_id: int
-    function_id: int
-    id: int | None = None
-
-
-@dataclass
 class ResourcePool:
     """Represents a capacity pool of resources (teams and/or functions).
 
@@ -88,7 +73,7 @@ class ResourcePool:
         id: Unique primary key identifier.
         description: Informational notes / description of the pool.
         capacity_fte: Optional user-defined pool capacity limit. When omitted,
-            the calculated assigned capacity is used for backwards compatibility.
+            the calculated assigned capacity supplies the limit.
         created_at: ISO timestamp of creation.
     """
 
@@ -128,7 +113,7 @@ class PoolMapping:
 
     Attributes:
         pool_id: ID of the parent resource pool.
-        target_type: 'team', 'employee', or legacy 'function'.
+        target_type: 'team', 'employee', or 'function'.
         target_id: ID of the mapped team, employee, or function.
         allocation_pct: Fractional percentage allocated to this pool (0.0 to 100.0).
         id: Unique primary key identifier.
@@ -167,11 +152,10 @@ class PoolAssignment:
 
 
 @dataclass
-class PoolFunctionContribution:
+class PoolResourceContribution:
     """Details of a unique resource contributing to a pool's assigned capacity.
 
-    The historical class name is retained for API compatibility. New records are
-    normally employee-based; legacy function-only pools continue to be supported.
+    Contributions describe employees or vacant functions mapped to a pool.
 
     Attributes:
         function_id: Unique function ID.
@@ -184,8 +168,8 @@ class PoolFunctionContribution:
         is_deduplicated: True if function appeared in both team and direct mapping.
         employee_id: Employee ID when the contribution represents an employee.
         employee_name: Display name when the contribution represents an employee.
-        resource_type: ``employee`` for normal records or ``function`` for legacy
-            function-only records.
+        resource_type: ``employee`` for occupied functions or ``function`` for
+            vacant functions.
     """
 
     function_id: int
@@ -202,12 +186,12 @@ class PoolFunctionContribution:
 
     @property
     def resource_id(self) -> int:
-        """Return the employee ID, falling back to the legacy function ID."""
+        """Return the employee ID or the vacant function ID."""
         return self.employee_id if self.employee_id is not None else self.function_id
 
     @property
     def resource_name(self) -> str:
-        """Return the employee name, falling back to the legacy function name."""
+        """Return the employee name or the vacant function name."""
         return self.employee_name or self.function_name
 
 
@@ -246,7 +230,7 @@ class PoolCapacityDetail:
         total_assigned_fte_scalar: Simple scalar sum of all active assignments.
         is_overassigned: True when demand exceeds effective capacity on any date.
         peak_excess_fte: Largest single-day excess over effective capacity.
-        contributing_functions: List of individual function contributions.
+        contributing_resources: List of employee and vacant-function contributions.
         assignments: List of active assignments with resolved project and task names.
         daily_overassignments: List of dates where assignment exceeds pool capacity.
         overassignment_intervals: Human-readable summary of overassigned date ranges.
@@ -259,7 +243,7 @@ class PoolCapacityDetail:
     total_assigned_fte_scalar: float
     is_overassigned: bool
     peak_excess_fte: float
-    contributing_functions: list[PoolFunctionContribution] = field(default_factory=list)
+    contributing_resources: list[PoolResourceContribution] = field(default_factory=list)
     assignments: list[CapacityAssignment] = field(default_factory=list)
     daily_overassignments: list[DailyOverassignment] = field(default_factory=list)
     overassignment_intervals: list[str] = field(default_factory=list)
@@ -269,29 +253,6 @@ class PoolCapacityDetail:
     daily_assigned_capacity: dict[str, float] = field(default_factory=dict)
     has_assigned_resources: bool = False
     effective_capacity_fte: float = 0.0
-
-    @property
-    def contributing_resources(self) -> list[PoolFunctionContribution]:
-        """Alias exposing the contribution list using current resource terminology."""
-        return self.contributing_functions
-
-    @property
-    def peak_daily_fte(self) -> float:
-        """Alias for peak_assigned_fte.
-
-        Returns:
-            float: Peak assigned FTE.
-        """
-        return self.peak_assigned_fte
-
-    @property
-    def total_capacity(self) -> float:
-        """Alias for total_capacity_fte.
-
-        Returns:
-            float: Total capacity in FTE.
-        """
-        return self.total_capacity_fte
 
 
 @dataclass

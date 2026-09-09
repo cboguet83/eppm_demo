@@ -1,4 +1,4 @@
-"""Task DataFrame formatting for planning displays and historical adapters."""
+"""Task DataFrame formatting for planning displays."""
 
 import pandas as pd
 

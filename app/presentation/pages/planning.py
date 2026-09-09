@@ -6,7 +6,6 @@ boundary. Authoritative validation and persistence live in application services.
 
 import datetime
 import html
-import hashlib
 from collections.abc import Callable
 from functools import wraps
 from app.presentation.assets import component_path
@@ -31,7 +30,6 @@ from app.domain.resources.capacity_rules import (
     get_projects_consuming_pool_in_period,
     project_pool_status,
 )
-from app.domain.resources.rules import validate_fte
 from app.domain.planning.csv_import import get_csv_template, parse_csv
 from app.domain.planning.rules import normalize_progress
 from app.presentation.components.planning_imports import csv_text
@@ -53,9 +51,7 @@ from app.presentation.components.tag_frames import (
 from app.presentation.components.schema_frames import parameters_frame
 from app.presentation.components.planning_data import (
     load_planning_catalog,
-    load_planning_steps,
     load_planning_project_metadata,
-    load_planning_bounds,
     load_dependency_choices,
     load_project_summaries,
     affected_task_projects,

@@ -1,5 +1,9 @@
 """Regression coverage for SQLite handle ownership and cache revisions."""
 
+from app.application.exceptions import PlanningConflictError
+
+from app.presentation.components import planning_frames
+
 from contextlib import closing
 from pathlib import Path
 import sqlite3
@@ -7,10 +11,10 @@ from unittest.mock import patch
 
 import pytest
 
-from src.database.connection import get_db
-from src.database.seeder import seed_default_data_if_empty
-from src.repositories.milestone_repo import MilestoneRepository
-from src.repositories.portfolio_repo import portfolio_revision
+from app.infrastructure.database.connection import get_db
+from app.infrastructure.database.seeder import seed_default_data_if_empty
+from app.main import create_planning_service
+from app.infrastructure.repositories.portfolio import portfolio_revision
 
 
 @pytest.mark.parametrize("operation", ["read", "write", "rollback"])
@@ -20,8 +24,8 @@ def test_task_repository_closes_connections_on_every_exit(
     """Keep the real connection alive to prove closure is not left to GC."""
     path = str(tmp_path / "tasks.db")
     seed_default_data_if_empty(path)
-    repository = MilestoneRepository(path)
-    tasks = repository.get_all_milestones()
+    repository = create_planning_service(path)
+    tasks = planning_frames.tasks_frame(repository.get_all_milestones(), project_labels=True)
     task_id, predecessor_id = (int(value) for value in tasks.id.iloc[:2])
     repository.save_task_dependencies(
         task_id, [{"predecessor_task_id": predecessor_id}],
@@ -30,11 +34,11 @@ def test_task_repository_closes_connections_on_every_exit(
     try:
         with patch("app.infrastructure.repositories.planning.get_db", return_value=connection):
             if operation == "read":
-                assert not repository.get_all_milestones().empty
+                assert not planning_frames.tasks_frame(repository.get_all_milestones(), project_labels=True).empty
             elif operation == "write":
                 assert repository.update_dates(task_id, "2026-01-01", "2026-01-02")
             else:
-                with pytest.raises(sqlite3.IntegrityError):
+                with pytest.raises(PlanningConflictError):
                     repository.save_task_dependencies(
                         task_id, [{"predecessor_task_id": -1}],
                     )
@@ -47,7 +51,7 @@ def test_task_repository_closes_connections_on_every_exit(
         dependencies = repository.get_task_dependencies(task_id)
         assert [row["predecessor_task_id"] for row in dependencies] == [predecessor_id]
     elif operation == "write":
-        updated = repository.get_all_milestones().set_index("id").loc[task_id]
+        updated = planning_frames.tasks_frame(repository.get_all_milestones(), project_labels=True).set_index("id").loc[task_id]
         assert updated.start_date == "2026-01-01"
         assert updated.end_date == "2026-01-02"
 

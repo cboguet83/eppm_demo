@@ -9,8 +9,8 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 from app.main import create_project_type_service
-from src.database.schema_init import init_db
-from src.repositories.schema_repo import SchemaRepository
+from app.infrastructure.database.schema_init import init_db
+from app.main import create_schema_service
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 @pytest.fixture
 def french_host_locale():
     """Exercise widget callbacks when the test host and app use different locales."""
-    from src.i18n import get_current_locale, set_current_locale
+    from app.presentation.i18n import get_current_locale, set_current_locale
 
     previous = get_current_locale()
     set_current_locale("fr")
@@ -31,7 +31,7 @@ def project_types_app(db_path: str) -> None:
     import pandas as pd
     from app.main import create_project_type_service
     from app.presentation.pages.project_types import render_project_types
-    from src.i18n import set_current_locale
+    from app.presentation.i18n import set_current_locale
 
     set_current_locale("en")
     render_project_types(
@@ -78,7 +78,7 @@ def test_project_type_screen_saves_required_overrides_and_explicit_defaults(
     """The migrated UI can enable, edit, and remove a template's default value."""
     path = str(tmp_path / "rules.db")
     init_db(path)
-    SchemaRepository(path).create_parameter("p", None, "Detail", "TEXT")
+    create_schema_service(path).create_parameter("p", None, "Detail", "TEXT")
     service = create_project_type_service(path)
     app = AppTest.from_function(project_types_app, args=(path,), default_timeout=15).run()
     assert not app.exception
@@ -98,7 +98,7 @@ def test_project_type_screen_saves_required_overrides_and_explicit_defaults(
     assert service.get_template(1)[0]["has_default"] is False
 
 
-@pytest.mark.parametrize("launcher", ["app.py", "streamlit_app.py"])
+@pytest.mark.parametrize("launcher", ["streamlit_app.py", "streamlit_app.py"])
 def test_existing_and_new_cli_help_preserve_startup_arguments(launcher: str) -> None:
     """Both source launchers continue to expose the original seeding flags."""
     result = subprocess.run(
@@ -110,7 +110,7 @@ def test_existing_and_new_cli_help_preserve_startup_arguments(launcher: str) -> 
     assert "--projects" in result.stdout
 
 
-@pytest.mark.parametrize("launcher", ["app.py", "streamlit_app.py"])
+@pytest.mark.parametrize("launcher", ["streamlit_app.py", "streamlit_app.py"])
 def test_both_streamlit_launchers_bootstrap_the_real_application(
     launcher: str, tmp_path: Path,
 ) -> None:

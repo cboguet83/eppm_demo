@@ -1,5 +1,7 @@
 """Tag use cases, transaction guarantees, typed projections, and safe errors."""
 
+from app.application.exceptions import TagConflictError
+
 from contextlib import closing
 from dataclasses import replace
 from pathlib import Path
@@ -8,7 +10,7 @@ from unittest.mock import patch
 
 import pytest
 
-from app.application.exceptions import TagConflictError, TagStorageError
+from app.application.exceptions import TagStorageError
 from app.domain.tags.models import ProjectTag, ResourcePoolTag, TagDictionary, TagGroup, TaskTag
 from app.domain.tags.rules import (
     normalize_group,
@@ -20,8 +22,7 @@ from app.domain.tags.rules import (
 from app.infrastructure.repositories.tags import SqliteTagGateway
 from app.infrastructure.database.connection import get_db
 from app.main import create_tag_service
-from src.database.schema_init import init_db
-from src.repositories.tag_repo import TagRepository
+from app.infrastructure.database.schema_init import init_db
 
 
 @pytest.fixture
@@ -118,8 +119,8 @@ def test_assignment_foreign_keys_and_missing_record_results(database: str) -> No
         service.create_project_tag(ProjectTag(project_id=99, free_tag="Missing"))
     with pytest.raises(TagConflictError):
         service.create_task_tag(TaskTag(task_id=1, tag_id=99))
-    with pytest.raises(sqlite3.IntegrityError):
-        TagRepository(database).create_task_tag(TaskTag(task_id=99, free_tag="Legacy"))
+    with pytest.raises(TagConflictError):
+        create_tag_service(database).create_task_tag(TaskTag(task_id=99, free_tag="Legacy"))
     for model, update in (
         (TagGroup(tag_group_name="Missing"), service.update_tag_group),
         (TagDictionary(tag="Missing"), service.update_tag),

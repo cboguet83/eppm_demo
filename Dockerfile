@@ -37,9 +37,8 @@ RUN useradd -m -u 1000 appuser && \
 COPY --from=builder --chown=appuser:appuser /root/.local /home/appuser/.local
 
 # Copy application source code and scripts
-COPY --chown=appuser:appuser app.py streamlit_app.py .
+COPY --chown=appuser:appuser streamlit_app.py .
 COPY --chown=appuser:appuser app/ ./app/
-COPY --chown=appuser:appuser src/ ./src/
 COPY --chown=appuser:appuser scripts/ ./scripts/
 COPY --chown=appuser:appuser .streamlit/ ./.streamlit/
 

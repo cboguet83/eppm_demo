@@ -1,5 +1,13 @@
 """Project use-case, transaction integrity, and new UI regressions."""
 
+from app.main import create_project_service
+from app.main import create_schema_service
+
+from app.application.exceptions import ProjectConflictError, ProjectStorageError
+
+from app.infrastructure.repositories.projects import SqliteProjectGateway
+import pandas as pd
+
 import sqlite3
 from contextlib import closing
 from pathlib import Path
@@ -7,15 +15,12 @@ from pathlib import Path
 import pytest
 from streamlit.testing.v1 import AppTest
 
-from app.application.exceptions import ProjectConflictError, ProjectStorageError
 from app.application.services.projects import ProjectService
 from app.domain.projects.project import normalize_project_name, prepare_project_values
 from app.infrastructure.database.connection import get_db
-from app.infrastructure.repositories.projects import SqliteProjectGateway
-from app.main import create_project_service, create_project_type_service, create_portfolio_service
-from src.database.schema_init import init_db
-from src.repositories.project_repo import ProjectRepository
-from src.repositories.schema_repo import SchemaRepository
+from app.infrastructure.database.seed_projects import create_seed_project
+from app.main import create_project_type_service, create_portfolio_service
+from app.infrastructure.database.schema_init import init_db
 
 
 @pytest.fixture
@@ -50,7 +55,7 @@ def test_core_rejects_blank_names_without_storage_and_copies_default_lists() -> 
 
 
 def test_type_switches_restore_values_without_reapplying_creation_defaults(database: str) -> None:
-    schema = SchemaRepository(database)
+    schema = create_schema_service(database)
     types = create_project_type_service(database)
     special = types.create_type("Rail")
     schema.create_parameter("p", None, "Rail code", "TEXT", applies_to_all=False, project_type_ids=[special])
@@ -61,7 +66,7 @@ def test_type_switches_restore_values_without_reapplying_creation_defaults(datab
     projects.update_project(pid, "Line", "Draft", 10, 2, {"p": "Edited"})
     projects.update_project(pid, "Line", "Draft", 10, 2, {}, project_type_id=1)
     assert projects.get_project_by_id(pid).dynamic_attributes == {"p": "Edited"}
-    assert ProjectRepository(database).get_all_projects().iloc[0].dynamic_attributes == {}
+    assert pd.DataFrame(create_project_service(database).get_planning_catalog(tuple(parameter.param_id for parameter in create_schema_service(database).get_all_parameters()))).iloc[0].dynamic_attributes == {}
     projects.update_project(pid, "Line", "Draft", 10, 2, {}, project_type_id=special)
     assert projects.get_project_by_id(pid).dynamic_attributes == {"p": "Edited"}
     fresh = projects.create_project(name="No rail history")
@@ -74,7 +79,7 @@ def test_type_switches_restore_values_without_reapplying_creation_defaults(datab
 
 
 def test_partial_property_write_rolls_back_master_and_all_prior_values(database: str) -> None:
-    schema = SchemaRepository(database)
+    schema = create_schema_service(database)
     for pid in ("a", "b"):
         schema.create_parameter(pid, None, pid, "TEXT")
     service = create_project_service(database)
@@ -96,8 +101,8 @@ def test_partial_property_write_rolls_back_master_and_all_prior_values(database:
         "Original", 0, {"a": "old", "b": "old"},
     )
     assert create_portfolio_service(database).get_metrics().total_projects == 1
-    with pytest.raises(sqlite3.IntegrityError):
-        ProjectRepository(database).create_project(project_id=pid, name="Duplicate")
+    with pytest.raises(ProjectConflictError):
+        create_project_service(database).create_project(project_id=pid, name="Duplicate")
 
 
 def test_delete_rolls_back_dependencies_if_final_delete_fails(database: str) -> None:
@@ -120,9 +125,9 @@ def test_delete_rolls_back_dependencies_if_final_delete_fails(database: str) -> 
 def test_bulk_seeding_uses_the_same_rules_without_committing_its_caller(database: str) -> None:
     with closing(get_db(database)) as conn:
         conn.execute("BEGIN")
-        ProjectRepository.create_on_connection(conn, name="Outer transaction")
+        create_seed_project(conn, name="Outer transaction")
         with pytest.raises(ValueError, match="name is required"):
-            ProjectRepository.create_on_connection(conn, name=" ")
+            create_seed_project(conn, name=" ")
         assert conn.in_transaction
         conn.rollback()
     assert create_portfolio_service(database).get_metrics().total_projects == 0
@@ -153,7 +158,7 @@ def test_gateway_closes_connections_and_reserves_the_writer_before_reads(
             connection.execute("SELECT 1")
 
 
-def test_new_storage_errors_are_safe_and_legacy_callers_keep_sqlite_errors(tmp_path: Path) -> None:
+def test_project_storage_errors_are_safe_across_services_and_readers(tmp_path: Path) -> None:
     path = str(tmp_path / "missing" / "private.db")
     with pytest.raises(ProjectStorageError) as error:
         create_project_service(path).exists(1)
@@ -161,16 +166,16 @@ def test_new_storage_errors_are_safe_and_legacy_callers_keep_sqlite_errors(tmp_p
     assert isinstance(error.value.__cause__, sqlite3.OperationalError)
     with pytest.raises(ProjectStorageError):
         create_portfolio_service(path, include_allocations=False).get_page([], {})
-    with pytest.raises(sqlite3.OperationalError):
-        ProjectRepository(path).get_all_projects()
+    with pytest.raises(ProjectStorageError):
+        create_project_service(path).get_planning_catalog(())
 
 
 def test_create_dialog_retains_draft_when_another_user_takes_the_preview_id(database: str) -> None:
-    SchemaRepository(database).create_parameter("p", None, "Notes", "TEXT")
+    create_schema_service(database).create_parameter("p", None, "Notes", "TEXT")
     app = AppTest.from_string(f'''
 from app.main import create_project_workspace
 from app.presentation.components.project_dialogs import open_create_project_dialog
-from src.i18n import set_current_locale
+from app.presentation.i18n import set_current_locale
 set_current_locale("en")
 open_create_project_dialog(create_project_workspace({database!r}))
 ''', default_timeout=15).run()

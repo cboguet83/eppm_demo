@@ -9,7 +9,9 @@ import streamlit as st
 from app.application.exceptions import ProjectStorageError
 from app.domain.projects.project import PROJECT_STATUSES
 from app.presentation.i18n import t
-from app.presentation.components.dynamic_fields import render_dynamic_field as _render_dynamic_field
+from app.presentation.components.dynamic_fields import (
+    render_dynamic_field as _render_dynamic_field,
+)
 from app.presentation.components.project_workspace import ProjectWorkspace
 from app.presentation.components.project_type_frames import template_frame, types_frame
 
@@ -26,24 +28,9 @@ def _save_project(save: Callable[..., _Result], **kwargs: Any) -> _Result:
         st.stop()
 
 
-def _dynamic_project_value(attributes: dict[str, Any], parameter: pd.Series) -> Any:
-    """Find an existing dynamic value by parameter ID, name, or alias."""
-    param_id = str(parameter["param_id"])
-    param_name = str(parameter.get("param_name", ""))
-    alias = (
-        str(parameter.get("alias", "")).strip()
-        if pd.notna(parameter.get("alias"))
-        else ""
-    )
-    value = attributes.get(param_id)
-    if value is None and param_name:
-        value = attributes.get(param_name)
-    if value is None and alias:
-        value = attributes.get(alias)
-    return value
-
-
-def _manager_options(workspace: ProjectWorkspace) -> tuple[list[int | None], dict[int | None, str]]:
+def _manager_options(
+    workspace: ProjectWorkspace,
+) -> tuple[list[int | None], dict[int | None, str]]:
     """Use injected editor reference data with the existing vacant-position label."""
     names = workspace.portfolio.get_catalog().managers
     return [None, *names], {None: "— None —", **names}
@@ -75,14 +62,12 @@ def _render_dynamic_fields(
                     values[param_id] = _render_dynamic_field(
                         parameter,
                         options,
-                        _dynamic_project_value(attributes, parameter),
+                        attributes.get(str(parameter["param_id"])),
                         key_prefix,
                     )
 
     if not params.empty:
-        ungrouped = params[
-            params["group_id"].isna() | ~params["group_id"].isin(known_group_ids)
-        ]
+        ungrouped = params[params["group_id"].isna() | ~params["group_id"].isin(known_group_ids)]
         if not ungrouped.empty:
             with st.expander(
                 f":material/push_pin: {t('schema.param_group_none')}",
@@ -93,7 +78,7 @@ def _render_dynamic_fields(
                     values[param_id] = _render_dynamic_field(
                         parameter,
                         options,
-                        _dynamic_project_value(attributes, parameter),
+                        attributes.get(str(parameter["param_id"])),
                         key_prefix,
                     )
     return values
@@ -110,16 +95,24 @@ def open_create_project_dialog(
     project_id = st.session_state[draft_key]
     catalog = workspace.portfolio.get_catalog()
     groups = pd.DataFrame(catalog.groups)
-    options = pd.DataFrame(catalog.options, columns=["id", "param_id", "option_value", "display_order"])
+    options = pd.DataFrame(
+        catalog.options, columns=["id", "param_id", "option_value", "display_order"]
+    )
     manager_options = [None, *catalog.managers]
     manager_labels = {None: "— None —", **catalog.managers}
 
     type_options = types_frame(workspace.types.get_all_types())
     type_labels = dict(zip(type_options["id"], type_options["name"]))
-    type_id = st.selectbox(t("project_types.label"), list(type_labels), format_func=type_labels.get,
-                          key=f"create_type_{project_id}")
+    type_id = st.selectbox(
+        t("project_types.label"),
+        list(type_labels),
+        format_func=type_labels.get,
+        key=f"create_type_{project_id}",
+    )
     params = template_frame(workspace.types.get_template(int(type_id)))
-    defaults = {p["param_id"]: p["default_value"] for _, p in params.iterrows() if p["has_default"]}
+    defaults = {
+        p["param_id"]: p["default_value"] for _, p in params.iterrows() if p["has_default"]
+    }
     with st.container():
         id_col, name_col, status_col = st.columns([1, 2, 1])
         id_col.text_input(t("master_data.field_id"), value=str(project_id), disabled=True)
@@ -153,7 +146,8 @@ def open_create_project_dialog(
             if not clean_name:
                 st.error(t("master_data.err_required_fields"))
             else:
-                created_id = _save_project(workspace.projects.create_project,
+                created_id = _save_project(
+                    workspace.projects.create_project,
                     name=clean_name,
                     status=status,
                     planned_budget=planned,
@@ -181,7 +175,9 @@ def open_edit_project_dialog(
 
     catalog = workspace.portfolio.get_catalog()
     groups = pd.DataFrame(catalog.groups)
-    options = pd.DataFrame(catalog.options, columns=["id", "param_id", "option_value", "display_order"])
+    options = pd.DataFrame(
+        catalog.options, columns=["id", "param_id", "option_value", "display_order"]
+    )
     manager_options = [None, *catalog.managers]
     manager_labels = {None: "— None —", **catalog.managers}
     current_manager = int(project.function_id) if project.function_id is not None else None
@@ -191,9 +187,13 @@ def open_edit_project_dialog(
 
     type_options = types_frame(workspace.types.get_all_types())
     type_labels = dict(zip(type_options["id"], type_options["name"]))
-    type_id = st.selectbox(t("project_types.label"), list(type_labels),
-                          index=list(type_labels).index(project.project_type_id), format_func=type_labels.get,
-                          key=f"edit_type_{project_id}")
+    type_id = st.selectbox(
+        t("project_types.label"),
+        list(type_labels),
+        index=list(type_labels).index(project.project_type_id),
+        format_func=type_labels.get,
+        key=f"edit_type_{project_id}",
+    )
     params = template_frame(workspace.types.get_template(int(type_id)))
     with st.container():
         id_col, name_col, status_col = st.columns([1, 2, 1])
@@ -238,7 +238,8 @@ def open_edit_project_dialog(
             if not clean_name:
                 st.error(t("master_data.err_required_fields"))
             else:
-                updated = _save_project(workspace.projects.update_project,
+                updated = _save_project(
+                    workspace.projects.update_project,
                     project_id=project_id,
                     name=clean_name,
                     status=status,

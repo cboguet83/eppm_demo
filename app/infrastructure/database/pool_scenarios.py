@@ -5,7 +5,6 @@ Apply:   python -m app.infrastructure.database.pool_scenarios --year 2026 --appl
 """
 
 import hashlib
-import json
 import random
 import sqlite3
 import tempfile

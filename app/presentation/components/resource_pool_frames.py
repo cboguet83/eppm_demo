@@ -1,4 +1,4 @@
-"""DataFrame formatting at the pool presentation/compatibility boundary."""
+"""DataFrame formatting at the pool presentation boundary."""
 
 from dataclasses import asdict
 import pandas as pd

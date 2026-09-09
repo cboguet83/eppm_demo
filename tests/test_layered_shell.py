@@ -180,38 +180,13 @@ assert not any(name == 'src' or name.startswith('src.') for name in sys.modules)
     assert result.returncode == 0, result.stderr
 
 
-def test_historical_app_helpers_delegate_to_migrated_owners(database, monkeypatch):
-    import app
-    from app.shared.config import config
-
-    monkeypatch.setattr(
-        "app.compatibility.config",
-        replace(
-            config,
-            db_path=database,
-            force_reseed=False,
-            seed_projects_count=0,
-        ),
-    )
-    monkeypatch.setattr(sys, "argv", ["app.py"])
-    assert app.bootstrap_database()
-    groups, parameters, options = app.load_full_schema(database)
-    assert len(groups) and len(parameters) and len(options)
-    assert app.generate_param_id(database)
-    assert app.get_next_available_group_order(database) > 0
-    assert app._get_database_seed_counts(database)["projects"] == 5
-    assert app._get_planning_totals(database)["pools"] == 103
-    with pytest.raises(AttributeError):
-        getattr(app, "unknown_export")
-
-
 @pytest.mark.parametrize("argv", [["--help"], ["-h"]])
-def test_compatibility_launcher_help_does_not_initialize_a_database(tmp_path, argv):
+def test_launcher_help_does_not_initialize_a_database(tmp_path, argv):
     import os
 
     database = tmp_path / "unopened.db"
     result = subprocess.run(
-        [sys.executable, "app.py", *argv],
+        [sys.executable, "streamlit_app.py", *argv],
         env={**os.environ, "DB_NAME": str(database)},
         capture_output=True,
         text=True,
@@ -222,17 +197,34 @@ def test_compatibility_launcher_help_does_not_initialize_a_database(tmp_path, ar
     assert not database.exists()
 
 
+@pytest.mark.parametrize("flag", ["--force", "-f", "--seed-projects", "-n"])
+def test_retired_startup_flags_fail_without_initializing_storage(tmp_path, flag):
+    import os
+
+    database = tmp_path / "unopened.db"
+    result = subprocess.run(
+        [sys.executable, "-m", "app.main", flag],
+        env={**os.environ, "DB_NAME": str(database)},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 2
+    assert "unrecognized arguments" in result.stderr
+    assert not database.exists()
+
+
 def test_cli_seed_count_uses_the_composed_maintenance_service(database, monkeypatch):
     from app.main import _run_cli
     from app.shared.config import config
 
     monkeypatch.setattr("app.shared.config.config", replace(config, db_path=database))
-    monkeypatch.setattr(sys, "argv", ["app.py", "--projects", "2"])
+    monkeypatch.setattr(sys, "argv", ["streamlit_app.py", "--projects", "2"])
     assert _run_cli()
     assert create_maintenance_service(database).counts()["projects"] == 2
-    monkeypatch.setattr(sys, "argv", ["app.py"])
+    monkeypatch.setattr(sys, "argv", ["streamlit_app.py"])
     assert not _run_cli()
-    monkeypatch.setattr(sys, "argv", ["app.py", "--force"])
+    monkeypatch.setattr(sys, "argv", ["streamlit_app.py", "--force-reseed"])
     with patch(
         "app.main.create_maintenance_service", side_effect=DatabaseMaintenanceError("Unavailable")
     ):

@@ -1,12 +1,13 @@
 """Interval sweep must match the previous exact daily deduplication rules."""
 
+from app.domain.resources.capacity_rules import accumulate_daily_usage
+
 from collections import defaultdict
 from datetime import date, timedelta
 import random
 import unittest
 
-from src.services.capacity_timeline import demand_timeline
-from src.services.resource_pool_service import ResourcePoolService
+from app.domain.resources.timeline import demand_timeline
 
 
 class CapacityTimelineTests(unittest.TestCase):
@@ -23,7 +24,7 @@ class CapacityTimelineTests(unittest.TestCase):
                 task = index if rng.random() < .7 else None
                 fte = rng.choice([0, .1, .25, 1, 2.5])
                 assignments.append(dict(project_id=pid, task_id=task, start_date=str(start), end_date=str(end), fte_assigned=fte))
-                ResourcePoolService._accumulate_daily_usage((project if task is None else tasks)[pid], str(start), str(end), fte)
+                accumulate_daily_usage((project if task is None else tasks)[pid], str(start), str(end), fte)
             dates = set().union(*(list(project.values()) + list(tasks.values())))
             expected = {day: round(sum(max(project[p].get(day,0),tasks[p].get(day,0)) for p in range(1,13)),3) for day in dates}
             self.assertEqual(demand_timeline(assignments), expected)

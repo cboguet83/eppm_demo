@@ -18,9 +18,7 @@ services:
       - ./data:/app/data
       # Development bind mounts: Streamlit hot-reloads application changes
       # without rebuilding the image. Dependencies remain image-managed.
-      - ./app.py:/app/app.py:ro
       - ./streamlit_app.py:/app/streamlit_app.py:ro
       - ./app:/app/app:ro
-      - ./src:/app/src:ro
       - ./scripts:/app/scripts:ro
       - ./.streamlit:/app/.streamlit:ro

@@ -5,12 +5,14 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from src.database.connection import get_db
-from src.database.schema_init import init_db
-from src.repositories.portfolio_repo import PortfolioRepository, portfolio_revision
-from src.repositories.project_repo import ProjectRepository
-from src.repositories.project_type_repo import ProjectTypeRepository
-from src.repositories.schema_repo import SchemaRepository
+from app.infrastructure.database.connection import get_db
+from app.infrastructure.database.schema_init import init_db
+from app.main import create_portfolio_service
+from app.infrastructure.repositories.portfolio import portfolio_revision
+from app.infrastructure.database.seed_projects import create_seed_project
+from app.main import create_project_service
+from app.main import create_project_type_service
+from app.main import create_schema_service
 
 
 class PortfolioPagingTests(unittest.TestCase):
@@ -19,10 +21,10 @@ class PortfolioPagingTests(unittest.TestCase):
         self.addCleanup(self.directory.cleanup)
         self.path = str(Path(self.directory.name) / 'portfolio.db')
         init_db(self.path)
-        self.projects = ProjectRepository(self.path)
-        self.repo = PortfolioRepository(self.path)
-        self.schema = SchemaRepository(self.path)
-        self.types = ProjectTypeRepository(self.path)
+        self.projects = create_project_service(self.path)
+        self.repo = create_portfolio_service(self.path)
+        self.schema = create_schema_service(self.path)
+        self.types = create_project_type_service(self.path)
         self.special = self.types.create_type('Special')
         self.schema.create_parameter('phase', None, 'phase', 'TEXT', applies_to_all=False,
                                      project_type_ids=[self.special])
@@ -34,7 +36,7 @@ class PortfolioPagingTests(unittest.TestCase):
         with closing(get_db(self.path)) as conn:
             with conn:
                 for i in range(1, 256):
-                    ProjectRepository.create_on_connection(conn, name=f'Project {i:03d}',
+                    create_seed_project(conn, name=f'Project {i:03d}',
                         planned_budget=i, project_type_id=self.special if i % 2 else 1,
                         dynamic_attributes={'phase': 'Late' if i > 200 else 'Early'} if i % 2 else {})
 
@@ -90,15 +92,17 @@ class PortfolioPagingTests(unittest.TestCase):
 import importlib
 import streamlit as st
 from unittest.mock import patch
-from src.i18n import set_current_locale
-from src.repositories.project_repo import ProjectRepository
-from src.repositories.schema_repo import SchemaRepository
-import src.views.portfolio_table_component as component
+from app.presentation.i18n import set_current_locale
+from app.main import create_project_service
+from app.main import create_schema_service
+import app.presentation.components.portfolio_table as component
 importlib.reload(component)
-from src.views.portfolio_view import render_portfolio_overview
+from app.presentation.pages.portfolio import render_portfolio_overview
+from app.main import create_project_workspace
+from app.infrastructure.repositories.projects import SqliteProjectGateway
 set_current_locale('en')
-with patch.object(ProjectRepository, 'get_all_projects', side_effect=AssertionError('eager load')):
-    render_portfolio_overview(ProjectRepository({self.path!r}), SchemaRepository({self.path!r}))
+with patch.object(SqliteProjectGateway, 'read_planning_catalog', side_effect=AssertionError('eager load')):
+    render_portfolio_overview(create_project_workspace({self.path!r}))
 ''', default_timeout=15).run()
         self.assertFalse(app.exception, [e.message for e in app.exception])
         self.assertIn('Projects Master List', [h.value for h in app.subheader])

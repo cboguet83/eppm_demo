@@ -3,12 +3,6 @@
 import pandas as pd
 
 from app.application.services.budgets import BudgetReport
-from app.domain.projects.budgets import (
-    BudgetAmounts,
-    PortfolioMetrics,
-    euro_amount,
-    summarize_budgets,
-)
 
 HEALTH_LABELS = {
     "over_budget": "🔴 Over Budget",
@@ -38,19 +32,4 @@ def budget_frame(report: BudgetReport) -> pd.DataFrame:
             }
             for row in report.rows
         ]
-    )
-
-
-def calculate_frame_metrics(projects: pd.DataFrame) -> PortfolioMetrics:
-    """Adapt legacy DataFrame amounts to the shared decimal aggregate rules."""
-    if projects.empty:
-        return PortfolioMetrics()
-    return summarize_budgets(
-        BudgetAmounts(
-            euro_amount(planned if pd.notna(planned) else None),
-            euro_amount(actual if pd.notna(actual) else None),
-        )
-        for planned, actual in projects[["planned_budget", "actual_budget"]].itertuples(
-            index=False, name=None
-        )
     )

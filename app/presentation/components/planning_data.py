@@ -91,12 +91,6 @@ def load_planning_project_metadata(
     )
 
 
-@st.cache_data(ttl=60, max_entries=4, show_spinner=False)
-def load_planning_bounds(_workspace: PlanningWorkspace, revision: tuple) -> ProjectBounds:
-    """Cache aggregate dates for explicit callers needing all project bounds."""
-    return _workspace.planning.get_all_project_date_bounds()
-
-
 @st.cache_data(ttl=60, max_entries=16, show_spinner=False)
 def load_dependency_choices(
     _workspace: PlanningWorkspace,

@@ -7,9 +7,9 @@ import shutil
 import tempfile
 import unittest
 
-from src.database.connection import get_db
-from src.database.schema_init import init_db
-from src.database.seeder import seed_default_data_if_empty
+from app.infrastructure.database.connection import get_db
+from app.infrastructure.database.schema_init import init_db
+from app.infrastructure.database.seeder import seed_default_data_if_empty
 
 
 class TestDatabaseLayer(unittest.TestCase):
@@ -119,7 +119,6 @@ class TestDatabaseLayer(unittest.TestCase):
 
     def test_seed_creates_all_categories_parameters_and_enums(self) -> None:
         """Verify seeded categories, 30 parameters, all discrete enums, and project manager FKs."""
-        import json
         init_db(self.temp_db_path)
         seed_default_data_if_empty(self.temp_db_path)
 
@@ -182,7 +181,7 @@ class TestDatabaseLayer(unittest.TestCase):
             self.assertGreaterEqual(station_count, 120)
 
             # Five project types, with only their effective custom properties.
-            from src.database.property_store import effective_template, read_values
+            from app.infrastructure.database.property_store import effective_template, read_values
             cursor.execute("SELECT id, name, function_id, project_type_id FROM project")
             projects = cursor.fetchall()
             self.assertEqual(len(projects), 5)

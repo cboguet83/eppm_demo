@@ -1,4 +1,4 @@
-"""Compatibility exports for database utilities now owned by infrastructure."""
+"""Preview or apply resource-pool scenarios through the maintenance service."""
 
 import argparse
 import os
@@ -8,17 +8,6 @@ from datetime import date
 
 if __package__ in (None, ""):
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from app.infrastructure.database.pool_scenarios import (
-    MARKER,
-    BASE_GROUPS,
-    fingerprint,
-    seed_snapshot,
-    _seed_snapshot,
-    _apply_pool_plan,
-    seed_pool_scenarios,
-)
-
 
 from app.main import create_maintenance_service
 from scripts.maintenance_cli import cli_errors

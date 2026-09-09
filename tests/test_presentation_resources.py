@@ -120,11 +120,3 @@ def test_missing_or_malformed_packaged_catalog_is_logged_safely(
     assert i18n.load_locale_catalog("en") == {}
     assert "Translation catalog" in caplog.text
     assert str(tmp_path) not in caplog.text
-
-
-def test_legacy_i18n_exports_share_the_migrated_owner():
-    import src.i18n as legacy
-    import src.i18n.translator as translator
-
-    assert legacy.t is translator.t is i18n.t
-    assert legacy.set_current_locale is i18n.set_current_locale

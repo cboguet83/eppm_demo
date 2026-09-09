@@ -1,4 +1,10 @@
-"""Schema domain contracts, real SQLite integrity, and compatibility regressions."""
+"""Schema domain contracts, real SQLite integrity, and display projections."""
+
+from app.application.exceptions import SchemaStorageError
+
+from app.main import create_schema_service
+
+from app.presentation.components import schema_frames
 
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
@@ -7,15 +13,13 @@ from pathlib import Path
 
 import pytest
 
-from app.application.exceptions import SchemaConflictError, SchemaStorageError
+from app.application.exceptions import SchemaConflictError
 from app.application.services.schema import SchemaService
 from app.domain.projects.schema import next_group_order, next_parameter_id
 from app.infrastructure.database.connection import get_db
 from app.infrastructure.repositories.schema import SqliteSchemaGateway
-from app.main import create_schema_service, create_project_service, create_project_type_service
-from src.database.schema_init import init_db
-from src.repositories.schema_repo import SchemaRepository
-from src.services.schema_service import SchemaService as LegacySchemaService
+from app.main import create_project_service, create_project_type_service
+from app.infrastructure.database.schema_init import init_db
 
 
 @pytest.fixture
@@ -26,11 +30,12 @@ def database(tmp_path: Path) -> str:
     return path
 
 
-def test_identifier_and_order_rules_keep_legacy_sequence_and_fill_gaps() -> None:
+def test_identifier_and_order_rules_use_canonical_codes_and_fill_gaps() -> None:
     assert next_group_order([1, 3, None, 0, -1]) == 2
     assert next_group_order([]) == 1
     assert next_parameter_id([]) == "PRM_001"
-    assert next_parameter_id([2, "4", "PRM_009_extra", "PRM_", "PRM_bad", "custom", None]) == "PRM_010"
+    assert next_parameter_id(["PRM_002", "4", "PRM_009_extra", "PRM_", "PRM_bad", "custom"]) == "PRM_003"
+    assert next_parameter_id(["PRM_009", "PRM_003"]) == "PRM_010"
 
 
 def test_invalid_schema_inputs_are_rejected_before_opening_storage() -> None:
@@ -177,11 +182,11 @@ def test_concurrent_creates_allocate_fresh_ids_and_free_group_orders(database: s
         first.update_group(first.get_all_groups()[1].id, "Second", 1)
 
 
-def test_missing_ids_and_legacy_contracts(database: str) -> None:
+def test_schema_missing_records_and_display_projection(database: str) -> None:
     service = create_schema_service(database)
-    legacy = SchemaRepository(database)
-    assert legacy.create_parameter(" p ", None, " Name ", "TEXT", True, " Alias ") is True
-    frame = legacy.get_all_parameters()
+    other_service = create_schema_service(database)
+    assert other_service.create_parameter(" p ", None, " Name ", "TEXT", True, " Alias ") == "p"
+    frame = schema_frames.parameters_frame(other_service.get_all_parameters())
     assert (frame.iloc[0].param_id, frame.iloc[0].alias, frame.iloc[0].mandatory) == ("p", "Alias", 1)
     assert service.get_all_parameters()[0].mandatory is True
     assert not service.update_parameter("missing", None, "Missing", "TEXT")
@@ -191,13 +196,13 @@ def test_missing_ids_and_legacy_contracts(database: str) -> None:
     assert not service.update_group(999, "Missing", 1)
     assert not service.delete_parameter("missing")
     assert not service.delete_option(999)
-    with pytest.raises(sqlite3.IntegrityError):
-        legacy.create_parameter("p", None, "Duplicate", "TEXT")
-    group = legacy.create_group("Group", 1)
-    with pytest.raises(sqlite3.IntegrityError):
-        legacy.create_group("Group", 2)
-    assert legacy.update_group(group, "Updated", 3)
-    assert LegacySchemaService.get_next_available_group_order(database) == 1
+    with pytest.raises(SchemaConflictError):
+        other_service.create_parameter("p", None, "Duplicate", "TEXT")
+    group = other_service.create_group("Group", 1)
+    with pytest.raises(SchemaConflictError):
+        other_service.create_group("Group", 2)
+    assert other_service.update_group(group, "Updated", 3)
+    assert create_schema_service(database).get_next_available_group_order() == 1
 
 
 def test_gateway_closes_connections_and_holds_writer_before_reference_guards(
@@ -229,16 +234,11 @@ def test_gateway_closes_connections_and_holds_writer_before_reference_guards(
             connection.execute("SELECT 1")
 
 
-def test_storage_errors_are_safe_and_legacy_id_previews_work_before_migration(tmp_path: Path) -> None:
+def test_schema_storage_failures_are_translated_to_safe_errors(tmp_path: Path) -> None:
     path = str(tmp_path / "missing" / "private.db")
     with pytest.raises(SchemaStorageError) as error:
         create_schema_service(path).get_snapshot()
     assert path not in str(error.value)
     assert isinstance(error.value.__cause__, sqlite3.OperationalError)
-    with pytest.raises(sqlite3.OperationalError):
-        SchemaRepository(path).get_all_groups()
-    legacy = str(tmp_path / "legacy.db")
-    with closing(sqlite3.connect(legacy)) as conn, conn:
-        conn.execute("CREATE TABLE schema_parameters(id INTEGER)")
-        conn.execute("INSERT INTO schema_parameters VALUES (11)")
-    assert LegacySchemaService.generate_param_id(legacy) == "PRM_012"
+    with pytest.raises(SchemaStorageError):
+        schema_frames.groups_frame(create_schema_service(path).get_all_groups())

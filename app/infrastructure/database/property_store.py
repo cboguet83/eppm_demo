@@ -12,7 +12,6 @@ from typing import Any
 
 from app.domain.projects.property_values import encode_property_value
 from app.domain.projects.project_types import resolve_template
-from app.domain.projects.project import prepare_project_values
 
 
 def parameters(conn: sqlite3.Connection) -> list[dict[str, Any]]:
@@ -91,11 +90,3 @@ def effective_template(conn: sqlite3.Connection, type_id: int) -> list[dict[str,
     overrides = dict(conn.execute("SELECT param_id, mandatory_override FROM project_type_property_rule WHERE project_type_id = ?", (type_id,)))
     defaults = read_values(conn, defaults=True, owner_id=type_id).get(type_id, {})
     return resolve_template(parameters(conn), selected, overrides, defaults)
-
-
-def prepare_values(conn: sqlite3.Connection, type_id: int, submitted: dict[str, Any], *, creating: bool, existing: dict[str, Any] | None = None) -> dict[str, Any]:
-    choices: dict[str, set[str]] = {}
-    for pid, value in conn.execute("SELECT param_id, option_value FROM schema_param_options"):
-        choices.setdefault(pid, set()).add(value)
-    return prepare_project_values(effective_template(conn, type_id), choices, submitted,
-                                  creating=creating, existing=existing)

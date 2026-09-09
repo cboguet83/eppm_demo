@@ -15,7 +15,7 @@ from typing import TypedDict
 from app.infrastructure.database.demo_catalog import DEMO_TYPES, sample_values
 from app.infrastructure.database.property_store import effective_template
 from app.infrastructure.database.seed_projects import create_seed_project
-from app.domain.projects.project import PROJECT_STATUSES as STATUS_LIST
+from app.domain.projects.project import PROJECT_STATUSES
 from app.infrastructure.database.flush import flush_database
 from app.infrastructure.database.connection import get_db
 from app.infrastructure.database.backup import backup_before_seed
@@ -60,9 +60,6 @@ MILESTONE_TEMPLATES: list[tuple[str, str]] = [
     ("QUAL", "Controle Qualité"),
     ("CER", "Certificat Conformité"),
 ]
-
-PROJECT_STATUSES = STATUS_LIST
-
 
 class SeedTask(TypedDict):
     """A generated schedule item before persistence assigns its database ID."""

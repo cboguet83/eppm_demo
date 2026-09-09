@@ -70,11 +70,11 @@ class TestI18n(unittest.TestCase):
         """Verify t() resolves dot notation and interpolates parameters."""
         set_current_locale("en")
         self.assertEqual(t("nav.portfolio"), "Portfolio Overview")
-        self.assertEqual(t("planning.schedule_title", project_id="PRJ-001"), "Timeline Schedule: PRJ-001")
+        self.assertEqual(t("planning.schedule_title", project_id=1), "Timeline Schedule: 1")
 
         set_current_locale("fr")
         self.assertEqual(t("nav.portfolio"), "Aperçu du Portefeuille")
-        self.assertEqual(t("planning.schedule_title", project_id="PRJ-001"), "Calendrier du Projet : PRJ-001")
+        self.assertEqual(t("planning.schedule_title", project_id=1), "Calendrier du Projet : 1")
 
         set_current_locale("de")
         self.assertEqual(t("nav.portfolio"), "Portfolio-Übersicht")

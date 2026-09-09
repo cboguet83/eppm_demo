@@ -14,7 +14,7 @@ from app.domain.resources.models import DailyOverassignment, PoolCapacityDetail
 from app.domain.resources.overallocation import overloaded_consumers
 from app.infrastructure.database.connection import get_db
 from app.main import create_planning_service, create_project_overallocation_service
-from src.database.schema_init import init_db
+from app.infrastructure.database.schema_init import init_db
 
 
 @pytest.fixture

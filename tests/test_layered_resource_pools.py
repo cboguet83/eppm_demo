@@ -1,4 +1,8 @@
-"""Resource-pool rules, SQLite integrity, atomic use cases, and compatibility."""
+"""Resource-pool rules, SQLite integrity, atomic use cases, and display projections."""
+
+from app.application.exceptions import ResourcePoolConflictError
+
+from app.presentation.components import resource_pool_frames
 
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
@@ -9,7 +13,7 @@ from threading import Barrier
 
 import pytest
 
-from app.application.exceptions import ResourcePoolConflictError, ResourcePoolStorageError
+from app.application.exceptions import ResourcePoolStorageError
 from app.domain.resources.models import (
     PoolAssignment,
     PoolMapping,
@@ -27,8 +31,7 @@ from app.domain.resources.rules import (
 )
 from app.infrastructure.repositories.resource_pools import SqliteResourcePoolGateway
 from app.main import create_resource_pool_service
-from src.database.schema_init import init_db
-from src.repositories.resource_pool_repo import ResourcePoolRepository
+from app.infrastructure.database.schema_init import init_db
 
 
 @pytest.fixture
@@ -148,7 +151,7 @@ def test_concurrent_opposite_group_edges_cannot_commit_a_cycle(database: str) ->
 
 def test_assignment_filters_missing_records_and_mapping_upsert_identity(database: str) -> None:
     service = create_resource_pool_service(database)
-    legacy = ResourcePoolRepository(database)
+    other_service = create_resource_pool_service(database)
     pool = service.create_pool(ResourcePool("Pool"))
     mapping = PoolMapping(pool, "function", 1)
     first = service.create_mapping(mapping)
@@ -184,9 +187,9 @@ def test_assignment_filters_missing_records_and_mapping_upsert_identity(database
     assert not service.delete_mapping(99)
     assert not service.delete_assignment(99)
     assert not service.update_mapping(99, 0)
-    assert list(legacy.get_all_resource_pools()["id"]) == [pool]
+    assert list(resource_pool_frames.pools_frame(other_service.get_all_pools())["id"]) == [pool]
     assert service.delete_pool(pool)
-    assert legacy.get_assignments().empty and legacy.get_all_mappings().empty
+    assert resource_pool_frames.assignments_frame(other_service.get_assignments()).empty and resource_pool_frames.mappings_frame(other_service.get_all_mappings()).empty
 
 
 def test_gateway_reserves_writes_rolls_back_and_closes_connections(database: str) -> None:
@@ -214,5 +217,5 @@ def test_gateway_reserves_writes_rolls_back_and_closes_connections(database: str
         with gateway.transaction() as store:
             store.connection.execute("SELECT * FROM missing_table")
     assert "missing_table" not in str(failure.value)
-    with pytest.raises(sqlite3.IntegrityError):
-        ResourcePoolRepository(database).create_assignment(PoolAssignment(99, 1, 1))
+    with pytest.raises(ResourcePoolConflictError):
+        create_resource_pool_service(database).create_assignment(PoolAssignment(99, 1, 1))
