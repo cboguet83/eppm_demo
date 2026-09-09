@@ -28,7 +28,17 @@ from app.shared.logging import get_logger, setup_logging
 def script_error(error: Exception) -> bool:
     """Suppress internal exception details in browser-rendered scripts and callbacks."""
     reference = token_urlsafe(16)
-    get_logger(__name__).error("application.operation_failed reference=%s", reference)
+    location = error.__traceback__
+    while location is not None and location.tb_next is not None:
+        location = location.tb_next
+    # Record code location and category, never the exception message, source line,
+    # local variables or provider payload. The browser receives only its reference.
+    get_logger(__name__).error(
+        "application.operation_failed reference=%s exception=%s source=%s line=%s",
+        reference, type(error).__name__,
+        Path(location.tb_frame.f_code.co_filename).name if location is not None else "unknown",
+        location.tb_lineno if location is not None else 0,
+    )
     st.error(t("auth.operation_failed", reference=reference))
     return True
 

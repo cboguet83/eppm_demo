@@ -1,6 +1,6 @@
 # ADR 0019: OIDC identities, explicit grants, and persistent application sessions
 
-- Status: Accepted design; integration in progress on the feature branch
+- Status: Accepted design; validation in progress on the feature branch
 - Date: 2026-09-09
 - Specification: [OIDC and access management](../implementation/oidc-and-access-management.md)
 
@@ -72,6 +72,12 @@ mandatory even if a token claims `nonce_supported=false`. Only minimal verified
 identity/timing/MFA claims leave the adapter. No access or ID token reaches Streamlit
 state, browser components, application audit, or cookies.
 
+The adapter accepts only Authlib's `UserInfo` result from ID-token validation on
+the code-exchange path. An ordinary JSON `userinfo` field in a token response is
+not proof of identity. Responses without an ID token are rejected even when they
+contain plausible issuer, subject, timing, and nonce fields; a signed ID token
+supersedes any unverified profile hints returned alongside it.
+
 Authlib transient data, including the PKCE verifier, stays in SQLite for at most ten
 minutes. Its browser cookie contains a signed state marker. Reading transient data
 atomically consumes it, preventing replay across workers. The application cookie is
@@ -98,7 +104,8 @@ disabled because they can contain PKCE verifiers or callback authorization codes
 
 References: [Streamlit authentication](https://docs.streamlit.io/develop/concepts/connections/authentication),
 [st.App](https://docs.streamlit.io/develop/api-reference/server/st.app),
-[Authlib Starlette integration](https://docs.authlib.org/en/latest/oauth2/client/web/starlette.html).
+[Authlib Starlette integration](https://docs.authlib.org/en/latest/oauth2/client/web/starlette.html),
+[Authlib 1.8.0 ID-token parsing](https://github.com/authlib/authlib/blob/v1.8.0/authlib/integrations/base_client/async_openid.py).
 
 ## Business operations and transport integration
 
@@ -108,6 +115,11 @@ server-resolved actor. Deployment/fixture callers use the separate
 The running shell no longer initializes, seeds, resets, or counts the entire
 database. Database initialization installs planning indexes and summary storage.
 Navigation exposes only authorized business, settings, or access-management pages.
+The obsolete presentation startup cache and allocation-seeding dialogs are removed.
+Maintenance construction lives only in `app.operator_services`; the explicit seed
+CLI delegates there. Import checks prevent presentation modules from taking a
+maintenance-service dependency. Actual-entry-point tests verify that public startup
+does not create storage and stale transport bindings cannot render administration.
 
 Each existing SQLite business gateway begins its transaction before installing
 `SqliteBusinessSecurity`. Connection-local read views filter ownership before
@@ -240,8 +252,9 @@ verification results, limitations, and production responsibilities.
 - Real HTTP/WebSocket tests cover authenticated download fetch, forged runtime
   identity headers, session expiry/revocation/security changes, blocked native data
   routes, and server validation of malformed/oversized CSV component payloads.
-- Current integration checkpoint: 724 Python tests, 14 subtests, and all 42
+- Current integration checkpoint: 775 Python tests, 14 subtests, and all 42
   JavaScript tests passed. The opt-in real Keycloak browser workflow passed against
   the rebuilt image without source mounts, including grants, scoped exports,
-  revocation, and logout across tabs. Statement coverage is 90.35%
-  (9,631 of 10,660 statements), below the repository's 99% target.
+  revocation, and logout across tabs. Three consecutive browser runs passed after
+  moving live audit inspection into the Linux container. Statement coverage is
+  92.26% (9,770 of 10,590 statements), below the repository's 99% target.

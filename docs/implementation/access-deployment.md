@@ -83,6 +83,14 @@ the `eppm` realm. Both containers share a network namespace so the application
 process and host browser use the same issuer; no custom DNS or hosts-file entry is
 needed. These HTTP settings are confined to explicit local development.
 
+After the containers start, run account commands and database inspection inside
+the application container. For example, append
+`exec -T app python -m scripts.access_admin pending-accounts` to the same Compose
+command above. The browser tests also read audit counts this way. Concurrent
+Windows SQLite inspection of the Linux container's mounted database caused writer
+lock failures during verification; stop the application before using host-side
+SQLite tools, or perform the operation entirely inside its container.
+
 The generated file contains independent random passwords for the fictional users
 `alex.admin`, `sam.editor`, and `robin.viewer`, the local provider operator, the
 client, and the application cookie. Obtain the relevant local password directly
@@ -134,7 +142,9 @@ Application session records also require a deployment retention policy; the runt
 does not currently prune expired session rows or limit independent concurrent logins.
 
 Operational security events contain an event category, reference, and sometimes
-an exception class, never token/cookie/credential values or raw provider errors.
+an exception class. Script failures also record the source basename and line number;
+they never record exception messages, source text, local variables, or full traces.
+No token/cookie/credential values or raw provider errors belong in these events.
 Do not re-enable OAuth/HTTP-client debug logs or raw callback query logging in the
 application or reverse proxy. Demo business reset operations preserve application
 users, grants, security audit, and bootstrap state.

@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from app.application.services.access import AccessService
     from app.application.services.budgets import BudgetService
     from app.application.services.collaboration import CollaborationService
+    from app.application.services.maintenance import MaintenanceService
     from app.application.services.organization import OrganizationService
     from app.application.services.planning import PlanningService
     from app.application.services.pool_capacity import PoolCapacityService
@@ -117,6 +118,9 @@ def create_planning_workspace(db_path: str | None = None) -> PlanningWorkspace:
     return application.create_planning_workspace(db_path, access=deployment_access())
 
 
-def create_maintenance_service(db_path: str | None = None) -> application.MaintenanceService:
+def create_maintenance_service(db_path: str | None = None) -> MaintenanceService:
     """Compose database maintenance for deployment commands and test fixtures."""
-    return application.create_maintenance_service(db_path)
+    from app.application.services.maintenance import MaintenanceService
+    from app.infrastructure.database.maintenance import SqliteMaintenanceGateway
+
+    return MaintenanceService(SqliteMaintenanceGateway(db_path))

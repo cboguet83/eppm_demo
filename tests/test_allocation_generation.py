@@ -32,45 +32,6 @@ def allocation_database(tmp_path: Path) -> str:
     return path
 
 
-def test_generation_dialog_previews_without_writing_then_applies_reviewed_mix(allocation_database: str) -> None:
-    from streamlit.testing.v1 import AppTest
-
-    app = AppTest.from_string(f'''
-from app.operator_services import create_maintenance_service
-from app.presentation.components.allocation_seeding import _generate_allocations_dialog
-_generate_allocations_dialog(create_maintenance_service({allocation_database!r}))
-''', default_timeout=30).run()
-    assert not app.exception and len(app.number_input) == 6
-    app.number_input(key="seed_over_pct").set_value(25)
-    app.number_input(key="seed_unstaffed_pct").set_value(20)
-    app.button(key="preview_allocations").click().run()
-    assert not app.exception and not app.error and app.dataframe
-    with closing(sqlite3.connect(allocation_database)) as connection:
-        assert connection.execute("SELECT COUNT(*) FROM resource_pool_assignment").fetchone()[0] == 1
-    app.button(key="apply_allocation_preview").click().run()
-    assert not app.exception and not app.error
-    assert app.session_state["seeding_status_message"].startswith("Pool allocations generated")
-    assert len(create_pool_capacity_service(allocation_database).calculate_many(list(range(1, 11)))) == 10
-
-
-def test_clear_dialog_waits_for_confirmation_and_cancel_keeps_allocations(allocation_database: str) -> None:
-    from streamlit.testing.v1 import AppTest
-
-    app = AppTest.from_string(f'''
-from app.operator_services import create_maintenance_service
-from app.presentation.components.allocation_seeding import _clear_allocations_dialog
-_clear_allocations_dialog(create_maintenance_service({allocation_database!r}))
-''').run()
-    app.button(key="cancel_clear_allocations").click().run()
-    assert not app.exception
-    with closing(sqlite3.connect(allocation_database)) as connection:
-        assert connection.execute("SELECT COUNT(*) FROM resource_pool_assignment").fetchone()[0] == 1
-    app.button(key="confirm_clear_allocations").click().run()
-    assert not app.exception
-    with closing(sqlite3.connect(allocation_database)) as connection:
-        assert connection.execute("SELECT COUNT(*) FROM resource_pool_assignment").fetchone()[0] == 0
-
-
 def test_fte_rounding_never_exceeds_target_or_changes_category() -> None:
     assert allocation_fte(1, 124.049) == 1.24
     assert allocation_fte(1, 100) == 1

@@ -19,7 +19,6 @@ from app.application.services.planning import PlanningService
 from app.application.services.project_overallocation import ProjectOverallocationService
 from app.application.services.collaboration import CollaborationService
 from app.application.services.budgets import BudgetService
-from app.application.services.maintenance import MaintenanceService
 
 if TYPE_CHECKING:
     from app.infrastructure.database.pool_capacity_cache import (
@@ -171,13 +170,6 @@ def create_budget_service(db_path: str | None = None, *, access: BusinessAccess)
     return BudgetService(SqliteBudgetReader(db_path, access=access))
 
 
-def create_maintenance_service(db_path: str | None = None) -> MaintenanceService:
-    """Connect startup and explicit maintenance to SQLite infrastructure."""
-    from app.infrastructure.database.maintenance import SqliteMaintenanceGateway
-
-    return MaintenanceService(SqliteMaintenanceGateway(db_path))
-
-
 def main() -> None:
     """Run a startup command or compose the Streamlit application."""
     import streamlit as st
@@ -213,6 +205,7 @@ def _startup_parser(*, add_help: bool = False) -> ArgumentParser:
 def _run_cli() -> bool:
     """Handle explicit help or seeding requests without rendering a bare UI."""
     from app.application.exceptions import DatabaseMaintenanceError
+    from app.operator_services import create_maintenance_service
     from app.shared.config import config
     from app.shared.logging import get_logger, setup_logging
 

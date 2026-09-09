@@ -33,14 +33,19 @@ from app.shared.config.authentication import AuthenticationConfig
 
 
 @pytest.fixture
-def oidc(tmp_path: Path):
+def oidc(tmp_path: Path, request: pytest.FixtureRequest):
     """Mock only the remote provider's HTTP transport; JOSE, state and SQL remain real."""
     path = str(tmp_path / "oidc.db")
     init_db(path)
     now = [int(time.time())]
-    config = AuthenticationConfig("development", "http://keycloak.localhost:8080/realms/eppm",
-                                  "eppm-test", secrets.token_urlsafe(32), "http://localhost:8501",
-                                  secrets.token_urlsafe(48), local_http=True, mfa_acr_values=("2",))
+    production = getattr(request, "param", False)
+    config = AuthenticationConfig(
+        "production" if production else "development",
+        "https://identity.example.test/realms/eppm" if production else "http://keycloak.localhost:8080/realms/eppm",
+        "eppm-test", secrets.token_urlsafe(32),
+        "https://eppm.example.test" if production else "http://localhost:8501",
+        secrets.token_urlsafe(48), local_http=not production, mfa_acr_values=("2",),
+    )
     access = AccessService(SqliteAccessGateway(path), AuthorizationPolicy(lambda: now[0], SessionLimits()),
                            config.issuer, lambda: secrets.token_urlsafe(32))
     provider = create_oidc_client(config, path, lambda: now[0])
@@ -73,8 +78,12 @@ def oidc(tmp_path: Path):
         claims = {key: value for key, value in claims.items() if value is not None}
         signed = jwt.encode({"alg": "RS256", "kid": state["key"].kid}, claims, state["key"])
         state["signed"] = signed
-        return httpx.Response(200, json={"access_token": secrets.token_urlsafe(24),
-                                        "token_type": "Bearer", "id_token": signed})
+        token = {"access_token": secrets.token_urlsafe(24), "token_type": "Bearer"}
+        if not state.get("omit_id_token"):
+            token["id_token"] = signed
+        if state.get("plain_userinfo"):
+            token["userinfo"] = state.get("userinfo_claims", claims)
+        return httpx.Response(200, json=token)
 
     provider.client_kwargs["transport"] = httpx.MockTransport(remote)
     routes = AuthenticationRoutes(provider, access)
@@ -123,11 +132,37 @@ def test_verified_oidc_login_creates_pending_account_without_tokens_in_cookies(o
     assert browser.get("/auth/session").json() == {"status": "pending"}
 
 
+@pytest.mark.parametrize("plain_userinfo", [False, True])
+def test_token_response_without_id_token_never_substitutes_unverified_profile_claims(oidc, plain_userinfo):
+    path, _, _, state, browser, _, _ = oidc
+    params = begin(oidc)
+    state["omit_id_token"] = True
+    state["plain_userinfo"] = plain_userinfo
+    response = browser.get("/auth/callback", params=params)
+    assert response.status_code == 401
+    assert not browser.cookies.get(SESSION_COOKIE)
+    with closing(get_db(path)) as connection:
+        assert connection.execute("SELECT count(*) FROM app_user").fetchone()[0] == 0
+        assert connection.execute("SELECT count(*) FROM app_session").fetchone()[0] == 0
+
+
+def test_verified_id_token_overrides_unverified_profile_fields_in_token_response(oidc):
+    path, _, _, state, browser, _, _ = oidc
+    params = begin(oidc)
+    state["plain_userinfo"] = True
+    state["userinfo_claims"] = {"sub": "different-subject", "name": "Unverified Profile"}
+    assert browser.get("/auth/callback", params=params).status_code == 303
+    with closing(get_db(path)) as connection:
+        assert connection.execute("SELECT subject FROM app_identity").fetchone()[0] == "verified-test-subject"
+        assert connection.execute("SELECT display_name FROM app_user").fetchone()[0] == "Fictional User"
+
+
 @pytest.mark.parametrize("invalid", [
     {"iss": "https://wrong.example.test"}, {"aud": "different-client"},
     {"aud": ["different-client", "also-wrong"], "azp": "eppm-test"},
     {"azp": "different-client"}, {"aud": ["eppm-test", "second"], "azp": None},
     {"exp": 1}, {"iat": 9999999999}, {"auth_time": None}, {"auth_time": 9999999999},
+    {"auth_time": 1.5}, {"auth_time": True}, {"iat": 1.5}, {"exp": 9999999999.5},
     {"sub": None}, {"nonce": "wrong-nonce"}, {"nonce": None},
     {"nonce": "wrong-nonce", "nonce_supported": False},
 ])
@@ -158,6 +193,36 @@ def test_bad_signature_rejected_and_new_key_id_refreshes_jwks(oidc):
     assert state["key_fetches"] == 2
 
 
+@pytest.mark.parametrize("nonce", ["", None])
+def test_corrupted_server_nonce_never_establishes_a_session(oidc, nonce):
+    path, _, _, _, browser, _, _ = oidc
+    params = begin(oidc)
+    with closing(get_db(path)) as connection, connection:
+        stored = json.loads(connection.execute("SELECT data FROM app_oidc_state").fetchone()[0])
+        stored["data"]["nonce"] = nonce
+        connection.execute("UPDATE app_oidc_state SET data=?", (json.dumps(stored),))
+    assert browser.get("/auth/callback", params=params).status_code == 401
+    assert not browser.cookies.get(SESSION_COOKIE)
+    with closing(get_db(path)) as connection:
+        assert connection.execute("SELECT count(*) FROM app_user").fetchone()[0] == 0
+
+
+@pytest.mark.parametrize("oidc", [True], indirect=True)
+def test_production_oidc_responses_apply_secure_cookie_and_browser_header_policy(oidc):
+    _, _, _, _, browser, _, _ = oidc
+    response = browser.get("/auth/callback", params=begin(oidc))
+    assert response.status_code == 303
+    session_cookie = next(value for value in response.headers.get_list("set-cookie") if value.startswith(SESSION_COOKIE + "="))
+    assert "Secure" in session_cookie and "HttpOnly" in session_cookie and "SameSite=lax" in session_cookie
+    for result in (response, browser.get("/auth/session")):
+        assert result.headers["Strict-Transport-Security"] == "max-age=31536000"
+        assert result.headers["Cache-Control"] == "no-store"
+        assert result.headers["Referrer-Policy"] == "no-referrer"
+        assert result.headers["X-Content-Type-Options"] == "nosniff"
+        assert result.headers["X-Frame-Options"] == "SAMEORIGIN"
+        assert result.headers["Content-Security-Policy"] == "frame-ancestors 'self'; object-src 'none'; base-uri 'self'"
+
+
 def test_missing_wrong_replayed_and_foreign_browser_state_fail_before_exchange(oidc):
     _, _, _, state, browser, _, _ = oidc
     params = begin(oidc)
@@ -179,6 +244,7 @@ def test_missing_wrong_replayed_and_foreign_browser_state_fail_before_exchange(o
 
 @pytest.mark.parametrize("change", [
     {"issuer": "https://another.example.test"}, {"jwks_uri": "http://untrusted.example.test/keys"},
+    {"jwks_uri": None},
     {"code_challenge_methods_supported": ["plain"]}, {"response_types_supported": ["token"]},
     {"id_token_signing_alg_values_supported": ["none", "HS256"]},
 ])

@@ -42,6 +42,116 @@ def identity(subject: str, *, issuer: str = "https://identity.example.test/realm
     return VerifiedIdentity(issuer, subject, "same@example.test", "Test Account", auth_time, 100000, True)
 
 
+@pytest.mark.parametrize("corrupt_scope", [
+    {"kind": "unsupported"}, {"kind": "projects", "project_ids": [999]},
+])
+def test_corrupt_persisted_edit_scope_never_borrows_valid_viewer_access(security, corrupt_scope):
+    _, _, gateway, policy, service, _ = security
+    admin = administrator(security)
+    user = service.actor(service.sign_in(identity("damaged-grant")))
+    service.set_status(admin, user.user_id, "active")
+    viewer = service.grant(admin, user.user_id, "project_viewer", {"kind": "all"})
+    editor = service.grant(admin, user.user_id, "project_editor", {"kind": "projects", "project_ids": [1]})
+    # Simulate damaged stored authorization data without disabling database constraints.
+    with gateway.transaction(write=True) as store:
+        store.connection.execute("UPDATE app_role_assignment SET scope_json=? WHERE id=?",
+                                 (json.dumps(corrupt_scope), editor))
+    with gateway.transaction() as store:
+        assert policy.projects(store, user, Permission.READ) == {1, 2, 3}
+        assert policy.projects(store, user, Permission.EDIT) == set()
+        with pytest.raises(AccessDenied):
+            policy.require(store, user, Permission.EDIT, [1])
+    assert service.capabilities(user) == {Permission.READ}
+    assert [item["assignment_id"] for item in service.effective_access(admin, user.user_id, 1)] == [viewer]
+    damaged = next(item for item in service.assignments(admin, user.user_id) if item["id"] == editor)
+    assert damaged["problem"] and damaged["matching_projects"] == 0
+
+
+def test_verified_reauthentication_rotates_cookie_and_preserves_current_scoped_grants(security):
+    _, now, gateway, policy, service, _ = security
+    admin = administrator(security)
+    original = service.sign_in(identity("rotated-user"))
+    user = service.actor(original)
+    service.set_status(admin, user.user_id, "active")
+    service.grant(admin, user.user_id, "project_editor", {"kind": "projects", "project_ids": [1]})
+    now[0] += 100
+    replacement = service.sign_in(identity("rotated-user", auth_time=now[0]), original)
+    assert replacement != original
+    with pytest.raises(AccessDenied):
+        service.actor(original)
+    with pytest.raises(AccessDenied):
+        service.actor(secrets.token_urlsafe(32))
+    current = service.actor(replacement)
+    assert current.user_id == user.user_id
+    with gateway.transaction() as store:
+        assert store.session(user.session_hash)["revoked"]
+        assert not store.session(current.session_hash)["revoked"]
+        assert policy.projects(store, current, Permission.EDIT) == {1}
+
+
+@pytest.mark.parametrize("status", ["pending", "disabled"])
+def test_last_administrator_state_change_rolls_back_status_and_audit(security, status):
+    _, _, gateway, _, service, _ = security
+    admin = administrator(security)
+    before = service.audit(admin)
+    with pytest.raises(ValueError, match="At least one active"):
+        service.set_status(admin, admin.user_id, status)
+    assert service.account(admin)["status"] == "active"
+    assert service.audit(admin) == before
+    with gateway.transaction() as store:
+        assert store.active_admin_count() == 1
+
+
+def test_administration_rejects_unknown_targets_and_provider_mismatches_without_changes(security):
+    _, _, _, _, service, _ = security
+    admin = administrator(security)
+    before = service.audit(admin)
+    operations = [
+        lambda: service.set_status(admin, 999, "active"),
+        lambda: service.grant(admin, 999, "project_viewer", {"kind": "all"}),
+        lambda: service.revoke(admin, 999),
+        lambda: service.effective_access(admin, 999, 1),
+    ]
+    for operation in operations:
+        with pytest.raises(AccessDenied):
+            operation()
+    with pytest.raises(ValueError, match="configured OIDC issuer"):
+        service.register(admin, "https://different.example.test", "subject", "Same Name")
+    with pytest.raises(ValueError, match="Unknown user status"):
+        service.set_status(admin, admin.user_id, "deleted")
+    assert service.audit(admin) == before
+    assert len(service.list_users(admin)) == 1
+
+
+@pytest.mark.parametrize("condition", [{}, "executable_expression()", {
+    "property_id": 7, "operator": "eq", "value_ids": [1],
+}, {"property_id": "", "operator": "eq", "value_ids": [1]}])
+def test_scope_grants_reject_malformed_nested_property_conditions(security, condition):
+    _, _, _, _, service, _ = security
+    admin = administrator(security)
+    before = service.audit(admin)
+    with pytest.raises(ValueError, match="Invalid property"):
+        service.grant(admin, admin.user_id, "project_viewer", {"kind": "properties", "conditions": [condition]})
+    assert service.audit(admin) == before
+    assert [row["role"] for row in service.assignments(admin, admin.user_id)] == ["access_admin"]
+
+
+@pytest.mark.parametrize("configuration", [
+    {"idle_seconds": 0}, {"absolute_seconds": -1}, {"reauthentication_seconds": True},
+])
+def test_invalid_session_deadlines_are_rejected_before_constructing_a_policy(configuration):
+    with pytest.raises(ValueError, match="positive integer seconds"):
+        SessionLimits(**configuration)
+
+
+@pytest.mark.parametrize("operator,reference", [("", "request-17"), ("deployment", "")])
+def test_deployment_actor_requires_both_operator_attribution_and_correlation_reference(operator, reference):
+    from app.domain.access.models import DeploymentActor
+
+    with pytest.raises(ValueError, match="explicit operator and correlation"):
+        DeploymentActor(operator, reference)
+
+
 def test_deleted_reused_project_and_option_ids_never_retarget_old_grants(security):
     _, _, gateway, policy, service, _ = security
     admin = administrator(security)

@@ -85,10 +85,15 @@ def test_scoped_summary_cache_cannot_reuse_a_global_hidden_dependency_indicator(
     "UPDATE main.project SET name='Forbidden' WHERE id=2",
     "UPDATE main.project_task SET task_name='Forbidden' WHERE id=20",
     "UPDATE main.project_task SET project_id=2 WHERE id=10",
+    "UPDATE main.project_task SET project_id=0 WHERE id=10",
     "UPDATE main.resource_pool_assignment SET project_id=1 WHERE id=2",
     "UPDATE main.resource_pool_assignment SET task_id=20 WHERE id=1",
     "INSERT OR REPLACE INTO main.resource_pool_assignment(id,pool_id,project_id,task_id,fte_assigned) VALUES(2,1,1,10,2)",
     "INSERT INTO main.task_dependencies(task_id,predecessor_task_id,link_type,lag_days) VALUES(20,10,'FS',0)",
+    "INSERT INTO main.task_dependencies(task_id,predecessor_project_id,link_type,lag_days) VALUES(10,2,'FS',0)",
+    "INSERT INTO main.task_tag(task_id,free_tag) VALUES(20,'Unauthorized tag')",
+    "INSERT INTO main.task_tag(task_id,free_tag) VALUES(0,'Invalid owner')",
+    "INSERT INTO main.task_tag(task_id,free_tag) VALUES(999,'Missing owner')",
     "DELETE FROM main.task_dependencies WHERE task_id=10",
     "DELETE FROM main.project WHERE id=1",
     "INSERT INTO main.project(name) VALUES('Forbidden')",
@@ -117,6 +122,15 @@ def test_ordinary_editor_can_change_project_fields_and_rewrite_unchanged_protect
                      "ON CONFLICT(project_id,param_id) DO UPDATE SET text_value=excluded.text_value")
     with closing(get_db(path)) as conn:
         assert conn.execute("SELECT name FROM project WHERE id=1").fetchone()[0] == "Allowed"
+
+
+def test_business_administrator_can_update_shared_capacity_through_the_guarded_transaction(business):
+    path, _, _, _, manager = business
+    with transaction(path, manager) as connection:
+        connection.execute("UPDATE main.resource_pool SET capacity_fte=4 WHERE id=1")
+    with closing(get_db(path)) as connection:
+        assert connection.execute("SELECT capacity_fte FROM resource_pool WHERE id=1").fetchone()[0] == 4
+        assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
 
 
 def test_business_admin_protected_changes_are_audited_and_audit_failure_rolls_back(business):

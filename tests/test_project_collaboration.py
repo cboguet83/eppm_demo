@@ -64,25 +64,6 @@ def event_values(repo):
     )
 
 
-def test_cached_startup_distinguishes_database_identity_and_schema_version(tmp_path):
-    """Startup cannot reuse another database's result or ignore a changed version."""
-    from app.operator_services import create_maintenance_service
-    from app.presentation.startup import bootstrap_database
-
-    first, second = (str(tmp_path / name) for name in ("first.db", "second.db"))
-    for path in (first, second):
-        bootstrap_database(path, "first-version", True, 1, create_maintenance_service(path))
-        assert create_maintenance_service(path).counts()["projects"] == 1
-    with closing(get_db(first)) as connection, connection:
-        connection.execute("UPDATE project SET name='Retained edit'")
-    bootstrap_database(first, "first-version", True, 1, create_maintenance_service(first))
-    with closing(get_db(first)) as connection:
-        assert connection.execute("SELECT name FROM project").fetchone()[0] == "Retained edit"
-    bootstrap_database(first, "next-version", True, 1, create_maintenance_service(first))
-    with closing(get_db(first)) as connection:
-        assert connection.execute("SELECT name FROM project").fetchone()[0] != "Retained edit"
-
-
 def test_roles_can_repeat_and_occupants_follow_the_function(collaboration, collaboration_path):
     repo = collaboration
     role = repo.save_catalog("role", "Sponsor")

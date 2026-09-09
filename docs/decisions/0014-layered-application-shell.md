@@ -3,6 +3,12 @@
 - Status: Accepted for the fourteenth migration increment
 - Date: 2026-09-09
 
+This is the historical decision for increment 14. Its startup cache and browser
+maintenance controls are superseded by [ADR 0019](0019-oidc-identities-and-access-policy.md):
+the authenticated application never initializes or seeds storage, and deployment
+commands own maintenance. The compatibility surface was subsequently retired.
+The diagram and validation below describe the original increment, not current runtime.
+
 ## Context and decision
 
 The feature pages and maintenance operations had migrated, but startup still ran

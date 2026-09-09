@@ -9,6 +9,9 @@ Evidence uses actual SQLite transactions and Authlib/JOSE verification. Focused
 OIDC tests substitute only remote HTTP responses. The opt-in browser suite uses
 real Keycloak, real signed tokens, the actual ASGI launcher, and separate browser
 contexts. No browser event, role label, or UI visibility hint grants authorization.
+The actual Authlib exchange regression also rejects a token-endpoint profile object
+when no ID token was verified. Only the library's parsed `UserInfo` result is accepted
+on this path; ordinary token-response JSON cannot substitute for that result.
 
 ## Authentication and federation
 
@@ -76,9 +79,12 @@ Release source: [V16 logging/errors](https://github.com/OWASP/ASVS/blob/v5.0.0/5
 
 ## Validation status and gaps
 
-On 2026-09-09, the complete Python suite passed **724 tests and 14 subtests**.
+On 2026-09-09, the complete Python suite passed **775 tests and 14 subtests**.
 Its single opt-in browser test was skipped in the regular run, then passed separately
 against real Keycloak and the rebuilt application image without source bind mounts.
+The browser workflow passed three consecutive runs after moving live audit
+inspection into the Linux container, avoiding concurrent Windows/Linux SQLite
+access to the mounted fixture database.
 All **42 JavaScript tests** passed. Repository-wide per-file Sonar secrets scans
 were clean; these are secrets scans, not a SonarCloud quality-gate result.
 
@@ -88,7 +94,15 @@ project grant, scoped totals and portfolio rendering, read-only project details,
 authorized/unauthorized export fetching, revocation, and logout across two tabs.
 The built image's ASGI launcher discovery also passed.
 
-Measured statement coverage is **90.35%** (9,631 of 10,660 statements), below the
+Additional regressions cover strict integer token timestamps, missing/corrupted
+nonce state, production Secure/HttpOnly cookies and security headers, stale
+application transport bindings, malformed stored grants, scoped child ownership,
+and server pushes after revocation. Script-error tests verify that operational
+diagnostics contain code location/category without exception payloads or browser
+disclosure. Legacy-upgrade tests preserve projects, dependency owners, parameter
+identifiers and constraints, retain a recoverable backup, and create no accounts.
+
+Measured `app` statement coverage is **92.26%** (9,770 of 10,590 statements), below the
 **99%** project target. Coverage remains unfinished work; the passing workflow tests
 do not establish that target. Missing statements include legacy planning and
 organization UI branches, schema upgrades, and additional access boundary cases.

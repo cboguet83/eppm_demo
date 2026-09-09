@@ -7,6 +7,7 @@ no existing environment file, identity cookie, or development database is read.
 
 from contextlib import closing
 from dataclasses import dataclass, field
+import json
 import os
 from pathlib import Path
 import re
@@ -42,6 +43,24 @@ class BrowserDeployment:
                                 capture_output=True, timeout=180, check=False)
         if result.returncode:
             raise RuntimeError("The isolated browser deployment command failed: " + arguments[0])
+
+    def audit_counts(self) -> dict[str, int]:
+        """Inspect committed audit inside Linux, sharing the application's SQLite locks."""
+        script = (
+            "import json,sqlite3; "
+            "from app.shared.config import config; "
+            "connection=sqlite3.connect(config.db_path); "
+            "rows=connection.execute('SELECT action,count(*) FROM app_security_audit GROUP BY action').fetchall(); "
+            "connection.close(); print(json.dumps(dict(rows)))"
+        )
+        result = subprocess.run(
+            self.compose + ["exec", "-T", "app", "python", "-c", script],
+            cwd=ROOT, env=self.environment, capture_output=True, text=True,
+            timeout=30, check=False,
+        )
+        if result.returncode:
+            raise RuntimeError("Unable to inspect the isolated deployment's audit counts.")
+        return json.loads(result.stdout)
 
 
 def wait_for_server(url: str) -> None:
@@ -144,8 +163,7 @@ def wait_for_audit(server: BrowserDeployment, action: str, count: int) -> None:
     """Wait for the real UI transaction before refreshing its transport runtime."""
     deadline = time.monotonic() + 15
     while time.monotonic() < deadline:
-        with closing(get_db(str(server.database))) as connection:
-            actual = connection.execute("SELECT count(*) FROM app_security_audit WHERE action=?", (action,)).fetchone()[0]
+        actual = server.audit_counts().get(action, 0)
         if actual >= count:
             return
         time.sleep(0.1)
@@ -205,9 +223,17 @@ def exercise_scoped_user(browser, admin_page, server: BrowserDeployment) -> None
         expect(second_tab.get_by_role("link", name="Sign in", exact=True)).to_be_visible()
         assert viewer_context.request.get(server.origin + "/auth/session").status == 401
     except (AssertionError, Error) as error:
-        with closing(get_db(str(server.database))) as connection:
-            counts = connection.execute("SELECT action,count(*) FROM app_security_audit GROUP BY action").fetchall()
+        counts = server.audit_counts()
         error.add_note("Fictional test audit action counts: " + repr(counts))
+        logs = subprocess.run(
+            server.compose + ["logs", "--no-log-prefix", "app"], cwd=ROOT, env=server.environment,
+            capture_output=True, text=True, timeout=30, check=False,
+        )
+        safe_failures = re.findall(
+            r"application\.operation_failed reference=[A-Za-z0-9_-]+ exception=[A-Za-z0-9_]+ "
+            r"source=[A-Za-z0-9_.-]+ line=\d+", logs.stdout,
+        )
+        error.add_note("Sanitized application failure categories: " + repr(safe_failures))
         error.add_note("Post-login administrator UI:\n" + admin_page.locator("body").aria_snapshot())
         raise
     finally:

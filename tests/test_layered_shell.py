@@ -14,14 +14,12 @@ from app.application.exceptions import DatabaseMaintenanceError
 from app.infrastructure.database.connection import get_db
 from app.operator_services import create_maintenance_service
 from app.presentation.navigation import PAGE_PLANNING, PAGE_PORTFOLIO, PAGE_SETTINGS
-from app.presentation.startup import bootstrap_database
 
 
-def shell_app(database: str, force: bool = False) -> None:
+def shell_app(database: str) -> None:
     """Exercise shell behavior with real storage and a small route recorder."""
     from functools import partial
     import streamlit as st
-    from app.operator_services import create_maintenance_service
     from app.presentation.components.application_workspace import ApplicationWorkspace
     from app.presentation.navigation import PAGE_PLANNING, PAGE_PORTFOLIO, PAGE_SETTINGS
     from app.presentation.shell import render_application
@@ -48,16 +46,14 @@ def application_app(database: str) -> None:
 
 @pytest.fixture
 def database(tmp_path: Path):
-    """Give each UI session an independent startup cache key and database."""
-    bootstrap_database.clear()
+    """Prepare isolated business data through the deployment-only service."""
     database = str(tmp_path / "shell.db")
     create_maintenance_service(database).startup(force=True, projects=1)
-    yield database
-    bootstrap_database.clear()
+    return database
 
 
 def test_shell_never_exposes_deployment_maintenance_or_reseeds_on_rerun(database):
-    app = AppTest.from_function(shell_app, args=(database, True)).run()
+    app = AppTest.from_function(shell_app, args=(database,)).run()
     assert not app.exception
     assert not any('reseed' in str(button.key) for button in app.button)
     assert not any('seed' in str(item.key) for item in app.number_input)
@@ -208,7 +204,7 @@ def test_cli_seed_count_uses_the_composed_maintenance_service(database, monkeypa
     assert not _run_cli()
     monkeypatch.setattr(sys, "argv", ["streamlit_app.py", "--force-reseed"])
     with patch(
-        "app.main.create_maintenance_service", side_effect=DatabaseMaintenanceError("Unavailable")
+        "app.operator_services.create_maintenance_service", side_effect=DatabaseMaintenanceError("Unavailable")
     ):
         with pytest.raises(SystemExit, match="1"):
             _run_cli()

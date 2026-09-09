@@ -5,6 +5,7 @@ from typing import Any
 
 from authlib.integrations.starlette_client import OAuth, StarletteOAuth2App
 from authlib.integrations.starlette_client.integration import StarletteIntegration
+from authlib.oidc.core import UserInfo
 from starlette.requests import Request
 
 from app.domain.access.models import AccessDenied, VerifiedIdentity
@@ -48,7 +49,7 @@ class ConfiguredOidcClient(StarletteOAuth2App):
 
     async def parse_id_token(self, token: dict[str, Any], nonce: str,
                              claims_options: dict[str, Any] | None = None,
-                             claims_cls: type | None = None, leeway: int = 0) -> dict[str, Any]:
+                             claims_cls: type | None = None, leeway: int = 0) -> UserInfo:
         """Require exact issuer, audience, nonce and authentication time in verified claims."""
         if not isinstance(nonce, str) or not nonce:
             raise AccessDenied()
@@ -87,7 +88,9 @@ async def verified_identity(client: ConfiguredOidcClient, request: Request) -> V
         raise AccessDenied()
     token = await client.authorize_access_token(request, leeway=0)
     claims = token.get("userinfo")
-    if not isinstance(claims, dict):
+    # Authlib produces UserInfo only after ID-token parsing on this code-exchange
+    # path. A token endpoint's JSON "userinfo" field is an unverified plain dict.
+    if not isinstance(claims, UserInfo):
         raise AccessDenied()
     if any(type(claims.get(name)) is not int for name in ("auth_time", "exp", "iat")):
         raise AccessDenied()
