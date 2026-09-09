@@ -1,0 +1,65 @@
+{
+  "realm": "eppm",
+  "enabled": true,
+  "displayName": "EPPM local development",
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "resetPasswordAllowed": false,
+  "loginWithEmailAllowed": false,
+  "duplicateEmailsAllowed": false,
+  "bruteForceProtected": true,
+  "accessTokenLifespan": 3600,
+  "ssoSessionIdleTimeout": 900,
+  "ssoSessionMaxLifespan": 28800,
+  "clients": [
+    {
+      "clientId": "eppm",
+      "name": "EPPM application",
+      "protocol": "openid-connect",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "${OIDC_CLIENT_SECRET}",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": ["${APP_ORIGIN}/auth/callback"],
+      "webOrigins": ["${APP_ORIGIN}"],
+      "attributes": {"pkce.code.challenge.method": "S256"},
+      "defaultClientScopes": ["profile", "email", "acr"],
+      "optionalClientScopes": []
+    }
+  ],
+  "users": [
+    {
+      "id": "425bce03-231c-48ac-a513-dbd395645992",
+      "username": "alex.admin",
+      "firstName": "Alex",
+      "lastName": "Example",
+      "email": "alex.admin@example.test",
+      "emailVerified": true,
+      "enabled": true,
+      "credentials": [{"type": "password", "value": "${KEYCLOAK_ALEX_PASSWORD}", "temporary": false}]
+    },
+    {
+      "id": "05ba1718-fb97-4a6c-8d8f-b98d28a15ebc",
+      "username": "sam.editor",
+      "firstName": "Sam",
+      "lastName": "Example",
+      "email": "sam.editor@example.test",
+      "emailVerified": true,
+      "enabled": true,
+      "credentials": [{"type": "password", "value": "${KEYCLOAK_SAM_PASSWORD}", "temporary": false}]
+    },
+    {
+      "id": "6db7d5e7-a19a-485d-b3dc-51dc42d135eb",
+      "username": "robin.viewer",
+      "firstName": "Robin",
+      "lastName": "Example",
+      "email": "robin.viewer@example.test",
+      "emailVerified": true,
+      "enabled": true,
+      "credentials": [{"type": "password", "value": "${KEYCLOAK_ROBIN_PASSWORD}", "temporary": false}]
+    }
+  ]
+}

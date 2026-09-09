@@ -1,0 +1,273 @@
+"""Exercise real Authlib code exchange and signature validation at the HTTP boundary."""
+
+import asyncio
+from base64 import urlsafe_b64decode, urlsafe_b64encode
+from contextlib import closing
+from dataclasses import replace
+from hashlib import sha256
+import json
+from pathlib import Path
+import secrets
+import time
+from urllib.parse import parse_qs, urlencode, urlsplit
+
+import httpx2 as httpx
+from joserfc import jwt
+from joserfc.jwk import RSAKey
+import pytest
+from starlette.applications import Starlette
+from starlette.middleware import Middleware
+from starlette.middleware.sessions import SessionMiddleware
+from starlette.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
+
+from app.application.services.access import AccessService, AuthorizationPolicy, SessionLimits
+from app.infrastructure.authentication.http import AuthenticationRoutes, OIDC_COOKIE, SESSION_COOKIE
+from app.infrastructure.authentication.middleware import BrowserSecurityMiddleware
+from app.infrastructure.authentication.oidc import create_oidc_client
+from app.infrastructure.authentication.state import SqliteOidcState
+from app.infrastructure.database.connection import get_db
+from app.infrastructure.database.schema_init import init_db
+from app.infrastructure.repositories.access import SqliteAccessGateway
+from app.shared.config.authentication import AuthenticationConfig
+
+
+@pytest.fixture
+def oidc(tmp_path: Path):
+    """Mock only the remote provider's HTTP transport; JOSE, state and SQL remain real."""
+    path = str(tmp_path / "oidc.db")
+    init_db(path)
+    now = [int(time.time())]
+    config = AuthenticationConfig("development", "http://keycloak.localhost:8080/realms/eppm",
+                                  "eppm-test", secrets.token_urlsafe(32), "http://localhost:8501",
+                                  secrets.token_urlsafe(48), local_http=True, mfa_acr_values=("2",))
+    access = AccessService(SqliteAccessGateway(path), AuthorizationPolicy(lambda: now[0], SessionLimits()),
+                           config.issuer, lambda: secrets.token_urlsafe(32))
+    provider = create_oidc_client(config, path, lambda: now[0])
+    signing = RSAKey.generate_key(2048, parameters={"kid": "initial"})
+    metadata = {"issuer": config.issuer, "authorization_endpoint": config.issuer + "/authorize",
+                "token_endpoint": config.issuer + "/token", "jwks_uri": config.issuer + "/keys",
+                "response_types_supported": ["code"], "code_challenge_methods_supported": ["S256"],
+                "id_token_signing_alg_values_supported": ["RS256", "HS256", "none"],
+                "authorization_response_iss_parameter_supported": True}
+    state = {"key": signing, "jwks": [signing.as_dict(private=False)], "metadata": metadata,
+             "claims": {}, "authorization": {}, "exchanges": 0, "key_fetches": 0}
+
+    def remote(request: httpx.Request) -> httpx.Response:
+        if request.url == config.discovery_url:
+            return httpx.Response(200, json=state["metadata"])
+        if request.url == metadata["jwks_uri"]:
+            state["key_fetches"] += 1
+            return httpx.Response(200, json={"keys": state["jwks"]})
+        assert str(request.url) == metadata["token_endpoint"]
+        state["exchanges"] += 1
+        body = parse_qs(request.content.decode())
+        assert body["redirect_uri"] == [config.callback_url]
+        challenge = urlsafe_b64encode(sha256(body["code_verifier"][0].encode()).digest()).rstrip(b"=").decode()
+        assert [challenge] == state["authorization"]["code_challenge"]
+        assert body["grant_type"] == ["authorization_code"]
+        claims = {"iss": config.issuer, "sub": "verified-test-subject", "aud": config.client_id,
+                  "azp": config.client_id, "iat": now[0], "exp": now[0] + 3600, "auth_time": now[0],
+                  "nonce": state["authorization"]["nonce"][0], "acr": "2", "name": "Fictional User",
+                  "email": "fictional@example.test", **state["claims"]}
+        claims = {key: value for key, value in claims.items() if value is not None}
+        signed = jwt.encode({"alg": "RS256", "kid": state["key"].kid}, claims, state["key"])
+        state["signed"] = signed
+        return httpx.Response(200, json={"access_token": secrets.token_urlsafe(24),
+                                        "token_type": "Bearer", "id_token": signed})
+
+    provider.client_kwargs["transport"] = httpx.MockTransport(remote)
+    routes = AuthenticationRoutes(provider, access)
+    app = Starlette(routes=routes.routes(), middleware=[
+        Middleware(BrowserSecurityMiddleware, config=config),
+        Middleware(SessionMiddleware, secret_key=config.cookie_secret, session_cookie=OIDC_COOKIE,
+                   max_age=600, same_site="lax", https_only=config.secure_cookies),
+    ])
+    with TestClient(app, base_url=config.origin, follow_redirects=False) as browser:
+        yield path, config, access, state, browser, now, provider
+
+
+def begin(oidc) -> dict[str, str]:
+    """Start the actual Authlib redirect and keep the returned browser-bound state."""
+    _, config, _, state, browser, _, _ = oidc
+    response = browser.get("/auth/login?next=https://untrusted.example.test")
+    assert response.status_code == 302, response.text
+    params = parse_qs(urlsplit(response.headers["location"]).query)
+    state["authorization"] = params
+    assert params["response_type"] == ["code"]
+    assert params["redirect_uri"] == [config.callback_url]
+    assert params["code_challenge_method"] == ["S256"]
+    assert params["max_age"] == ["0"]
+    return {"state": params["state"][0], "code": "test-authorization-code", "iss": config.issuer}
+
+
+def test_verified_oidc_login_creates_pending_account_without_tokens_in_cookies(oidc):
+    path, config, access, state, browser, _, _ = oidc
+    params = begin(oidc)
+    state_cookie = browser.cookies.get(OIDC_COOKIE)
+    payload = urlsafe_b64decode(state_cookie.split(".")[0] + "==").decode()
+    assert "code_verifier" not in payload and "nonce" not in payload
+    response = browser.get("/auth/callback", params=params)
+    assert response.status_code == 303
+    assert response.headers["location"] == config.origin + "/"
+    assert "HttpOnly" in response.headers["set-cookie"] and "SameSite=lax" in response.headers["set-cookie"]
+    cookie = browser.cookies.get(SESSION_COOKIE)
+    actor = access.actor(cookie)
+    assert access.account(actor)["status"] == "pending"
+    with closing(get_db(path)) as conn:
+        assert conn.execute("SELECT count(*) FROM app_role_assignment").fetchone()[0] == 0
+        assert conn.execute("SELECT count(*) FROM app_oidc_state").fetchone()[0] == 0
+        assert conn.execute("SELECT session_hash FROM app_session").fetchone()[0] != cookie
+    assert state["signed"] not in str(browser.cookies)
+    assert "userinfo" not in str(browser.cookies)
+    assert browser.get("/auth/session").json() == {"status": "pending"}
+
+
+@pytest.mark.parametrize("invalid", [
+    {"iss": "https://wrong.example.test"}, {"aud": "different-client"},
+    {"aud": ["different-client", "also-wrong"], "azp": "eppm-test"},
+    {"azp": "different-client"}, {"aud": ["eppm-test", "second"], "azp": None},
+    {"exp": 1}, {"iat": 9999999999}, {"auth_time": None}, {"auth_time": 9999999999},
+    {"sub": None}, {"nonce": "wrong-nonce"}, {"nonce": None},
+    {"nonce": "wrong-nonce", "nonce_supported": False},
+])
+def test_invalid_identity_claims_cannot_create_an_application_account(oidc, invalid, caplog):
+    path, _, _, state, browser, _, _ = oidc
+    params = begin(oidc)
+    state["claims"] = invalid
+    response = browser.get("/auth/callback", params=params)
+    assert response.status_code == 401
+    assert set(response.json()["error"]) == {"code", "message", "reference"}
+    assert not browser.cookies.get(SESSION_COOKIE)
+    with closing(get_db(path)) as conn:
+        assert conn.execute("SELECT count(*) FROM app_user").fetchone()[0] == 0
+    assert state["signed"] not in caplog.text
+    assert "test-authorization-code" not in caplog.text
+
+
+def test_bad_signature_rejected_and_new_key_id_refreshes_jwks(oidc):
+    _, _, _, state, browser, _, provider = oidc
+    params = begin(oidc)
+    state["key"] = RSAKey.generate_key(2048, parameters={"kid": "initial"})
+    assert browser.get("/auth/callback", params=params).status_code == 401
+    params = begin(oidc)
+    state["key"] = RSAKey.generate_key(2048, parameters={"kid": "rotated"})
+    state["jwks"] = [state["key"].as_dict(private=False)]
+    assert "jwks" in provider.server_metadata
+    assert browser.get("/auth/callback", params=params).status_code == 303
+    assert state["key_fetches"] == 2
+
+
+def test_missing_wrong_replayed_and_foreign_browser_state_fail_before_exchange(oidc):
+    _, _, _, state, browser, _, _ = oidc
+    params = begin(oidc)
+    assert browser.get("/auth/callback", params={**params, "state": "wrong"}).status_code == 401
+    params = begin(oidc)
+    cookie = browser.cookies.get(OIDC_COOKIE)
+    browser.cookies.clear()
+    assert browser.get("/auth/callback", params=params).status_code == 401
+    assert state["exchanges"] == 0
+    # Authlib discards a failed request's state, including a foreign browser callback.
+    params = begin(oidc)
+    cookie = browser.cookies.get(OIDC_COOKIE)
+    assert browser.get("/auth/callback", params=params).status_code == 303
+    browser.cookies.clear()
+    browser.cookies.set(OIDC_COOKIE, cookie)
+    assert browser.get("/auth/callback", params=params).status_code == 401
+    assert state["exchanges"] == 1
+
+
+@pytest.mark.parametrize("change", [
+    {"issuer": "https://another.example.test"}, {"jwks_uri": "http://untrusted.example.test/keys"},
+    {"code_challenge_methods_supported": ["plain"]}, {"response_types_supported": ["token"]},
+    {"id_token_signing_alg_values_supported": ["none", "HS256"]},
+])
+def test_unsafe_discovery_fails_closed(oidc, change):
+    _, _, _, state, browser, _, _ = oidc
+    state["metadata"].update(change)
+    assert browser.get("/auth/login").status_code == 503
+    assert not browser.cookies.get(SESSION_COOKIE)
+
+
+def test_callback_rejects_issuer_mixup_and_duplicate_parameters(oidc):
+    _, _, _, state, browser, _, _ = oidc
+    params = begin(oidc)
+    assert browser.get("/auth/callback", params={**params, "iss": "https://wrong.example.test"}).status_code == 401
+    assert state["exchanges"] == 0
+    params = begin(oidc)
+    assert browser.get("/auth/callback?" + urlencode(params) + "&state=second").status_code == 401
+    assert state["exchanges"] == 0
+
+
+def test_expired_state_and_concurrent_consumption_are_single_use(oidc):
+    path, _, _, _, browser, now, _ = oidc
+    params = begin(oidc)
+    now[0] += 601
+    assert browser.get("/auth/callback", params=params).status_code == 401
+    cache = SqliteOidcState(path, lambda: now[0])
+
+    async def concurrent():
+        await cache.set("concurrent", json.dumps({"data": {"nonce": "test"}}), 600)
+        return await asyncio.gather(cache.get("concurrent"), cache.get("concurrent"))
+
+    assert sum(value is not None for value in asyncio.run(concurrent())) == 1
+
+
+def test_activity_requires_origin_and_explicit_event_and_logout_revokes_other_tabs(oidc):
+    path, config, _, _, browser, now, _ = oidc
+    assert browser.get("/auth/callback", params=begin(oidc)).status_code == 303
+    cookie = browser.cookies.get(SESSION_COOKIE)
+    now[0] += 100
+    assert browser.post("/auth/activity").status_code == 403
+    assert browser.post("/auth/activity", headers={"Origin": config.origin}).status_code == 403
+    assert browser.post("/auth/activity", headers={"Origin": "https://foreign.example.test", "X-Eppm-Activity": "user-interaction"}).status_code == 403
+    assert browser.get("/auth/session").status_code == 200
+    with closing(get_db(path)) as conn:
+        assert conn.execute("SELECT last_activity FROM app_session").fetchone()[0] == now[0] - 100
+    assert browser.post("/auth/activity", headers={"Origin": config.origin, "X-Eppm-Activity": "user-interaction"}).status_code == 204
+    assert browser.post("/auth/logout", headers={"Origin": config.origin}).status_code == 204
+    browser.cookies.set(SESSION_COOKIE, cookie)
+    assert browser.get("/auth/session").status_code == 401
+    assert browser.post("/auth/activity", headers={"Origin": config.origin, "X-Eppm-Activity": "user-interaction"}).status_code == 403
+
+
+def test_cross_origin_websocket_and_foreign_host_are_rejected(oidc):
+    _, _, _, _, browser, _, _ = oidc
+    assert browser.get("/auth/login", headers={"Host": "evil.example.test"}).status_code == 403
+    with pytest.raises(WebSocketDisconnect) as error:
+        with browser.websocket_connect("/_stcore/stream", headers={"Origin": "https://evil.example.test"}):
+            pass
+    assert error.value.code == 1008
+
+
+@pytest.mark.parametrize("change", [
+    {"issuer": "http://identity.example.test"}, {"origin": "http://localhost:8501/path"},
+    {"issuer": "https://user:pass@identity.example.test"}, {"issuer": "https://identity.example.test?x=1"},
+    {"origin": "http://localhost:8501/"}, {"local_http": True, "environment": "production"},
+    {"algorithms": ("none",)}, {"algorithms": ("HS256",)}, {"algorithms": ()},
+    {"client_secret": ""}, {"cookie_secret": ""}, {"idle_seconds": 0},
+    {"idle_seconds": 30000}, {"reauthentication_seconds": 30000},
+])
+def test_invalid_deployment_configuration_has_no_anonymous_fallback(oidc, change):
+    _, config, _, _, _, _, _ = oidc
+    with pytest.raises(ValueError):
+        replace(config, **change)
+
+
+def test_environment_mapping_and_production_mfa_cookie_policy(oidc):
+    _, config, _, _, _, _, _ = oidc
+    values = {"APP_ENV": "production", "APP_ORIGIN": "https://eppm.example.test",
+              "OIDC_ISSUER": "https://identity.example.test/realm", "OIDC_CLIENT_ID": config.client_id,
+              "OIDC_CLIENT_SECRET": config.client_secret, "APP_COOKIE_SECRET": config.cookie_secret,
+              "OIDC_MFA_ACR_VALUES": "2,urn:example:mfa"}
+    production = AuthenticationConfig.from_environment(values)
+    assert production.secure_cookies and production.mfa_acr_values == ("2", "urn:example:mfa")
+    assert config.client_secret not in repr(production) and config.cookie_secret not in repr(production)
+    with pytest.raises(ValueError):
+        AuthenticationConfig.from_environment({**values, "OIDC_MFA_ACR_VALUES": ""})
+    with pytest.raises(ValueError):
+        AuthenticationConfig.from_environment({})
+    with pytest.raises(ValueError):
+        AuthenticationConfig.from_environment({**values, "SESSION_IDLE_SECONDS": "invalid"})
+    with pytest.raises(ValueError):
+        AuthenticationConfig.from_environment({**values, "OIDC_ALLOW_LOCAL_HTTP": "perhaps"})
