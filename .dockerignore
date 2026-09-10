@@ -8,7 +8,11 @@ venv/
 ENV/
 .git/
 .gitignore
+# Keep local credentials out of the Docker build context.
 .env
+.env.*
+!.env.example
+.streamlit/secrets.toml
 .pytest_cache/
 .coverage
 htmlcov/
