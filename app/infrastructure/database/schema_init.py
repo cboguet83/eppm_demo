@@ -12,6 +12,7 @@ from app.infrastructure.database.project_collaboration_migration import migrate_
 from app.infrastructure.database.project_experience_migration import migrate_project_experience
 from app.infrastructure.database.project_links_migration import migrate_project_links
 from app.infrastructure.database.access_migration import migrate_access
+from app.infrastructure.database.wbs_migration import migrate_wbs
 from app.shared.logging import get_logger
 
 logger = get_logger(__name__)
@@ -678,6 +679,7 @@ def init_db(db_path: Optional[str] = None) -> None:
         migrate_project_experience(conn)
         migrate_project_links(conn)
         migrate_access(conn)
+        migrate_wbs(conn)
         from app.infrastructure.database.planning_summary_cache import ensure_planning_indexes
         from app.infrastructure.database.pool_capacity_cache import install_capacity_cache
         from app.infrastructure.database.display_revision import install_display_revision

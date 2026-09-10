@@ -1,4 +1,25 @@
 {
+    "wbs": {
+        "title": "OTP",
+        "code": "Code OTP",
+        "description": "Description",
+        "fictive": "OTP fictif (préfixe #)",
+        "allocation": "Affectation (%)",
+        "available": "Disponible pour ce projet : {percentage} %",
+        "remaining": "Non affecté (%)",
+        "add": "Ajouter un OTP",
+        "remove": "Retirer l’OTP",
+        "select": "Sélectionner un OTP",
+        "empty": "Aucun OTP défini. Un administrateur métier peut en ajouter dans les paramètres.",
+        "none": "Aucun OTP affecté à ce projet.",
+        "entry": "Entrée du catalogue",
+        "new": "Nouvel OTP",
+        "save": "Enregistrer l’OTP",
+        "delete": "Supprimer l’OTP",
+        "confirm_delete": "Confirmer la suppression de l’OTP",
+        "code_help": "Lettres, chiffres, points, tirets et tirets bas. Les codes fictifs commencent par #.",
+        "denied": "Seul un administrateur métier peut gérer le catalogue des OTP."
+    },
   "auth": {
     "operation_failed": "L'opération n'a pas pu aboutir. Référence : {reference}",
     "title": "Connexion à EPPM",

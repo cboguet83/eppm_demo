@@ -263,6 +263,8 @@ def run_app() -> None:
 def create_settings_workspace(db_path: str | None = None, *, access: BusinessAccess) -> SettingsWorkspace:
     """Compose the lazy Settings sections from migrated application services."""
     from app.presentation.components.settings_workspace import SettingsWorkspace
+    from app.application.services.wbs import WbsService
+    from app.infrastructure.repositories.projects import SqliteProjectGateway
 
     return SettingsWorkspace(
         create_organization_service(db_path, access=access),
@@ -272,6 +274,7 @@ def create_settings_workspace(db_path: str | None = None, *, access: BusinessAcc
         create_schema_service(db_path, access=access),
         create_project_type_service(db_path, access=access),
         create_collaboration_service(db_path, access=access),
+        WbsService(SqliteProjectGateway(db_path, access=access)),
     )
 
 

@@ -247,7 +247,7 @@ def _project_detail_sections(proj_id: int, workspace: ProjectWorkspace) -> None:
     field_groups = content.field_groups
     labels = [t("portfolio.tab_details_links") if label.casefold() == "useful links" else label
               for label, _ in field_groups]
-    labels += [t("project_collaboration.contacts", default="Project Contacts"),
+    labels += [t("wbs.title", default="WBS"), t("project_collaboration.contacts", default="Project Contacts"),
                t("project_collaboration.log", default="Project log")]
     tabs = st.tabs(labels, key=f"project_details_tabs_{proj_id}", on_change="rerun")
     for tab, (group_label, fields) in zip(tabs, field_groups):
@@ -269,6 +269,10 @@ def _project_detail_sections(proj_id: int, workspace: ProjectWorkspace) -> None:
                     st.html('<div style="display:flex;flex-direction:column;gap:1rem">' + ''.join(rows) + '</div>')
                 if group_label.casefold() == "useful links" and workspace.render_links:
                     workspace.render_links(int(proj_id))
+    if tabs[-3].open:
+        from app.presentation.components.wbs_editor import render_wbs_rows
+        with tabs[-3]:
+            render_wbs_rows(workspace.projects.get_wbs_allocations(proj_id), workspace.projects.get_wbs_options(proj_id))
     if tabs[-2].open:
         with tabs[-2]:
             workspace.render_contacts(int(proj_id))

@@ -1,4 +1,25 @@
 {
+    "wbs": {
+        "title": "WBS",
+        "code": "WBS-Code",
+        "description": "Beschreiwung",
+        "fictive": "Fiktive WBS (#-Präfix)",
+        "allocation": "Zouweisung (%)",
+        "available": "Fir dëse Projet disponibel: {percentage}%",
+        "remaining": "Net zougewisen (%)",
+        "add": "WBS derbäisetzen",
+        "remove": "WBS ewechhuelen",
+        "select": "WBS auswielen",
+        "empty": "Keng WBS definéiert. E Fachadministrateur kann Entréeën an den Astellungen derbäisetzen.",
+        "none": "Dësem Projet ass kee WBS zougewisen.",
+        "entry": "Katalogentrée",
+        "new": "Neie WBS",
+        "save": "WBS späicheren",
+        "delete": "WBS läschen",
+        "confirm_delete": "Läsche vum WBS bestätegen",
+        "code_help": "Buschtawen, Zuelen, Punkten, Binde- an Ënnerstrécher. Fiktiv Coden fänke mat # un.",
+        "denied": "Nëmmen e Fachadministrateur däerf de WBS-Katalog verwalten."
+    },
   "auth": {
     "operation_failed": "D'Operatioun konnt net ofgeschloss ginn. Referenz: {reference}",
     "title": "Bei EPPM umellen",

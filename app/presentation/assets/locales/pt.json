@@ -1,4 +1,25 @@
 {
+    "wbs": {
+        "title": "WBS",
+        "code": "Código WBS",
+        "description": "Descrição",
+        "fictive": "WBS fictícia (prefixo #)",
+        "allocation": "Alocação (%)",
+        "available": "Disponível para este projeto: {percentage}%",
+        "remaining": "Não alocado (%)",
+        "add": "Adicionar WBS",
+        "remove": "Remover WBS",
+        "select": "Selecionar uma WBS",
+        "empty": "Nenhuma WBS definida. Um administrador de negócio pode adicionar entradas nas definições.",
+        "none": "Nenhuma WBS atribuída a este projeto.",
+        "entry": "Entrada do catálogo",
+        "new": "Nova WBS",
+        "save": "Guardar WBS",
+        "delete": "Eliminar WBS",
+        "confirm_delete": "Confirmar a eliminação da WBS",
+        "code_help": "Letras, números, pontos, hífenes e sublinhados. Os códigos fictícios começam por #.",
+        "denied": "Apenas um administrador de negócio pode gerir o catálogo WBS."
+    },
   "auth": {
     "operation_failed": "Não foi possível concluir a operação. Referência: {reference}",
     "title": "Iniciar sessão no EPPM",

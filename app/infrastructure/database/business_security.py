@@ -15,11 +15,13 @@ logger = get_logger(__name__)
 
 
 _OWNED_TABLES = {
+    "project_wbs": "project_id",
     "project_link": "project_id", "project_contact": "project_id", "project_log_event": "project_id",
     "project_property_value": "project_id", "project_property_value_item": "project_id",
     "project_tag": "project_id", "task_tag": "task_id",
 }
 _SHARED_TABLES = frozenset({
+    "wbs",
     "schema_groups", "schema_parameters", "schema_param_options", "schema_parameter_translation",
     "project_type", "project_type_property", "project_type_property_rule", "project_type_property_default",
     "project_type_property_default_item", "function_type", "function", "team", "employee",

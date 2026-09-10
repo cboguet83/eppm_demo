@@ -14,6 +14,9 @@ _CSS = _MODAL_CSS + """
 .tabs button[aria-selected=true] {background:#C41039;color:white;border-color:#C41039;}
 .links {margin-top:18px; border-top:1px solid var(--st-border-color);padding-top:12px;}
 .link-row {display:grid;grid-template-columns:1fr 2fr auto;gap:8px;margin-bottom:8px;}
+.links,.wbs {grid-column:1/-1;min-width:0;}
+.wbs-row {display:grid;grid-template-columns:minmax(0,2fr) minmax(7rem,1fr) auto;gap:8px;align-items:end;margin-bottom:12px;}
+.wbs-row small {display:block;}
 .help {opacity:.75;font-size:.9rem;}
 [hidden] {display:none !important;}
 select[multiple] {min-height:90px;}
@@ -65,8 +68,9 @@ export default function({data, parentElement, setTriggerValue}) {
         if(pending) return;
         pending=true; form.setAttribute('aria-busy','true');
         const values=read(), links=[...linkRows.children].map(row=>({alias:row.querySelector('[name=alias]').value,url:row.querySelector('[name=url]').value}));
+        const wbs=[...wbsRows.children].map(row=>({wbs_id:Number(row.querySelector('select').value),percentage:row.querySelector('input').value===''?null:Number(row.querySelector('input').value)}));
         for(const control of form.querySelectorAll('input,textarea,select,button')) control.disabled=true;
-        setTriggerValue('action',{kind,token:data.token,values,links,dirty:[...draft.dirty]});
+        setTriggerValue('action',{kind,token:data.token,values,links,wbs,dirty:[...draft.dirty]});
     };
     for(const field of data.fields) {
         const label=element('label');if(!field.tab) label.className='compact';
@@ -102,7 +106,29 @@ export default function({data, parentElement, setTriggerValue}) {
         remove.onclick=()=>row.remove();row.append(remove);linkRows.append(row);
     };
     data.links.forEach(addLink);
-    const add=element('button','Add link');add.type='button';add.disabled=!data.can_save;add.onclick=()=>addLink({});links.append(add);form.append(links);
+    const add=element('button','Add link');add.type='button';add.disabled=!data.can_save;add.onclick=()=>addLink({});links.append(add);
+    panels.get(data.links_tab)?.append(links);
+    const wbs=element('section');wbs.className='wbs';
+    const wbsRows=element('div');wbs.append(wbsRows);
+    const labels=data.wbs_labels||{}, choices=data.wbs_options||[];
+    const addWbs=value=>{
+        const row=element('div');row.className='wbs-row';
+        const label=element('label',labels.code), select=element('select');select.setAttribute('aria-label',labels.code);
+        const empty=element('option',labels.select);empty.value='';select.append(empty);
+        for(const choice of choices) {const option=element('option',choice.code+(choice.description?' — '+choice.description:''));option.value=choice.id;select.append(option);}
+        select.value=value.wbs_id||'';select.disabled=!data.can_save;
+        const available=element('small');label.append(select,available);
+        const share=element('label',labels.allocation), input=element('input');input.type='number';input.min=0;input.step=1;
+        input.value=value.percentage??100;input.setAttribute('aria-label',labels.allocation);input.disabled=!data.can_save;share.append(input);
+        const update=()=>{const choice=choices.find(item=>String(item.id)===select.value);available.textContent=choice?labels.available.replace('{percentage}',choice.available):'';input.max=choice?.available??100;};
+        select.onchange=update;update();
+        const remove=element('button',labels.remove);remove.type='button';remove.disabled=!data.can_save;remove.onclick=()=>row.remove();
+        row.append(label,share,remove);wbsRows.append(row);
+    };
+    (data.wbs||[]).forEach(addWbs);
+    const addWbsButton=element('button',labels.add);addWbsButton.type='button';addWbsButton.disabled=!data.can_save||!choices.length;addWbsButton.onclick=()=>addWbs({});
+    wbs.append(addWbsButton);if(!choices.length) wbs.append(element('p',labels.empty));
+    panels.get(data.wbs_tab)?.append(wbs);
     if(data.error) {const error=element('p',data.error);error.className='error';error.setAttribute('role','alert');form.append(error);}
     const buttons=element('div');buttons.className='buttons';
     const cancel=element('button',data.cancel);cancel.type='button';

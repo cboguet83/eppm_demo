@@ -11,6 +11,7 @@ from typing import Protocol, TypedDict
 from app.domain.projects.project import Project
 from app.domain.projects.links import LinkValues
 from app.domain.projects.project_types import PropertyValue, TemplateProperty
+from app.application.ports.wbs import WbsStore
 
 
 class PlanningProject(TypedDict):
@@ -25,7 +26,7 @@ class PlanningProject(TypedDict):
     dynamic_attributes: dict[str, PropertyValue]
 
 
-class ProjectStore(Protocol):
+class ProjectStore(WbsStore, Protocol):
     """Operations sharing the transaction supplied by ProjectGateway."""
 
     def find(self, project_id: int) -> Project | None: ...

@@ -9,6 +9,7 @@ from app.application.exceptions import ProjectStorageError
 # Explicit source tables: derived caches and authentication/session housekeeping
 # must not invalidate business displays. Permissions have their own revision.
 DISPLAY_SOURCE_TABLES = frozenset({
+    "wbs", "project_wbs",
     "employee", "employee_calendar_exception", "function", "function_type",
     "project", "project_contact", "project_event_type", "project_event_type_translation",
     "project_link", "project_log_event", "project_property_value", "project_property_value_item",

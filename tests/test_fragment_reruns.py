@@ -51,6 +51,7 @@ class FragmentRun:
                         delta.new_element.button.id,
                         delta.new_element.bidi_component.id,
                         delta.new_element.component_instance.id,
+                        delta.new_element.dataframe.id,
                         delta.add_block.tab_container.id,
                     )
                     identifier = next((value for value in identifiers if value.endswith("-" + self.widget_key)), "")
@@ -67,7 +68,10 @@ class FragmentRun:
                 states = WidgetStates(widgets=runner._session_state.get_widget_states())
                 if self.widget_json is not None:
                     widget = next(widget for widget in states.widgets if widget.id.endswith("-" + self.widget_key))
-                    widget.json_value = json.dumps(self.widget_json)
+                    if widget.HasField("string_value"):
+                        widget.string_value = json.dumps(self.widget_json)
+                    else:
+                        widget.json_value = json.dumps(self.widget_json)
                 if self.widget_index is not None:
                     assert self.widget_id, "The interactive control must have rendered"
                     widget = next((widget for widget in states.widgets if widget.id == self.widget_id), None)

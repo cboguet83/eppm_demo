@@ -8,6 +8,7 @@ from app.application.ports.projects import PlanningProject, ProjectGateway, Proj
 from app.domain.projects.project import Project, normalize_project_name, prepare_project_values
 from app.domain.projects.project_types import PropertyValue
 from app.domain.projects.links import LinkValues, normalize_link
+from app.domain.projects.wbs import WbsAllocation, WbsOption, normalize_allocations
 
 
 def create_in_transaction(store: ProjectStore, project: Project) -> int:
@@ -56,10 +57,12 @@ class ProjectService:
         dynamic_attributes: dict[str, PropertyValue] | None = None,
         function_id: int | None = None, project_type_id: int | None = None,
         custom_links: list[LinkValues] | None = None,
+        wbs_allocations: list[WbsAllocation] | None = None,
     ) -> int:
         """Atomically validate the effective template and create a project."""
         name = normalize_project_name(name)
         links = [normalize_link(link["url"], link["alias"]) for link in custom_links or []]
+        allocations = normalize_allocations(wbs_allocations) if wbs_allocations is not None else []
         with self._gateway.transaction(write=True, permission=Permission.CREATE) as store:
             type_id = store.default_type_id() if project_type_id is None else project_type_id
             created_id = create_in_transaction(store, Project(
@@ -68,6 +71,8 @@ class ProjectService:
             ))
             if links:
                 store.replace_links(created_id, links)
+            if allocations:
+                store.replace_wbs(created_id, allocations)
             return created_id
 
     def update_project(
@@ -75,9 +80,11 @@ class ProjectService:
         actual_budget: float, dynamic_attributes: dict[str, PropertyValue],
         function_id: int | None = None, project_type_id: int | None = None,
         custom_links: list[LinkValues] | None = None,
+        wbs_allocations: list[WbsAllocation] | None = None,
     ) -> bool:
         """Update active values atomically, preserving inactive values for later."""
         links = None if custom_links is None else [normalize_link(link["url"], link["alias"]) for link in custom_links]
+        allocations = None if wbs_allocations is None else normalize_allocations(wbs_allocations)
         with self._gateway.transaction(write=True, permission=Permission.EDIT, project_ids=[project_id]) as store:
             existing = store.find(project_id)
             if existing is None:
@@ -92,7 +99,20 @@ class ProjectService:
                                  actual_budget, values, function_id, type_id))
             if links is not None:
                 store.replace_links(project_id, links)
+            if allocations is not None:
+                store.replace_wbs(project_id, allocations)
             return True
+
+    def get_wbs_options(self, project_id: int | None = None) -> list[WbsOption]:
+        """Read available whole percentages for a new or currently visible project."""
+        permission = Permission.CREATE if project_id is None else Permission.READ
+        with self._gateway.transaction(permission=permission, project_ids=None if project_id is None else [project_id]) as store:
+            return store.wbs_options(project_id)
+
+    def get_wbs_allocations(self, project_id: int) -> list[WbsAllocation]:
+        """Read the project's WBS shares with current project authorization."""
+        with self._gateway.transaction(permission=Permission.READ, project_ids=[project_id]) as store:
+            return store.wbs_allocations(project_id)
 
     def get_links(self, project_id: int) -> list[LinkValues]:
         """Read custom links for project inspection or editing."""

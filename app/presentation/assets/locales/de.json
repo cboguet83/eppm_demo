@@ -1,4 +1,25 @@
 {
+    "wbs": {
+        "title": "WBS",
+        "code": "WBS-Code",
+        "description": "Beschreibung",
+        "fictive": "Fiktiver WBS (#-Präfix)",
+        "allocation": "Zuordnung (%)",
+        "available": "Für dieses Projekt verfügbar: {percentage}%",
+        "remaining": "Nicht zugeordnet (%)",
+        "add": "WBS hinzufügen",
+        "remove": "WBS entfernen",
+        "select": "WBS auswählen",
+        "empty": "Keine WBS definiert. Ein Fachadministrator kann Einträge in den Einstellungen hinzufügen.",
+        "none": "Diesem Projekt ist kein WBS zugeordnet.",
+        "entry": "Katalogeintrag",
+        "new": "Neuer WBS",
+        "save": "WBS speichern",
+        "delete": "WBS löschen",
+        "confirm_delete": "Löschen des WBS bestätigen",
+        "code_help": "Buchstaben, Zahlen, Punkte, Binde- und Unterstriche. Fiktive Codes beginnen mit #.",
+        "denied": "Nur ein Fachadministrator darf den WBS-Katalog verwalten."
+    },
   "auth": {
     "operation_failed": "Der Vorgang konnte nicht abgeschlossen werden. Referenz: {reference}",
     "title": "Bei EPPM anmelden",

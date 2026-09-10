@@ -17,14 +17,15 @@ from app.domain.projects.links import LinkValues
 from app.domain.projects.project_types import TemplateProperty
 from app.infrastructure.database.project_transactions import project_connection
 from app.infrastructure.database.property_store import effective_template, read_values, write_value
+from app.infrastructure.repositories.wbs import SqliteWbsStore
 
 
-class SqliteProjectStore:
+class SqliteProjectStore(SqliteWbsStore):
     """Execute operations within the application-owned transaction."""
 
     def __init__(self, connection: sqlite3.Connection) -> None:
         """Use an existing connection without committing or closing it."""
-        self._connection = connection
+        super().__init__(connection)
 
     def find(self, project_id: int) -> Project | None:
         """Read all stored values, including inactive ones needed for restoration."""

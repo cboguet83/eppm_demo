@@ -1,4 +1,25 @@
 {
+    "wbs": {
+        "title": "WBS",
+        "code": "WBS code",
+        "description": "Description",
+        "fictive": "Fictive WBS (# prefix)",
+        "allocation": "Allocation (%)",
+        "available": "Available for this project: {percentage}%",
+        "remaining": "Unallocated (%)",
+        "add": "Add WBS",
+        "remove": "Remove WBS",
+        "select": "Select a WBS",
+        "empty": "No WBS defined. A business administrator can add entries in Settings.",
+        "none": "No WBS assigned to this project.",
+        "entry": "Catalog entry",
+        "new": "New WBS",
+        "save": "Save WBS",
+        "delete": "Delete WBS",
+        "confirm_delete": "Confirm WBS deletion",
+        "code_help": "Letters, numbers, dots, dashes and underscores. Fictive codes start with #.",
+        "denied": "Only a business administrator can maintain the WBS catalog."
+    },
   "auth": {
     "operation_failed": "The operation could not complete. Reference: {reference}",
     "title": "Sign in to EPPM",

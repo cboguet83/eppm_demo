@@ -1,6 +1,7 @@
 """Shared modal workflows for creating, editing, and deleting projects."""
 
 from collections.abc import Callable
+from copy import deepcopy
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import date
@@ -26,6 +27,7 @@ from app.presentation.components.dynamic_fields import (
 from app.presentation.components.project_workspace import ProjectWorkspace
 from app.presentation.components.project_type_frames import template_frame, types_frame
 from app.presentation.components.project_links import render_links_editor
+from app.presentation.components.wbs_editor import render_wbs_editor
 
 STATUS_LIST = list(PROJECT_STATUSES)
 _Result = TypeVar("_Result")
@@ -142,12 +144,14 @@ def _render_project_properties(
     workspace: ProjectWorkspace, project_id: int | None,
     params: pd.DataFrame, references: ProjectDialogReferences,
     attributes: dict[str, Any], key_prefix: str, *, disabled: bool = False,
+    sections: dict[str, Callable[[], None]] | None = None,
 ) -> dict[str, Any]:
     """Keep dynamic property interactions local while rechecking their current scope."""
     permissions = _field_permissions(workspace, project_id)
     return _render_dynamic_fields(params, references.groups, references.options, attributes, key_prefix,
         disabled=disabled or (project_id is not None and not permissions.allows(Permission.EDIT, project_id)),
-        protected_disabled=project_id is not None and not permissions.allows(Permission.PROPERTIES, project_id))
+        protected_disabled=project_id is not None and not permissions.allows(Permission.PROPERTIES, project_id),
+        sections=sections)
 
 
 def _render_dynamic_fields(
@@ -158,6 +162,7 @@ def _render_dynamic_fields(
     key_prefix: str,
     disabled: bool = False,
     protected_disabled: bool = False,
+    sections: dict[str, Callable[[], None]] | None = None,
 ) -> dict[str, Any]:
     """Expose every applicable template property, including custom/ungrouped ones.
 
@@ -166,6 +171,11 @@ def _render_dynamic_fields(
     """
     values: dict[str, Any] = {}
     field_groups = parameter_groups(params, groups)
+    links_label = t("portfolio.tab_details_links", default="Useful links")
+    field_groups = [(links_label if label.casefold() == "useful links" else label, fields) for label, fields in field_groups]
+    for label in sections or {}:
+        if label not in [name for name, _ in field_groups]:
+            field_groups.append((label, params.iloc[:0]))
     labels = [label for label, _ in field_groups]
     creating = key_prefix.startswith("portfolio_create_")
     if creating:
@@ -179,8 +189,11 @@ def _render_dynamic_fields(
         value = draft.get(param_id, attributes.get(param_id))
         values[param_id] = value.isoformat() if isinstance(value, date) else value
     tabs = st.tabs(labels, key=f"{key_prefix}_tabs", on_change="rerun")
-    for tab, (_, fields) in zip(tabs, field_groups):
+    for tab, (label, fields) in zip(tabs, field_groups):
         if tab.open:
+            if st.session_state.get(key_prefix + "_last_tab") != label:
+                st.session_state[key_prefix + "_last_tab"] = label
+                st.session_state[key_prefix + "_tab_visit"] = st.session_state.get(key_prefix + "_tab_visit", 0) + 1
             with tab:
                 for _, parameter in fields.iterrows():
                     param_id = str(parameter["param_id"])
@@ -188,6 +201,8 @@ def _render_dynamic_fields(
                         parameter, options, attributes.get(param_id), key_prefix,
                         disabled=disabled or (protected_disabled and str(parameter.get("param_type")) == "ENUM"),
                     )
+                if label in (sections or {}):
+                    sections[label]()
     if creating:
         for tab in tabs[-2:]:
             if tab.open:
@@ -237,10 +252,10 @@ def _create_project_editor(workspace: ProjectWorkspace, project_id: int, referen
             workspace, project_id, Project(planned_budget=150000.0), references, creating=True,
         )
         st.write(f"#### {t('project_types.template')}")
+        sections, draft = _assignment_sections(workspace, None, [], f"portfolio_create_{project_id}")
         dynamic_values = _render_project_properties(
-            workspace, None, params, references, defaults, f"portfolio_create_{project_id}",
+            workspace, None, params, references, defaults, f"portfolio_create_{project_id}", sections=sections,
         )
-        custom_links = render_links_editor([], f"create_links_{project_id}")
         if st.button("Create project", icon=":material/add:", width="stretch"):
             clean_name = name.strip()
             if not clean_name:
@@ -255,9 +270,10 @@ def _create_project_editor(workspace: ProjectWorkspace, project_id: int, referen
                     dynamic_attributes=dynamic_values,
                     function_id=manager,
                     project_type_id=int(type_id),
-                    custom_links=custom_links,
+                    custom_links=draft["links"], wbs_allocations=draft["wbs"],
                 )
                 st.session_state.pop(draft_key, None)
+                st.session_state.pop(f"portfolio_create_{project_id}_assignments", None)
                 st.session_state["selected_portfolio_project_id"] = created_id
                 st.toast("Project created.", icon="✅")
                 st.rerun()
@@ -269,6 +285,38 @@ def _dismiss_project_dialog() -> None:
     st.session_state.pop("project_fields_editing", None)
     if (project_id := st.session_state.pop("project_edit_draft_id", None)) is not None:
         st.session_state.pop(f"portfolio_edit_{project_id}_draft", None)
+        st.session_state.pop(f"portfolio_edit_{project_id}_assignments", None)
+
+
+def _assignment_sections(workspace: ProjectWorkspace, project_id: int | None,
+                         links: list[LinkValues], prefix: str, *, disabled: bool = False
+                         ) -> tuple[dict[str, Callable[[], None]], dict[str, Any]]:
+    """Retain optional sections across tab switches and save them with the project."""
+    key = prefix + "_assignments"
+    if key not in st.session_state:
+        st.session_state[key] = {"links": links, "wbs": workspace.projects.get_wbs_allocations(project_id) if project_id else [],
+                                 "options": workspace.projects.get_wbs_options(project_id)}
+    draft = st.session_state[key]
+
+    def initial(section: str) -> tuple[list, str]:
+        # A data_editor applies deltas to its input frame. Keep that frame stable
+        # while mounted; when returning to a tab, mount the last accepted draft.
+        visit = st.session_state.get(prefix + "_tab_visit", 0)
+        if draft.get(section + "_visit") != visit:
+            draft[section + "_initial"] = deepcopy(draft[section])
+            draft[section + "_visit"] = visit
+        return draft[section + "_initial"], f"{prefix}_{section}_{visit}"
+
+    def links_section() -> None:
+        values, widget_key = initial("links")
+        draft["links"] = render_links_editor(values, widget_key, disabled=disabled)
+
+    def wbs_section() -> None:
+        values, widget_key = initial("wbs")
+        draft["wbs"] = render_wbs_editor(values, draft["options"], widget_key, disabled=disabled)
+
+    return {t("portfolio.tab_details_links", default="Useful links"): links_section,
+            t("wbs.title", default="WBS"): wbs_section}, draft
 
 
 def open_edit_project_dialog(
@@ -343,11 +391,11 @@ def _edit_project_editor(
             workspace, project_id, project, references, creating=False, disabled=disabled,
         )
         st.write(f"#### {t('project_types.template')}")
+        sections, draft = _assignment_sections(workspace, project_id, links, f"portfolio_edit_{project_id}", disabled=disabled)
         dynamic_values = _render_project_properties(
             workspace, project_id, params, references, dict(project.dynamic_attributes or {}),
-            f"portfolio_edit_{project_id}", disabled=disabled,
+            f"portfolio_edit_{project_id}", disabled=disabled, sections=sections,
         )
-        custom_links = render_links_editor(links, f"edit_links_{project_id}", disabled=disabled)
         if st.button(t("master_data.btn_update"), key=f"save_project_{project_id}", width="stretch", disabled=disabled):
             clean_name = name.strip()
             if not clean_name:
@@ -363,7 +411,7 @@ def _edit_project_editor(
                     dynamic_attributes=dynamic_values,
                     function_id=manager,
                     project_type_id=int(type_id),
-                    custom_links=custom_links,
+                    custom_links=draft["links"], wbs_allocations=draft["wbs"],
                 )
                 if not updated:
                     st.error("The selected project no longer exists.")

@@ -11,6 +11,7 @@ import streamlit as st
 from app.application.exceptions import ProjectStorageError, ProjectTypeStorageError, SchemaStorageError
 from app.domain.access.models import Permission
 from app.domain.projects.project import Project, PROJECT_STATUSES
+from app.domain.projects.wbs import normalize_allocations
 from app.presentation.components.project_dialogs import (
     ProjectDialogReferences, _dialog_references, _dialog_parameters,
 )
@@ -70,7 +71,14 @@ def _project_form(workspace: ProjectWorkspace, draft: ProjectDraft, type_id: int
         options=[("", "— None —"), *[(str(key), label) for key, label in references.managers.items()]])
     params = _dialog_parameters(references, type_id, workspace)
     groups = parameter_groups(params, references.groups)
+    links_tab = t("portfolio.tab_details_links", default="Useful links")
+    groups = [(links_tab if label.casefold() == "useful links" else label, fields) for label, fields in groups]
     tabs = [label for label, _ in groups]
+    if links_tab not in tabs:
+        tabs.append(links_tab)
+    wbs_tab = t("wbs.title", default="WBS")
+    if wbs_tab not in tabs:
+        tabs.append(wbs_tab)
     for label, parameters in groups:
         for _, parameter in parameters.iterrows():
             param_id = str(parameter["param_id"])
@@ -102,6 +110,9 @@ def _project_form(workspace: ProjectWorkspace, draft: ProjectDraft, type_id: int
         token=draft.token, title="Create new project" if draft.project_id is None else f"Edit project #{draft.project_id}",
         fields=fields, tabs=tabs, messages=messages, values=values,
         links=draft.form.get("links", []), error="", can_save=True,
+        links_tab=links_tab, wbs_tab=wbs_tab,
+        wbs=draft.form.get("wbs", []), wbs_options=draft.form.get("wbs_options", []),
+        wbs_labels={key: t("wbs." + key) for key in ("code", "allocation", "available", "add", "remove", "select", "empty")},
         can_delete=draft.project_id is not None and permissions.allows(Permission.DELETE, draft.project_id),
         submit="Create project" if draft.project_id is None else t("master_data.btn_update"),
         cancel=t("settings.btn_cancel", default="Cancel"),
@@ -127,6 +138,8 @@ def begin_project_dialog(workspace: ProjectWorkspace, project_id: int | None = N
         draft.form["values"] = {"display_id": str(workspace.projects.generate_project_id() if project_id is None else project_id)}
         if project_id is not None:
             draft.form["links"] = workspace.projects.get_links(project_id)
+            draft.form["wbs"] = workspace.projects.get_wbs_allocations(project_id)
+        draft.form["wbs_options"] = workspace.projects.get_wbs_options(project_id)
         type_id = next(iter(references.type_labels)) if project_id is None else project.project_type_id
         draft.form = _project_form(workspace, draft, int(type_id))
         st.session_state[_STATE] = draft
@@ -158,6 +171,7 @@ def _accept_values(draft: ProjectDraft, event: dict[str, Any]) -> dict[str, Any]
     ):
         raise ValueError("Each custom link needs a display alias and URL.")
     draft.form["values"], draft.form["links"] = values, links
+    draft.form["wbs"] = normalize_allocations(event.get("wbs", draft.form.get("wbs", [])))
     draft.edited.update({key: values[key] for key in dirty if key.startswith("p:")})
     return values
 
@@ -174,6 +188,7 @@ def _save(workspace: ProjectWorkspace, draft: ProjectDraft, values: dict[str, An
         project_type_id=int(values["project_type_id"]),
         dynamic_attributes={key[2:]: value for key, value in values.items() if key.startswith("p:")},
         custom_links=[link for link in draft.form["links"] if link["alias"] or link["url"]],
+        wbs_allocations=draft.form["wbs"],
     )
     if draft.project_id is None:
         return workspace.projects.create_project(**arguments)
