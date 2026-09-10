@@ -75,3 +75,7 @@ class CollaborationStorageError(RuntimeError):
 
 class DatabaseMaintenanceError(RuntimeError):
     """Database startup or maintenance failed with a safe user-facing message."""
+
+
+class FinanceStorageError(RuntimeError):
+    """Finance storage failed without exposing SQL or financial payloads."""

@@ -42,6 +42,8 @@ remain `shared`; project workflow callers use separate reference projections.
 | PlanningService | `get_totals` | read; totals use scoped project/task/dependency/allocation views |
 | Database initialization | `ensure_planning_indexes` | deployment maintenance; unavailable through planning services or browser workflows |
 | BudgetService | `get_report` | read; scope before financial totals |
+| FinanceService | `view`, `export` | current active session; explicitly global WBS budget visibility, independent of project grants |
+| FinanceService | `save`, `change_status`, `validate_import` | global `finance.edit`; Finance editor or Business administrator; writer transaction rechecks current session and grants |
 | ProjectOverallocationService | `overallocated_project_ids` | read; only authorized demand may influence returned project indicators |
 | PoolCapacityService | `calculate_many`, `get_summaries`, `get_details` | read for project demand; shared for full employee/mapping contributions; project workflows receive minimal capacity projections |
 | CollaborationService | `list_links`, `list_contacts`, `list_events` | read |

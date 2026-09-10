@@ -49,7 +49,7 @@ def _label(key: str, default: str) -> str:
 def _role_label(role: str) -> str:
     labels = {"project_viewer": "Project viewer", "project_editor": "Project editor",
               "project_approver": "Project approver", "access_admin": "Access administrator",
-              "business_admin": "Business administrator"}
+              "business_admin": "Business administrator", "finance_editor": "Finance editor"}
     return _label("roles." + role, labels.get(role, role))
 
 
@@ -57,7 +57,7 @@ def _permission_label(permission: str) -> str:
     labels = {"project.read": "View projects", "project.edit": "Edit projects", "project.approve": "Approve projects",
               "project.create": "Create projects", "project.delete": "Delete projects",
               "project.protected_properties": "Edit protected properties", "business.manage": "Manage shared business data",
-              "access.manage": "Manage application access"}
+              "access.manage": "Manage application access", "finance.edit": "Edit and approve budget plans"}
     return _label("permissions." + permission.replace(".", "_"), labels.get(permission, permission))
 
 
@@ -187,7 +187,7 @@ def _scope_editor(
     service: AccessService, actor: Actor, role: str, catalog: dict[str, dict[str, object]],
 ) -> dict[str, object]:
     if role in APPLICATION_ROLES:
-        st.info(_label("global_admin", "This administrator role applies to the whole application."))
+        st.info(_label("global_role", "This role applies to the whole application."))
         return {"kind": "all"}
     kinds = {"projects": _label("named_projects", "Named projects"),
              "properties": _label("properties", "Matching properties"), "all": _label("all", "All projects")}

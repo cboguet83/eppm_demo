@@ -17,6 +17,7 @@ class Permission(StrEnum):
     PROPERTIES = "project.protected_properties"
     SHARED = "business.manage"
     ACCESS = "access.manage"
+    FINANCE = "finance.edit"
 
 
 ROLE_PERMISSIONS: Mapping[str, frozenset[Permission]] = MappingProxyType({
@@ -24,10 +25,11 @@ ROLE_PERMISSIONS: Mapping[str, frozenset[Permission]] = MappingProxyType({
     "project_editor": frozenset({Permission.READ, Permission.EDIT}),
     "project_approver": frozenset({Permission.READ, Permission.APPROVE}),
     "access_admin": frozenset({Permission.ACCESS}),
+    "finance_editor": frozenset({Permission.FINANCE}),
     "business_admin": frozenset({Permission.READ, Permission.EDIT, Permission.CREATE,
-                                Permission.DELETE, Permission.PROPERTIES, Permission.SHARED}),
+                                Permission.DELETE, Permission.PROPERTIES, Permission.SHARED, Permission.FINANCE}),
 })
-APPLICATION_ROLES = frozenset({"access_admin", "business_admin"})
+APPLICATION_ROLES = frozenset({"access_admin", "business_admin", "finance_editor"})
 USER_STATES = frozenset({"pending", "active", "disabled"})
 
 

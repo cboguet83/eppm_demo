@@ -94,8 +94,9 @@ def test_security_revision_change_requires_a_fresh_runtime_before_admin_renderin
     current, status, revision = service.browser_identity(cookie)
     binding = settings.session_binding(current.session_hash, status, revision)
     app = AppTest.from_function(application_entry, args=(cookie, binding), default_timeout=30).run()
-    assert not app.exception and not app.error and not app.radio
-    assert "no assigned application access" in app.info[0].value
+    assert not app.exception and not app.error
+    assert app.radio(key="app_sidebar_nav").options == ["Finance"]
+    assert app.header[0].value == "Finance"
 
     DeploymentAccessService(
         service.gateway, lambda: int(time.time()), "entry-test",
@@ -107,11 +108,13 @@ def test_security_revision_change_requires_a_fresh_runtime_before_admin_renderin
 
     current, status, revision = service.browser_identity(cookie)
     binding = settings.session_binding(current.session_hash, status, revision)
-    refreshed = AppTest.from_function(application_entry, args=(cookie, binding), default_timeout=30).run()
+    from app.presentation.navigation import PAGE_ACCESS
+    refreshed = AppTest.from_function(application_entry, args=(cookie, binding), default_timeout=30)
+    refreshed.query_params["nav"] = PAGE_ACCESS
+    refreshed.run()
     assert not refreshed.exception and not refreshed.error
+    assert refreshed.radio(key="app_sidebar_nav").options == ["Finance", "Application access"]
     assert refreshed.header[0].value == "Application access"
-    assert len(refreshed.radio[0].options) == 1
-    assert "Application access" in refreshed.radio[0].options[0]
 
 
 @pytest.mark.parametrize("with_traceback", [False, True])

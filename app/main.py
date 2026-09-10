@@ -19,6 +19,7 @@ from app.application.services.planning import PlanningService
 from app.application.services.project_overallocation import ProjectOverallocationService
 from app.application.services.collaboration import CollaborationService
 from app.application.services.budgets import BudgetService
+from app.application.services.finance import FinanceService
 
 if TYPE_CHECKING:
     from app.infrastructure.database.pool_capacity_cache import (
@@ -292,13 +293,14 @@ def create_application_workspace(
     from app.shared.config import config
     from app.presentation.components.application_workspace import ApplicationWorkspace
     from app.presentation.navigation import (
-        PAGE_PORTFOLIO, PAGE_PLANNING, PAGE_SETTINGS, PAGE_SCHEMA_DEF, PAGE_BUDGET, PAGE_ACCESS,
+        PAGE_PORTFOLIO, PAGE_PLANNING, PAGE_SETTINGS, PAGE_SCHEMA_DEF, PAGE_BUDGET, PAGE_ACCESS, PAGE_FINANCE,
     )
     from app.presentation.pages.portfolio import render_portfolio_overview
     from app.presentation.pages.planning import render_planning_milestones
     from app.presentation.pages.settings import render_settings_view
     from app.presentation.pages.budgets import render_budget_tracking
     from app.presentation.pages.access_management import render_access_management
+    from app.presentation.pages.finance import render_finance
 
     identity = str(Path(db_path or config.db_path).resolve())
     with SqliteAccessGateway(identity).transaction() as store:
@@ -309,7 +311,10 @@ def create_application_workspace(
             read = False
         shared = access.global_permission(store, Permission.SHARED)
         administration = access.global_permission(store, Permission.ACCESS)
+        if isinstance(access.actor, Actor):
+            access.policy.session(store, access.actor)
     pages = {}
+    pages[PAGE_FINANCE] = partial(render_finance, create_finance_service(identity, access=access))
     totals = None
     if read:
         pages[PAGE_PORTFOLIO] = partial(render_portfolio_overview, create_project_workspace(identity, access=access))
@@ -323,6 +328,14 @@ def create_application_workspace(
     if administration and authentication is not None and isinstance(access.actor, Actor):
         pages[PAGE_ACCESS] = partial(render_access_management, authentication, access.actor)
     return ApplicationWorkspace(identity, pages, totals)
+
+
+def create_finance_service(db_path: str | None = None, *, access: BusinessAccess) -> FinanceService:
+    """Compose the independent shared budget plan with explicit actor authorization."""
+    from app.infrastructure.repositories.finance import SqliteFinanceGateway
+    from app.shared.config import config
+
+    return FinanceService(SqliteFinanceGateway(db_path or config.db_path, access))
 
 
 def create_planning_workspace(db_path: str | None = None, *, access: BusinessAccess) -> PlanningWorkspace:

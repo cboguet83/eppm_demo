@@ -81,7 +81,7 @@ def test_administration_ui_exposes_fixed_roles_and_keeps_bootstrap_out_of_browse
     app.selectbox(key="access_selected_user").set_value(user_id).run()
     assert not app.exception
     assert set(app.selectbox(key="access_new_role").options) == {
-        "Access administrator", "Business administrator", "Project viewer", "Project editor", "Project approver",
+        "Access administrator", "Business administrator", "Project viewer", "Project editor", "Project approver", "Finance editor",
     }
     assert all("bootstrap" not in button.label.lower() for button in app.button)
     app.selectbox(key="access_new_role").set_value("business_admin").run()

@@ -11,6 +11,7 @@ from app.presentation.navigation import (
     PAGE_SETTINGS,
     PAGE_SCHEMA_DEF,
     PAGE_ACCESS,
+    PAGE_FINANCE,
 )
 
 
@@ -109,7 +110,8 @@ def render_application(workspace: ApplicationWorkspace) -> None:
     }
 
     nav_map[PAGE_ACCESS] = t("access.title", default="Application access")
-    page_keys = [page for page in (PAGE_PORTFOLIO, PAGE_PLANNING, PAGE_SETTINGS, PAGE_ACCESS) if page in workspace.pages]
+    nav_map[PAGE_FINANCE] = t("finance.title", default="Finance")
+    page_keys = [page for page in (PAGE_PORTFOLIO, PAGE_PLANNING, PAGE_SETTINGS, PAGE_FINANCE, PAGE_ACCESS) if page in workspace.pages]
     if not page_keys:
         st.info(t("auth.no_access", default="Your account has no assigned application access. Contact an access administrator."))
         return

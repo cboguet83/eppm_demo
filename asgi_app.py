@@ -80,7 +80,14 @@ def application_security() -> tuple[list[BaseRoute], list[Middleware]]:
         service = create_portfolio_service(config.db_path, access=business_access)
         return service.get_allocation_badges(project_ids, revision)
 
+    from app.main import create_finance_service
+    from app.infrastructure.authentication.finance import FinanceDownloadRoutes
+
+    def export_budget(actor: Actor, snapshot_id: int) -> str:
+        return create_finance_service(config.db_path, access=BusinessAccess(actor, access.policy)).export(snapshot_id)
+
     routes = (AuthenticationRoutes(client, access).routes() + DownloadRoutes(access, export_template).routes()
+              + FinanceDownloadRoutes(access, export_budget).routes()
               + PlanningReadRoutes(access, read_tasks, read_allocations=read_allocations).routes())
     middleware = [Middleware(BrowserSecurityMiddleware, config=settings),
                   Middleware(ApplicationSessionMiddleware, access=access, config=settings),
