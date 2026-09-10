@@ -222,7 +222,7 @@ def test_task_bundle_reads_tags_and_assignments_from_the_same_snapshot(database:
     changed = []
 
     def commit_during_hydration(statement: str) -> None:
-        if "FROM task_dependencies" not in statement or changed:
+        if "CROSS JOIN task_dependencies" not in statement or changed:
             return
         with closing(sqlite3.connect(database)) as writer, writer:
             writer.execute("UPDATE project_task SET task_name='After' WHERE id=1")

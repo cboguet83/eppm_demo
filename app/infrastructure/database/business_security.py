@@ -117,19 +117,27 @@ class SqliteBusinessSecurity:
         visible = "SELECT id FROM temp.eppm_visible_project"
         predicates = {"project": f"id IN ({visible})", "project_task": f"project_id IN ({visible})"}
         for table, owner in _OWNED_TABLES.items():
-            predicates[table] = (f"task_id IN (SELECT id FROM main.project_task WHERE project_id IN ({visible}))"
+            predicates[table] = (f"EXISTS (SELECT 1 FROM main.project_task owner WHERE owner.id={table}.task_id "
+                                 f"AND owner.project_id IN ({visible}))"
                                  if owner == "task_id" else f"project_id IN ({visible})")
         predicates["resource_pool_assignment"] = f"""project_id IN ({visible}) AND
-            (task_id IS NULL OR task_id IN (SELECT id FROM main.project_task WHERE project_id IN ({visible})))"""
-        predicates["task_dependencies"] = f"""task_id IN (SELECT id FROM main.project_task WHERE project_id IN ({visible}))
+            (task_id IS NULL OR EXISTS (SELECT 1 FROM main.project_task owner
+                WHERE owner.id=resource_pool_assignment.task_id AND owner.project_id IN ({visible})))"""
+        # Correlated PK lookups preserve both endpoint checks without first
+        # enumerating every visible task for a small dependency batch.
+        predicates["task_dependencies"] = f"""EXISTS (
+            SELECT 1 FROM main.project_task owner WHERE owner.id=task_dependencies.task_id
+            AND owner.project_id IN ({visible}))
             AND (predecessor_project_id IS NULL OR predecessor_project_id IN ({visible}))
-            AND (predecessor_task_id IS NULL OR predecessor_task_id IN
-                (SELECT id FROM main.project_task WHERE project_id IN ({visible})))"""
+            AND (predecessor_task_id IS NULL OR EXISTS (
+                SELECT 1 FROM main.project_task pred WHERE pred.id=task_dependencies.predecessor_task_id
+                AND pred.project_id IN ({visible})))"""
         for table, predicate in predicates.items():
             if table == "project_task":
                 columns = [row[1] for row in self.connection.execute("PRAGMA main.table_info(project_task)")]
                 fields = [f'"{name}"' for name in columns if name != "predecessor_id"]
-                fields.append(f"CASE WHEN predecessor_id IN (SELECT id FROM main.project_task WHERE project_id IN ({visible})) "
+                fields.append(f"CASE WHEN EXISTS (SELECT 1 FROM main.project_task pred "
+                              f"WHERE pred.id=project_task.predecessor_id AND pred.project_id IN ({visible})) "
                               "THEN predecessor_id ELSE NULL END AS predecessor_id")
                 selection = ",".join(fields)
             else:

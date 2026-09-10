@@ -9,6 +9,21 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from app.shared.config.authentication import AuthenticationConfig
 
 
+def _public_framework_bundle(scope: Scope, message: Message, headers: MutableHeaders) -> bool:
+    """Retain Streamlit's cache policy only for its reserved, public JS/CSS routes."""
+    if (scope.get("method") not in {"GET", "HEAD"}
+            or not scope["path"].startswith(("/static/js/", "/static/css/"))
+            or message["status"] not in {200, 206, 304}
+            or "set-cookie" in headers):
+        return False
+    # A 304 keeps the previously cached bundle's headers. Missing bundles fall
+    # back to uncached HTML, which must never acquire an immutable cache policy.
+    if message["status"] == 304:
+        return True
+    directives = {value.strip().lower() for value in headers.get("cache-control", "").split(",")}
+    return {"public", "immutable"} <= directives
+
+
 class BrowserSecurityMiddleware:
     """Use the configured public origin instead of trusting browser or proxy headers."""
 
@@ -35,7 +50,8 @@ class BrowserSecurityMiddleware:
         async def secured_send(message: Message) -> None:
             if message["type"] == "http.response.start":
                 response_headers = MutableHeaders(scope=message)
-                response_headers["Cache-Control"] = "no-store"
+                if not _public_framework_bundle(scope, message, response_headers):
+                    response_headers["Cache-Control"] = "no-store"
                 response_headers["X-Content-Type-Options"] = "nosniff"
                 response_headers["X-Frame-Options"] = "SAMEORIGIN"
                 response_headers["Referrer-Policy"] = "no-referrer"

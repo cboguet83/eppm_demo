@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from app.application.services.portfolio import PortfolioService
+from app.application.services.portfolio import PortfolioService, portfolio_revision_token
 from app.infrastructure.database.connection import get_db
 from app.infrastructure.repositories.portfolio import SqlitePortfolioReader
 from app.infrastructure.database.seed_projects import create_seed_project
@@ -48,6 +48,15 @@ def test_portfolio_enrichment_is_bounded_and_component_input_is_normalized(tmp_p
     # Browsing needs schema metadata; manager choices are loaded only by dialogs.
     assert service.get_catalog(include_managers=False).managers == {}
 
+    calls.clear()
+    rows = service.get_page(columns, {}, 100, include_allocations=False)["rows"]
+    assert [row["project_id"] for row in rows] == list(range(101, 106))
+    assert calls == []
+    assert all("is_overallocated" not in row for row in rows)
+    badges = service.get_allocation_badges([101, 105], portfolio_revision_token(service.revision()))
+    assert badges == {"project_ids": [101, 105], "overallocated": [105]}
+    assert calls == [[101, 105]]
+
 
 def test_portfolio_cache_separates_databases_and_refreshes_after_project_writes(tmp_path: Path) -> None:
     columns = [{"key": "name", "format": "text"}]
@@ -58,6 +67,7 @@ def test_portfolio_cache_separates_databases_and_refreshes_after_project_writes(
         create_project_service(path).create_project(name=name)
         services.append(create_portfolio_service(path, include_allocations=False))
     first, second = services
+    assert first.get_allocation_badges([1], portfolio_revision_token(first.revision())) == {"project_ids": [1], "overallocated": []}
     assert first.revision() != second.revision()
     for service, expected in ((first, "First"), (second, "Second")):
         page = _load_portfolio_page(service.revision(), columns, {}, 0, service)

@@ -16,6 +16,9 @@ A successful local login does not replace the production checks below.
    Security tables, audit protection, scope identities, and bootstrap state are
    installed alongside the existing business schema. Application startup does not
    migrate, seed, reset, or restore administrator assignments.
+   This also installs the display revision and its business-table triggers for
+   portfolio/planning caching. Run the migration before using the updated display
+   code on an existing database; no project records or role assignments are reset.
 3. Register one confidential OIDC client with the provider. Enable authorization
    code with PKCE S256, use only the exact `${APP_ORIGIN}/auth/callback` redirect,
    and disable implicit, password, and service-account grants for this client.
@@ -159,6 +162,65 @@ and rejected changes are rolled back before their operational event is recorded.
 Do not re-enable OAuth/HTTP-client debug logs or raw callback query logging in the
 application or reverse proxy. Demo business reset operations preserve application
 users, grants, security audit, and bootstrap state.
+
+## Gantt task and dependency loading
+
+Expanding projects and enabling external dependencies use bounded task HTTP reads.
+Each batch now obtains tasks, dependency endpoints, tags, assignments, project
+labels and referenced whole-project date bounds in one authorized database
+snapshot. Capacity details are requested only for pools assigned to those tasks;
+their calculations still include all authorized consumers of each requested pool.
+
+Dependency queries start with the requested projects' tasks. Scoped task ownership
+and predecessor checks use indexed lookups rather than materializing every visible
+task. This retains the same endpoint visibility rules, including redaction of a
+hidden legacy predecessor. Business write guards are unchanged. Current access and
+the business/security revision are still checked before delivery.
+
+The browser loads visible projects before off-screen overscan, with at most 25
+projects per request and 100 loaded projects retained. These reads update the
+existing chart without a Streamlit rerun or an activity-timeout extension.
+
+Session controls retain one listener set and one polling timer across component
+renders. Activity is throttled across the page and same-origin charts; activity
+and session checks each permit only one request in flight. Repeated renders do
+not reset this state or accumulate requests ahead of task loads. Unmounting
+removes listeners and timers, and late responses from disposed controls are ignored.
+
+## Portfolio scrolling
+
+The master list reads 100 rows at a time and retains at most five pages in the
+browser. Scrollbar jumps load the visible page before off-screen overscan.
+Paging reruns only the grid fragment; controls, navigation and the selected
+project summary remain mounted. The scrollbar element is retained across updates.
+
+Resource-overallocation badges load after the rows through the same-origin
+`POST /api/portfolio/allocations` route. Allow this route alongside the existing
+planning task route when configuring a reverse proxy. Each request contains at
+most 25 project IDs and rechecks current access and the display revision. The
+browser permits one badge request at a time, times out after 15 seconds, and
+offers an explicit retry after a failure. These reads do not extend session activity.
+
+Scoped capacity calculations are reused per pool within the same current
+user/session, readable scope, capacity/security revision and day. Pool input reads
+include only assignments to the requested pools and the task bounds of their
+authorized consuming projects. They still include every authorized consumer needed
+to calculate each pool's warnings correctly.
+
+## Browser bundle loading
+
+Streamlit's versioned public JavaScript and CSS under `/static/js/` and
+`/static/css/` retain the framework's immutable cache policy. Initial HTML, account
+and project responses, downloads, error responses and responses that set cookies
+remain uncached. Application static files and custom component responses do not
+receive this exception.
+
+If a browser reports `Failed to fetch dynamically imported module` after a
+connection interruption or development restart, first check that the named bundle
+is available. A failed import can remain failed in the current browser document
+even after the server recovers. Reload the page once (Ctrl+F5 for a hard reload) to
+start a fresh document. The application does not force automatic page reloads for
+this condition.
 
 ## Verification before production
 

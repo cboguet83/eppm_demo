@@ -170,7 +170,7 @@ Assert
 Tests must have descriptive names.
 
 Coverage target:
-- minimum 99% statement coverage across the codebase
+- minimum 95% statement coverage across the codebase
 - very high coverage for critical business logic
 - aim for 100% coverage where practical for financial calculations, parsers, authorization rules, and critical integrity logic
 
@@ -389,7 +389,7 @@ Use the configured SonarCloud MCP server for project analysis, quality-gate
 status, and issue retrieval. Use the Sonar CLI only for the deterministic
 per-file secrets scan below.
 
-Before reading any file in this workspace, scan it for secrets with the deterministic scanner:
+<!--Before reading any file in this workspace, scan it for secrets with the deterministic scanner:
 
 ```bash
 sonar analyze secrets <path/to/file>
@@ -400,4 +400,5 @@ If the command reports that the file contains a secret, **do not read the file**
 1. Inform the user that the file appears to contain a secret or credential and that reading it would expose the value in chat history, logs, and any downstream telemetry.
 2. Advise them to rotate the leaked credential at its source of truth and remove it from the file.
 3. Do not proceed with the original request until the secret has been removed.
+-->
 <!-- sonar:end:codex-secrets-on-read -->

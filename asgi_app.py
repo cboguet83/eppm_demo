@@ -12,6 +12,7 @@ import streamlit as st
 
 from app.infrastructure.authentication.http import AuthenticationRoutes, OIDC_COOKIE
 from app.infrastructure.authentication.downloads import DownloadRoutes
+from app.infrastructure.authentication.planning import PlanningReadRoutes
 from app.infrastructure.authentication.session_middleware import ApplicationSessionMiddleware, TRUSTED_USER_HEADERS
 from app.application.services.business_access import BusinessAccess
 from app.domain.access.models import Actor
@@ -58,7 +59,29 @@ def application_security() -> tuple[list[BaseRoute], list[Middleware]]:
         service = create_planning_service(config.db_path, access=BusinessAccess(actor, access.policy))
         return service.export_project_template(project_id)
 
-    routes = AuthenticationRoutes(client, access).routes() + DownloadRoutes(access, export_template).routes()
+    def read_tasks(actor: Actor, project_ids: list[int], revision: str) -> dict[str, object]:
+        from app.domain.access.models import Permission
+        from app.main import create_planning_workspace
+        from app.presentation.components.planning_transport import read_planning_batch
+
+        business_access = BusinessAccess(actor, access.policy)
+        with access.gateway.transaction() as store:
+            business_access.require(store, Permission.READ, project_ids)
+        workspace = create_planning_workspace(config.db_path, access=business_access)
+        return read_planning_batch(workspace, project_ids, revision)
+
+    def read_allocations(actor: Actor, project_ids: list[int], revision: str) -> dict[str, object]:
+        from app.domain.access.models import Permission
+        from app.main import create_portfolio_service
+
+        business_access = BusinessAccess(actor, access.policy)
+        with access.gateway.transaction() as store:
+            business_access.require(store, Permission.READ, project_ids)
+        service = create_portfolio_service(config.db_path, access=business_access)
+        return service.get_allocation_badges(project_ids, revision)
+
+    routes = (AuthenticationRoutes(client, access).routes() + DownloadRoutes(access, export_template).routes()
+              + PlanningReadRoutes(access, read_tasks, read_allocations=read_allocations).routes())
     middleware = [Middleware(BrowserSecurityMiddleware, config=settings),
                   Middleware(ApplicationSessionMiddleware, access=access, config=settings),
                   Middleware(SessionMiddleware, secret_key=settings.cookie_secret,

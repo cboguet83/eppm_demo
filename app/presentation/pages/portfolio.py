@@ -10,7 +10,7 @@ from app.presentation.components.authorized_cache import authorized_cache
 from app.domain.access.models import Permission
 
 from app.application.exceptions import ProjectStorageError, ProjectTypeStorageError, SchemaStorageError
-from app.application.services.portfolio import PortfolioService
+from app.application.services.portfolio import PortfolioService, portfolio_revision_token
 from app.domain.projects.budgets import BudgetAmounts, analyze_budget, euro_amount
 from app.domain.projects.links import normalize_link
 from app.presentation.i18n import get_current_locale, t
@@ -47,13 +47,19 @@ def _sync_portfolio_project_selection(
         st.session_state[selection_key] = project_id
 
 
+def _select_portfolio_project() -> None:
+    """Update only the selected project's panel after the browser selects a row."""
+    _sync_portfolio_project_selection()
+    st.rerun("portfolio_selection")
+
+
 @st.fragment
 def _render_project_details_panel(
     selected_proj: pd.Series,
     params: pd.DataFrame,
     workspace: ProjectWorkspace,
 ) -> None:
-    """Isolate detail tab reruns and preserve the page's existing scroll range."""
+    """Keep selected-project actions independent from the master list."""
     from app.presentation.components.tab_position import preserve_tab_position
 
     key = f"project_details_panel_{selected_proj['id']}"
@@ -108,12 +114,6 @@ def _render_project_details_body(
     if proj_obj is None:
         st.info("The selected project no longer exists.")
         return
-    params = localize_parameters(
-        template_frame(workspace.types.template_reference(proj_obj.project_type_id)),
-        workspace.schema.alias_references(get_current_locale()),
-    )
-    allowed = set(params["param_id"]) if not params.empty else set()
-    dyn_dict = {pid: value for pid, value in proj_obj.dynamic_attributes.items() if pid in allowed}
     st.caption(f"{t('project_types.label')}: {selected_proj.get('project_template', '')}")
     st.markdown("---")
     head_c1, head_c2 = st.columns([4, 1])
@@ -136,12 +136,36 @@ def _render_project_details_body(
         (t("portfolio.col_actual", default="Actual (€)"), f"€{actual:,.2f}"),
         (t("portfolio.kpi_variance", default="Variance"), f"€{variance:,.2f} · {burn_rate_label} burn"),
     ]
-    with st.container(horizontal=True, horizontal_alignment="distribute"):
+    with st.container(key=f"project_details_summary_{proj_id}", horizontal=True, horizontal_alignment="distribute"):
         for label, value in summary:
             with st.container(width="content"):
                 st.caption(label)
                 st.caption(value)
 
+    _render_project_detail_sections(int(proj_id), workspace)
+
+
+@st.fragment
+def _render_project_detail_sections(proj_id: int, workspace: ProjectWorkspace) -> None:
+    """Switch lazy sections without rebuilding the summary or master list."""
+    try:
+        _project_detail_sections(proj_id, workspace)
+    except (ValueError, ProjectStorageError, ProjectTypeStorageError, SchemaStorageError) as exc:
+        st.error(str(exc))
+
+
+def _project_detail_sections(proj_id: int, workspace: ProjectWorkspace) -> None:
+    """Read the current authorized project before displaying a retained tab."""
+    proj_obj = workspace.projects.get_project_by_id(proj_id)
+    if proj_obj is None:
+        st.info("The selected project no longer exists.")
+        return
+    params = localize_parameters(
+        template_frame(workspace.types.template_reference(proj_obj.project_type_id)),
+        workspace.schema.alias_references(get_current_locale()),
+    )
+    allowed = set(params["param_id"]) if not params.empty else set()
+    dyn_dict = {pid: value for pid, value in proj_obj.dynamic_attributes.items() if pid in allowed}
     # Render only the effective template, including user-created groups/fields.
     groups = pd.DataFrame(workspace.portfolio.get_catalog(include_managers=False).groups)
     field_groups = parameter_groups(params, groups)
@@ -179,7 +203,7 @@ def _render_project_details_body(
 def _load_portfolio_page(revision: tuple, columns: list[dict], query: dict, offset: int,
                          _service: PortfolioService) -> dict:
     """Cache by source identity/revision; injected service instances are not hashed."""
-    return _service.get_page(columns, query, offset)
+    return _service.get_page(columns, query, offset, include_allocations=False)
 
 
 @authorized_cache(ttl=60, max_entries=64, show_spinner=False)
@@ -213,7 +237,7 @@ def _portfolio_columns(params: pd.DataFrame) -> list[dict]:
 
 
 def _render_portfolio_browser(workspace: ProjectWorkspace) -> None:
-    """Scroll requests rerun only this fragment, not navigation or global KPIs."""
+    """Compose controls, the independent scrolling grid, and selected-project panel."""
     params = pd.DataFrame(workspace.portfolio.get_catalog(include_managers=False).parameters)
     columns = _portfolio_columns(localize_parameters(params, workspace.schema.alias_references(get_current_locale())))
     search = st.text_input(t("portfolio.filter_search"), placeholder=t("portfolio.filter_search_placeholder"))
@@ -224,6 +248,21 @@ def _render_portfolio_browser(workspace: ProjectWorkspace) -> None:
             open_create_project_dialog(workspace)
     st.caption("Click a project to see its details. Scroll to load more projects automatically.")
 
+    _render_portfolio_grid(workspace, columns, search)
+    _render_portfolio_selection(workspace, params)
+
+
+@st.fragment
+def _render_portfolio_grid(workspace: ProjectWorkspace, columns: list[dict], search: str) -> None:
+    """Load scrolling pages without rebuilding controls, permissions UI, or details."""
+    try:
+        _portfolio_grid(workspace, columns, search)
+    except (ValueError, ProjectStorageError, ProjectTypeStorageError, SchemaStorageError) as exc:
+        st.error(str(exc))
+
+
+def _portfolio_grid(workspace: ProjectWorkspace, columns: list[dict], search: str) -> None:
+    """Serve a bounded row page under the current display and permission revision."""
     revision = workspace.portfolio.revision()
     context = hashlib.sha256(json.dumps([revision, columns, search],
                                        sort_keys=True).encode()).hexdigest()
@@ -245,7 +284,6 @@ def _render_portfolio_browser(workspace: ProjectWorkspace) -> None:
     if current_request and request.get("kind") == "facet" and request.get("column") in {c["key"] for c in columns}:
         facet = _load_portfolio_facet(revision, columns, query, request["column"],
                                      str(request.get("search") or ""), workspace.portfolio)
-    _sync_portfolio_project_selection()
     gantt_project = (component_state.get("gantt_click") if isinstance(component_state, dict)
                      else getattr(component_state, "gantt_click", None))
     if (type(gantt_project) is int and gantt_project > 0
@@ -260,10 +298,25 @@ def _render_portfolio_browser(workspace: ProjectWorkspace) -> None:
         key=_PORTFOLIO_TABLE_KEY,
         page_info={**{k: v for k, v in page.items() if k != "rows"},
                    "context": context, "query": query,
+                   "allocation_endpoint": "/api/portfolio/allocations",
+                   "revision": portfolio_revision_token(revision),
                    "request_id": request.get("nonce") if current_request else None,
                    "facet": facet},
+        on_selection_change=_select_portfolio_project,
     )
 
+
+@st.fragment(key="portfolio_selection")
+def _render_portfolio_selection(workspace: ProjectWorkspace, params: pd.DataFrame) -> None:
+    """Resolve the current selected row independently from master-list paging."""
+    try:
+        _portfolio_selection(workspace, params)
+    except (ValueError, ProjectStorageError, ProjectTypeStorageError, SchemaStorageError) as exc:
+        st.error(str(exc))
+
+
+def _portfolio_selection(workspace: ProjectWorkspace, params: pd.DataFrame) -> None:
+    _sync_portfolio_project_selection()
     selected_id = st.session_state.get(_SELECTED_PROJECT_KEY)
     if selected_id is not None:
         detail = workspace.portfolio.get_detail(int(selected_id))

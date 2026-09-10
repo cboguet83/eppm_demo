@@ -1,8 +1,10 @@
 """Streamlit Components v2 project table used by the portfolio overview."""
 
+from collections.abc import Callable
 from typing import Any
 
 import streamlit as st
+
 from app.presentation.components.context_menu import CONTEXT_MENU_CSS
 
 
@@ -57,6 +59,11 @@ td { height: 40px; }
     border: 0; cursor: pointer; font-size: 18px; line-height: 20px;
 }
 .project-context-menu button {display: block; width: 100%; text-align: left;}
+.allocation-status {font-size: 0.78rem;}
+.allocation-status button {
+    background: var(--st-primary-color, #C41039); color: white;
+    border: 0; border-radius: 0.3rem; cursor: pointer; padding: 0.35rem 0.5rem;
+}
 th { height: 44px; }
 .virtual-spacer td { padding: 0; border: 0; }
 .virtual-spacer, .loading-row { pointer-events: none; }
@@ -201,6 +208,7 @@ export default function(component) {
     const ROW_HEIGHT = 40, HEADER_HEIGHT = 44, OVERSCAN = 8, PAGE_SIZE = 100;
     let model = root._portfolio;
     if (!model || model.context !== info.context) {
+        model?.badgeController?.abort();
         model = root._portfolio = {context: info.context, pages: new Map(), pending: null,
             query: info.query || {}, total: info.total, top: 0, left: 0, menu: null, sequence: 0};
     }
@@ -228,6 +236,12 @@ export default function(component) {
     model.query = info.query || {};
     model.total = info.total;
     model.selected = data.selected_id;
+    const previousRows = new Map((model.pages.get(info.offset) || []).map(row => [row.project_id, row]));
+    for (const row of data.rows || []) {
+        if (row.is_overallocated === undefined && previousRows.has(row.project_id)) {
+            row.is_overallocated = previousRows.get(row.project_id).is_overallocated;
+        }
+    }
     model.pages.delete(info.offset);
     model.pages.set(info.offset, data.rows || []);
     while (model.pages.size > 5) model.pages.delete(model.pages.keys().next().value);
@@ -272,7 +286,11 @@ export default function(component) {
             const button = document.createElement('button'); button.type = 'button';
             button.className = 'context-menu-item';
             button.textContent = label; button.setAttribute('role', 'menuitem');
-            button.onclick = e => {e.stopPropagation(); closeProjectMenu(); setTriggerValue(trigger, row.project_id);};
+            button.onclick = e => {
+                e.stopPropagation(); closeProjectMenu();
+                if (trigger === 'row_click') {model.selected = row.project_id; model.redraw?.();}
+                setTriggerValue(trigger, row.project_id);
+            };
             menu.appendChild(button);
         };
         addAction('Open project details', 'row_click');
@@ -283,9 +301,9 @@ export default function(component) {
     root.onkeydown = event => {if (event.key === 'Escape') closeProjectMenu();};
 
 
-    // Keep scroll offsets and the bounded row cache across component updates.
-    root.replaceChildren();
-    const scroll = document.createElement('div');
+    // Retain the actual scrollbar during updates, including an active thumb drag.
+    closeMenu(); closeProjectMenu();
+    const scroll = root.querySelector('.table-scroll') || document.createElement('div');
     scroll.className = 'table-scroll';
     scroll.setAttribute('aria-label', 'Projects master list; scroll to load projects');
     const table = document.createElement('table');
@@ -322,10 +340,70 @@ export default function(component) {
     });
     head.appendChild(header); table.appendChild(head);
     const body = document.createElement('tbody');
-    table.appendChild(body); scroll.appendChild(table); root.appendChild(scroll);
-    const status = document.createElement('div');
+    table.appendChild(body); scroll.replaceChildren(table);
+    if (!root.querySelector('.table-scroll')) root.appendChild(scroll);
+    const status = root.querySelector('.row-count') || document.createElement('div');
     status.className = 'row-count'; status.setAttribute('role', 'status');
-    status.setAttribute('aria-live', 'polite'); root.appendChild(status);
+    status.setAttribute('aria-live', 'polite');
+    if (!root.querySelector('.row-count')) root.appendChild(status);
+    const badgeStatus = root.querySelector('.allocation-status') || document.createElement('div');
+    badgeStatus.className = 'allocation-status'; badgeStatus.setAttribute('role', 'status');
+    if (!root.querySelector('.allocation-status')) root.appendChild(badgeStatus);
+
+    const loadBadges = () => {
+        badgeStatus.replaceChildren();
+        if (!info.allocation_endpoint) return;
+        if (model.badgeError) {
+            const retry = document.createElement('button'); retry.type = 'button';
+            retry.textContent = model.badgeError === 409 ? 'Refresh project list' : 'Retry allocation warnings';
+            retry.onclick = () => {
+                const changed = model.badgeError === 409;
+                model.badgeError = null;
+                if (changed) request('page');
+                else drawRows();
+            };
+            const message = document.createElement('span'); message.textContent = 'Allocation warnings unavailable. ';
+            badgeStatus.append(message, retry);
+            return;
+        }
+        if (model.badgePending) return;
+        const first = Math.max(0, Math.floor((model.top - HEADER_HEIGHT) / ROW_HEIGHT));
+        const ids = [];
+        for (let index = first; index < Math.min(model.total, first + 25); index++) {
+            const row = model.pages.get(Math.floor(index / PAGE_SIZE) * PAGE_SIZE)?.[index % PAGE_SIZE];
+            if (row && row.is_overallocated === undefined) ids.push(row.project_id);
+        }
+        if (!ids.length) return;
+        const nonce = 'badges-' + Date.now() + '-' + (++model.sequence);
+        model.badgePending = nonce;
+        model.badgeController = new AbortController();
+        const timeout = setTimeout(() => model.badgeController.abort(), 15000);
+        fetch(info.allocation_endpoint, {method: 'POST', credentials: 'same-origin',
+            headers: {'Content-Type': 'application/json'}, signal: model.badgeController.signal,
+            body: JSON.stringify({project_ids: ids, revision: info.revision, scope_token: model.context, nonce})})
+            .then(async response => {
+                if (!response.ok) throw Object.assign(new Error(), {status: response.status});
+                const payload = await response.json();
+                if (root._portfolio !== model) return;
+                if (payload.nonce !== nonce || payload.scope_token !== model.context ||
+                    JSON.stringify(payload.project_ids) !== JSON.stringify(ids) ||
+                    !Array.isArray(payload.overallocated) || payload.overallocated.some(id => !ids.includes(id))) {
+                    throw new Error('Invalid allocation response');
+                }
+                const overloaded = new Set(payload.overallocated);
+                for (const rows of model.pages.values()) {
+                    for (const row of rows) if (ids.includes(row.project_id)) row.is_overallocated = overloaded.has(row.project_id);
+                }
+            })
+            .catch(error => {
+                if (root._portfolio === model) model.badgeError = error.status || 503;
+            })
+            .finally(() => {
+                clearTimeout(timeout);
+                model.badgePending = null;
+                if (root._portfolio === model) model.redraw?.();
+            });
+    };
 
     const spacer = height => {
         if (!height) return;
@@ -397,10 +475,18 @@ export default function(component) {
             body.appendChild(tr);
         }
         spacer(Math.max(0, model.total - last) * ROW_HEIGHT);
+        loadBadges();
         if (!model.pending) {
             status.textContent = model.total ? model.total.toLocaleString() + ' matching projects · scroll to browse'
                 : 'No projects match the filters.';
-            // Fetch visible gaps first, then prefetch just before a batch boundary.
+            // A scrollbar jump may leave an unloaded overscan page above the
+            // viewport. Load the rows actually on screen before that hidden gap.
+            const visible = Math.max(0, Math.floor((model.top - HEADER_HEIGHT) / ROW_HEIGHT));
+            const visibleEnd = Math.min(model.total - 1, visible + Math.ceil((scroll.clientHeight || 512) / ROW_HEIGHT));
+            for (let offset = Math.floor(visible / PAGE_SIZE) * PAGE_SIZE; offset <= visibleEnd; offset += PAGE_SIZE) {
+                if (!model.pages.has(offset)) {request('page', {offset}); return;}
+            }
+            // Fill overscan gaps and prefetch only after visible rows are ready.
             const from = Math.floor(first / PAGE_SIZE) * PAGE_SIZE;
             const through = Math.min(model.total - 1, last + 15);
             for (let offset = from; offset <= through; offset += PAGE_SIZE) {
@@ -408,6 +494,8 @@ export default function(component) {
             }
         }
     };
+
+    model.redraw = drawRows;
 
     const showMenu = () => {
         closeMenu();
@@ -524,6 +612,7 @@ def portfolio_project_table(
     *,
     key: str,
     page_info: dict[str, Any],
+    on_selection_change: Callable[[], None] | None = None,
 ) -> Any:
     """Render the portfolio table and return the ID from the latest row click."""
     _PORTFOLIO_PROJECT_TABLE = st.components.v2.component(
@@ -538,7 +627,7 @@ def portfolio_project_table(
         width="stretch",
         height="content",
         on_request_change=lambda: None,
-        on_row_click_change=lambda: None,
+        on_row_click_change=on_selection_change or (lambda: None),
         on_gantt_click_change=lambda: None,
     )
     return getattr(result, "row_click", None)

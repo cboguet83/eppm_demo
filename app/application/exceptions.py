@@ -17,6 +17,10 @@ class ProjectStorageError(RuntimeError):
     """Project or portfolio storage is unavailable."""
 
 
+class PortfolioRevisionChanged(ValueError):
+    """Portfolio inputs changed while a requested badge batch was being read."""
+
+
 class SchemaConflictError(ValueError):
     """A schema edit conflicts with a name, order, ID, or existing reference."""
 
@@ -51,6 +55,10 @@ class TagStorageError(RuntimeError):
 
 class PlanningConflictError(ValueError):
     """A task change conflicts with an existing reference or constraint."""
+
+
+class PlanningRevisionChanged(ValueError):
+    """Planning inputs changed before a requested display batch could be delivered."""
 
 
 class PlanningStorageError(RuntimeError):

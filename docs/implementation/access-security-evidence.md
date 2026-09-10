@@ -189,10 +189,184 @@ These cases are covered in `tests/test_scoped_capacity_races.py`. The running
 development app also passed fresh login, Planning rendering and capacity reload
 after a session-activity update.
 
-Measured `app` statement coverage is **99.02%** (10,480 of 10,584 statements), meeting
+Portfolio and planning display revisions now use a persisted business epoch/counter
+and the current security revision, read in one SQLite snapshot. Session activity,
+WAL lifecycle and derived-cache writes no longer discard loaded project pages or
+rebuild the Gantt scope. Every protected lookup still checks the current session
+and readable projects; role changes invalidate displays even when read scope stays
+the same. Metadata-only revision checks avoid installing business write guards;
+actual business queries and mutations retain their existing enforcement.
+
+The final responsiveness run on 2026-09-10 passed **1,135 Python tests and 14
+subtests**, with one opt-in skip. All **42 focused JavaScript tests** for paging,
+lazy task loading, scrolling, permissions and session activity passed.
+New regressions cover session activity in DELETE/WAL modes, revoked/disabled/expired
+sessions, unchanged read scope after permission changes, committed edits versus
+rollback, migration preservation, and actual portfolio/Gantt render callbacks.
+
+An isolated authenticated browser verified rapid scrolling on the development
+portfolio containing 10,001 projects and retained the planning viewport and scope.
+The database was backed up before the additive revision upgrade. Thirty authorized
+revision lookups on the same isolated fixture averaged 8.89 ms before and 2.48 ms
+after; this measures the revision lookup, not overall page rendering time.
+
+Further live testing identified two additional causes of disruptive refreshes.
+Login/logout audit events incremented the global security revision, disconnecting
+unrelated WebSockets; those events now retain their audit records without changing
+the permission revision. The transport still denies a revoked or expired session
+on either message direction, and actual role/status/scope changes still invalidate
+the binding. A regression reproduces another browser's login/logout while an
+existing WebSocket remains open.
+
+Expanded Gantt scrolling now hydrates task batches through the authenticated
+`POST /api/planning/tasks` route rather than component events. One bounded request
+is in flight at a time; its result updates the existing chart rows. Stale scopes
+and revisions are discarded, the browser working set remains capped at 100
+projects, and a failed request offers an explicit retry. Each batch checks current
+read permission for all requested projects, and checks the display revision again
+before delivery. HTTP reads do not extend idle timeout. Edits retain their original
+authoritative service path and refresh the currently loaded rows. A changed data
+revision for the same chart selection preserves its viewport and collapse state.
+
+The expanded 10,001-project development Gantt loaded four HTTP batches during a
+rapid-scroll browser check with **zero Streamlit reruns**, preserving its viewport
+and scope. A second browser then logged in and out; the first remained on Planning
+and continued loading without a reset. This explicitly exercises expanded lazy
+task loading, whereas the earlier live check had only scrolled collapsed headers.
+
+Session controls count trusted wheel events in both the page and same-origin
+chart frames using passive, throttled listeners. Synthetic scroll events and
+background task reads do not extend idle timeout. Temporary network/5xx failures
+in activity or session checks retain the current page and retry, rather than
+resetting navigation; confirmed 401/403 or account-status changes still exit it.
+After restarting the development process to reload its registered component,
+the live browser retained Planning during a simulated 503 session response and
+recorded genuine Gantt wheel activity through the endpoint's 204 response. This
+final run also repeated the four task batches with zero Streamlit reruns and the
+independent browser login/logout check successfully.
+
+Application access now isolates account search/selection from navigation and the
+audit report. Its nested role/scope editor updates independently of account status,
+existing assignments and the effective-access form. Static administrator scopes
+also perform a fresh protected catalog read on every editor rerun. The
+effective-access form submits its project reference only when the check is requested.
+Settings navigation also runs inside a page fragment. Project detail sections have
+their own nested fragment, retaining the summary and master list while checking
+current project access and loading only the selected section.
+
+Eight regressions in `tests/test_fragment_reruns.py` enqueue real fragment requests
+on Streamlit's script runner after initial rendering. They assert that navigation
+receives no deltas, the audit is read once, and the project summary is built once.
+They also verify denial after revocation/disablement and safe handling of deletion
+inside the retained child fragment. These checks do not rely on ordinary AppTest
+widget runs, which reconstruct the full script.
+
+An isolated browser session on the running development app then changed the
+selected account, roles, named/property/all-project scopes and Settings section.
+Decoded Streamlit update messages showed zero sidebar deltas for those
+interactions. Switching Contacts, Project log, Useful links and back to Contacts
+updated only the detail-section fragment and its active collaboration child;
+the summary received zero deltas and retained the same DOM element. No account,
+role assignment, project or reference data was changed by this browser check.
+
+The full UI responsiveness run measured `app` statement coverage at **99.03%**
+(10,607 of 10,711 statements), meeting
 the **99%** project target. The full and focused runs leave 104 uncovered statements;
 the 420 existing excluded lines are unchanged. This figure is statement coverage,
 not proof that every possible branch or deployment condition has been exercised.
+
+The subsequent public-bundle caching correction passed **120 focused tests** across
+real installed static asset serving, OIDC, session transport and planning HTTP
+reads. New tests exercise JavaScript/CSS GET, HEAD, range and conditional responses,
+missing-bundle HTML fallback, errors, cookie-setting responses and protected paths.
+The correction preserves the framework's cache policy only on successful public
+bundle responses; application data still receives `no-store`.
+
+A fresh anonymous development browser loaded the reported Multiselect module and
+its dependency graph successfully. After the correction, a second page loaded all
+86 recorded JavaScript bundles from cache: recorded transfer bytes fell from
+2,227,867 to zero. A separate isolated browser aborted the Multiselect request to
+reproduce the TypeError, confirmed that the failed import remained failed after
+network recovery in that document, and recovered successfully after one reload.
+The original user's failed request was not captured, so its specific interruption
+cause is not established by this reproduction.
+
+The subsequent master-list paging correction passed **1,181 Python tests and 14
+subtests**, with one opt-in skip, plus **62 JavaScript tests**. These runs include
+new real-database regressions for overlapping pool-cache subsets, summary/detail
+reuse, mutation during cache extension, actor isolation and restricted capacity
+inputs. Actual fragment requests verify that paging does not rebuild catalog
+controls or the selected summary and still denies access after revocation.
+Authenticated badge HTTP tests cover hidden/missing IDs, logout, disabled/revoked/
+expired sessions, concurrent allocation/scope changes, body limits, foreign origins,
+safe errors and unchanged session activity. JavaScript tests cover immediate row
+display, late/malformed badge responses, explicit retry, timeout, bounded requests
+and retained scrollbar identity.
+
+Profiling the 10,001-project development portfolio identified repeated scoped
+capacity calculations on the row-display path. Before this correction, jumps to
+indices 5000, 2500 and 7500 took 1,511 / 1,833 / 2,271 ms to finish loading both
+visible rows and off-screen overscan, emitting 58 / 102 / 102 Streamlit UI deltas.
+In the final isolated browser run, visible rows appeared after 314 / 359 / 337 ms;
+the comparable visible-plus-overscan times were 617 / 744 / 655 ms. Each jump
+emitted four UI deltas, confined to the grid. Badges completed separately after
+622 / 1,042 / 660 ms. An earlier post-change run measured visible rows at
+458–613 ms, so these are local observations rather than a latency guarantee.
+
+A continuous sequence of scroll movements from index 8000 to 9000 retained the
+same scrollbar and selected-summary DOM elements, kept the final position and
+finished its remaining page work 881 ms after movement stopped. The checks used
+an isolated authenticated browser without modifying business data or permissions.
+The coverage figure above belongs to the earlier UI run; coverage was not
+remeasured for this paging correction.
+
+The Gantt latency follow-up reproduced project expansions at indices 5000 and
+7500 taking **9,516 / 8,748 ms**. Enabling external dependencies at index 2500
+took **20,693 ms** for the visible rows and **30,518 ms** including overscan.
+Both operations already had zero Streamlit reruns; server reads were a major delay.
+Profiles identified full-pool capacity loading, repeated display-cache/security
+reads and queries that scanned unrelated visible tasks.
+
+The corrected task transport reads one authorized metadata snapshot, loads only
+the tasks' assigned pools and checks revision freshness before delivery. Dependency
+queries first select the requested successor tasks; scoped ownership checks use
+indexed lookups. No write guard or endpoint visibility rule is removed. A database
+work regression adds 5,000 unrelated visible tasks and dependencies and verifies
+that the requested dependency query's SQLite instruction count remains bounded.
+Other regressions verify duplicate project IDs, empty predecessor projects,
+batched project bounds, unchanged read-snapshot semantics and scoped pool demand.
+
+Follow-up browser network timing exposed a second cause of intermittent pauses:
+one interaction issued **38 concurrent session-activity requests**. The session
+component initialized listeners and polling again on repeated frontend renders,
+although its cleanup only ran on unmount. These duplicate requests queued ahead
+of task reads. The component now retains its controller and throttle state across
+renders, with one polling timer and one request in flight per activity/session
+check. Regression tests simulate 40 renders, slow responses, replacement content,
+unmount/remount and late responses after disposal.
+
+The final isolated browser check after both corrections on the same 10,001-project
+development database showed expansions in **622 / 693 ms**, external dependencies
+in **661 ms** and all external-link overscan in **1,227 ms**. Scrolling to indices
+9000 and 1000 with external links enabled and immediately expanding projects took
+**709 / 811 ms**, preserving the viewport. The duplicate activity requests were
+absent: the whole browser scenario sent two activity requests at least ten seconds
+apart, with no overlap. Task requests started within one millisecond of their
+network dispatch. The preceding run measured expansions at 614 / 765 ms and
+visible external dependencies at 609 ms.
+The chart rendered the same 11 dependency bundles with zero Streamlit UI deltas.
+These are observed local timings rather than a general latency guarantee.
+
+The full regression run passed **1,188 Python tests and 14 subtests**, with one
+opt-in skip. A subsequent **36-test** task-HTTP run added coverage of the filtered
+chart's whole-project predecessor fallback. All **65 JavaScript tests** passed,
+including the subsequent session-controller lifecycle regressions.
+After that lifecycle correction, **108 focused Python tests** passed across task
+HTTP, session transport, actual fragment reruns, planning snapshots and account
+presentation/entry. The temporary HTTP timing instrumentation was removed.
+Combined statement coverage is **99.01%** (10,678 of 10,785 statements), meeting
+the 99% target. The checks retain current-scope denial, allocation redaction,
+revision-race rejection and transactional write enforcement.
 
 Additional ASVS features outside the specified implementation are not claimed:
 device/posture risk evaluation, MFA for every non-administrator, self-service session

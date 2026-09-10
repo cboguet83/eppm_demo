@@ -1,5 +1,7 @@
 """Fixed-role access administration, explicit scopes and immutable audit inspection."""
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 import json
 
@@ -77,10 +79,22 @@ def _scope_summary(encoded: str, catalog: dict[str, dict[str, object]]) -> str:
     return (" " + _label("and", "and") + " ").join(conditions)
 
 
-def render_access_management(service: AccessService, actor: Actor) -> None:
-    """Reauthorize each read/write through the service rather than trust widget state."""
-    st.header(_label("title", "Application access"))
+@contextmanager
+def _access_errors() -> Iterator[None]:
+    """Handle authorization failures inside the fragment that is being rerun."""
     try:
+        yield
+    except ReauthenticationRequired:
+        st.warning(_label("reauthenticate", "Sign in again before changing application access."))
+        st.link_button(_label("sign_in_again", "Sign in again"), "/auth/login", type="primary")
+    except ValueError as error:
+        st.error(_validation_message(str(error)))
+
+
+def render_access_management(service: AccessService, actor: Actor) -> None:
+    """Keep account controls independent from navigation and the audit report."""
+    st.header(_label("title", "Application access"))
+    with _access_errors():
         users_tab, audit_tab = st.tabs([_label("users", "Users"), _label("audit", "Security audit")])
         with users_tab:
             _users(service, actor)
@@ -93,14 +107,16 @@ def render_access_management(service: AccessService, actor: Actor) -> None:
                                   ("action", _label("action", "Action")), ("outcome", _label("outcome", "Outcome")),
                                   ("details_json", _label("details", "Details")),
                                   ("correlation_id", _label("reference", "Reference"))], {}, key="access_audit")
-    except ReauthenticationRequired:
-        st.warning(_label("reauthenticate", "Sign in again before changing application access."))
-        st.link_button(_label("sign_in_again", "Sign in again"), "/auth/login", type="primary")
-    except ValueError as error:
-        st.error(_validation_message(str(error)))
 
 
+@st.fragment
 def _users(service: AccessService, actor: Actor) -> None:
+    """Refresh selected-account details without rerunning the application shell."""
+    with _access_errors():
+        _user_controls(service, actor)
+
+
+def _user_controls(service: AccessService, actor: Actor) -> None:
     search = st.text_input(_label("search", "Search accounts"), key="access_user_search")
     users = service.list_users(actor, search)
     choices = {user["id"]: user for user in users}
@@ -136,16 +152,12 @@ def _users(service: AccessService, actor: Actor) -> None:
         if st.button(_label("revoke", "Revoke assignment"), key=f'access_revoke_{assignment["id"]}'):
             service.revoke(actor, int(assignment["id"]))
             st.rerun()
-    st.subheader(_label("grant", "Assign a role"))
-    role = st.selectbox(_label("role", "Fixed role"), list(ROLE_PERMISSIONS), format_func=_role_label, key="access_new_role")
-    st.caption(" · ".join(_permission_label(value) for value in sorted(ROLE_PERMISSIONS[role])))
-    scope = _scope_editor(service, actor, role)
-    if st.button(_label("save_grant", "Grant access"), key="access_grant"):
-        service.grant(actor, user_id, role, scope)
-        st.rerun()
+    _assignment_editor(service, actor, user_id)
     st.subheader(_label("explain", "Explain effective access"))
-    project_id = st.number_input(_label("project_id", "Project reference"), min_value=1, step=1, key="access_explain_project")
-    if st.button(_label("check", "Check effective access")):
+    with st.form("access_explain"):
+        project_id = st.number_input(_label("project_id", "Project reference"), min_value=1, step=1, key="access_explain_project")
+        check = st.form_submit_button(_label("check", "Check effective access"))
+    if check:
         explanation = service.effective_access(actor, user_id, int(project_id))
         if not explanation:
             st.info(_label("no_access", "No assignment grants access to this project."))
@@ -155,7 +167,25 @@ def _users(service: AccessService, actor: Actor) -> None:
                 st.caption(_label("mfa", "Administrator permissions also require a provider-verified MFA session."))
 
 
-def _scope_editor(service: AccessService, actor: Actor, role: str) -> dict[str, object]:
+@st.fragment
+def _assignment_editor(service: AccessService, actor: Actor, user_id: int) -> None:
+    """Rerun dependent scope controls while retaining the account and its grants."""
+    with _access_errors():
+        # This protected read reauthorizes every fragment run, including roles
+        # with static all-project scope that need no project-choice query.
+        catalog = {str(item["property_id"]): item for item in service.scope_catalog(actor)}
+        st.subheader(_label("grant", "Assign a role"))
+        role = st.selectbox(_label("role", "Fixed role"), list(ROLE_PERMISSIONS), format_func=_role_label, key="access_new_role")
+        st.caption(" · ".join(_permission_label(value) for value in sorted(ROLE_PERMISSIONS[role])))
+        scope = _scope_editor(service, actor, role, catalog)
+        if st.button(_label("save_grant", "Grant access"), key="access_grant"):
+            service.grant(actor, user_id, role, scope)
+            st.rerun()
+
+
+def _scope_editor(
+    service: AccessService, actor: Actor, role: str, catalog: dict[str, dict[str, object]],
+) -> dict[str, object]:
     if role in APPLICATION_ROLES:
         st.info(_label("global_admin", "This administrator role applies to the whole application."))
         return {"kind": "all"}
@@ -172,7 +202,6 @@ def _scope_editor(service: AccessService, actor: Actor, role: str) -> dict[str, 
                                   key="access_scope_projects")
         return {"kind": kind, "project_ids": selected}
     st.caption(_label("protected", "Scope-eligible properties are protected. All conditions must match; add separate assignments for alternatives."))
-    catalog = {str(item["property_id"]): item for item in service.scope_catalog(actor)}
     selected = st.multiselect(_label("conditions", "Properties to match"), list(catalog),
                               format_func=lambda value: str(catalog[value]["label"]),
                               key="access_scope_properties")

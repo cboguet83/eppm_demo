@@ -163,3 +163,81 @@ def test_continuously_changing_capacity_inputs_fail_without_publishing_stale_cac
     assert result[0].peak_assigned_fte == 4
     with closing(get_db(path)) as connection:
         assert connection.execute("SELECT fte_assigned FROM resource_pool_assignment WHERE id=2").fetchone() == (2,)
+
+
+def test_overlapping_pool_pages_and_summary_detail_reads_reuse_scoped_calculations(business):
+    path, _, _, editor, _ = business
+    with closing(get_db(path)) as connection, connection:
+        connection.execute("INSERT INTO resource_pool(id,name,capacity_fte) VALUES(2,'Second pool',2),(3,'Third pool',3)")
+    cache = SqliteCapacityCache(path, CapacityCacheState(), lambda: date(2026, 1, 2), access=editor)
+    capacity = create_pool_capacity_service(path, access=editor)
+    calls = []
+
+    def calculate(pool_ids, day):
+        calls.append(pool_ids)
+        return capacity.calculate_many(pool_ids, day)
+
+    summaries = cache.load(calculate, pool_ids=[1, 2])
+    assert [item.pool_id for item in summaries] == [1, 2]
+    assert cache.load(calculate, details=True, pool_ids=[2])[0].pool_id == 2
+    assert [item.pool_id for item in cache.load(calculate, pool_ids=[2, 3])] == [2, 3]
+    assert [item.pool_id for item in cache.load(calculate, details=True)] == [1, 2, 3]
+    assert calls == [[1, 2], [3]]
+    # Caller mutation of either projection cannot corrupt the shared pool entry.
+    summaries.clear()
+    detail = cache.load(calculate, details=True, pool_ids=[1])[0]
+    assert detail.daily_usage
+    detail.daily_usage.clear()
+    assert cache.load(calculate, pool_ids=[1])[0].peak_assigned_fte == 1
+    assert cache.load(calculate, details=True, pool_ids=[1])[0].daily_usage
+    assert len(calls) == 2
+
+
+def test_extending_a_pool_cache_discards_warm_values_if_inputs_change_mid_calculation(business):
+    path, _, _, editor, _ = business
+    with closing(get_db(path)) as connection, connection:
+        connection.execute("INSERT INTO resource_pool(id,name,capacity_fte) VALUES(2,'Second pool',2)")
+    cache = SqliteCapacityCache(path, CapacityCacheState(), lambda: date(2026, 1, 2), access=editor)
+    capacity = create_pool_capacity_service(path, access=editor)
+    calls = []
+
+    def calculate(pool_ids, day):
+        calls.append(pool_ids)
+        result = capacity.calculate_many(pool_ids, day)
+        if len(calls) == 2:
+            with closing(get_db(path)) as connection, connection:
+                connection.execute("UPDATE resource_pool_assignment SET fte_assigned=2 WHERE id=1")
+        return result
+
+    assert cache.load(calculate, pool_ids=[1])[0].peak_assigned_fte == 1
+    expanded = cache.load(calculate, details=True, pool_ids=[1, 2])
+    assert calls == [[1], [2], [1, 2]]
+    assert expanded[0].peak_assigned_fte == 2
+
+
+def test_pool_cache_reuse_never_crosses_current_actor_scope(business):
+    path, _, _, editor, manager = business
+    state = CapacityCacheState()
+    for access, peak in ((manager, 3), (editor, 1), (manager, 3)):
+        cache = SqliteCapacityCache(path, state, lambda: date(2026, 1, 2), access=access)
+        capacity = create_pool_capacity_service(path, access=access)
+        assert cache.load(capacity.calculate_many, pool_ids=[1])[0].peak_assigned_fte == peak
+        assert cache.load(capacity.calculate_many, details=True)[0].peak_assigned_fte == peak
+
+
+def test_capacity_inputs_include_only_projects_consuming_the_requested_pools(business):
+    from app.infrastructure.repositories.pool_capacity import SqliteCapacityReader
+
+    path, _, _, editor, manager = business
+    with closing(get_db(path)) as connection, connection:
+        connection.execute("INSERT INTO project(id,name) VALUES(3,'Unrelated')")
+        connection.execute("INSERT INTO project_task(id,project_id,task_name,start_date,end_date) VALUES(30,3,'Other task','2026-01-01','2026-01-05')")
+        connection.execute("INSERT INTO resource_pool(id,name,capacity_fte) VALUES(2,'Other pool',1)")
+        connection.execute("INSERT INTO resource_pool_assignment(pool_id,project_id,task_id,fte_assigned) VALUES(2,3,30,1)")
+    for access, expected in ((manager, {1, 2}), (editor, {1})):
+        reader = SqliteCapacityReader(path, access=access)
+        inputs = reader.read([1])
+        assert set(inputs) == {1}
+        assert set(inputs[1].project_bounds) == expected
+        assert {item['project_id'] for item in inputs[1].assignments} == expected
+        assert reader.read([]) == {}

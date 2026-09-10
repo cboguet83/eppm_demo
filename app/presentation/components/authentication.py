@@ -10,27 +10,41 @@ from app.presentation.shell import render_language_selector
 
 _SESSION_JS = """
 export default function({data, parentElement}) {
-    const root = parentElement.querySelector('.session-controls');
+    // Streamlit can render the same mounted component many times before unmounting.
+    const existing = parentElement.eppmSessionControls;
+    if (existing) { existing.update(data); return existing.dispose; }
+    let root = parentElement.querySelector('.session-controls'), currentData = data;
     const logout = document.createElement('button');
     logout.textContent = data.logout;
     root.replaceChildren(logout);
-    let lastActivity = 0, disposed = false;
+    let lastActivity = 0, disposed = false, activityPending = false, pollPending = false;
     const documents = new Set(), frames = new Set();
     const expire = () => { if (!disposed) window.location.replace('/'); };
+    const retry = () => { lastActivity = 0; root.dataset.sessionConnection = 'retrying'; };
+    const accepted = response => {
+        if (disposed) return false;
+        if (response.ok) { delete root.dataset.sessionConnection; return true; }
+        if (response.status === 401 || response.status === 403) expire();
+        else retry();
+        return false;
+    };
     const activity = async event => {
-        if (!event.isTrusted || Date.now() - lastActivity < 10000) return;
+        if (disposed || activityPending || !event.isTrusted || Date.now() - lastActivity < 10000) return;
         lastActivity = Date.now();
+        activityPending = true;
         try {
             const response = await fetch('/auth/activity', {method:'POST', credentials:'same-origin',
                 headers:{'X-Eppm-Activity':'user-interaction'}, cache:'no-store'});
-            if (!response.ok) expire();
-        } catch { expire(); }
+            accepted(response);
+        } catch { if (!disposed) retry(); }
+        finally { activityPending = false; }
     };
     const attachDocument = doc => {
         if (!doc || documents.has(doc)) return;
         documents.add(doc);
         doc.addEventListener('pointerdown', activity, true);
         doc.addEventListener('keydown', activity, true);
+        doc.addEventListener('wheel', activity, {capture:true, passive:true});
     };
     const attachFrame = frame => {
         try { attachDocument(frame.contentDocument); } catch { /* Cross-origin embedded content is isolated. */ }
@@ -58,22 +72,35 @@ export default function({data, parentElement}) {
     const otherTabLogout = event => { if (event.key === 'eppm-logout') expire(); };
     window.addEventListener('storage', otherTabLogout);
     const poll = setInterval(async () => {
+        if (disposed || pollPending) return;
+        pollPending = true;
         try {
             const response = await fetch('/auth/session', {credentials:'same-origin', cache:'no-store'});
-            if (!response.ok) { expire(); return; }
+            if (!accepted(response)) return;
             const session = await response.json();
-            if (session.status !== data.status) expire();
-        } catch { expire(); }
+            if (session.status !== currentData.status) expire();
+        } catch { if (!disposed) retry(); }
+        finally { pollPending = false; }
     }, 15000);
-    return () => {
+    const dispose = () => {
+        if (disposed) return;
         disposed = true; clearInterval(poll); observer.disconnect();
+        delete parentElement.eppmSessionControls;
         window.removeEventListener('storage', otherTabLogout);
         for (const doc of documents) {
             doc.removeEventListener('pointerdown', activity, true);
             doc.removeEventListener('keydown', activity, true);
+            doc.removeEventListener('wheel', activity, true);
         }
         for (const frame of frames) frame.removeEventListener('load', onFrameLoad);
     };
+    parentElement.eppmSessionControls = {dispose, update(next) {
+        currentData = next;
+        root = parentElement.querySelector('.session-controls');
+        logout.textContent = next.logout;
+        if (logout.parentElement !== root) root.replaceChildren(logout);
+    }};
+    return dispose;
 }
 """
 

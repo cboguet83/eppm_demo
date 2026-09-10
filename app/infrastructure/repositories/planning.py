@@ -131,7 +131,7 @@ class SqlitePlanningStore:
 
     def _dependencies(
         self,
-        where: str,
+        selected_tasks_sql: str,
         params: Sequence[object],
         *,
         task_label: bool = True,
@@ -139,15 +139,15 @@ class SqlitePlanningStore:
         label = ", s_task.task_name AS task_name" if task_label else ""
         rows = self.connection.execute(
             f"""
+            WITH selected_tasks AS MATERIALIZED ({selected_tasks_sql})
             SELECT d.id, d.task_id, d.predecessor_task_id, d.predecessor_project_id,
-                   d.link_type, d.lag_days, p_task.task_name AS predecessor_task_name,
-                   p_task.start_date AS pred_start_date, p_task.end_date AS pred_end_date,
-                   p_task.project_id AS pred_task_project_id,
-                   p_proj.name AS predecessor_project_name {label}
-            FROM task_dependencies d JOIN project_task s_task ON d.task_id=s_task.id
-            LEFT JOIN project_task p_task ON d.predecessor_task_id=p_task.id
-            LEFT JOIN project p_proj ON d.predecessor_project_id=p_proj.id
-            {where}
+                   d.link_type, d.lag_days,
+                   (SELECT task_name FROM project_task p WHERE p.id=d.predecessor_task_id) AS predecessor_task_name,
+                   (SELECT start_date FROM project_task p WHERE p.id=d.predecessor_task_id) AS pred_start_date,
+                   (SELECT end_date FROM project_task p WHERE p.id=d.predecessor_task_id) AS pred_end_date,
+                   (SELECT project_id FROM project_task p WHERE p.id=d.predecessor_task_id) AS pred_task_project_id,
+                   (SELECT name FROM project p WHERE p.id=d.predecessor_project_id) AS predecessor_project_name {label}
+            FROM selected_tasks s_task CROSS JOIN task_dependencies d ON d.task_id=s_task.id
         """,
             params,
         )
@@ -155,20 +155,24 @@ class SqlitePlanningStore:
 
     def get_dependencies_for_project(self, project_id: int) -> list[DependencySchedule]:
         """Read a project's enriched incoming links."""
-        return self._dependencies("WHERE s_task.project_id=?", (project_id,))
+        return self.get_dependencies_for_projects([project_id])
 
     def get_dependencies_for_projects(self, project_ids: list[int]) -> list[DependencySchedule]:
         """Batch incoming links without loading unrelated tasks."""
         if not project_ids:
             return []
         return self._dependencies(
-            "WHERE s_task.project_id IN (SELECT value FROM json_each(?))",
+            "SELECT DISTINCT s_task.id,s_task.task_name FROM json_each(?) requested "
+            "CROSS JOIN project_task s_task ON s_task.project_id=requested.value",
             (json.dumps(project_ids),),
         )
 
     def get_task_dependencies(self, task_id: int) -> list[DependencySchedule]:
         """Read enriched predecessor dates for one task."""
-        return self._dependencies("WHERE d.task_id=?", (task_id,), task_label=False)
+        return self._dependencies(
+            "SELECT s_task.id,s_task.task_name FROM project_task s_task WHERE s_task.id=?",
+            (task_id,), task_label=False,
+        )
 
     def get_project_date_bounds(self, project_id: int) -> tuple[str | None, str | None]:
         """Aggregate one project's schedule dates."""
@@ -393,14 +397,36 @@ class SqlitePlanningStore:
         ]
 
     def read_task_bundle(self, project_ids: list[int]) -> PlanningTaskBundle:
-        """Reuse typed stores on the same connection for bounded task hydration."""
+        """Read bounded task rows and all required display metadata in one transaction."""
         tasks = self.get_milestones_for_projects(project_ids)
         task_ids = [task["id"] for task in tasks]
+        dependencies = self.get_dependencies_for_projects(project_ids)
+        bound_ids = set(project_ids) | {
+            link["predecessor_project_id"] for link in dependencies
+            if link.get("predecessor_project_id") and not link.get("predecessor_task_id")
+        }
+        project_bounds: ProjectBounds = {str(pid): (None, None) for pid in bound_ids}
+        project_bounds.update({
+            str(row[0]): (row[1], row[2]) for row in self.connection.execute(
+                "SELECT project_id,MIN(start_date),MAX(end_date) FROM project_task "
+                "WHERE project_id IN (SELECT value FROM json_each(?)) GROUP BY project_id",
+                (json.dumps(sorted(bound_ids)),),
+            )
+        })
+        project_names: dict[int, str] = dict(self.connection.execute(
+            "SELECT id,name FROM project WHERE id IN (SELECT value FROM json_each(?))", (json.dumps(project_ids),),
+        ))
+        tags = SqliteTagStore(self.connection)
+        resources = SqliteResourcePoolStore(self.connection)
         return PlanningTaskBundle(
             tasks,
-            self.get_dependencies_for_projects(project_ids),
-            SqliteTagStore(self.connection).get_task_tags_by_task_ids(task_ids),
-            SqliteResourcePoolStore(self.connection).get_task_assignments_map(task_ids),
+            dependencies,
+            tags.get_task_tags_by_task_ids(task_ids),
+            resources.get_task_assignments_map(task_ids),
+            project_names=project_names,
+            project_bounds=project_bounds,
+            project_tags=tags.get_project_tags_by_project_ids(project_ids),
+            project_pools=resources.get_project_assignments_map(project_ids),
         )
 
 

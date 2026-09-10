@@ -58,6 +58,14 @@ discovers ASGI applications through constructor assignments in the module's AST;
 an application returned only by a factory is not discovered. A test calls the
 installed discovery implementation to protect this startup contract.
 
+Browser security middleware preserves Streamlit's own immutable caching for
+successful, cookie-free public JavaScript/CSS bundle responses on its reserved
+`/static/js/` and `/static/css/` routes, including conditional reads. Initial HTML,
+authentication and business responses, downloads, errors and cookie-setting
+responses retain `no-store`. A missing bundle's HTML fallback cannot become
+immutable. This prevents the authentication middleware from forcing repeated
+downloads of framework code without caching user data.
+
 Local Keycloak and EPPM share a Compose network namespace and expose loopback
 ports. Browser and server use the same `http://localhost:<provider-port>` issuer.
 The imported client retains Keycloak's `basic` scope to supply `auth_time` alongside
@@ -236,6 +244,13 @@ C4Component
 The authenticated shell, business transaction guards, scoped caches and download
 routes are connected. Project dialogs, collaboration actions, and planning controls
 use current permission projections; their callbacks still reauthorize stored targets.
+Gantt task batches reuse one authorized snapshot for task and project display
+metadata. Dependency queries start from bounded successor tasks and retain indexed
+visibility checks for both stored endpoints. Task-owned tags, allocations and
+legacy predecessor references use equivalent indexed ownership checks. These are
+read-query optimizations within the existing guards, not a change to role policy.
+Capacity enrichment is restricted to the requested tasks' pools and still includes
+every authorized consuming project needed for those pools' warnings.
 Account/access screens use the five existing language catalogs. Public and pending
 screens provide the same session-local language selector as the application shell.
 See the [deployment guide](../implementation/access-deployment.md) and
@@ -270,3 +285,24 @@ verification results, limitations, and production responsibilities.
   resource Settings dialogs, empty planning portfolios, and schema deletion during
   saving. Capacity race tests verify that changed scopes/inputs cannot publish stale
   results. The permission inventory includes all 213 public business-service methods.
+- The display responsiveness follow-up uses transactional business/security
+  revisions instead of SQLite file fingerprints. Current session/scope checks
+  remain mandatory on every protected cache lookup; session activity and derived
+  cache writes no longer reset portfolio paging or Gantt scope. Existing databases
+  receive the additive revision triggers through the deployment migration command.
+  Combined validation covers 1,098 Python tests (the full run plus corrected
+  lifecycle fixtures), 25 JavaScript paging/scrolling tests, and a live authenticated
+  check on 10,001 projects. Statement coverage remains 99.02% (10,500/10,604).
+- Expanded Gantt task hydration uses a bounded, same-origin authenticated HTTP
+  route to avoid Streamlit reruns while scrolling. Each batch uses current
+  `project.read` authorization and verifies business/security freshness before
+  delivery; edits retain transaction-bound service checks. Login/logout audit
+  events no longer change the global permission revision, while each session is
+  still revalidated on traffic. This prevents unrelated browser activity from
+  resetting a page. Live verification observed four task batches with zero
+  reruns and preserved the page across another browser's login/logout.
+- Final follow-up validation: 1,127 Python tests and 14 subtests passed, with one
+  opt-in skip; 42 focused JavaScript tests passed. Coverage is 99.03%
+  (10,578/10,682). Trusted wheel input now counts as activity in same-origin
+  frames; temporary session-check failures retain the view for retry, while
+  confirmed denial or account-status changes still end access.

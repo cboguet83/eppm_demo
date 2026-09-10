@@ -5,12 +5,19 @@ them project templates. No portfolio query loads all project property records.
 """
 
 from app.application.services.business_access import BusinessAccess
+from app.application.exceptions import ProjectStorageError
+from contextlib import closing
 import json
+import sqlite3
 from pathlib import Path
 from typing import Any
 
 from app.shared.config import config
 from app.infrastructure.database.project_transactions import project_connection
+from app.infrastructure.database.connection import get_db
+from app.infrastructure.database.display_revision import read_display_revision
+from app.infrastructure.repositories.access import SqliteAccessStore
+from app.domain.access.models import Actor
 from app.infrastructure.database.property_store import parameters
 from app.infrastructure.repositories.budgets import read_budget_totals
 from app.domain.projects.budgets import euro_amount, monetary_statistics
@@ -21,28 +28,26 @@ from app.application.ports.portfolio import (
 from typing import cast
 
 
-def portfolio_revision(db_path: str | None) -> tuple:
-    """Track SQLite commits even when filesystem timestamps do not advance.
+def portfolio_revision(db_path: str | None, *, access: BusinessAccess | None = None) -> tuple:
+    """Track display inputs without invalidating on session activity or cache writes.
 
-    Include the database change counter and WAL/index headers alongside file
-    metadata. The WAL index tracks commits when an existing WAL is reused.
-    See https://www.sqlite.org/fileformat.html and /walformat.html.
+    Protected callers recheck the current session and scope in the same snapshot
+    as the business/security revision. This metadata read needs no temporary
+    business views or write triggers; actual business queries retain those guards.
     """
     path = Path(db_path or config.db_path).resolve()
-    result = [str(path)]
-    for filename, header_size in (
-        (path, 28),
-        (Path(str(path) + '-wal'), 32),
-        (Path(str(path) + '-shm'), 48),
-    ):
-        try:
-            stat = filename.stat()
-            with filename.open('rb') as source:
-                header = source.read(header_size).hex()
-            result.append((stat.st_mtime_ns, stat.st_size, stat.st_ino, header))
-        except FileNotFoundError:
-            result.append(None)
-    return tuple(result)
+    try:
+        with closing(get_db(str(path))) as connection, connection:
+            connection.execute("BEGIN")
+            scope = ()
+            if access is not None:
+                projects = access.projects(SqliteAccessStore(connection))
+                actor = access.actor
+                identity = (actor.user_id, actor.session_hash) if isinstance(actor, Actor) else ("deployment",)
+                scope = (identity, tuple(sorted(projects)))
+            return (str(path), *read_display_revision(connection), *scope)
+    except sqlite3.DatabaseError as exc:
+        raise ProjectStorageError("Project display data could not be accessed. Please try again.") from exc
 
 
 class SqlitePortfolioReader:
@@ -177,14 +182,7 @@ class SqlitePortfolioReader:
 
     def revision(self) -> tuple:
         """Reauthorize before cache lookup and isolate revisions by trusted actor/scope."""
-        from app.domain.access.models import Actor
-        from app.infrastructure.repositories.access import SqliteAccessStore
-
-        with project_connection(self.db_path, access=self.access) as conn:
-            projects = self.access.projects(SqliteAccessStore(conn))
-            actor = self.access.actor
-            identity = (actor.user_id, actor.session_hash) if isinstance(actor, Actor) else ("deployment",)
-            return portfolio_revision(self.db_path) + (identity, tuple(sorted(projects)))
+        return portfolio_revision(self.db_path, access=self.access)
 
     def get_detail(self, project_id: int) -> PortfolioRow | None:
         """Read one project summary using the same manager labels as the grid."""

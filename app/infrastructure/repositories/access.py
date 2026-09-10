@@ -191,7 +191,11 @@ class SqliteAccessStore:
         """Append required audit in the same transaction; failure aborts its mutation."""
         self._execute("INSERT INTO app_security_audit(occurred_at,actor,target,action,outcome,correlation_id,details_json) VALUES(?,?,?,?,?,?,?)",
             (now, actor, target, action, outcome, correlation_id, json.dumps(dict(details), ensure_ascii=True, sort_keys=True)))
-        self._execute("UPDATE app_security_state SET revision=revision+1 WHERE id=1")
+        # These events change one session, whose validity is checked directly on
+        # every transport message. They do not change anyone's permissions and
+        # must not invalidate unrelated Streamlit runtimes or display caches.
+        if action not in {"authentication.success", "session.logout"}:
+            self._execute("UPDATE app_security_state SET revision=revision+1 WHERE id=1")
 
     def list_audit(self, limit: int = 100) -> list[dict[str, object]]:
         """Read a bounded audit history; no update/delete API exists."""

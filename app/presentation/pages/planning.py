@@ -38,6 +38,7 @@ from app.domain.planning.rules import normalize_progress
 from app.presentation.components.property_labels import property_label
 from app.presentation.components.planning_events import validate_event
 from app.presentation.components.planning_workspace import PlanningWorkspace
+from app.presentation.components.planning_transport import planning_revision_token
 from app.presentation.components.project_dialogs import open_edit_project_dialog
 from app.presentation.components.resource_pool_frames import (
     pools_frame,
@@ -1240,6 +1241,13 @@ def _render_planning_chart(
     widget_key = "planning_lazy_gantt"
     snapshot = st.session_state.get("planning_chart_snapshot")
     event = st.session_state.pop("planning_pending_change", None)
+    # HTTP task reads update only the browser. Carry its bounded working set into
+    # subsequent edit events so edited/dependent loaded rows receive their patches.
+    component_event = st.session_state.get(widget_key)
+    if snapshot and isinstance(component_event, dict) and component_event.get("scope_token") == snapshot["token"]:
+        loaded = component_event.get("loaded_project_ids")
+        if isinstance(loaded, list):
+            snapshot["loaded"] = list(dict.fromkeys(pid for pid in loaded[-100:] if type(pid) is int and pid in ids))
     revision = workspace.revision()
     unchanged_scope = snapshot is not None and snapshot["scope"] == scope
     known_edit = (
@@ -1280,6 +1288,9 @@ def _render_planning_chart(
             resource_pool_hierarchy=hierarchy,
             active_resource_filter=st.session_state.get("active_resource_pool_filter"),
             data_revision=snapshot["token"],
+            task_endpoint="/api/planning/tasks",
+            task_revision=planning_revision_token(snapshot["revision"]),
+            view_scope=planning_revision_token(scope),
         )
     else:
         args = {}
@@ -1365,6 +1376,7 @@ def _render_planning_chart(
         args["dependency_response"] = response
     pool_details_cache = snapshot["details"]
     permissions = workspace.projects.projects.permissions()
+    args["task_revision"] = planning_revision_token(snapshot["revision"])
     gantt_event = _interactive_gantt(
         **args,
         permissions={"edit_all": permissions.allows(Permission.EDIT),

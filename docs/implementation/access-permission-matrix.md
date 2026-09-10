@@ -30,7 +30,7 @@ remain `shared`; project workflow callers use separate reference projections.
 | ProjectService | `generate_project_id`, `create_project` | global `project.create` |
 | ProjectService | `update_project` | edit; changed scope-eligible values/type additionally require `project.protected_properties` and audit |
 | ProjectService | `delete_project` | global `project.delete`; all dependent mutations authorized in the transaction |
-| PortfolioService | `revision`, `get_metrics`, `get_page`, `get_facet`, `get_detail` | read; current security context participates in every cache key |
+| PortfolioService | `revision`, `get_metrics`, `get_page`, `get_facet`, `get_detail`, `get_allocation_badges` | read; current security context participates in every cache key; deferred badges reject a revision change during calculation |
 | PortfolioService | `get_catalog` | reference; no full organization records |
 | PlanningService | `export_schedule`, `export_project_template` | read; download delivery reauthorizes on fetch |
 | PlanningService | `validate_project_template` | edit; all supplied cross-project references must be authorized; no changes |
@@ -38,7 +38,7 @@ remain `shared`; project workflow callers use separate reference projections.
 | PlanningService | `create_milestone`, `update_milestone`, `save_task_dependencies`, `add_dependency`, `update_dates`, `update_progress`, `delete_milestone` | edit; stored owners and all changed dependency endpoints |
 | PlanningService | `related_project_ids`, `get_milestones_by_project`, `search_task_choices`, `get_all_milestones`, `get_dependencies_for_project`, `get_task_dependencies` | read; hidden dependency endpoints and labels are excluded |
 | PlanningService | `get_project_date_bounds`, `get_all_project_date_bounds`, `get_all_external_tasks_map`, `get_milestones_for_projects`, `get_dependencies_for_projects`, `get_milestone_by_id` | read |
-| PlanningService | `get_project_summaries`, `affected_task_projects`, `consuming_pool_ids`, `read_task_bundle` | read; derived cache refresh is not permission to mutate business data |
+| PlanningService | `get_project_summaries`, `affected_task_projects`, `consuming_pool_ids`, `read_task_bundle` | read; task bundles include scoped project labels, metadata and whole-project predecessor bounds in the same snapshot; derived cache refresh is not permission to mutate business data |
 | PlanningService | `get_totals` | read; totals use scoped project/task/dependency/allocation views |
 | Database initialization | `ensure_planning_indexes` | deployment maintenance; unavailable through planning services or browser workflows |
 | BudgetService | `get_report` | read; scope before financial totals |
@@ -92,9 +92,20 @@ notes, dictionary usage counts, and unrelated project assignments.
 | Registration, status changes, grants, revocations | Current global `access.manage`, recent verified authentication, production MFA; atomic audit and last-admin continuity |
 | Bootstrap/recovery/account inspection CLI | Explicit deployment operator context; no HTTP route; bootstrap once and recovery with reason |
 | WebSocket/widget/custom-component callbacks | Server-resolved actor; overwritten trusted identity header binds reconnects to the browser session and security revision; incoming and outgoing messages revalidate session/status/revision; operation-specific transaction checks remain mandatory |
+| Gantt task batches (`POST /api/planning/tasks`) | Same-origin authenticated request, maximum 4 KiB and 25 positive project IDs; current `project.read` for every requested project; current business/security revision before and after reads; no-store response; no session-activity extension or Streamlit rerun |
+| Portfolio capacity badges (`POST /api/portfolio/allocations`) | Same bounded authenticated transport as task batches; current `project.read` for every requested project; scoped capacity inputs; business/security revision checked before and after calculation; no-store response; no session-activity extension or Streamlit rerun |
 | CSV/import/bulk/download | Same permissions as direct service calls; a bounded 2 MiB UTF-8 CSV component payload replaces native file uploads; import validation precedes mutation; authenticated attachment route regenerates and authorizes exports on fetch |
 | Native media, native upload, metrics URLs | Denied; business downloads use the authenticated attachment route |
 | Cached content/fragments/background work | Current session and effective scope; user/security revision isolation; background work never extends user activity |
+
+Login and logout remain atomically audited but do not increment the global
+permission revision. Each transport independently rechecks its own session, so
+logout still closes all tabs sharing that cookie without disconnecting unrelated
+sessions. Role/status/protected-scope changes retain revision invalidation.
+Trusted wheel input in same-origin frames counts as explicit activity, subject to
+the same ten-second throttle as clicks and keys. Synthetic input and background
+reads do not. A temporary network/5xx session-check failure retains the view for
+retry; confirmed 401/403 and account-status changes still leave the protected page.
 
 `project.approve` is reserved for an existing approval workflow if one is found.
 The inspected application has no approval state transition to authorize. Granting

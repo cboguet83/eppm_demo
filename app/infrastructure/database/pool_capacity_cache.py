@@ -10,6 +10,7 @@ import json
 from pathlib import Path
 import sqlite3
 from threading import RLock
+from typing import cast
 from uuid import uuid4
 
 from app.application.exceptions import ResourcePoolStorageError
@@ -179,7 +180,7 @@ class SqliteCapacityCache:
 
     def _load_for_actor(self, calculate: CapacityCalculation, *, details: bool,
                         pool_ids: list[int] | None) -> CapacityResult:
-        """Isolate derived results by current actor/scope and never reuse global JSON blobs."""
+        """Reuse pool calculations across page subsets within one current actor/scope."""
         path = str(Path(self.db_path or config.db_path).resolve())
         subset = tuple(sorted(set(pool_ids))) if pool_ids is not None else None
         day = self.today()
@@ -193,26 +194,29 @@ class SqliteCapacityCache:
                         selected = [value for value in selected if value in subset]
                     revision = _capacity_security_revision(conn)
                 key = (path, revision, self.access.actor.user_id, self.access.actor.session_hash,
-                       tuple(sorted(allowed)), day.isoformat(), details, subset)
-                if key in self.state.entries:
-                    self.state.entries.move_to_end(key)
-                    return deepcopy(self.state.entries[key])
-                calculated = calculate(selected, day)
-                with closing(get_db(path)) as conn, conn:
-                    conn.execute("BEGIN")
-                    current = self.access.projects(SqliteAccessStore(conn))
-                    if current != allowed or _capacity_security_revision(conn) != revision:
-                        continue
-                if details:
-                    result = calculated
-                else:
-                    columns = {field.name for field in fields(PoolCapacitySummary)}
-                    result = [PoolCapacitySummary(**{key: value for key, value in asdict(item).items() if key in columns})
-                              for item in calculated]
-                self.state.entries[key] = deepcopy(result)
+                       tuple(sorted(allowed)), day.isoformat(), "scoped-pool-details")
+                # Every entry under this key contains details. Summaries are a
+                # cheap projection, so reading a badge never discards its calculation.
+                cached = cast(list[PoolCapacityDetail], self.state.entries.get(key, []))
+                by_pool = {item.pool_id: item for item in cached}
+                missing = [pool_id for pool_id in selected if pool_id not in by_pool]
+                if missing:
+                    calculated = calculate(missing, day)
+                    with closing(get_db(path)) as conn, conn:
+                        conn.execute("BEGIN")
+                        current = self.access.projects(SqliteAccessStore(conn))
+                        if current != allowed or _capacity_security_revision(conn) != revision:
+                            continue
+                    by_pool.update((item.pool_id, deepcopy(item)) for item in calculated)
+                self.state.entries[key] = list(by_pool.values())
+                self.state.entries.move_to_end(key)
                 while len(self.state.entries) > 8:
                     self.state.entries.popitem(last=False)
-                return result
+                result = [by_pool[pool_id] for pool_id in selected if pool_id in by_pool]
+                if details:
+                    return deepcopy(result)
+                return [PoolCapacitySummary(**{field.name: getattr(item, field.name)
+                                               for field in fields(PoolCapacitySummary)}) for item in result]
         raise ResourcePoolStorageError("Pool data changed while calculating capacity; please retry.")
 
     def _load(

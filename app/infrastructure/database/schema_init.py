@@ -680,9 +680,11 @@ def init_db(db_path: Optional[str] = None) -> None:
         migrate_access(conn)
         from app.infrastructure.database.planning_summary_cache import ensure_planning_indexes
         from app.infrastructure.database.pool_capacity_cache import install_capacity_cache
+        from app.infrastructure.database.display_revision import install_display_revision
 
         ensure_planning_indexes(conn)
         install_capacity_cache(conn)
+        install_display_revision(conn)
         conn.commit()
         conn.execute("PRAGMA foreign_keys = ON")
     logger.info("Schema initialization complete")

@@ -7,6 +7,7 @@ from app.domain.access.models import Permission
 from app.application.services.business_access import BusinessAccess
 from collections.abc import Iterator
 from contextlib import closing, contextmanager
+import json
 import sqlite3
 
 from app.application.exceptions import ResourcePoolConflictError, ResourcePoolStorageError
@@ -280,6 +281,8 @@ class SqliteResourcePoolStore:
         project_id: int | None = None,
         task_id: int | None = None,
         only_project_level: bool = False,
+        *,
+        pool_ids: Collection[int] | None = None,
     ) -> list[AssignmentRow]:
         """Retrieves resource pool assignments with optional filters."""
         conn = self.connection
@@ -306,7 +309,10 @@ class SqliteResourcePoolStore:
             LEFT JOIN project_task pt ON rpa.task_id = pt.id
             WHERE 1=1
         """
-        params: list[int] = []
+        params: list[int | str] = []
+        if pool_ids is not None:
+            query += " AND rpa.pool_id IN (SELECT value FROM json_each(?))"
+            params.append(json.dumps(list(pool_ids)))
         if pool_id is not None:
             query += " AND rpa.pool_id = ?"
             params.append(pool_id)

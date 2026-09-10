@@ -5,7 +5,7 @@ from app.domain.access.models import Permission
 
 
 from contextlib import AbstractContextManager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import NotRequired, Protocol, TypedDict
 
 from app.domain.planning.records import (
@@ -59,12 +59,16 @@ class ProjectSummary(TypedDict):
 
 @dataclass
 class PlanningTaskBundle:
-    """Tasks and their related links read from one source snapshot."""
+    """Tasks, display metadata, and referenced project bounds from one snapshot."""
 
     tasks: list[TaskRow]
     dependencies: list[DependencySchedule]
     tags: dict[int, list[TagLink]]
     pools: dict[int, list[AssignmentLink]]
+    project_names: dict[int, str] = field(default_factory=dict)
+    project_bounds: ProjectBounds = field(default_factory=dict)
+    project_tags: dict[int, list[TagLink]] = field(default_factory=dict)
+    project_pools: dict[int, list[AssignmentLink]] = field(default_factory=dict)
 
 
 class PlanningTotals(TypedDict):

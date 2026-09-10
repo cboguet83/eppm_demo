@@ -83,6 +83,23 @@ def test_live_messages_close_after_revocation_expiry_or_permission_change(transp
         assert failure.value.code == 1008
 
 
+def test_other_browser_login_and_logout_do_not_disconnect_an_existing_page(transport):
+    browser, access, _, cookie, settings, _, path = transport
+    _, _, revision = access.browser_identity(cookie)
+    with browser.websocket_connect("ws://localhost:8501/_stcore/stream", headers={"origin": settings.origin}) as socket:
+        socket.receive_text()
+        other_cookie = access.sign_in(VerifiedIdentity(settings.issuer, "other-browser", "", "Other", 1000, 100000, True))
+        socket.send_text("still on the same page after another login")
+        assert socket.receive_text() == "still on the same page after another login"
+        access.logout(access.actor(other_cookie))
+        socket.send_text("still on the same page after another logout")
+        assert socket.receive_text() == "still on the same page after another logout"
+    assert access.browser_identity(cookie)[2] == revision
+    with closing(get_db(path)) as connection:
+        actions = [row[0] for row in connection.execute("SELECT action FROM app_security_audit")]
+    assert actions.count("authentication.success") == 2 and "session.logout" in actions
+
+
 def test_anonymous_connection_cannot_forge_a_previous_runtime_owner(transport):
     browser, access, _, cookie, settings, _, _ = transport
     identity, state, revision = access.browser_identity(cookie)

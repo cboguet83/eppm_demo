@@ -21,8 +21,9 @@ from app.presentation.pages.tags import (
 )
 
 
+@st.fragment
 def render_settings_view(workspace: SettingsWorkspace) -> None:
-    """Renders the Settings screen with sections for Organization Structure and Parameter Definition."""
+    """Switch Settings sections without rerunning navigation or portfolio totals."""
     st.header(f"⚙️ {t('settings.title', default='Settings')}")
     default_section_idx = 0
     if st.session_state.get("settings_active_section") == "parameters":
