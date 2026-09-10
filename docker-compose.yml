@@ -5,12 +5,15 @@ services:
       context: .
       dockerfile: Dockerfile
     restart: unless-stopped
+    entrypoint: ["python", "-m", "scripts.run_app"]
     ports:
       - "127.0.0.1:8501:8501"
     environment:
       - DB_NAME=/app/data/ppm_mock.db
       - LOG_LEVEL=INFO
       - APP_ENV=${APP_ENV:-production}
+      - APP_RUN_MODE=${APP_RUN_MODE:-auto}
+      - APP_FILE_WATCHER_TYPE=${APP_FILE_WATCHER_TYPE:-}
       - APP_ORIGIN=${APP_ORIGIN:?Configure the application origin}
       - APP_COOKIE_SECRET=${APP_COOKIE_SECRET:?Configure a random cookie secret}
       - OIDC_ISSUER=${OIDC_ISSUER:?Configure the exact provider issuer}

@@ -1,7 +1,6 @@
 # Local OIDC overlay: docker compose --env-file .local/oidc.env -f docker-compose.yml -f docker-compose.oidc.yml up
 services:
   app:
-    entrypoint: ["streamlit", "run", "asgi_app.py"]
     # Both processes and the host browser use the same exact localhost issuer.
     # Publishing belongs to the shared network namespace's owning service.
     network_mode: service:keycloak
@@ -37,6 +36,7 @@ services:
       KEYCLOAK_ALEX_PASSWORD: ${KEYCLOAK_ALEX_PASSWORD:?Configure the fictional admin user password}
       KEYCLOAK_SAM_PASSWORD: ${KEYCLOAK_SAM_PASSWORD:?Configure the fictional editor user password}
       KEYCLOAK_ROBIN_PASSWORD: ${KEYCLOAK_ROBIN_PASSWORD:?Configure the fictional viewer user password}
+      KEYCLOAK_CLEMENT_PASSWORD: ${KEYCLOAK_CLEMENT_PASSWORD:?Configure the fictional Clement user password}
     volumes:
       - ./deployment/keycloak/eppm-realm.json:/opt/keycloak/data/import/eppm-realm.json:ro
       - keycloak-local-data:/opt/keycloak/data

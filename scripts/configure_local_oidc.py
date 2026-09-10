@@ -19,7 +19,8 @@ def local_environment(origin: str = "http://localhost:8501", *, provider_port: i
         raise ValueError("The local provider port must be between 1024 and 65535.")
     if parsed.port is None or not 1024 <= parsed.port <= 65535 or parsed.port == provider_port:
         raise ValueError("Choose distinct application and provider ports between 1024 and 65535.")
-    values = {"APP_ENV": "development", "APP_ORIGIN": origin,
+    values = {"APP_ENV": "development", "APP_RUN_MODE": "auto",
+              "APP_FILE_WATCHER_TYPE": "", "APP_ORIGIN": origin,
               "OIDC_ISSUER": f"http://localhost:{provider_port}/realms/eppm",
               "OIDC_LOCAL_PORT": str(provider_port), "APP_LOCAL_PORT": str(parsed.port),
               "OIDC_CLIENT_ID": "eppm", "OIDC_ALLOW_LOCAL_HTTP": "true",
