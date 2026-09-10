@@ -186,6 +186,7 @@
     "settings": "Astellungen"
   },
   "portfolio": {
+    "planning_resources_details": "Detailer zur Planung an de Ressourcen",
     "title": "Portefeuille Analytik & Dynamesch Iwwersiicht",
     "kpi_total_projects": "Total Projeten",
     "kpi_planned_budget": "Geplangte Gesamtbudget",

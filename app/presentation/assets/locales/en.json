@@ -186,6 +186,7 @@
     "settings": "Settings"
   },
   "portfolio": {
+    "planning_resources_details": "Planning & resources details",
     "title": "Portfolio Overview",
     "kpi_total_projects": "Total Projects",
     "kpi_planned_budget": "Total Planned Budget",

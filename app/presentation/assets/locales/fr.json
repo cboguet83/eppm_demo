@@ -186,6 +186,7 @@
     "settings": "Paramètres"
   },
   "portfolio": {
+    "planning_resources_details": "Détails du planning et des ressources",
     "title": "Analytique du Portefeuille & Vue Dynamique",
     "kpi_total_projects": "Projets Totaux",
     "kpi_planned_budget": "Budget Planifié Total",

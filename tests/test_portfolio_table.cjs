@@ -188,7 +188,9 @@ test('overallocation is an indicator and navigation uses the project context men
   assert.equal(warning.onclick, undefined);
   assert.equal(warning.tag, 'span');
   let stopped = 0;
-  app.root.querySelector('.project-menu-button').onclick({preventDefault() {}, stopPropagation() {stopped++;}});
+  assert.equal(app.root.querySelector('.project-menu-button'), undefined);
+  const firstRow = app.root.querySelectorAll('tr').find(r => r.dataset.projectId === '1');
+  firstRow.oncontextmenu({preventDefault() {}, stopPropagation() {stopped++;}});
   assert.deepEqual(app.ganttClicks, []);
   app.button('View resource overallocation in Gantt').onclick({stopPropagation() {stopped++;}});
   assert.deepEqual(app.ganttClicks, [1]);

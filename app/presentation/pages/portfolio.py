@@ -19,6 +19,7 @@ from app.domain.projects.budgets import BudgetAmounts, analyze_budget, euro_amou
 from app.domain.projects.links import normalize_link
 from app.domain.projects.project import Project
 from app.presentation.i18n import get_current_locale, t
+from app.presentation.navigation import PAGE_PLANNING
 from app.presentation.components.property_labels import localize_parameters, parameter_groups, property_label
 from app.presentation.components.project_workspace import ProjectWorkspace
 from app.presentation.components.project_type_frames import template_frame
@@ -175,7 +176,7 @@ def _draw_project_details(selected_proj: pd.Series, workspace: ProjectWorkspace)
     variance = analysis.variance
     burn_rate_label = f"{analysis.burn_rate:.1f}%" if analysis.burn_rate is not None else "—"
 
-    head_c1, head_c2 = st.columns([4, 1])
+    head_c1, head_c2 = st.columns([3, 2])
     with head_c1:
         st.subheader(f"📌 {t('portfolio.details_title', default='Project Details')}: #{proj_id} — {proj_name}")
     with head_c2:
@@ -211,11 +212,30 @@ def _render_project_edit_action(project_id: int, workspace: ProjectWorkspace) ->
         current = _detail_content.get()
         can_edit = (current[2].can_edit if current is not None and current[:2] == (id(workspace), project_id)
                     else workspace.projects.permissions().allows(Permission.EDIT, project_id))
-        if can_edit:
-            st.button("Edit details", key=f"btn_edit_details_{project_id}", width="stretch",
-                      on_click=begin_project_dialog, args=(workspace, project_id))
+        edit, planning = st.columns([1, 2])
+        with edit:
+            if can_edit:
+                st.button("Edit details", key=f"btn_edit_details_{project_id}", width="stretch",
+                          on_click=begin_project_dialog, args=(workspace, project_id))
+        with planning:
+            if st.button(t("portfolio.planning_resources_details"),
+                         key=f"btn_planning_details_{project_id}", width="stretch"):
+                _open_project_planning(project_id, workspace)
     except (ValueError, ProjectStorageError, ProjectTypeStorageError, SchemaStorageError) as exc:
         st.error(str(exc))
+
+
+def _open_project_planning(project_id: int, workspace: ProjectWorkspace) -> None:
+    """Navigate to an authorized project, replacing stale planning focus filters."""
+    if workspace.projects.get_project_by_id(project_id) is None:
+        return
+    for key in ("active_resource_pool_filter", "pending_resource_pool_filter",
+                "pending_clear_resource_pool_filter", "pending_project_context_filter",
+                "target_planning_task_id"):
+        st.session_state.pop(key, None)
+    st.session_state["target_planning_project_id"] = project_id
+    st.session_state["nav_redirect"] = PAGE_PLANNING
+    st.rerun()
 
 
 @st.fragment
@@ -379,13 +399,8 @@ def _portfolio_grid(workspace: ProjectWorkspace, columns: list[dict], search: st
                                      str(request.get("search") or ""), workspace.portfolio)
     gantt_project = (component_state.get("gantt_click") if isinstance(component_state, dict)
                      else getattr(component_state, "gantt_click", None))
-    if (type(gantt_project) is int and gantt_project > 0
-            and workspace.projects.get_project_by_id(gantt_project) is not None):
-        st.session_state["target_planning_project_id"] = int(gantt_project)
-        st.session_state.pop("active_resource_pool_filter", None)
-        st.session_state.pop("pending_resource_pool_filter", None)
-        st.session_state["nav_redirect"] = "2. Planning & Step Loader"
-        st.rerun()
+    if type(gantt_project) is int and gantt_project > 0:
+        _open_project_planning(gantt_project, workspace)
     portfolio_project_table(
         page["rows"], columns, st.session_state.get(_SELECTED_PROJECT_KEY),
         key=_PORTFOLIO_TABLE_KEY,

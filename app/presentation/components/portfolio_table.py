@@ -54,10 +54,6 @@ td { height: 40px; }
     margin-right: 0.4rem;
     padding: 0 0.15rem;
 }
-.project-menu-button {
-    float: right; background: transparent; color: var(--st-text-color);
-    border: 0; cursor: pointer; font-size: 18px; line-height: 20px;
-}
 .project-context-menu button {display: block; width: 100%; text-align: left;}
 .allocation-status {font-size: 0.78rem;}
 .allocation-status button {
@@ -466,15 +462,6 @@ export default function(component) {
                         const name = document.createElement('span'); name.textContent = text;
                         td.append(warning, name);
                     } else td.textContent = text;
-                    if (column.key === 'name') {
-                        const menuButton = document.createElement('button'); menuButton.type = 'button';
-                        menuButton.className = 'project-menu-button'; menuButton.textContent = '⋯';
-                        menuButton.setAttribute('aria-label', 'Project actions: ' + row.name);
-                        menuButton.setAttribute('aria-haspopup', 'menu');
-                        menuButton.onclick = event => showProjectMenu(event, row);
-                        menuButton.onkeydown = event => event.stopPropagation();
-                        td.appendChild(menuButton);
-                    }
                     tr.appendChild(td);
                 });
             }

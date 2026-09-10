@@ -1,5 +1,7 @@
 """Browser session controls and public account-state views."""
 
+import html
+
 import streamlit as st
 
 from app.application.services.access import AccessService
@@ -113,7 +115,12 @@ def account_gate(service: AccessService, cookie: str) -> Actor | None:
     except AccessDenied:
         render_language_selector()
         st.title(t("auth.title", default="Sign in to EPPM"))
-        st.link_button(t("auth.sign_in", default="Sign in"), "/auth/login", type="primary")
+        st.html(
+            '<a href="/auth/login" target="_self" style="display:inline-block;'
+            'background:#C41039;color:white;border-radius:6px;padding:8px 14px;'
+            'font:inherit;text-decoration:none">'
+            + html.escape(t("auth.sign_in", default="Sign in")) + '</a>'
+        )
         return None
     with st.sidebar:
         st.caption(t("auth.signed_in", default="Signed in as"))

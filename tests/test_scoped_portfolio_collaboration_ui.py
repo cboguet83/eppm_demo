@@ -122,6 +122,32 @@ def test_portfolio_navigation_resolves_current_read_scope(business, field, proje
             assert ("btn_edit_details_1" in buttons) == (field == "row_click" and project_id == 1)
 
 
+@pytest.mark.parametrize("read_only", [False, True])
+def test_planning_shortcut_allows_project_readers_and_replaces_stale_focus(business, read_only):
+    path, service, admin, editor, _ = business
+    if read_only:
+        for assignment in service.assignments(admin, editor.actor.user_id):
+            service.revoke(admin, assignment["id"])
+        service.grant(admin, editor.actor.user_id, "project_viewer",
+                      {"kind": "projects", "project_ids": [1]})
+    with patch("app.presentation.pages.portfolio.portfolio_project_table"):
+        app = AppTest.from_function(portfolio_app, args=(path, editor.actor))
+        app.session_state["portfolio_master_table"] = {"row_click": 1}
+        app.run()
+        assert not app.exception and not app.error
+        assert ("btn_edit_details_1" in [button.key for button in app.button]) == (not read_only)
+        stale_keys = ("active_resource_pool_filter", "pending_resource_pool_filter",
+                      "pending_clear_resource_pool_filter", "pending_project_context_filter",
+                      "target_planning_task_id")
+        for key in stale_keys:
+            app.session_state[key] = {"project_id": 2}
+        app.button(key="btn_planning_details_1").click().run()
+    assert not app.exception and not app.error
+    assert app.session_state["nav_redirect"] == "2. Planning & Step Loader"
+    assert app.session_state["target_planning_project_id"] == 1
+    assert all(key not in app.session_state for key in stale_keys)
+
+
 @pytest.mark.parametrize("offset", ["invalid", [], float("inf")])
 def test_portfolio_facet_requests_and_invalid_offsets_keep_scoped_rows_and_statistics(business, offset):
     path, _, _, editor, _ = business
