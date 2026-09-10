@@ -11,6 +11,16 @@ from app.infrastructure.database.connection import get_db
 from tests.test_business_transaction_security import business as business, scoped_planning_app
 
 
+def filtered_planning_app(path, actor):
+    """Include shell markers to detect full-app reruns from chart callbacks."""
+    import streamlit as st
+    from tests.test_business_transaction_security import scoped_planning_app
+
+    st.sidebar.text("Retained navigation")
+    st.text("Retained page shell")
+    scoped_planning_app(path, actor)
+
+
 @pytest.mark.parametrize("action", ["update_dates", "update_progress"])
 def test_inline_gantt_updates_refresh_only_authorized_tasks_and_pool_demand(business, action):
     path, _, _, editor, _ = business
@@ -58,18 +68,68 @@ def test_lazy_gantt_hydration_discards_invalid_hidden_and_duplicate_project_ids(
 
 
 @pytest.mark.parametrize("filter_scope", ["this", "all", "predecessors"])
-def test_project_context_filter_callback_keeps_authorized_selection_through_full_rerun(business, filter_scope):
+def test_project_context_filter_refreshes_the_planning_fragment_once_with_current_scope(business, filter_scope):
+    from tests.test_fragment_reruns import FragmentRun
+
     path, _, _, editor, _ = business
-    with patch("app.presentation.pages.planning._interactive_gantt", return_value=None) as component:
-        app = AppTest.from_function(scoped_planning_app, args=(path, editor.actor), default_timeout=30).run()
-        app.session_state["before_event"] = {
-            "action": "filter_project", "project_id": 1, "filter_scope": filter_scope, "nonce": "project-filter",
-        }
-        app.run()
-        assert not app.exception and not app.error
-        assert app.session_state["ms_multi_projects"] == [1]
-        assert "Hidden" not in json.dumps(component.call_args.kwargs, default=str)
-        assert "planning_needs_full_rerun" not in app.session_state
+    app = AppTest.from_function(filtered_planning_app, args=(path, editor.actor), default_timeout=30)
+    rerun = FragmentRun("planning_lazy_gantt", widget_json={
+        "action": "filter_project", "project_id": 1, "filter_scope": filter_scope, "nonce": "project-filter",
+    })
+    rerun.run(app)
+    assert not app.error
+    assert app.session_state["ms_multi_projects"] == [1]
+    assert "planning_needs_full_rerun" not in app.session_state
+    deltas = [message.delta for message in rerun.messages if message.WhichOneof("type") == "delta"]
+    assert all(delta.fragment_id for delta in deltas), "Filtering must not rerun the application shell"
+    chart_updates = [delta.new_element.component_instance for delta in deltas if delta.new_element.component_instance.id]
+    assert len(chart_updates) == 1
+    assert "Hidden" not in chart_updates[0].json_args
+    assert not any(message.metadata.delta_path[0] == 1 for message in rerun.messages if message.WhichOneof("type") == "delta")
+
+
+def test_changing_the_chart_selection_reads_current_capacity_once_per_rebuild(business):
+    from app.presentation.components.planning_workspace import PlanningWorkspace
+    from tests.test_fragment_reruns import FragmentRun
+
+    path, access, administrator, editor, _ = business
+    with closing(get_db(path)) as connection, connection:
+        connection.execute("INSERT INTO project(id,name) VALUES(3,'Other visible project')")
+    access.grant(administrator, editor.actor.user_id, "project_viewer", {"kind": "projects", "project_ids": [3]})
+    reads = []
+    original = PlanningWorkspace.pool_details
+
+    def details(workspace, pool_ids=None):
+        reads.append(pool_ids)
+        return original(workspace, pool_ids)
+
+    rerun = FragmentRun("planning_lazy_gantt", widget_json={
+        "action": "filter_project", "project_id": 1, "filter_scope": "all", "nonce": "capacity-filter",
+    })
+    app = AppTest.from_function(filtered_planning_app, args=(path, editor.actor), default_timeout=30)
+    with patch.object(PlanningWorkspace, "pool_details", details):
+        rerun.run(app)
+    assert not app.error
+    assert app.session_state["ms_multi_projects"] == [1]
+    assert len(reads) == 2  # One initial build and one changed selection.
+
+
+def test_project_filter_rechecks_a_disabled_account_without_a_full_application_rerun(business):
+    from tests.test_fragment_reruns import FragmentRun
+
+    path, access, administrator, editor, _ = business
+    rerun = FragmentRun(
+        "planning_lazy_gantt",
+        before_rerun=lambda: access.set_status(administrator, editor.actor.user_id, "disabled"),
+        widget_json={"action": "filter_project", "project_id": 1, "filter_scope": "all", "nonce": "disabled-filter"},
+    )
+    app = AppTest.from_function(filtered_planning_app, args=(path, editor.actor), default_timeout=30)
+    rerun.run(app)
+    assert app.error and "not permitted" in app.error[0].value
+    assert not any(
+        message.delta.new_element.component_instance.id
+        for message in rerun.messages if message.WhichOneof("type") == "delta"
+    )
 
 
 @pytest.mark.parametrize("event", [

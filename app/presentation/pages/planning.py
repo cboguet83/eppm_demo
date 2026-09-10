@@ -152,10 +152,10 @@ def _apply_immediate_gantt_update(
 
 @planning_errors
 def _handle_gantt_component_change(widget_key: str, workspace: PlanningWorkspace) -> None:
-    """Handle inline Gantt mutations in the component callback.
+    """Route filters and inline Gantt mutations before the automatic rerun.
 
-    Component callbacks run before Streamlit executes the automatic rerun, so
-    the rebuilt Gantt immediately reads the newly persisted task values.
+    Filters target the planning workspace so selection widgets update together.
+    Inline edits commit before the chart fragment reads the changed task values.
     """
     gantt_event = st.session_state.get(widget_key)
     if not isinstance(gantt_event, dict) or not isinstance(gantt_event.get("action"), str):
@@ -189,8 +189,8 @@ def _handle_gantt_component_change(widget_key: str, workspace: PlanningWorkspace
             "tasks": load_dependency_choices(workspace, workspace.revision(), project_id),
         }
     elif gantt_event.get("action") == "filter_project":
-        _focus_planning_on_project(gantt_event, workspace)
-        st.session_state["planning_needs_full_rerun"] = True
+        st.session_state["pending_project_context_filter"] = gantt_event
+        st.rerun("planning_workspace")
     else:
         before = workspace.revision()
         if _apply_immediate_gantt_update(gantt_event, workspace):
@@ -1232,8 +1232,6 @@ def _render_planning_chart(
 ) -> None:
     from uuid import uuid4
 
-    if st.session_state.pop("planning_needs_full_rerun", False):
-        st.rerun()
     selected_id = selected_projects[0]
     all_proj_ids = df_projects.id.tolist()
     ids = tuple(sorted(map(int, selected_projects)))
@@ -1258,9 +1256,13 @@ def _render_planning_chart(
     )
     rebuild = not unchanged_scope or (revision != snapshot["revision"] and (not known_edit))
     if rebuild:
-        details = {d.pool_id: d for d in workspace.pool_details()}
+        details: dict[int, PoolCapacityDetail] = {}
         summaries = load_project_summaries(workspace, revision, ids)
         pools, hierarchy = _load_planning_pool_payload(workspace, revision, ids, details)
+        # A cache miss fills current details while building the pool payload.
+        # A cache hit skips that function body, so read current details once here.
+        if pools and not details:
+            details = {d.pool_id: d for d in workspace.pool_details()}
         bounds = {str(p["id"]): (p["start"], p["end"]) for p in summaries}
         loaded = list(ids) if len(ids) == 1 else []
         tasks = build_task_payload(workspace, loaded, bounds, details) if loaded else []
@@ -1528,10 +1530,10 @@ def _render_planning_chart(
         )
 
 
-@st.fragment
+@st.fragment(key="planning_workspace")
 @planning_errors
 def render_planning_milestones(workspace: PlanningWorkspace) -> None:
-    """Renders the Planning & Step Loader screen with interactive drag & drop and Plotly timeline."""
+    """Render planning filters and their interactive Gantt and capacity grids."""
     st.markdown(
         """
         <style>

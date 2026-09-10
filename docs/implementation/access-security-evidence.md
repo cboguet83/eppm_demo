@@ -368,6 +368,75 @@ Combined statement coverage is **99.01%** (10,678 of 10,785 statements), meeting
 the 99% target. The checks retain current-scope denial, allocation redaction,
 revision-race rejection and transactional write enforcement.
 
+The dependency-filter follow-up reproduced the reported nine-project group in
+**11,873 ms**, including **10,318 ms** for dependency traversal. The context-menu
+action emitted two framework rerun cycles and 19 sidebar deltas. The callback now
+targets the named planning workspace instead of starting a full application rerun.
+Modern dependency traversal uses indexed endpoints; the redacted legacy links
+are materialized once, and `UNION` preserves cycle termination. Catalog revision
+hashing follows the existing tuple-key convention, and a chart rebuild no longer
+reads the same capacity details twice.
+
+The final isolated browser run selected the same nine projects in **2,260 ms**;
+the independent dependency lookup took **421 ms**. Predecessor-only and single-
+project filters took **2,269 / 2,172 ms**. Each action emitted one chart update and
+zero sidebar deltas. Streamlit still uses two internal dispatch cycles to route
+the callback; the first now emits zero UI deltas, followed by 15 planning deltas.
+These local observations are not a latency guarantee.
+
+New regressions exercise actual component callbacks, retained navigation, current
+account disabling, one capacity read per rebuild, hidden-project graph boundaries,
+legacy and whole-project links, duplicate seeds and cycle behavior. A deterministic
+SQLite-work check holds 5,000 unrelated tasks constant while expanding the
+connected group from two projects to eleven, guarding against a repeated global
+scan for each discovered project.
+
+Validation passed 1,193 Python tests and 14 subtests in the full run, with one
+opt-in skip. One AppTest source-extraction error resulted from a test-file edit
+during that run; rerunning the affected module from its final source passed all
+30 tests, including the added account-disabling regression. All 65 JavaScript
+tests passed. Combined statement coverage is **99.01%** (10,675 of 10,782
+statements), meeting the 99% target.
+
+The subsequent page-navigation check reproduced 19 sidebar deltas on each switch
+between Portfolio, Planning, Settings and Application access. Navigation now
+targets the named `application_page` fragment. Two isolated authenticated browser
+runs, including returning to Portfolio and Planning, emitted zero sidebar deltas
+on every switch and retained the same navigation and language-selector DOM nodes.
+The destination page was checked for visibility; the development health endpoint
+returned HTTP 200. These checks did not alter business data.
+
+Navigation regressions assert that the shell and totals reader execute once per
+initial load, the selected page replaces the previous page, and explicit redirects
+still perform a full application update. Tests also retain language/deep-link
+behavior and reject an unavailable route. Real scoped SQLite services deny the
+next page read when access is revoked or the account is disabled between initial
+render and navigation. Existing WebSocket session-binding enforcement is unchanged.
+
+The navigation follow-up passed 92 focused tests, then the complete Python suite:
+**1,198 passed, 1 opt-in skip and 14 subtests passed**. Combined statement coverage
+remains **99.01%** (10,682 of 10,789 statements). Changed-file secrets scans and
+`git diff --check` also passed.
+
+The contact/log modal follow-up replaces the native Streamlit dialog close/rerun
+path with a self-contained Component v2 form using the browser `dialog` element.
+All fields are built before opening. Successful callbacks commit through the
+existing scoped service, update only the owning list and close the modal after
+acknowledgment. Validation failures preserve entered values. The server retains
+the project, operation and edited row identity; submissions cannot supply them.
+
+An isolated browser run verified contact removal, contact creation and log creation
+with zero sidebar deltas and exactly one initial shell render. Log validation kept
+the modal open, and multiline description/comment values were preserved. Opening
+and cancelling both modals was also verified in the signed-in development app
+without changing its project data; its health endpoint returned HTTP 200.
+
+Validation passed **317 relevant Python tests and 5 JavaScript tests**. Regressions
+cover sibling-list isolation, replayed submissions, malformed values, revoked or
+disabled actors, safe text rendering, complete-before-open presentation, pending
+save protection, validation retry, Cancel, Escape and backdrop dismissal. Combined
+statement coverage remains **99.01%** (10,713 of 10,820 statements).
+
 Additional ASVS features outside the specified implementation are not claimed:
 device/posture risk evaluation, MFA for every non-administrator, self-service session
 inventory, an administrator "terminate every session" function, provider back-channel

@@ -327,27 +327,41 @@ class SqlitePlanningStore:
         self.connection.execute("DELETE FROM main.project_task WHERE project_id=?", (project_id,))
 
     def related_project_ids(self, project_id: int | list[int], scope: str) -> list[int]:
-        """Traverse stored project dependencies transitively with UNION cycle termination."""
+        """Walk indexed dependency endpoints with UNION cycle termination.
+
+        Legacy predecessor links are materialized once because their scoped-view
+        redaction is computed. Modern links use task/project indexes as each
+        connected project is discovered, without enumerating unrelated links.
+        """
         seeds = project_id if isinstance(project_id, list) else [project_id]
         if scope == "this":
             return sorted(set(seeds))
-        direction = "edges.successor=selected.id"
-        next_id = "edges.predecessor"
-        if scope == "all":
-            direction = "edges.successor=selected.id OR edges.predecessor=selected.id"
-            next_id = "CASE WHEN edges.successor=selected.id THEN edges.predecessor ELSE edges.successor END"
+        reverse_legacy = "UNION SELECT predecessor,successor FROM legacy" if scope == "all" else ""
+        successors = """
+                UNION SELECT (SELECT project_id FROM project_task task WHERE task.id=d.task_id)
+                FROM selected CROSS JOIN task_dependencies d ON d.predecessor_project_id=selected.id
+                WHERE d.predecessor_task_id IS NULL
+                UNION SELECT (SELECT project_id FROM project_task task WHERE task.id=d.task_id)
+                FROM selected CROSS JOIN project_task pred ON pred.project_id=selected.id
+                CROSS JOIN task_dependencies d ON d.predecessor_task_id=pred.id
+        """ if scope == "all" else ""
         rows = self.connection.execute(f"""
-            WITH RECURSIVE edges(successor, predecessor) AS (
-                SELECT task.project_id, COALESCE(pred.project_id,d.predecessor_project_id)
-                FROM task_dependencies d JOIN project_task task ON task.id=d.task_id
-                LEFT JOIN project_task pred ON pred.id=d.predecessor_task_id
-                UNION
-                SELECT task.project_id,pred.project_id FROM project_task task
-                JOIN project_task pred ON pred.id=task.predecessor_id
+            WITH RECURSIVE legacy(successor, predecessor) AS MATERIALIZED (
+                SELECT task.project_id,(SELECT project_id FROM project_task pred WHERE pred.id=task.predecessor_id)
+                FROM project_task task WHERE task.predecessor_id IS NOT NULL
+            ), directions(source,target) AS MATERIALIZED (
+                SELECT successor,predecessor FROM legacy {reverse_legacy}
             ), selected(id) AS (
-                SELECT value FROM json_each(?) UNION SELECT {next_id} FROM edges JOIN selected ON {direction}
-                WHERE edges.predecessor IS NOT NULL
-            ) SELECT id FROM selected ORDER BY id
+                SELECT value FROM json_each(?) UNION SELECT directions.target
+                FROM selected JOIN directions ON directions.source=selected.id
+                WHERE directions.target IS NOT NULL
+                UNION SELECT COALESCE(
+                    (SELECT project_id FROM project_task pred WHERE pred.id=d.predecessor_task_id),
+                    d.predecessor_project_id)
+                FROM selected CROSS JOIN project_task task ON task.project_id=selected.id
+                CROSS JOIN task_dependencies d ON d.task_id=task.id
+                {successors}
+            ) SELECT id FROM selected WHERE id IS NOT NULL ORDER BY id
         """, (json.dumps(seeds),))
         return [int(row[0]) for row in rows]
 

@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
+import json
 from unittest.mock import patch
 
 import pytest
@@ -26,6 +27,11 @@ class FragmentRun:
     fragment_id: str = ""
     dispatched: bool = False
     messages: list[ForwardMsg] = field(default_factory=list)
+    widget_json: dict[str, object] | None = None
+    widget_index: int | None = None
+    full_app_request: bool = False
+    widget_id: str = ""
+    widget_options: list[str] = field(default_factory=list)
 
     def runner(self, *args, **kwargs) -> LocalScriptRunner:
         runner = LocalScriptRunner(*args, **kwargs)
@@ -41,17 +47,31 @@ class FragmentRun:
                         delta.new_element.selectbox.id,
                         delta.new_element.radio.id,
                         delta.new_element.bidi_component.id,
+                        delta.new_element.component_instance.id,
                         delta.add_block.tab_container.id,
                     )
-                    if any(identifier.endswith("-" + self.widget_key) for identifier in identifiers):
+                    identifier = next((value for value in identifiers if value.endswith("-" + self.widget_key)), "")
+                    if identifier:
+                        self.widget_id = identifier
                         self.fragment_id = delta.fragment_id
+                        self.widget_options = list(delta.new_element.radio.options)
             if event == ScriptRunnerEvent.SCRIPT_STOPPED_WITH_SUCCESS and not self.dispatched:
-                assert self.fragment_id, "The interactive control must belong to a fragment"
+                assert self.fragment_id or self.full_app_request, "The interactive control must belong to a fragment"
                 self.before_rerun()
                 self.dispatched = True
+                states = WidgetStates(widgets=runner._session_state.get_widget_states())
+                if self.widget_json is not None:
+                    widget = next(widget for widget in states.widgets if widget.id.endswith("-" + self.widget_key))
+                    widget.json_value = json.dumps(self.widget_json)
+                if self.widget_index is not None:
+                    assert self.widget_id, "The interactive control must have rendered"
+                    widget = next((widget for widget in states.widgets if widget.id == self.widget_id), None)
+                    if widget is None:
+                        widget = states.widgets.add(id=self.widget_id)
+                    widget.string_value = self.widget_options[self.widget_index]
                 runner.request_rerun(RerunData(
-                    widget_states=WidgetStates(widgets=runner._session_state.get_widget_states()),
-                    fragment_id_queue=[self.fragment_id],
+                    widget_states=states,
+                    fragment_id_queue=[] if self.full_app_request else [self.fragment_id],
                 ))
 
         runner.on_event.connect(event_received, weak=False)
@@ -156,6 +176,40 @@ def settings_fragment_app(path, actor):
     st.sidebar.caption("Navigation remains mounted")
     access = BusinessAccess(actor, AuthorizationPolicy(lambda: 1000, SessionLimits()))
     render_settings_view(create_settings_workspace(path, access=access))
+
+
+def navigation_app(path, actor):
+    """Navigate composed protected pages while retaining the authorized shell."""
+    import streamlit as st
+    from app.application.services.access import AuthorizationPolicy, SessionLimits
+    from app.application.services.business_access import BusinessAccess
+    from app.main import create_application_workspace
+    from app.presentation.shell import render_application
+
+    st.session_state["shell_runs"] = st.session_state.get("shell_runs", 0) + 1
+    access = BusinessAccess(actor, AuthorizationPolicy(lambda: 1000, SessionLimits()))
+    render_application(create_application_workspace(path, access=access))
+
+
+@pytest.mark.parametrize("change", ["disabled", "revoked"])
+def test_retained_navigation_rechecks_current_access_before_loading_the_next_page(business, change):
+    path, service, admin, editor, _ = business
+    app = AppTest.from_function(navigation_app, args=(path, editor.actor))
+
+    def remove_access():
+        if change == "disabled":
+            service.set_status(admin, editor.actor.user_id, "disabled")
+        else:
+            for assignment in service.assignments(admin, editor.actor.user_id):
+                service.revoke(admin, assignment["id"])
+
+    rerun = FragmentRun("app_sidebar_nav", remove_access, widget_index=1, full_app_request=True)
+    rerun.run(app)
+    assert app.session_state["shell_runs"] == 1
+    assert "not permitted" in app.error[0].value
+    deltas = [message for message in rerun.messages if message.WhichOneof("type") == "delta"]
+    assert deltas and all(message.metadata.delta_path[0] == 0 for message in deltas)
+    assert not any(message.delta.new_element.component_instance.id for message in deltas)
 
 
 def test_settings_section_rerun_does_not_rerun_application_shell(business):

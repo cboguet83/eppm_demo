@@ -24,6 +24,12 @@ def shell_app(database: str) -> None:
     from app.presentation.navigation import PAGE_PLANNING, PAGE_PORTFOLIO, PAGE_SETTINGS
     from app.presentation.shell import render_application
 
+    st.session_state["shell_runs"] = st.session_state.get("shell_runs", 0) + 1
+
+    def totals():
+        st.session_state["totals_reads"] = st.session_state.get("totals_reads", 0) + 1
+        return {"projects": 1, "tasks": 2, "dependencies": 0, "pools": 3}
+
     render_application(
         ApplicationWorkspace(
             database,
@@ -31,7 +37,7 @@ def shell_app(database: str) -> None:
                 page: partial(st.write, page)
                 for page in (PAGE_PLANNING, PAGE_PORTFOLIO, PAGE_SETTINGS)
             },
-            None,
+            totals,
         )
     )
 
@@ -68,20 +74,45 @@ def test_shell_never_exposes_deployment_maintenance_or_reseeds_on_rerun(database
 
 
 def test_shell_routes_navigation_redirects_and_language_changes(database):
-    app = AppTest.from_function(shell_app, args=(database,)).run()
+    from tests.test_fragment_reruns import FragmentRun
+
+    app = AppTest.from_function(shell_app, args=(database,))
+    rerun = FragmentRun("app_sidebar_nav", widget_index=2, full_app_request=True)
+    rerun.run(app)
     assert not app.exception
-    assert PAGE_PORTFOLIO in [item.value for item in app.markdown]
-    app.radio(key="app_sidebar_nav").set_value(PAGE_SETTINGS).run()
     assert PAGE_SETTINGS in [item.value for item in app.markdown]
+    assert PAGE_PORTFOLIO not in [item.value for item in app.markdown]
+    assert app.session_state["shell_runs"] == 1
+    assert app.session_state["totals_reads"] == 1
+    deltas = [message for message in rerun.messages if message.WhichOneof("type") == "delta"]
+    assert deltas and all(message.metadata.delta_path[0] == 0 for message in deltas)
+    assert all(message.delta.fragment_id for message in deltas)
     app.session_state["nav_redirect"] = PAGE_PLANNING
     app.run()
     assert app.radio(key="app_sidebar_nav").value == PAGE_PLANNING
+    assert app.session_state["shell_runs"] == 2
+    assert app.session_state["totals_reads"] == 2
     app.selectbox(key="app_language_selector").set_value("fr").run()
     assert not app.exception
     assert app.selectbox(key="app_language_selector").value == "fr"
     app.session_state["nav_redirect"] = "obsolete route"
     app.run()
     assert PAGE_PORTFOLIO in [item.value for item in app.markdown]
+
+
+def test_retained_page_rejects_a_route_outside_the_authorized_workspace():
+    def unavailable_page_app():
+        import streamlit as st
+        from app.presentation.components.application_workspace import ApplicationWorkspace
+        from app.presentation.shell import _render_application_page
+
+        st.session_state["app_sidebar_nav"] = "unavailable"
+        _render_application_page(ApplicationWorkspace("unused", {"allowed": lambda: st.write("protected")}, None))
+
+    app = AppTest.from_function(unavailable_page_app).run()
+    assert not app.exception
+    assert "no assigned application access" in app.info[0].value
+    assert not app.markdown
 
 
 @pytest.mark.parametrize("project_id,task_id", [("42", "7"), ("bad", "-2"), ("0", "")])
@@ -104,9 +135,11 @@ def test_planning_deep_links_validate_ids_and_consume_query_parameters(
 
 
 def test_schema_deep_link_selects_parameters_after_settings_was_already_open(database):
-    app = AppTest.from_function(application_app, args=(database,), default_timeout=30).run()
+    from tests.test_fragment_reruns import FragmentRun
+
+    app = AppTest.from_function(application_app, args=(database,), default_timeout=30)
+    FragmentRun("app_sidebar_nav", widget_index=2, full_app_request=True).run(app)
     assert not app.exception
-    app.radio(key="app_sidebar_nav").set_value(PAGE_SETTINGS).run()
     assert app.radio(key="rb_settings_section").value == "org_structure"
     app.query_params.update(nav="schema")
     app.run()
@@ -134,7 +167,9 @@ def render(database):
 app = AppTest.from_function(render, args=(sys.argv[1],), default_timeout=60).run()
 assert not app.exception, list(app.exception)
 for page in (PAGE_PLANNING, PAGE_SETTINGS):
-    app.radio(key='app_sidebar_nav').set_value(page).run()
+    app = AppTest.from_function(render, args=(sys.argv[1],), default_timeout=60)
+    app.session_state['app_sidebar_nav'] = page
+    app.run()
     assert not app.exception, list(app.exception)
 assert not any(name == 'src' or name.startswith('src.') for name in sys.modules)
 """

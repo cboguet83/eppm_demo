@@ -163,6 +163,37 @@ Do not re-enable OAuth/HTTP-client debug logs or raw callback query logging in t
 application or reverse proxy. Demo business reset operations preserve application
 users, grants, security audit, and bootstrap state.
 
+## Page navigation
+
+The sidebar navigation callback targets the named `application_page` fragment.
+Switching pages renders only the selected page, leaving account controls, language,
+navigation and planning totals mounted. Totals are read on a full application run,
+including language changes and explicit redirects, rather than on every page switch.
+Nested page fragments retain their own local update behavior.
+
+This retains display elements, not authorization decisions for subsequent reads.
+The existing WebSocket session binding checks current account/security state on
+incoming and outgoing messages, and page services enforce current access before
+returning business data. Revoked access cannot load a newly selected protected page.
+
+## Project contact and log modals
+
+Contacts and project logs use a self-contained Component v2 modal with the browser's
+native `dialog` element. This avoids the full-app rerun required to programmatically
+close Streamlit's dialog. Choices and existing values are prepared before the modal
+is shown; its fields appear together. The component modifies only its own DOM.
+
+Save events execute the authoritative collaboration service in the owning section's
+callback, then render that list once and acknowledge closure of the modal. The
+project summary, other sections and sidebar are retained. Validation failures keep
+the form open with entered values and a safe error. Cancel, Escape and backdrop
+dismissal do not write data. Duplicate clicks are blocked while a save is pending;
+events replayed after a completed modal are ignored.
+
+The operation, project and edited row identity stay in server-side session state.
+The component submits only allowlisted string fields; service validation, scoped
+transactions and current write authorization remain authoritative.
+
 ## Gantt task and dependency loading
 
 Expanding projects and enabling external dependencies use bounded task HTTP reads.
@@ -180,6 +211,18 @@ the business/security revision are still checked before delivery.
 The browser loads visible projects before off-screen overscan, with at most 25
 projects per request and 100 loaded projects retained. These reads update the
 existing chart without a Streamlit rerun or an activity-timeout extension.
+
+Project and task context-menu filters target the named planning workspace
+fragment. The filter controls and chart update together; the application shell
+and sidebar remain mounted. The callback queues the filter before rendering,
+so the former chart-fragment-to-full-app refresh is unnecessary.
+
+Dependency filters follow indexed task/project endpoints as connected projects
+are discovered. The redacted legacy predecessor projection is materialized once,
+and `UNION` terminates cycles. Every endpoint still passes the current scoped
+views; a hidden project cannot connect two otherwise visible projects. Chart
+rebuilds read current capacity details once, including when the display payload
+is already cached.
 
 Session controls retain one listener set and one polling timer across component
 renders. Activity is throttled across the page and same-origin charts; activity

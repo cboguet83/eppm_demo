@@ -141,11 +141,12 @@ def render_application(workspace: ApplicationWorkspace) -> None:
     if st.session_state.get("app_sidebar_nav") not in page_keys:
         st.session_state["app_sidebar_nav"] = page_keys[0]
 
-    page = st.sidebar.radio(
+    st.sidebar.radio(
         t("app.sidebar_nav", default="Navigation"),
         page_keys,
         format_func=lambda k: nav_map.get(k, k),
         key="app_sidebar_nav",
+        on_change=lambda: st.rerun("application_page"),
     )
 
     if workspace.totals is not None:
@@ -158,7 +159,17 @@ def render_application(workspace: ApplicationWorkspace) -> None:
                 left.caption(f"{t('planning_totals.' + first, default=first.title())}  \n{totals[first]:,}")
                 right.caption(f"{t('planning_totals.' + second, default=second.title())}  \n{totals[second]:,}")
 
-    workspace.pages[page]()
+    _render_application_page(workspace)
+
+
+@st.fragment(key="application_page")
+def _render_application_page(workspace: ApplicationWorkspace) -> None:
+    """Switch the main page while retaining navigation, account controls and totals."""
+    render_page = workspace.pages.get(st.session_state.get("app_sidebar_nav"))
+    if render_page is None:
+        st.info(t("auth.no_access", default="Your account has no assigned application access. Contact an access administrator."))
+        return
+    render_page()
 
 
 def render_language_selector() -> None:

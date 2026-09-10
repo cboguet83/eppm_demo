@@ -187,6 +187,10 @@ def test_log_paging_and_seed_flush_leave_no_orphans(collaboration, collaboration
 
 
 def ui_app(collaboration_path, body):
+    if body.startswith(("_contact_dialog", "_remove_contact_dialog")):
+        body += "\nrender_project_contacts(1, service)"
+    elif body.startswith("_event_dialog"):
+        body += "\nrender_project_log(1, service)"
     return AppTest.from_string(
         f"""
 from app.presentation.i18n import set_current_locale
@@ -201,50 +205,49 @@ service = create_collaboration_service({collaboration_path!r})
 
 
 def test_contact_ui_adds_edits_and_removes_function_assignments(collaboration, collaboration_path):
+    from tests.modal_interactions import modal_state, submit_modal
+
     repo = collaboration
     role = repo.save_catalog("role", "Sponsor")
     app = ui_app(collaboration_path, "render_project_contacts(1, service)")
     assert not app.exception
     assert not app.selectbox
     next(b for b in app.button if b.label == "Add contact").click().run()
-    assert not app.exception and app.get("dialog")
+    assert not app.exception and modal_state(app)["form"]["title"] == "Project contact"
     app = ui_app(collaboration_path, "_contact_dialog(1, service)")
-    next(b for b in app.button if b.label == "Save contact").click().run()
+    submit_modal(app)
     assert not app.exception
     contact = repo.list_contacts(1)[0]
     assert contact["role_id"] == role and contact["person"] == "Alice Smith"
     app = ui_app(collaboration_path, f"_contact_dialog(1, service, {contact['id']})")
-    assert next(w for w in app.selectbox if w.label == "Role").disabled
-    next(w for w in app.selectbox if w.label == "Function").select(2)
-    next(b for b in app.button if b.label == "Save contact").click().run()
+    assert modal_state(app)["form"]["fields"][0]["disabled"]
+    submit_modal(app, values={"function_id": "2"})
     assert not app.exception
     assert repo.list_contacts(1)[0]["person"] == "Bob Jones"
     app = ui_app(collaboration_path, f"_remove_contact_dialog(1, service, {contact['id']})")
-    next(b for b in app.button if b.label == "Cancel").click().run()
+    submit_modal(app, cancel=True)
     assert repo.list_contacts(1)
-    next(b for b in app.button if b.label == "Confirm removal").click().run()
+    submit_modal(app)
     assert not app.exception
     assert repo.list_contacts(1) == []
 
 
 def test_log_ui_creates_and_edits_all_fields(collaboration, collaboration_path):
+    from tests.modal_interactions import submit_modal
+
     repo = collaboration
     app = ui_app(collaboration_path, "render_project_log(1, service)")
     assert not app.exception
     assert not app.text_input
     app.button(key="project_log_1_add").click().run()
-    app.text_input[0].set_value("Approval")
-    app.text_area[0].set_value("Needs approval")
-    app.text_area[1].set_value("Review tomorrow")
-    next(w for w in app.selectbox if w.label == "Scope").select("global")
-    next(b for b in app.button if b.label == "Save event").click().run()
+    submit_modal(app, "log", {"title": "Approval", "description": "Needs approval",
+                              "comment": "Review tomorrow", "scope": "global"})
     assert not app.exception
     event = repo.list_events(1)[0]
     assert event["title"] == "Approval" and event["scope"] == "global"
     with patch("app.presentation.components.action_table.action_table", return_value={"id": event["id"], "action": "edit"}):
         app.run()
-    next(w for w in app.selectbox if w.label == "State").select("completed")
-    next(b for b in app.button if b.label == "Save event").click().run()
+    submit_modal(app, "log", {"status": "completed"})
     assert not app.exception
     assert repo.list_events(1)[0]["status"] == "completed"
 
@@ -378,17 +381,19 @@ def test_collaboration_ui_paging_and_event_date_editing(collaboration, collabora
     event_id = collaboration.list_events(1)[0]["id"]
     with patch("app.presentation.components.action_table.action_table", return_value={"id": event_id, "action": "edit"}):
         app.run()
-    app.date_input[0].set_value(date(2027, 3, 1))
-    next(button for button in app.button if button.label == "Save event").click().run()
+    from tests.modal_interactions import submit_modal
+    submit_modal(app, "log", {"deadline": "2027-03-01"})
     assert not app.exception
     assert collaboration.list_events(1)[0]["deadline"] == "2027-03-01"
 
 
 def test_collaboration_ui_reports_validation_and_read_failures(collaboration, collaboration_path):
+    from tests.modal_interactions import modal_state, submit_modal
+
     app = ui_app(collaboration_path, "_event_dialog(1, service)")
-    next(button for button in app.button if button.label == "Save event").click().run()
+    submit_modal(app, "log")
     assert not app.exception
-    assert app.error[0].value == "Title is required."
+    assert modal_state(app, "log")["form"]["error"] == "Title is required."
     assert collaboration.list_events(1) == []
     with closing(get_db(collaboration_path)) as connection, connection:
         connection.execute("DROP TABLE project_log_event")

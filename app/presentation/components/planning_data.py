@@ -28,7 +28,7 @@ from app.presentation.components.planning_workspace import PlanningWorkspace
 from app.presentation.components.schema_frames import parameters_frame
 
 
-@authorized_cache(ttl=60, max_entries=8, show_spinner=False)
+@authorized_cache(ttl=60, max_entries=8, show_spinner=False, hash_funcs={tuple: repr})
 def load_planning_catalog(
     _workspace: PlanningWorkspace,
     revision: tuple,

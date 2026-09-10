@@ -264,6 +264,10 @@ def collaboration_app(path: str, actor: Actor, surface: str, contact_id: int | N
         "reassign": lambda: collaboration._contact_dialog(1, service, contact_id),
         "log": lambda: collaboration._event_dialog(1, service),
     }[surface]()
+    if surface == "reassign":
+        collaboration.render_project_contacts(1, service)
+    elif surface == "log":
+        collaboration.render_project_log(1, service)
 
 
 @pytest.mark.parametrize("action", ["reassign", "remove"])
@@ -275,14 +279,15 @@ def test_contact_table_actions_are_limited_to_current_visible_assignments(contac
     with patch("streamlit.components.v2.component", return_value=component):
         app = AppTest.from_function(collaboration_app, args=(path, editor.actor, "contacts")).run()
     assert not app.exception and not app.error
-    payload = component.call_args.kwargs["data"]
+    payload = next(call.kwargs["data"] for call in component.call_args_list
+                   if call.kwargs["key"] == "project_contacts_table_1")
     assert [row["id"] for row in payload["rows"]] == [visible_id]
     assert payload["rows"][0]["person"] == "Rae Visible"
     assert "Robin Hidden" not in str(payload) and "Unrelated Person" not in str(payload)
     assert set(payload["actions"]) == {"reassign", "remove"}
-    assert bool(app.get("dialog")) == (target == "visible")
+    assert ("project_contacts_1_modal_state" in app.session_state) == (target == "visible")
     if target == "visible" and action == "reassign":
-        assert next(widget for widget in app.selectbox if widget.label == "Role").disabled
+        assert app.session_state["project_contacts_1_modal_state"]["form"]["fields"][0]["disabled"]
     with closing(get_db(path)) as connection:
         assert connection.execute("SELECT COUNT(*) FROM project_contact").fetchone()[0] == 2
 
@@ -297,8 +302,10 @@ def test_viewer_contacts_include_visible_people_without_exposing_edit_actions(bu
     with patch("streamlit.components.v2.component", return_value=component):
         app = AppTest.from_function(collaboration_app, args=(path, editor.actor, "contacts")).run()
     assert not app.exception and not app.error and not app.button and not app.get("dialog")
-    assert component.call_args.kwargs["data"]["actions"] == {}
-    assert [row["id"] for row in component.call_args.kwargs["data"]["rows"]] == [visible_id]
+    payload = next(call.kwargs["data"] for call in component.call_args_list
+                   if call.kwargs["key"] == "project_contacts_table_1")
+    assert payload["actions"] == {}
+    assert [row["id"] for row in payload["rows"]] == [visible_id]
 
 
 @pytest.mark.parametrize("stale", ["removed", "moved"])
@@ -310,27 +317,27 @@ def test_contact_reassignment_detects_a_changed_owner_before_submitting(contacts
             connection.execute("DELETE FROM project_contact WHERE id=?", (visible_id,))
         else:
             connection.execute("UPDATE project_contact SET project_id=2 WHERE id=?", (visible_id,))
-    next(button for button in app.button if button.label == "Save contact").click().run()
+    app.run()
     assert not app.exception and "no longer exists" in app.error[0].value
-    assert not app.selectbox and not app.button
+    assert not app.selectbox
     with closing(get_db(path)) as connection:
         assert connection.execute("SELECT project_id,function_id FROM project_contact WHERE id=?", (visible_id,)).fetchall() == ([] if stale == "removed" else [(2, 10)])
 
 
 def test_log_creation_requires_configured_event_types_and_preserves_multiline_values(business):
+    from tests.modal_interactions import submit_modal
+
     path, _, _, editor, manager = business
     shared = create_collaboration_service(path, access=manager)
     for record in shared.list_catalog("event_type"):
         shared.delete_catalog("event_type", record["id"])
     app = AppTest.from_function(collaboration_app, args=(path, editor.actor, "log")).run()
-    assert not app.exception and not app.button
+    assert not app.exception and "project_log_1_modal_state" not in app.session_state
     assert "Create event types in Settings" in app.info[0].value
     shared.save_catalog("event_type", "Update")
     app.run()
-    app.text_input(key="project_log_1_new_title").set_value("Scope review")
-    app.text_area(key="project_log_1_new_description").set_value("First line\nSecond line")
-    app.text_area(key="project_log_1_new_comment").set_value("Review\nApproved wording")
-    next(button for button in app.button if button.label == "Save event").click().run()
+    submit_modal(app, "log", {"title": "Scope review", "description": "First line\nSecond line",
+                              "comment": "Review\nApproved wording"})
     assert not app.exception and not app.error
     events = shared.list_events(1)
     assert len(events) == 1 and events[0]["description"] == "First line\nSecond line"
