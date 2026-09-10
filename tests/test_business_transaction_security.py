@@ -535,6 +535,7 @@ def test_collaboration_edit_controls_recheck_current_status(business):
     {"id": 1, "action": "open"},
 ])
 def test_scoped_allocation_popups_accept_only_visible_navigation_actions(business, surface, event):
+    import streamlit as st
     from types import SimpleNamespace
     from unittest.mock import Mock, patch
     from streamlit.testing.v1 import AppTest
@@ -549,7 +550,9 @@ def test_scoped_allocation_popups_accept_only_visible_navigation_actions(busines
     resources = create_resource_pool_service(path, access=manager)
     resources.create_pool_group(ResourcePoolGroup("Visible group"), pool_ids=[1])
     component = Mock(side_effect=[SimpleNamespace(action=event), SimpleNamespace(action=None)])
-    with patch("streamlit.components.v2.component", return_value=component):
+    register = st.components.v2.component
+    with patch("streamlit.components.v2.component", side_effect=lambda name, **kwargs:
+               component if name == "eppm_action_table" else register(name, **kwargs)):
         app = AppTest.from_function(
             permission_control_app, args=(path, editor.actor, surface), default_timeout=30,
         )

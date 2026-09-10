@@ -1,6 +1,7 @@
 """Shared modal workflows for creating, editing, and deleting projects."""
 
 from collections.abc import Callable
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import date
 from functools import wraps
@@ -8,6 +9,8 @@ from typing import Any, TypeVar
 
 import pandas as pd
 import streamlit as st
+
+from app.presentation.components.dialog import dialog
 
 from app.application.exceptions import ProjectStorageError, ProjectTypeStorageError, SchemaStorageError
 from app.application.ports.business_permissions import PermissionSnapshot
@@ -26,13 +29,19 @@ from app.presentation.components.project_links import render_links_editor
 
 STATUS_LIST = list(PROJECT_STATUSES)
 _Result = TypeVar("_Result")
+_permission_reads: ContextVar[dict[int, PermissionSnapshot] | None] = ContextVar(
+    "project_dialog_permission_reads", default=None,
+)
 
 
 def _dialog_errors[**P](function: Callable[P, None]) -> Callable[P, None]:
     @wraps(function)
     def render(*args: P.args, **kwargs: P.kwargs) -> None:
         try:
-            function(*args, **kwargs)
+            # Share a current snapshot only within this synchronous dialog render.
+            # Independent field-fragment interactions start outside this context.
+            with _permission_reads.set({}):
+                function(*args, **kwargs)
         except (ValueError, ProjectStorageError, ProjectTypeStorageError, SchemaStorageError) as exc:
             st.error(str(exc))
     return render
@@ -78,8 +87,18 @@ def _save_project(save: Callable[..., _Result], **kwargs: Any) -> _Result:
         st.stop()
 
 
+def _permissions(workspace: ProjectWorkspace) -> PermissionSnapshot:
+    reads = _permission_reads.get()
+    if reads is None:
+        return workspace.projects.permissions()
+    identity = id(workspace.projects)
+    if identity not in reads:
+        reads[identity] = workspace.projects.permissions()
+    return reads[identity]
+
+
 def _field_permissions(workspace: ProjectWorkspace, project_id: int | None) -> PermissionSnapshot:
-    permissions = _save_project(workspace.projects.permissions)
+    permissions = _save_project(_permissions, workspace=workspace)
     required = Permission.CREATE if project_id is None else Permission.READ
     if not permissions.allows(required, project_id):
         st.error(t("access.create_denied", default="You do not have permission to create projects.")
@@ -194,11 +213,11 @@ def open_create_project_dialog(
     _create_project_editor(workspace, project_id, references)
 
 
-@st.dialog("Create new project", width="large")
+@dialog("Create new project", width="large")
 @_dialog_errors
 def _create_project_editor(workspace: ProjectWorkspace, project_id: int, references: ProjectDialogReferences) -> None:
     """Retain reference choices while rechecking current creation permission."""
-    if not workspace.projects.permissions().allows(Permission.CREATE):
+    if not _permissions(workspace).allows(Permission.CREATE):
         st.error(t("access.create_denied", default="You do not have permission to create projects."))
         return
     draft_key = "portfolio_create_draft_id"
@@ -271,7 +290,7 @@ def open_edit_project_dialog(
     _edit_project_editor(project_id, workspace, project, references, links, read_only)
 
 
-@st.dialog("Project details", width="large", on_dismiss=_dismiss_project_dialog)
+@dialog("Project details", width="large", on_dismiss=_dismiss_project_dialog)
 @_dialog_errors
 def _edit_project_editor(
     project_id: int, workspace: ProjectWorkspace, project: Project,
@@ -279,7 +298,7 @@ def _edit_project_editor(
 ) -> None:
     """Retain the editable draft and references; authorize every dialog interaction."""
 
-    permissions = workspace.projects.permissions()
+    permissions = _permissions(workspace)
     if not permissions.allows(Permission.READ, project_id):
         st.error(t("auth.no_access", default="Your account has no assigned application access. Contact an access administrator."))
         return

@@ -6,6 +6,8 @@ from functools import wraps
 import pandas as pd
 import streamlit as st
 
+from app.presentation.components.dialog import dialog
+
 from app.application.exceptions import OrganizationStorageError, ResourcePoolStorageError
 from app.application.services.resource_pools import ResourcePoolService
 from app.domain.resources.models import (
@@ -48,7 +50,7 @@ def require_change(changed: bool) -> None:
         raise ValueError("This record no longer exists. Please refresh and try again.")
 
 
-@st.dialog(t("settings.dialog_add_pool", default="➕ Create Resource Pool"))
+@dialog(t("settings.dialog_add_pool", default="➕ Create Resource Pool"))
 @pool_errors
 def _open_add_pool_dialog(service: ResourcePoolService) -> None:
     """Modal dialog to create a new resource pool."""
@@ -105,7 +107,7 @@ def _open_add_pool_dialog(service: ResourcePoolService) -> None:
         st.rerun()
 
 
-@st.dialog(t("settings.dialog_edit_pool", default="✏️ Edit Resource Pool"))
+@dialog(t("settings.dialog_edit_pool", default="✏️ Edit Resource Pool"))
 @pool_errors
 def _open_edit_pool_dialog(service: ResourcePoolService, pool_id: int) -> None:
     """Modal dialog to edit an existing resource pool."""
@@ -174,7 +176,7 @@ def _open_edit_pool_dialog(service: ResourcePoolService, pool_id: int) -> None:
         st.rerun()
 
 
-@st.dialog(t("settings.delete_confirm_title", default="🗑️ Confirm Deletion"))
+@dialog(t("settings.delete_confirm_title", default="🗑️ Confirm Deletion"))
 @pool_errors
 def _open_delete_pool_dialog(service: ResourcePoolService, pool_id: int, pool_name: str) -> None:
     """Modal dialog to confirm deletion of a resource pool."""
@@ -204,7 +206,7 @@ def _pool_group_option_maps(service: ResourcePoolService) -> tuple[dict[int, str
     return (pool_labels, group_labels)
 
 
-@st.dialog("➕ Create pool group")
+@dialog("➕ Create pool group")
 @pool_errors
 def _open_add_pool_group_dialog(service: ResourcePoolService) -> None:
     """Create a recursive group and its direct members."""
@@ -233,7 +235,7 @@ def _open_add_pool_group_dialog(service: ResourcePoolService) -> None:
         st.rerun()
 
 
-@st.dialog("✏️ Edit pool group")
+@dialog("✏️ Edit pool group")
 @pool_errors
 def _open_edit_pool_group_dialog(service: ResourcePoolService, group_id: int) -> None:
     """Edit a recursive group while excluding child choices that form cycles."""
@@ -279,7 +281,7 @@ def _open_edit_pool_group_dialog(service: ResourcePoolService, group_id: int) ->
         st.rerun()
 
 
-@st.dialog("🗑️ Delete pool group")
+@dialog("🗑️ Delete pool group")
 @pool_errors
 def _open_delete_pool_group_dialog(
     service: ResourcePoolService, group_id: int, group_name: str
@@ -366,7 +368,7 @@ def _render_pool_groups_management(service: ResourcePoolService) -> None:
         )
 
 
-@st.dialog(t("settings.dialog_add_mapping", default="➕ Assign Team or Employee to Pool"))
+@dialog(t("settings.dialog_add_mapping", default="➕ Assign Team or Employee to Pool"))
 @pool_errors
 def _open_add_pool_mapping_dialog(
     service: ResourcePoolService, pool_id: int, df_teams: pd.DataFrame, df_employees: pd.DataFrame
@@ -474,7 +476,7 @@ def _render_pool_assignments_table(
         st.rerun()
 
 
-@st.dialog("Confirm unassignment")
+@dialog("Confirm unassignment")
 @pool_errors
 def _confirm_unassign(
     service: ResourcePoolService, pool_id: int, assignment_id: int, project_name: str,

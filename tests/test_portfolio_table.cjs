@@ -122,6 +122,15 @@ test('virtual scrolling renders a small window, prefetches, preserves position, 
   assert.ok(app.root.querySelectorAll('tbody')[0].children.length < 40);
 });
 
+test('a saved project refresh retains scroll while a changed filter resets it', () => {
+  const app = harness(); app.render(); app.scroll(20);
+  app.render(0, {context: 'saved-revision', preserve_position: true});
+  assert.equal(app.root.querySelector('.table-scroll').scrollTop, 844);
+  assert.equal(app.root._portfolio.context, 'saved-revision');
+  app.render(0, {context: 'filtered-revision'});
+  assert.equal(app.root.querySelector('.table-scroll').scrollTop, 0);
+});
+
 test('scroll jumps fetch the required batch and the browser cache stays bounded', () => {
   const app = harness(); app.render();
   for (let offset = 500; offset <= 4500; offset += 500) {

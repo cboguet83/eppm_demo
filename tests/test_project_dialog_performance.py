@@ -23,6 +23,7 @@ def project_screen(path, actor, operation):
     from app.main import create_project_workspace
     from app.presentation.components.project_dialogs import open_create_project_dialog, open_edit_project_dialog
     from app.presentation.pages.portfolio import _render_project_create_action, _render_project_edit_action
+    from app.presentation.components.portfolio_project_dialog import render_project_modal
 
     st.session_state["shell_runs"] = st.session_state.get("shell_runs", 0) + 1
     st.sidebar.caption("Navigation and account")
@@ -36,6 +37,8 @@ def project_screen(path, actor, operation):
         _render_project_create_action(workspace)
     else:
         _render_project_edit_action(1, workspace)
+    if operation.endswith("action"):
+        render_project_modal(workspace)
 
 
 @pytest.mark.parametrize("role,project_id,visible", [
@@ -64,7 +67,7 @@ def test_opening_project_dialog_reruns_only_its_action_and_dialog(business, oper
     rerun = FragmentRun(key, widget_trigger=True)
     rerun.run(app)
     assert app.session_state["shell_runs"] == 1
-    assert app.get("dialog")
+    assert app.session_state["portfolio_project_modal_state"].form["can_save"]
     deltas = [message for message in rerun.messages if message.WhichOneof("type") == "delta"]
     assert deltas and all(message.metadata.delta_path[0] != 1 for message in deltas)
     assert all(message.delta.fragment_id for message in deltas)

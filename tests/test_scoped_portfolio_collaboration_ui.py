@@ -74,12 +74,13 @@ def test_project_details_fragment_stops_displaying_a_deleted_project(business):
 
 
 def test_business_administrator_can_open_project_creation_from_the_scoped_portfolio(business):
+    from tests.test_fragment_reruns import FragmentRun
     path, _, _, _, manager = business
     with patch("app.presentation.pages.portfolio.portfolio_project_table"):
-        app = AppTest.from_function(portfolio_app, args=(path, manager.actor), default_timeout=30).run()
-        app.button(key="btn_create_project_from_portfolio").click().run()
-    assert not app.exception and not app.error and app.get("dialog")
-    assert any(button.label == "Create project" for button in app.button)
+        app = AppTest.from_function(portfolio_app, args=(path, manager.actor), default_timeout=30)
+        FragmentRun("btn_create_project_from_portfolio", widget_trigger=True).run(app)
+    assert not app.exception and not app.error
+    assert app.session_state["portfolio_project_modal_state"].form["submit"] == "Create project"
     with closing(get_db(path)) as connection:
         assert connection.execute("SELECT id FROM project ORDER BY id").fetchall() == [(1,), (2,)]
 
@@ -180,17 +181,17 @@ def test_numeric_portfolio_statistics_and_cached_facets_follow_each_actor_scope(
 
 
 def test_portfolio_detail_button_opens_the_persisted_project_for_editing(business):
+    from tests.test_fragment_reruns import FragmentRun
     path, _, _, editor, _ = business
     with patch("app.presentation.pages.portfolio.portfolio_project_table"):
         app = AppTest.from_function(portfolio_app, args=(path, editor.actor))
         app.session_state["portfolio_master_table"] = {"row_click": 1}
-        app.run()
-        app.button(key="btn_edit_details_1").click().run()
-    assert not app.exception and not app.error and app.get("dialog")
-    assert app.button(key="btn_edit_details_1").label == "Edit details"
-    assert any(not widget.disabled for widget in app.get("dialog")[0].text_input)
-    assert not any(button.key == "enable_project_edit_1" for button in app.button)
-    assert any("Update Project" in button.label and not button.disabled for button in app.button)
+        FragmentRun("btn_edit_details_1", widget_trigger=True).run(app)
+    assert not app.exception and not app.error
+    form = app.session_state["portfolio_project_modal_state"].form
+    assert form["can_save"] and form["values"]["name"] == "Visible"
+    assert not next(field for field in form["fields"] if field["key"] == "name")["disabled"]
+    assert "Update Project" in form["submit"]
 
 
 def task_query_app(path: str, actor: Actor) -> None:

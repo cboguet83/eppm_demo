@@ -176,6 +176,22 @@ The existing WebSocket session binding checks current account/security state on
 incoming and outgoing messages, and page services enforce current access before
 returning business data. Revoked access cannot load a newly selected protected page.
 
+## Popup presentation
+
+All 40 native Streamlit dialogs use the shared presentation decorator in
+`app/presentation/components/dialog.py`. The shell loads the visibility rules before
+opening actions are available. A completion component follows the dialog body and
+reveals it after its initial elements and lazy widget placeholders have mounted.
+This prevents an empty frame followed by fields appearing in stages. Already-open
+dialogs remain mounted during subsequent interactions. Native keyboard dismissal,
+backdrop dismissal, forms, file uploads and server validation keep their behavior.
+Stopped permission errors become visible when the script finishes.
+
+Contacts and project logs already prepare their entire browser-native modal before
+showing it. Neither mechanism eliminates the time needed for authorized server
+reads or writes; this presentation change removes partial opening without adding a
+fixed loading delay or weakening authorization.
+
 ## Project creation and editing
 
 Portfolio creation and `Edit details` each have a small action fragment, so opening
@@ -185,15 +201,26 @@ and opens directly in edit mode. In the current role model, business administrat
 can create projects and edit all projects; project editors can edit their assigned
 scope. The planning chart's read-only details entry keeps its existing behavior.
 
-Each open project dialog retains its catalog, manager labels, localized aliases
-and loaded templates. Basic fields and dynamic properties update in separate
-fragments; property tabs render only their selected content. Typed text/date drafts
-remain available when a tab is hidden and are submitted together on save. Reopening
-a dialog loads fresh references, and dismissing an edit discards its property draft.
+Portfolio project forms use a Component v2 browser modal. The opening callback
+prepares the references and all fields before the browser displays the form.
+Text, numeric and date inputs, property tabs, multiselects and custom links remain
+local. Changing the project template requests its fields from the server while
+retaining explicitly edited values. Reopening loads fresh references.
 
-Retained display data does not replace current authorization: the dialog and its
-field fragments check access on interaction, and saves validate the current template,
-ownership and permissions in the existing write transaction.
+Saving checks the current template, ownership and permissions in the existing
+write transaction. Success closes the modal and refreshes only the grid and
+selected project; the shell remains mounted and grid scroll position is retained.
+Validation errors retain the draft. An obsolete form token cannot write another
+project, and duplicate submissions are blocked while the request is pending.
+
+The planning chart retains its native read-only project details dialog. Its sections
+share a current permission snapshot only within one synchronous render; subsequent
+independent interactions obtain current permissions again.
+
+Gantt step creation and full step edits commit in the component callback before
+the chart renders. The response contains one patch for affected projects instead
+of rendering old data and then requesting a full-page rerun. Write failures are
+displayed within the chart fragment and keep the existing authoritative checks.
 
 ## Project contact and log modals
 
@@ -255,6 +282,12 @@ The master list reads 100 rows at a time and retains at most five pages in the
 browser. Scrollbar jumps load the visible page before off-screen overscan.
 Paging reruns only the grid fragment; controls, navigation and the selected
 project summary remain mounted. The scrollbar element is retained across updates.
+
+Master-list header filters are neutral until a filter is applied, then turn red;
+opening or hovering over an unused filter does not activate its red highlight.
+The portfolio removes the top padding and empty style rows. Selected-project
+details follow the matching-project count directly, without a separate template
+caption or divider. The template remains available in the grid and project editor.
 
 Resource-overallocation badges load after the rows through the same-origin
 `POST /api/portfolio/allocations` route. Allow this route alongside the existing

@@ -91,12 +91,13 @@ tbody tr.selected {
     gap: 0.35rem;
     justify-content: space-between;
 }
-.filter-button {
+.portfolio-project-table .filter-button {
     align-items: center;
-    background: transparent;
+    background: transparent !important;
+    border-color: transparent !important;
     border: 0;
     border-radius: 0.25rem;
-    color: var(--st-text-color);
+    color: var(--st-text-color) !important;
     cursor: pointer;
     display: inline-flex;
     font: inherit;
@@ -105,9 +106,13 @@ tbody tr.selected {
     opacity: 0.62;
     width: 1.6rem;
 }
-.filter-button:hover, .filter-button.active {
-    background: color-mix(in srgb, var(--st-primary-color) 14%, transparent);
-    color: var(--st-primary-color);
+.portfolio-project-table .filter-button:hover {
+    background: color-mix(in srgb, var(--st-text-color) 8%, transparent) !important;
+    opacity: 1;
+}
+.portfolio-project-table .filter-button.active {
+    background: var(--st-primary-color, #C41039) !important;
+    color: white !important;
     opacity: 1;
 }
 .filter-menu {
@@ -209,8 +214,9 @@ export default function(component) {
     let model = root._portfolio;
     if (!model || model.context !== info.context) {
         model?.badgeController?.abort();
+        const position = info.preserve_position && model ? {top:model.top, left:model.left} : {top:0,left:0};
         model = root._portfolio = {context: info.context, pages: new Map(), pending: null,
-            query: info.query || {}, total: info.total, top: 0, left: 0, menu: null, sequence: 0};
+            query: info.query || {}, total: info.total, ...position, menu: null, sequence: 0};
     }
     const dismissFilterMenu = () => {
         model.menu = null;

@@ -106,12 +106,15 @@ def test_mapping_dialog_empty_employee_branch_prevents_saving_an_invalid_target(
 
 @pytest.mark.parametrize("target", [1, 3])
 def test_allocation_row_unassignment_can_only_open_for_an_assignment_in_the_selected_pool(business, target):
+    import streamlit as st
     path, _, _, _, manager = business
     with closing(get_db(path)) as connection, connection:
         connection.execute("INSERT INTO resource_pool(id,name,capacity_fte) VALUES(2,'Other pool',1)")
         connection.execute("INSERT INTO resource_pool_assignment(id,pool_id,project_id,fte_assigned) VALUES(3,2,1,1)")
     component = Mock(return_value=SimpleNamespace(action={"id": target, "action": "unassign"}))
-    with patch("streamlit.components.v2.component", return_value=component):
+    register = st.components.v2.component
+    with patch("streamlit.components.v2.component", side_effect=lambda name, **kwargs:
+               component if name == "eppm_action_table" else register(name, **kwargs)):
         app = AppTest.from_function(resource_settings_app, args=(path, manager.actor), default_timeout=30)
         app.session_state["target_resource_pool_id"] = 1
         app.run()

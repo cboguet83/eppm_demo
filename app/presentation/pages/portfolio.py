@@ -18,7 +18,7 @@ from app.presentation.components.property_labels import localize_parameters, par
 from app.presentation.components.project_workspace import ProjectWorkspace
 from app.presentation.components.project_type_frames import template_frame
 from app.presentation.components.portfolio_table import portfolio_project_table
-from app.presentation.components.project_dialogs import open_create_project_dialog, open_edit_project_dialog
+from app.presentation.components.portfolio_project_dialog import begin_project_dialog, render_project_modal
 
 ALLOWED_DYNAMIC_PARAMS: set[str] = {
     "phase",
@@ -64,11 +64,11 @@ def _render_project_details_panel(
 
     key = f"project_details_panel_{selected_proj['id']}"
     with st.container(key=key):
-        preserve_tab_position(key)
         try:
             _render_project_details_body(selected_proj, params, workspace)
         except (ValueError, ProjectStorageError, ProjectTypeStorageError, SchemaStorageError) as exc:
             st.error(str(exc))
+        preserve_tab_position(key)
 
 
 def _property_value_html(display: str, param_type: str, label: str) -> str:
@@ -114,8 +114,6 @@ def _render_project_details_body(
     if proj_obj is None:
         st.info("The selected project no longer exists.")
         return
-    st.caption(f"{t('project_types.label')}: {selected_proj.get('project_template', '')}")
-    st.markdown("---")
     head_c1, head_c2 = st.columns([4, 1])
     with head_c1:
         st.subheader(f"📌 {t('portfolio.details_title', default='Project Details')}: #{proj_id} — {proj_name}")
@@ -144,10 +142,9 @@ def _render_project_details_body(
 def _render_project_edit_action(project_id: int, workspace: ProjectWorkspace) -> None:
     """Open editing without rebuilding the selected project's summary or sections."""
     try:
-        if workspace.projects.permissions().allows(Permission.EDIT, project_id) and st.button(
-            "Edit details", key=f"btn_edit_details_{project_id}", width="stretch",
-        ):
-            open_edit_project_dialog(project_id, workspace)
+        if workspace.projects.permissions().allows(Permission.EDIT, project_id):
+            st.button("Edit details", key=f"btn_edit_details_{project_id}", width="stretch",
+                      on_click=begin_project_dialog, args=(workspace, project_id))
     except (ValueError, ProjectStorageError, ProjectTypeStorageError, SchemaStorageError) as exc:
         st.error(str(exc))
 
@@ -156,10 +153,9 @@ def _render_project_edit_action(project_id: int, workspace: ProjectWorkspace) ->
 def _render_project_create_action(workspace: ProjectWorkspace) -> None:
     """Keep opening creation independent from the portfolio grid and selection."""
     try:
-        if workspace.projects.permissions().allows(Permission.CREATE) and st.button(
-            "Create new project", icon=":material/add:", type="primary", key="btn_create_project_from_portfolio",
-        ):
-            open_create_project_dialog(workspace)
+        if workspace.projects.permissions().allows(Permission.CREATE):
+            st.button("Create new project", icon=":material/add:", type="primary", key="btn_create_project_from_portfolio",
+                      on_click=begin_project_dialog, args=(workspace,))
     except (ValueError, ProjectStorageError, ProjectTypeStorageError, SchemaStorageError) as exc:
         st.error(str(exc))
 
@@ -257,6 +253,16 @@ def _portfolio_columns(params: pd.DataFrame) -> list[dict]:
 
 def _render_portfolio_browser(workspace: ProjectWorkspace) -> None:
     """Compose controls, the independent scrolling grid, and selected-project panel."""
+    st.html("""<style>
+        [data-testid="stMainBlockContainer"]:has(.st-key-portfolio_master_table) {
+            padding-top: 0 !important;
+        }
+        /* Style-only shell elements must not reserve empty rows above the page. */
+        [data-testid="stMainBlockContainer"]:has(.st-key-portfolio_master_table)
+        > [data-testid="stVerticalBlock"] > [data-testid="stElementContainer"]:has(style) {
+            display: none;
+        }
+    </style>""")
     params = pd.DataFrame(workspace.portfolio.get_catalog(include_managers=False).parameters)
     columns = _portfolio_columns(localize_parameters(params, workspace.schema.alias_references(get_current_locale())))
     search = st.text_input(t("portfolio.filter_search"), placeholder=t("portfolio.filter_search_placeholder"))
@@ -267,9 +273,10 @@ def _render_portfolio_browser(workspace: ProjectWorkspace) -> None:
 
     _render_portfolio_grid(workspace, columns, search)
     _render_portfolio_selection(workspace, params)
+    render_project_modal(workspace)
 
 
-@st.fragment
+@st.fragment(key="portfolio_grid")
 def _render_portfolio_grid(workspace: ProjectWorkspace, columns: list[dict], search: str) -> None:
     """Load scrolling pages without rebuilding controls, permissions UI, or details."""
     try:
@@ -318,6 +325,7 @@ def _portfolio_grid(workspace: ProjectWorkspace, columns: list[dict], search: st
                    "allocation_endpoint": "/api/portfolio/allocations",
                    "revision": portfolio_revision_token(revision),
                    "request_id": request.get("nonce") if current_request else None,
+                   "preserve_position": st.session_state.pop("portfolio_preserve_grid_position", False),
                    "facet": facet},
         on_selection_change=_select_portfolio_project,
     )
@@ -333,7 +341,10 @@ def _render_portfolio_selection(workspace: ProjectWorkspace, params: pd.DataFram
 
 
 def _portfolio_selection(workspace: ProjectWorkspace, params: pd.DataFrame) -> None:
-    _sync_portfolio_project_selection()
+    if "portfolio_selection_override" in st.session_state:
+        st.session_state[_SELECTED_PROJECT_KEY] = st.session_state.pop("portfolio_selection_override")
+    else:
+        _sync_portfolio_project_selection()
     selected_id = st.session_state.get(_SELECTED_PROJECT_KEY)
     if selected_id is not None:
         detail = workspace.portfolio.get_detail(int(selected_id))

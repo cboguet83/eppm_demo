@@ -14,6 +14,8 @@ from app.presentation.assets import component_path
 from typing import Any
 import pandas as pd
 import streamlit as st
+
+from app.presentation.components.dialog import dialog
 from app.presentation.components.authorized_cache import authorized_cache
 from app.domain.access.models import Permission
 import streamlit.components.v1 as components
@@ -150,6 +152,33 @@ def _apply_immediate_gantt_update(
     return False
 
 
+def _apply_step_form(
+    event: dict[str, Any], workspace: PlanningWorkspace, fallback_project: int | None = None,
+) -> dict[str, Any] | None:
+    """Commit a step form once and return the metadata for its targeted patch."""
+    name = str(event.get("task_name", "")).strip()
+    start = str(event.get("start_date", "")).strip()
+    end = str(event.get("end_date", "")).strip()
+    if not name or not start or not end:
+        return None
+    values = dict(
+        task_name=name, phase=str(event.get("phase", "")).strip() or "General",
+        start_date=start, end_date=end, progress_pct=int(event.get("progress_pct", 0)),
+        dependencies=event.get("dependencies", [] if event["action"] == "create_step_full" else None),
+        description=str(event.get("description", "")).strip(),
+    )
+    before = workspace.revision()
+    if event["action"] == "create_step_full":
+        project_id = int(event.get("project_id") or fallback_project or 0)
+        step_id = workspace.planning.create_milestone(project_id=project_id, **values)
+        st.toast(t("planning.toast_step_created", name=name, project_id=project_id), icon="➕")
+        return {**event, "id": step_id, "project_id": project_id, "before_revision": before}
+    step_id = int(event["id"])
+    require_change(workspace.planning.update_milestone(milestone_id=step_id, **values))
+    st.toast(t("planning.toast_step_updated", name=name), icon="✏️")
+    return {**event, "before_revision": before}
+
+
 @planning_errors
 def _handle_gantt_component_change(widget_key: str, workspace: PlanningWorkspace) -> None:
     """Route filters and inline Gantt mutations before the automatic rerun.
@@ -164,6 +193,8 @@ def _handle_gantt_component_change(widget_key: str, workspace: PlanningWorkspace
         "filter_project",
         "update_dates",
         "update_progress",
+        "create_step_full",
+        "update_task_full",
         "load_dependency_tasks",
         "load_project_tasks",
         "initialize_planning",
@@ -191,6 +222,14 @@ def _handle_gantt_component_change(widget_key: str, workspace: PlanningWorkspace
     elif gantt_event.get("action") == "filter_project":
         st.session_state["pending_project_context_filter"] = gantt_event
         st.rerun("planning_workspace")
+    elif gantt_event.get("action") in {"create_step_full", "update_task_full"}:
+        try:
+            change = _apply_step_form(gantt_event, workspace)
+        except (ValueError, PlanningStorageError, ProjectStorageError) as exc:
+            st.session_state["planning_step_form_error"] = str(exc)
+            return
+        if change:
+            st.session_state["planning_pending_change"] = change
     else:
         before = workspace.revision()
         if _apply_immediate_gantt_update(gantt_event, workspace):
@@ -407,7 +446,7 @@ def _build_resource_pool_hierarchy(
     return hierarchy
 
 
-@st.dialog(t("planning.dialog_project_tags_title", default="🏷️ Manage Project Tags"))
+@dialog(t("planning.dialog_project_tags_title", default="🏷️ Manage Project Tags"))
 @planning_errors
 def _manage_project_tags_dialog(
     project_id: int, project_name: str, workspace: PlanningWorkspace
@@ -500,7 +539,7 @@ def _manage_project_tags_dialog(
             st.rerun()
 
 
-@st.dialog(t("planning.dialog_task_tags_title", default="🏷️ Manage Task Tags"))
+@dialog(t("planning.dialog_task_tags_title", default="🏷️ Manage Task Tags"))
 @planning_errors
 def _manage_task_tags_dialog(task_id: int, task_name: str, workspace: PlanningWorkspace) -> None:
     """Modal dialog for adding, editing, and deleting tags on a task."""
@@ -592,7 +631,7 @@ def _manage_task_tags_dialog(task_id: int, task_name: str, workspace: PlanningWo
             st.rerun()
 
 
-@st.dialog(t("planning.dialog_project_pools_title", default="🏊 Manage Project Resource Pools"))
+@dialog(t("planning.dialog_project_pools_title", default="🏊 Manage Project Resource Pools"))
 @planning_errors
 def _manage_project_resource_pools_dialog(
     project_id: int, project_name: str, workspace: PlanningWorkspace
@@ -797,7 +836,7 @@ def _manage_project_resource_pools_dialog(
             st.rerun()
 
 
-@st.dialog(t("planning.dialog_task_pools_title", default="🏊 Manage Task Resource Pools"))
+@dialog(t("planning.dialog_task_pools_title", default="🏊 Manage Task Resource Pools"))
 @planning_errors
 def _manage_task_resource_pools_dialog(
     task_id: int, task_name: str, project_id: int | str, workspace: PlanningWorkspace
@@ -1232,6 +1271,9 @@ def _render_planning_chart(
 ) -> None:
     from uuid import uuid4
 
+    feedback = st.empty()
+    if error := st.session_state.pop("planning_step_form_error", None):
+        feedback.error(error)
     selected_id = selected_projects[0]
     all_proj_ids = df_projects.id.tolist()
     ids = tuple(sorted(map(int, selected_projects)))
@@ -1461,59 +1503,10 @@ def _render_planning_chart(
                         "project_id": str(gantt_event.get("project_id", selected_id)),
                     }
                     st.rerun()
-            elif action == "update_task_full" and step_id:
-                t_name = str(gantt_event.get("task_name", "")).strip()
-                t_phase = str(gantt_event.get("phase", "General")).strip()
-                t_start = str(gantt_event.get("start_date", "")).strip()
-                t_end = str(gantt_event.get("end_date", "")).strip()
-                t_prog = int(gantt_event.get("progress_pct", 0))
-                t_desc = str(gantt_event.get("description", "")).strip()
-                t_deps = gantt_event.get("dependencies")
-                if t_name and t_start and t_end:
-                    require_change(
-                        workspace.planning.update_milestone(
-                            milestone_id=int(step_id),
-                            task_name=t_name,
-                            phase=t_phase,
-                            start_date=t_start,
-                            end_date=t_end,
-                            progress_pct=t_prog,
-                            dependencies=t_deps,
-                            description=t_desc,
-                        )
-                    )
-                    st.toast(t("planning.toast_step_updated", name=t_name), icon="✏️")
-                    st.rerun()
-            elif action == "create_step_full":
-                t_proj = str(gantt_event.get("project_id", "")).strip() or selected_id
-                t_name = str(gantt_event.get("task_name", "")).strip()
-                t_phase = str(gantt_event.get("phase", "")).strip() or "General"
-                t_start = str(gantt_event.get("start_date", "")).strip()
-                t_end = str(gantt_event.get("end_date", "")).strip()
-                t_prog = int(gantt_event.get("progress_pct", 0))
-                t_desc = str(gantt_event.get("description", "")).strip()
-                t_deps = gantt_event.get("dependencies", [])
-                if t_name and t_start and t_end:
-                    before = workspace.revision()
-                    new_step_id = workspace.planning.create_milestone(
-                        project_id=int(t_proj),
-                        task_name=t_name,
-                        phase=t_phase,
-                        start_date=t_start,
-                        end_date=t_end,
-                        progress_pct=t_prog,
-                        dependencies=t_deps,
-                        description=t_desc,
-                    )
-                    st.session_state["planning_pending_change"] = {
-                        **gantt_event,
-                        "id": new_step_id,
-                        "project_id": int(t_proj),
-                        "before_revision": before,
-                    }
-                    st.toast(
-                        t("planning.toast_step_created", name=t_name, project_id=t_proj), icon="➕"
-                    )
+            elif action in {"update_task_full", "create_step_full"}:
+                change = _apply_step_form(gantt_event, workspace, int(selected_id))
+                if change:
+                    st.session_state["planning_pending_change"] = change
                     st.rerun()
             elif action == "update_dates" and step_id:
                 _apply_immediate_gantt_update(gantt_event, workspace)
@@ -1844,7 +1837,7 @@ def render_planning_milestones(workspace: PlanningWorkspace) -> None:
     )
 
 
-@st.dialog("Active Allocations on Projects & Tasks", width="large")
+@dialog("Active Allocations on Projects & Tasks", width="large")
 @planning_errors
 def _pool_allocations_dialog(pool_id: int, workspace: PlanningWorkspace, group_id: int | None = None) -> None:
     """Reuse the Settings allocation projection for the chosen pool."""
@@ -1863,7 +1856,7 @@ def _pool_allocations_dialog(pool_id: int, workspace: PlanningWorkspace, group_i
         )
 
 
-@st.dialog("Schedule CSV", width="large")
+@dialog("Schedule CSV", width="large")
 @planning_errors
 def _schedule_csv_dialog(workspace: PlanningWorkspace, project_id: int, action: str) -> None:
     """Load exports or validate an import only after its menu is invoked."""

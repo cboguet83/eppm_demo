@@ -459,8 +459,55 @@ role/scope visibility, cross-tab text/date retention, lost permission, deleted-p
 saves, existing template/link workflows and project deletion confirmation. Combined
 statement coverage is **99.02%** (10,781 of 10,888 statements).
 
+The shared popup presentation follow-up applies the same completion rule to all
+40 native dialogs. Browser tests sample animation frames while a deliberately slow
+dialog emits fields in separate stages, including a cold multiselect load. Every
+visible frame contains the completed form. Reopening, Escape, the close button,
+backdrop dismissal and a stopped permission error are covered. Authenticated checks
+of project creation, basic-field editing and project editing recorded zero partial
+frames and zero sidebar deltas; no business data was saved. Cold opening latency
+remains variable, and these checks do not claim instantaneous server reads.
+
+The project permission projection is reused only during one synchronous dialog
+render. Tests verify that independent field-fragment interactions read it again,
+alongside the existing downgrade, disabled-actor and write-authorization checks.
+
+The full Python suite and corrected-case reruns account for **1,247 passing tests**;
+the separate opt-in Keycloak deployment test was skipped. The final targeted run
+also dispatches real Cancel fragment events across nine settings dialogs and
+verifies that the database remains unchanged. Four existing browser-modal
+JavaScript tests pass. Combined statement coverage is **99.00%** (10,820 of 10,929
+statements). Older broad component mocks were narrowed to their intended tables,
+and the property-form test now navigates lazy tabs and preserves explicitly cleared
+text when saving from another section.
+
 Additional ASVS features outside the specified implementation are not claimed:
 device/posture risk evaluation, MFA for every non-administrator, self-service session
 inventory, an administrator "terminate every session" function, provider back-channel
 logout, and remote tamper-resistant log collection. This document does not substitute
 for a deployment threat assessment or a complete independent ASVS review.
+
+The subsequent portfolio form change replaces its native project editor with a
+prepared Component v2 modal. Browser tests verify complete content at `showModal`,
+viewport bounds, local typed inputs/tabs/custom links, validation retries, explicit
+deletion confirmation and reopening after dismissal. Real fragment dispatch against
+isolated storage verifies one grid/selection update per successful save, no sidebar
+deltas, disabled-account denial, protected ENUM denial and forged-delete rejection.
+Gantt create/full-edit events now commit before one affected-project chart patch;
+a revoked editor cannot create a task through a retained component.
+
+An authenticated development check, using unsaved drafts only, observed creation
+opening in 2,526 ms and editing in 2,040 ms, including a 300 ms settling allowance.
+Each opening emitted two UI deltas and zero partial frames or sidebar deltas.
+Changing a field emitted zero deltas; its 338 ms observation includes that same
+settling allowance. The form appeared with all 29 creation controls or 35 editing
+controls present. These measurements address staged rendering and unnecessary
+reruns; server reads still impose opening latency and are not claimed instantaneous.
+
+Final validation accounts for **1,283 passing Python tests** across the full suite
+and corrected/added-case reruns, with the separate opt-in Keycloak test skipped.
+The final 48-test run passes, as do all **70 JavaScript tests**. Combined statement
+coverage is **99.01%** (10,998 of 11,108 statements), including every statement in
+the new portfolio form controller. The revoked-grid assertion now checks removal
+of the protected table and absence of new component payloads; an empty modal host
+retained outside that fragment does not carry project data.

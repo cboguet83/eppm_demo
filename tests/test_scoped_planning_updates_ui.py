@@ -206,6 +206,7 @@ def test_forged_resource_settings_navigation_does_not_grant_shared_administratio
 
 @pytest.mark.parametrize("group", [False, True])
 def test_gantt_pool_and_group_allocation_menus_open_only_scoped_rows(business, group):
+    import streamlit as st
     from types import SimpleNamespace
     from unittest.mock import Mock
 
@@ -216,8 +217,10 @@ def test_gantt_pool_and_group_allocation_menus_open_only_scoped_rows(business, g
     event = {"action": "show_pool_allocations", "pool_id": 0 if group else 1,
              "group_id": 1 if group else None, "nonce": "allocations-menu"}
     table = Mock(return_value=SimpleNamespace(action=None))
+    register = st.components.v2.component
     with patch("app.presentation.pages.planning._interactive_gantt", return_value=event), \
-            patch("streamlit.components.v2.component", return_value=table):
+            patch("streamlit.components.v2.component", side_effect=lambda name, **kwargs:
+                  table if name == "eppm_action_table" else register(name, **kwargs)):
         app = AppTest.from_function(scoped_planning_app, args=(path, editor.actor), default_timeout=30).run()
     assert not app.exception and not app.error and app.get("dialog")
     payload = table.call_args.kwargs["data"]

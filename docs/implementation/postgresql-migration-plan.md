@@ -2,7 +2,8 @@
 
 Planning date: 2026-09-10.
 
-Status: agreed implementation plan; implementation has not started.
+Status: agreed implementation plan; implementation has not started. Scope is the
+PostgreSQL migration only.
 
 ## 1. Instructions to the implementing agent
 
@@ -29,6 +30,11 @@ services, tests, and decisions before implementation; include accepted features
 present in the starting baseline. Do not implement unrelated planned features as
 part of this migration.
 
+Planning revisions, their PostgreSQL schema changes, and stale-edit protection
+belong to the separate [task and resource planning implementation plan](planning-revisions-plan.md).
+Complete and validate this database migration first. Do not add preparatory
+version columns or implement the planning-revision feature in this migration.
+
 ## 2. Objective and agreed boundaries
 
 Replace SQLite with PostgreSQL while preserving the application's existing
@@ -45,6 +51,9 @@ alone will improve browser rendering or Python calculations.
   not delete existing databases or Docker volumes.
 - **Runtime:** retain Python `>=3.14,<3.15` and the existing Streamlit/custom
   component architecture.
+- **Database migration only:** preserve current planning functionality. Planning
+  and revision tables, version columns, historical snapshots, approval/baseline
+  workflows, and stale-edit protection belong to the dedicated planning feature.
 - **Performance:** 50 active users on the current Docker host; 95% of routine
   warm browsing and simple saves must complete within one second.
 - **Delivery:** focused intermediate commits, tested milestones, deployment and
@@ -138,6 +147,9 @@ alone will improve browser rendering or Python calculations.
 - Never replay an uncertain commit or an external side effect. Translate
   exhausted retries into existing safe application errors. UI rendering and
   external calls must remain outside replayable transaction callbacks.
+- Preserve original command inputs across retries. Database retries address
+  serialization failures and deadlocks, not stale forms. Do not add or silently
+  substitute expected-version tokens as part of this migration.
 - Preserve atomic OIDC-state consumption, session expiry/revocation,
   authentication-versus-activity distinctions, immutable audit history, and
   rollback of a business/security mutation when its required audit insert fails.
@@ -152,10 +164,12 @@ alone will improve browser rendering or Python calculations.
   component contracts. Update composition APIs to accept the injected database
   resource rather than filesystem paths. Preserve DTO boundaries instead of
   exposing driver rows to the UI.
-- Replace the global business-edit revision counter with project/pool revisions
-  and separate shared-catalog/security revisions. Unrelated project edits must
-  not contend on one revision row. The existing global counter is a known
-  concurrency risk that a direct SQL translation would retain.
+- Replace the global business-display revision counter with project/pool
+  cache-invalidation revisions and separate shared-catalog/security revisions.
+  Unrelated project edits must not contend on one revision row. The existing
+  global counter is a known concurrency risk that a direct SQL translation would
+  retain. These active cache counters are neither planning history nor stale-edit
+  protection; do not treat them as preparation for the separate planning feature.
 - Build opaque cache tokens from revisions and effective scope read in the same
   snapshot. Detect membership changes, deletion, and database recreation.
   Preserve the browser's opaque-token contract rather than exposing database
@@ -179,9 +193,9 @@ large to review as one change. Keep unrelated user work out of every commit.
 | --- | --- |
 | 1. Baseline and decisions | Record the starting commit, existing test results, deterministic workload, and SQLite timings. Add an ADR superseding SQLite-specific decisions while preserving business/security guarantees. |
 | 2. PostgreSQL foundation | Add Compose service, credentials/configuration, pooled connections, migration runner, and isolated PostgreSQL test fixtures. Verify startup, shutdown, pool cleanup, and migration failure recovery. |
-| 3. Schema and enforcement | Add schema, constraints, row security, audit enforcement, and concurrency controls. Pass direct-database security and integrity tests before connecting business features. |
+| 3. Schema and enforcement | Add the existing application schema, constraints, row security, audit enforcement, and transaction controls. Pass direct-database security and integrity tests before connecting business features. No preparatory planning-version columns are included. |
 | 4. Core repositories | Port organization, templates/schema, projects, tags, collaboration, and budgets, including Decimal contracts. Commit coherent subsystem groups with their tests. |
-| 5. Planning and caches | Port scheduling, dependencies, allocations, capacity calculations, portfolio queries, and revisions. Validate snapshot consistency, concurrent edits, and stale-cache rejection. |
+| 5. Existing planning and caches | Port current scheduling, dependencies, allocations, capacity calculations, portfolio queries, and cache-invalidation revisions. Validate transaction snapshot consistency, overlapping writes, and stale-cache rejection. Do not implement planning revisions or stale-form checks. |
 | 6. Runtime cutover | Switch composition, authentication, operator commands, seed/reset tools, and benchmarks to PostgreSQL. Archive legacy SQLite code and remove active dependencies on it. |
 | 7. Acceptance and documentation | Complete regression, browser, concurrency, performance, and backup/restore checks. Update README, configuration examples, deployment instructions, and C4 documentation. |
 
@@ -207,8 +221,10 @@ changed since planning.
   cascades, calendar overlaps, hierarchy cycles, allocation totals, translations,
   filters, and exact monetary round trips.
 - Exercise concurrent bootstrap, last-administrator changes, session revocation
-  versus saves, conflicting schedule edits, cache publication races, and pooled
-  connections reused by different actors.
+  versus saves, overlapping schedule transactions, cache publication races, and
+  pooled connections reused by different actors. Check database integrity and
+  existing application semantics; rejection of an outdated editor draft is not
+  an acceptance criterion for this migration.
 - Verify unauthorized direct writes, hidden dependency endpoints,
   protected-property changes, and failed audit inserts cannot bypass safeguards.
 - Verify transaction rollback, whole-operation retry, pool exhaustion, database
@@ -245,8 +261,9 @@ changed since planning.
   successful save confirmation. A pooled average must not hide a failing
   individual scenario. Routine nonconflicting operations must have no unexpected
   failures.
-- Report cold loads, badges, bulk imports, and deliberately conflicting edits
-  separately. Expected conflict handling does not replace correctness checks.
+- Report cold loads, badges, bulk imports, and deliberate database transaction
+  conflicts separately. Transaction-conflict handling does not demonstrate
+  protection against saving an outdated form.
 - Record database time, pool waits, lock waits, server processing, browser
   rendering, and unexpected failures. Record CPU, memory, Docker resource limits,
   application/database versions, connection limits, and load-generator placement.
@@ -274,6 +291,7 @@ changed since planning.
 - [ ] Migration branch and starting commit recorded; unrelated work preserved.
 - [ ] Superseding ADR and accurate C4 documentation completed.
 - [ ] PostgreSQL schema, migrations, connections, and deployment tooling complete.
+- [ ] Preparatory version columns, planning revisions, and stale-edit handling remain outside this plan.
 - [ ] All repositories, authentication storage, maintenance tools, and benchmarks ported.
 - [ ] Authorization, audit, transaction, cache, and monetary guarantees verified.
 - [ ] Active runtime and tests use PostgreSQL; legacy SQLite migration history retained.
@@ -282,6 +300,11 @@ changed since planning.
 - [ ] Fifty-user responsiveness target met with recorded evidence.
 - [ ] Fresh setup, restart, backup/restore, and recovery procedures verified.
 - [ ] Final handoff lists commits, checks, benchmark results, and any remaining limitations.
+
+Migration acceptance covers the current application's PostgreSQL operation. The
+final implementation handoff must explicitly state that planning revisions,
+their version columns, and stale-form overwrite protection belong to their
+dedicated plan and are not implemented by this migration.
 
 ## References
 

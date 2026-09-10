@@ -3,6 +3,7 @@
 import streamlit as st
 
 from app.presentation.components.application_workspace import ApplicationWorkspace
+from app.presentation.components.dialog import install_dialog_presentation
 from app.presentation.i18n import SUPPORTED_LOCALES, get_current_locale, set_current_locale, t
 from app.presentation.navigation import (
     PAGE_PORTFOLIO,
@@ -96,6 +97,7 @@ def render_application(workspace: ApplicationWorkspace) -> None:
         unsafe_allow_html=True,
     )
 
+    install_dialog_presentation()
     render_language_selector()
 
     st.sidebar.title(f"📌 {t('app.title', default='PPM Demo Portal')}")

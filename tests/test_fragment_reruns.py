@@ -33,6 +33,7 @@ class FragmentRun:
     widget_id: str = ""
     widget_options: list[str] = field(default_factory=list)
     widget_trigger: bool = False
+    widget_label: str = ""
 
     def runner(self, *args, **kwargs) -> LocalScriptRunner:
         runner = LocalScriptRunner(*args, **kwargs)
@@ -53,6 +54,8 @@ class FragmentRun:
                         delta.add_block.tab_container.id,
                     )
                     identifier = next((value for value in identifiers if value.endswith("-" + self.widget_key)), "")
+                    if self.widget_label and delta.new_element.button.label == self.widget_label:
+                        identifier = delta.new_element.button.id
                     if identifier:
                         self.widget_id = identifier
                         self.fragment_id = delta.fragment_id
@@ -262,7 +265,8 @@ def test_retained_master_grid_rechecks_access_before_serving_its_cached_page(bus
     rerun.run(app)
     rerun.assert_isolated()
     assert "not permitted" in app.error[0].value
-    assert not app.get("bidi_component")
+    assert not any(component.key == "portfolio_master_table" for component in app.get("bidi_component"))
+    assert not any(message.delta.new_element.HasField("bidi_component") for message in rerun.messages)
 
 
 def test_project_section_rerun_preserves_summary_and_loads_only_active_section(business):

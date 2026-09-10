@@ -7,6 +7,8 @@ from functools import wraps
 import pandas as pd
 import streamlit as st
 
+from app.presentation.components.dialog import dialog
+
 from app.application.exceptions import OrganizationStorageError
 from app.application.services.organization import OrganizationService
 from app.domain.organization.models import Employee, EmployeeCalendarException, FunctionType, OrgFunction, Team
@@ -34,7 +36,7 @@ def require_change(changed: bool) -> None:
         raise ValueError("This record no longer exists. Please refresh and try again.")
 
 
-@st.dialog(t("settings.dialog_add_func", default="➕ Create Job Function"))
+@dialog(t("settings.dialog_add_func", default="➕ Create Job Function"))
 @organization_errors
 def _open_add_function_dialog(
     service: OrganizationService,
@@ -108,7 +110,7 @@ def _open_add_function_dialog(
         st.rerun()
 
 
-@st.dialog(t("settings.dialog_edit_func", default="✏️ Edit Job Function"))
+@dialog(t("settings.dialog_edit_func", default="✏️ Edit Job Function"))
 @organization_errors
 def _open_edit_function_dialog(
     service: OrganizationService,
@@ -198,7 +200,7 @@ def _open_edit_function_dialog(
         st.rerun()
 
 
-@st.dialog(t("settings.delete_confirm_title", default="🗑️ Confirm Deletion"))
+@dialog(t("settings.delete_confirm_title", default="🗑️ Confirm Deletion"))
 @organization_errors
 def _open_delete_function_dialog(
     service: OrganizationService,
@@ -219,7 +221,7 @@ def _open_delete_function_dialog(
         st.rerun()
 
 
-@st.dialog(t("settings.dialog_add_team", default="➕ Create Team"))
+@dialog(t("settings.dialog_add_team", default="➕ Create Team"))
 @organization_errors
 def _open_add_team_dialog(
     service: OrganizationService,
@@ -272,7 +274,7 @@ def _open_add_team_dialog(
         st.rerun()
 
 
-@st.dialog(t("settings.dialog_edit_team", default="✏️ Edit Team"))
+@dialog(t("settings.dialog_edit_team", default="✏️ Edit Team"))
 @organization_errors
 def _open_edit_team_dialog(
     service: OrganizationService,
@@ -338,7 +340,7 @@ def _open_edit_team_dialog(
         st.rerun()
 
 
-@st.dialog(t("settings.delete_confirm_title", default="🗑️ Confirm Deletion"))
+@dialog(t("settings.delete_confirm_title", default="🗑️ Confirm Deletion"))
 @organization_errors
 def _open_delete_team_dialog(
     service: OrganizationService,
@@ -359,7 +361,7 @@ def _open_delete_team_dialog(
         st.rerun()
 
 
-@st.dialog(t("settings.dialog_add_type", default="➕ Create Function Type"))
+@dialog(t("settings.dialog_add_type", default="➕ Create Function Type"))
 @organization_errors
 def _open_add_function_type_dialog(service: OrganizationService) -> None:
     """Modal dialog to create a new function type."""
@@ -382,7 +384,7 @@ def _open_add_function_type_dialog(service: OrganizationService) -> None:
         st.rerun()
 
 
-@st.dialog(t("settings.dialog_edit_type", default="✏️ Edit Function Type"))
+@dialog(t("settings.dialog_edit_type", default="✏️ Edit Function Type"))
 @organization_errors
 def _open_edit_function_type_dialog(
     service: OrganizationService,
@@ -409,7 +411,7 @@ def _open_edit_function_type_dialog(
         st.rerun()
 
 
-@st.dialog(t("settings.delete_confirm_title", default="🗑️ Confirm Deletion"))
+@dialog(t("settings.delete_confirm_title", default="🗑️ Confirm Deletion"))
 @organization_errors
 def _open_delete_function_type_dialog(
     service: OrganizationService,
@@ -430,7 +432,7 @@ def _open_delete_function_type_dialog(
         st.rerun()
 
 
-@st.dialog(t("settings.dialog_add_emp", default="➕ Add New Employee"))
+@dialog(t("settings.dialog_add_emp", default="➕ Add New Employee"))
 @organization_errors
 def _open_add_employee_dialog(
     service: OrganizationService,
@@ -762,7 +764,7 @@ def _render_employee_calendar_exception_editor(
         st.rerun(scope="fragment")
 
 
-@st.dialog(t("settings.dialog_edit_emp", default="✏️ Edit Employee Profile"))
+@dialog(t("settings.dialog_edit_emp", default="✏️ Edit Employee Profile"))
 @organization_errors
 def _open_edit_employee_dialog(
     service: OrganizationService,
@@ -849,7 +851,7 @@ def _open_edit_employee_dialog(
         st.rerun()
 
 
-@st.dialog(t("settings.delete_confirm_title", default="🗑️ Confirm Deletion"))
+@dialog(t("settings.delete_confirm_title", default="🗑️ Confirm Deletion"))
 @organization_errors
 def _open_delete_employee_dialog(
     service: OrganizationService,
