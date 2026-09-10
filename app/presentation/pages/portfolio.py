@@ -3,6 +3,8 @@
 import hashlib
 import html
 import json
+from contextvars import ContextVar
+from dataclasses import dataclass
 
 import pandas as pd
 import streamlit as st
@@ -11,8 +13,11 @@ from app.domain.access.models import Permission
 
 from app.application.exceptions import ProjectStorageError, ProjectTypeStorageError, SchemaStorageError
 from app.application.services.portfolio import PortfolioService, portfolio_revision_token
+from app.application.services.project_types import ProjectTypeService
+from app.application.services.schema import SchemaService
 from app.domain.projects.budgets import BudgetAmounts, analyze_budget, euro_amount
 from app.domain.projects.links import normalize_link
+from app.domain.projects.project import Project
 from app.presentation.i18n import get_current_locale, t
 from app.presentation.components.property_labels import localize_parameters, parameter_groups, property_label
 from app.presentation.components.project_workspace import ProjectWorkspace
@@ -31,6 +36,52 @@ ALLOWED_DYNAMIC_PARAMS: set[str] = {
 
 _PORTFOLIO_TABLE_KEY = "portfolio_master_table"
 _SELECTED_PROJECT_KEY = "selected_portfolio_project_id"
+
+
+@dataclass(frozen=True)
+class _DetailContent:
+    """Current display data reused only within one synchronous details render."""
+
+    project: Project
+    field_groups: list[tuple[str, pd.DataFrame]]
+    can_edit: bool
+
+
+_detail_content: ContextVar[tuple[int, int, _DetailContent] | None] = ContextVar(
+    "portfolio_detail_content", default=None,
+)
+
+
+def _load_detail_content(project_id: int, workspace: ProjectWorkspace) -> _DetailContent | None:
+    """Resolve authorized project and schema reads before emitting visible fields."""
+    current = _detail_content.get()
+    if current is not None and current[:2] == (id(workspace), project_id):
+        return current[2]
+    project = workspace.projects.get_project_by_id(project_id)
+    if project is None:
+        return None
+    can_edit = workspace.projects.permissions().allows(Permission.EDIT, project_id)
+    fields = _detail_fields(
+        (), project.project_type_id, get_current_locale(),
+        _service=workspace.portfolio, _types=workspace.types, _schema=workspace.schema,
+    )
+    return _DetailContent(project, fields, can_edit)
+
+
+@authorized_cache(ttl=60, max_entries=128, show_spinner=False)
+def _detail_fields(
+    revision: tuple, type_id: int, locale: str, *, _service: PortfolioService,
+    _types: ProjectTypeService, _schema: SchemaService,
+) -> list[tuple[str, pd.DataFrame]]:
+    """Reuse reference fields under the current database, actor, scope and revision."""
+    params = localize_parameters(
+        template_frame(_types.template_reference(type_id)), _schema.alias_references(locale),
+    )
+    groups = pd.DataFrame(_service.get_catalog(include_managers=False).groups)
+    field_groups = parameter_groups(params, groups)
+    if not any(label.casefold() == "useful links" for label, _ in field_groups):
+        field_groups.append(("useful links", params.iloc[:0]))
+    return field_groups
 
 
 def _sync_portfolio_project_selection(
@@ -68,7 +119,7 @@ def _render_project_details_panel(
             _render_project_details_body(selected_proj, params, workspace)
         except (ValueError, ProjectStorageError, ProjectTypeStorageError, SchemaStorageError) as exc:
             st.error(str(exc))
-        preserve_tab_position(key)
+        preserve_tab_position(key, reveal_complete=True)
 
 
 def _property_value_html(display: str, param_type: str, label: str) -> str:
@@ -99,6 +150,20 @@ def _render_project_details_body(
         params: Schema parameters DataFrame.
         workspace: Injected project use cases and collaboration sections.
     """
+    proj_id = int(selected_proj["id"])
+    content = _load_detail_content(proj_id, workspace)
+    if content is None:
+        st.info("The selected project no longer exists.")
+        return
+    token = _detail_content.set((id(workspace), proj_id, content))
+    try:
+        _draw_project_details(selected_proj, workspace)
+    finally:
+        _detail_content.reset(token)
+
+
+def _draw_project_details(selected_proj: pd.Series, workspace: ProjectWorkspace) -> None:
+    """Draw prepared summary and section data without intervening project reads."""
     proj_id = selected_proj["id"]
     proj_name = selected_proj["name"]
     proj_status = selected_proj.get("status", "—")
@@ -110,17 +175,13 @@ def _render_project_details_body(
     variance = analysis.variance
     burn_rate_label = f"{analysis.burn_rate:.1f}%" if analysis.burn_rate is not None else "—"
 
-    proj_obj = workspace.projects.get_project_by_id(proj_id)
-    if proj_obj is None:
-        st.info("The selected project no longer exists.")
-        return
     head_c1, head_c2 = st.columns([4, 1])
     with head_c1:
         st.subheader(f"📌 {t('portfolio.details_title', default='Project Details')}: #{proj_id} — {proj_name}")
     with head_c2:
         _render_project_edit_action(int(proj_id), workspace)
 
-    # Labels and values deliberately use the same native caption font size.
+    # Emit the complete summary together, retaining caption-sized labels and values.
     summary = [
         (t("portfolio.col_status", default="Status"), str(proj_status)),
         (t("master_data.field_project_manager", default="Project Manager"), str(pm_name)),
@@ -129,11 +190,16 @@ def _render_project_details_body(
         (t("portfolio.col_actual", default="Actual (€)"), f"€{actual:,.2f}"),
         (t("portfolio.kpi_variance", default="Variance"), f"€{variance:,.2f} · {burn_rate_label} burn"),
     ]
-    with st.container(key=f"project_details_summary_{proj_id}", horizontal=True, horizontal_alignment="distribute"):
-        for label, value in summary:
-            with st.container(width="content"):
-                st.caption(label)
-                st.caption(value)
+    with st.container(key=f"project_details_summary_{proj_id}"):
+        st.html(
+            '<dl style="display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;'
+            'font-size:.875rem;color:inherit;opacity:.7;margin:0">'
+            + ''.join(
+                '<div style="min-width:0;overflow-wrap:anywhere">'
+                f'<dt>{html.escape(label)}</dt><dd style="margin:1rem 0 0">{html.escape(value)}</dd></div>'
+                for label, value in summary
+            ) + '</dl>'
+        )
 
     _render_project_detail_sections(int(proj_id), workspace)
 
@@ -142,7 +208,10 @@ def _render_project_details_body(
 def _render_project_edit_action(project_id: int, workspace: ProjectWorkspace) -> None:
     """Open editing without rebuilding the selected project's summary or sections."""
     try:
-        if workspace.projects.permissions().allows(Permission.EDIT, project_id):
+        current = _detail_content.get()
+        can_edit = (current[2].can_edit if current is not None and current[:2] == (id(workspace), project_id)
+                    else workspace.projects.permissions().allows(Permission.EDIT, project_id))
+        if can_edit:
             st.button("Edit details", key=f"btn_edit_details_{project_id}", width="stretch",
                       on_click=begin_project_dialog, args=(workspace, project_id))
     except (ValueError, ProjectStorageError, ProjectTypeStorageError, SchemaStorageError) as exc:
@@ -171,21 +240,11 @@ def _render_project_detail_sections(proj_id: int, workspace: ProjectWorkspace) -
 
 def _project_detail_sections(proj_id: int, workspace: ProjectWorkspace) -> None:
     """Read the current authorized project before displaying a retained tab."""
-    proj_obj = workspace.projects.get_project_by_id(proj_id)
-    if proj_obj is None:
+    content = _load_detail_content(proj_id, workspace)
+    if content is None:
         st.info("The selected project no longer exists.")
         return
-    params = localize_parameters(
-        template_frame(workspace.types.template_reference(proj_obj.project_type_id)),
-        workspace.schema.alias_references(get_current_locale()),
-    )
-    allowed = set(params["param_id"]) if not params.empty else set()
-    dyn_dict = {pid: value for pid, value in proj_obj.dynamic_attributes.items() if pid in allowed}
-    # Render only the effective template, including user-created groups/fields.
-    groups = pd.DataFrame(workspace.portfolio.get_catalog(include_managers=False).groups)
-    field_groups = parameter_groups(params, groups)
-    if not any(label.casefold() == "useful links" for label, _ in field_groups):
-        field_groups.append(("useful links", params.iloc[:0]))
+    field_groups = content.field_groups
     labels = [t("portfolio.tab_details_links") if label.casefold() == "useful links" else label
               for label, _ in field_groups]
     labels += [t("project_collaboration.contacts", default="Project Contacts"),
@@ -194,17 +253,20 @@ def _project_detail_sections(proj_id: int, workspace: ProjectWorkspace) -> None:
     for tab, (group_label, fields) in zip(tabs, field_groups):
         if tab.open:
             with tab:
+                rows = []
                 for _, prop in fields.iterrows():
-                    value = dyn_dict.get(prop["param_id"])
+                    value = content.project.dynamic_attributes.get(prop["param_id"])
                     display = ", ".join(map(str, value)) if isinstance(value, list) else str(value) if value is not None else "—"
                     label = property_label(prop.to_dict(), {})
                     value_html = _property_value_html(display, prop["param_type"], label)
-                    st.html(
+                    rows.append(
                         '<div style="display:grid;grid-template-columns:minmax(10rem,25%) minmax(0,1fr);'
                         'column-gap:2rem;padding:.25rem 0;overflow-wrap:anywhere">'
                         f'<span>{html.escape(label)}{" *" if prop["mandatory"] else ""}:</span>'
                         f'<span>{value_html}</span></div>'
                     )
+                if rows:
+                    st.html('<div style="display:flex;flex-direction:column;gap:1rem">' + ''.join(rows) + '</div>')
                 if group_label.casefold() == "useful links" and workspace.render_links:
                     workspace.render_links(int(proj_id))
     if tabs[-2].open:
@@ -254,6 +316,9 @@ def _portfolio_columns(params: pd.DataFrame) -> list[dict]:
 def _render_portfolio_browser(workspace: ProjectWorkspace) -> None:
     """Compose controls, the independent scrolling grid, and selected-project panel."""
     st.html("""<style>
+        .stVerticalBlock[class*="st-key-project_details_panel_"]:not([data-eppm-details-ready]) {
+            visibility: hidden;
+        }
         [data-testid="stMainBlockContainer"]:has(.st-key-portfolio_master_table) {
             padding-top: 0 !important;
         }

@@ -192,6 +192,17 @@ showing it. Neither mechanism eliminates the time needed for authorized server
 reads or writes; this presentation change removes partial opening without adding a
 fixed loading delay or weakening authorization.
 
+## Project details loading
+
+Project details prepare the authorized project, edit capability and effective
+template before drawing the summary and first section. The project read is reused
+only during that synchronous render; independent tab and action requests check
+current access again. Template fields and labels use the existing authorized
+display cache, keyed by database, actor/scope, revision, template and locale.
+Schema changes invalidate those entries. The summary and each property section
+are emitted as complete HTML blocks. A newly selected panel becomes visible after
+its final component mounts, while subsequent tab changes retain the mounted panel.
+
 ## Project creation and editing
 
 Portfolio creation and `Edit details` each have a small action fragment, so opening

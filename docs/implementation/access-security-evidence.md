@@ -481,6 +481,20 @@ statements). Older broad component mocks were narrowed to their intended tables,
 and the property-form test now navigates lazy tabs and preserves explicitly cleared
 text when saving from another section.
 
+The project-details rendering follow-up prepares project/schema reads before
+visible fields, uses one project read per render and batches summary/property
+HTML. Template metadata caching uses the existing current-access revision guard.
+Tests verify fresh project reads on independent tab requests, template-rule cache
+invalidation, no partial summary after a reference-read failure, and complete
+visible frames under deliberately delayed reads. Existing disabled, revoked and
+deleted-project fragment tests retain their authorization expectations.
+
+Authenticated, read-only checks recorded 21–22 UI deltas per selection, down from
+44–45, and zero sidebar deltas. Warm selections measured approximately 1,114 ms
+versus 1,423–1,545 ms before the change, including a 200 ms settling allowance.
+The first selection after restarting the server remained slower (3,740 ms); these
+observations do not claim instantaneous cold startup or eliminate database I/O.
+
 Additional ASVS features outside the specified implementation are not claimed:
 device/posture risk evaluation, MFA for every non-administrator, self-service session
 inventory, an administrator "terminate every session" function, provider back-channel
