@@ -1,9 +1,15 @@
 """Batched capacity inputs read through one SQLite snapshot."""
 
+from app.application.services.business_access import BusinessAccess
 from datetime import date
+from dataclasses import replace
+import json
 
 from app.domain.organization.models import EmployeeCalendarException
 from app.domain.resources.inputs import CapacityInputs
+from app.domain.resources.models import PoolCapacityDetail
+from app.domain.access.models import Permission
+from app.infrastructure.repositories.access import SqliteAccessStore
 from app.infrastructure.repositories.organization import SqliteOrganizationStore
 from app.infrastructure.repositories.resource_pools import SqliteResourcePoolGateway
 
@@ -11,9 +17,17 @@ from app.infrastructure.repositories.resource_pools import SqliteResourcePoolGat
 class SqliteCapacityReader:
     """Read shared catalogs once regardless of the number of requested pools."""
 
-    def __init__(self, db_path: str | None = None) -> None:
+    def __init__(self, db_path: str | None = None, *, access: BusinessAccess) -> None:
         """Retain the database gateway without opening a connection."""
-        self._gateway = SqliteResourcePoolGateway(db_path)
+        self._gateway = SqliteResourcePoolGateway(db_path, access=access)
+        self._access = access
+
+    def visible_details(self, details: list[PoolCapacityDetail]) -> list[PoolCapacityDetail]:
+        """Recheck current access and hide employee staffing from project-only readers."""
+        with self._gateway.transaction() as store:
+            if self._access.global_permission(SqliteAccessStore(store.connection), Permission.SHARED):
+                return details
+            return [replace(detail, contributing_resources=[]) for detail in details]
 
     def read(self, pool_ids: list[int]) -> dict[int, CapacityInputs]:
         """Collect pool, organization, and task inputs within one read transaction."""
@@ -39,11 +53,14 @@ class SqliteCapacityReader:
                 "SELECT team_id, function_id FROM team_function",
             ):
                 team_functions.setdefault(team_id, []).append(function_id)
+            assignments = store.get_assignments(pool_ids=pool_ids)
+            project_ids = sorted({row["project_id"] for row in assignments})
             bounds = {
                 project_id: (start, end)
                 for project_id, start, end in store.connection.execute(
                     "SELECT project_id, MIN(start_date), MAX(end_date) "
-                    "FROM project_task GROUP BY project_id",
+                    "FROM project_task WHERE project_id IN (SELECT value FROM json_each(?)) GROUP BY project_id",
+                    (json.dumps(project_ids),),
                 )
             }
             pools = {pool.id: pool for pool in store.get_all_pools()}
@@ -63,7 +80,7 @@ class SqliteCapacityReader:
             for mapping in store.get_all_mappings():
                 if mapping.pool_id in inputs:
                     inputs[mapping.pool_id].mappings.append(mapping)
-            for assignment in store.get_assignments():
+            for assignment in assignments:
                 if assignment["pool_id"] in inputs:
                     inputs[assignment["pool_id"]].assignments.append(assignment)
             return inputs

@@ -6,19 +6,25 @@ configurable log levels.
 
 import logging
 import sys
+from typing import TextIO
 
 from app.shared.config import config
 
 
-def setup_logging() -> None:
+def setup_logging(*, stream: TextIO | None = None) -> None:
     """Configures the root logger based on application configuration."""
     log_format = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
     logging.basicConfig(
         level=getattr(logging, config.log_level.upper(), logging.INFO),
         format=log_format,
-        handlers=[logging.StreamHandler(sys.stdout)],
+        handlers=[logging.StreamHandler(sys.stdout if stream is None else stream)],
         force=True,
     )
+    # OAuth client debug output includes PKCE verifiers; HTTP access logs include
+    # authorization codes in callback query strings. Emit our safe security events.
+    for name in ("authlib", "httpx", "httpx2", "httpcore", "httpcore2"):
+        logging.getLogger(name).setLevel(logging.WARNING)
+    logging.getLogger("uvicorn.access").disabled = True
 
 
 def get_logger(name: str) -> logging.Logger:

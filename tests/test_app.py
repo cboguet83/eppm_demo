@@ -1,6 +1,6 @@
 """Startup and portfolio workflow regressions through supported application APIs."""
 
-from app.main import create_schema_service
+from app.operator_services import create_schema_service
 from app.domain.projects.budgets import BudgetAmounts, euro_amount, summarize_budgets
 from app.presentation.components.planning_catalog import flatten_dynamic_attributes
 
@@ -18,7 +18,7 @@ import pandas as pd
 from app.infrastructure.database.connection import get_db
 from app.infrastructure.database.schema_init import init_db
 from app.infrastructure.database.seeder import seed_default_data_if_empty
-from app.main import create_project_service
+from app.operator_services import create_project_service
 
 
 class TestPPMStudio(unittest.TestCase):
@@ -76,7 +76,7 @@ class TestPPMStudio(unittest.TestCase):
 
     def test_database_seed_counts_include_projects_tasks_and_dependencies(self) -> None:
         """Verify the reseeding success summary uses persisted totals for all objects."""
-        from app.main import create_maintenance_service
+        from app.operator_services import create_maintenance_service
 
         init_db(self.temp_db_path)
         seed_default_data_if_empty(self.temp_db_path)

@@ -11,7 +11,7 @@ from streamlit.testing.v1 import AppTest
 
 from app.domain.organization.models import Employee, Team
 from app.domain.resources.models import PoolAssignment, ResourcePool, ResourcePoolGroup
-from app.main import create_organization_service, create_resource_pool_service
+from app.operator_services import create_organization_service, create_resource_pool_service
 from app.infrastructure.database.schema_init import init_db
 
 
@@ -29,7 +29,7 @@ def dialog(path: str, invocation: str) -> AppTest:
     """Keep the production modal open across AppTest's full-script reruns."""
     app = AppTest.from_string(
         f"""
-from app.main import create_resource_pool_service, create_organization_service
+from app.operator_services import create_resource_pool_service, create_organization_service
 from app.presentation.components import resource_pool_dialogs as dialogs
 from app.presentation.components.organization_frames import teams_frame, employees_frame
 from app.presentation.i18n import set_current_locale
@@ -159,9 +159,9 @@ def test_settings_pool_route_supplies_safe_row_data_and_individual_actions(datab
     )
     app = AppTest.from_string(
         f"""
-from app.main import create_organization_service
+from app.operator_services import create_organization_service
 from app.presentation.pages.settings import render_settings_view
-from app.main import create_settings_workspace
+from app.operator_services import create_settings_workspace
 render_settings_view(create_settings_workspace({database!r}))
 """,
         default_timeout=15,

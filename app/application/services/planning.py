@@ -1,10 +1,14 @@
 """Task and dependency use cases with atomic writes and pure scheduling rules."""
 
+from app.domain.access.models import Permission
+
+
 from app.application.ports.planning import (
     ExternalTask,
     PlanningGateway,
     PlanningStore,
     PlanningTaskBundle,
+    PlanningTotals,
     ProjectSummary,
     TaskChoice,
     TaskRow,
@@ -52,6 +56,11 @@ class PlanningService:
         """Inject storage without opening a connection."""
         self._gateway = gateway
 
+    def get_totals(self) -> PlanningTotals:
+        """Read totals after filtering projects, tasks, links and allocation owners."""
+        with self._gateway.transaction() as store:
+            return store.get_totals()
+
     def create_milestone(
         self,
         project_id: int,
@@ -76,7 +85,7 @@ class PlanningService:
                 description=description or "",
             )
         )
-        with self._gateway.transaction(write=True) as store:
+        with self._gateway.transaction(write=True, permission=Permission.EDIT, project_ids=[project_id]) as store:
             task_id = store.create_task(project_id, values)
             _replace_dependencies(store, task_id, dependencies, predecessor_id)
             return task_id
@@ -111,14 +120,14 @@ class PlanningService:
     def validate_project_template(self, project_id: int, content: str, *, date_format: str = "YYYY-MM-DD") -> list[TemplateStep]:
         """Preview a fully validated replacement without changing stored data."""
         steps = parse_template(content, date_format=date_format)
-        with self._gateway.transaction() as store:
+        with self._gateway.transaction(permission=Permission.EDIT, project_ids=[project_id]) as store:
             self._validate_template_references(store, project_id, steps)
         return steps
 
     def replace_project_template(self, project_id: int, content: str, *, date_format: str = "YYYY-MM-DD") -> int:
         """Validate first, then replace tasks, links and allocations atomically."""
         steps = parse_template(content, date_format=date_format)
-        with self._gateway.transaction(write=True) as store:
+        with self._gateway.transaction(write=True, permission=Permission.EDIT, project_ids=[project_id]) as store:
             self._validate_template_references(store, project_id, steps)
             store.clear_project_schedule(project_id)
             identities = {step.number: store.create_task(project_id, step.values) for step in steps}
@@ -289,10 +298,6 @@ class PlanningService:
         with self._gateway.transaction() as store:
             return store.get_milestone_by_id(milestone_id)
 
-    def ensure_indexes(self) -> None:
-        """Prepare the existing planning projection and its lookup indexes."""
-        with self._gateway.transaction(write=True) as store:
-            store.ensure_indexes()
 
     def get_project_summaries(self, project_ids: list[int]) -> list[ProjectSummary]:
         """Read or refresh derived headers without publishing over a concurrent edit."""

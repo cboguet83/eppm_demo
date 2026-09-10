@@ -1,5 +1,9 @@
 """Tag management with injected transactions and domain validation."""
 
+from app.domain.access.models import Permission
+from app.application.ports.references import TagReference
+
+
 from app.application.ports.tag_records import (
     DictionaryRow,
     EntityChoice,
@@ -28,20 +32,32 @@ class TagService:
         """Inject persistence without opening a connection."""
         self._gateway = gateway
 
+    def project_tag_choices(self) -> list[TagReference]:
+        """Read only dictionary selector labels for project tagging."""
+        with self._gateway.transaction() as store:
+            return [TagReference(row.id, row.tag, row.tag_group_id, row.tag_group_name)
+                    for row in store.get_project_tag_group_tags()]
+
+    def task_tag_choices(self) -> list[TagReference]:
+        """Read only dictionary selector labels for task tagging."""
+        with self._gateway.transaction() as store:
+            return [TagReference(row.id, row.tag, row.tag_group_id, row.tag_group_name)
+                    for row in store.get_task_tag_group_tags()]
+
     def get_all_tag_groups(self) -> list[TagGroupRow]:
         """Get all tag groups through one transaction."""
-        with self._gateway.transaction(write=False) as store:
+        with self._gateway.transaction(write=False, permission=Permission.SHARED) as store:
             return store.get_all_tag_groups()
 
     def get_tag_group_by_id(self, group_id: int) -> TagGroup | None:
         """Get tag group by id through one transaction."""
-        with self._gateway.transaction(write=False) as store:
+        with self._gateway.transaction(write=False, permission=Permission.SHARED) as store:
             return store.get_tag_group_by_id(group_id)
 
     def create_tag_group(self, group: TagGroup) -> int:
         """Create tag group through one transaction."""
         group = normalize_group(group)
-        with self._gateway.transaction(write=True) as store:
+        with self._gateway.transaction(write=True, permission=Permission.SHARED) as store:
             return store.create_tag_group(group)
 
     def update_tag_group(self, group: TagGroup) -> bool:
@@ -49,12 +65,12 @@ class TagService:
         if group.id is None:
             return False
         group = normalize_group(group)
-        with self._gateway.transaction(write=True) as store:
+        with self._gateway.transaction(write=True, permission=Permission.SHARED) as store:
             return store.update_tag_group(group)
 
     def delete_tag_group(self, group_id: int) -> bool:
         """Delete tag group through one transaction."""
-        with self._gateway.transaction(write=True) as store:
+        with self._gateway.transaction(write=True, permission=Permission.SHARED) as store:
             count = store.count_tags_by_group(group_id)
             if count:
                 raise ValueError(
@@ -64,43 +80,43 @@ class TagService:
 
     def count_tags_by_group(self, group_id: int) -> int:
         """Count tags by group through one transaction."""
-        with self._gateway.transaction(write=False) as store:
+        with self._gateway.transaction(write=False, permission=Permission.SHARED) as store:
             return store.count_tags_by_group(group_id)
 
     def get_all_tags(self) -> list[DictionaryRow]:
         """Get all tags through one transaction."""
-        with self._gateway.transaction(write=False) as store:
+        with self._gateway.transaction(write=False, permission=Permission.SHARED) as store:
             return store.get_all_tags()
 
     def get_tags_by_group_name(self, group_name: str) -> list[DictionaryRow]:
         """Get tags by group name through one transaction."""
-        with self._gateway.transaction(write=False) as store:
+        with self._gateway.transaction(write=False, permission=Permission.SHARED) as store:
             return store.get_tags_by_group_name(group_name)
 
     def get_project_tag_group_tags(self) -> list[DictionaryRow]:
         """Get project tag group tags through one transaction."""
-        with self._gateway.transaction(write=False) as store:
+        with self._gateway.transaction(write=False, permission=Permission.SHARED) as store:
             return store.get_project_tag_group_tags()
 
     def get_task_tag_group_tags(self) -> list[DictionaryRow]:
         """Get task tag group tags through one transaction."""
-        with self._gateway.transaction(write=False) as store:
+        with self._gateway.transaction(write=False, permission=Permission.SHARED) as store:
             return store.get_task_tag_group_tags()
 
     def get_tag_group_for_tag(self, tag_id: int) -> TagGroup | None:
         """Get tag group for tag through one transaction."""
-        with self._gateway.transaction(write=False) as store:
+        with self._gateway.transaction(write=False, permission=Permission.SHARED) as store:
             return store.get_tag_group_for_tag(tag_id)
 
     def get_tag_by_id(self, tag_id: int) -> TagDictionary | None:
         """Get tag by id through one transaction."""
-        with self._gateway.transaction(write=False) as store:
+        with self._gateway.transaction(write=False, permission=Permission.SHARED) as store:
             return store.get_tag_by_id(tag_id)
 
     def create_tag(self, tag_item: TagDictionary) -> int:
         """Create tag through one transaction."""
         tag_item = normalize_tag(tag_item)
-        with self._gateway.transaction(write=True) as store:
+        with self._gateway.transaction(write=True, permission=Permission.SHARED) as store:
             return store.create_tag(tag_item)
 
     def update_tag(self, tag_item: TagDictionary) -> bool:
@@ -108,37 +124,37 @@ class TagService:
         if tag_item.id is None:
             return False
         tag_item = normalize_tag(tag_item)
-        with self._gateway.transaction(write=True) as store:
+        with self._gateway.transaction(write=True, permission=Permission.SHARED) as store:
             return store.update_tag(tag_item)
 
     def delete_tag(self, tag_id: int) -> bool:
         """Delete tag through one transaction."""
-        with self._gateway.transaction(write=True) as store:
+        with self._gateway.transaction(write=True, permission=Permission.SHARED) as store:
             return store.delete_tag(tag_id)
 
     def count_tag_usages(self, tag_id: int) -> int:
         """Count tag usages through one transaction."""
-        with self._gateway.transaction(write=False) as store:
+        with self._gateway.transaction(write=False, permission=Permission.SHARED) as store:
             return store.count_tag_usages(tag_id)
 
     def get_all_resource_pool_tags(self) -> list[PoolTagRow]:
         """Get all resource pool tags through one transaction."""
-        with self._gateway.transaction(write=False) as store:
+        with self._gateway.transaction(write=False, permission=Permission.SHARED) as store:
             return store.get_all_resource_pool_tags()
 
     def get_resource_pool_tags(self, pool_id: int) -> list[PoolTagRow]:
         """Get resource pool tags through one transaction."""
-        with self._gateway.transaction(write=False) as store:
+        with self._gateway.transaction(write=False, permission=Permission.SHARED) as store:
             return store.get_resource_pool_tags(pool_id)
 
     def create_resource_pool_tag(self, pool_tag: ResourcePoolTag) -> int:
         """Create resource pool tag through one transaction."""
-        with self._gateway.transaction(write=True) as store:
+        with self._gateway.transaction(write=True, permission=Permission.SHARED) as store:
             return store.create_resource_pool_tag(pool_tag)
 
     def delete_resource_pool_tag(self, pool_tag_id: int) -> bool:
         """Delete resource pool tag through one transaction."""
-        with self._gateway.transaction(write=True) as store:
+        with self._gateway.transaction(write=True, permission=Permission.SHARED) as store:
             return store.delete_resource_pool_tag(pool_tag_id)
 
     def get_all_project_tags(self) -> list[ProjectTagRow]:

@@ -14,7 +14,7 @@ from app.domain.organization.models import Employee
 from app.domain.resources.models import PoolAssignment, ResourcePool
 from app.infrastructure.database.project_experience_migration import migrate_project_experience
 from app.infrastructure.database.schema_init import init_db
-from app.main import (
+from app.operator_services import (
     create_collaboration_service, create_maintenance_service, create_organization_service,
     create_project_service, create_resource_pool_service, create_schema_service,
 )
@@ -37,7 +37,7 @@ def experience_database(tmp_path: Path) -> str:
 def project_dialog(path: str, operation: str, locale: str = "en") -> AppTest:
     """Keep a production project dialog mounted during full AppTest reruns."""
     return AppTest.from_string(f'''
-from app.main import create_project_workspace
+from app.operator_services import create_project_workspace
 from app.presentation.components.project_dialogs import open_create_project_dialog, open_edit_project_dialog
 from app.presentation.i18n import set_current_locale
 set_current_locale({locale!r})
@@ -166,7 +166,7 @@ def test_unassignment_confirmation_and_cancel_preserve_pool_membership(experienc
     pool_id = service.create_pool(ResourcePool("Pool", capacity_fte=1))
     identity = service.create_assignment(PoolAssignment(pool_id, 1, 0.5))
     body = f'''
-from app.main import create_resource_pool_service
+from app.operator_services import create_resource_pool_service
 from app.presentation.components.resource_pool_dialogs import _confirm_unassign
 _confirm_unassign(create_resource_pool_service({experience_database!r}), {pool_id}, {identity}, "Project")
 '''

@@ -11,10 +11,12 @@ from app.application.exceptions import DatabaseMaintenanceError
 from app.domain.resources.allocation_generation import (
     AllocationGenerationRequest, allocation_fte, allocation_rates, percentage_count,
 )
-from app.infrastructure.database.allocation_seed import _apply_plan
+from app.infrastructure.database.allocation_seed import _apply_plan, _capacity_periods
 from app.infrastructure.database.pool_scenarios import fingerprint
 from app.infrastructure.database.schema_init import init_db
-from app.main import create_maintenance_service, create_pool_capacity_service
+from app.operator_services import create_maintenance_service, create_pool_capacity_service
+from app.domain.resources.models import PoolCapacityDetail
+from app.infrastructure.database.connection import get_db
 
 
 @pytest.fixture
@@ -30,45 +32,6 @@ def allocation_database(tmp_path: Path) -> str:
         connection.execute("INSERT INTO resource_pool_assignment(pool_id,project_id,fte_assigned,start_date,end_date) VALUES(1,1,0.5,'2026-06-01','2026-06-05')")
         connection.execute("INSERT INTO employee_calendar_exception(employee_id,start_date,end_date,occupation_percentage) VALUES(1,'2026-06-03','2026-06-03',0)")
     return path
-
-
-def test_generation_dialog_previews_without_writing_then_applies_reviewed_mix(allocation_database: str) -> None:
-    from streamlit.testing.v1 import AppTest
-
-    app = AppTest.from_string(f'''
-from app.main import create_maintenance_service
-from app.presentation.components.allocation_seeding import _generate_allocations_dialog
-_generate_allocations_dialog(create_maintenance_service({allocation_database!r}))
-''', default_timeout=30).run()
-    assert not app.exception and len(app.number_input) == 6
-    app.number_input(key="seed_over_pct").set_value(25)
-    app.number_input(key="seed_unstaffed_pct").set_value(20)
-    app.button(key="preview_allocations").click().run()
-    assert not app.exception and not app.error and app.dataframe
-    with closing(sqlite3.connect(allocation_database)) as connection:
-        assert connection.execute("SELECT COUNT(*) FROM resource_pool_assignment").fetchone()[0] == 1
-    app.button(key="apply_allocation_preview").click().run()
-    assert not app.exception and not app.error
-    assert app.session_state["seeding_status_message"].startswith("Pool allocations generated")
-    assert len(create_pool_capacity_service(allocation_database).calculate_many(list(range(1, 11)))) == 10
-
-
-def test_clear_dialog_waits_for_confirmation_and_cancel_keeps_allocations(allocation_database: str) -> None:
-    from streamlit.testing.v1 import AppTest
-
-    app = AppTest.from_string(f'''
-from app.main import create_maintenance_service
-from app.presentation.components.allocation_seeding import _clear_allocations_dialog
-_clear_allocations_dialog(create_maintenance_service({allocation_database!r}))
-''').run()
-    app.button(key="cancel_clear_allocations").click().run()
-    assert not app.exception
-    with closing(sqlite3.connect(allocation_database)) as connection:
-        assert connection.execute("SELECT COUNT(*) FROM resource_pool_assignment").fetchone()[0] == 1
-    app.button(key="confirm_clear_allocations").click().run()
-    assert not app.exception
-    with closing(sqlite3.connect(allocation_database)) as connection:
-        assert connection.execute("SELECT COUNT(*) FROM resource_pool_assignment").fetchone()[0] == 0
 
 
 def test_fte_rounding_never_exceeds_target_or_changes_category() -> None:
@@ -162,6 +125,69 @@ def test_plan_application_rolls_back_earlier_deletes_on_foreign_key_failure(allo
         _apply_plan(allocation_database, plan, original)
     with closing(sqlite3.connect(allocation_database)) as connection:
         assert connection.execute("SELECT COUNT(*) FROM resource_pool_assignment").fetchone()[0] == 1
+
+
+def test_apply_rechecks_database_fingerprint_under_the_writer_lock(allocation_database: str) -> None:
+    with closing(get_db(allocation_database)) as connection, connection:
+        original = fingerprint(connection)
+        connection.execute("UPDATE project SET name='Concurrent operator change' WHERE id=1")
+        current = fingerprint(connection)
+    with pytest.raises(ValueError, match="database changed"):
+        _apply_plan(allocation_database, [("DELETE FROM resource_pool_assignment", ())], original)
+    with closing(get_db(allocation_database)) as connection:
+        assert fingerprint(connection) == current
+        assert connection.execute("SELECT COUNT(*) FROM resource_pool_assignment").fetchone()[0] == 1
+
+
+@pytest.mark.parametrize("missing", ["projects", "staff", "available_days"])
+def test_unfulfillable_generation_keeps_the_live_database_unchanged(allocation_database: str, missing: str) -> None:
+    with closing(get_db(allocation_database)) as connection, connection:
+        if missing == "projects":
+            connection.execute("DELETE FROM resource_pool_assignment")
+            connection.execute("DELETE FROM project_task")
+            connection.execute("DELETE FROM project")
+        elif missing == "staff":
+            connection.execute("UPDATE employee SET occupation_percentage=0")
+        else:
+            connection.execute("DELETE FROM employee_calendar_exception")
+            connection.execute("INSERT INTO employee_calendar_exception(employee_id,start_date,end_date,occupation_percentage) VALUES(1,'2026-06-01','2026-06-05',0)")
+        before = fingerprint(connection)
+    problem = {"projects": "Create projects", "staff": "positive occupation", "available_days": "no available capacity"}[missing]
+    with pytest.raises(ValueError, match=problem):
+        create_maintenance_service(allocation_database).generate_pool_allocations(
+            AllocationGenerationRequest(100, 100, 0, 0, 0, 0), apply=True,
+        )
+    with closing(get_db(allocation_database)) as connection:
+        assert fingerprint(connection) == before
+
+
+def test_generation_reuses_zero_percent_employee_mappings_without_duplicates(allocation_database: str) -> None:
+    with closing(get_db(allocation_database)) as connection, connection:
+        connection.execute("UPDATE resource_pool_mapping SET allocation_pct=0")
+        mappings = connection.execute("SELECT id,pool_id,target_type,target_id FROM resource_pool_mapping ORDER BY id").fetchall()
+    report = create_maintenance_service(allocation_database).generate_pool_allocations(
+        AllocationGenerationRequest(100, 100, 0, 0, 0, 0), apply=True,
+    )
+    assert report["mappings_created"] == 0
+    with closing(get_db(allocation_database)) as connection:
+        assert connection.execute("SELECT id,pool_id,target_type,target_id FROM resource_pool_mapping ORDER BY id").fetchall() == mappings
+        assert connection.execute("SELECT DISTINCT allocation_pct FROM resource_pool_mapping").fetchall() == [(100,)]
+        assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
+
+
+def test_allocation_capacity_periods_merge_equal_capacity_but_do_not_bridge_absence() -> None:
+    detail = PoolCapacityDetail(pool_id=1, pool_name="Pool", total_capacity_fte=1,
+                               peak_assigned_fte=0, total_assigned_fte_scalar=0,
+                               is_overassigned=False, peak_excess_fte=0,
+                               effective_capacity_fte=1, daily_assigned_capacity={
+        "2026-06-02": 1, "2026-06-03": 0, "2026-06-04": 1,
+    })
+    assert _capacity_periods(detail, "2026-06-01", "2026-06-05") == [
+        ("2026-06-01", "2026-06-02", 1), ("2026-06-04", "2026-06-05", 1),
+    ]
+    for start, end in [("2026-06-05", "2026-06-01"), ("9999-12-31", "9999-12-31")]:
+        with pytest.raises(ValueError, match="invalid schedule period"):
+            _capacity_periods(detail, start, end)
 
 
 def test_generation_can_staff_empty_pools_and_supply_unstaffed_capacity(allocation_database: str) -> None:

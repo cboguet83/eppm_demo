@@ -8,6 +8,7 @@ import streamlit as st
 
 from app.presentation.pages.planning import (
     _apply_planning_flex_filters,
+    _focus_planning_on_project,
     _handle_gantt_component_change,
 )
 
@@ -98,14 +99,13 @@ class TestPlanningGanttCallbacks(unittest.TestCase):
         st.session_state["planning_flex_values::status"] = ["Active"]
         st.session_state["ms_planning_tag_filter"] = ["Priority"]
 
-        _handle_gantt_component_change("test_gantt", workspace)
+        _focus_planning_on_project(st.session_state["test_gantt"], workspace)
 
         self.assertEqual(st.session_state["ms_multi_projects"], [12])
         self.assertEqual(st.session_state["ms_planning_tag_filter"], [])
         self.assertNotIn("active_resource_pool_filter", st.session_state)
         self.assertNotIn("planning_flex_fields", st.session_state)
         self.assertNotIn("planning_flex_values::status", st.session_state)
-        self.assertEqual(st.session_state["last_gantt_nonce"], "filter-1")
         repo.assert_not_called()
         mock_toast.assert_called_once_with("Filtered planning to New Campus", icon="🔍")
 

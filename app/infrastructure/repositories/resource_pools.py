@@ -1,7 +1,13 @@
 """SQLite adapter for resource-pool queries and caller-owned writes."""
 
+from collections.abc import Collection
+from app.domain.access.models import Permission
+
+
+from app.application.services.business_access import BusinessAccess
 from collections.abc import Iterator
 from contextlib import closing, contextmanager
+import json
 import sqlite3
 
 from app.application.exceptions import ResourcePoolConflictError, ResourcePoolStorageError
@@ -18,6 +24,7 @@ from app.domain.resources.models import (
     ResourcePoolGroupMember,
 )
 from app.infrastructure.database.connection import get_db
+from app.infrastructure.database.business_security import authorized_business_transaction
 from app.shared.logging import get_logger
 
 logger = get_logger(__name__)
@@ -74,7 +81,7 @@ class SqliteResourcePoolStore:
         cursor = conn.cursor()
         cursor.execute(
             """
-            INSERT INTO resource_pool (name, description, capacity_fte)
+            INSERT INTO main.resource_pool (name, description, capacity_fte)
             VALUES (?, ?, ?)
             """,
             (pool.name.strip(), pool.description.strip(), pool.capacity_fte),
@@ -87,7 +94,7 @@ class SqliteResourcePoolStore:
         cursor = conn.cursor()
         cursor.execute(
             """
-            UPDATE resource_pool
+            UPDATE main.resource_pool
             SET name = ?, description = ?, capacity_fte = ?
             WHERE id = ?
             """,
@@ -99,7 +106,7 @@ class SqliteResourcePoolStore:
         """Deletes a resource pool by ID (cascades mappings and assignments)."""
         conn = self.connection
         cursor = conn.cursor()
-        cursor.execute("DELETE FROM resource_pool WHERE id = ?", (pool_id,))
+        cursor.execute("DELETE FROM main.resource_pool WHERE id = ?", (pool_id,))
         return cursor.rowcount > 0
 
     def get_all_group_members(self) -> list[ResourcePoolGroupMember]:
@@ -140,7 +147,7 @@ class SqliteResourcePoolStore:
         name = group.name.strip()
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT INTO resource_pool_group (name, description) VALUES (?, ?)",
+            "INSERT INTO main.resource_pool_group (name, description) VALUES (?, ?)",
             (name, group.description.strip()),
         )
         return int(cursor.lastrowid)
@@ -152,7 +159,7 @@ class SqliteResourcePoolStore:
         cursor = conn.cursor()
         cursor.execute(
             """
-            UPDATE resource_pool_group
+            UPDATE main.resource_pool_group
             SET name = ?, description = ?
             WHERE id = ?
             """,
@@ -164,7 +171,7 @@ class SqliteResourcePoolStore:
         """Delete a group and cascade all memberships that reference it."""
         conn = self.connection
         cursor = conn.cursor()
-        cursor.execute("DELETE FROM resource_pool_group WHERE id = ?", (group_id,))
+        cursor.execute("DELETE FROM main.resource_pool_group WHERE id = ?", (group_id,))
         return cursor.rowcount > 0
 
     def get_group_members(self, group_id: int) -> list[PoolGroupMemberRow]:
@@ -228,7 +235,7 @@ class SqliteResourcePoolStore:
         cursor = conn.cursor()
         cursor.execute(
             """
-            INSERT INTO resource_pool_mapping (pool_id, target_type, target_id, allocation_pct)
+            INSERT INTO main.resource_pool_mapping (pool_id, target_type, target_id, allocation_pct)
             VALUES (?, ?, ?, ?)
             ON CONFLICT(pool_id, target_type, target_id)
             DO UPDATE SET allocation_pct = excluded.allocation_pct
@@ -253,7 +260,7 @@ class SqliteResourcePoolStore:
         cursor = conn.cursor()
         cursor.execute(
             """
-            UPDATE resource_pool_mapping
+            UPDATE main.resource_pool_mapping
             SET allocation_pct = ?
             WHERE id = ?
             """,
@@ -265,7 +272,7 @@ class SqliteResourcePoolStore:
         """Deletes a pool mapping by ID."""
         conn = self.connection
         cursor = conn.cursor()
-        cursor.execute("DELETE FROM resource_pool_mapping WHERE id = ?", (mapping_id,))
+        cursor.execute("DELETE FROM main.resource_pool_mapping WHERE id = ?", (mapping_id,))
         return cursor.rowcount > 0
 
     def get_assignments(
@@ -274,6 +281,8 @@ class SqliteResourcePoolStore:
         project_id: int | None = None,
         task_id: int | None = None,
         only_project_level: bool = False,
+        *,
+        pool_ids: Collection[int] | None = None,
     ) -> list[AssignmentRow]:
         """Retrieves resource pool assignments with optional filters."""
         conn = self.connection
@@ -300,7 +309,10 @@ class SqliteResourcePoolStore:
             LEFT JOIN project_task pt ON rpa.task_id = pt.id
             WHERE 1=1
         """
-        params: list[int] = []
+        params: list[int | str] = []
+        if pool_ids is not None:
+            query += " AND rpa.pool_id IN (SELECT value FROM json_each(?))"
+            params.append(json.dumps(list(pool_ids)))
         if pool_id is not None:
             query += " AND rpa.pool_id = ?"
             params.append(pool_id)
@@ -349,7 +361,7 @@ class SqliteResourcePoolStore:
         cursor = conn.cursor()
         cursor.execute(
             """
-            INSERT INTO resource_pool_assignment (pool_id, project_id, task_id, fte_assigned, start_date, end_date, notes)
+            INSERT INTO main.resource_pool_assignment (pool_id, project_id, task_id, fte_assigned, start_date, end_date, notes)
             VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (
@@ -370,7 +382,7 @@ class SqliteResourcePoolStore:
         cursor = conn.cursor()
         cursor.execute(
             """
-            UPDATE resource_pool_assignment
+            UPDATE main.resource_pool_assignment
             SET pool_id = ?, project_id = ?, task_id = ?, fte_assigned = ?, start_date = ?, end_date = ?, notes = ?
             WHERE id = ?
             """,
@@ -391,7 +403,7 @@ class SqliteResourcePoolStore:
         """Deletes a pool assignment by ID."""
         conn = self.connection
         cursor = conn.cursor()
-        cursor.execute("DELETE FROM resource_pool_assignment WHERE id = ?", (assignment_id,))
+        cursor.execute("DELETE FROM main.resource_pool_assignment WHERE id = ?", (assignment_id,))
         return cursor.rowcount > 0
 
     def get_task_assignments_map(self, task_ids: list[int]) -> dict[int, list[AssignmentLink]]:
@@ -484,10 +496,10 @@ class SqliteResourcePoolStore:
     ) -> None:
         """Replace validated group edges in the surrounding write transaction."""
         self.connection.execute(
-            "DELETE FROM resource_pool_group_member WHERE group_id=?", (group_id,)
+            "DELETE FROM main.resource_pool_group_member WHERE group_id=?", (group_id,)
         )
         self.connection.executemany(
-            "INSERT INTO resource_pool_group_member(group_id,pool_id,child_group_id) VALUES(?,?,?)",
+            "INSERT INTO main.resource_pool_group_member(group_id,pool_id,child_group_id) VALUES(?,?,?)",
             [(group_id, pool_id, None) for pool_id in pool_ids]
             + [(group_id, None, child_id) for child_id in child_ids],
         )
@@ -516,9 +528,9 @@ class SqliteResourcePoolStore:
 
     def set_pool_tags(self, pool_id: int, tag_ids: list[int]) -> None:
         """Replace validated pool tag associations in the same transaction."""
-        self.connection.execute("DELETE FROM resource_pool_tag WHERE pool_id=?", (pool_id,))
+        self.connection.execute("DELETE FROM main.resource_pool_tag WHERE pool_id=?", (pool_id,))
         self.connection.executemany(
-            "INSERT INTO resource_pool_tag(pool_id,tag_id) VALUES(?,?)",
+            "INSERT INTO main.resource_pool_tag(pool_id,tag_id) VALUES(?,?)",
             [(pool_id, tag_id) for tag_id in tag_ids],
         )
 
@@ -526,19 +538,21 @@ class SqliteResourcePoolStore:
 class SqliteResourcePoolGateway:
     """Own connection lifetime, writer reservation, and safe storage errors."""
 
-    def __init__(self, db_path: str | None = None) -> None:
+    def __init__(self, db_path: str | None = None, *, access: BusinessAccess) -> None:
         """Retain the configured database path without opening a connection."""
         self.db_path = db_path
+        self.access = access
 
     @contextmanager
-    def transaction(self, *, write: bool = False) -> Iterator[SqliteResourcePoolStore]:
+    def transaction(self, *, write: bool = False, permission: Permission | None = None, project_ids: Collection[int] | None = None) -> Iterator[SqliteResourcePoolStore]:
         """Commit once or roll back fully, including tags and group membership."""
         try:
             with closing(get_db(self.db_path)) as connection:
                 connection.row_factory = sqlite3.Row
                 with connection:
                     connection.execute("BEGIN IMMEDIATE" if write else "BEGIN")
-                    yield SqliteResourcePoolStore(connection)
+                    with authorized_business_transaction(connection, self.access, permission=permission, project_ids=project_ids):
+                        yield SqliteResourcePoolStore(connection)
         except sqlite3.IntegrityError as exc:
             raise ResourcePoolConflictError(
                 "The resource-pool change conflicts with an existing reference or constraint."

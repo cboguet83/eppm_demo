@@ -4,12 +4,20 @@ The storage model retains the legacy project_type names. The public grid calls
 them project templates. No portfolio query loads all project property records.
 """
 
+from app.application.services.business_access import BusinessAccess
+from app.application.exceptions import ProjectStorageError
+from contextlib import closing
 import json
+import sqlite3
 from pathlib import Path
 from typing import Any
 
 from app.shared.config import config
 from app.infrastructure.database.project_transactions import project_connection
+from app.infrastructure.database.connection import get_db
+from app.infrastructure.database.display_revision import read_display_revision
+from app.infrastructure.repositories.access import SqliteAccessStore
+from app.domain.access.models import Actor
 from app.infrastructure.database.property_store import parameters
 from app.infrastructure.repositories.budgets import read_budget_totals
 from app.domain.projects.budgets import euro_amount, monetary_statistics
@@ -20,28 +28,26 @@ from app.application.ports.portfolio import (
 from typing import cast
 
 
-def portfolio_revision(db_path: str | None) -> tuple:
-    """Track SQLite commits even when filesystem timestamps do not advance.
+def portfolio_revision(db_path: str | None, *, access: BusinessAccess | None = None) -> tuple:
+    """Track display inputs without invalidating on session activity or cache writes.
 
-    Include the database change counter and WAL/index headers alongside file
-    metadata. The WAL index tracks commits when an existing WAL is reused.
-    See https://www.sqlite.org/fileformat.html and /walformat.html.
+    Protected callers recheck the current session and scope in the same snapshot
+    as the business/security revision. This metadata read needs no temporary
+    business views or write triggers; actual business queries retain those guards.
     """
     path = Path(db_path or config.db_path).resolve()
-    result = [str(path)]
-    for filename, header_size in (
-        (path, 28),
-        (Path(str(path) + '-wal'), 32),
-        (Path(str(path) + '-shm'), 48),
-    ):
-        try:
-            stat = filename.stat()
-            with filename.open('rb') as source:
-                header = source.read(header_size).hex()
-            result.append((stat.st_mtime_ns, stat.st_size, stat.st_ino, header))
-        except FileNotFoundError:
-            result.append(None)
-    return tuple(result)
+    try:
+        with closing(get_db(str(path))) as connection, connection:
+            connection.execute("BEGIN")
+            scope = ()
+            if access is not None:
+                projects = access.projects(SqliteAccessStore(connection))
+                actor = access.actor
+                identity = (actor.user_id, actor.session_hash) if isinstance(actor, Actor) else ("deployment",)
+                scope = (identity, tuple(sorted(projects)))
+            return (str(path), *read_display_revision(connection), *scope)
+    except sqlite3.DatabaseError as exc:
+        raise ProjectStorageError("Project display data could not be accessed. Please try again.") from exc
 
 
 class SqlitePortfolioReader:
@@ -49,13 +55,14 @@ class SqlitePortfolioReader:
     PAGE_SIZE = 100
     FACET_SIZE = 200
 
-    def __init__(self, db_path: str | None = None) -> None:
+    def __init__(self, db_path: str | None = None, *, access: BusinessAccess) -> None:
         """Retain the database path without opening a connection."""
         self.db_path = db_path
+        self.access = access
 
     def get_metrics(self) -> PortfolioMetrics:
         """Read decimal totals with constant-memory streaming of amount columns."""
-        return read_budget_totals(self.db_path)
+        return read_budget_totals(self.db_path, access=self.access)
 
     @staticmethod
     def _source(columns: list[PortfolioColumn]) -> tuple[str, list, set[str]]:
@@ -129,7 +136,7 @@ class SqlitePortfolioReader:
         key = sort.get('column') if sort.get('column') in keys else 'project_id'
         direction = 'DESC' if sort.get('direction') == 'desc' else 'ASC'
         order = '"' + key.replace('"', '""') + '" COLLATE NOCASE ' + direction + ', project_id ASC'
-        with project_connection(self.db_path) as conn:
+        with project_connection(self.db_path, access=self.access) as conn:
             total = conn.execute(sql + 'SELECT COUNT(*) FROM portfolio' + where, args + where_args).fetchone()[0]
             offset = min(max(0, int(offset)), max(0, (total - 1) // self.PAGE_SIZE * self.PAGE_SIZE))
             cursor = conn.execute(sql + 'SELECT * FROM portfolio' + where + ' ORDER BY ' + order + ' LIMIT ? OFFSET ?',
@@ -151,7 +158,7 @@ class SqlitePortfolioReader:
         value = 'COALESCE("' + column.replace('"', '""') + '",\'\')'
         sql += ', facet AS (SELECT ' + value + ' AS value FROM portfolio' + where + ') '
         args += where_args
-        with project_connection(self.db_path) as conn:
+        with project_connection(self.db_path, access=self.access) as conn:
             count, filled, unique = conn.execute(sql + "SELECT COUNT(*), COUNT(NULLIF(value,'')), COUNT(DISTINCT NULLIF(value,'')) FROM facet", args).fetchone()
             stats: list = [['Rows', count], ['Filled', filled], ['Unique', unique], ['Empty', count - filled]]
             fmt = next((c.get('format') for c in columns if c['key'] == column), 'text')
@@ -174,20 +181,20 @@ class SqlitePortfolioReader:
                 'has_more': len(choices) > self.FACET_SIZE}
 
     def revision(self) -> tuple:
-        """Include the database identity, file revision, and WAL revision."""
-        return portfolio_revision(self.db_path)
+        """Reauthorize before cache lookup and isolate revisions by trusted actor/scope."""
+        return portfolio_revision(self.db_path, access=self.access)
 
     def get_detail(self, project_id: int) -> PortfolioRow | None:
         """Read one project summary using the same manager labels as the grid."""
         sql, args, _ = self._source([])
-        with project_connection(self.db_path) as conn:
+        with project_connection(self.db_path, access=self.access) as conn:
             cursor = conn.execute(sql + 'SELECT * FROM portfolio WHERE project_id=?', args + [project_id])
             row = cursor.fetchone()
             return dict(zip([c[0] for c in cursor.description], row)) if row else None
 
     def get_catalog(self, *, include_managers: bool = True) -> ProjectCatalog:
         """Read schema; load occupant labels only when rendering a project editor."""
-        with project_connection(self.db_path) as conn:
+        with project_connection(self.db_path, access=self.access) as conn:
             def records(sql: str) -> list[dict]:
                 cursor = conn.execute(sql)
                 names = [column[0] for column in cursor.description]

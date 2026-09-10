@@ -1,5 +1,9 @@
 """Project contacts, reference catalogs, and log use cases."""
 
+from app.domain.access.models import AccessDenied, Permission
+from app.application.ports.collaboration import FunctionChoice
+
+
 from app.application.ports.collaboration import (
     CatalogEntry,
     CollaborationGateway,
@@ -53,18 +57,33 @@ class CollaborationService:
         """Create or rename a reference and its English translation atomically."""
         validate_catalog(kind)
         name = required_text(name, "Name")
-        with self._gateway.transaction(write=True) as store:
+        with self._gateway.transaction(write=True, permission=Permission.SHARED) as store:
             return store.save_catalog(kind, name, item_id)
 
     def delete_catalog(self, kind: CatalogKind, item_id: int) -> None:
         """Delete an unused reference, retaining protection for existing usage."""
         validate_catalog(kind)
-        with self._gateway.transaction(write=True) as store:
+        with self._gateway.transaction(write=True, permission=Permission.SHARED) as store:
             store.delete_catalog(kind, item_id)
+
+    def function_choices(self) -> list[FunctionChoice]:
+        """Read selector labels without unrelated employees' contact details."""
+        with self._gateway.transaction() as store:
+            return [FunctionChoice(function_id=row["function_id"],
+                                   function_name=row["function_name"], person=row["person"])
+                    for row in store.list_functions()]
+
+    def can_edit(self, project_id: int) -> bool:
+        """Describe current contact/log edit controls; mutations independently reauthorize."""
+        try:
+            with self._gateway.transaction(permission=Permission.EDIT, project_ids=[project_id]):
+                return True
+        except AccessDenied:
+            return False
 
     def list_functions(self) -> list[FunctionContact]:
         """Read current occupants, using the function name when vacant."""
-        with self._gateway.transaction() as store:
+        with self._gateway.transaction(permission=Permission.SHARED) as store:
             return store.list_functions()
 
     def list_contacts(self, project_id: int, locale: str = "en") -> list[ProjectContact]:

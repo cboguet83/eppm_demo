@@ -31,7 +31,9 @@ class PoolCapacityService:
         """Read all requested inputs once and evaluate on the same day."""
         day = on_date if on_date is not None else self._today()
         inputs = self._reader.read(pool_ids)
-        return [calculate_capacity(inputs[pool_id], day) for pool_id in pool_ids]
+        return self._reader.visible_details(
+            [calculate_capacity(inputs[pool_id], day) for pool_id in pool_ids]
+        )
 
     def get_summaries(self, pool_ids: list[int] | None = None) -> list[PoolCapacitySummary]:
         """Return revision-checked summary cards without decoding full details."""

@@ -1,5 +1,10 @@
 """SQLite organization adapter; SQL methods share a caller-owned transaction."""
 
+from collections.abc import Collection
+from app.domain.access.models import Permission
+
+
+from app.application.services.business_access import BusinessAccess
 from collections.abc import Iterator
 from contextlib import closing, contextmanager
 from datetime import date
@@ -11,6 +16,7 @@ from app.domain.organization.models import (
     Employee, EmployeeCalendarException, FunctionType, OrgFunction, Team,
 )
 from app.infrastructure.database.connection import get_db
+from app.infrastructure.database.business_security import authorized_business_transaction
 from app.shared.logging import get_logger
 
 logger = get_logger(__name__)
@@ -50,7 +56,7 @@ class SqliteOrganizationStore:
         conn = self.connection
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT INTO function_type (function_type) VALUES (?)",
+            "INSERT INTO main.function_type (function_type) VALUES (?)",
             (ftype.function_type,),
         )
         return int(cursor.lastrowid)
@@ -60,7 +66,7 @@ class SqliteOrganizationStore:
         conn = self.connection
         cursor = conn.cursor()
         cursor.execute(
-            "UPDATE function_type SET function_type = ? WHERE function_type_id = ?",
+            "UPDATE main.function_type SET function_type = ? WHERE function_type_id = ?",
             (ftype.function_type, ftype.function_type_id),
         )
         return cursor.rowcount > 0
@@ -69,7 +75,7 @@ class SqliteOrganizationStore:
         """Deletes a function type record by ID."""
         conn = self.connection
         cursor = conn.cursor()
-        cursor.execute('DELETE FROM function_type WHERE function_type_id = ?', (type_id,))
+        cursor.execute('DELETE FROM main.function_type WHERE function_type_id = ?', (type_id,))
         return cursor.rowcount > 0
 
     def get_all_functions(self) -> list[OrgFunction]:
@@ -108,7 +114,7 @@ class SqliteOrganizationStore:
         conn = self.connection
         cursor = conn.cursor()
         cursor.execute("""
-            INSERT INTO function (name, hierarchy_level, function_type_id, manager_function_id,
+            INSERT INTO main.function (name, hierarchy_level, function_type_id, manager_function_id,
                 dual_manager_function_id, fte_percentage, has_reports)
             VALUES (?, ?, ?, ?, ?, ?, ?)
         """, (
@@ -123,7 +129,7 @@ class SqliteOrganizationStore:
         conn = self.connection
         cursor = conn.cursor()
         cursor.execute("""
-            UPDATE function
+            UPDATE main.function
             SET name = ?, hierarchy_level = ?, function_type_id = ?, manager_function_id = ?,
                 dual_manager_function_id = ?, fte_percentage = ?, has_reports = ?
             WHERE function_id = ?
@@ -138,7 +144,7 @@ class SqliteOrganizationStore:
         """Deletes a job function by ID."""
         conn = self.connection
         cursor = conn.cursor()
-        cursor.execute('DELETE FROM function WHERE function_id = ?', (func_id,))
+        cursor.execute('DELETE FROM main.function WHERE function_id = ?', (func_id,))
         return cursor.rowcount > 0
 
     def get_all_teams(self) -> list[Team]:
@@ -172,7 +178,7 @@ class SqliteOrganizationStore:
         conn = self.connection
         cursor = conn.cursor()
         cursor.execute("""
-            INSERT INTO team (team_name, manager_function_id, leader_function_id)
+            INSERT INTO main.team (team_name, manager_function_id, leader_function_id)
             VALUES (?, ?, ?)
         """, (team.team_name, team.manager_function_id, team.leader_function_id))
         return int(cursor.lastrowid)
@@ -182,7 +188,7 @@ class SqliteOrganizationStore:
         conn = self.connection
         cursor = conn.cursor()
         cursor.execute("""
-            UPDATE team
+            UPDATE main.team
             SET team_name = ?, manager_function_id = ?, leader_function_id = ?
             WHERE team_id = ?
         """, (
@@ -195,7 +201,7 @@ class SqliteOrganizationStore:
         """Deletes a team record by ID."""
         conn = self.connection
         cursor = conn.cursor()
-        cursor.execute('DELETE FROM team WHERE team_id = ?', (team_id,))
+        cursor.execute('DELETE FROM main.team WHERE team_id = ?', (team_id,))
         return cursor.rowcount > 0
 
     def get_all_employees(self) -> list[Employee]:
@@ -232,7 +238,7 @@ class SqliteOrganizationStore:
         conn = self.connection
         cursor = conn.cursor()
         cursor.execute("""
-            INSERT INTO employee (
+            INSERT INTO main.employee (
                 firstname, lastname, email, mobile, sigle, employee_code,
                 function_id, occupation_percentage, landline
             )
@@ -248,7 +254,7 @@ class SqliteOrganizationStore:
         conn = self.connection
         cursor = conn.cursor()
         cursor.execute("""
-            UPDATE employee
+            UPDATE main.employee
             SET firstname = ?, lastname = ?, email = ?, mobile = ?, sigle = ?,
                 employee_code = ?, function_id = ?, occupation_percentage = ?, landline = ?
             WHERE employee_id = ?
@@ -263,7 +269,7 @@ class SqliteOrganizationStore:
         """Deletes an employee record by ID."""
         conn = self.connection
         cursor = conn.cursor()
-        cursor.execute('DELETE FROM employee WHERE employee_id = ?', (emp_id,))
+        cursor.execute('DELETE FROM main.employee WHERE employee_id = ?', (emp_id,))
         return cursor.rowcount > 0
 
     def get_employee_calendar_exceptions(self, emp_id: int | None = None) -> list[CalendarExceptionRow]:
@@ -331,7 +337,7 @@ class SqliteOrganizationStore:
         conn = self.connection
         cursor = conn.cursor()
         cursor.execute("""
-            INSERT INTO employee_calendar_exception (
+            INSERT INTO main.employee_calendar_exception (
                 employee_id, start_date, end_date, occupation_percentage, reason
             )
             VALUES (?, ?, ?, ?, ?)
@@ -347,7 +353,7 @@ class SqliteOrganizationStore:
         conn = self.connection
         cursor = conn.cursor()
         cursor.execute("""
-            UPDATE employee_calendar_exception
+            UPDATE main.employee_calendar_exception
             SET employee_id = ?, start_date = ?, end_date = ?,
                 occupation_percentage = ?, reason = ?
             WHERE exception_id = ?
@@ -362,7 +368,7 @@ class SqliteOrganizationStore:
         """Deletes an employee calendar exception."""
         conn = self.connection
         cursor = conn.cursor()
-        cursor.execute('DELETE FROM employee_calendar_exception WHERE exception_id = ?', (exception_id,))
+        cursor.execute('DELETE FROM main.employee_calendar_exception WHERE exception_id = ?', (exception_id,))
         return cursor.rowcount > 0
 
     def get_effective_occupation_percentage(self, employee_id: int, on_date: date) -> float | None:
@@ -418,23 +424,23 @@ class SqliteOrganizationStore:
 
     def set_team_functions(self, team_id: int, function_ids: list[int]) -> None:
         """Replace membership inside the surrounding team transaction."""
-        self.connection.execute("DELETE FROM team_function WHERE team_id = ?", (team_id,))
+        self.connection.execute("DELETE FROM main.team_function WHERE team_id = ?", (team_id,))
         self.connection.executemany(
-            "INSERT INTO team_function (team_id, function_id) VALUES (?, ?)",
+            "INSERT INTO main.team_function (team_id, function_id) VALUES (?, ?)",
             [(team_id, function_id) for function_id in sorted(set(function_ids))],
         )
 
     def add_team_function(self, team_id: int, function_id: int) -> bool:
         """Add a member once, preserving the legacy boolean result."""
         return self.connection.execute(
-            "INSERT OR IGNORE INTO team_function (team_id, function_id) VALUES (?, ?)",
+            "INSERT OR IGNORE INTO main.team_function (team_id, function_id) VALUES (?, ?)",
             (team_id, function_id),
         ).rowcount > 0
 
     def remove_team_function(self, team_id: int, function_id: int) -> bool:
         """Remove a member without deleting its function."""
         return self.connection.execute(
-            "DELETE FROM team_function WHERE team_id = ? AND function_id = ?",
+            "DELETE FROM main.team_function WHERE team_id = ? AND function_id = ?",
             (team_id, function_id),
         ).rowcount > 0
 
@@ -446,19 +452,21 @@ class SqliteOrganizationStore:
 class SqliteOrganizationGateway:
     """Own organization connection lifetime, writer reservation, and safe errors."""
 
-    def __init__(self, db_path: str | None = None) -> None:
+    def __init__(self, db_path: str | None = None, *, access: BusinessAccess) -> None:
         """Store the configured path without opening the database."""
         self.db_path = db_path
+        self.access = access
 
     @contextmanager
-    def transaction(self, *, write: bool = False) -> Iterator[OrganizationStore]:
+    def transaction(self, *, write: bool = False, permission: Permission | None = None, project_ids: Collection[int] | None = None) -> Iterator[OrganizationStore]:
         """Commit once or roll back every write and always close the connection."""
         try:
             with closing(get_db(self.db_path)) as connection:
                 connection.row_factory = sqlite3.Row
                 with connection:
                     connection.execute("BEGIN IMMEDIATE" if write else "BEGIN")
-                    yield SqliteOrganizationStore(connection)
+                    with authorized_business_transaction(connection, self.access, permission=permission, project_ids=project_ids):
+                        yield SqliteOrganizationStore(connection)
         except sqlite3.IntegrityError as exc:
             raise OrganizationConflictError(
                 "The organization change conflicts with an existing reference or unique value."

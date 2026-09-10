@@ -1,5 +1,6 @@
 """Decimal budget rules, real SQLite reporting, and budget screen regressions."""
 
+from app.operator_services import deployment_access
 from contextlib import closing
 from decimal import Decimal
 
@@ -15,7 +16,7 @@ from app.domain.projects.budgets import (
 )
 from app.infrastructure.database.connection import get_db
 from app.infrastructure.repositories.portfolio import SqlitePortfolioReader
-from app.main import create_budget_service, create_portfolio_service, create_project_service
+from app.operator_services import create_budget_service, create_portfolio_service, create_project_service
 from app.presentation.components.budget_frames import budget_frame
 from app.infrastructure.database.schema_init import init_db
 
@@ -100,7 +101,7 @@ def test_sqlite_budget_report_and_portfolio_totals_share_decimal_rules(database)
             connection.execute("SELECT typeof(planned_budget) FROM project LIMIT 1").fetchone()[0]
             == "real"
         )
-    facet = SqlitePortfolioReader(database).get_facet(
+    facet = SqlitePortfolioReader(database, access=deployment_access()).get_facet(
         [{"key": "planned_budget", "format": "currency"}],
         {},
         "planned_budget",
@@ -140,7 +141,7 @@ def test_budget_report_rows_and_totals_share_a_concurrent_snapshot(database, mon
 def render_budget(database):
     return AppTest.from_string(
         f"""
-from app.main import create_budget_service
+from app.operator_services import create_budget_service
 from app.presentation.pages.budgets import render_budget_tracking
 from app.presentation.i18n import set_current_locale
 set_current_locale('en')

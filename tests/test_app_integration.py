@@ -1,8 +1,8 @@
 """Integration tests for PPM Studio Pro."""
 
-from app.main import create_budget_service
-from app.main import create_project_service
-from app.main import create_schema_service
+from app.operator_services import create_budget_service
+from app.operator_services import create_project_service
+from app.operator_services import create_schema_service
 
 from app.presentation.components.planning_catalog import flatten_dynamic_attributes
 
@@ -16,7 +16,7 @@ import unittest
 
 from app.infrastructure.database.schema_init import init_db
 from app.infrastructure.database.seeder import seed_default_data_if_empty
-from app.main import create_planning_service
+from app.operator_services import create_planning_service
 
 
 class TestIntegration(unittest.TestCase):
@@ -132,21 +132,6 @@ class TestIntegration(unittest.TestCase):
             "complexity",
         }
         self.assertEqual(ALLOWED_DYNAMIC_PARAMS, expected_allowed)
-
-    def test_portfolio_table_payload_hides_id_but_retains_row_identity(self) -> None:
-        """The custom table payload must not expose the project-code column."""
-        import pandas as pd
-
-        from app.presentation.pages.portfolio import _build_portfolio_table_rows
-
-        frame = pd.DataFrame([
-            {"id": 42, "name": "Apollo", "status": "Draft", "tags": ["Strategic"]},
-        ])
-
-        rows = _build_portfolio_table_rows(frame, ["name", "status"])
-
-        self.assertEqual(rows, [{"name": "Apollo", "status": "Draft", "project_id": 42}])
-        self.assertNotIn("id", rows[0])
 
     def test_portfolio_row_click_is_applied_before_table_render(self) -> None:
         """The component event must synchronize the stable project ID before mounting."""

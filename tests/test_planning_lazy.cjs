@@ -19,6 +19,88 @@ function harness() {
   return {run,context,timers,messages};
 }
 
+test('HTTP task batches hydrate rows without Streamlit reruns and keep a bounded working set', async()=>{
+  const h=harness(), requests=[];
+  h.context.AbortController=AbortController;
+  h.context.fetch=async(url,options)=>{
+    requests.push({url, ...JSON.parse(options.body)});
+    return {ok:true,status:200,json:async()=>({scope_token:'current',nonce:'batch',replace_projects:[101],tasks:[]})};
+  };
+  h.run(`planningTaskEndpoint='/api/planning/tasks'; planningTaskRevision='revision'; planningScopeToken='current';
+    loadedProjectIds=new Set(Array.from({length:100},(_,i)=>String(i+1))); planningPendingRequest='batch';`);
+  await h.run("requestPlanningTasks(['101'],'batch')");
+  assert.equal(requests.length,1);
+  assert.deepEqual(requests[0].project_ids,[101]);
+  assert.equal(requests[0].revision,'revision');
+  assert.equal(h.messages.length,0);
+  assert.equal(h.run('loadedProjectIds.size'),100);
+  assert.equal(h.run("loadedProjectIds.has('1')"),false);
+  assert.equal(h.run("loadedProjectIds.has('101')"),true);
+  assert.equal(h.run('planningPendingRequest'),null);
+});
+
+test('slow HTTP reads stay single-flight and late responses cannot overwrite another scope', async()=>{
+  const h=harness(); let resolve, calls=0;
+  h.context.AbortController=AbortController;
+  h.context.fetch=()=>{calls++;return new Promise(done=>{resolve=done;});};
+  h.run(`lazyProjects=true; planningTaskEndpoint='/api/planning/tasks'; planningTaskRevision='revision'; planningScopeToken='current';
+    masterRenderItems=Array.from({length:100},(_,i)=>({type:'project_header',project_id:String(i+1),isCollapsed:false}));
+    scheduleProjectLoads(0,20);`);
+  h.timers.shift().fn();
+  h.run('scheduleProjectLoads(40,60);scheduleProjectLoads(60,90)');
+  assert.equal(calls,1);
+  assert.equal(h.timers.length,0); // No three-second retry can cancel a slow read.
+  h.run("planningScopeToken='new';planningPendingRequest=null");
+  resolve({ok:true,status:200,json:async()=>({scope_token:'current',replace_projects:[1],tasks:[{id:'stale'}]})});
+  await new Promise(done=>setImmediate(done));
+  assert.equal(h.run('tasksData.length'),0);
+  assert.equal(h.messages.length,0);
+});
+
+for (const status of [403,409]) test(`HTTP ${status} triggers one authorized refresh without a retry loop`, async()=>{
+  const h=harness();
+  h.context.AbortController=AbortController;
+  h.context.fetch=async()=>({ok:false,status});
+  h.run("lazyProjects=true;planningScopeToken='current';planningPendingRequest='batch';planningTaskEndpoint='/api/planning/tasks'");
+  await h.run("requestPlanningTasks(['1'],'batch')");
+  h.run('scheduleProjectLoads(0,20)');
+  assert.equal(h.messages.length,1);
+  assert.equal(h.messages[0].action,'initialize_planning');
+  assert.equal(h.timers.length,0);
+});
+
+test('HTTP failures leave existing rows visible and offer an explicit retry', async()=>{
+  const h=harness(); let notice;
+  h.context.AbortController=AbortController;
+  h.context.fetch=async()=>({ok:false,status:503});
+  h.context.document={getElementById:()=>notice,createElement:()=>({style:{},remove(){notice=null;}}),
+    body:{appendChild(element){notice=element;}}};
+  h.run("planningScopeToken='current';planningPendingRequest='batch';tasksData=[{id:'retained'}]");
+  await h.run("requestPlanningTasks(['1'],'batch')");
+  assert.equal(h.run('tasksData[0].id'),'retained');
+  assert.equal(h.messages.length,0);
+  assert.equal(h.run('planningLoadError'),true);
+  assert.ok(notice.textContent.includes('retry'));
+  notice.onclick();
+  assert.equal(h.run('planningLoadError'),false);
+});
+
+for (const sameSelection of [true,false]) test(`new chart data preserves the viewport only for the same selection: ${sameSelection}`,()=>{
+  const h=harness(), viewport={scrollTop:12000,scrollLeft:750}; let render;
+  Object.assign(h.context,{
+    window:{addEventListener(type,listener){render=listener;}},
+    document:{getElementById:()=>viewport}, updatePermissionControls(){},
+    lastFilterReset:0,hasInitializedCollapse:true,collapsedProjects:new Set(['2']),
+    renderTimeline(){viewport.scrollTop=0;viewport.scrollLeft=0;},
+  });
+  h.run(script.slice(script.indexOf('    let lastDataRevision ='),script.indexOf('    Streamlit.setComponentReady();')));
+  h.run("lastDataRevision='old';planningViewScope='selection';planningScopeToken='old-scope'");
+  render({data:{type:'streamlit:render',args:{tasks:[],data_revision:'new',scope_token:'new-scope',
+    view_scope:sameSelection?'selection':'different-selection',loaded_project_ids:[],project_summaries:[]}}});
+  assert.deepEqual(viewport,sameSelection?{scrollTop:12000,scrollLeft:750}:{scrollTop:0,scrollLeft:0});
+  assert.equal(h.context.collapsedProjects.has('2'),sameSelection);
+});
+
 test('project requests are bounded, coalesced and reject stale scope responses',()=>{
   const h=harness();
   h.run(`lazyProjects=true; planningScopeToken='current';
@@ -61,6 +143,17 @@ test('interval transport restores zero capacity and missing-day gaps exactly',()
     ['2026-03-28','2026-03-30',0],['2026-04-02','2026-04-02',4]]})`);
   assert.deepEqual({...result.daily_assigned_capacity},{'2026-03-28':0,'2026-03-29':0,'2026-03-30':0,'2026-04-02':4});
   assert.equal(result.daily_assigned_capacity_intervals,undefined);
+});
+
+test('visible Gantt projects load before overscan when external dependencies are enabled',()=>{
+  const h=harness();
+  h.run(`lazyProjects=true; showExternalLinks=true; planningScopeToken='current';
+    masterRenderItems=Array.from({length:100},(_,i)=>({type:'project_header',project_id:String(i+1),isCollapsed:true}));
+    renderedRowWindow={start:0,end:45,visibleStart:15,visibleEnd:30};
+    scheduleProjectLoads(0,45);`);
+  h.timers.shift().fn();
+  assert.deepEqual([...h.messages[0].project_ids.slice(0,16)],Array.from({length:16},(_,i)=>String(i+16)));
+  assert.equal(h.messages[0].project_ids.length,25);
 });
 
 test('creating a task retains viewport focus and expands only its own project',()=>{

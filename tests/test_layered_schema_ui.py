@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from streamlit.testing.v1 import AppTest
 
-from app.main import create_schema_service, create_project_service, create_project_type_service
+from app.operator_services import create_schema_service, create_project_service, create_project_type_service
 from app.infrastructure.database.schema_init import init_db
 
 
@@ -27,7 +27,7 @@ def french_host_locale():
 def editor(path: str) -> AppTest:
     """Exercise the new screen directly without a legacy repository dependency."""
     app = AppTest.from_string(f'''
-from app.main import create_schema_service, create_project_type_service
+from app.operator_services import create_schema_service, create_project_type_service
 from app.presentation.pages.schema import render_schema_definition
 from app.presentation.i18n import set_current_locale
 set_current_locale("en")
@@ -136,10 +136,10 @@ def test_settings_route_composes_the_schema_screen(
     app = AppTest.from_string(f'''
 import streamlit as st
 from app.presentation.i18n import set_current_locale
-from app.main import create_organization_service
-from app.main import create_schema_service
+from app.operator_services import create_organization_service
+from app.operator_services import create_schema_service
 from app.presentation.pages.settings import render_settings_view
-from app.main import create_settings_workspace
+from app.operator_services import create_settings_workspace
 set_current_locale("en")
 st.session_state["rb_settings_section"] = "param_def"
 render_settings_view(create_settings_workspace({path!r}))

@@ -12,8 +12,9 @@ from unittest.mock import patch
 import pytest
 
 from app.infrastructure.database.connection import get_db
+from app.infrastructure.database.schema_init import init_db
 from app.infrastructure.database.seeder import seed_default_data_if_empty
-from app.main import create_planning_service
+from app.operator_services import create_planning_service
 from app.infrastructure.repositories.portfolio import portfolio_revision
 
 
@@ -62,23 +63,23 @@ def test_revision_tracks_commits_with_unchanged_file_metadata(
 ) -> None:
     """Detect equal-size edits and reused WAL frames without timestamp changes."""
     path = tmp_path / "revision.db"
+    init_db(str(path))
     with closing(sqlite3.connect(path)) as connection:
         connection.execute(f"PRAGMA journal_mode={journal_mode}")
         connection.execute("PRAGMA wal_autocheckpoint=0")
-        connection.execute("CREATE TABLE sample (value TEXT)")
-        connection.execute("INSERT INTO sample VALUES ('first')")
+        connection.execute("INSERT INTO project(id,name) VALUES(1,'first')")
         connection.commit()
         metadata = path.stat()
         with patch.object(Path, "stat", return_value=metadata):
             before = portfolio_revision(str(path))
             assert portfolio_revision(str(path)) == before
-            connection.execute("UPDATE sample SET value='other'")
+            connection.execute("UPDATE project SET name='other' WHERE id=1")
             connection.commit()
             after = portfolio_revision(str(path))
             assert after != before
             assert portfolio_revision(str(path)) == after
             if journal_mode == "WAL":
                 connection.execute("PRAGMA wal_checkpoint(RESTART)")
-                connection.execute("UPDATE sample SET value='third'")
+                connection.execute("UPDATE project SET name='third' WHERE id=1")
                 connection.commit()
                 assert portfolio_revision(str(path)) != after

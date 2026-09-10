@@ -10,8 +10,8 @@ import tempfile
 import unittest
 
 from app.infrastructure.database.schema_init import init_db
-from app.main import create_planning_service
-from app.main import create_project_service
+from app.operator_services import create_planning_service
+from app.operator_services import create_project_service
 
 
 class TestTaskDependencies(unittest.TestCase):

@@ -1,9 +1,17 @@
 """Bounded portfolio browsing, filtering, and editor reference queries."""
 
+from hashlib import sha256
+
+from app.application.exceptions import PortfolioRevisionChanged
 from app.application.ports.portfolio import (
     AllocationReader, PortfolioColumn, PortfolioFacet, PortfolioMetrics,
     PortfolioPage, PortfolioReader, PortfolioRow, ProjectCatalog,
 )
+
+
+def portfolio_revision_token(revision: tuple) -> str:
+    """Digest a display revision without exposing session or database identifiers."""
+    return sha256(repr(revision).encode("utf-8")).hexdigest()
 
 
 def normalize_query(query: dict) -> dict:
@@ -40,18 +48,31 @@ class PortfolioService:
         """Read aggregate totals without loading individual project records."""
         return self._reader.get_metrics()
 
-    def get_page(self, columns: list[PortfolioColumn], query: dict, offset: int = 0) -> PortfolioPage:
-        """Read one page; overload detection is limited to its returned IDs."""
+    def get_page(
+        self, columns: list[PortfolioColumn], query: dict, offset: int = 0, *,
+        include_allocations: bool = True,
+    ) -> PortfolioPage:
+        """Read one page, optionally deferring capacity badges until rows are visible."""
         try:
             offset = max(0, int(offset))
         except (TypeError, ValueError, OverflowError):
             offset = 0
         page = self._reader.get_page(columns, normalize_query(query), offset)
-        if self._allocations is not None:
+        if include_allocations and self._allocations is not None:
             overloaded = self._allocations([int(row["project_id"]) for row in page["rows"]])
             for row in page["rows"]:
                 row["is_overallocated"] = row["project_id"] in overloaded
         return page
+
+    def get_allocation_badges(self, project_ids: list[int], revision: str) -> dict[str, object]:
+        """Read capacity warnings and reject results spanning a data or access change."""
+        current = self.revision()
+        if portfolio_revision_token(current) != revision:
+            raise PortfolioRevisionChanged()
+        overloaded = self._allocations(project_ids) if self._allocations is not None else set()
+        if self.revision() != current:
+            raise PortfolioRevisionChanged()
+        return {"project_ids": project_ids, "overallocated": sorted(overloaded)}
 
     def get_facet(
         self, columns: list[PortfolioColumn], query: dict, column: str, search: str = "",

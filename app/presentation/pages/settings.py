@@ -21,8 +21,9 @@ from app.presentation.pages.tags import (
 )
 
 
+@st.fragment
 def render_settings_view(workspace: SettingsWorkspace) -> None:
-    """Renders the Settings screen with sections for Organization Structure and Parameter Definition."""
+    """Switch Settings sections without rerunning navigation or portfolio totals."""
     st.header(f"⚙️ {t('settings.title', default='Settings')}")
     default_section_idx = 0
     if st.session_state.get("settings_active_section") == "parameters":
@@ -52,10 +53,11 @@ def render_settings_view(workspace: SettingsWorkspace) -> None:
     if selected_section == "project_configuration":
         from app.presentation.pages.collaboration import render_project_catalog
 
-        roles_tab, events_tab = st.tabs(
+        roles_tab, events_tab, wbs_tab = st.tabs(
             [
                 t("project_collaboration.roles", default="Project roles"),
                 t("project_collaboration.types", default="Event types"),
+                t("wbs.title", default="WBS"),
             ],
             key="project_configuration_tab",
             on_change="rerun",
@@ -66,6 +68,10 @@ def render_settings_view(workspace: SettingsWorkspace) -> None:
         if events_tab.open:
             with events_tab:
                 render_project_catalog(workspace.collaboration, "event_type")
+        if wbs_tab.open:
+            from app.presentation.pages.wbs import render_wbs_catalog
+            with wbs_tab:
+                render_wbs_catalog(workspace.wbs)
         return
     settings_tab_labels = [
         f"💼 {t('settings.tab_functions', default='Functions')}",

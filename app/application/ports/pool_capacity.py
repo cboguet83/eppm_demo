@@ -16,6 +16,8 @@ class CapacityReader(Protocol):
 
     def read(self, pool_ids: list[int]) -> dict[int, CapacityInputs]: ...
 
+    def visible_details(self, details: list[PoolCapacityDetail]) -> list[PoolCapacityDetail]: ...
+
 
 class CapacityCache(Protocol):
     """Reuse calculations while their source revision and day are current."""

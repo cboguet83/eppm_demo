@@ -13,7 +13,7 @@ from app.infrastructure.database.seeder import seed_default_data_if_empty
 
 
 def settings_app(db_path):
-    from app.main import create_settings_workspace
+    from app.operator_services import create_settings_workspace
     from app.presentation.pages.settings import render_settings_view
     render_settings_view(create_settings_workspace(db_path))
 
@@ -22,7 +22,7 @@ class SettingsLazyLoadingTests(unittest.TestCase):
     def test_resource_pool_details_keep_controls_without_daily_chart(self) -> None:
         """Pools with and without demand retain details but never render a chart."""
         from app.domain.resources.models import ResourcePool
-        from app.main import create_resource_pool_service
+        from app.operator_services import create_resource_pool_service
 
         with tempfile.TemporaryDirectory() as directory:
             db_path = str(Path(directory) / "test.db")

@@ -7,7 +7,7 @@ from app.domain.resources.capacity_rules import project_pool_status
 from app.domain.resources.rules import validate_allocation_pct
 from app.domain.resources.rules import validate_fte
 from app.domain.resources.rules import validate_pool_name
-from app.main import create_pool_capacity_service
+from app.operator_services import create_pool_capacity_service
 
 from app.presentation.components import resource_pool_frames
 
@@ -30,10 +30,10 @@ from app.domain.resources.models import (
     ResourcePoolGroup,
 )
 from app.presentation.i18n import set_current_locale
-from app.main import create_planning_service
-from app.main import create_organization_service
-from app.main import create_project_service
-from app.main import create_resource_pool_service
+from app.operator_services import create_planning_service
+from app.operator_services import create_organization_service
+from app.operator_services import create_project_service
+from app.operator_services import create_resource_pool_service
 
 
 class TestResourcePools(unittest.TestCase):
@@ -131,7 +131,7 @@ class TestResourcePools(unittest.TestCase):
         from app.presentation.pages.planning import _build_resource_pool_hierarchy
 
         pool_c = self.pool_repo.create_pool(ResourcePool(name="Ungrouped Pool"))
-        from app.main import create_planning_workspace
+        from app.operator_services import create_planning_workspace
         hierarchy = _build_resource_pool_hierarchy(
             create_planning_workspace(self.db_path),
             [

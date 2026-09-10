@@ -6,6 +6,8 @@ from functools import wraps
 import pandas as pd
 import streamlit as st
 
+from app.presentation.components.dialog import dialog
+
 from app.application.exceptions import TagStorageError
 from app.application.services.tags import TagService
 from app.domain.tags.models import ProjectTag, TagDictionary, TagGroup, TaskTag
@@ -32,7 +34,7 @@ def require_change(changed: bool) -> None:
         raise ValueError("This record no longer exists. Please refresh and try again.")
 
 
-@st.dialog(t("settings.dialog_add_tag_group", default="➕ Create Tag Group"))
+@dialog(t("settings.dialog_add_tag_group", default="➕ Create Tag Group"))
 @tag_errors
 def _open_add_tag_group_dialog(service: TagService) -> None:
     """Modal dialog to create a new tag group."""
@@ -50,7 +52,7 @@ def _open_add_tag_group_dialog(service: TagService) -> None:
         st.rerun()
 
 
-@st.dialog(t("settings.dialog_edit_tag_group", default="✏️ Edit Tag Group"))
+@dialog(t("settings.dialog_edit_tag_group", default="✏️ Edit Tag Group"))
 @tag_errors
 def _open_edit_tag_group_dialog(service: TagService, group_id: int, current_name: str) -> None:
     """Modal dialog to edit a tag group."""
@@ -71,7 +73,7 @@ def _open_edit_tag_group_dialog(service: TagService, group_id: int, current_name
         st.rerun()
 
 
-@st.dialog(t("settings.delete_confirm_title", default="🗑️ Confirm Deletion"))
+@dialog(t("settings.delete_confirm_title", default="🗑️ Confirm Deletion"))
 @tag_errors
 def _open_delete_tag_group_dialog(service: TagService, group_id: int, group_name: str) -> None:
     """Modal dialog to confirm deletion of a tag group."""
@@ -98,7 +100,7 @@ def _open_delete_tag_group_dialog(service: TagService, group_id: int, group_name
         st.rerun()
 
 
-@st.dialog(t("settings.dialog_add_tag", default="➕ Create Tag"))
+@dialog(t("settings.dialog_add_tag", default="➕ Create Tag"))
 @tag_errors
 def _open_add_tag_dialog(service: TagService, df_groups: pd.DataFrame) -> None:
     """Modal dialog to create a new tag in the dictionary."""
@@ -125,7 +127,7 @@ def _open_add_tag_dialog(service: TagService, df_groups: pd.DataFrame) -> None:
         st.rerun()
 
 
-@st.dialog(t("settings.dialog_edit_tag", default="✏️ Edit Tag"))
+@dialog(t("settings.dialog_edit_tag", default="✏️ Edit Tag"))
 @tag_errors
 def _open_edit_tag_dialog(
     service: TagService,
@@ -165,7 +167,7 @@ def _open_edit_tag_dialog(
         st.rerun()
 
 
-@st.dialog(t("settings.delete_confirm_title", default="🗑️ Confirm Deletion"))
+@dialog(t("settings.delete_confirm_title", default="🗑️ Confirm Deletion"))
 @tag_errors
 def _open_delete_tag_dialog(service: TagService, tag_id: int, tag_name: str) -> None:
     """Modal dialog to confirm deletion of a dictionary tag."""
@@ -190,7 +192,7 @@ def _open_delete_tag_dialog(service: TagService, tag_id: int, tag_name: str) -> 
         st.rerun()
 
 
-@st.dialog(t("settings.dialog_add_proj_tag", default="➕ Assign Project Tag"))
+@dialog(t("settings.dialog_add_proj_tag", default="➕ Assign Project Tag"))
 @tag_errors
 def _open_add_project_tag_dialog(
     service: TagService, df_projects: pd.DataFrame, df_tags: pd.DataFrame
@@ -230,7 +232,7 @@ def _open_add_project_tag_dialog(
         st.rerun()
 
 
-@st.dialog(t("settings.dialog_edit_proj_tag", default="✏️ Edit Project Tag Assignment"))
+@dialog(t("settings.dialog_edit_proj_tag", default="✏️ Edit Project Tag Assignment"))
 @tag_errors
 def _open_edit_project_tag_dialog(
     service: TagService,
@@ -282,7 +284,7 @@ def _open_edit_project_tag_dialog(
         st.rerun()
 
 
-@st.dialog(t("settings.delete_confirm_title", default="🗑️ Confirm Deletion"))
+@dialog(t("settings.delete_confirm_title", default="🗑️ Confirm Deletion"))
 @tag_errors
 def _open_delete_project_tag_dialog(service: TagService, pt_id: int, tag_label: str) -> None:
     """Modal dialog to confirm deletion of a project tag assignment."""
@@ -341,7 +343,7 @@ def _handle_task_tag_query_change() -> None:
             st.session_state["_last_task_tag_query_nonce"] = event.get("nonce")
 
 
-@st.dialog(t("settings.dialog_add_task_tag", default="➕ Assign Task Tag"))
+@dialog(t("settings.dialog_add_task_tag", default="➕ Assign Task Tag"))
 @tag_errors
 def _open_add_task_tag_dialog(service: TagService) -> None:
     """Modal dialog to assign a tag to a task."""
@@ -374,7 +376,7 @@ def _open_add_task_tag_dialog(service: TagService) -> None:
         st.rerun()
 
 
-@st.dialog(t("settings.dialog_edit_task_tag", default="✏️ Edit Task Tag Assignment"))
+@dialog(t("settings.dialog_edit_task_tag", default="✏️ Edit Task Tag Assignment"))
 @tag_errors
 def _open_edit_task_tag_dialog(
     service: TagService,
@@ -422,7 +424,7 @@ def _open_edit_task_tag_dialog(
         st.rerun()
 
 
-@st.dialog(t("settings.delete_confirm_title", default="🗑️ Confirm Deletion"))
+@dialog(t("settings.delete_confirm_title", default="🗑️ Confirm Deletion"))
 @tag_errors
 def _open_delete_task_tag_dialog(service: TagService, tt_id: int, tag_label: str) -> None:
     """Modal dialog to confirm deletion of a task tag assignment."""

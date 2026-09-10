@@ -14,6 +14,10 @@ from app.presentation.assets import component_path
 from typing import Any
 import pandas as pd
 import streamlit as st
+
+from app.presentation.components.dialog import dialog
+from app.presentation.components.authorized_cache import authorized_cache
+from app.domain.access.models import Permission
 import streamlit.components.v1 as components
 from app.application.exceptions import (
     OrganizationStorageError,
@@ -33,10 +37,10 @@ from app.domain.resources.capacity_rules import (
     project_pool_status,
 )
 from app.domain.planning.rules import normalize_progress
-from app.presentation.components.planning_imports import csv_text
 from app.presentation.components.property_labels import property_label
 from app.presentation.components.planning_events import validate_event
 from app.presentation.components.planning_workspace import PlanningWorkspace
+from app.presentation.components.planning_transport import planning_revision_token
 from app.presentation.components.project_dialogs import open_edit_project_dialog
 from app.presentation.components.resource_pool_frames import (
     pools_frame,
@@ -148,12 +152,39 @@ def _apply_immediate_gantt_update(
     return False
 
 
+def _apply_step_form(
+    event: dict[str, Any], workspace: PlanningWorkspace, fallback_project: int | None = None,
+) -> dict[str, Any] | None:
+    """Commit a step form once and return the metadata for its targeted patch."""
+    name = str(event.get("task_name", "")).strip()
+    start = str(event.get("start_date", "")).strip()
+    end = str(event.get("end_date", "")).strip()
+    if not name or not start or not end:
+        return None
+    values = dict(
+        task_name=name, phase=str(event.get("phase", "")).strip() or "General",
+        start_date=start, end_date=end, progress_pct=int(event.get("progress_pct", 0)),
+        dependencies=event.get("dependencies", [] if event["action"] == "create_step_full" else None),
+        description=str(event.get("description", "")).strip(),
+    )
+    before = workspace.revision()
+    if event["action"] == "create_step_full":
+        project_id = int(event.get("project_id") or fallback_project or 0)
+        step_id = workspace.planning.create_milestone(project_id=project_id, **values)
+        st.toast(t("planning.toast_step_created", name=name, project_id=project_id), icon="➕")
+        return {**event, "id": step_id, "project_id": project_id, "before_revision": before}
+    step_id = int(event["id"])
+    require_change(workspace.planning.update_milestone(milestone_id=step_id, **values))
+    st.toast(t("planning.toast_step_updated", name=name), icon="✏️")
+    return {**event, "before_revision": before}
+
+
 @planning_errors
 def _handle_gantt_component_change(widget_key: str, workspace: PlanningWorkspace) -> None:
-    """Handle inline Gantt mutations in the component callback.
+    """Route filters and inline Gantt mutations before the automatic rerun.
 
-    Component callbacks run before Streamlit executes the automatic rerun, so
-    the rebuilt Gantt immediately reads the newly persisted task values.
+    Filters target the planning workspace so selection widgets update together.
+    Inline edits commit before the chart fragment reads the changed task values.
     """
     gantt_event = st.session_state.get(widget_key)
     if not isinstance(gantt_event, dict) or not isinstance(gantt_event.get("action"), str):
@@ -162,6 +193,8 @@ def _handle_gantt_component_change(widget_key: str, workspace: PlanningWorkspace
         "filter_project",
         "update_dates",
         "update_progress",
+        "create_step_full",
+        "update_task_full",
         "load_dependency_tasks",
         "load_project_tasks",
         "initialize_planning",
@@ -187,8 +220,16 @@ def _handle_gantt_component_change(widget_key: str, workspace: PlanningWorkspace
             "tasks": load_dependency_choices(workspace, workspace.revision(), project_id),
         }
     elif gantt_event.get("action") == "filter_project":
-        _focus_planning_on_project(gantt_event, workspace)
-        st.session_state["planning_needs_full_rerun"] = True
+        st.session_state["pending_project_context_filter"] = gantt_event
+        st.rerun("planning_workspace")
+    elif gantt_event.get("action") in {"create_step_full", "update_task_full"}:
+        try:
+            change = _apply_step_form(gantt_event, workspace)
+        except (ValueError, PlanningStorageError, ProjectStorageError) as exc:
+            st.session_state["planning_step_form_error"] = str(exc)
+            return
+        if change:
+            st.session_state["planning_pending_change"] = change
     else:
         before = workspace.revision()
         if _apply_immediate_gantt_update(gantt_event, workspace):
@@ -297,7 +338,7 @@ def _build_resource_pool_hierarchy(
 ) -> list[dict[str, Any]]:
     """Build a loop-safe tree of pool groups and ungrouped pools for the Gantt."""
     pool_by_id = {int(pool["id"]): pool for pool in pools}
-    groups = resource_groups_frame(workspace.resources.get_all_pool_groups())
+    groups = resource_groups_frame(workspace.resources.group_choices())
     if groups.empty:
         return [
             {
@@ -320,7 +361,7 @@ def _build_resource_pool_hierarchy(
     members_by_group: dict[int, tuple[list[int], list[int]]] = {}
     child_group_ids: set[int] = set()
     grouped_pool_ids: set[int] = set()
-    for row in all_members_frame(workspace.resources.get_all_group_members()).to_dict("records"):
+    for row in all_members_frame(workspace.resources.group_membership()).to_dict("records"):
         pool_ids, child_ids = members_by_group.setdefault(int(row["group_id"]), ([], []))
         if pd.notna(row["pool_id"]):
             pool_ids.append(int(row["pool_id"]))
@@ -405,12 +446,15 @@ def _build_resource_pool_hierarchy(
     return hierarchy
 
 
-@st.dialog(t("planning.dialog_project_tags_title", default="🏷️ Manage Project Tags"))
+@dialog(t("planning.dialog_project_tags_title", default="🏷️ Manage Project Tags"))
 @planning_errors
 def _manage_project_tags_dialog(
     project_id: int, project_name: str, workspace: PlanningWorkspace
 ) -> None:
     """Modal dialog for attaching, editing, and deleting tags on a project."""
+    if not workspace.projects.projects.permissions().allows(Permission.EDIT, project_id):
+        st.info(t("access.read_only", default="You have read-only access to this project."))
+        return
     st.markdown(f"#### 📁 {project_name} `[#{project_id}]`")
     df_current_tags = get_project_tags_by_project_frame(
         workspace.tags.get_project_tags_by_project(project_id)
@@ -442,7 +486,7 @@ def _manage_project_tags_dialog(
                 st.rerun()
     st.divider()
     st.markdown(f"##### ➕ {t('planning.attach_new_tag', default='Attach New Tag')}")
-    df_tags = get_project_tag_group_tags_frame(workspace.tags.get_project_tag_group_tags())
+    df_tags = get_project_tag_group_tags_frame(workspace.tags.project_tag_choices())
     tag_options = [
         (
             None,
@@ -495,10 +539,15 @@ def _manage_project_tags_dialog(
             st.rerun()
 
 
-@st.dialog(t("planning.dialog_task_tags_title", default="🏷️ Manage Task Tags"))
+@dialog(t("planning.dialog_task_tags_title", default="🏷️ Manage Task Tags"))
 @planning_errors
 def _manage_task_tags_dialog(task_id: int, task_name: str, workspace: PlanningWorkspace) -> None:
     """Modal dialog for adding, editing, and deleting tags on a task."""
+    task = workspace.planning.get_milestone_by_id(task_id)
+    if task is None or not workspace.projects.projects.permissions().allows(Permission.EDIT, task["project_id"]):
+        st.info(t("access.read_only", default="You have read-only access to this project."))
+        return
+    task_name = task["task_name"]
     st.markdown(f"#### 📋 {task_name} `[Task #{task_id}]`")
     df_current_tags = get_task_tags_by_task_frame(workspace.tags.get_task_tags_by_task(task_id))
     st.markdown(f"##### {t('planning.current_tags', default='Current Assigned Tags')}")
@@ -527,7 +576,7 @@ def _manage_task_tags_dialog(task_id: int, task_name: str, workspace: PlanningWo
                 st.rerun()
     st.divider()
     st.markdown(f"##### ➕ {t('planning.attach_new_task_tag', default='Attach New Tag to Task')}")
-    df_tags = get_task_tag_group_tags_frame(workspace.tags.get_task_tag_group_tags())
+    df_tags = get_task_tag_group_tags_frame(workspace.tags.task_tag_choices())
     tag_options = [
         (
             None,
@@ -582,12 +631,15 @@ def _manage_task_tags_dialog(task_id: int, task_name: str, workspace: PlanningWo
             st.rerun()
 
 
-@st.dialog(t("planning.dialog_project_pools_title", default="🏊 Manage Project Resource Pools"))
+@dialog(t("planning.dialog_project_pools_title", default="🏊 Manage Project Resource Pools"))
 @planning_errors
 def _manage_project_resource_pools_dialog(
     project_id: int, project_name: str, workspace: PlanningWorkspace
 ) -> None:
     """Modal dialog for viewing, allocating, and unassigning resource pools at project level."""
+    if not workspace.projects.projects.permissions().allows(Permission.EDIT, project_id):
+        st.info(t("access.read_only", default="You have read-only access to this project."))
+        return
     st.markdown(f"#### 📁 {project_name} `[Project #{project_id}]`")
     proj_bounds = workspace.planning.get_all_project_date_bounds()
     p_bound = proj_bounds.get(project_id) or proj_bounds.get(str(project_id)) or (None, None)
@@ -653,7 +705,7 @@ def _manage_project_resource_pools_dialog(
                     st.rerun()
     st.divider()
     st.markdown(f"##### ➕ {t('planning.assign_new_pool', default='Assign Resource Pool')}")
-    df_all_pools = pools_frame(workspace.resources.get_all_pools())
+    df_all_pools = pools_frame(workspace.resources.pool_choices())
     if df_all_pools.empty:
         st.warning(
             t(
@@ -784,20 +836,24 @@ def _manage_project_resource_pools_dialog(
             st.rerun()
 
 
-@st.dialog(t("planning.dialog_task_pools_title", default="🏊 Manage Task Resource Pools"))
+@dialog(t("planning.dialog_task_pools_title", default="🏊 Manage Task Resource Pools"))
 @planning_errors
 def _manage_task_resource_pools_dialog(
     task_id: int, task_name: str, project_id: int | str, workspace: PlanningWorkspace
 ) -> None:
     """Manage task assignments using cached summaries, not full pool timelines."""
-    st.markdown(f"#### 📋 {task_name} `[Task #{task_id}]` (Project #{project_id})")
     step_info = workspace.planning.get_milestone_by_id(task_id)
+    if step_info is None or not workspace.projects.projects.permissions().allows(Permission.EDIT, step_info["project_id"]):
+        st.info(t("access.read_only", default="You have read-only access to this project."))
+        return
+    project_id, task_name = step_info["project_id"], step_info["task_name"]
+    st.markdown(f"#### 📋 {task_name} `[Task #{task_id}]` (Project #{project_id})")
     task_start_str = step_info.get("start_date") if step_info else None
     task_end_str = step_info.get("end_date") if step_info else None
     if task_start_str and task_end_str:
         st.caption(f"📅 **Task Schedule:** `{task_start_str}` ➔ `{task_end_str}`")
     df_current_assigns = assignments_frame(workspace.resources.get_assignments(task_id=task_id))
-    df_all_pools = pools_frame(workspace.resources.get_all_pools())
+    df_all_pools = pools_frame(workspace.resources.pool_choices())
     pool_rows = df_all_pools.to_dict("records")
     summary_ids = set(df_current_assigns["pool_id"].astype(int))
     summary_ids.update((int(row["id"]) for row in pool_rows if pd.isna(row["capacity_fte"])))
@@ -1009,7 +1065,7 @@ def _handle_filter_by_resource_pool(
     end_date = str(gantt_event.get("end_date", "")).strip()[:10] or "9999-12-31"
     clear_other = bool(gantt_event.get("clear_other_filters", True))
     pool_name = str(gantt_event.get("pool_name", ""))
-    pool_ids = workspace.resources.get_group_descendant_pool_ids(int(group_id)) if group_id else [pool_id]
+    pool_ids = workspace.resources.group_pool_ids(int(group_id)) if group_id else [pool_id]
     details = workspace.pool_details(pool_ids) if pool_ids else []
     matching_pids = sorted({pid for detail in details for pid in
         get_projects_consuming_pool_in_period(detail.assignments, start_date, end_date)})
@@ -1117,7 +1173,7 @@ def _render_filtered_active_allocations(
     st.markdown(full_table_html, unsafe_allow_html=True)
 
 
-@st.cache_data(ttl=60, max_entries=8, show_spinner=False, hash_funcs={tuple: repr})
+@authorized_cache(ttl=60, max_entries=8, show_spinner=False, hash_funcs={tuple: repr})
 def _load_planning_pool_payload(
     _workspace: PlanningWorkspace,
     revision: tuple,
@@ -1131,16 +1187,20 @@ def _load_planning_pool_payload(
     pool_details_cache = _pool_details_cache
     scope_pids = [int(p) for p in selected_projects if str(p).isdigit()]
     scope_pid_set = set(scope_pids)
-    df_all_pools = pools_frame(workspace.resources.get_all_pools())
+    df_all_pools = pools_frame(workspace.resources.pool_choices())
     if pool_ids is not None:
         df_all_pools = df_all_pools[df_all_pools.id.isin(pool_ids)]
+    # A fragment can retain a dictionary from an older scope. Refresh it through
+    # the actor-bound capacity cache before using any allocation records.
+    pool_details_cache.clear()
+    pool_details_cache.update({detail.pool_id: detail for detail in workspace.pool_details(
+        [int(value) for value in df_all_pools.id]
+    )})
     resource_pools_payload: list[dict[str, Any]] = []
     if not df_all_pools.empty:
         for _, p_row in df_all_pools.iterrows():
             p_id = int(p_row["id"])
             p_name = str(p_row["name"])
-            if p_id not in pool_details_cache:
-                pool_details_cache[p_id] = workspace.pool_details([p_id])[0]
             p_cap = pool_details_cache[p_id]
             effective_daily_capacity = (
                 p_cap.daily_assigned_capacity if p_cap.has_assigned_resources else {}
@@ -1211,8 +1271,9 @@ def _render_planning_chart(
 ) -> None:
     from uuid import uuid4
 
-    if st.session_state.pop("planning_needs_full_rerun", False):
-        st.rerun()
+    feedback = st.empty()
+    if error := st.session_state.pop("planning_step_form_error", None):
+        feedback.error(error)
     selected_id = selected_projects[0]
     all_proj_ids = df_projects.id.tolist()
     ids = tuple(sorted(map(int, selected_projects)))
@@ -1220,6 +1281,13 @@ def _render_planning_chart(
     widget_key = "planning_lazy_gantt"
     snapshot = st.session_state.get("planning_chart_snapshot")
     event = st.session_state.pop("planning_pending_change", None)
+    # HTTP task reads update only the browser. Carry its bounded working set into
+    # subsequent edit events so edited/dependent loaded rows receive their patches.
+    component_event = st.session_state.get(widget_key)
+    if snapshot and isinstance(component_event, dict) and component_event.get("scope_token") == snapshot["token"]:
+        loaded = component_event.get("loaded_project_ids")
+        if isinstance(loaded, list):
+            snapshot["loaded"] = list(dict.fromkeys(pid for pid in loaded[-100:] if type(pid) is int and pid in ids))
     revision = workspace.revision()
     unchanged_scope = snapshot is not None and snapshot["scope"] == scope
     known_edit = (
@@ -1230,9 +1298,13 @@ def _render_planning_chart(
     )
     rebuild = not unchanged_scope or (revision != snapshot["revision"] and (not known_edit))
     if rebuild:
-        details = {d.pool_id: d for d in workspace.pool_details()}
+        details: dict[int, PoolCapacityDetail] = {}
         summaries = load_project_summaries(workspace, revision, ids)
         pools, hierarchy = _load_planning_pool_payload(workspace, revision, ids, details)
+        # A cache miss fills current details while building the pool payload.
+        # A cache hit skips that function body, so read current details once here.
+        if pools and not details:
+            details = {d.pool_id: d for d in workspace.pool_details()}
         bounds = {str(p["id"]): (p["start"], p["end"]) for p in summaries}
         loaded = list(ids) if len(ids) == 1 else []
         tasks = build_task_payload(workspace, loaded, bounds, details) if loaded else []
@@ -1260,6 +1332,9 @@ def _render_planning_chart(
             resource_pool_hierarchy=hierarchy,
             active_resource_filter=st.session_state.get("active_resource_pool_filter"),
             data_revision=snapshot["token"],
+            task_endpoint="/api/planning/tasks",
+            task_revision=planning_revision_token(snapshot["revision"]),
+            view_scope=planning_revision_token(scope),
         )
     else:
         args = {}
@@ -1344,8 +1419,13 @@ def _render_planning_chart(
     if response:
         args["dependency_response"] = response
     pool_details_cache = snapshot["details"]
+    permissions = workspace.projects.projects.permissions()
+    args["task_revision"] = planning_revision_token(snapshot["revision"])
     gantt_event = _interactive_gantt(
         **args,
+        permissions={"edit_all": permissions.allows(Permission.EDIT),
+                     "editable_projects": sorted(permissions.project_permissions.get(Permission.EDIT, frozenset())),
+                     "manage_shared": permissions.allows(Permission.SHARED)},
         filter_reset=st.session_state.get("planning_filter_reset", 0),
         key=widget_key,
         on_change=lambda: _handle_gantt_component_change(widget_key, workspace),
@@ -1376,7 +1456,7 @@ def _render_planning_chart(
                 from app.presentation.components.csv_download import download_project_csv
 
                 project_id = int(gantt_event["project_id"])
-                download_project_csv(workspace.planning.export_project_template(project_id), project_id, nonce)
+                download_project_csv(project_id, nonce)
             elif action == "import_csv_template":
                 _schedule_csv_dialog(workspace, int(gantt_event["project_id"]), action)
             elif action == "go_to_pool_details":
@@ -1423,59 +1503,10 @@ def _render_planning_chart(
                         "project_id": str(gantt_event.get("project_id", selected_id)),
                     }
                     st.rerun()
-            elif action == "update_task_full" and step_id:
-                t_name = str(gantt_event.get("task_name", "")).strip()
-                t_phase = str(gantt_event.get("phase", "General")).strip()
-                t_start = str(gantt_event.get("start_date", "")).strip()
-                t_end = str(gantt_event.get("end_date", "")).strip()
-                t_prog = int(gantt_event.get("progress_pct", 0))
-                t_desc = str(gantt_event.get("description", "")).strip()
-                t_deps = gantt_event.get("dependencies")
-                if t_name and t_start and t_end:
-                    require_change(
-                        workspace.planning.update_milestone(
-                            milestone_id=int(step_id),
-                            task_name=t_name,
-                            phase=t_phase,
-                            start_date=t_start,
-                            end_date=t_end,
-                            progress_pct=t_prog,
-                            dependencies=t_deps,
-                            description=t_desc,
-                        )
-                    )
-                    st.toast(t("planning.toast_step_updated", name=t_name), icon="✏️")
-                    st.rerun()
-            elif action == "create_step_full":
-                t_proj = str(gantt_event.get("project_id", "")).strip() or selected_id
-                t_name = str(gantt_event.get("task_name", "")).strip()
-                t_phase = str(gantt_event.get("phase", "")).strip() or "General"
-                t_start = str(gantt_event.get("start_date", "")).strip()
-                t_end = str(gantt_event.get("end_date", "")).strip()
-                t_prog = int(gantt_event.get("progress_pct", 0))
-                t_desc = str(gantt_event.get("description", "")).strip()
-                t_deps = gantt_event.get("dependencies", [])
-                if t_name and t_start and t_end:
-                    before = workspace.revision()
-                    new_step_id = workspace.planning.create_milestone(
-                        project_id=int(t_proj),
-                        task_name=t_name,
-                        phase=t_phase,
-                        start_date=t_start,
-                        end_date=t_end,
-                        progress_pct=t_prog,
-                        dependencies=t_deps,
-                        description=t_desc,
-                    )
-                    st.session_state["planning_pending_change"] = {
-                        **gantt_event,
-                        "id": new_step_id,
-                        "project_id": int(t_proj),
-                        "before_revision": before,
-                    }
-                    st.toast(
-                        t("planning.toast_step_created", name=t_name, project_id=t_proj), icon="➕"
-                    )
+            elif action in {"update_task_full", "create_step_full"}:
+                change = _apply_step_form(gantt_event, workspace, int(selected_id))
+                if change:
+                    st.session_state["planning_pending_change"] = change
                     st.rerun()
             elif action == "update_dates" and step_id:
                 _apply_immediate_gantt_update(gantt_event, workspace)
@@ -1492,10 +1523,10 @@ def _render_planning_chart(
         )
 
 
-@st.fragment
+@st.fragment(key="planning_workspace")
 @planning_errors
 def render_planning_milestones(workspace: PlanningWorkspace) -> None:
-    """Renders the Planning & Step Loader screen with interactive drag & drop and Plotly timeline."""
+    """Render planning filters and their interactive Gantt and capacity grids."""
     st.markdown(
         """
         <style>
@@ -1550,10 +1581,9 @@ def render_planning_milestones(workspace: PlanningWorkspace) -> None:
         """,
         unsafe_allow_html=True,
     )
-    workspace.planning.ensure_indexes()
     revision = workspace.revision()
-    params = parameters_frame(workspace.schema.get_all_parameters())
-    alias_translations = workspace.schema.get_alias_translations(get_current_locale())
+    params = parameters_frame(workspace.schema.property_references())
+    alias_translations = workspace.schema.alias_references(get_current_locale())
     chosen_fields = set(st.session_state.get("planning_flex_fields", []))
     property_ids = tuple(
         sorted(
@@ -1568,7 +1598,7 @@ def render_planning_milestones(workspace: PlanningWorkspace) -> None:
         workspace, revision, property_ids
     )
     if df_projects.empty:
-        st.info(t("master_data.dynamic_empty", default="No projects registered yet."))
+        st.info(t("planning.no_projects_available", default="No projects available for planning."))
         return
     master_proj_ids = [int(p) for p in df_projects["id"].tolist()]
     proj_map = dict(zip(df_projects["id"], df_projects["name"]))
@@ -1745,7 +1775,7 @@ def render_planning_milestones(workspace: PlanningWorkspace) -> None:
             format_func=lambda x: f"{x} - {proj_map.get(x, '')}",
             key="ms_multi_projects",
         )
-        if not selected_projects:
+        if not selected_projects and not cur_active_rf:
             selected_projects = all_proj_ids
     if not selected_projects:
         if active_rf:
@@ -1807,14 +1837,14 @@ def render_planning_milestones(workspace: PlanningWorkspace) -> None:
     )
 
 
-@st.dialog("Active Allocations on Projects & Tasks", width="large")
+@dialog("Active Allocations on Projects & Tasks", width="large")
 @planning_errors
 def _pool_allocations_dialog(pool_id: int, workspace: PlanningWorkspace, group_id: int | None = None) -> None:
     """Reuse the Settings allocation projection for the chosen pool."""
     from app.presentation.components.resource_pool_dialogs import _render_pool_assignments_table
     from app.presentation.navigation import PAGE_PLANNING
 
-    pool_ids = workspace.resources.get_group_descendant_pool_ids(group_id) if group_id else [pool_id]
+    pool_ids = workspace.resources.group_pool_ids(group_id) if group_id else [pool_id]
     details = workspace.capacity.get_details(pool_ids) if pool_ids else []
     if not details:
         st.info("No resource pools found in this selection.")
@@ -1826,10 +1856,13 @@ def _pool_allocations_dialog(pool_id: int, workspace: PlanningWorkspace, group_i
         )
 
 
-@st.dialog("Schedule CSV", width="large")
+@dialog("Schedule CSV", width="large")
 @planning_errors
 def _schedule_csv_dialog(workspace: PlanningWorkspace, project_id: int, action: str) -> None:
     """Load exports or validate an import only after its menu is invoked."""
+    if not workspace.projects.projects.permissions().allows(Permission.EDIT, project_id):
+        st.info(t("access.read_only", default="You have read-only access to this project."))
+        return
     project = workspace.projects.projects.get_project_by_id(project_id)
     if project is None:
         st.error("The selected project no longer exists.")
@@ -1850,10 +1883,12 @@ def _schedule_csv_dialog(workspace: PlanningWorkspace, project_id: int, action: 
         "separate each column's values with semicolons in matching order (1;2 / FS;SS / 0;2). "
         "External references use task:123 or project:4 in preceding_step."
     )))
-    uploaded_file = st.file_uploader(
-        t("planning.csv_upload_label"), type=["csv"], key=f"uploader_steps_{project_id}",
+    from app.presentation.components.csv_upload import project_csv_upload
+
+    content = project_csv_upload(
+        t("planning.csv_upload_label"), key=f"uploader_steps_{project_id}",
     )
-    if uploaded_file is None:
+    if content is None:
         return
     date_format = st.selectbox(
         t("planning.csv_date_format", default="Date format in the CSV"),
@@ -1863,7 +1898,6 @@ def _schedule_csv_dialog(workspace: PlanningWorkspace, project_id: int, action: 
             "The preview shows the dates that will be saved."
         )),
     )
-    content = csv_text(uploaded_file)
     steps = workspace.planning.validate_project_template(project_id, content, date_format=date_format)
     steps_payload = list(csv.DictReader(io.StringIO(content.lstrip("\ufeff"))))
     for row, step in zip(steps_payload, steps, strict=True):

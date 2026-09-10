@@ -10,7 +10,7 @@ import streamlit as st
 from streamlit.testing.v1 import AppTest
 
 from app.domain.organization.models import FunctionType, OrgFunction
-from app.main import create_organization_service
+from app.operator_services import create_organization_service
 from app.infrastructure.database.schema_init import init_db
 
 
@@ -25,7 +25,7 @@ def dialog(path: str, invocation: str) -> AppTest:
     """Keep the production dialog open across AppTest's full script reruns."""
     app = AppTest.from_string(f'''
 import streamlit as st
-from app.main import create_organization_service
+from app.operator_services import create_organization_service
 from app.presentation.components import organization_dialogs as dialogs
 from app.presentation.components.organization_frames import functions_frame, function_types_frame
 from app.presentation.i18n import set_current_locale
@@ -144,9 +144,9 @@ def test_function_and_type_dialogs_preserve_validation_and_reference_errors(data
 def test_settings_organization_tabs_use_services_and_keep_other_tabs_lazy(database: str) -> None:
     app = AppTest.from_string(f'''
 from app.presentation.i18n import set_current_locale
-from app.main import create_organization_service
+from app.operator_services import create_organization_service
 from app.presentation.pages.settings import render_settings_view
-from app.main import create_settings_workspace
+from app.operator_services import create_settings_workspace
 set_current_locale("en")
 render_settings_view(create_settings_workspace({database!r}))
 ''', default_timeout=15)

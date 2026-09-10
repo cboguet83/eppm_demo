@@ -9,6 +9,7 @@ from app.application.services.project_types import ProjectTypeService
 from app.application.services.resource_pools import ResourcePoolService
 from app.application.services.schema import SchemaService
 from app.application.services.tags import TagService
+from app.application.services.wbs import WbsService
 
 
 @dataclass(frozen=True)
@@ -22,3 +23,4 @@ class SettingsWorkspace:
     schema: SchemaService
     types: ProjectTypeService
     collaboration: CollaborationService
+    wbs: WbsService

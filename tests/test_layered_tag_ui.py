@@ -9,7 +9,7 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 from app.domain.tags.models import ProjectTag, TagDictionary, TagGroup, TaskTag
-from app.main import create_tag_service
+from app.operator_services import create_tag_service
 from app.infrastructure.database.schema_init import init_db
 
 
@@ -32,7 +32,7 @@ def dialog(path: str, invocation: str) -> AppTest:
         f"""
 from dataclasses import asdict
 import pandas as pd
-from app.main import create_tag_service
+from app.operator_services import create_tag_service
 from app.presentation.components import tag_dialogs as dialogs
 from app.presentation.components.tag_frames import get_all_tag_groups_frame, get_all_tags_frame
 from app.presentation.i18n import set_current_locale
@@ -47,6 +47,32 @@ dialogs.{invocation}
     ).run()
     assert not app.exception, [item.message for item in app.exception]
     return app
+
+
+def test_used_dictionary_tag_deletion_explains_and_removes_its_assignments(database: str) -> None:
+    service = create_tag_service(database)
+    tag = service.create_tag(TagDictionary(tag="Assigned category"))
+    service.create_project_tag(ProjectTag(project_id=1, tag_id=tag))
+    service.create_task_tag(TaskTag(task_id=1, tag_id=tag))
+    app = dialog(database, f"_open_delete_tag_dialog(service,{tag},'Assigned category')")
+    assert "2 project, task, or resource-pool assignment(s)" in app.warning[0].value
+    app.button[0].click().run()
+    assert not app.exception and not app.error
+    assert service.get_tag_by_id(tag) is None
+    assert service.get_all_project_tags() == [] and service.get_all_task_tags() == []
+    with closing(sqlite3.connect(database)) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM project_task").fetchone() == (60,)
+        assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
+
+
+def test_empty_project_catalog_cannot_submit_a_tag_assignment(database: str) -> None:
+    with closing(sqlite3.connect(database)) as connection, connection:
+        connection.execute("DELETE FROM project_task")
+        connection.execute("DELETE FROM project")
+    app = dialog(database, "_open_add_project_tag_dialog(service,projects,tags)")
+    assert app.warning[0].value == "No projects available."
+    assert not app.button and not app.selectbox
+    assert create_tag_service(database).get_all_project_tags() == []
 
 
 def test_group_and_dictionary_dialogs_preserve_reference_guards(database: str) -> None:
@@ -168,7 +194,7 @@ def test_catalog_component_routes_create_events_to_migrated_dialogs(
     ) as component:
         app = AppTest.from_string(
             f"""
-from app.main import create_tag_service
+from app.operator_services import create_tag_service
 from app.presentation.pages.tags import {render}
 {render}(create_tag_service({database!r}))
 """,

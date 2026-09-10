@@ -1,7 +1,8 @@
 """Real database and Streamlit regression tests for project contacts and logs."""
 
-from app.main import create_project_service
-from app.main import create_schema_service
+from app.operator_services import deployment_access
+from app.operator_services import create_project_service
+from app.operator_services import create_schema_service
 
 from app.application.exceptions import CollaborationConflictError
 
@@ -22,7 +23,7 @@ from app.infrastructure.repositories.collaboration import (
     SqliteCollaborationGateway,
     SqliteCollaborationStore,
 )
-from app.main import create_collaboration_service
+from app.operator_services import create_collaboration_service
 
 
 @pytest.fixture
@@ -61,25 +62,6 @@ def event_values(repo):
         comment="Initial comment",
         event_type_id=repo.list_catalog("event_type")[0]["id"],
     )
-
-
-def test_cached_startup_distinguishes_database_identity_and_schema_version(tmp_path):
-    """Startup cannot reuse another database's result or ignore a changed version."""
-    from app.main import create_maintenance_service
-    from app.presentation.startup import bootstrap_database
-
-    first, second = (str(tmp_path / name) for name in ("first.db", "second.db"))
-    for path in (first, second):
-        bootstrap_database(path, "first-version", True, 1, create_maintenance_service(path))
-        assert create_maintenance_service(path).counts()["projects"] == 1
-    with closing(get_db(first)) as connection, connection:
-        connection.execute("UPDATE project SET name='Retained edit'")
-    bootstrap_database(first, "first-version", True, 1, create_maintenance_service(first))
-    with closing(get_db(first)) as connection:
-        assert connection.execute("SELECT name FROM project").fetchone()[0] == "Retained edit"
-    bootstrap_database(first, "next-version", True, 1, create_maintenance_service(first))
-    with closing(get_db(first)) as connection:
-        assert connection.execute("SELECT name FROM project").fetchone()[0] != "Retained edit"
 
 
 def test_roles_can_repeat_and_occupants_follow_the_function(collaboration, collaboration_path):
@@ -205,10 +187,14 @@ def test_log_paging_and_seed_flush_leave_no_orphans(collaboration, collaboration
 
 
 def ui_app(collaboration_path, body):
+    if body.startswith(("_contact_dialog", "_remove_contact_dialog")):
+        body += "\nrender_project_contacts(1, service)"
+    elif body.startswith("_event_dialog"):
+        body += "\nrender_project_log(1, service)"
     return AppTest.from_string(
         f"""
 from app.presentation.i18n import set_current_locale
-from app.main import create_collaboration_service
+from app.operator_services import create_collaboration_service
 from app.presentation.pages.collaboration import render_project_contacts, render_project_log, render_project_catalog, _contact_dialog, _remove_contact_dialog, _event_dialog
 set_current_locale('en')
 service = create_collaboration_service({collaboration_path!r})
@@ -219,50 +205,49 @@ service = create_collaboration_service({collaboration_path!r})
 
 
 def test_contact_ui_adds_edits_and_removes_function_assignments(collaboration, collaboration_path):
+    from tests.modal_interactions import modal_state, submit_modal
+
     repo = collaboration
     role = repo.save_catalog("role", "Sponsor")
     app = ui_app(collaboration_path, "render_project_contacts(1, service)")
     assert not app.exception
     assert not app.selectbox
     next(b for b in app.button if b.label == "Add contact").click().run()
-    assert not app.exception and app.get("dialog")
+    assert not app.exception and modal_state(app)["form"]["title"] == "Project contact"
     app = ui_app(collaboration_path, "_contact_dialog(1, service)")
-    next(b for b in app.button if b.label == "Save contact").click().run()
+    submit_modal(app)
     assert not app.exception
     contact = repo.list_contacts(1)[0]
     assert contact["role_id"] == role and contact["person"] == "Alice Smith"
     app = ui_app(collaboration_path, f"_contact_dialog(1, service, {contact['id']})")
-    assert next(w for w in app.selectbox if w.label == "Role").disabled
-    next(w for w in app.selectbox if w.label == "Function").select(2)
-    next(b for b in app.button if b.label == "Save contact").click().run()
+    assert modal_state(app)["form"]["fields"][0]["disabled"]
+    submit_modal(app, values={"function_id": "2"})
     assert not app.exception
     assert repo.list_contacts(1)[0]["person"] == "Bob Jones"
     app = ui_app(collaboration_path, f"_remove_contact_dialog(1, service, {contact['id']})")
-    next(b for b in app.button if b.label == "Cancel").click().run()
+    submit_modal(app, cancel=True)
     assert repo.list_contacts(1)
-    next(b for b in app.button if b.label == "Confirm removal").click().run()
+    submit_modal(app)
     assert not app.exception
     assert repo.list_contacts(1) == []
 
 
 def test_log_ui_creates_and_edits_all_fields(collaboration, collaboration_path):
+    from tests.modal_interactions import submit_modal
+
     repo = collaboration
     app = ui_app(collaboration_path, "render_project_log(1, service)")
     assert not app.exception
     assert not app.text_input
     app.button(key="project_log_1_add").click().run()
-    app.text_input[0].set_value("Approval")
-    app.text_area[0].set_value("Needs approval")
-    app.text_area[1].set_value("Review tomorrow")
-    next(w for w in app.selectbox if w.label == "Scope").select("global")
-    next(b for b in app.button if b.label == "Save event").click().run()
+    submit_modal(app, "log", {"title": "Approval", "description": "Needs approval",
+                              "comment": "Review tomorrow", "scope": "global"})
     assert not app.exception
     event = repo.list_events(1)[0]
     assert event["title"] == "Approval" and event["scope"] == "global"
     with patch("app.presentation.components.action_table.action_table", return_value={"id": event["id"], "action": "edit"}):
         app.run()
-    next(w for w in app.selectbox if w.label == "State").select("completed")
-    next(b for b in app.button if b.label == "Save event").click().run()
+    submit_modal(app, "log", {"status": "completed"})
     assert not app.exception
     assert repo.list_events(1)[0]["status"] == "completed"
 
@@ -303,7 +288,7 @@ def test_layered_catalog_rename_rolls_back_when_translation_write_fails(collabor
 
 
 def test_collaboration_adapter_rejects_untrusted_catalog_identifiers(collaboration, collaboration_path):
-    with SqliteCollaborationGateway(collaboration_path).transaction() as store:
+    with SqliteCollaborationGateway(collaboration_path, access=deployment_access()).transaction() as store:
         with pytest.raises(ValueError, match="Unknown project catalog"):
             store.list_catalog("role; DROP TABLE project", "en")
     assert len(pd.DataFrame(create_project_service(collaboration_path).get_planning_catalog(tuple(parameter.param_id for parameter in create_schema_service(collaboration_path).get_all_parameters())))) == 2
@@ -333,7 +318,7 @@ def test_layered_contacts_use_one_snapshot_during_concurrent_deletion(collaborat
 
 
 def test_layered_gateway_rolls_back_all_writes_and_closes_on_caller_error(collaboration, collaboration_path):
-    gateway = SqliteCollaborationGateway(collaboration_path)
+    gateway = SqliteCollaborationGateway(collaboration_path, access=deployment_access())
     with pytest.raises(ValueError, match="Abort operation"):
         with gateway.transaction(write=True) as store:
             store.save_catalog("role", "Partial", None)
@@ -367,7 +352,7 @@ def test_layered_event_boundary_rejects_malformed_fields_before_writes(
 def test_layered_event_paging_is_bounded_and_rejects_malformed_offsets(collaboration, collaboration_path):
     service = create_collaboration_service(collaboration_path)
     values = event_values(collaboration)
-    gateway = SqliteCollaborationGateway(collaboration_path)
+    gateway = SqliteCollaborationGateway(collaboration_path, access=deployment_access())
     with gateway.transaction(write=True) as store:
         for index in range(105):
             store.save_event(1, {**values, "title": str(index), "status": "new"}, None)
@@ -396,17 +381,19 @@ def test_collaboration_ui_paging_and_event_date_editing(collaboration, collabora
     event_id = collaboration.list_events(1)[0]["id"]
     with patch("app.presentation.components.action_table.action_table", return_value={"id": event_id, "action": "edit"}):
         app.run()
-    app.date_input[0].set_value(date(2027, 3, 1))
-    next(button for button in app.button if button.label == "Save event").click().run()
+    from tests.modal_interactions import submit_modal
+    submit_modal(app, "log", {"deadline": "2027-03-01"})
     assert not app.exception
     assert collaboration.list_events(1)[0]["deadline"] == "2027-03-01"
 
 
 def test_collaboration_ui_reports_validation_and_read_failures(collaboration, collaboration_path):
+    from tests.modal_interactions import modal_state, submit_modal
+
     app = ui_app(collaboration_path, "_event_dialog(1, service)")
-    next(button for button in app.button if button.label == "Save event").click().run()
+    submit_modal(app, "log")
     assert not app.exception
-    assert app.error[0].value == "Title is required."
+    assert modal_state(app, "log")["form"]["error"] == "Title is required."
     assert collaboration.list_events(1) == []
     with closing(get_db(collaboration_path)) as connection, connection:
         connection.execute("DROP TABLE project_log_event")

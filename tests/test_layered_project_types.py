@@ -1,5 +1,6 @@
 """Application and real SQLite regressions for the first migrated feature."""
 
+from app.operator_services import deployment_access
 from app.application.exceptions import ProjectTypeConflictError, ProjectTypeStorageError, SchemaConflictError
 
 from app.presentation.components import project_type_frames
@@ -15,11 +16,11 @@ from app.application.services.project_types import ProjectTypeService
 from app.infrastructure.repositories.project_types import SqliteProjectTypeGateway
 from app.infrastructure.repositories.project_types import SqliteProjectTypeStore
 from app.domain.projects.project_types import make_applicability
-from app.main import create_project_type_service
+from app.operator_services import create_project_type_service
 from app.infrastructure.database.connection import get_db
 from app.infrastructure.database.schema_init import init_db
-from app.main import create_project_service
-from app.main import create_schema_service
+from app.operator_services import create_project_service
+from app.operator_services import create_schema_service
 
 
 @pytest.fixture
@@ -168,7 +169,7 @@ def test_gateway_closes_connections_on_success_and_validation_failure(
 
 def test_guarded_write_holds_the_sqlite_writer_reservation(database: str) -> None:
     """Another writer cannot invalidate guards between their read and the save."""
-    gateway = SqliteProjectTypeGateway(database)
+    gateway = SqliteProjectTypeGateway(database, access=deployment_access())
     with closing(sqlite3.connect(database, timeout=0)) as other:
         with gateway.transaction(write=True) as store:
             assert store.find_type(1).is_general

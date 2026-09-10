@@ -1,0 +1,44 @@
+# Local OIDC overlay: docker compose --env-file .local/oidc.env -f docker-compose.yml -f docker-compose.oidc.yml up
+services:
+  app:
+    # Both processes and the host browser use the same exact localhost issuer.
+    # Publishing belongs to the shared network namespace's owning service.
+    network_mode: service:keycloak
+    ports: !reset []
+    environment:
+      APP_ENV: development
+      APP_ORIGIN: ${APP_ORIGIN:?Run scripts.configure_local_oidc first}
+      APP_COOKIE_SECRET: ${APP_COOKIE_SECRET:?Configure a random cookie secret}
+      OIDC_ISSUER: http://localhost:${OIDC_LOCAL_PORT:-8080}/realms/eppm
+      STREAMLIT_SERVER_PORT: ${APP_LOCAL_PORT:-8501}
+      OIDC_CLIENT_ID: eppm
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:?Configure the client secret}
+      OIDC_ALLOW_LOCAL_HTTP: "true"
+      SESSION_IDLE_SECONDS: "900"
+      SESSION_ABSOLUTE_SECONDS: "28800"
+      SESSION_REAUTHENTICATION_SECONDS: "300"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:${APP_LOCAL_PORT:-8501}/_stcore/health')"]
+    depends_on:
+      - keycloak
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7.2
+    command: ["start-dev", "--http-port=${OIDC_LOCAL_PORT:-8080}", "--import-realm"]
+    ports:
+      - "127.0.0.1:${OIDC_LOCAL_PORT:-8080}:${OIDC_LOCAL_PORT:-8080}"
+      - "127.0.0.1:${APP_LOCAL_PORT:-8501}:${APP_LOCAL_PORT:-8501}"
+    environment:
+      KC_HOSTNAME: http://localhost:${OIDC_LOCAL_PORT:-8080}
+      KC_BOOTSTRAP_ADMIN_USERNAME: local-operator
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?Configure the local operator password}
+      APP_ORIGIN: ${APP_ORIGIN:?Configure the application origin}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:?Configure the client secret}
+      KEYCLOAK_ALEX_PASSWORD: ${KEYCLOAK_ALEX_PASSWORD:?Configure the fictional admin user password}
+      KEYCLOAK_SAM_PASSWORD: ${KEYCLOAK_SAM_PASSWORD:?Configure the fictional editor user password}
+      KEYCLOAK_ROBIN_PASSWORD: ${KEYCLOAK_ROBIN_PASSWORD:?Configure the fictional viewer user password}
+      KEYCLOAK_CLEMENT_PASSWORD: ${KEYCLOAK_CLEMENT_PASSWORD:?Configure the fictional Clement user password}
+    volumes:
+      - ./deployment/keycloak/eppm-realm.json:/opt/keycloak/data/import/eppm-realm.json:ro
+      - keycloak-local-data:/opt/keycloak/data
+volumes:
+  keycloak-local-data:

@@ -1,4 +1,4 @@
-﻿# PPM Studio Pro - Enterprise Project Portfolio Management
+# PPM Studio Pro - Enterprise Project Portfolio Management
 
 PPM Studio Pro is an enterprise-grade Project Portfolio Management (PPM) web application built with Streamlit, SQLite, and Plotly. It enables portfolio managers, architects, and PMO executives to manage project master data, configure flexible metadata schemas, schedule milestone roadmaps, manage organizational hierarchies and resource pools, and track portfolio analytics in real-time.
   
@@ -40,6 +40,11 @@ Existing SQLite data and applied database migrations are preserved.
 [ADR 0016](docs/decisions/0016-project-experience-and-allocation-generation.md)
 covers project/contact dialogs, translated property aliases, numbered schedule
 exports, and configurable allocation generation.
+[ADR 0019](docs/decisions/0019-oidc-identities-and-access-policy.md) adds real OIDC
+authentication, independent application accounts, fixed roles, project scopes, and
+audited access administration. Start with the
+[access deployment guide](docs/implementation/access-deployment.md); it covers local
+Keycloak, migrations, exact-account bootstrap, recovery, and production MFA.
 
 ### C4 level 2: runtime containers
 
@@ -48,10 +53,13 @@ C4Container
     title EPPM runtime
     Person(user, "Portfolio manager", "Manages projects, planning, and resources")
     System_Boundary(eppm, "EPPM") {
-        Container(web, "Application", "Python 3.14 / Streamlit", "UI and application logic in one process")
-        ContainerDb(database, "Application data", "SQLite file", "Projects, types, properties, planning, and resources")
+        Container(web, "Application", "Python 3.14 / Streamlit / ASGI", "Authenticated UI and authorized application services")
+        ContainerDb(database, "Application data", "SQLite file", "Business data, identities, grants, sessions, and audit")
     }
-    Rel(user, web, "Uses", "HTTP / HTTPS")
+    System_Ext(provider, "OIDC provider", "Local Keycloak or enterprise identity provider")
+    Rel(user, web, "Uses", "HTTPS; explicit local HTTP development")
+    Rel(user, provider, "Authenticates", "Browser redirect")
+    Rel(web, provider, "Validates authentication", "OIDC code flow with PKCE")
     Rel(web, database, "Reads and writes", "SQLite")
 ```
 
@@ -59,7 +67,8 @@ C4Container
 
 | Location | Purpose |
 | --- | --- |
-| `streamlit_app.py` | Streamlit launcher |
+| `asgi_app.py` | Authenticated ASGI launcher |
+| `streamlit_app.py` | UI script hosted by the authenticated launcher |
 | `app/main.py` | Dependency construction and startup |
 | `app/presentation/` | Application shell, pages, components, locale state, and bundled assets |
 | `app/application/` | Project/type/schema/organization/pool use cases, capacity services, portfolio queries, ports, and boundary errors |
@@ -77,6 +86,7 @@ C4Container
 ### 1. Prerequisites
 - Python 3.14.x
 - Virtual environment (`venv` or `conda`)
+- Docker and Docker Compose with `!reset` support for local Keycloak
 
 ### 2. Environment Setup
 ```powershell
@@ -92,16 +102,23 @@ source .venv/bin/activate
 # Install dependencies
 pip install -e ".[dev]"
 
-# Copy environment template
-cp .env.example .env
+# Generate ignored local credentials (refuses to overwrite an existing file)
+python -m scripts.configure_local_oidc
 ```
 
 ### 3. Run the Application
 ```powershell
-streamlit run streamlit_app.py
+docker compose --env-file .local/oidc.env -f docker-compose.yml -f docker-compose.oidc.yml build app
+python -m scripts.access_admin --database data/ppm_mock.db migrate
+docker compose --env-file .local/oidc.env -f docker-compose.yml -f docker-compose.oidc.yml up -d
 ```
-Open `http://localhost:8501` in your browser. Use `python -m app.main --help` for
-startup options and `python -m scripts.seed_defaults` for default-data seeding.
+Open `http://localhost:8501`. First login creates a pending account with no business
+access. Follow the [bootstrap instructions](docs/implementation/access-deployment.md#bootstrap-and-recovery)
+to appoint that exact account as access administrator, then assign further roles
+explicitly. Existing databases need a verified backup before migration. Startup
+does not seed or reset business data. A host-process deployment uses
+`streamlit run asgi_app.py` with the documented authentication environment populated;
+Streamlit does not automatically load OIDC settings from `.env`.
 
 ### 4. Run Automated Tests
 ```powershell
@@ -128,7 +145,7 @@ and tag items. Template defaults use equivalent relational tables. The Python
 `Project.dynamic_attributes` interface remains a dictionary keyed by property ID;
 project DataFrames now return dictionaries instead of JSON strings.
 
-Existing databases migrate automatically: projects receive the protected General
+The deployment migration command upgrades existing databases: projects receive the protected General
 type, while existing properties continue applying to all types. The migration
 creates `<database>.before-project-types.bak`, verifies converted values and
 foreign keys, then removes the JSON column. Invalid or ambiguous legacy values
@@ -144,10 +161,9 @@ PPM Studio Pro supports two complementary database seeding workflows:
 
 ### Pool allocation controls
 
-The sidebar's **Database Seeding** section has **Generate pool allocations** and
-**Clear pool allocations**. Clearing requires confirmation and removes project/task
-demand while preserving pools and staffing. Both operations back up the database
-before applying changes.
+Pool allocation generation and clearing are deployment-only CLI operations. Clearing
+removes project/task demand while preserving pools and staffing. Both operations
+back up the database before applying changes; neither is exposed in the browser.
 
 Generation first previews the mix without changing the database. Configure:
 
@@ -198,8 +214,10 @@ allocation rows expose **Open** and confirmed **Unassign** actions directly.
 The CSV section exports the selected project's schedule and offers an import
 template; both start with `step_number`, numbered from 1.
 
-### A. Automatic Bootstrap Seeding (`app/infrastructure/database/seeder.py`)
-On initial application launch, if the database is empty, the system automatically bootstraps:
+### A. Explicit Demo Seeding (`app/infrastructure/database/seeder.py`)
+The deployment command `python -m scripts.seed_defaults` populates the demo catalog.
+It is separate from application-account bootstrap and is never run automatically by
+the authenticated UI. The catalog contains:
 - **5 Schema Groups**: `basic info`, `scoping`, `localization`, `useful links`, `classification`.
 - **31 Custom Properties**: Cover all eight supported types, including `URL` and `MULTI_ENUM`, with aliases, applicability, and relational values.
 - **5 Project Types**: General, Infrastructure, Digitalisation, Compliance, and Renovation. Localization applies to Infrastructure/Renovation; interfaces apply to Infrastructure/Digitalisation/Renovation. Scope is globally required but optional for General. Infrastructure requires code line; Compliance requires acceptance criteria. Three types provide distinct scope defaults.
@@ -275,130 +293,49 @@ python scripts/seed_database.py --projects 50 --seed 12345
 PPM Studio Pro is containerized following enterprise 12-factor standards using a lightweight, secure multi-stage Docker build.
 
 ### Multi-Stage Build Architecture
-- **Builder Stage (`python:3.11-slim`)**: Compiles wheels and installs dependencies into a user space (`/root/.local`).
-- **Runtime Stage (`python:3.11-slim`)**: Minimal image copying only the installed packages, running as an unprivileged non-root user (`appuser` with UID 1000), with built-in HTTP healthchecks on `/_stcore/health`.
+- **Builder Stage (`python:3.14-slim`)**: Installs dependencies into a user space (`/root/.local`).
+- **Runtime Stage (`python:3.14-slim`)**: Copies installed packages and runs as an unprivileged user (`appuser`, UID 1000), with HTTP healthchecks on `/_stcore/health`.
 
 ---
 
-### 1. Using Docker Compose (Recommended)
+### Compose and standalone deployments
 
-The included [`docker-compose.yml`](file:///c:/Users/cbogu/Documents/python/eppm_demo/docker-compose.yml) configures container execution with persistent named volume storage for the SQLite database:
+The [base Compose configuration](docker-compose.yml) binds the application to
+localhost and persists SQLite through a host-directory mount. It requires explicit
+OIDC configuration. The [local overlay](docker-compose.oidc.yml) adds Keycloak and
+uses the generated `.local/oidc.env` file. Use the same `--env-file` and both `-f`
+arguments shown above for `logs`, `ps`, `exec`, and `down` operations.
+
+For a standalone container or production reverse proxy, follow the
+[deployment guide](docs/implementation/access-deployment.md). Supply authentication
+settings through deployment secret storage or a protected environment file and
+mount the migrated database. Keep authentication enabled during rollback. The image
+starts `streamlit run asgi_app.py`; the UI script alone is not an authenticated
+launcher.
+
+### Deployment-only seeding
+
+The running application never seeds, resets, or restores administrator privileges.
+To change demo data, run an explicit deployment command against the intended
+installation. For example, after reviewing its destructive business-data scope:
 
 ```powershell
-# Build image and launch container in background
-docker compose up -d --build
-
-# View real-time container logs
-docker compose logs -f
-
-# Check container status and healthcheck
-docker compose ps
-
-# Stop and tear down the container
-docker compose down
+docker compose --env-file .local/oidc.env -f docker-compose.yml -f docker-compose.oidc.yml exec app python -m scripts.seed_defaults --force
 ```
 
-The application will be accessible at `http://localhost:8501`.
+Seed commands back up existing data and preserve application users, grants, security
+audit, and initial-bootstrap state. Run regression tests in the development
+environment; the runtime image does not include tests or test dependencies.
+
+### Configuration
+
+[.env.example](.env.example) lists the provider, cookie, MFA, and session settings.
+Actual credentials belong in ignored local configuration or deployment secret
+storage. `APP_ENV` defaults to production in Compose. `DB_NAME` identifies the
+container database; `EPPM_DATA_DIRECTORY` selects its host directory. Local ports
+are generated consistently by `scripts.configure_local_oidc`.
 
 ---
-
-### 2. Standalone Docker Commands
-
-You can also build and run the container directly using the Docker CLI:
-
-```powershell
-# 1. Build the Docker image
-docker build -t eppm-demo:latest .
-
-# 2. Create a local data directory for persistent database storage
-mkdir -p data
-
-# 3. Run container with persistent volume mount and port mapping
-# On Windows PowerShell:
-docker run -d `
-  --name eppm-app `
-  -p 8501:8501 `
-  -v ${PWD}/data:/app/data `
-  -e DB_NAME=/app/data/ppm_mock.db `
-  --restart unless-stopped `
-  eppm-demo:latest
-
-# On Linux / macOS:
-docker run -d \
-  --name eppm-app \
-  -p 8501:8501 \
-  -v $(pwd)/data:/app/data \
-  -e DB_NAME=/app/data/ppm_mock.db \
-  --restart unless-stopped \
-  eppm-demo:latest
-```
-
----
-
-### 3. Managing Database Seeding Inside Docker
-
-To populate or reset mock projects inside a running Docker container, execute the seeding script via `docker compose exec`:
-#### Option A: Force Re-seeding Automatically on Docker Startup
-When persistent named volumes (`ppm_data`) are mounted, the database file persists across container restarts. To wipe and cleanly re-seed the database automatically when starting Docker, set `FORCE_RESEED=true`:
-
-```powershell
-# Reseed 50 projects inside the active container
-# Windows PowerShell: Force re-seed default demo dataset on startup
-$env:FORCE_RESEED="true"; docker compose up -d
-
-# Or force re-seed with 50 generated projects on startup
-$env:FORCE_RESEED="true"; $env:SEED_PROJECTS_COUNT="50"; docker compose up -d
-```
-
-```bash
-# Linux / macOS:
-FORCE_RESEED=true docker compose up -d
-
-# With 50 generated projects:
-FORCE_RESEED=true SEED_PROJECTS_COUNT=50 docker compose up -d
-```
-
-> [!TIP]
-> Database re-seeding is guarded by Streamlit's `@st.cache_resource`, ensuring it executes **strictly once** on container boot and never interrupts or wipes data during interactive web UI script reruns.
-
-#### Option B: On-Demand Seeding via CLI
-To populate or reset mock projects inside a running Docker container on-demand, execute the seeding commands via `docker compose exec`:
-
-```powershell
-# Force re-seed default taxonomy, schema, and sample projects
-docker compose exec app python -m scripts.seed_defaults --force
-
-# Reseed 50 generated projects inside the active container
-docker compose exec app python scripts/seed_database.py --projects 50
-
-# Reseed 250 projects with custom task bounds
-docker compose exec app python scripts/seed_database.py --projects 250 --min-tasks 3 --max-tasks 12
-
-```
-
-Run the regression suite from the local development environment with
-`python -m pytest -q`; the runtime image does not include tests or test dependencies.
-
----
-
-### 4. Container Configuration & Environment Variables
-
-PPM Studio Pro recognizes the following environment variables (defined via `.env`, `docker-compose.yml`, or `-e` flags):
-
-| Variable | Default | Purpose |
-| :--- | :--- | :--- |
-| `DB_NAME` | `/app/data/ppm_mock.db` | Absolute path to the SQLite database file inside the container. |
-| `LOG_LEVEL` | `INFO` | Logging threshold (`DEBUG`, `INFO`, `WARNING`, `ERROR`). |
-| `APP_ENV` | `production` | Deployment mode (`development`, `staging`, `production`). |
-| `FORCE_RESEED` | `false` | When `true`, wipes existing data and re-seeds database on startup. |
-| `SEED_PROJECTS_COUNT` | `0` | Number of projects to generate when `FORCE_RESEED=true` (0 uses default seed). |
-| `STREAMLIT_SERVER_PORT` | `8501` | In-container HTTP listening port. |
-| `STREAMLIT_SERVER_ADDRESS` | `0.0.0.0` | In-container network bind address. |
-| `STREAMLIT_SERVER_HEADLESS`| `true` | Runs Streamlit in headless mode without spawning local browser windows. |
-
-
----
-
 ## 📋 Features Overview
 
 Pool capacity summaries and details are persisted as derived data in SQLite and
@@ -479,9 +416,9 @@ temporary SQLite copy for database-backed interactions; it never moves live task
 alternative Chromium executable can be supplied as its first argument. Timings
 are diagnostic measurements, not a guarantee for every device or date range.
 
-The sidebar seed control accepts up to **10,000 projects**. Large seeds and the
-first capacity calculation afterward take longer; filtering the planning view to
-the projects of interest also reduces its task payload.
+Large deployment-side seeds and the first capacity calculation afterward take
+longer; filtering the planning view to the projects of interest reduces its task
+payload. The authenticated sidebar exposes no seeding or reset controls.
 
 Every actual seed operation backs up an existing database before changing it, using
 SQLite's backup API (including WAL contents). With Docker, backups are stored in

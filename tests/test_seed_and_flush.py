@@ -1,7 +1,7 @@
 """Unit tests for Database Seeding and Database Flushing scripts."""
 
-from app.main import create_project_service
-from app.main import create_schema_service
+from app.operator_services import create_project_service
+from app.operator_services import create_schema_service
 
 from app.presentation.components import planning_frames
 import pandas as pd
@@ -17,7 +17,7 @@ import unittest
 from app.infrastructure.database.flush import flush_database
 from app.infrastructure.database.bulk_seed import seed_database
 from app.infrastructure.database.connection import get_db
-from app.main import create_planning_service
+from app.operator_services import create_planning_service
 
 
 class TestSeedAndFlush(unittest.TestCase):

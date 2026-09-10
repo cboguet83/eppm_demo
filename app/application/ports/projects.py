@@ -1,11 +1,17 @@
 """Storage contracts for transactional project operations."""
 
+from collections.abc import Collection
+from app.domain.access.models import Permission
+from app.application.ports.business_permissions import PermissionSnapshot
+
+
 from contextlib import AbstractContextManager
 from typing import Protocol, TypedDict
 
 from app.domain.projects.project import Project
 from app.domain.projects.links import LinkValues
 from app.domain.projects.project_types import PropertyValue, TemplateProperty
+from app.application.ports.wbs import WbsStore
 
 
 class PlanningProject(TypedDict):
@@ -20,7 +26,7 @@ class PlanningProject(TypedDict):
     dynamic_attributes: dict[str, PropertyValue]
 
 
-class ProjectStore(Protocol):
+class ProjectStore(WbsStore, Protocol):
     """Operations sharing the transaction supplied by ProjectGateway."""
 
     def find(self, project_id: int) -> Project | None: ...
@@ -39,5 +45,6 @@ class ProjectStore(Protocol):
 class ProjectGateway(Protocol):
     """Own the lifetime of a consistent read or atomic write transaction."""
 
-    def transaction(self, *, write: bool = False) -> AbstractContextManager[ProjectStore]: ...
+    def transaction(self, *, write: bool = False, permission: Permission | None = None, project_ids: Collection[int] | None = None) -> AbstractContextManager[ProjectStore]: ...
     def read_planning_catalog(self, property_ids: tuple[str, ...]) -> list[PlanningProject]: ...
+    def permission_snapshot(self) -> PermissionSnapshot: ...

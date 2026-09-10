@@ -1,5 +1,6 @@
 """Organization rules, real SQLite transactions, and display projections."""
 
+from app.operator_services import deployment_access
 from app.application.exceptions import OrganizationConflictError, OrganizationStorageError
 
 from app.presentation.components import organization_frames
@@ -23,7 +24,7 @@ from app.domain.organization.rules import (
     validate_function, validate_occupation_percentage,
 )
 from app.infrastructure.repositories.organization import SqliteOrganizationGateway
-from app.main import create_organization_service
+from app.operator_services import create_organization_service
 from app.infrastructure.database.schema_init import init_db
 
 
@@ -251,7 +252,7 @@ def test_gateway_reserves_writers_and_closes_connections(database: str, monkeypa
 
     captured = get_db(database)
     monkeypatch.setattr("app.infrastructure.repositories.organization.get_db", lambda _: captured)
-    gateway = SqliteOrganizationGateway(database)
+    gateway = SqliteOrganizationGateway(database, access=deployment_access())
     if operation == "rollback":
         with pytest.raises(ValueError, match="cancel"):
             with gateway.transaction(write=True) as store:

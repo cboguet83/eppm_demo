@@ -54,13 +54,13 @@ def encode_value(conn: sqlite3.Connection, pid: str, value: Any) -> tuple:
 def write_value(conn: sqlite3.Connection, owner_id: int, pid: str, value: Any, *, defaults: bool = False) -> None:
     table, owner = ("project_type_property_default", "project_type_id") if defaults else ("project_property_value", "project_id")
     kind, text, number, date, items = encode_value(conn, pid, value)
-    conn.execute(f"DELETE FROM {table}_item WHERE {owner} = ? AND param_id = ?", (owner_id, pid))
+    conn.execute(f"DELETE FROM main.{table}_item WHERE {owner} = ? AND param_id = ?", (owner_id, pid))
     conn.execute(
-        f"INSERT INTO {table} ({owner}, param_id, kind, text_value, number_value, date_value) VALUES (?, ?, ?, ?, ?, ?) "
+        f"INSERT INTO main.{table} ({owner}, param_id, kind, text_value, number_value, date_value) VALUES (?, ?, ?, ?, ?, ?) "
         f"ON CONFLICT ({owner}, param_id) DO UPDATE SET kind=excluded.kind, text_value=excluded.text_value, number_value=excluded.number_value, date_value=excluded.date_value",
         (owner_id, pid, kind, text, number, date),
     )
-    conn.executemany(f"INSERT INTO {table}_item ({owner}, param_id, position, value) VALUES (?, ?, ?, ?)",
+    conn.executemany(f"INSERT INTO main.{table}_item ({owner}, param_id, position, value) VALUES (?, ?, ?, ?)",
                      [(owner_id, pid, i, item) for i, item in enumerate(items)])
 
 

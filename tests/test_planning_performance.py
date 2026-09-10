@@ -17,12 +17,12 @@ import pandas as pd
 from streamlit.testing.v1 import AppTest
 
 from app.infrastructure.database.seeder import seed_default_data_if_empty
-from app.main import create_planning_service
-from app.main import create_pool_capacity_service, create_resource_pool_service
+from app.operator_services import create_planning_service
+from app.operator_services import create_pool_capacity_service, create_resource_pool_service
 
 
 def planning_app(db_path):
-    from app.main import create_planning_workspace
+    from app.operator_services import create_planning_workspace
     from app.presentation.pages.planning import render_planning_milestones
     render_planning_milestones(create_planning_workspace(db_path))
 
@@ -30,11 +30,11 @@ def planning_app(db_path):
 
 class PlanningPerformanceTests(unittest.TestCase):
     def test_catalog_reads_only_requested_properties_and_invalidates_after_edits(self):
-        from app.main import create_project_service
-        from app.main import create_schema_service
+        from app.operator_services import create_project_service
+        from app.operator_services import create_schema_service
         from app.infrastructure.repositories.portfolio import portfolio_revision
         from app.presentation.components.planning_data import load_planning_catalog, load_dependency_choices
-        from app.main import create_planning_workspace
+        from app.operator_services import create_planning_workspace
         from app.infrastructure.database.connection import get_db
         with tempfile.TemporaryDirectory() as directory:
             path = str(Path(directory) / 'lazy.db')

@@ -7,12 +7,12 @@ from pathlib import Path
 
 from app.infrastructure.database.connection import get_db
 from app.infrastructure.database.schema_init import init_db
-from app.main import create_portfolio_service
+from app.operator_services import create_portfolio_service
 from app.infrastructure.repositories.portfolio import portfolio_revision
 from app.infrastructure.database.seed_projects import create_seed_project
-from app.main import create_project_service
-from app.main import create_project_type_service
-from app.main import create_schema_service
+from app.operator_services import create_project_service
+from app.operator_services import create_project_type_service
+from app.operator_services import create_schema_service
 
 
 class PortfolioPagingTests(unittest.TestCase):
@@ -93,12 +93,12 @@ import importlib
 import streamlit as st
 from unittest.mock import patch
 from app.presentation.i18n import set_current_locale
-from app.main import create_project_service
-from app.main import create_schema_service
+from app.operator_services import create_project_service
+from app.operator_services import create_schema_service
 import app.presentation.components.portfolio_table as component
 importlib.reload(component)
 from app.presentation.pages.portfolio import render_portfolio_overview
-from app.main import create_project_workspace
+from app.operator_services import create_project_workspace
 from app.infrastructure.repositories.projects import SqliteProjectGateway
 set_current_locale('en')
 with patch.object(SqliteProjectGateway, 'read_planning_catalog', side_effect=AssertionError('eager load')):

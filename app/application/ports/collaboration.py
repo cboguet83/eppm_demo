@@ -1,5 +1,9 @@
 """Typed projections and transaction contracts for project collaboration."""
 
+from collections.abc import Collection
+from app.domain.access.models import Permission
+
+
 from contextlib import AbstractContextManager
 from typing import Protocol, TypedDict
 
@@ -21,12 +25,17 @@ class CatalogEntry(TypedDict):
     label: str
 
 
-class FunctionContact(TypedDict):
+class FunctionChoice(TypedDict):
     """Function identity and its current occupant display name."""
 
     function_id: int
     function_name: str
     person: str
+
+
+class FunctionContact(FunctionChoice):
+    """Contact details resolved only for a project assignment or shared administration."""
+
     mobile: str
     landline: str
 
@@ -75,5 +84,6 @@ class CollaborationGateway(Protocol):
     """Supply a consistent reader or an atomic reserved writer."""
 
     def transaction(
-        self, *, write: bool = False
+        self, *, write: bool = False, permission: Permission | None = None,
+        project_ids: Collection[int] | None = None
     ) -> AbstractContextManager[CollaborationStore]: ...

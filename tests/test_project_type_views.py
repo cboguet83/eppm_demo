@@ -12,9 +12,9 @@ from streamlit.testing.v1 import AppTest
 from app.infrastructure.database.schema_init import init_db
 from app.presentation.i18n import t, set_current_locale
 from app.infrastructure.database.seeder import seed_default_data_if_empty
-from app.main import create_project_service
-from app.main import create_project_type_service
-from app.main import create_schema_service
+from app.operator_services import create_project_service
+from app.operator_services import create_project_type_service
+from app.operator_services import create_schema_service
 
 
 class ProjectTypeViewTests(unittest.TestCase):
@@ -32,9 +32,9 @@ class ProjectTypeViewTests(unittest.TestCase):
         return AppTest.from_string(f'''
 import streamlit as st
 from app.presentation.i18n import set_current_locale
-from app.main import create_project_service
-from app.main import create_schema_service
-from app.main import create_project_workspace
+from app.operator_services import create_project_service
+from app.operator_services import create_schema_service
+from app.operator_services import create_project_workspace
 from app.presentation.components.project_dialogs import open_create_project_dialog, open_edit_project_dialog
 set_current_locale("en")
 workspace = create_project_workspace({self.path!r})
@@ -111,6 +111,17 @@ schema = create_schema_service({self.path!r})
     def test_all_template_property_types_are_exposed_in_create_edit_and_details(self):
         import datetime
 
+        def field_in_tab(app, prefix, kind, widget):
+            # Property tabs render on selection; exercise each actual control.
+            for label in [tab.label for tab in app.tabs]:
+                app.session_state[prefix + '_tabs'] = label
+                app.run()
+                self.assert_clean(app)
+                matches = [item for item in app.get(widget) if item.key == prefix + '_' + kind]
+                if matches:
+                    return matches[0]
+            self.fail(f'{kind} is missing from all property tabs')
+
         template = self.types.create_type('Complete template')
         group = self.schema.create_group('Custom template group', 1)
         values = {'TEXT': 'Text value', 'ENUM': 'Option A', 'MULTI_ENUM': ['Option A'],
@@ -130,12 +141,17 @@ schema = create_schema_service({self.path!r})
         app.selectbox(key='create_type_1').select(template).run()
         self.assert_clean(app)
         for kind in ('TEXT', 'URL', 'HYPERLINK', 'blank'):
-            self.assertIn(f'portfolio_create_1_{kind}', [w.key for w in app.text_input])
-        self.assertEqual(app.date_input(key='portfolio_create_1_DATE').value, datetime.date(2026, 9, 8))
-        self.assertEqual(app.number_input(key='portfolio_create_1_NUMBER').value, 0)
-        self.assertEqual(app.selectbox(key='portfolio_create_1_ENUM').value, 'Option A')
-        self.assertEqual(app.multiselect(key='portfolio_create_1_MULTI_ENUM').value, ['Option A'])
-        self.assertEqual(app.multiselect(key='portfolio_create_1_TAGS').value, ['Free tag'])
+            field_in_tab(app, 'portfolio_create_1', kind, 'text_input')
+        for kind, widget, expected in [
+            ('DATE', 'date_input', datetime.date(2026, 9, 8)), ('NUMBER', 'number_input', 0),
+            ('ENUM', 'selectbox', 'Option A'), ('MULTI_ENUM', 'multiselect', ['Option A']),
+            ('TAGS', 'multiselect', ['Free tag']),
+        ]:
+            self.assertEqual(field_in_tab(app, 'portfolio_create_1', kind, widget).value, expected)
+        # An explicitly cleared value must stay empty even if its tab is hidden
+        # on save; an untouched, unset property is independently nullable.
+        field_in_tab(app, 'portfolio_create_1', 'blank', 'text_input').input('Temporary').run()
+        field_in_tab(app, 'portfolio_create_1', 'blank', 'text_input').input('').run()
         self.assertNotIn('portfolio_create_1_other', [w.key for w in app.text_input])
         next(w for w in app.text_input if w.label == t('master_data.field_name')).input('Complete project').run()
         next(b for b in app.button if b.label == 'Create project').click().run()
@@ -144,8 +160,8 @@ schema = create_schema_service({self.path!r})
 
         app = self.app('open_edit_project_dialog(1, workspace)')
         self.assert_clean(app)
-        app.text_input(key='portfolio_edit_1_blank').input('Previously empty').run()
-        app.number_input(key='portfolio_edit_1_NUMBER').set_value(42).run()
+        field_in_tab(app, 'portfolio_edit_1', 'blank', 'text_input').input('Previously empty').run()
+        field_in_tab(app, 'portfolio_edit_1', 'NUMBER', 'number_input').set_value(42).run()
         next(b for b in app.button if b.label == t('master_data.btn_update')).click().run()
         self.assert_clean(app)
         self.assertEqual(self.repo.get_project_by_id(1).dynamic_attributes,

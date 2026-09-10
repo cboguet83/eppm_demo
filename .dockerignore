@@ -12,10 +12,13 @@ ENV/
 .env
 .env.*
 !.env.example
+.local/
 .streamlit/secrets.toml
+data/
+*.db
+*.sqlite*
 .pytest_cache/
 .coverage
 htmlcov/
 *.log
 scratch/
-

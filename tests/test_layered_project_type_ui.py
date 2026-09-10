@@ -8,9 +8,9 @@ from pathlib import Path
 import pytest
 from streamlit.testing.v1 import AppTest
 
-from app.main import create_project_type_service
+from app.operator_services import create_project_type_service
 from app.infrastructure.database.schema_init import init_db
-from app.main import create_schema_service
+from app.operator_services import create_schema_service
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -29,7 +29,7 @@ def french_host_locale():
 def project_types_app(db_path: str) -> None:
     """Host the new screen with dependencies constructed outside presentation."""
     import pandas as pd
-    from app.main import create_project_type_service
+    from app.operator_services import create_project_type_service
     from app.presentation.pages.project_types import render_project_types
     from app.presentation.i18n import set_current_locale
 
@@ -111,22 +111,22 @@ def test_existing_and_new_cli_help_preserve_startup_arguments(launcher: str) -> 
 
 
 @pytest.mark.parametrize("launcher", ["streamlit_app.py", "streamlit_app.py"])
-def test_both_streamlit_launchers_bootstrap_the_real_application(
+def test_launchers_fail_closed_without_oidc_and_never_initialize_storage(
     launcher: str, tmp_path: Path,
 ) -> None:
     """An isolated process tests actual startup without reusing test module state."""
     db_path = tmp_path / "startup.db"
-    env = {**os.environ, "DB_NAME": str(db_path), "FORCE_RESEED": "false",
+    env = {**{key: value for key, value in os.environ.items() if not key.startswith("OIDC_")}, "DB_NAME": str(db_path), "FORCE_RESEED": "false",
            "SEED_PROJECTS_COUNT": "0"}
     code = (
         "from streamlit.testing.v1 import AppTest; "
         f"app = AppTest.from_file({launcher!r}, default_timeout=30).run(); "
         "assert not app.exception, [error.message for error in app.exception]; "
-        "assert app.sidebar.radio, 'Navigation did not render'"
+        "assert not app.sidebar.radio; assert app.error"
     )
     result = subprocess.run(
         [sys.executable, "-c", code], cwd=ROOT, env=env,
         capture_output=True, text=True, check=False, timeout=45,
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    assert db_path.exists()
+    assert not db_path.exists()

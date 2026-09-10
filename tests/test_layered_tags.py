@@ -1,5 +1,6 @@
 """Tag use cases, transaction guarantees, typed projections, and safe errors."""
 
+from app.operator_services import deployment_access
 from app.application.exceptions import TagConflictError
 
 from contextlib import closing
@@ -21,7 +22,7 @@ from app.domain.tags.rules import (
 )
 from app.infrastructure.repositories.tags import SqliteTagGateway
 from app.infrastructure.database.connection import get_db
-from app.main import create_tag_service
+from app.operator_services import create_tag_service
 from app.infrastructure.database.schema_init import init_db
 
 
@@ -136,7 +137,7 @@ def test_assignment_foreign_keys_and_missing_record_results(database: str) -> No
 
 
 def test_gateway_reserves_writes_and_closes_connections_on_every_exit(database: str) -> None:
-    gateway = SqliteTagGateway(database)
+    gateway = SqliteTagGateway(database, access=deployment_access())
     with pytest.raises(ValueError, match="rollback"):
         with gateway.transaction(write=True) as store:
             connection = store.connection

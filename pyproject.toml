@@ -11,6 +11,7 @@ dynamic = ["dependencies"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "pytest-cov>=5"]
+browser-tests = ["playwright==1.62.0"]
 
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}

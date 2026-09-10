@@ -2195,11 +2195,44 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         window.parent.postMessage({ isStreamlitMessage: true, type: "streamlit:setFrameHeight", height: height || document.body.scrollHeight + 10 }, "*");
       },
       setComponentValue: function (value) {
+        value = {...value, scope_token: value.scope_token || planningScopeToken,
+          loaded_project_ids: [...loadedProjectIds].map(Number)};
         window.parent.postMessage({ isStreamlitMessage: true, type: "streamlit:setComponentValue", value: value }, "*");
       }
     };
 
     let tasksData = [];
+    // Presentation hints only. Every server operation checks current stored grants.
+    let editAllProjects = false;
+    let editableProjectIds = new Set();
+    let canManageSharedData = false;
+
+    function updatePermissionControls(permissions) {
+      editAllProjects = permissions?.edit_all === true;
+      editableProjectIds = new Set((permissions?.editable_projects || []).map(String));
+      canManageSharedData = permissions?.manage_shared === true;
+    }
+
+    function canEditProject(projectId) {
+      return projectId != null && (editAllProjects || editableProjectIds.has(String(projectId)));
+    }
+
+    function canEditTask(task) {
+      return Boolean(task && canEditProject(task.project_id));
+    }
+
+    function canEditDependency(dependency) {
+      return Boolean(dependency && canEditProject(dependency.predProjectId)
+        && canEditProject(dependency.succProjectId));
+    }
+
+    function setMenuActionsVisible(labelIds, visible) {
+      for (const id of labelIds) {
+        const item = document.getElementById(id)?.closest('.context-menu-item');
+        if (item) item.style.display = visible ? '' : 'none';
+      }
+    }
+
     let allProjectsData = []; // list of { id, name, tags }
     let externalTasksData = {}; // project_id -> list of { id, task_name, start_date, end_date }
     let projectSummariesData = [];
@@ -2211,7 +2244,65 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     let planningNeededProjects = [];
     let planningForcedProjects = new Set();
     let planningPendingDiagnostics = null;
+    let planningTaskEndpoint = null;
+    let planningTaskRevision = null;
+    let planningViewScope = null;
+    let planningFetchController = null;
+    let planningLoadError = false;
     const projectTaskWindows = new Map();
+
+    function showPlanningLoadError() {
+      planningLoadError = true;
+      let notice = document.getElementById('planning-load-error');
+      if (!notice) {
+        notice = document.createElement('button');
+        notice.id = 'planning-load-error';
+        notice.textContent = 'Tasks could not be loaded. Click to retry.';
+        notice.style.cssText = 'position:fixed;bottom:8px;right:8px;z-index:2000';
+        notice.onclick = () => {
+          planningLoadError = false;
+          notice.remove();
+          if (renderedRowWindow) scheduleProjectLoads(renderedRowWindow.start, renderedRowWindow.end);
+        };
+        document.body.appendChild(notice);
+      }
+    }
+
+    async function requestPlanningTasks(projectIds, nonce) {
+      const scope = planningScopeToken, revision = planningTaskRevision;
+      const controller = new AbortController();
+      planningFetchController = controller;
+      try {
+        const response = await fetch(planningTaskEndpoint, {
+          method:'POST', credentials:'same-origin', signal:controller.signal,
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({project_ids:projectIds.map(Number), scope_token:scope, revision, nonce})
+        });
+        if (planningPendingRequest !== nonce || planningScopeToken !== scope || planningTaskRevision !== revision) return;
+        if (response.status === 403 || response.status === 409) {
+          // A real permission/data change needs one authorized render, never a
+          // repeating scroll retry. Ordinary task reads stay entirely in HTTP.
+          planningLoadError = true;
+          Streamlit.setComponentValue({action:'initialize_planning',nonce});
+          return;
+        }
+        if (!response.ok) throw new Error('Task read failed');
+        const patch = await response.json();
+        if (planningPendingRequest !== nonce || planningScopeToken !== scope || planningTaskRevision !== revision) return;
+        const replaced = new Set((patch.replace_projects || []).map(String));
+        const loaded = [...loadedProjectIds].filter(pid => !replaced.has(pid)).concat([...replaced]);
+        patch.evict_project_ids = loaded.slice(0, Math.max(0, loaded.length - 100));
+        patch.loaded_project_ids = loaded.slice(-100);
+        applyPlanningPatch(patch);
+      } catch (error) {
+        if (!controller.signal.aborted && planningPendingRequest === nonce) showPlanningLoadError();
+      } finally {
+        if (planningFetchController === controller) planningFetchController = null;
+        if (planningPendingRequest === nonce) planningPendingRequest = null;
+        if (planningScopeToken === scope && !planningLoadError && renderedRowWindow)
+          scheduleProjectLoads(renderedRowWindow.start, renderedRowWindow.end);
+      }
+    }
 
     function updateLoadedProjectWindows(replaced) {
       const tasks = new Map();
@@ -2266,15 +2357,21 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     }
 
     function scheduleProjectLoads(start, end) {
-      if (!lazyProjects) return;
+      if (!lazyProjects || planningLoadError) return;
       const needed = new Set([...planningForcedProjects].filter(pid => !loadedProjectIds.has(pid)));
-      for (let i = start; i <= end; i++) {
-        const item = masterRenderItems[i];
-        if (!item) continue;
-        const pid = String(item.project_id || item.task?.project_id || '');
-        if (pid && !loadedProjectIds.has(pid) &&
-            (item.type === 'loading' || (item.type === 'project_header' && (!item.isCollapsed || showExternalLinks)))) needed.add(pid);
-      }
+      const addWindow = (first, last) => {
+        for (let i = first; i <= last; i++) {
+          const item = masterRenderItems[i];
+          if (!item) continue;
+          const pid = String(item.project_id || item.task?.project_id || '');
+          if (pid && !loadedProjectIds.has(pid) &&
+              (item.type === 'loading' || (item.type === 'project_header' && (!item.isCollapsed || showExternalLinks)))) needed.add(pid);
+        }
+      };
+      // Visible tasks and links must not wait behind the preceding overscan rows.
+      addWindow(Math.max(start, renderedRowWindow?.visibleStart ?? start),
+        Math.min(end, renderedRowWindow?.visibleEnd ?? end));
+      addWindow(start, end);
       planningNeededProjects = [...needed].slice(0, 25);
       if (!planningPendingRequest && planningNeededProjects.length && !planningLoadTimer) {
         planningLoadTimer = setTimeout(() => {
@@ -2282,6 +2379,10 @@ button:not(.context-menu-item):disabled {opacity:.5;}
           if (!planningNeededProjects.length || planningPendingRequest) return;
           const nonce = Date.now() + '_projects_' + Math.random();
           planningPendingRequest = nonce;
+          if (planningTaskEndpoint) {
+            requestPlanningTasks(planningNeededProjects, nonce);
+            return;
+          }
           Streamlit.setComponentValue({action:'load_project_tasks',project_ids:planningNeededProjects,
             scope_token:planningScopeToken,nonce});
           // A user edit can supersede a pending read on a Streamlit rerun.
@@ -2954,18 +3055,6 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       showTooltip(e, tooltipContent);
     }
 
-    function triggerManageTaskTags() {
-      hideContextMenu();
-      if (!selectedContextMenuTask || !selectedContextMenuTask.id) return;
-      Streamlit.setComponentValue({
-        action: "manage_task_tags",
-        task_id: parseInt(selectedContextMenuTask.id, 10),
-        task_name: selectedContextMenuTask.name || '',
-        project_id: selectedContextMenuTask.project_id || currentProjectId,
-        nonce: Date.now() + "_" + Math.random()
-      });
-    }
-
     function formatLinkTypeLabel(lt) {
       const type = (lt || 'FS').toUpperCase();
       if (type === 'FS') return 'Finish-to-Start (FS)';
@@ -2985,6 +3074,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       hideTooltip();
 
       selectedDependencyInfo = depInfo;
+      setMenuActionsVisible(['ctx-label-edit-dep'], canEditDependency(depInfo));
       const menu = document.getElementById('dep-context-menu');
       const content = document.getElementById('dep-ctx-content');
       if (!menu || !content) return;
@@ -3087,7 +3177,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
 
     function openEditModalForDep() {
       hideDepContextMenu();
-      if (!selectedDependencyInfo) return;
+      if (!canEditDependency(selectedDependencyInfo)) return;
       const succTask = tasksData.find(x => String(x.id) === String(selectedDependencyInfo.succId));
       if (succTask) {
         selectedContextMenuTask = succTask;
@@ -3122,7 +3212,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
 
       const fixBtn = document.querySelector('#diag-backdrop .modal-footer .btn-save');
       if (fixBtn) {
-        fixBtn.style.display = 'inline-block';
+        fixBtn.style.display = canEditTask(t) ? 'inline-block' : 'none';
         fixBtn.onclick = function () {
           closeDiagModal();
           openEditModal();
@@ -3182,7 +3272,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
             <div class="violation-card" style="margin-bottom:10px; background:#fff1f2; border:1px solid #fecdd3; border-left:4px solid #ef4444; border-radius:6px; padding:8px 10px;">
               <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
                 <span style="font-weight:700; color:#0f172a; font-size:12px;">📋 Step: ${escapeHtml(item.taskName)} <span style="color:#64748b;">(#${item.taskId})</span></span>
-                <button class="btn-mode" onclick="closeDiagModal(); openEditModalById('${item.taskId}');" style="font-size:11px; padding:2px 8px; background:#ffffff; border:1px solid #cbd5e1; border-radius:4px; cursor:pointer;">✏️ Fix</button>
+                ${canEditProject(targetPId) ? `<button class="btn-mode" onclick="closeDiagModal(); openEditModalById('${item.taskId}');" style="font-size:11px; padding:2px 8px; background:#ffffff; border:1px solid #cbd5e1; border-radius:4px; cursor:pointer;">✏️ Fix</button>` : ''}
               </div>
               <div style="color:#991b1b; font-size:11px; line-height:1.4;">
                 ${escapeHtml(item.violation)}
@@ -3194,7 +3284,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
 
       const fixBtn = document.querySelector('#diag-backdrop .modal-footer .btn-save');
       if (fixBtn) {
-        if (violsList.length > 0) {
+        if (violsList.length > 0 && canEditProject(targetPId)) {
           fixBtn.style.display = 'inline-block';
           fixBtn.onclick = function () {
             closeDiagModal();
@@ -3219,6 +3309,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       const t = selectedContextMenuTask;
       const deps = t.dependenciesList || [];
       document.getElementById('view-pred-title').innerText = `🔗 Predecessors for: ${t.name}`;
+      document.querySelector('#view-pred-backdrop .btn-save').style.display = canEditTask(t) ? '' : 'none';
       const body = document.getElementById('view-pred-body');
 
       if (deps.length === 0) {
@@ -3288,6 +3379,9 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       hideDepContextMenu();
       hideTooltip();
       selectedContextMenuTask = task;
+
+      setMenuActionsVisible(['ctx-label-add-step', 'ctx-label-edit-step', 'ctx-label-task-tags',
+        'ctx-label-task-pools', 'ctx-label-complete-step', 'ctx-label-delete-step'], canEditTask(task));
 
       const menu = document.getElementById('context-menu');
       const violBtn = document.getElementById('ctx-violation-btn');
@@ -3373,6 +3467,8 @@ button:not(.context-menu-item):disabled {opacity:.5;}
 
       selectedContextMenuProjectId = projectId;
       selectedContextMenuTask = null;
+      setMenuActionsVisible(['ctx-project-add-step', 'ctx-import-csv', 'ctx-label-project-tags',
+        'ctx-label-project-pools'], canEditProject(projectId));
       const menu = document.getElementById('project-context-menu');
       if (!menu) return;
 
@@ -3461,6 +3557,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       hideProjectContextMenu();
       modalMode = 'add';
       addStepTargetProjectId = targetProjectId || (selectedContextMenuTask ? selectedContextMenuTask.project_id : currentProjectId);
+      if (!canEditProject(addStepTargetProjectId)) return;
 
       const pId = addStepTargetProjectId || "General";
       const tmpl = getT('modal.add_title', '➕ Add New Step ({project_id})');
@@ -3508,6 +3605,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         return;
       }
       modalMode = 'edit';
+      if (!canEditTask(selectedContextMenuTask)) return;
       addStepTargetProjectId = selectedContextMenuTask.project_id || currentProjectId;
 
       const t = selectedContextMenuTask;
@@ -3760,6 +3858,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     }
 
     function saveEditModal() {
+      if (modalMode === 'add' ? !canEditProject(addStepTargetProjectId) : !canEditTask(selectedContextMenuTask)) return;
       if (document.querySelector('.dep-target:disabled')) {
         alert('Please wait for predecessor tasks to finish loading.');
         return;
@@ -3845,7 +3944,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
 
     function triggerManageTaskTags() {
       hideContextMenu();
-      if (!selectedContextMenuTask || !selectedContextMenuTask.id) return;
+      if (!canEditTask(selectedContextMenuTask)) return;
 
       Streamlit.setComponentValue({
         action: "manage_task_tags",
@@ -3858,7 +3957,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
 
     function triggerManageTaskPools() {
       hideContextMenu();
-      if (!selectedContextMenuTask || !selectedContextMenuTask.id) return;
+      if (!canEditTask(selectedContextMenuTask)) return;
 
       Streamlit.setComponentValue({
         action: "manage_task_pools",
@@ -3873,6 +3972,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     function triggerManageProjectTagsFromMenu(action = "manage_project_tags") {
       hideProjectContextMenu();
       if (!selectedContextMenuProjectId) return;
+      if (action !== 'export_csv_template' && !canEditProject(selectedContextMenuProjectId)) return;
 
       Streamlit.setComponentValue({
         action,
@@ -3883,7 +3983,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
 
     function triggerManageProjectPoolsFromMenu() {
       hideProjectContextMenu();
-      if (!selectedContextMenuProjectId) return;
+      if (!canEditProject(selectedContextMenuProjectId)) return;
 
       Streamlit.setComponentValue({
         action: "manage_project_pools",
@@ -3942,7 +4042,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
 
     function markComplete() {
       hideContextMenu();
-      if (!selectedContextMenuTask) return;
+      if (!canEditTask(selectedContextMenuTask)) return;
 
       Streamlit.setComponentValue({
         action: "update_progress",
@@ -3954,7 +4054,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
 
     function deleteSelectedStep() {
       hideContextMenu();
-      if (!selectedContextMenuTask) return;
+      if (!canEditTask(selectedContextMenuTask)) return;
 
       if (confirm(`Are you sure you want to delete step '${selectedContextMenuTask.name}'?`)) {
         Streamlit.setComponentValue({
@@ -4419,7 +4519,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       const clearBtn = document.getElementById('ctx-res-clear-btn');
       if (filterBtn) filterBtn.style.display = 'flex';
       const detailsBtn = document.getElementById('ctx-res-details-btn');
-      if (detailsBtn) detailsBtn.style.display = groupId ? 'none' : 'flex';
+      if (detailsBtn) detailsBtn.style.display = !groupId && canManageSharedData ? 'flex' : 'none';
       if (activeResourceFilter) {
         if (clearDivider) clearDivider.style.display = 'block';
         if (clearBtn) clearBtn.style.display = 'flex';
@@ -4453,6 +4553,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     function triggerGoToResourcePoolDetails(action = "go_to_pool_details") {
       hideResourceCellContextMenu();
       if (!selectedResourceCellCtx) return;
+      if (action === 'go_to_pool_details' && !canManageSharedData) return;
       Streamlit.setComponentValue({
         action,
         pool_id: selectedResourceCellCtx.pool_id,
@@ -5622,13 +5723,15 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       const safetyEnd = Math.min(totalItems - 1, lastVisible + 5);
       if (!force && renderedRowWindow &&
           safetyStart >= renderedRowWindow.start && safetyEnd <= renderedRowWindow.end) {
+        renderedRowWindow.visibleStart = firstVisible;
+        renderedRowWindow.visibleEnd = lastVisible;
         updateDependencyClip(renderedRowWindow.start, renderedRowWindow.end);
         scheduleProjectLoads(renderedRowWindow.start, renderedRowWindow.end);
         return;
       }
       const startIndex = Math.max(0, firstVisible - 15);
       const endIndex = Math.min(totalItems - 1, lastVisible + 15);
-      renderedRowWindow = { start: startIndex, end: endIndex };
+      renderedRowWindow = {start: startIndex, end: endIndex, visibleStart: firstVisible, visibleEnd: lastVisible};
       scheduleProjectLoads(startIndex, endIndex);
 
       // 1. Render Visible Frozen Left Column Rows
@@ -5950,10 +6053,12 @@ button:not(.context-menu-item):disabled {opacity:.5;}
               predName: predName,
               predId: pTaskId || (pred && !pred.isProject ? pred.id : null),
               predProject: predProject,
+              predProjectId: pProjId || pTaskObj?.project_id || pred?.project_id,
               predDates: predDates,
               succName: t.name,
               succId: t.id,
               succProject: t.project_name || tProjId,
+              succProjectId: tProjId,
               succDates: `${formatMmmYy(t.start)} ➔ ${formatMmmYy(t.end)}`,
               linkType: linkType,
               linkTypeLabel: formatLinkTypeLabel(linkType),
@@ -6213,8 +6318,13 @@ button:not(.context-menu-item):disabled {opacity:.5;}
 
     // Drag and drop mechanics
     function bindDragEvents(element, task, isMilestone) {
+      if (!canEditTask(task)) {
+        element.style.cursor = 'default';
+        element.querySelectorAll('.resize-handle').forEach(handle => { handle.style.display = 'none'; });
+        return;
+      }
       element.addEventListener('mousedown', (e) => {
-        if (e.button !== 0) return;
+        if (e.button !== 0 || !canEditTask(task)) return;
 
         e.preventDefault();
         e.stopPropagation();
@@ -6252,7 +6362,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
           const sStr = formatDate(newStart);
           const eStr = formatDate(newEnd);
 
-          showTooltip(moveEvent, `<b>${task.name}</b><br>${sStr} &rarr; ${eStr}`);
+          showTooltip(moveEvent, `<b>${escapeHtml(task.name)}</b><br>${sStr} &rarr; ${eStr}`);
 
           const newStartX = dateToX(newStart);
           element.style.left = `${newStartX}px`;
@@ -6267,6 +6377,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
           window.removeEventListener('mouseup', onMouseUp);
           element.classList.remove('dragging');
           hideTooltip();
+          if (!canEditTask(task)) { renderTimeline(); return; }
 
           const deltaPx = upEvent.clientX - startMouseX;
           const deltaMs = deltaPx * msPerPixel;
@@ -6314,6 +6425,15 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     window.addEventListener("message", function (event) {
       if (event.data && event.data.type === "streamlit:render") {
         const args = event.data.args || {};
+        if (args.task_endpoint) planningTaskEndpoint = args.task_endpoint;
+        if (args.task_revision && args.task_revision !== planningTaskRevision) {
+          planningFetchController?.abort();
+          planningPendingRequest = null;
+          planningLoadError = false;
+          document.getElementById('planning-load-error')?.remove();
+          planningTaskRevision = args.task_revision;
+        }
+        updatePermissionControls(args.permissions);
         if ((args.filter_reset || 0) !== lastFilterReset) {
           lastFilterReset = args.filter_reset || 0;
           onlyOverallocatedPools = false;
@@ -6328,20 +6448,27 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         }
         if (args.patch) {applyPlanningPatch(args.patch); if (args.dependency_response) receiveDependencyChoices(args.dependency_response); return;}
         if (args.tasks && (!args.data_revision || args.data_revision !== lastDataRevision)) {
+          const viewport = document.getElementById('timeline-body-scroller');
+          const position = viewport && planningViewScope && planningViewScope === args.view_scope
+            ? {top:viewport.scrollTop, left:viewport.scrollLeft} : null;
           lastDataRevision = args.data_revision;
           requestingInitialPlanning = false;
           lazyProjects = Boolean(args.lazy_projects);
           projectSummariesData = args.project_summaries || [];
           loadedProjectIds = new Set((args.loaded_project_ids || []).map(String));
           if (planningScopeToken !== args.scope_token) {
-            hasInitializedCollapse = false;
-            collapsedProjects.clear();
+            if (!position) {
+              hasInitializedCollapse = false;
+              collapsedProjects.clear();
+            }
+            planningFetchController?.abort();
             planningPendingRequest = null;
             planningNeededProjects = [];
             planningForcedProjects.clear();
             planningPendingDiagnostics = null;
           }
           planningScopeToken = args.scope_token || null;
+          planningViewScope = args.view_scope || null;
           if (args.translations) {i18n = Object.assign({}, i18n, args.translations); updateLocalizedUI();}
           if (args.resource_pools) {
             resourcePoolsData = args.resource_pools.map(unpackPoolData);
@@ -6357,6 +6484,11 @@ button:not(.context-menu-item):disabled {opacity:.5;}
             currentProjectId = args.project_id || "";
             isMultiProject = Boolean(args.is_multi_project);
             renderTimeline();
+            if (position) {
+              viewport.scrollTop = position.top;
+              viewport.scrollLeft = position.left;
+              renderVirtualWindow();
+            }
           }
         }
         if (args.dependency_response) receiveDependencyChoices(args.dependency_response);

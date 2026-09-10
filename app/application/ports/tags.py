@@ -1,5 +1,9 @@
 """Typed transaction contracts for tagging use cases."""
 
+from collections.abc import Collection
+from app.domain.access.models import Permission
+
+
 from contextlib import AbstractContextManager
 from typing import Protocol
 from app.application.ports.tag_records import (
@@ -110,4 +114,4 @@ class TagStore(Protocol):
 class TagGateway(Protocol):
     """Supply a consistent reader or reserved writer."""
 
-    def transaction(self, *, write: bool = False) -> AbstractContextManager[TagStore]: ...
+    def transaction(self, *, write: bool = False, permission: Permission | None = None, project_ids: Collection[int] | None = None) -> AbstractContextManager[TagStore]: ...

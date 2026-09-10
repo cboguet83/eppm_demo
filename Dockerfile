@@ -37,7 +37,7 @@ RUN useradd -m -u 1000 appuser && \
 COPY --from=builder --chown=appuser:appuser /root/.local /home/appuser/.local
 
 # Copy application source code and scripts
-COPY --chown=appuser:appuser streamlit_app.py .
+COPY --chown=appuser:appuser streamlit_app.py asgi_app.py .
 COPY --chown=appuser:appuser app/ ./app/
 COPY --chown=appuser:appuser scripts/ ./scripts/
 COPY --chown=appuser:appuser .streamlit/ ./.streamlit/
@@ -49,4 +49,4 @@ EXPOSE 8501
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health')" || exit 1
 
-ENTRYPOINT ["streamlit", "run", "streamlit_app.py"]
+ENTRYPOINT ["python", "-m", "scripts.run_app"]

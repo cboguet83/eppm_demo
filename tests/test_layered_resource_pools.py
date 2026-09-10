@@ -1,5 +1,6 @@
 """Resource-pool rules, SQLite integrity, atomic use cases, and display projections."""
 
+from app.operator_services import deployment_access
 from app.application.exceptions import ResourcePoolConflictError
 
 from app.presentation.components import resource_pool_frames
@@ -30,7 +31,7 @@ from app.domain.resources.rules import (
     normalize_pool,
 )
 from app.infrastructure.repositories.resource_pools import SqliteResourcePoolGateway
-from app.main import create_resource_pool_service
+from app.operator_services import create_resource_pool_service
 from app.infrastructure.database.schema_init import init_db
 
 
@@ -193,7 +194,7 @@ def test_assignment_filters_missing_records_and_mapping_upsert_identity(database
 
 
 def test_gateway_reserves_writes_rolls_back_and_closes_connections(database: str) -> None:
-    gateway = SqliteResourcePoolGateway(database)
+    gateway = SqliteResourcePoolGateway(database, access=deployment_access())
     with pytest.raises(ValueError, match="abort"):
         with gateway.transaction(write=True) as store:
             connection = store.connection

@@ -1,5 +1,12 @@
 """SQLite adapter for project master data and typed custom values."""
 
+from collections.abc import Collection
+from app.domain.access.models import Permission
+from app.application.ports.business_permissions import PermissionSnapshot
+from app.infrastructure.repositories.access import SqliteAccessStore
+
+
+from app.application.services.business_access import BusinessAccess
 import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -10,14 +17,15 @@ from app.domain.projects.links import LinkValues
 from app.domain.projects.project_types import TemplateProperty
 from app.infrastructure.database.project_transactions import project_connection
 from app.infrastructure.database.property_store import effective_template, read_values, write_value
+from app.infrastructure.repositories.wbs import SqliteWbsStore
 
 
-class SqliteProjectStore:
+class SqliteProjectStore(SqliteWbsStore):
     """Execute operations within the application-owned transaction."""
 
     def __init__(self, connection: sqlite3.Connection) -> None:
         """Use an existing connection without committing or closing it."""
-        self._connection = connection
+        super().__init__(connection)
 
     def find(self, project_id: int) -> Project | None:
         """Read all stored values, including inactive ones needed for restoration."""
@@ -62,7 +70,7 @@ class SqliteProjectStore:
     def insert(self, project: Project) -> int:
         """Insert master data and its validated typed values atomically."""
         cursor = self._connection.execute(
-            "INSERT INTO project(id,name,status,planned_budget,actual_budget,function_id,project_type_id) "
+            "INSERT INTO main.project(id,name,status,planned_budget,actual_budget,function_id,project_type_id) "
             "VALUES (?,?,?,?,?,?,?)",
             (
                 project.id,
@@ -82,7 +90,7 @@ class SqliteProjectStore:
     def update(self, project: Project) -> None:
         """Upsert active values without deleting stored inactive properties."""
         self._connection.execute(
-            "UPDATE project SET name=?,status=?,planned_budget=?,actual_budget=?,function_id=?,project_type_id=? WHERE id=?",
+            "UPDATE main.project SET name=?,status=?,planned_budget=?,actual_budget=?,function_id=?,project_type_id=? WHERE id=?",
             (
                 project.name,
                 project.status,
@@ -104,8 +112,8 @@ class SqliteProjectStore:
 
     def replace_links(self, project_id: int, links: list[LinkValues]) -> None:
         """Replace validated custom links within the project save transaction."""
-        self._connection.execute("DELETE FROM project_link WHERE project_id=?", (project_id,))
-        self._connection.executemany("INSERT INTO project_link(project_id,url,alias) VALUES(?,?,?)",
+        self._connection.execute("DELETE FROM main.project_link WHERE project_id=?", (project_id,))
+        self._connection.executemany("INSERT INTO main.project_link(project_id,url,alias) VALUES(?,?,?)",
                                      [(project_id, link["url"], link["alias"]) for link in links])
 
     def exists(self, project_id: int) -> bool:
@@ -127,36 +135,43 @@ class SqliteProjectStore:
     def delete(self, project_id: int) -> bool:
         """Remove task dependencies first and let foreign keys cascade owned rows."""
         self._connection.execute(
-            """DELETE FROM task_dependencies WHERE predecessor_project_id=?
+            """DELETE FROM main.task_dependencies WHERE predecessor_project_id=?
             OR task_id IN (SELECT id FROM project_task WHERE project_id=?)
             OR predecessor_task_id IN (SELECT id FROM project_task WHERE project_id=?)""",
             (project_id, project_id, project_id),
         )
         self._connection.execute(
-            "UPDATE project_task SET predecessor_id=NULL WHERE project_id=?", (project_id,)
+            "UPDATE main.project_task SET predecessor_id=NULL WHERE project_id=?", (project_id,)
         )
-        self._connection.execute("DELETE FROM project_task WHERE project_id=?", (project_id,))
+        self._connection.execute("DELETE FROM main.project_task WHERE project_id=?", (project_id,))
         return (
-            self._connection.execute("DELETE FROM project WHERE id=?", (project_id,)).rowcount > 0
+            self._connection.execute("DELETE FROM main.project WHERE id=?", (project_id,)).rowcount > 0
         )
 
 
 class SqliteProjectGateway:
     """Supply one closed-after-use connection per project operation."""
 
-    def __init__(self, db_path: str | None = None) -> None:
+    def __init__(self, db_path: str | None = None, *, access: BusinessAccess) -> None:
         """Retain the database identity without opening a connection."""
         self._db_path = db_path
+        self.access = access
+
+    def permission_snapshot(self) -> PermissionSnapshot:
+        """Resolve all permission scopes in one consistent, actor-bound transaction."""
+        with project_connection(self._db_path, access=self.access) as connection:
+            return self.access.describe(SqliteAccessStore(connection))
 
     @contextmanager
-    def transaction(self, *, write: bool = False) -> Iterator[ProjectStore]:
+    def transaction(self, *, write: bool = False, permission: Permission | None = None, project_ids: Collection[int] | None = None) -> Iterator[ProjectStore]:
         """Reserve the writer before validation, or provide a consistent read."""
-        with project_connection(self._db_path, write=write) as connection:
+        with project_connection(self._db_path, write=write, access=self.access,
+                                permission=permission, project_ids=project_ids) as connection:
             yield SqliteProjectStore(connection)
 
     def read_planning_catalog(self, property_ids: tuple[str, ...]) -> list[PlanningProject]:
         """Read minimal planning identities and explicitly requested active values."""
-        with project_connection(self._db_path) as connection:
+        with project_connection(self._db_path, access=self.access) as connection:
             cursor = connection.execute(
                 "SELECT p.id,p.name,p.status,p.function_id,p.project_type_id,t.name "
                 "FROM project p JOIN project_type t ON t.id=p.project_type_id ORDER BY p.id"

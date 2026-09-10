@@ -14,12 +14,12 @@ from unittest.mock import patch
 from streamlit.testing.v1 import AppTest
 
 from app.infrastructure.database.schema_init import init_db
-from app.main import create_resource_pool_service
+from app.operator_services import create_resource_pool_service
 
 
 def task_pool_app(db_path: str, task_id: int = 1) -> None:
     """Render the real injected dialog against an isolated database."""
-    from app.main import create_planning_workspace
+    from app.operator_services import create_planning_workspace
     from app.presentation.pages.planning import _manage_task_resource_pools_dialog
     _manage_task_resource_pools_dialog(task_id, 'Test task', 1, create_planning_workspace(db_path))
 
