@@ -11,12 +11,20 @@ from typing import Any
 
 import streamlit as st
 
+from app.application.services.portfolio import portfolio_revision_token
+
+
+class _AuthorizedRevision(tuple):
+    """Retain the complete revision while hashing it as one compact fingerprint."""
+
 
 def authorized_cache(**options: Any) -> Callable:
     """Bind every lookup to current server-side access, even for an old callback."""
     def decorate(function: Callable) -> Callable:
         parameters = signature(function)
-        cached = st.cache_data(**options)(function)
+        hash_funcs = dict(options.get("hash_funcs") or {})
+        hash_funcs[_AuthorizedRevision] = portfolio_revision_token
+        cached = st.cache_data(**{**options, "hash_funcs": hash_funcs})(function)
 
         @wraps(function)
         def guarded(*args: Any, **kwargs: Any) -> Any:
@@ -25,7 +33,7 @@ def authorized_cache(**options: Any) -> Callable:
             if owner is None:
                 raise ValueError("Protected caching requires an injected revision owner.")
             current = owner.revision()
-            values.arguments["revision"] = (values.arguments["revision"], current)
+            values.arguments["revision"] = _AuthorizedRevision((values.arguments["revision"], current))
             return cached(*values.args, **values.kwargs)
 
         guarded.clear = cached.clear
