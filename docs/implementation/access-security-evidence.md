@@ -79,7 +79,9 @@ Release source: [V16 logging/errors](https://github.com/OWASP/ASVS/blob/v5.0.0/5
 
 ## Validation status and gaps
 
-On 2026-09-10, the complete Python suite passed **1,069 tests and 14 subtests**.
+On 2026-09-10, the complete Python suite passed **1,077 tests and 14 subtests**.
+A subsequent **11-test capacity run** also passed, including one additional
+operator-upgrade case (1,078 distinct Python tests validated).
 Its single opt-in browser test was skipped in the regular run and passed separately
 against real Keycloak and the rebuilt application image without source bind mounts.
 The browser workflow passed three consecutive runs after moving live audit
@@ -177,8 +179,18 @@ operator seeding separate from Streamlit rendering and fails closed without OIDC
 configuration. The permission inventory was cross-checked against all 213 public
 business-service methods.
 
-Measured `app` statement coverage is **99.02%** (10,474 of 10,578 statements), meeting
-the **99%** project target. The fresh full-suite run leaves 104 uncovered statements;
+The capacity cache now uses persisted capacity and security revisions from one SQL
+snapshot. SQLite WAL file lifecycle and session-activity writes no longer cause
+false retry failures. Actual input changes, scope changes and loss of shared-data
+permission still invalidate results, including when readable project IDs stay the
+same. Deployment initialization installs revision storage before authenticated
+reads; migration and legacy operator-cache repair preserve business/access records.
+These cases are covered in `tests/test_scoped_capacity_races.py`. The running
+development app also passed fresh login, Planning rendering and capacity reload
+after a session-activity update.
+
+Measured `app` statement coverage is **99.02%** (10,480 of 10,584 statements), meeting
+the **99%** project target. The full and focused runs leave 104 uncovered statements;
 the 420 existing excluded lines are unchanged. This figure is statement coverage,
 not proof that every possible branch or deployment condition has been exercised.
 

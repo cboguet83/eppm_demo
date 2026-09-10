@@ -24,7 +24,6 @@ from app.domain.resources.models import (
 )
 from app.infrastructure.database.connection import get_db
 from app.infrastructure.repositories.access import SqliteAccessStore
-from app.infrastructure.repositories.portfolio import portfolio_revision
 from app.shared.config import config
 from app.shared.logging import get_logger
 
@@ -134,6 +133,17 @@ def _decode_detail(raw: str) -> PoolCapacityDetail:
     return PoolCapacityDetail(**payload)
 
 
+def _capacity_security_revision(connection: sqlite3.Connection) -> tuple[str, int, int]:
+    """Read capacity inputs and permission revisions from the same SQL snapshot."""
+    row = connection.execute(
+        "SELECT c.epoch,c.revision,s.revision FROM pool_capacity_revision c "
+        "CROSS JOIN app_security_state s WHERE c.id=1 AND s.id=1"
+    ).fetchone()
+    if row is None:
+        raise ResourcePoolStorageError("Resource pool capacity revision is unavailable.")
+    return str(row[0]), int(row[1]), int(row[2])
+
+
 class SqliteCapacityCache:
     """Persist derived data and reject publication after concurrent source edits."""
 
@@ -181,7 +191,7 @@ class SqliteCapacityCache:
                     selected = [row[0] for row in conn.execute("SELECT id FROM resource_pool ORDER BY name,id")]
                     if subset is not None:
                         selected = [value for value in selected if value in subset]
-                    revision = portfolio_revision(path)
+                    revision = _capacity_security_revision(conn)
                 key = (path, revision, self.access.actor.user_id, self.access.actor.session_hash,
                        tuple(sorted(allowed)), day.isoformat(), details, subset)
                 if key in self.state.entries:
@@ -191,7 +201,7 @@ class SqliteCapacityCache:
                 with closing(get_db(path)) as conn, conn:
                     conn.execute("BEGIN")
                     current = self.access.projects(SqliteAccessStore(conn))
-                    if current != allowed or portfolio_revision(path) != revision:
+                    if current != allowed or _capacity_security_revision(conn) != revision:
                         continue
                 if details:
                     result = calculated

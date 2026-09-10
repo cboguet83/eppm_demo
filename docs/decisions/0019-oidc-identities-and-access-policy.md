@@ -137,6 +137,13 @@ never reuses the global deployment cache or employee-contribution payloads for
 project-only readers. Scoped planning summaries do not reuse global dependency
 warning flags that could reveal hidden projects.
 
+Capacity publication compares persisted capacity and security revisions from the
+same SQL snapshot, together with current project scope. It does not use file metadata:
+WAL file creation/deletion and routine session activity are not capacity edits.
+Initialization installs the existing derived revision tables and triggers before
+authenticated reads. Removing shared-data permission invalidates staffing details
+even when the user's readable project set remains unchanged.
+
 `ApplicationSessionMiddleware` overwrites `x-eppm-browser-session` with a signed
 binding of the validated session digest, account status, and security revision.
 The pinned Streamlit 1.63 `server.trustedUserHeaders` configuration maps this
@@ -252,12 +259,13 @@ verification results, limitations, and production responsibilities.
 - Real HTTP/WebSocket tests cover authenticated download fetch, forged runtime
   identity headers, session expiry/revocation/security changes, blocked native data
   routes, and server validation of malformed/oversized CSV component payloads.
-- Final integration verification on 2026-09-10: 1,069 Python tests, 14 subtests, and all 42
-  JavaScript tests passed. The opt-in real Keycloak browser workflow passed against
+- Full integration run on 2026-09-10: 1,077 Python tests and 14 subtests passed.
+  A subsequent 11-test capacity run passed with an additional operator-upgrade case.
+  All 42 JavaScript tests passed previously. The opt-in real Keycloak browser workflow passed against
   the rebuilt image without source mounts, including grants, scoped exports,
   revocation, and logout across tabs. Three consecutive browser runs passed after
   moving live audit inspection into the Linux container. Statement coverage is
-  99.02% (10,474 of 10,578 statements), meeting the repository's 99% target.
+  99.02% (10,480 of 10,584 statements), meeting the repository's 99% target.
 - Final UI checks cover stale project-detail fragments, scoped Gantt events and
   resource Settings dialogs, empty planning portfolios, and schema deletion during
   saving. Capacity race tests verify that changed scopes/inputs cannot publish stale
