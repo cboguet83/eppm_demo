@@ -120,12 +120,7 @@ def _render_project_details_body(
     with head_c1:
         st.subheader(f"📌 {t('portfolio.details_title', default='Project Details')}: #{proj_id} — {proj_name}")
     with head_c2:
-        if st.button(
-            "View project details",
-            key=f"btn_edit_details_{proj_id}",
-            width="stretch",
-        ):
-            open_edit_project_dialog(int(proj_id), workspace, read_only=True)
+        _render_project_edit_action(int(proj_id), workspace)
 
     # Labels and values deliberately use the same native caption font size.
     summary = [
@@ -143,6 +138,30 @@ def _render_project_details_body(
                 st.caption(value)
 
     _render_project_detail_sections(int(proj_id), workspace)
+
+
+@st.fragment
+def _render_project_edit_action(project_id: int, workspace: ProjectWorkspace) -> None:
+    """Open editing without rebuilding the selected project's summary or sections."""
+    try:
+        if workspace.projects.permissions().allows(Permission.EDIT, project_id) and st.button(
+            "Edit details", key=f"btn_edit_details_{project_id}", width="stretch",
+        ):
+            open_edit_project_dialog(project_id, workspace)
+    except (ValueError, ProjectStorageError, ProjectTypeStorageError, SchemaStorageError) as exc:
+        st.error(str(exc))
+
+
+@st.fragment
+def _render_project_create_action(workspace: ProjectWorkspace) -> None:
+    """Keep opening creation independent from the portfolio grid and selection."""
+    try:
+        if workspace.projects.permissions().allows(Permission.CREATE) and st.button(
+            "Create new project", icon=":material/add:", type="primary", key="btn_create_project_from_portfolio",
+        ):
+            open_create_project_dialog(workspace)
+    except (ValueError, ProjectStorageError, ProjectTypeStorageError, SchemaStorageError) as exc:
+        st.error(str(exc))
 
 
 @st.fragment
@@ -243,9 +262,7 @@ def _render_portfolio_browser(workspace: ProjectWorkspace) -> None:
     search = st.text_input(t("portfolio.filter_search"), placeholder=t("portfolio.filter_search_placeholder"))
     with st.container(horizontal=True, horizontal_alignment="distribute", vertical_alignment="center"):
         st.subheader(t("portfolio.table_header"))
-        if workspace.projects.permissions().allows(Permission.CREATE) and st.button("Create new project", icon=":material/add:", type="primary",
-                     key="btn_create_project_from_portfolio"):
-            open_create_project_dialog(workspace)
+        _render_project_create_action(workspace)
     st.caption("Click a project to see its details. Scroll to load more projects automatically.")
 
     _render_portfolio_grid(workspace, columns, search)

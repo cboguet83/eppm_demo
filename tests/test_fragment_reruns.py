@@ -32,6 +32,7 @@ class FragmentRun:
     full_app_request: bool = False
     widget_id: str = ""
     widget_options: list[str] = field(default_factory=list)
+    widget_trigger: bool = False
 
     def runner(self, *args, **kwargs) -> LocalScriptRunner:
         runner = LocalScriptRunner(*args, **kwargs)
@@ -46,6 +47,7 @@ class FragmentRun:
                     identifiers = (
                         delta.new_element.selectbox.id,
                         delta.new_element.radio.id,
+                        delta.new_element.button.id,
                         delta.new_element.bidi_component.id,
                         delta.new_element.component_instance.id,
                         delta.add_block.tab_container.id,
@@ -69,6 +71,11 @@ class FragmentRun:
                     if widget is None:
                         widget = states.widgets.add(id=self.widget_id)
                     widget.string_value = self.widget_options[self.widget_index]
+                if self.widget_trigger:
+                    widget = next((widget for widget in states.widgets if widget.id == self.widget_id), None)
+                    if widget is None:
+                        widget = states.widgets.add(id=self.widget_id)
+                    widget.trigger_value = True
                 runner.request_rerun(RerunData(
                     widget_states=states,
                     fragment_id_queue=[] if self.full_app_request else [self.fragment_id],

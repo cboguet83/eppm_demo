@@ -179,7 +179,7 @@ def test_numeric_portfolio_statistics_and_cached_facets_follow_each_actor_scope(
     assert dict(facet["stats"])["Average"] == 51
 
 
-def test_portfolio_detail_button_opens_the_persisted_project_read_only(business):
+def test_portfolio_detail_button_opens_the_persisted_project_for_editing(business):
     path, _, _, editor, _ = business
     with patch("app.presentation.pages.portfolio.portfolio_project_table"):
         app = AppTest.from_function(portfolio_app, args=(path, editor.actor))
@@ -187,9 +187,10 @@ def test_portfolio_detail_button_opens_the_persisted_project_read_only(business)
         app.run()
         app.button(key="btn_edit_details_1").click().run()
     assert not app.exception and not app.error and app.get("dialog")
-    assert all(widget.disabled for widget in app.get("dialog")[0].text_input)
-    assert app.button(key="enable_project_edit_1")
-    assert not any("Save" in button.label for button in app.button)
+    assert app.button(key="btn_edit_details_1").label == "Edit details"
+    assert any(not widget.disabled for widget in app.get("dialog")[0].text_input)
+    assert not any(button.key == "enable_project_edit_1" for button in app.button)
+    assert any("Update Project" in button.label and not button.disabled for button in app.button)
 
 
 def task_query_app(path: str, actor: Actor) -> None:

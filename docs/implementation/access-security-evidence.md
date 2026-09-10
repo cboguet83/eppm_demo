@@ -437,6 +437,28 @@ disabled actors, safe text rendering, complete-before-open presentation, pending
 save protection, validation retry, Cancel, Escape and backdrop dismissal. Combined
 statement coverage remains **99.01%** (10,713 of 10,820 statements).
 
+The portfolio project-dialog follow-up restricts `Edit details` to current
+`project.edit` scope and opens editing immediately. Business administrators already
+hold both creation and editing permissions; viewer, approver, unrelated-project
+editor and access-only administrator cases do not expose this action.
+
+Creation/edit actions now run independently from the portfolio and summary.
+Reference data is retained only within the open dialog. Basic fields and property
+tabs have separate fragments, with current permission checks before rendering.
+Hidden property tabs preserve their drafts, including dates. The service still
+validates current schemas, constraints and authorization at save time.
+
+An authenticated browser check measured 1,779 ms to open creation, 1,253 ms to open
+editing and 679 ms for a basic-field edit. The field edit previously took 1,287 ms
+and emitted 52 UI deltas; it now emits 15. These observations include a 300 ms
+settling allowance and are not latency guarantees. All measured actions emitted
+zero sidebar deltas. Browser checks used unsaved drafts only.
+
+Validation passed **180 relevant Python tests**, including actual fragment dispatch,
+role/scope visibility, cross-tab text/date retention, lost permission, deleted-project
+saves, existing template/link workflows and project deletion confirmation. Combined
+statement coverage is **99.02%** (10,781 of 10,888 statements).
+
 Additional ASVS features outside the specified implementation are not claimed:
 device/posture risk evaluation, MFA for every non-administrator, self-service session
 inventory, an administrator "terminate every session" function, provider back-channel

@@ -176,6 +176,25 @@ The existing WebSocket session binding checks current account/security state on
 incoming and outgoing messages, and page services enforce current access before
 returning business data. Revoked access cannot load a newly selected protected page.
 
+## Project creation and editing
+
+Portfolio creation and `Edit details` each have a small action fragment, so opening
+their dialogs leaves the master grid and project summary in place. `Edit details`
+is shown only when the current permission snapshot allows editing that project,
+and opens directly in edit mode. In the current role model, business administrators
+can create projects and edit all projects; project editors can edit their assigned
+scope. The planning chart's read-only details entry keeps its existing behavior.
+
+Each open project dialog retains its catalog, manager labels, localized aliases
+and loaded templates. Basic fields and dynamic properties update in separate
+fragments; property tabs render only their selected content. Typed text/date drafts
+remain available when a tab is hidden and are submitted together on save. Reopening
+a dialog loads fresh references, and dismissing an edit discards its property draft.
+
+Retained display data does not replace current authorization: the dialog and its
+field fragments check access on interaction, and saves validate the current template,
+ownership and permissions in the existing write transaction.
+
 ## Project contact and log modals
 
 Contacts and project logs use a self-contained Component v2 modal with the browser's

@@ -32,20 +32,21 @@ def render_dynamic_field(
     key = f"{key_prefix}_{param_id}"
     draft_key = f"{key_prefix}_draft"
     is_creation = key_prefix.startswith("portfolio_create_")
+    is_project_draft = is_creation or key_prefix.startswith("portfolio_edit_")
 
     def remember_edit() -> None:
         draft = dict(st.session_state.get(draft_key, {}))
         draft[param_id] = st.session_state[key]
         st.session_state[draft_key] = draft
 
-    if is_creation:
+    if is_project_draft:
         draft = st.session_state.get(draft_key, {})
         if param_id in draft:
             current_value = draft[param_id]
-        else:
+        elif is_creation:
             # Untouched fields follow the newly selected type's creation default.
             st.session_state.pop(key, None)
-    widget_args = {"key": key, "persist_state": "page", "on_change": remember_edit if is_creation else None, "disabled": disabled}
+    widget_args = {"key": key, "persist_state": "page", "on_change": remember_edit if is_project_draft else None, "disabled": disabled}
 
     if param_type == "TEXT":
         return st.text_input(
