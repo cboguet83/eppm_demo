@@ -24,9 +24,32 @@ def task_pool_app(db_path: str, task_id: int = 1) -> None:
     _manage_task_resource_pools_dialog(task_id, 'Test task', 1, create_planning_workspace(db_path))
 
 
+def project_pool_app(db_path: str) -> None:
+    """Render project allocation against the same many-pool fixture."""
+    from app.operator_services import create_planning_workspace
+    from app.presentation.pages.planning import _manage_project_resource_pools_dialog
+    _manage_project_resource_pools_dialog(1, 'Project', create_planning_workspace(db_path))
+
+
 
 class TaskPoolDialogTests(unittest.TestCase):
     """Keep modal reads bounded without hiding changes or breaking mutations."""
+
+    def test_project_popup_batches_only_assigned_pools_and_reuses_the_result(self) -> None:
+        from app.application.services.pool_capacity import PoolCapacityService
+        with closing(sqlite3.connect(self.path)) as conn, conn:
+            conn.execute('INSERT INTO resource_pool_assignment(pool_id,project_id,fte_assigned) VALUES(1,1,0.5)')
+        original = PoolCapacityService.get_details
+        app = AppTest.from_function(project_pool_app, args=(self.path,))
+        with patch.object(PoolCapacityService, 'get_details', autospec=True, side_effect=original) as reads:
+            app.run()
+            self.assert_healthy(app)
+            self.assertEqual([call.args[1] for call in reads.call_args_list], [[1]])
+            reads.reset_mock()
+            app.number_input(key='ni_assign_proj_fte').set_value(1.5).run()
+            app.radio(key='rb_assign_proj_period_mode').set_value('custom').run()
+            self.assert_healthy(app)
+            self.assertEqual(reads.call_count, 0)
 
     def setUp(self) -> None:
         """Create real tasks, duplicate assignments and many unrelated pools."""

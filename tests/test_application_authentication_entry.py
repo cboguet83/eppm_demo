@@ -96,7 +96,8 @@ def test_security_revision_change_requires_a_fresh_runtime_before_admin_renderin
     app = AppTest.from_function(application_entry, args=(cookie, binding), default_timeout=30).run()
     assert not app.exception and not app.error
     assert app.radio(key="app_sidebar_nav").options == ["Dashboard", "Finance"]
-    assert app.header[0].value == "Dashboard"
+    assert not app.header
+    assert app.expander[0].label == "0 matching projects"
 
     DeploymentAccessService(
         service.gateway, lambda: int(time.time()), "entry-test",

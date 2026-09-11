@@ -267,7 +267,7 @@ def _project_detail_sections(proj_id: int, workspace: ProjectWorkspace) -> None:
     field_groups = content.field_groups
     labels = [t("portfolio.tab_details_links") if label.casefold() == "useful links" else label
               for label, _ in field_groups]
-    labels += [t("wbs.title", default="WBS"), t("project_collaboration.contacts", default="Project Contacts"),
+    labels += [t("dashboard.budget", default="Budget"), t("project_collaboration.contacts", default="Project Contacts"),
                t("project_collaboration.log", default="Project log")]
     tabs = st.tabs(labels, key=f"project_details_tabs_{proj_id}", on_change="rerun")
     for tab, (group_label, fields) in zip(tabs, field_groups):
@@ -292,6 +292,7 @@ def _project_detail_sections(proj_id: int, workspace: ProjectWorkspace) -> None:
     if tabs[-3].open:
         from app.presentation.components.wbs_editor import render_wbs_rows
         with tabs[-3]:
+            st.subheader(t("dashboard.wbs_assignment", default="WBS assignment"))
             render_wbs_rows(workspace.projects.get_wbs_allocations(proj_id), workspace.projects.get_wbs_options(proj_id))
             if workspace.render_budget is not None:
                 workspace.render_budget(proj_id)

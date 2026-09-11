@@ -804,6 +804,20 @@
     "allocation": "Zoudeelung",
     "total": "Total",
     "no_wbs": "Dëse Projet huet keng zougewisen WBS.",
-    "unavailable": "Daten net disponibel oder Zougang geännert. Lued nei."
+    "unavailable": "Daten net disponibel oder Zougang geännert. Lued nei.",
+    "pool": "Ressourcepools",
+    "finance_overview": "Finanziellen Iwwerbléck",
+    "approved_budget": "Geneemegte Budget",
+    "capacity_overallocation": "Kapazitéit an Iwwerbelaaschtung",
+    "overallocation": "Iwwerbelaaschtung",
+    "total_capacity": "Gesamtkapazitéit vun de Pools",
+    "go_to_consumers": "Plang a Meilesteng: benotzend Projeten",
+    "loading": "Gëtt gelueden…",
+    "today": "Aktuellen Datum",
+    "no_status_budget": "Keng Budgetsversioun {status} a Finanze verfügbar.",
+    "status_source": "Budget {status} {number} · {name}",
+    "unmatched_status": "Kee Budget {status} fir WBS-Coden: {codes}",
+    "wbs_assignment": "WBS-Zouuerdnung",
+    "no_consumers": "Keng zougänglech Projete benotzen déi betraffe Pools an dësem Quartal."
   }
 }

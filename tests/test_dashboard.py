@@ -170,3 +170,47 @@ def test_undated_assignments_use_today_and_invalidate_on_calendar_day_change(bus
     service.today = lambda: date(2026, 10, 1)
     assert service.revision() != revision
     assert service.shortages([3])['2026-Q4'] == 1
+
+
+def test_pool_facets_exclude_finished_projects_and_preserve_numeric_project_order(business):
+    path, _, _, _, manager = business
+    with closing(get_db(path)) as conn, conn:
+        conn.executemany('INSERT INTO project(id,name,status) VALUES(?,?,?)',
+                         [(3,'AAA','Completed'),(4,'BBB','Cancelled'),(5,'CCC','Canceled'),(6,'AAA','In Progress')])
+    service = create_dashboard_service(path, access=manager)
+    catalog = service.catalog()
+    assert [row['id'] for row in catalog.projects] == [1, 2, 6]
+    assert service.choices(catalog, {}, 'pool') == ['', '1']
+    assert [row['id'] for row in service.filtered(catalog, {'pool':['1']})] == [1,2]
+    assert service.filtered(catalog, {'pool':['']})[0]['id'] == 6
+    assert matches(catalog.projects[0], {'pool':['1','other']}, True)
+
+
+def test_quarter_capacity_uses_concurrent_daily_totals_and_calendar_overrides():
+    from dataclasses import replace
+    from app.domain.dashboard import quarterly_capacity, responsible_pools, quarter_bounds
+    first = replace(pool(1, 2), effective_capacity_fte=2, has_assigned_resources=True,
+                    daily_assigned_capacity={'2026-01-01':4})
+    second = replace(pool(2, 1, '2026-02-01'), effective_capacity_fte=3, has_assigned_resources=True,
+                     daily_assigned_capacity={'2026-02-01':5})
+    capacity = quarterly_capacity([first, second, first], 2026)
+    assert capacity['2026-Q1'] == 7  # Different-day capacity peaks are not added.
+    assert capacity['2026-Q2'] == 5
+    start, end = quarter_bounds('2026-Q1', 2026)
+    assert responsible_pools([first, second], {1}, start, end) == {1,2}
+    with pytest.raises(ValueError):
+        quarter_bounds('2026-Q5', 2026)
+
+
+def test_chart_drillthrough_includes_all_authorized_consumers_but_never_hidden_projects(business):
+    path, _, _, editor, manager = business
+    with closing(get_db(path)) as conn, conn:
+        conn.execute('UPDATE resource_pool SET capacity_fte=1 WHERE id=1')
+    restricted = create_dashboard_service(path, access=editor)
+    unrestricted = create_dashboard_service(path, access=manager)
+    restricted.today = unrestricted.today = lambda: date(2026, 6, 1)
+    assert restricted.consuming_projects([1], '2026-Q1') == [1]
+    assert unrestricted.consuming_projects([1], '2026-Q1') == [1,2]
+    assert restricted.consuming_projects([1], '2027-Q1') == []
+    with pytest.raises(AccessDenied):
+        restricted.consuming_projects([2], '2026-Q1')

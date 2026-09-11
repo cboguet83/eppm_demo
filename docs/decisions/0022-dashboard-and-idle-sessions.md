@@ -10,8 +10,8 @@ Dashboard is the normal signed-in landing page for active accounts. Explicit int
 project/planning destinations survive sign-in; destinations are allowlisted rather
 than accepting arbitrary return URLs. Existing page choices remain session-local.
 
-One authorized project catalog supplies five filters: Gantt-style flexible filters,
-level-3 manager, level-4 manager, manager's team, and project manager. Fixed facets
+One authorized project catalog supplies six filters: Gantt-style flexible filters,
+level-3 manager, level-4 manager, manager's team, project manager, and resource pool. Fixed facets
 use OR within each selection and AND across controls. Flexible fields retain Any/All.
 Each facet considers the other filters and retains its authorized selections.
 Function IDs distinguish identical occupant names. Primary reporting ancestors are
@@ -19,7 +19,10 @@ resolved with cycle/depth guards; a manager at the requested level or more senio
 represents themselves. Team membership comes from team_function, not leadership.
 No project grants produces an empty dashboard, never a global project catalog.
 
-The five-row project page shows name, PRM_001 (Code Courrier), PRM_008 (phase), and
+The collapsible project table shows five visible rows and lazy, continuous scrolling.
+It defaults to project-ID order and excludes Completed/Cancelled/Canceled projects.
+A nested fragment reauthorizes each 50-row fetch without rerunning charts. Its
+matching-project count remains visible when collapsed. The columns are name, PRM_001 (Code Courrier), PRM_008 (phase), and
 PRM_027 (strategic priority). Every chart and issue count covers all matching projects,
 independently of which five rows are displayed. Scope is checked before all reads
 and again before cache access, including old callbacks after grant changes.
@@ -29,7 +32,9 @@ Cancellation selects the previous approved snapshot. Each current project WBS sh
 is multiplied by its approved amount with Decimal, rounded half-up to integer cents
 per project/WBS/year, and those cents are summed. Blank differs from zero. Missing
 codes are reported; absent annual data breaks the chart line. The identical service
-supplies the project-details Budget table beneath WBS allocations. Neither view
+supplies Approved, Proposed, and Draft tables in the project-details Budget tab,
+beneath WBS assignment. Each selects its latest effective status version. Approved
+and Proposed omit allocation percentages; Draft retains them. Neither view
 changes approved Finance history or the existing project budget fields.
 
 Both charts span current year minus five through plus fourteen. Quarter values are
@@ -43,7 +48,16 @@ Active events whose event type has system_code=blocking_point are issues. The
 additive dashboard-idle-sessions-v1 migration classifies the existing Blocking Point
 entry without changing events. Renaming or translating that entry retains its
 classification; a trigger classifies the default after an explicit catalog reseed.
-The issues popup uses the existing multiline log table with no write actions.
+The warning icon beside Finance overview opens the existing multiline log table
+with no write actions. The approved curve has an explicit legend. Both charts
+include a dashed green current-date marker.
+
+The resource chart adds maximum daily total effective capacity across relevant pools
+on a secondary axis, using the existing staffing/calendar rules. Quarter right-click
+uses a small CCv2 SVG chart because native chart APIs do not provide context-menu
+events. The server re-resolves responsible pools and returns only currently authorized
+projects consuming those pools in that quarter. Pool IDs and hidden consumers are
+not accepted from the browser or returned with aggregate chart data.
 
 ## Activity-based authentication
 

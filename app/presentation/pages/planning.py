@@ -631,6 +631,22 @@ def _manage_task_tags_dialog(task_id: int, task_name: str, workspace: PlanningWo
             st.rerun()
 
 
+@authorized_cache(show_spinner=False, max_entries=64, ttl=300)
+def _project_pool_dialog_data(_workspace: PlanningWorkspace, revision: tuple, project_id: int):
+    """Load popup references once and calculate only assigned or undefined pools."""
+    bounds = _workspace.planning.get_all_project_date_bounds().get(project_id, (None, None))
+    assignments = assignments_frame(_workspace.resources.get_assignments(project_id=project_id, only_project_level=True))
+    pools = pools_frame(_workspace.resources.pool_choices())
+    assigned_ids = sorted(set(assignments['pool_id'].astype(int))) if not assignments.empty else []
+    statuses = {detail.pool_id: project_pool_status(project_id, detail)
+                for detail in _workspace.pool_details(assigned_ids)} if assigned_ids else {}
+    missing_capacity = [int(row['id']) for row in pools.to_dict('records') if pd.isna(row['capacity_fte'])]
+    summaries = {row.pool_id: row.total_capacity_fte for row in _workspace.capacity.get_summaries(missing_capacity)} if missing_capacity else {}
+    choices = [(int(row['id']), f"🏊 {row['name']} (Cap: {summaries[int(row['id'])] if pd.isna(row['capacity_fte']) else float(row['capacity_fte']):.2f} FTE)")
+               for row in pools.to_dict('records')]
+    return bounds, assignments, statuses, choices
+
+
 @dialog(t("planning.dialog_project_pools_title", default="🏊 Manage Project Resource Pools"))
 @planning_errors
 def _manage_project_resource_pools_dialog(
@@ -641,14 +657,9 @@ def _manage_project_resource_pools_dialog(
         st.info(t("access.read_only", default="You have read-only access to this project."))
         return
     st.markdown(f"#### 📁 {project_name} `[Project #{project_id}]`")
-    proj_bounds = workspace.planning.get_all_project_date_bounds()
-    p_bound = proj_bounds.get(project_id) or proj_bounds.get(str(project_id)) or (None, None)
-    p_start_str, p_end_str = p_bound
+    (p_start_str, p_end_str), df_current_assigns, statuses, pool_choices = _project_pool_dialog_data(workspace, workspace.revision(), project_id)
     if p_start_str and p_end_str:
-        st.caption(f"📅 **Project Timeline:** `{p_start_str}` ➔ `{p_end_str}`")
-    df_current_assigns = assignments_frame(
-        workspace.resources.get_assignments(project_id=project_id, only_project_level=True)
-    )
+        st.caption(f"Project Timeline: {p_start_str} → {p_end_str}")
     st.markdown(f"##### {t('planning.current_pools', default='Current Assigned Resource Pools')}")
     if df_current_assigns.empty:
         st.info(
@@ -665,7 +676,7 @@ def _manage_project_resource_pools_dialog(
             fte_val = float(row["fte_assigned"])
             c_start = row.get("custom_start_date")
             c_end = row.get("custom_end_date")
-            p_status = project_pool_status(project_id, workspace.pool_details([p_id])[0])
+            p_status = statuses[p_id]
             minimum_capacity = float(p_status["minimum_capacity_fte"])
             if p_status["is_overassigned"]:
                 status_html = f"""<span style="background-color:#FDE8EC; color:#C41039; border:1px solid #C41039; padding:2px 7px; border-radius:10px; font-weight:700; font-size:11px;">⚠️ Overassigned (Peak: {p_status['project_peak_assigned_fte']:.2f} / Min. effective cap: {minimum_capacity:.2f} FTE)</span>"""
@@ -705,130 +716,119 @@ def _manage_project_resource_pools_dialog(
                     st.rerun()
     st.divider()
     st.markdown(f"##### ➕ {t('planning.assign_new_pool', default='Assign Resource Pool')}")
-    df_all_pools = pools_frame(workspace.resources.pool_choices())
-    if df_all_pools.empty:
-        st.warning(
-            t(
-                "planning.no_pools_exist",
-                default="No resource pools configured. Create pools in Settings > Resource Pools.",
-            )
-        )
+    if not pool_choices:
+        st.warning(t('planning.no_pools_exist', default='No resource pools configured.'))
         return
-    pool_choices = []
-    for _, pr in df_all_pools.iterrows():
-        pid = int(pr["id"])
-        pcap = workspace.pool_details([pid])[0]
-        pool_choices.append((pid, f"🏊 {pr['name']} (Cap: {pcap.total_capacity_fte:.2f} FTE)"))
-    sel_pool_tuple = st.selectbox(
-        t("planning.select_resource_pool", default="Select Resource Pool *"),
-        options=pool_choices,
-        format_func=lambda x: x[1],
-        key="sb_assign_proj_pool",
+    period_mode = st.radio(
+        t("master_data.assignment_period_mode", default="Assignment Period Mode"),
+        options=["full", "custom"],
+        format_func=lambda m: (
+            t("master_data.period_full_project", default="Full Project Duration (Default)")
+            if m == "full"
+            else t("master_data.period_custom_range", default="Custom Specific Period")
+        ),
+        key="rb_assign_proj_period_mode",
+        horizontal=True,
     )
-    sel_pool_id = sel_pool_tuple[0] if sel_pool_tuple else None
-    c_fte, c_mode = st.columns([1, 2])
-    with c_fte:
-        fte_input = st.number_input(
-            t("master_data.field_fte", default="Assigned FTE *"),
-            min_value=0.1,
-            max_value=100.0,
-            value=1.0,
-            step=0.1,
-            key="ni_assign_proj_fte",
+    with st.form("assign_proj_pool_form", border=False):
+        sel_pool_tuple = st.selectbox(
+            t("planning.select_resource_pool", default="Select Resource Pool *"),
+            options=pool_choices,
+            format_func=lambda x: x[1],
+            key="sb_assign_proj_pool",
         )
-    with c_mode:
-        period_mode = st.radio(
-            t("master_data.assignment_period_mode", default="Assignment Period Mode"),
-            options=["full", "custom"],
-            format_func=lambda m: (
-                t("master_data.period_full_project", default="Full Project Duration (Default)")
-                if m == "full"
-                else t("master_data.period_custom_range", default="Custom Specific Period")
-            ),
-            key="rb_assign_proj_period_mode",
-            horizontal=True,
-        )
-    custom_start_str = None
-    custom_end_str = None
-    if period_mode == "custom":
-        default_s = (
-            datetime.datetime.strptime(p_start_str, "%Y-%m-%d").date()
-            if p_start_str
-            else datetime.date.today()
-        )
-        default_e = (
-            datetime.datetime.strptime(p_end_str, "%Y-%m-%d").date()
-            if p_end_str
-            else default_s + datetime.timedelta(days=30)
-        )
-        col_s, col_e = st.columns(2)
-        with col_s:
-            custom_s_val = st.date_input(
-                t("master_data.custom_start_date", default="Start Date"),
-                value=default_s,
-                key="di_assign_proj_s",
+        sel_pool_id = sel_pool_tuple[0] if sel_pool_tuple else None
+        c_fte = st.container()
+        with c_fte:
+            fte_input = st.number_input(
+                t("master_data.field_fte", default="Assigned FTE *"),
+                min_value=0.1,
+                max_value=100.0,
+                value=1.0,
+                step=0.1,
+                key="ni_assign_proj_fte",
             )
-        with col_e:
-            custom_e_val = st.date_input(
-                t("master_data.custom_end_date", default="End Date"),
-                value=default_e,
-                key="di_assign_proj_e",
+        custom_start_str = None
+        custom_end_str = None
+        if period_mode == "custom":
+            default_s = (
+                datetime.datetime.strptime(p_start_str, "%Y-%m-%d").date()
+                if p_start_str
+                else datetime.date.today()
             )
-        if custom_s_val and custom_e_val:
-            if custom_e_val < custom_s_val:
-                st.error(
-                    t(
-                        "master_data.date_range_error",
-                        default="End Date cannot be before Start Date.",
+            default_e = (
+                datetime.datetime.strptime(p_end_str, "%Y-%m-%d").date()
+                if p_end_str
+                else default_s + datetime.timedelta(days=30)
+            )
+            col_s, col_e = st.columns(2)
+            with col_s:
+                custom_s_val = st.date_input(
+                    t("master_data.custom_start_date", default="Start Date"),
+                    value=default_s,
+                    key="di_assign_proj_s",
+                )
+            with col_e:
+                custom_e_val = st.date_input(
+                    t("master_data.custom_end_date", default="End Date"),
+                    value=default_e,
+                    key="di_assign_proj_e",
+                )
+            if custom_s_val and custom_e_val:
+                if custom_e_val < custom_s_val:
+                    st.error(
+                        t(
+                            "master_data.date_range_error",
+                            default="End Date cannot be before Start Date.",
+                        )
                     )
-                )
-            else:
-                custom_start_str = custom_s_val.strftime("%Y-%m-%d")
-                custom_end_str = custom_e_val.strftime("%Y-%m-%d")
-    notes_input = st.text_input(
-        t("master_data.field_assignment_notes", default="Notes / Allocation Purpose"),
-        placeholder="e.g. Core architectural oversight, PMO support",
-        key="ti_assign_proj_notes",
-    )
-    col_btn_save, col_btn_close = st.columns([3, 1])
-    with col_btn_save:
-        if st.button(
-            t("planning.btn_confirm_assign_pool_proj", default="Assign Pool to Project"),
-            type="primary",
-            key="btn_confirm_assign_proj_pool",
-        ):
-            if sel_pool_id is None:
-                st.error(
-                    t("planning.pool_required_error", default="Please select a resource pool.")
-                )
-            elif period_mode == "custom" and (not custom_start_str or not custom_end_str):
-                st.error(
-                    t(
-                        "master_data.date_range_error",
-                        default="End Date cannot be before Start Date.",
+                else:
+                    custom_start_str = custom_s_val.strftime("%Y-%m-%d")
+                    custom_end_str = custom_e_val.strftime("%Y-%m-%d")
+        notes_input = st.text_input(
+            t("master_data.field_assignment_notes", default="Notes / Allocation Purpose"),
+            placeholder="e.g. Core architectural oversight, PMO support",
+            key="ti_assign_proj_notes",
+        )
+        col_btn_save = st.container()
+        with col_btn_save:
+            if st.form_submit_button(
+                t("planning.btn_confirm_assign_pool_proj", default="Assign Pool to Project"),
+                type="primary",
+                key="btn_confirm_assign_proj_pool",
+            ):
+                if sel_pool_id is None:
+                    st.error(
+                        t("planning.pool_required_error", default="Please select a resource pool.")
                     )
-                )
-            else:
-                new_assignment = PoolAssignment(
-                    pool_id=sel_pool_id,
-                    project_id=project_id,
-                    task_id=None,
-                    fte_assigned=float(fte_input),
-                    start_date=custom_start_str,
-                    end_date=custom_end_str,
-                    notes=notes_input.strip(),
-                )
-                workspace.resources.create_assignment(new_assignment)
-                st.toast(
-                    t(
-                        "planning.toast_pool_assigned_proj",
-                        default="Resource pool assigned to project!",
-                    ),
-                    icon="🏊",
-                )
-                st.session_state["modal_manage_project_pool"] = None
-                st.rerun()
-    with col_btn_close:
+                elif period_mode == "custom" and (not custom_start_str or not custom_end_str):
+                    st.error(
+                        t(
+                            "master_data.date_range_error",
+                            default="End Date cannot be before Start Date.",
+                        )
+                    )
+                else:
+                    new_assignment = PoolAssignment(
+                        pool_id=sel_pool_id,
+                        project_id=project_id,
+                        task_id=None,
+                        fte_assigned=float(fte_input),
+                        start_date=custom_start_str,
+                        end_date=custom_end_str,
+                        notes=notes_input.strip(),
+                    )
+                    workspace.resources.create_assignment(new_assignment)
+                    st.toast(
+                        t(
+                            "planning.toast_pool_assigned_proj",
+                            default="Resource pool assigned to project!",
+                        ),
+                        icon="🏊",
+                    )
+                    st.session_state["modal_manage_project_pool"] = None
+                    st.rerun()
+    with st.container():
         if st.button(
             t("planning.btn_close_dialog", default="Close"), key="btn_close_proj_pool_dialog"
         ):
@@ -932,114 +932,114 @@ def _manage_task_resource_pools_dialog(
             else float(pr["capacity_fte"])
         )
         pool_choices.append((pid, f"🏊 {pr['name']} (Cap: {capacity:.2f} FTE)"))
-    sel_pool_tuple = st.selectbox(
-        t("planning.select_resource_pool", default="Select Resource Pool *"),
-        options=pool_choices,
-        format_func=lambda x: x[1],
-        key="sb_assign_task_pool",
+    period_mode = st.radio(
+        t("master_data.assignment_period_mode", default="Assignment Period Mode"),
+        options=["full", "custom"],
+        format_func=lambda m: (
+            t("master_data.period_full_task", default="Full Task Duration (Default)")
+            if m == "full"
+            else t("master_data.period_custom_range", default="Custom Specific Period")
+        ),
+        key="rb_assign_task_period_mode",
+        horizontal=True,
     )
-    sel_pool_id = sel_pool_tuple[0] if sel_pool_tuple else None
-    c_fte, c_mode = st.columns([1, 2])
-    with c_fte:
-        fte_input = st.number_input(
-            t("master_data.field_fte", default="Assigned FTE *"),
-            min_value=0.1,
-            max_value=100.0,
-            value=1.0,
-            step=0.1,
-            key="ni_assign_task_fte",
+    with st.form("assign_task_pool_form", border=False):
+        sel_pool_tuple = st.selectbox(
+            t("planning.select_resource_pool", default="Select Resource Pool *"),
+            options=pool_choices,
+            format_func=lambda x: x[1],
+            key="sb_assign_task_pool",
         )
-    with c_mode:
-        period_mode = st.radio(
-            t("master_data.assignment_period_mode", default="Assignment Period Mode"),
-            options=["full", "custom"],
-            format_func=lambda m: (
-                t("master_data.period_full_task", default="Full Task Duration (Default)")
-                if m == "full"
-                else t("master_data.period_custom_range", default="Custom Specific Period")
-            ),
-            key="rb_assign_task_period_mode",
-            horizontal=True,
-        )
-    custom_start_str = None
-    custom_end_str = None
-    if period_mode == "custom":
-        default_s = (
-            datetime.datetime.strptime(task_start_str, "%Y-%m-%d").date()
-            if task_start_str
-            else datetime.date.today()
-        )
-        default_e = (
-            datetime.datetime.strptime(task_end_str, "%Y-%m-%d").date()
-            if task_end_str
-            else default_s + datetime.timedelta(days=14)
-        )
-        col_s, col_e = st.columns(2)
-        with col_s:
-            custom_s_val = st.date_input(
-                t("master_data.custom_start_date", default="Start Date"),
-                value=default_s,
-                key="di_assign_task_s",
+        sel_pool_id = sel_pool_tuple[0] if sel_pool_tuple else None
+        c_fte = st.container()
+        with c_fte:
+            fte_input = st.number_input(
+                t("master_data.field_fte", default="Assigned FTE *"),
+                min_value=0.1,
+                max_value=100.0,
+                value=1.0,
+                step=0.1,
+                key="ni_assign_task_fte",
             )
-        with col_e:
-            custom_e_val = st.date_input(
-                t("master_data.custom_end_date", default="End Date"),
-                value=default_e,
-                key="di_assign_task_e",
+        custom_start_str = None
+        custom_end_str = None
+        if period_mode == "custom":
+            default_s = (
+                datetime.datetime.strptime(task_start_str, "%Y-%m-%d").date()
+                if task_start_str
+                else datetime.date.today()
             )
-        if custom_s_val and custom_e_val:
-            if custom_e_val < custom_s_val:
-                st.error(
-                    t(
-                        "master_data.date_range_error",
-                        default="End Date cannot be before Start Date.",
+            default_e = (
+                datetime.datetime.strptime(task_end_str, "%Y-%m-%d").date()
+                if task_end_str
+                else default_s + datetime.timedelta(days=14)
+            )
+            col_s, col_e = st.columns(2)
+            with col_s:
+                custom_s_val = st.date_input(
+                    t("master_data.custom_start_date", default="Start Date"),
+                    value=default_s,
+                    key="di_assign_task_s",
+                )
+            with col_e:
+                custom_e_val = st.date_input(
+                    t("master_data.custom_end_date", default="End Date"),
+                    value=default_e,
+                    key="di_assign_task_e",
+                )
+            if custom_s_val and custom_e_val:
+                if custom_e_val < custom_s_val:
+                    st.error(
+                        t(
+                            "master_data.date_range_error",
+                            default="End Date cannot be before Start Date.",
+                        )
                     )
-                )
-            else:
-                custom_start_str = custom_s_val.strftime("%Y-%m-%d")
-                custom_end_str = custom_e_val.strftime("%Y-%m-%d")
-    notes_input = st.text_input(
-        t("master_data.field_assignment_notes", default="Notes / Allocation Purpose"),
-        placeholder="e.g. Lead drafting, Structural analysis",
-        key="ti_assign_task_notes",
-    )
-    col_btn_save, col_btn_close = st.columns([3, 1])
-    with col_btn_save:
-        if st.button(
-            t("planning.btn_confirm_assign_pool", default="Assign Pool to Task"),
-            type="primary",
-            key="btn_confirm_assign_task_pool",
-        ):
-            if sel_pool_id is None:
-                st.error(
-                    t("planning.pool_required_error", default="Please select a resource pool.")
-                )
-            elif period_mode == "custom" and (not custom_start_str or not custom_end_str):
-                st.error(
-                    t(
-                        "master_data.date_range_error",
-                        default="End Date cannot be before Start Date.",
+                else:
+                    custom_start_str = custom_s_val.strftime("%Y-%m-%d")
+                    custom_end_str = custom_e_val.strftime("%Y-%m-%d")
+        notes_input = st.text_input(
+            t("master_data.field_assignment_notes", default="Notes / Allocation Purpose"),
+            placeholder="e.g. Lead drafting, Structural analysis",
+            key="ti_assign_task_notes",
+        )
+        col_btn_save = st.container()
+        with col_btn_save:
+            if st.form_submit_button(
+                t("planning.btn_confirm_assign_pool", default="Assign Pool to Task"),
+                type="primary",
+                key="btn_confirm_assign_task_pool",
+            ):
+                if sel_pool_id is None:
+                    st.error(
+                        t("planning.pool_required_error", default="Please select a resource pool.")
                     )
-                )
-            else:
-                parsed_proj_id = int(project_id) if str(project_id).isdigit() else None
-                new_assignment = PoolAssignment(
-                    pool_id=sel_pool_id,
-                    project_id=parsed_proj_id,
-                    task_id=task_id,
-                    fte_assigned=float(fte_input),
-                    start_date=custom_start_str,
-                    end_date=custom_end_str,
-                    notes=notes_input.strip(),
-                )
-                workspace.resources.create_assignment(new_assignment)
-                st.toast(
-                    t("planning.toast_pool_assigned", default="Resource pool assigned to task!"),
-                    icon="🏊",
-                )
-                st.session_state["modal_manage_task_pool"] = None
-                st.rerun()
-    with col_btn_close:
+                elif period_mode == "custom" and (not custom_start_str or not custom_end_str):
+                    st.error(
+                        t(
+                            "master_data.date_range_error",
+                            default="End Date cannot be before Start Date.",
+                        )
+                    )
+                else:
+                    parsed_proj_id = int(project_id) if str(project_id).isdigit() else None
+                    new_assignment = PoolAssignment(
+                        pool_id=sel_pool_id,
+                        project_id=parsed_proj_id,
+                        task_id=task_id,
+                        fte_assigned=float(fte_input),
+                        start_date=custom_start_str,
+                        end_date=custom_end_str,
+                        notes=notes_input.strip(),
+                    )
+                    workspace.resources.create_assignment(new_assignment)
+                    st.toast(
+                        t("planning.toast_pool_assigned", default="Resource pool assigned to task!"),
+                        icon="🏊",
+                    )
+                    st.session_state["modal_manage_task_pool"] = None
+                    st.rerun()
+    with st.container():
         if st.button(
             t("planning.btn_close_dialog", default="Close"), key="btn_close_task_pool_dialog"
         ):
@@ -1581,6 +1581,9 @@ def render_planning_milestones(workspace: PlanningWorkspace) -> None:
         """,
         unsafe_allow_html=True,
     )
+    if (dashboard_projects := st.session_state.pop('dashboard_planning_projects', None)) is not None:
+        _clear_all_planning_filters()
+        st.session_state['ms_multi_projects'] = dashboard_projects
     revision = workspace.revision()
     params = parameters_frame(workspace.schema.property_references())
     alias_translations = workspace.schema.alias_references(get_current_locale())

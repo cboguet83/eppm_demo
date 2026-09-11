@@ -2,7 +2,7 @@
 
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from typing import TypedDict
 
@@ -85,7 +85,7 @@ def matches(project: DashboardProject, filters: dict[str, list[str]], match_all:
             continue
         actual = {value.casefold() for value in project['fields'].get(key, [])}
         wanted = {value.casefold() for value in selected}
-        if match_all and key not in {'manager', 'level3', 'level4', 'team'}:
+        if match_all and key not in {'manager', 'level3', 'level4', 'team', 'pool'}:
             if not wanted <= actual:
                 return False
         elif not wanted & actual:
@@ -109,4 +109,51 @@ def quarterly_shortfall(pools: list[PoolCapacityDetail], project_ids: set[int], 
         value = date.fromisoformat(day)
         quarter = f'{value.year}-Q{(value.month-1)//3+1}'
         result[quarter] = max(result[quarter], float(excess))
+    return result
+
+
+def quarter_bounds(quarter: str, year: int) -> tuple[date, date]:
+    """Validate a displayed calendar quarter and return inclusive date bounds."""
+    valid = {f'{y}-Q{q}' for y in range(year - 5, year + 15) for q in range(1, 5)}
+    if quarter not in valid:
+        raise ValueError('Select a quarter in the displayed date range.')
+    y, q = int(quarter[:4]), int(quarter[-1])
+    start = date(y, 3 * q - 2, 1)
+    end = date(y + 1, 1, 1) if q == 4 else date(y, 3 * q + 1, 1)
+    return start, end - timedelta(days=1)
+
+
+def responsible_pools(pools: list[PoolCapacityDetail], project_ids: set[int],
+                      start: date, end: date) -> set[int]:
+    """Identify relevant pools with a positive shortfall anywhere in the interval."""
+    result = set()
+    for pool in pools:
+        periods = [(row['start_date'], row['end_date']) for row in pool.assignments
+                   if row['project_id'] in project_ids and row['fte_assigned'] > 0]
+        if any(start.isoformat() <= day.date <= end.isoformat() and day.excess_fte > 0
+               and any(first <= day.date <= last for first, last in periods)
+               for day in pool.daily_overassignments):
+            result.add(pool.pool_id)
+    return result
+
+
+def quarterly_capacity(pools: list[PoolCapacityDetail], year: int) -> dict[str, float]:
+    """Peak daily total effective capacity of the selected, distinct relevant pools."""
+    unique = {pool.pool_id: pool for pool in pools}.values()
+    base = sum(Decimal(str(pool.effective_capacity_fte)) for pool in unique)
+    deltas: dict[str, Decimal] = defaultdict(Decimal)
+    for pool in unique:
+        if pool.has_assigned_resources:
+            for day, capacity in pool.daily_assigned_capacity.items():
+                deltas[day] += Decimal(str(capacity)) - Decimal(str(pool.effective_capacity_fte))
+    result = {}
+    for y in range(year - 5, year + 15):
+        for q in range(1, 5):
+            quarter = f'{y}-Q{q}'
+            start, end = quarter_bounds(quarter, year)
+            changes = [value for day, value in deltas.items() if start.isoformat() <= day <= end.isoformat()]
+            # Do not invent a baseline day when every day has a calendar override.
+            if len(changes) < (end - start).days + 1:
+                changes.append(Decimal(0))
+            result[quarter] = float(base + max(changes, default=Decimal(0)))
     return result

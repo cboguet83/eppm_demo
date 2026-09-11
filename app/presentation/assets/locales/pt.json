@@ -827,6 +827,20 @@
     "allocation": "Atribuição",
     "total": "Total",
     "no_wbs": "Este projeto não tem WBS atribuídos.",
-    "unavailable": "Dados indisponíveis ou acesso alterado. Recarregue a página."
+    "unavailable": "Dados indisponíveis ou acesso alterado. Recarregue a página.",
+    "pool": "Grupos de recursos",
+    "finance_overview": "Visão financeira",
+    "approved_budget": "Orçamento aprovado",
+    "capacity_overallocation": "Capacidade e sobrealocação",
+    "overallocation": "Sobrealocação",
+    "total_capacity": "Capacidade total dos grupos",
+    "go_to_consumers": "Planeamento e marcos: projetos consumidores",
+    "loading": "A carregar…",
+    "today": "Data atual",
+    "no_status_budget": "Nenhuma versão orçamental {status} disponível em Finanças.",
+    "status_source": "Orçamento {status} {number} · {name}",
+    "unmatched_status": "Nenhum orçamento {status} para códigos WBS: {codes}",
+    "wbs_assignment": "Atribuição WBS",
+    "no_consumers": "Nenhum projeto acessível utiliza os grupos responsáveis neste trimestre."
   }
 }

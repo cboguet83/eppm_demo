@@ -804,6 +804,20 @@
     "allocation": "Zuordnung",
     "total": "Gesamt",
     "no_wbs": "Diesem Projekt sind keine PSP zugeordnet.",
-    "unavailable": "Daten nicht verfügbar oder Zugriff geändert. Bitte neu laden."
+    "unavailable": "Daten nicht verfügbar oder Zugriff geändert. Bitte neu laden.",
+    "pool": "Ressourcenpools",
+    "finance_overview": "Finanzübersicht",
+    "approved_budget": "Genehmigtes Budget",
+    "capacity_overallocation": "Kapazität und Überbelegung",
+    "overallocation": "Überbelegung",
+    "total_capacity": "Gesamtkapazität der Pools",
+    "go_to_consumers": "Planung und Meilensteine: nutzende Projekte",
+    "loading": "Wird geladen…",
+    "today": "Aktuelles Datum",
+    "no_status_budget": "Keine Budgetversion mit Status {status} in Finanzen verfügbar.",
+    "status_source": "Budget {status} {number} · {name}",
+    "unmatched_status": "Kein Budget {status} für PSP-Codes: {codes}",
+    "wbs_assignment": "PSP-Zuordnung",
+    "no_consumers": "Keine zugänglichen Projekte nutzen die betroffenen Pools in diesem Quartal."
   }
 }

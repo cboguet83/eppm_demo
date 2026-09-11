@@ -44,6 +44,27 @@ def database(tmp_path: Path) -> str:
     return path
 
 
+def test_dashboard_drill_through_replaces_stale_planning_filters(database: str) -> None:
+    """A resource-chart jump must show all its consumers despite old filters."""
+    with closing(sqlite3.connect(database)) as connection, connection:
+        connection.execute("INSERT INTO project(id,name) VALUES(2,'Second project')")
+    app = AppTest.from_function(planning_app, args=(database,), default_timeout=30)
+    app.session_state["ms_multi_projects"] = [1]
+    app.session_state["ms_planning_tag_filter"] = ["Old tag"]
+    app.session_state["active_resource_pool_filter"] = {"pool_ids": [999]}
+    app.session_state["planning_flex_fields"] = ["name"]
+    app.session_state["target_planning_project_id"] = 1
+    app.session_state["dashboard_planning_projects"] = [1, 2]
+    with patch("app.presentation.pages.planning._interactive_gantt", return_value=None):
+        app.run()
+    assert not app.exception and not app.error
+    assert app.session_state["ms_multi_projects"] == [1, 2]
+    assert app.session_state["ms_planning_tag_filter"] == []
+    assert app.session_state["planning_flex_fields"] == []
+    assert "active_resource_pool_filter" not in app.session_state
+    assert "dashboard_planning_projects" not in app.session_state
+
+
 def test_gantt_create_edit_progress_and_delete_use_real_application_transactions(
     database: str,
 ) -> None:

@@ -827,6 +827,20 @@
     "allocation": "Affectation",
     "total": "Total",
     "no_wbs": "Aucun OTP affecté à ce projet.",
-    "unavailable": "Données indisponibles ou droits modifiés. Rechargez la page."
+    "unavailable": "Données indisponibles ou droits modifiés. Rechargez la page.",
+    "pool": "Pools de ressources",
+    "finance_overview": "Vue financière",
+    "approved_budget": "Budget approuvé",
+    "capacity_overallocation": "Capacité et suraffectation",
+    "overallocation": "Suraffectation",
+    "total_capacity": "Capacité totale des pools",
+    "go_to_consumers": "Planning et jalons : projets consommateurs",
+    "loading": "Chargement…",
+    "today": "Date actuelle",
+    "no_status_budget": "Aucune version budgétaire {status} disponible dans Finance.",
+    "status_source": "Budget {status} {number} · {name}",
+    "unmatched_status": "Aucun budget {status} pour les OTP : {codes}",
+    "wbs_assignment": "Affectation des OTP",
+    "no_consumers": "Aucun projet accessible ne consomme les pools concernés ce trimestre."
   }
 }

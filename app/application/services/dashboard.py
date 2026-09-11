@@ -45,9 +45,9 @@ class DashboardService:
                    for value in project['fields'].get(key, [])}
         return sorted(options | (set(filters.get(key, [])) & authorized), key=str.casefold)
 
-    def report(self, project_ids: list[int]) -> DashboardReport:
-        """Calculate current WBS shares from one consistent approved snapshot."""
-        data = self.reader.data(project_ids)
+    def report(self, project_ids: list[int], status: str = 'Approved') -> DashboardReport:
+        """Calculate WBS shares from the latest snapshot with the requested status."""
+        data = self.reader.data(project_ids, status)
         return DashboardReport(allocated_budget(data.shares, data.approved, self.today().year),
                                data.approved.version if data.approved else None, data.issue_count)
 
@@ -58,3 +58,11 @@ class DashboardService:
     def issues(self, project_ids: list[int], locale: str) -> list[dict]:
         """Read current active blockers after checking project scope again."""
         return self.reader.issues(project_ids, locale)
+
+    def resources(self, project_ids: list[int]) -> dict[str, dict[str, float]]:
+        """Read both quarterly resource series in one authorized snapshot."""
+        return self.reader.resources(project_ids, self.today())
+
+    def consuming_projects(self, project_ids: list[int], quarter: str) -> list[int]:
+        """Reauthorize a chart drill-through before returning planning project IDs."""
+        return self.reader.consuming_projects(project_ids, quarter, self.today())

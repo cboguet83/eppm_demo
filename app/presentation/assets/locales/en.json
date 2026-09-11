@@ -803,6 +803,20 @@
     "allocation": "Allocation",
     "total": "Total",
     "no_wbs": "This project has no assigned WBS.",
-    "unavailable": "Dashboard data is unavailable or access has changed. Please reload."
+    "unavailable": "Dashboard data is unavailable or access has changed. Please reload.",
+    "pool": "Resource pools",
+    "finance_overview": "Finance overview",
+    "approved_budget": "Approved budget",
+    "capacity_overallocation": "Capacity and Overallocation",
+    "overallocation": "Overallocation",
+    "total_capacity": "Total pools capacity",
+    "go_to_consumers": "Planning & milestones: consuming projects",
+    "loading": "Loading…",
+    "today": "Current date",
+    "no_status_budget": "No {status} budget version available in Finance.",
+    "status_source": "{status} budget {number} · {name}",
+    "unmatched_status": "No {status} budget for WBS codes: {codes}",
+    "wbs_assignment": "WBS assignment",
+    "no_consumers": "No accessible projects consume the responsible pools in this quarter."
   }
 }

@@ -15,7 +15,8 @@ def render_wbs_rows(allocations: list[WbsAllocation], options: list[WbsOption]) 
         return
     st.dataframe(pd.DataFrame([{t("wbs.code"): choices[row["wbs_id"]]["code"],
                                t("wbs.description"): choices[row["wbs_id"]]["description"],
-                               t("wbs.allocation"): row["percentage"]} for row in allocations]),
+                               t("wbs.allocation"): row["percentage"]} for row in allocations]).style.set_properties(
+                     subset=[t("wbs.code"), t("wbs.allocation")], **{"color": "#808080"}),
                  hide_index=True, width="stretch")
 
 
