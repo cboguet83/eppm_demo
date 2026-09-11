@@ -34,7 +34,6 @@ class AuthenticationConfig:
     cookie_secret: str = field(repr=False)
     local_http: bool = False
     idle_seconds: int = 900
-    absolute_seconds: int = 28800
     reauthentication_seconds: int = 300
     algorithms: tuple[str, ...] = ("RS256",)
     mfa_acr_values: tuple[str, ...] = ()
@@ -62,11 +61,9 @@ class AuthenticationConfig:
                 raise ValueError(f"Configure a valid OIDC {name}.")
         if (not self.algorithms or not set(self.algorithms) <= {"RS256", "PS256", "ES256"}):
             raise ValueError("Select an explicitly supported asymmetric signing algorithm.")
-        limits = (self.idle_seconds, self.absolute_seconds, self.reauthentication_seconds)
+        limits = (self.idle_seconds, self.reauthentication_seconds)
         if any(type(value) is not int or value <= 0 for value in limits):
             raise ValueError("Session limits must be positive integer seconds.")
-        if self.idle_seconds > self.absolute_seconds or self.reauthentication_seconds > self.absolute_seconds:
-            raise ValueError("Idle and reauthentication limits cannot exceed the absolute session limit.")
         if self.environment != "development" and not self.mfa_acr_values:
             raise ValueError("Configure provider-attested MFA ACR values for production administrators.")
 
@@ -98,7 +95,6 @@ class AuthenticationConfig:
         try:
             limits = {name: int(values.get(key, default)) for name, key, default in (
                 ("idle_seconds", "SESSION_IDLE_SECONDS", "900"),
-                ("absolute_seconds", "SESSION_ABSOLUTE_SECONDS", "28800"),
                 ("reauthentication_seconds", "SESSION_REAUTHENTICATION_SECONDS", "300"),
             )}
         except ValueError:

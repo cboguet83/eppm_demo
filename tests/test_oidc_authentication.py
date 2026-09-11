@@ -96,10 +96,10 @@ def oidc(tmp_path: Path, request: pytest.FixtureRequest):
         yield path, config, access, state, browser, now, provider
 
 
-def begin(oidc) -> dict[str, str]:
+def begin(oidc, query: str = 'next=https://untrusted.example.test') -> dict[str, str]:
     """Start the actual Authlib redirect and keep the returned browser-bound state."""
     _, config, _, state, browser, _, _ = oidc
-    response = browser.get("/auth/login?next=https://untrusted.example.test")
+    response = browser.get('/auth/login?' + query)
     assert response.status_code == 302, response.text
     params = parse_qs(urlsplit(response.headers["location"]).query)
     state["authorization"] = params
@@ -312,7 +312,7 @@ def test_cross_origin_websocket_and_foreign_host_are_rejected(oidc):
     {"origin": "http://localhost:8501/"}, {"local_http": True, "environment": "production"},
     {"algorithms": ("none",)}, {"algorithms": ("HS256",)}, {"algorithms": ()},
     {"client_secret": ""}, {"cookie_secret": ""}, {"idle_seconds": 0},
-    {"idle_seconds": 30000}, {"reauthentication_seconds": 30000},
+    {"idle_seconds": -1}, {"reauthentication_seconds": -1},
 ])
 def test_invalid_deployment_configuration_has_no_anonymous_fallback(oidc, change):
     _, config, _, _, _, _, _ = oidc
@@ -337,3 +337,29 @@ def test_environment_mapping_and_production_mfa_cookie_policy(oidc):
         AuthenticationConfig.from_environment({**values, "SESSION_IDLE_SECONDS": "invalid"})
     with pytest.raises(ValueError):
         AuthenticationConfig.from_environment({**values, "OIDC_ALLOW_LOCAL_HTTP": "perhaps"})
+
+
+def test_internal_planning_destination_survives_oidc_and_cookie_has_no_fixed_expiry(oidc):
+    _,config,_,_,browser,_,_=oidc
+    params=begin(oidc,'nav=planning&project_id=17&task_id=23&next=https://untrusted.example.test')
+    response=browser.get('/auth/callback',params=params)
+    assert response.headers['location']==config.origin+'/?nav=planning&project_id=17&task_id=23'
+    cookie=next(value for value in response.headers.get_list('set-cookie') if value.startswith(SESSION_COOKIE+'='))
+    assert 'Max-Age' not in cookie and 'expires=' not in cookie.lower()
+
+
+def test_session_and_activity_storage_outages_are_retryable(oidc,monkeypatch):
+    _,config,access,_,browser,_,_=oidc
+    browser.get('/auth/callback',params=begin(oidc))
+    def unavailable(*args,**kwargs):
+        raise RuntimeError('private database detail')
+    monkeypatch.setattr(access,'actor',unavailable)
+    for response in [browser.get('/auth/session'),browser.post('/auth/activity',headers={'Origin':config.origin,'X-Eppm-Activity':'user-interaction'})]:
+        assert response.status_code==503 and 'private' not in response.text
+
+
+@pytest.mark.parametrize('query', [{'nav':'https://untrusted.example.test'}, {'nav':'planning','project_id':'9'*1000}, {'nav':'portfolio','project_id':'-1'}])
+def test_login_destination_never_accepts_external_or_invalid_identifiers(query):
+    from app.infrastructure.authentication.http import login_destination
+    destination=login_destination(query)
+    assert destination.startswith('/') and 'untrusted' not in destination and 'project_id' not in destination

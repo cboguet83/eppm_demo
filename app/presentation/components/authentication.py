@@ -1,6 +1,7 @@
 """Browser session controls and public account-state views."""
 
 import html
+from urllib.parse import urlencode
 
 import streamlit as st
 
@@ -20,6 +21,8 @@ export default function({data, parentElement}) {
     logout.textContent = data.logout;
     root.replaceChildren(logout);
     let lastActivity = 0, disposed = false, activityPending = false, pollPending = false;
+    let unsentActivity = false, activityTimer = null;
+    const activityEvents = ["pointerdown", "pointermove", "keydown", "wheel", "touchstart", "touchmove"];
     const documents = new Set(), frames = new Set();
     const expire = () => { if (!disposed) window.location.replace('/'); };
     const retry = () => { lastActivity = 0; root.dataset.sessionConnection = 'retrying'; };
@@ -30,23 +33,35 @@ export default function({data, parentElement}) {
         else retry();
         return false;
     };
-    const activity = async event => {
-        if (disposed || activityPending || !event.isTrusted || Date.now() - lastActivity < 10000) return;
-        lastActivity = Date.now();
-        activityPending = true;
+    const scheduleActivity = delay => {
+        if (disposed || activityTimer !== null) return;
+        activityTimer = setTimeout(() => { activityTimer = null; flushActivity(); }, delay);
+    };
+    const flushActivity = async () => {
+        if (disposed || activityPending || !unsentActivity) return;
+        const delay = 10000 - (Date.now() - lastActivity);
+        if (delay > 0) { scheduleActivity(delay); return; }
+        if (activityTimer !== null) { clearTimeout(activityTimer); activityTimer = null; }
+        unsentActivity = false; lastActivity = Date.now(); activityPending = true;
         try {
             const response = await fetch('/auth/activity', {method:'POST', credentials:'same-origin',
                 headers:{'X-Eppm-Activity':'user-interaction'}, cache:'no-store'});
-            accepted(response);
-        } catch { if (!disposed) retry(); }
-        finally { activityPending = false; }
+            if (!accepted(response) && response.status !== 401 && response.status !== 403) unsentActivity = true;
+        } catch { if (!disposed) { retry(); unsentActivity = true; } }
+        finally {
+            activityPending = false;
+            if (unsentActivity) scheduleActivity(10000);
+        }
+    };
+    const activity = event => {
+        if (disposed || !event.isTrusted) return;
+        unsentActivity = true;
+        return flushActivity();
     };
     const attachDocument = doc => {
         if (!doc || documents.has(doc)) return;
         documents.add(doc);
-        doc.addEventListener('pointerdown', activity, true);
-        doc.addEventListener('keydown', activity, true);
-        doc.addEventListener('wheel', activity, {capture:true, passive:true});
+        for (const type of activityEvents) doc.addEventListener(type, activity, {capture:true, passive:true});
     };
     const attachFrame = frame => {
         try { attachDocument(frame.contentDocument); } catch { /* Cross-origin embedded content is isolated. */ }
@@ -86,13 +101,11 @@ export default function({data, parentElement}) {
     }, 15000);
     const dispose = () => {
         if (disposed) return;
-        disposed = true; clearInterval(poll); observer.disconnect();
+        disposed = true; clearInterval(poll); clearTimeout(activityTimer); observer.disconnect();
         delete parentElement.eppmSessionControls;
         window.removeEventListener('storage', otherTabLogout);
         for (const doc of documents) {
-            doc.removeEventListener('pointerdown', activity, true);
-            doc.removeEventListener('keydown', activity, true);
-            doc.removeEventListener('wheel', activity, true);
+            for (const type of activityEvents) doc.removeEventListener(type, activity, true);
         }
         for (const frame of frames) frame.removeEventListener('load', onFrameLoad);
     };
@@ -115,8 +128,10 @@ def account_gate(service: AccessService, cookie: str) -> Actor | None:
     except AccessDenied:
         render_language_selector()
         st.title(t("auth.title", default="Sign in to EPPM"))
+        query = {key: st.query_params[key] for key in ('nav', 'project_id', 'task_id') if key in st.query_params}
+        login_url = '/auth/login' + ('?' + urlencode(query) if query else '')
         st.html(
-            '<a href="/auth/login" target="_self" style="display:inline-block;'
+            '<a href="' + html.escape(login_url, quote=True) + '" target="_self" style="display:inline-block;'
             'background:#C41039;color:white;border-radius:6px;padding:8px 14px;'
             'font:inherit;text-decoration:none">'
             + html.escape(t("auth.sign_in", default="Sign in")) + '</a>'

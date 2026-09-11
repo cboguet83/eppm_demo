@@ -210,7 +210,7 @@ def test_scope_grants_reject_malformed_nested_property_conditions(security, cond
 
 
 @pytest.mark.parametrize("configuration", [
-    {"idle_seconds": 0}, {"absolute_seconds": -1}, {"reauthentication_seconds": True},
+    {"idle_seconds": 0}, {"idle_seconds": -1}, {"reauthentication_seconds": True},
 ])
 def test_invalid_session_deadlines_are_rejected_before_constructing_a_policy(configuration):
     with pytest.raises(ValueError, match="positive integer seconds"):
@@ -452,7 +452,7 @@ def test_revocation_disabling_and_logout_affect_existing_sessions_immediately(se
     assert service.account(next_login)["id"] == tab1.user_id
 
 
-def test_idle_absolute_token_expiry_and_recent_authentication_are_enforced(security):
+def test_idle_expiry_and_recent_authentication_with_active_sessions_beyond_token_and_eight_hours(security):
     _, now, _, _, service, _ = security
     admin = administrator(security)
     now[0] = 1300
@@ -470,18 +470,40 @@ def test_idle_absolute_token_expiry_and_recent_authentication_are_enforced(secur
     now[0] = 1000
     short = service.actor(service.sign_in(replace(identity("short"), expires_at=1100)))
     now[0] = 1100
-    with pytest.raises(AccessDenied):
-        service.account(short)
+    service.account(short)
     now[0] = 1000
     active = service.actor(service.sign_in(identity("long")))
     for timestamp in range(1500, 29800, 500):
         now[0] = timestamp
         service.activity(active)
     now[0] = 29800
+    service.activity(active)
+    now[0] = 30699
+    service.account(active)
+    now[0] = 30700
     with pytest.raises(AccessDenied):
-        service.activity(active)
-    with pytest.raises(ReauthenticationRequired):
-        service.sign_in(identity("long"))
+        service.account(active)
+    service.sign_in(identity("long"))
+
+
+def test_shared_cookie_activity_extends_both_tabs_and_expired_sessions_cannot_revive(security):
+    _, now, gateway, _, service, _ = security
+    cookie = service.sign_in(identity('shared-browser'))
+    first_tab = service.actor(cookie)
+    second_tab = service.actor(cookie)
+    now[0] = 1500
+    service.activity(first_tab)
+    with gateway.transaction() as store:
+        session = store.session(second_tab.session_hash)
+        assert session['last_activity'] == 1500
+        assert session['expires_at'] == 2400
+    now[0] = 2300
+    service.account(second_tab)
+    now[0] = 2400
+    with pytest.raises(AccessDenied):
+        service.activity(first_tab)
+    with pytest.raises(AccessDenied):
+        service.account(second_tab)
 
 
 def test_concurrent_bootstrap_is_one_time_and_grants_only_access_admin(security):

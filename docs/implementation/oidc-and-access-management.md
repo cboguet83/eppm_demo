@@ -197,8 +197,9 @@ Demo seeding and business-data reset operations must preserve users, assignments
 Use these initial project defaults:
 
 - Idle timeout: 15 minutes.
-- Absolute authenticated-session lifetime: 8 hours.
-- Earlier identity-token expiry takes precedence.
+- No absolute application-session limit while active.
+- Identity-token expiry is checked at sign-in; application activity renews the idle deadline.
+- Dashboard is the normal landing page; explicit internal project/planning links survive sign-in.
 - Access-administration changes require reauthentication within the preceding 5 minutes.
 - Production administrator identities require MFA enforced by the identity provider.
 

@@ -12,6 +12,7 @@ from app.presentation.navigation import (
     PAGE_SCHEMA_DEF,
     PAGE_ACCESS,
     PAGE_FINANCE,
+    PAGE_DASHBOARD,
 )
 
 
@@ -110,8 +111,9 @@ def render_application(workspace: ApplicationWorkspace) -> None:
     }
 
     nav_map[PAGE_ACCESS] = t("access.title", default="Application access")
+    nav_map[PAGE_DASHBOARD] = t("dashboard.title", default="Dashboard")
     nav_map[PAGE_FINANCE] = t("finance.title", default="Finance")
-    page_keys = [page for page in (PAGE_PORTFOLIO, PAGE_PLANNING, PAGE_SETTINGS, PAGE_FINANCE, PAGE_ACCESS) if page in workspace.pages]
+    page_keys = [page for page in (PAGE_DASHBOARD, PAGE_PORTFOLIO, PAGE_PLANNING, PAGE_SETTINGS, PAGE_FINANCE, PAGE_ACCESS) if page in workspace.pages]
     if not page_keys:
         st.info(t("auth.no_access", default="Your account has no assigned application access. Contact an access administrator."))
         return
@@ -122,7 +124,18 @@ def render_application(workspace: ApplicationWorkspace) -> None:
         target_proj_id = st.query_params.get("project_id")
         target_task_id = st.query_params.get("task_id")
 
-        if target_nav in ("planning", PAGE_PLANNING):
+        if target_nav in ("dashboard", PAGE_DASHBOARD):
+            st.session_state["app_sidebar_nav"] = PAGE_DASHBOARD
+        elif target_nav in ("portfolio", PAGE_PORTFOLIO):
+            st.session_state["app_sidebar_nav"] = PAGE_PORTFOLIO
+            project_id = _positive_identifier(target_proj_id)
+            if project_id is not None:
+                st.session_state['selected_portfolio_project_id'] = project_id
+        elif target_nav == 'finance':
+            st.session_state['app_sidebar_nav'] = PAGE_FINANCE
+        elif target_nav == 'settings':
+            st.session_state['app_sidebar_nav'] = PAGE_SETTINGS
+        elif target_nav in ("planning", PAGE_PLANNING):
             st.session_state["app_sidebar_nav"] = PAGE_PLANNING
             project_id = _positive_identifier(target_proj_id)
             task_id = _positive_identifier(target_task_id)

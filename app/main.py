@@ -20,6 +20,7 @@ from app.application.services.project_overallocation import ProjectOverallocatio
 from app.application.services.collaboration import CollaborationService
 from app.application.services.budgets import BudgetService
 from app.application.services.finance import FinanceService
+from app.application.services.dashboard import DashboardService
 
 if TYPE_CHECKING:
     from app.infrastructure.database.pool_capacity_cache import (
@@ -144,6 +145,8 @@ def create_project_workspace(db_path: str | None = None, *, access: BusinessAcce
     from app.presentation.components.project_workspace import ProjectWorkspace
     from app.presentation.pages.collaboration import render_project_contacts, render_project_log, render_project_links
 
+    from app.presentation.pages.dashboard import render_project_budget
+
     collaboration = create_collaboration_service(db_path, access=access)
 
     return ProjectWorkspace(
@@ -154,6 +157,7 @@ def create_project_workspace(db_path: str | None = None, *, access: BusinessAcce
         partial(render_project_log, service=collaboration),
         create_schema_service(db_path, access=access),
         partial(render_project_links, service=collaboration),
+        partial(render_project_budget, service=create_dashboard_service(db_path, access=access)),
     )
 
 
@@ -293,7 +297,7 @@ def create_application_workspace(
     from app.shared.config import config
     from app.presentation.components.application_workspace import ApplicationWorkspace
     from app.presentation.navigation import (
-        PAGE_PORTFOLIO, PAGE_PLANNING, PAGE_SETTINGS, PAGE_SCHEMA_DEF, PAGE_BUDGET, PAGE_ACCESS, PAGE_FINANCE,
+        PAGE_PORTFOLIO, PAGE_PLANNING, PAGE_SETTINGS, PAGE_SCHEMA_DEF, PAGE_BUDGET, PAGE_ACCESS, PAGE_FINANCE, PAGE_DASHBOARD,
     )
     from app.presentation.pages.portfolio import render_portfolio_overview
     from app.presentation.pages.planning import render_planning_milestones
@@ -301,6 +305,7 @@ def create_application_workspace(
     from app.presentation.pages.budgets import render_budget_tracking
     from app.presentation.pages.access_management import render_access_management
     from app.presentation.pages.finance import render_finance
+    from app.presentation.pages.dashboard import render_dashboard
 
     identity = str(Path(db_path or config.db_path).resolve())
     with SqliteAccessGateway(identity).transaction() as store:
@@ -313,7 +318,7 @@ def create_application_workspace(
         administration = access.global_permission(store, Permission.ACCESS)
         if isinstance(access.actor, Actor):
             access.policy.session(store, access.actor)
-    pages = {}
+    pages = {PAGE_DASHBOARD: partial(render_dashboard, create_dashboard_service(identity, access=access))}
     pages[PAGE_FINANCE] = partial(render_finance, create_finance_service(identity, access=access))
     totals = None
     if read:
@@ -328,6 +333,14 @@ def create_application_workspace(
     if administration and authentication is not None and isinstance(access.actor, Actor):
         pages[PAGE_ACCESS] = partial(render_access_management, authentication, access.actor)
     return ApplicationWorkspace(identity, pages, totals)
+
+
+def create_dashboard_service(db_path: str | None = None, *, access: BusinessAccess) -> DashboardService:
+    """Compose authorized dashboard and project WBS budget reporting."""
+    from app.infrastructure.repositories.dashboard import SqliteDashboardReader
+    from app.shared.config import config
+
+    return DashboardService(SqliteDashboardReader(db_path or config.db_path, access))
 
 
 def create_finance_service(db_path: str | None = None, *, access: BusinessAccess) -> FinanceService:

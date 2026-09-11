@@ -217,7 +217,7 @@ def test_retained_navigation_rechecks_current_access_before_loading_the_next_pag
             for assignment in service.assignments(admin, editor.actor.user_id):
                 service.revoke(admin, assignment["id"])
 
-    rerun = FragmentRun("app_sidebar_nav", remove_access, widget_index=1, full_app_request=True)
+    rerun = FragmentRun("app_sidebar_nav", remove_access, widget_index=2, full_app_request=True)
     rerun.run(app)
     assert app.session_state["shell_runs"] == 1
     assert "not permitted" in app.error[0].value

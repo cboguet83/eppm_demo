@@ -115,18 +115,23 @@ identities, even when emails or usernames are unchanged.
 
 ## Sessions, logs, and audit operations
 
-Defaults are 900 seconds idle, 28,800 seconds absolute, and the earlier verified
-ID-token expiry. Access-administration writes require provider authentication within
-300 seconds. Refreshing, reconnecting, and background status polling do not extend
-authentication time. User interaction extends idle time only within the remaining
-absolute/token lifetime. Each protected operation reads current account state and
-permissions, including downloads and long-lived Streamlit connections.
+The application uses a sliding idle deadline, defaulting to 900 seconds through
+`SESSION_IDLE_SECONDS`. `SESSION_ABSOLUTE_SECONDS` is obsolete and ignored.
+OIDC token expiry is validated at sign-in and does not limit subsequent active use.
+Access-administration writes still require fresh provider authentication within
+`SESSION_REAUTHENTICATION_SECONDS` (default 300). Trusted activity updates both
+last activity and the server-side expiry in one transaction. Reconnects, rendering,
+and background checks never extend the deadline. Activity updates are coalesced
+with a trailing update; activity in any shared-session tab keeps it active.
+Explicit logout, revocation, disabled-account checks, MFA, and Origin checks remain.
+Temporary session endpoint failures return 503 without forcing browser logout.
+The policy migration revokes existing sessions once; users sign in again.
 
 Application logout revokes the browser's EPPM session across its open tabs. It does
 not end the provider's SSO session; the next EPPM login nevertheless requests fresh
 authentication. Provider-side disabling is not continuously introspected and has
-no back-channel logout integration in this version. Its maximum remaining EPPM
-access is bounded by the earlier application absolute/idle/ID-token deadlines.
+no back-channel logout integration in this version. An already authenticated EPPM session remains active while its user is active;
+provider-side disabling alone does not revoke that application session.
 Disable the EPPM account to deny its next protected operation independently.
 Disabling leaves session rows in place so the browser can display its own disabled
 account status. Reactivating the account can restore access through an otherwise

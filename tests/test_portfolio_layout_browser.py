@@ -23,7 +23,7 @@ def test_master_layout_has_no_top_gap_or_template_caption_and_colors_only_applie
         browser = playwright.chromium.launch(headless=True)
         try:
             page = browser.new_page(viewport={"width": 1500, "height": 1100})
-            page.goto(popup_server)
+            page.goto(popup_server + '/?nav=portfolio')
             table = page.locator('.st-key-portfolio_master_table')
             expect(table.locator('tbody tr').first).to_be_visible(timeout=30000)
             expect(table.locator('.project-menu-button')).to_have_count(0)
@@ -70,7 +70,7 @@ def test_project_details_shortcut_opens_planning_filtered_to_the_selected_projec
         browser = playwright.chromium.launch(headless=True)
         try:
             page = browser.new_page(viewport={"width": 1500, "height": 1100})
-            page.goto(popup_server)
+            page.goto(popup_server + '/?nav=portfolio')
             row = page.locator('.st-key-portfolio_master_table tbody tr[data-project-id]').first
             expect(row).to_be_visible(timeout=30000)
             project_id = row.get_attribute('data-project-id')

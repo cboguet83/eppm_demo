@@ -41,7 +41,7 @@ def test_every_visible_selection_frame_contains_the_complete_summary_and_first_s
         try:
             page = browser.new_page(viewport={'width':1500,'height':1100})
             page.add_init_script(_SAMPLE)
-            page.goto(popup_server)
+            page.goto(popup_server + '/?nav=portfolio')
             table = page.locator('.st-key-portfolio_master_table')
             expect(table.locator('tbody tr').first).to_be_visible(timeout=30000)
             for index in [0, 1, 0]:

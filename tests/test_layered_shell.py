@@ -138,7 +138,7 @@ def test_schema_deep_link_selects_parameters_after_settings_was_already_open(dat
     from tests.test_fragment_reruns import FragmentRun
 
     app = AppTest.from_function(application_app, args=(database,), default_timeout=30)
-    FragmentRun("app_sidebar_nav", widget_index=2, full_app_request=True).run(app)
+    FragmentRun("app_sidebar_nav", widget_index=3, full_app_request=True).run(app)
     assert not app.exception
     assert app.radio(key="rb_settings_section").value == "org_structure"
     app.query_params.update(nav="schema")

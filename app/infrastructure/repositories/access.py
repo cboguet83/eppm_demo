@@ -126,9 +126,9 @@ class SqliteAccessStore:
         """Invalidate the browser session across its open tabs and reconnects."""
         self._execute("UPDATE app_session SET revoked=1 WHERE session_hash=?", (session_hash,))
 
-    def touch_session(self, session_hash: str, now: int) -> None:
+    def touch_session(self, session_hash: str, now: int, expires_at: int) -> None:
         """Record explicit user activity, never background permission checks."""
-        self._execute("UPDATE app_session SET last_activity=? WHERE session_hash=?", (now, session_hash))
+        self._execute("UPDATE app_session SET last_activity=?,expires_at=? WHERE session_hash=?", (now, expires_at, session_hash))
 
     def scope_projects(self, scope: ProjectScope) -> set[int]:
         """Resolve all references first, then intersect current matching project IDs."""

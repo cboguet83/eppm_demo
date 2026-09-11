@@ -293,6 +293,8 @@ def _project_detail_sections(proj_id: int, workspace: ProjectWorkspace) -> None:
         from app.presentation.components.wbs_editor import render_wbs_rows
         with tabs[-3]:
             render_wbs_rows(workspace.projects.get_wbs_allocations(proj_id), workspace.projects.get_wbs_options(proj_id))
+            if workspace.render_budget is not None:
+                workspace.render_budget(proj_id)
     if tabs[-2].open:
         with tabs[-2]:
             workspace.render_contacts(int(proj_id))

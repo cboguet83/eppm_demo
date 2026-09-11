@@ -19,11 +19,12 @@ function harness(){
   const parentElement={querySelector:()=>root};
   const requests=[],reloads=[];
   let now=20000,response={ok:true,json:async()=>({status:'active'})};
-  const polls=new Set();
+  const polls=new Set(),timers=new Map();
   Object.assign(main,{createElement:()=>({}),querySelectorAll:()=>[frame],body:{}});
   const context=vm.createContext({document:main,Date:{now:()=>now},
     window:{...document(),location:{replace:url=>reloads.push(url)}},localStorage:{setItem(){}},
     MutationObserver:class{observe(){}disconnect(){}},setInterval:fn=>{polls.add(fn);return fn;},clearInterval:fn=>polls.delete(fn),
+    setTimeout:(fn,delay)=>{timers.set(fn,now+delay);return fn;},clearTimeout:fn=>timers.delete(fn),
     fetch:async(url,options)=>{requests.push({url,options});if(response instanceof Error)throw response;return response;},
   });
   vm.runInContext(script,context);
@@ -31,7 +32,9 @@ function harness(){
   const cleanup=mount();
   return {main,child,root,requests,reloads,cleanup,mount,polls,poll:()=>Promise.all([...polls].map(fn=>fn())),
     replaceRoot:()=>{root={dataset:{},replaceChildren(child){child.parentElement=this;this.child=child;}};return root;},
-    advance:()=>{now+=10000;},respond:value=>{response=value;},
+    advance:(milliseconds=10000)=>{now+=milliseconds;},
+    timers,flushTimers:async()=>{for(const [fn,due] of [...timers])if(due<=now){timers.delete(fn);await fn();}await Promise.resolve();},
+    event:(doc,type,trusted=true)=>Promise.all([...doc.listeners.get(type).handlers].map(fn=>fn({isTrusted:trusted}))),respond:value=>{response=value;},
     wheel:(doc,trusted=true)=>Promise.all([...doc.listeners.get('wheel').handlers].map(fn=>fn({isTrusted:trusted}))),};
 }
 
@@ -109,4 +112,18 @@ for(const status of [401,403]) test(`explicit session denial still closes the pa
 test('a confirmed account-status change still leaves the protected page',async()=>{
   const h=harness();h.respond({ok:true,json:async()=>({status:'disabled'})});
   await h.poll();assert.equal(h.reloads.length,1);
+});
+
+
+test('pointer movement and touch retain the last event in a throttled burst',async()=>{
+  const h=harness();
+  await h.event(h.main,'pointermove');
+  h.advance(9000);await h.event(h.child,'touchmove');
+  assert.equal(h.requests.length,1);assert.equal(h.timers.size,1);
+  h.advance(1000);await h.flushTimers();
+  assert.equal(h.requests.length,2);
+  h.advance(20000);await h.flushTimers();await h.poll();
+  assert.equal(h.requests.filter(r=>r.url==='/auth/activity').length,2);
+  await h.event(h.main,'pointermove',false);assert.equal(h.requests.length,3);
+  h.cleanup();assert.equal(h.timers.size,0);
 });

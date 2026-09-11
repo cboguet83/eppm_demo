@@ -1,6 +1,7 @@
 """HTTP login, logout and activity endpoints with safe, bounded failure responses."""
 
 from secrets import token_urlsafe
+from urllib.parse import urlencode
 
 from starlette.concurrency import run_in_threadpool
 from starlette.requests import Request
@@ -17,6 +18,19 @@ OIDC_COOKIE = "eppm_oidc"
 logger = get_logger(__name__)
 
 
+def login_destination(values: dict[str, str]) -> str:
+    """Preserve only supported internal navigation, never a supplied redirect URL."""
+    nav = values.get('nav')
+    if nav not in {'planning', 'portfolio', 'dashboard', 'finance', 'settings', 'schema'}:
+        return '/'
+    query = {'nav': nav}
+    for key in ('project_id', 'task_id'):
+        value = values.get(key, '')
+        if isinstance(value, str) and len(value) <= 19 and value.isascii() and value.isdigit() and 0 < int(value) <= 9223372036854775807:
+            query[key] = value
+    return '/?' + urlencode(query)
+
+
 def require_same_origin(request: Request, origin: str) -> None:
     """Reject cross-origin and missing-origin state-changing browser requests."""
     if request.headers.get("origin") != origin:
@@ -25,8 +39,8 @@ def require_same_origin(request: Request, origin: str) -> None:
 
 def failure_response(correlation: str, *, status: int = 401) -> JSONResponse:
     """Return a safe problem document without provider payloads or exception text."""
-    return JSONResponse({"error": {"code": "authentication_required",
-                                   "message": "Sign in to continue.",
+    return JSONResponse({"error": {"code": "service_unavailable" if status == 503 else "authentication_required",
+                                   "message": "Temporarily unavailable. Please try again." if status == 503 else "Sign in to continue.",
                                    "reference": correlation}}, status_code=status,
                         headers={"Cache-Control": "no-store"})
 
@@ -48,6 +62,7 @@ class AuthenticationRoutes:
     async def login(self, request: Request) -> Response:
         """Start a fresh provider login with exact callback, state, nonce and PKCE."""
         try:
+            request.session['eppm_return_query'] = {key: request.query_params[key] for key in ('nav', 'project_id', 'task_id') if key in request.query_params}
             params: dict[str, str | int] = {"prompt": "login", "max_age": 0}
             if self.config.mfa_acr_values:
                 params["acr_values"] = " ".join(self.config.mfa_acr_values)
@@ -67,11 +82,12 @@ class AuthenticationRoutes:
         except Exception as error:
             request.session.clear()
             return self._failure("oidc.callback_failed", error_type=type(error))
+        destination = login_destination(request.session.get('eppm_return_query', {}))
         request.session.clear()
-        response = RedirectResponse(self.config.origin + "/", status_code=303)
+        response = RedirectResponse(self.config.origin + destination, status_code=303)
         response.headers["Cache-Control"] = "no-store"
         response.set_cookie(SESSION_COOKIE, cookie, httponly=True, secure=self.config.secure_cookies,
-                            samesite="lax", path="/", max_age=self.config.absolute_seconds)
+                            samesite="lax", path="/")
         return response
 
     async def logout(self, request: Request) -> Response:
@@ -101,8 +117,10 @@ class AuthenticationRoutes:
             actor = await run_in_threadpool(self.access.actor, request.cookies.get(SESSION_COOKIE, ""))
             await run_in_threadpool(self.access.activity, actor)
             return Response(status_code=204, headers={"Cache-Control": "no-store"})
-        except Exception:
+        except AccessDenied:
             return self._failure("session.activity_denied", status=403)
+        except Exception:
+            return self._failure("session.activity_unavailable", status=503)
 
     async def session(self, request: Request) -> Response:
         """Check cross-tab revocation without updating last activity or exposing profile data."""
@@ -110,8 +128,10 @@ class AuthenticationRoutes:
             actor = await run_in_threadpool(self.access.actor, request.cookies.get(SESSION_COOKIE, ""))
             account = await run_in_threadpool(self.access.account, actor)
             return JSONResponse({"status": account["status"]}, headers={"Cache-Control": "no-store"})
-        except Exception:
+        except AccessDenied:
             return self._failure("session.expired")
+        except Exception:
+            return self._failure("session.unavailable", status=503)
 
     @staticmethod
     def _failure(event: str, *, status: int = 401, error_type: type[Exception] | None = None) -> Response:

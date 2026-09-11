@@ -20,16 +20,15 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class SessionLimits:
-    """Explicit project defaults; provider token expiry may shorten the session."""
+    """Explicit sliding-idle and administrative reauthentication durations."""
 
     idle_seconds: int = 900
-    absolute_seconds: int = 28800
     reauthentication_seconds: int = 300
     require_admin_mfa: bool = False
 
     def __post_init__(self) -> None:
         if any(type(value) is not int or value <= 0 for value in
-               (self.idle_seconds, self.absolute_seconds, self.reauthentication_seconds)):
+               (self.idle_seconds, self.reauthentication_seconds)):
             raise ValueError("Session limits must be positive integer seconds.")
 
 
@@ -44,7 +43,7 @@ class AuthorizationPolicy:
         session = store.session(actor.session_hash)
         now = self.clock()
         if (session is None or session["user_id"] != actor.user_id or session["revoked"]
-                or now >= session["expires_at"] or now >= session["auth_time"] + self.limits.absolute_seconds
+                or now >= session["expires_at"]
                 or now - session["last_activity"] >= self.limits.idle_seconds
                 or session["auth_time"] > now + 30 or (active and session["status"] != "active")):
             raise AccessDenied()
@@ -125,9 +124,7 @@ class AccessService:
         _safe_text(identity.subject, 512, required=True)
         _safe_text(identity.email, 320)
         _safe_text(identity.display_name, 256)
-        expiry = min(identity.expires_at, identity.auth_time + self.policy.limits.absolute_seconds)
-        if expiry <= now:
-            raise ReauthenticationRequired("Sign in again to start a new authenticated session.")
+        expiry = now + self.policy.limits.idle_seconds
         cookie = self.token_factory()
         digest = session_digest(cookie)
         with self.gateway.transaction(write=True) as store:
@@ -174,7 +171,8 @@ class AccessService:
         """Touch only after an explicit user interaction, never on background polling."""
         with self.gateway.transaction(write=True) as store:
             self.policy.session(store, actor, active=False)
-            store.touch_session(actor.session_hash, self.policy.clock())
+            now = self.policy.clock()
+            store.touch_session(actor.session_hash, now, now + self.policy.limits.idle_seconds)
 
     def list_users(self, actor: Actor, search: str = "") -> list[UserRecord]:
         """Access administrators can search application accounts independently of employees."""

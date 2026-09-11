@@ -24,3 +24,4 @@ class ProjectWorkspace:
     render_log: Callable[[int], None]
     schema: SchemaService
     render_links: Callable[[int], None] | None = None
+    render_budget: Callable[[int], None] | None = None

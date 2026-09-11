@@ -95,8 +95,8 @@ def test_security_revision_change_requires_a_fresh_runtime_before_admin_renderin
     binding = settings.session_binding(current.session_hash, status, revision)
     app = AppTest.from_function(application_entry, args=(cookie, binding), default_timeout=30).run()
     assert not app.exception and not app.error
-    assert app.radio(key="app_sidebar_nav").options == ["Finance"]
-    assert app.header[0].value == "Finance"
+    assert app.radio(key="app_sidebar_nav").options == ["Dashboard", "Finance"]
+    assert app.header[0].value == "Dashboard"
 
     DeploymentAccessService(
         service.gateway, lambda: int(time.time()), "entry-test",
@@ -113,7 +113,7 @@ def test_security_revision_change_requires_a_fresh_runtime_before_admin_renderin
     refreshed.query_params["nav"] = PAGE_ACCESS
     refreshed.run()
     assert not refreshed.exception and not refreshed.error
-    assert refreshed.radio(key="app_sidebar_nav").options == ["Finance", "Application access"]
+    assert refreshed.radio(key="app_sidebar_nav").options == ["Dashboard", "Finance", "Application access"]
     assert refreshed.header[0].value == "Application access"
 
 

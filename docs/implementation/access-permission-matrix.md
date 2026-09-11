@@ -44,6 +44,7 @@ remain `shared`; project workflow callers use separate reference projections.
 | BudgetService | `get_report` | read; scope before financial totals |
 | FinanceService | `view`, `export` | current active session; explicitly global WBS budget visibility, independent of project grants |
 | FinanceService | `save`, `cancel`, `validate_import` | global `finance.edit`; Finance editor or Business administrator; writer transaction rechecks current session and grants |
+| DashboardService | `catalog`, `report`, `shortages`, `issues` | current active session and readable project scope; only aggregate competing-pool demand may cross project scope; no hidden project/staff details |
 | ProjectOverallocationService | `overallocated_project_ids` | read; only authorized demand may influence returned project indicators |
 | PoolCapacityService | `calculate_many`, `get_summaries`, `get_details` | read for project demand; shared for full employee/mapping contributions; project workflows receive minimal capacity projections |
 | CollaborationService | `list_links`, `list_contacts`, `list_events` | read |

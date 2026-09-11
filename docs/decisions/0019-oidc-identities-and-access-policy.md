@@ -49,7 +49,7 @@ An administrator must revoke an invalid assignment before granting a replacement
 
 The supported `st.App` ASGI integration adds Authlib routes and middleware to the
 normal Streamlit script. Native Streamlit authentication alone does not support the
-required application idle/absolute limits and cross-tab revocation; its documented
+required application idle limits and cross-tab revocation; its documented
 identity cookie lifetime is 30 days. This is the concrete reason for custom routes,
 not a replacement frontend framework.
 
@@ -92,14 +92,18 @@ atomically consumes it, preventing replay across workers. The application cookie
 an opaque random value, stored only as a SHA-256 digest in SQLite. Cookies are HttpOnly
 and SameSite=Lax, and Secure outside explicit loopback HTTP development.
 
-Application session defaults are 15 minutes idle, 8 hours absolute, and the verified
-ID-token expiry if sooner. Access-management changes require authentication within
+Following the approved Dashboard decision (2026-09-11), application sessions use
+a sliding 15-minute idle deadline by default. OIDC expiry is validated at sign-in;
+there is no subsequent token-expiry or absolute-duration application logout. Access-management changes require authentication within
 5 minutes. Production/staging administrator permissions also require an ACR value
 that the deployment has verified attests MFA. Every login explicitly requests fresh
 provider authentication. Background checks never update last activity.
 
-The session component captures trusted pointer/keyboard interactions, including
-same-origin component frames. Same-origin POST activity extends idle time. Logout
+The session component captures trusted pointer movement/clicks, keyboard, wheel,
+and touch interactions, including same-origin component frames. Leading/trailing
+activity updates are coalesced across controls; synthetic events and background
+polls never extend the deadline. Cookies have browser-session lifetime rather
+than a fixed eight-hour expiry. Same-origin POST activity extends idle time. Logout
 revokes the browser's shared application session, clears its cookie, and notifies
 other tabs. A background status check detects expiry without extending it. These
 browser controls complement, and do not replace, server checks for every protected
