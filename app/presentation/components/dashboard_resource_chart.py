@@ -36,8 +36,9 @@ export default function({data,parentElement,setTriggerValue}) {
         add('text',{x:left-8,y:y+4,'text-anchor':'end',fill:'currentColor','data-axis':'overallocation'},tick(overAxis.step*i));
     }
     for(let i=0;i<=capAxis.count;i++)add('text',{x:right+8,y:bottom-height*i/capAxis.count+4,fill:'currentColor','data-axis':'capacity'},tick(capAxis.step*i));
-    add('text',{x:left,y:12,fill:'currentColor'},data.overallocationLabel);
-    add('text',{x:right,y:12,'text-anchor':'end',fill:'currentColor'},data.capacityLabel);
+    const middle=(top+bottom)/2;
+    add('text',{transform:`translate(18 ${middle}) rotate(-90)`,'text-anchor':'middle',fill:'currentColor','data-axis-title':'overallocation'},data.overallocationLabel);
+    add('text',{transform:`translate(1080 ${middle}) rotate(90)`,'text-anchor':'middle',fill:'currentColor','data-axis-title':'capacity'},data.capacityLabel);
     const path=[];
     data.rows.forEach((row,index)=>{
         const x=left+width*(index+.5)/n,barHeight=height*row.overallocation/maxOver;

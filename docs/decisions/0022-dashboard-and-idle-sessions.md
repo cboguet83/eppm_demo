@@ -57,6 +57,11 @@ The framed Active Issues card beside Finance overview opens the existing multili
 with no write actions. The approved curve has a top-right legend; resource legends
 sit to the right, axes show whole numbers, and tooltips show one decimal. Both charts
 include a dashed green current-date marker.
+Resource axis titles are vertical beside their axes. The centered issue icon sits
+above the count/label; zero issues uses a green icon, black text, and a disabled
+popup, while positive counts use orange throughout. The layered Finance chart
+specification includes a compact fingerprint of its amounts and year window so
+project filtering cannot retain an earlier browser dataset.
 
 The resource chart adds maximum daily total effective capacity across relevant pools
 on a secondary axis, using the existing staffing/calendar rules. Quarter right-click

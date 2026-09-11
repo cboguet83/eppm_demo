@@ -208,11 +208,15 @@ def _select_project(service: DashboardService, token: str) -> None:
 
 def _finance_chart(service: DashboardService, report) -> None:
     years = range(service.today().year-2, service.today().year+10)
+    # Layered Vega charts can retain their old named dataset when only Arrow data
+    # changes. Recreate this chart for different values, without rerunning the shell.
+    chart_revision = sha256(repr((years.start, tuple(sorted(report.budget.totals.items())))).encode()).hexdigest()[:16]
     values = pd.DataFrame([{'date': f'{year}-01-01', 'budget': report.budget.totals.get(year) / 100
                             if year in report.budget.totals else None,
                             'series': _label('approved_budget')} for year in years])
     values['segment'] = values['budget'].isna().cumsum().astype(str)
     st.vega_lite_chart(values, {
+        'name': 'dashboard_finance_' + chart_revision,
         'layer': [
             {'mark': {'type': 'line', 'point': {'filled': True}},
              'encoding': {'detail': {'field': 'segment', 'type': 'nominal'},
@@ -229,7 +233,7 @@ def _finance_chart(service: DashboardService, report) -> None:
              'mark': {'type': 'rule', 'color': '#23934c', 'strokeDash': [6, 4], 'strokeWidth': 2},
              'encoding': {'x': {'field': 'today', 'type': 'temporal'},
                           'tooltip': [{'field': 'today', 'type': 'temporal', 'title': _label('today'), 'format': '%d/%m/%Y'}]}}
-        ]}, height=260)
+        ]}, height=260, key='dashboard_finance_' + chart_revision)
 
 
 def _planning_jump(service: DashboardService, ids: tuple[int, ...], quarter: str) -> None:
@@ -247,10 +251,12 @@ def render_dashboard(service: DashboardService) -> None:
     """Update filters, five-row pages and charts independently of the application shell."""
     st.html("""<style>
     .stMainBlockContainer:has(.st-key-dashboard_filter_pool){padding-top:.25rem!important}
-    .st-key-dashboard_issue_count button{background:transparent!important;border:0!important;color:#df8b16!important;min-height:90px;width:100%;justify-content:center;gap:12px}
-    .st-key-dashboard_issue_count button [data-testid=stIconMaterial]{font-size:52px!important;width:52px!important;height:52px!important;flex:0 0 52px;line-height:1}
-    .st-key-dashboard_issue_count button p{font-size:28px!important}
-    .st-key-dashboard_issue_card [data-testid=stMarkdownContainer]{text-align:center}
+    .st-key-dashboard_issue_count button{background:transparent!important;border:0!important;color:var(--issue-icon)!important;min-height:90px;width:100%;justify-content:center}
+    .st-key-dashboard_issue_count button > div{justify-content:center!important;width:100%}
+    .st-key-dashboard_issue_count button [data-testid=stMarkdownContainer]{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
+    .st-key-dashboard_issue_count button [data-testid=stIconMaterial]{font-size:52px!important;width:52px!important;height:52px!important;flex:0 0 52px;line-height:1;color:var(--issue-icon)!important}
+    .st-key-dashboard_issue_count button:disabled{opacity:1!important}
+    .st-key-dashboard_issue_card [data-testid=stMarkdownContainer]{text-align:center;color:var(--issue-text)}
     </style>""")
     if st.session_state.pop('dashboard_selection_error', False):
         st.error(_label('unavailable'))
@@ -274,10 +280,14 @@ def render_dashboard(service: DashboardService) -> None:
             if _source(report):
                 _finance_chart(service, report)
         with issues, st.container(border=True, key='dashboard_issue_card'):
-            if st.button(str(report.issue_count), key='dashboard_issue_count', icon=':material/warning:',
-                         help=t('dashboard.issue_count', count=report.issue_count)):
+            icon_color = '#df8b16' if report.issue_count else '#23934c'
+            text_color = '#df8b16' if report.issue_count else '#000000'
+            st.html(f'<style>.st-key-dashboard_issue_card{{--issue-icon:{icon_color};--issue-text:{text_color}}}</style>')
+            if st.button(_label('active_issues'), icon=':material/warning:', key='dashboard_issue_count', width='stretch',
+                         disabled=report.issue_count == 0,
+                         help=t('dashboard.issue_count', count=report.issue_count)) and report.issue_count:
                 _issues(service, ids)
-            st.markdown(_label('active_issues'))
+            st.markdown(f"{report.issue_count} {_label('active_issues')}")
         st.subheader(_label('capacity_overallocation'))
         quarter = resource_chart(_shortages(service, revision, ids), today=service.today().isoformat(),
             year=service.today().year, locale=get_current_locale(), labels={

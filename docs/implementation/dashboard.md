@@ -38,6 +38,9 @@ The Approved budget legend is at the top right; resource legends are to the righ
 Resource axes show whole numbers, and resource tooltips show one decimal place.
 The large warning icon in the framed Active Issues card beside Finance overview
 opens the read-only active-issues table.
+The icon is centered above the count and label. With no issues, the icon is green,
+the text is black, and the popup is disabled. Otherwise the icon, number, and text
+are orange. The resource chart's vertical titles sit beside their respective axes.
 
 Mouse movement, clicks, typing, touch, and scrolling reset the session's idle
 deadline. Activity in another tab also counts. The default is 15 minutes of
@@ -114,3 +117,11 @@ checks cover row click/keyboard selection, unchanged sidebar execution count,
 the 48-quarter chart range, unique integer axis ticks, one-decimal tooltips,
 legend position, and the enlarged Active Issues card. The final screenshot was
 reviewed. The restarted development app is healthy and responds with HTTP 200.
+
+The selected-project Finance curve regression now compares actual browser values
+for two projects sharing a WBS at 50% and 25%. The server calculated the right
+shares, but the layered chart retained the previous dataset. A compact budget
+fingerprint in the chart specification now refreshes it when values change;
+lazy table scrolling still leaves the chart mounted. All 24 Dashboard tests pass,
+including chart-value updates, centered icon geometry, colors, disabled zero-issue
+popup, and vertical axis titles.
