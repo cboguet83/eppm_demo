@@ -20,6 +20,10 @@ application-wide **Finance editor** role; Business administrators already qualif
    is audited. Cancellation cannot be undone, but the version can be copied and
    saved as a new version with a different status.
 
+Saving releases the previous grid's navigation listeners before mounting the saved
+version. You can navigate immediately afterward. Leaving genuinely unsaved changes
+still asks whether to discard them; canceling keeps the entered values.
+
 CSV exports include all saved WBS rows and exactly the current year through current
 year +14, excluding past years. Use the exported headers and UTF-8 encoding when
 editing a file. CSV imports replace the entire current/future grid after validation

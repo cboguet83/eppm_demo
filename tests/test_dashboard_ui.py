@@ -4,6 +4,8 @@ from contextlib import closing
 from datetime import date
 import json
 
+import pytest
+
 from streamlit.testing.v1 import AppTest
 
 from app.infrastructure.database.connection import get_db
@@ -55,6 +57,38 @@ def test_dashboard_no_scope_has_no_project_values(business):
     app=AppTest.from_function(screen,args=(path,editor.actor)).run()
     assert not app.exception and app.info
     assert table_data(app)['rows']==[]
+
+
+def selection_screen(path, actor, event, selected):
+    """Run the selection boundary with a recorded keyed-rerun request."""
+    import streamlit as st
+    from unittest.mock import patch
+    from app.application.services.access import AuthorizationPolicy, SessionLimits
+    from app.application.services.business_access import BusinessAccess
+    from app.main import create_dashboard_service
+    from app.presentation.pages.dashboard import _select_project
+
+    service = create_dashboard_service(path, access=BusinessAccess(actor, AuthorizationPolicy(lambda:1000, SessionLimits())))
+    st.session_state['dashboard_project_table'] = {'project': event}
+    st.session_state['dashboard_selected_project'] = selected
+    with patch('app.presentation.pages.dashboard.st.rerun') as rerun:
+        _select_project(service, 'current')
+    st.json({'selected': st.session_state['dashboard_selected_project'],
+             'reruns': [call.args[0] for call in rerun.call_args_list]})
+
+
+@pytest.mark.parametrize('event,selected,expected,reruns', [
+    ({'id':1,'token':'current'}, None, 1, ['dashboard']),
+    ({'id':1,'token':'current'}, 1, None, ['dashboard']),
+    ({'id':2,'token':'current'}, None, None, []),
+    ({'id':1,'token':'stale'}, None, None, []),
+    ({'id':True,'token':'current'}, None, None, []),
+])
+def test_project_selection_rechecks_scope_and_rejects_stale_events(business, event, selected, expected, reruns):
+    path, _, _, editor, _ = business
+    app = AppTest.from_function(selection_screen, args=(path,editor.actor,event,selected)).run()
+    assert not app.exception
+    assert json.loads(app.json[0].value) == {'selected':expected,'reruns':reruns}
 
 
 def budget_screen(path, actor, project_id):

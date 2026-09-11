@@ -6,9 +6,9 @@ from app.presentation.components.context_menu import CONTEXT_MENU_CSS
 
 
 _CSS = """
-.resource-chart {position:relative;color:var(--st-text-color);font:12px var(--st-font)}
-svg {display:block;width:100%;height:300px;overflow:visible}
-.legend {display:flex;gap:24px;justify-content:center;margin:4px 0 12px}
+.resource-chart {position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:16px;color:var(--st-text-color);font:12px var(--st-font)}
+svg {grid-column:1;grid-row:1;display:block;width:100%;height:300px;overflow:visible}
+.legend {grid-column:2;grid-row:1;display:flex;flex-direction:column;gap:16px;justify-content:center;margin:0}
 .legend span::before {content:'';display:inline-block;width:22px;height:3px;background:var(--series);margin-right:7px;vertical-align:middle}
 .tip {position:fixed;background:var(--st-background-color);color:var(--st-text-color);border:1px solid #cbd5e1;box-shadow:0 4px 12px #0002;padding:8px;border-radius:5px;white-space:pre-line;pointer-events:none;z-index:10001}
 [data-quarter]:focus {outline:2px solid #C41039;outline-offset:-2px}
@@ -25,14 +25,17 @@ export default function({data,parentElement,setTriggerValue}) {
     root.replaceChildren(legend,svg);
     const add=(kind,attrs,text)=>{const node=document.createElementNS(ns,kind);for(const [key,value] of Object.entries(attrs))node.setAttribute(key,value);if(text!==undefined)node.textContent=text;svg.appendChild(node);return node;};
     const left=68,right=1025,top=25,bottom=248,width=right-left,height=bottom-top,n=data.rows.length;
-    const maxOver=Math.max(1,...data.rows.map(row=>row.overallocation)),maxCap=Math.max(1,...data.rows.map(row=>row.capacity));
-    const fmt=value=>Number(value).toLocaleString(data.locale,{maximumFractionDigits:3});
-    for(let i=0;i<=4;i++){
-        const y=bottom-height*i/4;
+    const axis=maximum=>{const step=Math.max(1,Math.ceil(maximum/4)),count=Math.max(1,Math.ceil(maximum/step));return {step,count,max:step*count};};
+    const overAxis=axis(Math.max(...data.rows.map(row=>row.overallocation))),capAxis=axis(Math.max(...data.rows.map(row=>row.capacity)));
+    const maxOver=overAxis.max,maxCap=capAxis.max;
+    const fmt=value=>Number(value).toLocaleString(data.locale,{minimumFractionDigits:1,maximumFractionDigits:1});
+    const tick=value=>Number(value).toLocaleString(data.locale,{maximumFractionDigits:0});
+    for(let i=0;i<=overAxis.count;i++){
+        const y=bottom-height*i/overAxis.count;
         add('line',{x1:left,x2:right,y1:y,y2:y,stroke:'#dce2eb','stroke-width':.6});
-        add('text',{x:left-8,y:y+4,'text-anchor':'end',fill:'currentColor'},fmt(maxOver*i/4));
-        add('text',{x:right+8,y:y+4,fill:'currentColor'},fmt(maxCap*i/4));
+        add('text',{x:left-8,y:y+4,'text-anchor':'end',fill:'currentColor','data-axis':'overallocation'},tick(overAxis.step*i));
     }
+    for(let i=0;i<=capAxis.count;i++)add('text',{x:right+8,y:bottom-height*i/capAxis.count+4,fill:'currentColor','data-axis':'capacity'},tick(capAxis.step*i));
     add('text',{x:left,y:12,fill:'currentColor'},data.overallocationLabel);
     add('text',{x:right,y:12,'text-anchor':'end',fill:'currentColor'},data.capacityLabel);
     const path=[];
@@ -77,8 +80,9 @@ def resource_chart(series: dict[str, dict[str, float]], *, today: str, year: int
         html='<div class="resource-chart"></div>', css=_CSS + CONTEXT_MENU_CSS, js=_JS)
     result = component(data={'rows': [{'quarter': key, 'overallocation': value,
                                       'capacity': series['capacity'][key]}
-                                     for key, value in series['overallocation'].items()],
-                             'today': today, 'start': f'{year-5}-01-01', 'end': f'{year+15}-01-01',
+                                     for key, value in series['overallocation'].items()
+                                     if year - 2 <= int(key[:4]) <= year + 9],
+                             'today': today, 'start': f'{year-2}-01-01', 'end': f'{year+10}-01-01',
                              'locale': locale, **labels}, key='dashboard_resource_chart',
                        on_quarter_change=lambda: None, height='content')
     return getattr(result, 'quarter', None)

@@ -1,5 +1,8 @@
 export default function({data, parentElement, setTriggerValue}) {
     const root = parentElement.querySelector('.finance');
+    // CCv2 may render new data before disposing the previous invocation.
+    // Release its document listeners before replacing the model and dialog.
+    root.financeCleanup?.();
     const labels = data.labels;
     const t = (key, values={}) => Object.entries(values).reduce((s,[k,v])=>s.replaceAll('{'+k+'}',String(v)), labels[key] || key);
     const element = (tag,text='',cls='') => {const el=document.createElement(tag);el.textContent=text;el.className=cls;return el;};
@@ -258,9 +261,10 @@ export default function({data, parentElement, setTriggerValue}) {
         }
         event.clipboardData.setData('text/plain',lines.join('\n'));event.preventDefault();
     };
-    const beforeUnload=event=>{if(model.dirty){event.preventDefault();event.returnValue='';}};
+    const beforeUnload=event=>{if(!disposed && root.isConnected && model.dirty){event.preventDefault();event.returnValue='';}};
     const sidebarClick=event=>{
-        if(!model.dirty || !event.target.closest?.('[data-testid="stSidebar"]')) return;
+        if(disposed || !root.isConnected || root.financeModel!==model || !model.dirty
+            || !event.target.closest?.('[data-testid="stSidebar"]')) return;
         event.preventDefault();event.stopImmediatePropagation();
         showDialog(t('unsaved'),[element('p',t('discard_warning'))],'discard',()=>{
             model.dirty=false;event.target.click();
@@ -281,9 +285,13 @@ export default function({data, parentElement, setTriggerValue}) {
             model.rows=rows;padRows();model.dirty=true;renderRows();updateControls();saveDialog();
         });
     }
-    return ()=>{
+    const cleanup=()=>{
         disposed=true;cancelAnimationFrame(frame);viewport.removeEventListener('paste',onPaste);viewport.removeEventListener('copy',onCopy);
         window.removeEventListener('beforeunload',beforeUnload);viewport.onscroll=null;
         document.removeEventListener('click',sidebarClick,true);
+        if(modal.open) modal.close();
+        if(root.financeCleanup===cleanup) delete root.financeCleanup;
     };
+    root.financeCleanup=cleanup;
+    return cleanup;
 }

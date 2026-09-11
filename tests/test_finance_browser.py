@@ -43,6 +43,56 @@ def paste(locator, text):
         node.dispatchEvent(new ClipboardEvent('paste',{clipboardData:clipboard,bubbles:true,cancelable:true}));}""", text)
 
 
+_NAV_APP = _APP.replace('render_finance(service)\n', '''
+page = st.sidebar.radio('Page', ['Finance', 'Dashboard'], key='test_page')
+if page == 'Finance':
+    render_finance(service)
+else:
+    st.header('Dashboard destination')
+''')
+
+
+@pytest.mark.parametrize('popup_server', [_NAV_APP], indirect=True, ids=['finance-navigation'])
+def test_saving_finance_releases_sidebar_navigation(popup_server):
+    """Saving a dirty plan must release its old browser navigation guard."""
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(viewport={'width':1500, 'height':1000})
+            errors = []
+            page.on('pageerror', lambda error: errors.append(str(error)))
+            page.goto(popup_server)
+            grid = page.locator('.finance')
+            code = grid.get_by_role('textbox', name='1 WBS code', exact=True)
+            expect(code).to_be_visible(timeout=30000)
+            code.fill('A.1')
+            code.press('Tab')
+            grid.get_by_role('textbox', name='1 2026', exact=True).fill('42')
+            grid.get_by_role('button', name='Save new version', exact=True).click()
+            dialog = grid.get_by_role('dialog')
+            dialog.get_by_role('textbox', name='Name', exact=True).fill('Navigation baseline')
+            dialog.get_by_role('combobox', name='Status', exact=True).select_option('Draft')
+            dialog.get_by_role('button', name='Confirm', exact=True).click()
+            expect(grid.locator('.plan-name')).to_have_text('Navigation baseline')
+            page.get_by_text('Dashboard', exact=True).click()
+            expect(page.get_by_role('heading', name='Dashboard destination')).to_be_visible()
+            page.get_by_text('Finance', exact=True).click()
+            expect(grid.locator('.plan-name')).to_have_text('Navigation baseline')
+            amount = grid.get_by_role('textbox', name='1 2026', exact=True)
+            amount.fill('55')
+            page.get_by_text('Dashboard', exact=True).click()
+            dialog = grid.get_by_role('dialog')
+            expect(dialog).to_be_visible()
+            dialog.get_by_role('button', name='Cancel', exact=True).click()
+            expect(amount).to_have_value('55')
+            page.get_by_text('Dashboard', exact=True).click()
+            dialog.get_by_role('button', name='Discard changes', exact=True).click()
+            expect(page.get_by_role('heading', name='Dashboard destination')).to_be_visible()
+            assert not errors
+        finally:
+            browser.close()
+
+
 @pytest.mark.parametrize('popup_server', [_APP], indirect=True, ids=['finance-workflow'])
 def test_finance_grid_saves_versions_imports_and_cancellations_without_shell_reruns(popup_server,tmp_path):
     with sync_playwright() as playwright:

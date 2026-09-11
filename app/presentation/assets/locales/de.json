@@ -818,6 +818,7 @@
     "status_source": "Budget {status} {number} · {name}",
     "unmatched_status": "Kein Budget {status} für PSP-Codes: {codes}",
     "wbs_assignment": "PSP-Zuordnung",
-    "no_consumers": "Keine zugänglichen Projekte nutzen die betroffenen Pools in diesem Quartal."
+    "no_consumers": "Keine zugänglichen Projekte nutzen die betroffenen Pools in diesem Quartal.",
+    "active_issues": "Aktive Probleme"
   }
 }

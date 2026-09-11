@@ -10,6 +10,10 @@ and shows five rows at a time with continuous scrolling. Rows are loaded in batc
 of 50; the browser retains at most six batches and renders only the visible rows
 plus a small buffer. Collapse the table to keep its matching-project count visible.
 Charts and issues include all matches, independently of scrolling. Mail code is PRM_001.
+Click a project row (or press Enter/Space on it) to filter the dashboard to that
+project. Click it again to restore the previous scope. Changing another filter or
+using Clear all removes the row selection. Selection refreshes only Dashboard;
+scrolling still updates only the table.
 
 Finance overview uses the most recent approved Finance version and each project's
 current WBS allocation percentages. Hover to see annual euro values. The source
@@ -29,7 +33,11 @@ calendar overrides. Both graphs mark the current date with a dashed green line.
 Right-click a quarter to open Planning filtered to accessible projects consuming
 the pools responsible for that quarter’s overallocation. This includes accessible
 consumers outside the original dashboard selection, but never reveals hidden projects.
-The warning icon beside Finance overview opens the read-only active-issues table.
+Both charts display the current year, two previous years, and nine future years.
+The Approved budget legend is at the top right; resource legends are to the right.
+Resource axes show whole numbers, and resource tooltips show one decimal place.
+The large warning icon in the framed Active Issues card beside Finance overview
+opens the read-only active-issues table.
 
 Mouse movement, clicks, typing, touch, and scrolling reset the session's idle
 deadline. Activity in another tab also counts. The default is 15 minutes of
@@ -92,3 +100,17 @@ and the application shell runs once. These are isolated local observations, not
 production guarantees. The final screenshot was reviewed. The development app
 was restarted and verified healthy with HTTP 200; this refinement needs no new
 database migration.
+
+## Finance navigation and chart controls verification
+
+The Finance save freeze was reproduced in an isolated browser: a previous grid
+invocation retained its unsaved-change sidebar listener after the saved snapshot
+replaced its model. Explicit component cleanup now releases those listeners and
+closes the old dialog before rendering new data. A browser regression saves a
+plan, navigates away and back, then verifies both Cancel and Discard on a new edit.
+
+The affected suites passed 90 Python tests and all 71 JavaScript tests. Browser
+checks cover row click/keyboard selection, unchanged sidebar execution count,
+the 48-quarter chart range, unique integer axis ticks, one-decimal tooltips,
+legend position, and the enlarged Active Issues card. The final screenshot was
+reviewed. The restarted development app is healthy and responds with HTTP 200.

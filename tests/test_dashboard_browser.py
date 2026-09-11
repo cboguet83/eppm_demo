@@ -1,6 +1,7 @@
 """Real dashboard charts, issue popup, paging and browser-local session activity."""
 
 import json
+import re
 import time
 
 import pytest
@@ -61,6 +62,14 @@ def test_dashboard_charts_paging_and_read_only_issues_do_not_rerun_shell(popup_s
             table=page.locator('.st-key-dashboard_project_table .viewport')
             expect(table.locator('tr[data-project-id="1"]')).to_be_visible()
             assert table.locator('tr[data-project-id]').count()<=12
+            table.locator('tr[data-project-id="2"]').click()
+            expect(page.get_by_text('1 matching projects',exact=True)).to_be_visible()
+            expect(table.locator('tr[data-project-id="2"]')).to_have_attribute('aria-selected','true')
+            expect(page.locator('.st-key-dashboard_issue_count button:visible')).to_contain_text('0')
+            expect(page.get_by_text('Shell runs: 1',exact=True)).to_be_visible()
+            table.locator('tr[data-project-id="2"]').press('Enter')
+            expect(page.get_by_text('1000 matching projects',exact=True)).to_be_visible()
+            expect(page.locator('.st-key-dashboard_issue_count button:visible')).to_contain_text('1')
             chart=page.get_by_test_id('stVegaLiteChart')
             chart.evaluate("node=>node.dataset.mountCheck='retained'")
             start=time.perf_counter();table.evaluate('node=>node.scrollTop=3500')
@@ -102,9 +111,25 @@ def test_dashboard_charts_paging_and_read_only_issues_do_not_rerun_shell(popup_s
             expect(page.get_by_role('heading', name='Dashboard', exact=True)).to_have_count(0)
             expect(page.locator('.resource-chart [data-today="2026-06-01"]')).to_have_count(1)
             expect(page.locator('.resource-chart .legend')).to_contain_text('Total pools capacity')
+            resource = page.locator('.resource-chart')
+            assert resource.locator('[data-quarter]').count()==48
+            expect(resource.locator('[data-quarter="2024-Q1"]')).to_have_count(1)
+            expect(resource.locator('[data-quarter="2035-Q4"]')).to_have_count(1)
+            assert all(re.fullmatch(r'\d+', text) for text in resource.locator('[data-axis]').all_text_contents())
+            for axis in ('overallocation','capacity'):
+                ticks=resource.locator(f'[data-axis="{axis}"]').all_text_contents()
+                assert len(ticks)==len(set(ticks))
+            resource.locator('[data-quarter="2026-Q1"]').hover()
+            expect(resource.get_by_role('tooltip')).to_contain_text('Overallocation: 3.0')
+            expect(resource.get_by_role('tooltip')).to_contain_text('Total pools capacity: 2.0')
+            assert resource.locator('.legend').bounding_box()['x'] >= resource.locator('svg').bounding_box()['x']+resource.locator('svg').bounding_box()['width']
+            expect(page.locator('.st-key-dashboard_issue_card')).to_contain_text('Active Issues')
+            issue_icon=page.locator('.st-key-dashboard_issue_count [data-testid=stIconMaterial]').first
+            assert issue_icon.evaluate('node=>parseFloat(getComputedStyle(node).fontSize)')>=48
             expect(page.get_by_text('1 matching projects',exact=True)).to_be_visible()
             expect(table.locator('tr[data-project-id="2"]')).to_have_count(0)
             expect(table.locator('tr[data-project-id="1"]')).to_be_visible()
+            page.get_by_role('heading',name='Finance overview',exact=True).hover()
             page.screenshot(path=str(tmp_path/'dashboard.png'),full_page=True,animations='disabled')
             (tmp_path/'dashboard-timing.json').write_text(json.dumps({'initial_seconds':initial,'paging_seconds':paging,'filter_seconds':filtering,'shell_runs':1}),encoding='utf-8')
             quarter=page.locator('.resource-chart [data-quarter="2026-Q1"]')

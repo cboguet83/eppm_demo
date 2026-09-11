@@ -841,6 +841,7 @@
     "status_source": "Budget {status} {number} · {name}",
     "unmatched_status": "Aucun budget {status} pour les OTP : {codes}",
     "wbs_assignment": "Affectation des OTP",
-    "no_consumers": "Aucun projet accessible ne consomme les pools concernés ce trimestre."
+    "no_consumers": "Aucun projet accessible ne consomme les pools concernés ce trimestre.",
+    "active_issues": "Problèmes actifs"
   }
 }

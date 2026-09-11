@@ -817,6 +817,7 @@
     "status_source": "{status} budget {number} · {name}",
     "unmatched_status": "No {status} budget for WBS codes: {codes}",
     "wbs_assignment": "WBS assignment",
-    "no_consumers": "No accessible projects consume the responsible pools in this quarter."
+    "no_consumers": "No accessible projects consume the responsible pools in this quarter.",
+    "active_issues": "Active Issues"
   }
 }

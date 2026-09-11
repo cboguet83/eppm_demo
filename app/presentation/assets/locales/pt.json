@@ -841,6 +841,7 @@
     "status_source": "Orçamento {status} {number} · {name}",
     "unmatched_status": "Nenhum orçamento {status} para códigos WBS: {codes}",
     "wbs_assignment": "Atribuição WBS",
-    "no_consumers": "Nenhum projeto acessível utiliza os grupos responsáveis neste trimestre."
+    "no_consumers": "Nenhum projeto acessível utiliza os grupos responsáveis neste trimestre.",
+    "active_issues": "Problemas ativos"
   }
 }

@@ -26,6 +26,10 @@ matching-project count remains visible when collapsed. The columns are name, PRM
 PRM_027 (strategic priority). Every chart and issue count covers all matching projects,
 independently of which five rows are displayed. Scope is checked before all reads
 and again before cache access, including old callbacks after grant changes.
+Clicking a row toggles an additional project-ID selection, combined with the other
+filters. Its authorized callback targets the keyed Dashboard fragment so charts
+and issue counts update without rerunning the sidebar. Lazy scrolling remains local
+to the nested table fragment.
 
 Annual budget uses the latest numbered, effectively Approved Finance snapshot.
 Cancellation selects the previous approved snapshot. Each current project WBS share
@@ -37,7 +41,8 @@ beneath WBS assignment. Each selects its latest effective status version. Approv
 and Proposed omit allocation percentages; Draft retains them. Neither view
 changes approved Finance history or the existing project budget fields.
 
-Both charts span current year minus five through plus fourteen. Quarter values are
+Both charts display current year minus two through plus nine. Finance data and
+project-details budget tables retain their twenty-year window. Quarter values are
 the maximum daily sum of positive pool shortages. All competing demand contributes
 on pools consumed by selected projects on that day. Spare capacity never offsets
 another pool's shortage, and peaks on different days are not added. The database
@@ -48,8 +53,9 @@ Active events whose event type has system_code=blocking_point are issues. The
 additive dashboard-idle-sessions-v1 migration classifies the existing Blocking Point
 entry without changing events. Renaming or translating that entry retains its
 classification; a trigger classifies the default after an explicit catalog reseed.
-The warning icon beside Finance overview opens the existing multiline log table
-with no write actions. The approved curve has an explicit legend. Both charts
+The framed Active Issues card beside Finance overview opens the existing multiline log table
+with no write actions. The approved curve has a top-right legend; resource legends
+sit to the right, axes show whole numbers, and tooltips show one decimal. Both charts
 include a dashed green current-date marker.
 
 The resource chart adds maximum daily total effective capacity across relevant pools

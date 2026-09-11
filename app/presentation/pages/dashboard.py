@@ -1,13 +1,16 @@
 """Fragment-local portfolio dashboard and shared read-only allocated-budget view."""
 
 from hashlib import sha256
+from functools import partial
 
 import pandas as pd
 import streamlit as st
 
 from app.application.exceptions import ProjectStorageError
+from app.application.ports.dashboard import DashboardCatalog
 from app.application.services.dashboard import DashboardService
 from app.domain.access.models import AccessDenied
+from app.domain.dashboard import DashboardProject
 from app.domain.finance import euro_text
 from app.presentation.components.action_table import action_table
 from app.presentation.components.dialog import dialog
@@ -39,6 +42,7 @@ def _shortages(_service: DashboardService, revision: tuple, ids: tuple[int, ...]
 
 def _reset_page() -> None:
     st.session_state['dashboard_offset'] = 0
+    st.session_state.pop('dashboard_selected_project', None)
 
 
 def _clear() -> None:
@@ -160,7 +164,7 @@ def _projects(service: DashboardService) -> None:
 
 def _project_page(service: DashboardService, filters: dict[str, list[str]], match_all: bool) -> None:
     revision = service.revision()
-    projects = service.filtered(_catalog(service, revision), filters, match_all)
+    projects = _matching_projects(service, _catalog(service, revision), filters, match_all)
     token = sha256(repr((revision, [row['id'] for row in projects])).encode()).hexdigest()
     request = st.session_state.get('dashboard_project_table', {}).get('request', {})
     offset = request.get('offset', 0) if isinstance(request, dict) and request.get('token') == token else 0
@@ -171,11 +175,39 @@ def _project_page(service: DashboardService, filters: dict[str, list[str]], matc
                 ', '.join(row['fields'].get('PRM_001', [])), ', '.join(row['fields'].get('PRM_008', [])),
                 ', '.join(row['fields'].get('PRM_027', []))]} for row in projects[offset:offset+50]]
         dashboard_table(rows, [_label(key) for key in ('project', 'mail_code', 'phase', 'priority')],
-                        len(projects), offset, token, _label('loading'))
+                        len(projects), offset, token, _label('loading'),
+                        st.session_state.get('dashboard_selected_project'),
+                        partial(_select_project, service, token))
+
+
+def _matching_projects(service: DashboardService, catalog: DashboardCatalog,
+                       filters: dict[str, list[str]], match_all: bool) -> list[DashboardProject]:
+    """Apply the row selection on top of the authorized dashboard filters."""
+    projects = service.filtered(catalog, filters, match_all)
+    selected = st.session_state.get('dashboard_selected_project')
+    return [row for row in projects if row['id'] == selected] if selected is not None else projects
+
+
+def _select_project(service: DashboardService, token: str) -> None:
+    """Toggle a currently readable row and refresh only the Dashboard fragment."""
+    event = st.session_state.get('dashboard_project_table', {}).get('project')
+    if not isinstance(event, dict) or event.get('token') != token or type(event.get('id')) is not int:
+        return
+    try:
+        catalog = _catalog(service, service.revision())
+        filters, match_all = st.session_state.get('dashboard_active_filters', ({}, False))
+        allowed = {row['id'] for row in _matching_projects(service, catalog, filters, match_all)}
+        if event['id'] not in allowed:
+            return
+        selected = st.session_state.get('dashboard_selected_project')
+        st.session_state['dashboard_selected_project'] = None if selected == event['id'] else event['id']
+    except (AccessDenied, ProjectStorageError):
+        st.session_state['dashboard_selection_error'] = True
+    st.rerun('dashboard')
 
 
 def _finance_chart(service: DashboardService, report) -> None:
-    years = range(service.today().year-5, service.today().year+15)
+    years = range(service.today().year-2, service.today().year+10)
     values = pd.DataFrame([{'date': f'{year}-01-01', 'budget': report.budget.totals.get(year) / 100
                             if year in report.budget.totals else None,
                             'series': _label('approved_budget')} for year in years])
@@ -190,7 +222,7 @@ def _finance_chart(service: DashboardService, report) -> None:
                                          'values': [f'{year}-01-01' for year in years]}},
                           'y': {'field': 'budget', 'type': 'quantitative', 'title': _label('euros')},
                           'color': {'field': 'series', 'type': 'nominal', 'title': None,
-                                    'scale': {'range': ['#C41039']}, 'legend': {'orient': 'bottom'}},
+                                    'scale': {'range': ['#C41039']}, 'legend': {'orient': 'top-right','direction':'horizontal'}},
                           'tooltip': [{'field': 'date', 'type': 'temporal', 'title': _label('year'), 'format': '%Y'},
                                       {'field': 'budget', 'type': 'quantitative', 'title': _label('euros'), 'format': ',.2f'}]}},
             {'data': {'values': [{'today': service.today().isoformat()}]},
@@ -210,15 +242,23 @@ def _planning_jump(service: DashboardService, ids: tuple[int, ...], quarter: str
     st.rerun()
 
 
-@st.fragment
+@st.fragment(key='dashboard')
 def render_dashboard(service: DashboardService) -> None:
     """Update filters, five-row pages and charts independently of the application shell."""
-    st.html("<style>.stMainBlockContainer:has(.st-key-dashboard_filter_pool){padding-top:.25rem!important}.st-key-dashboard_issue_count button{background:transparent!important;border:0!important;color:#df8b16!important;font-size:1.2rem}</style>")
+    st.html("""<style>
+    .stMainBlockContainer:has(.st-key-dashboard_filter_pool){padding-top:.25rem!important}
+    .st-key-dashboard_issue_count button{background:transparent!important;border:0!important;color:#df8b16!important;min-height:90px;width:100%;justify-content:center;gap:12px}
+    .st-key-dashboard_issue_count button [data-testid=stIconMaterial]{font-size:52px!important;width:52px!important;height:52px!important;flex:0 0 52px;line-height:1}
+    .st-key-dashboard_issue_count button p{font-size:28px!important}
+    .st-key-dashboard_issue_card [data-testid=stMarkdownContainer]{text-align:center}
+    </style>""")
+    if st.session_state.pop('dashboard_selection_error', False):
+        st.error(_label('unavailable'))
     try:
         revision = service.revision()
         catalog = _catalog(service, revision)
         filters, match_all = _filters(service, catalog)
-        projects = service.filtered(catalog, filters, match_all)
+        projects = _matching_projects(service, catalog, filters, match_all)
         # A queued scroll callback can retain an older fragment invocation.
         # Read the latest filter snapshot inside the fragment, not its old arguments.
         st.session_state['dashboard_active_filters'] = (filters, match_all)
@@ -228,14 +268,16 @@ def render_dashboard(service: DashboardService) -> None:
             return
         ids = tuple(row['id'] for row in projects)
         report = _report(service, revision, ids)
-        title, issues = st.columns([8, 1], vertical_alignment='center')
-        title.subheader(_label('finance_overview'))
-        with issues:
+        finance, issues = st.columns([8, 1.5], vertical_alignment='center')
+        with finance:
+            st.subheader(_label('finance_overview'))
+            if _source(report):
+                _finance_chart(service, report)
+        with issues, st.container(border=True, key='dashboard_issue_card'):
             if st.button(str(report.issue_count), key='dashboard_issue_count', icon=':material/warning:',
                          help=t('dashboard.issue_count', count=report.issue_count)):
                 _issues(service, ids)
-        if _source(report):
-            _finance_chart(service, report)
+            st.markdown(_label('active_issues'))
         st.subheader(_label('capacity_overallocation'))
         quarter = resource_chart(_shortages(service, revision, ids), today=service.today().isoformat(),
             year=service.today().year, locale=get_current_locale(), labels={
