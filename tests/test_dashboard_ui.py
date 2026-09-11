@@ -42,6 +42,7 @@ def test_dashboard_lazy_table_and_filters_cover_all_results(business):
     assert table_data(app)['total']==12
     assert [row['id'] for row in table_data(app)['rows']]==list(range(1,13))
     assert app.expander[0].label=='12 matching projects'
+    assert app.expander[0].proto.expanded is False
     assert not any(button.key in {'dashboard_next','dashboard_previous'} for button in app.button)
     app.multiselect(key='dashboard_flex_fields').set_value(['name']).run()
     app.multiselect(key='dashboard_filter_name').set_value(['Visible']).run()

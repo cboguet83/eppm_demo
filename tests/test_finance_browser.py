@@ -63,6 +63,7 @@ def test_saving_finance_releases_sidebar_navigation(popup_server):
             page.on('pageerror', lambda error: errors.append(str(error)))
             page.goto(popup_server)
             grid = page.locator('.finance')
+            grid.get_by_role('button', name='Edit', exact=True).click(timeout=30000)
             code = grid.get_by_role('textbox', name='1 WBS code', exact=True)
             expect(code).to_be_visible(timeout=30000)
             code.fill('A.1')
@@ -78,6 +79,7 @@ def test_saving_finance_releases_sidebar_navigation(popup_server):
             expect(page.get_by_role('heading', name='Dashboard destination')).to_be_visible()
             page.get_by_text('Finance', exact=True).click()
             expect(grid.locator('.plan-name')).to_have_text('Navigation baseline')
+            grid.get_by_role('button', name='Edit', exact=True).click()
             amount = grid.get_by_role('textbox', name='1 2026', exact=True)
             amount.fill('55')
             page.get_by_text('Dashboard', exact=True).click()
@@ -101,6 +103,14 @@ def test_finance_grid_saves_versions_imports_and_cancellations_without_shell_rer
             page=browser.new_page(viewport={'width':1500,'height':1000})
             page.goto(popup_server)
             grid=page.locator('.finance')
+            expect(grid.get_by_role('button',name='Edit',exact=True)).to_be_visible(timeout=30000)
+            expect(grid.get_by_role('button',name='Save new version',exact=True)).to_be_disabled()
+            expect(grid.get_by_role('button',name='Import CSV',exact=True)).to_be_disabled()
+            assert grid.locator('tbody input').count()==0
+            paste(grid.locator('.viewport'), 'LOCKED\tignored\t42')
+            grid.get_by_role('button',name='Edit',exact=True).click(timeout=30000)
+            expect(grid.get_by_role('textbox',name='1 WBS code',exact=True)).to_have_value('')
+            expect(grid.get_by_role('button',name='Save new version',exact=True)).to_be_enabled()
             expect(grid.get_by_role('textbox',name='1 WBS code',exact=True)).to_be_visible(timeout=30000)
             assert grid.locator('tbody tr[data-row]').count()==25
             assert grid.locator('tbody tr.unused').count()==25
@@ -128,7 +138,8 @@ def test_finance_grid_saves_versions_imports_and_cancellations_without_shell_rer
             dialog.get_by_role('button',name='Confirm',exact=True).click()
             expect(grid.get_by_role('combobox',name='Budget version',exact=True)).to_have_text('1')
             expect(grid.locator('.plan-name')).to_have_text('Baseline')
-            expect(grid.get_by_role('button',name='Save new version',exact=True)).to_be_enabled()
+            expect(grid.get_by_role('button',name='Save new version',exact=True)).to_be_disabled()
+            grid.get_by_role('button',name='Edit',exact=True).click()
             page.screenshot(path=str(tmp_path/'finance-grid.png'),full_page=True)
             grid.get_by_role('button',name='Save new version',exact=True).click()
             expect(grid.get_by_role('dialog').get_by_role('textbox',name='Name',exact=True)).to_have_value('Baseline')
@@ -140,6 +151,7 @@ def test_finance_grid_saves_versions_imports_and_cancellations_without_shell_rer
             with page.expect_download() as download:
                 grid.get_by_role('button',name='Export CSV',exact=True).click()
             assert re.fullmatch(re.escape(popup_server)+r'/downloads/finance/\d+/budget.csv',download.value.url)
+            grid.get_by_role('button',name='Edit',exact=True).click()
             header=';'.join(['wbs_code','description',*map(str,range(2026,2041))])+'\n'
             invalid=header+'B;ignored;-1'+';'*14+'\n'
             grid.locator('input[type=file]').set_input_files({'name':'budget.csv','mimeType':'text/csv','buffer':invalid.encode()})
@@ -152,6 +164,7 @@ def test_finance_grid_saves_versions_imports_and_cancellations_without_shell_rer
             grid.get_by_role('dialog').get_by_role('combobox',name='Status',exact=True).select_option('Draft')
             grid.get_by_role('dialog').get_by_role('button',name='Confirm',exact=True).click()
             expect(grid.get_by_role('combobox',name='Budget version',exact=True)).to_have_text('321')
+            grid.get_by_role('button',name='Edit',exact=True).click()
             expect(grid.get_by_role('textbox',name='1 WBS code',exact=True)).to_have_value('#NEW')
             expect(grid.get_by_role('textbox',name='1 2026',exact=True)).to_have_value('77.25')
             # Invalid clipboard batches and cancelled navigation preserve unsaved values.
@@ -167,15 +180,18 @@ def test_finance_grid_saves_versions_imports_and_cancellations_without_shell_rer
             expect(amount).to_have_value('88.00')
             versions.select_option(first_id)
             grid.get_by_role('dialog').get_by_role('button',name='Discard changes',exact=True).click()
+            grid.get_by_role('button',name='Edit',exact=True).click()
             expect(grid.get_by_role('textbox',name='1 WBS code',exact=True)).to_have_value('A.1')
-            grid.get_by_role('button',name='Cancel version',exact=True).click()
+            grid.get_by_role('button',name='Delete Version',exact=True).click()
             grid.get_by_role('dialog').get_by_role('button',name='Confirm',exact=True).click()
-            expect(grid.get_by_role('button',name='Cancel version',exact=True)).to_be_disabled()
+            expect(grid.get_by_role('button',name='Delete Version',exact=True)).to_be_disabled()
             assert versions.locator('option').count()==3
+            grid.get_by_role('button',name='Edit',exact=True).click()
             grid.get_by_role('button',name='Save new version',exact=True).click()
             grid.get_by_role('dialog').get_by_role('combobox',name='Status',exact=True).select_option('Proposed')
             grid.get_by_role('dialog').get_by_role('button',name='Confirm',exact=True).click()
             expect(versions).to_have_text('4321')
+            grid.get_by_role('button',name='Edit',exact=True).click()
             expect(grid.get_by_role('textbox',name='1 WBS code',exact=True)).to_have_value('A.1')
             page.screenshot(path=str(tmp_path/'finance-grid.png'),full_page=True)
             expect(page.get_by_text('Shell runs: 1',exact=True)).to_be_visible()
@@ -213,7 +229,7 @@ def test_active_reader_sees_the_shared_plan_with_editing_disabled(popup_server):
             page.goto(popup_server)
             grid=page.locator('.finance')
             expect(grid.get_by_role('button',name='Enregistrer une nouvelle version',exact=True)).to_be_visible(timeout=30000)
-            for name in ['Enregistrer une nouvelle version','Importer CSV','Annuler la version']:
+            for name in ['Enregistrer une nouvelle version','Importer CSV','Supprimer la version','Modifier']:
                 expect(grid.get_by_role('button',name=name,exact=True)).to_be_disabled()
             expect(grid.get_by_role('button',name='Exporter CSV',exact=True)).to_be_enabled()
             expect(grid.get_by_text('42.00',exact=True)).to_be_visible()
@@ -240,6 +256,7 @@ def test_large_finance_grid_virtualizes_rows_and_preserves_history_on_paste(popu
             page=browser.new_page(viewport={'width':1500,'height':1000})
             page.goto(popup_server)
             grid=page.locator('.finance')
+            grid.get_by_role('button',name='Edit',exact=True).click(timeout=30000)
             expect(grid.get_by_role('textbox',name='1 WBS code',exact=True)).to_be_visible(timeout=30000)
             assert grid.locator('tbody tr[data-row]').count()<=28
             viewport=grid.locator('.viewport')
@@ -276,6 +293,7 @@ def test_blank_rows_grow_keyboard_navigation_and_missing_code_validation(popup_s
             page=browser.new_page(viewport={'width':1500,'height':1000})
             page.goto(popup_server)
             grid=page.locator('.finance')
+            grid.get_by_role('button',name='Edit',exact=True).click(timeout=30000)
             first=grid.get_by_role('textbox',name='1 WBS code',exact=True)
             expect(first).to_be_visible(timeout=30000)
             first.fill('A');first.press('Tab')

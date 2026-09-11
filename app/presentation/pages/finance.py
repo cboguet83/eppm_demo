@@ -15,7 +15,7 @@ from app.presentation.i18n import t
 
 LABELS = (
     "version", "empty_plan", "version_name", "save_confirm", "save_notice", "status", "choose_status",
-    "name_required", "save", "reload", "import", "export", "export_saved", "cancel_version", "cancel_notice",
+    "name_required", "edit", "save", "reload", "import", "export", "export_saved", "cancel_version", "cancel_notice",
     "metadata", "empty_hint", "grid", "code", "description", "remove",
     "remove_row", "row_count", "unsaved", "saved", "invalid_code", "missing_code", "duplicate_code", "invalid_amount",
     "paste_bounds", "paste_locked", "unmatched", "row_limit", "file_error", "import_preview", "replace_warning",

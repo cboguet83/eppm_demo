@@ -170,7 +170,7 @@ def _project_page(service: DashboardService, filters: dict[str, list[str]], matc
     offset = request.get('offset', 0) if isinstance(request, dict) and request.get('token') == token else 0
     offset = min(max(0, offset), max(0, len(projects)-1)) if type(offset) is int else 0
     offset = offset // 50 * 50
-    with st.expander(t('dashboard.matching', count=len(projects)), expanded=True, key='dashboard_project_list'):
+    with st.expander(t('dashboard.matching', count=len(projects)), expanded=False, key='dashboard_project_list'):
         rows = [{'id': row['id'], 'values': [row['name'],
                 ', '.join(row['fields'].get('PRM_001', [])), ', '.join(row['fields'].get('PRM_008', [])),
                 ', '.join(row['fields'].get('PRM_027', []))]} for row in projects[offset:offset+50]]

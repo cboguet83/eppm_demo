@@ -60,6 +60,7 @@ def test_finance_curve_uses_selected_project_share(popup_server):
         try:
             page = browser.new_page(viewport={'width':1500,'height':1200})
             page.goto(popup_server)
+            page.locator('.st-key-dashboard_project_list summary').click(timeout=30000)
             table = page.locator('.st-key-dashboard_project_table .viewport')
             expect(table.locator('tr[data-project-id="1"]')).to_be_visible(timeout=30000)
             points = page.locator('[data-testid=stVegaLiteChart] .mark-symbol.role-mark path')
@@ -88,6 +89,8 @@ def test_dashboard_charts_paging_and_read_only_issues_do_not_rerun_shell(popup_s
             expect(page.locator('[data-testid=stVegaLiteChart]').first).to_be_visible(timeout=30000)
             initial=time.perf_counter()-start
             expect(page.get_by_text('1000 matching projects',exact=True)).to_be_visible()
+            expect(page.locator('.st-key-dashboard_project_list details')).not_to_have_attribute('open', '')
+            page.locator('.st-key-dashboard_project_list summary').click()
             table=page.locator('.st-key-dashboard_project_table .viewport')
             expect(table.locator('tr[data-project-id="1"]')).to_be_visible()
             assert table.locator('tr[data-project-id]').count()<=12

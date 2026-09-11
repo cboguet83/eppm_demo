@@ -11,11 +11,11 @@ export default function({data, parentElement, setTriggerValue}) {
     let model = root.financeModel;
     if (!model || model.token !== signature) {
         model = {token:signature,rows:clone(data.rows),dirty:false,scrollTop:0,scrollLeft:550,preview:null,
-                 focus:null,selection:null};
+                 focus:null,selection:null,editing:false};
         root.financeModel=model;
     }
     let busy=false, disposed=false, frame=0;
-    const editable = () => data.can_edit;
+    const editable = () => data.can_edit && model.editing;
     const populated = row => row.code.trim() || Object.values(row.amounts).some(value=>value.trim());
     const padRows = () => {
         const last=model.rows.findLastIndex(populated);
@@ -78,6 +78,7 @@ export default function({data, parentElement, setTriggerValue}) {
             modal.close();emit({kind:'save',rows:payload(),status:status.value,name:name.value,year:data.year});
         }));modal.append(actions);modal.showModal();
     };
+    const edit=button('edit',()=>{model.editing=true;renderRows();updateControls();});
     const save=button('save',saveDialog);
     const cancel=button('reload',()=>discardThen(()=>emit({kind:'reload'})));
     const cancelVersion=button('cancel_version',()=>discardThen(()=>
@@ -97,7 +98,7 @@ export default function({data, parentElement, setTriggerValue}) {
         const go=()=>{const a=element('a');a.href=data.download_url;a.download='budget.csv';root.append(a);a.click();a.remove();};
         if(model.dirty) showDialog(t('export'),[element('p',t('export_saved'))],'export',go);else go();
     });
-    toolbar.append(versionSelect,save,cancel,upload,download,cancelVersion,file);
+    toolbar.append(versionSelect,edit,save,cancel,upload,download,cancelVersion,file);
     const metadata=element('p', data.selected ? t('metadata',{author:data.selected.author,
         date:new Date(data.selected.created_at*1000).toLocaleString(),status:t(data.selected.status)}) : t('empty_hint'),'muted');
     const viewport=element('div','','viewport');viewport.setAttribute('aria-label',t('grid'));viewport.tabIndex=0;
@@ -116,10 +117,11 @@ export default function({data, parentElement, setTriggerValue}) {
     const valueAt=(row,col)=>col===0?row.code:col===1?descriptionFor(row.code):
         ((years[col-2]<data.year ? historyFor(row.code) : row.amounts)[years[col-2]] || '');
     function updateControls() {
+        edit.disabled=!data.can_edit || model.editing || busy;
         save.disabled=upload.disabled=!editable() || busy;
         cancel.disabled=versionSelect.disabled=busy;
         download.disabled=!data.selected || busy;
-        cancelVersion.disabled=!editable() || !data.selected || data.selected.status==='Canceled' || busy;
+        cancelVersion.disabled=!data.can_edit || !data.selected || data.selected.status==='Canceled' || busy;
         count.textContent=t('row_count',{count:model.rows.filter(row=>row.code.trim()).length});dirty.textContent=model.dirty?t('unsaved'):t('saved');
     }
     function validateRows(rows=model.rows) {

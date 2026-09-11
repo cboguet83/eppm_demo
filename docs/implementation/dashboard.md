@@ -125,3 +125,5 @@ fingerprint in the chart specification now refreshes it when values change;
 lazy table scrolling still leaves the chart mounted. All 24 Dashboard tests pass,
 including chart-value updates, centered icon geometry, colors, disabled zero-issue
 popup, and vertical axis titles.
+
+The matching-project details frame starts collapsed; expand it to inspect or select projects.

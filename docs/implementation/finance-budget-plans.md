@@ -4,7 +4,9 @@ Open **Finance** in the sidebar. Every active account can view/export the shared
 plan. To edit, import, save or cancel, an access administrator assigns the
 application-wide **Finance editor** role; Business administrators already qualify.
 
-1. Enter WBS codes and amounts directly in the blank spreadsheet grid, paste plain
+1. Click **Edit** to enable the initially read-only grid, CSV import, and **Save new version**.
+   Saving, reloading, or selecting a version returns to read-only mode. Enter WBS
+   codes and amounts directly in the blank spreadsheet grid, paste plain
    Excel values, or import CSV. Matching descriptions appear automatically; French
    labels use OTP. Unused rows are gray until a WBS is entered. Rows grow as needed.
 2. Enter nonnegative euro amounts with at most two decimals. Past-year cells remain
@@ -15,7 +17,7 @@ application-wide **Finance editor** role; Business administrators already qualif
    automatically as 1, 2, 3…; no major/minor choice remains.
 4. Select any older version to inspect or edit a copy. Saving always creates a new
    version, including a status-only change. Existing budget values are preserved.
-5. **Cancel version** cancels the selected saved version after confirmation without
+5. **Delete Version** cancels the selected saved version after confirmation without
    creating another number. Its amounts remain visible/exportable and cancellation
    is audited. Cancellation cannot be undone, but the version can be copied and
    saved as a new version with a different status.
