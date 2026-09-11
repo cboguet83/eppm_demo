@@ -1,19 +1,24 @@
 # Finance budget plans
 
 Open **Finance** in the sidebar. Every active account can view/export the shared
-plan. To edit, import, propose or approve, an access administrator assigns the
+plan. To edit, import, save or cancel, an access administrator assigns the
 application-wide **Finance editor** role; Business administrators already qualify.
 
-1. Add WBS rows, paste plain Excel values, or import a CSV. Codes may be absent
-   from Settings; matched descriptions appear automatically. French labels use OTP.
-2. Enter nonnegative euro amounts, with at most two decimal places. Past-year cells
-   are gray and read-only. Use the right-pane scrollbar to see the full year range.
-3. Save changes. The first save requires a name and creates 1.0 Draft. Later saves
-   offer a revision or a named new major version. Nothing is overwritten.
-4. Propose or approve a saved snapshot using the confirmed status actions. These
-   create new minor revisions. Edit an approved snapshot to create another Draft.
-5. Use the version selector to inspect history. Older minors are read-only and
-   offer **Copy to new major version**.
+1. Enter WBS codes and amounts directly in the blank spreadsheet grid, paste plain
+   Excel values, or import CSV. Matching descriptions appear automatically; French
+   labels use OTP. Unused rows are gray until a WBS is entered. Rows grow as needed.
+2. Enter nonnegative euro amounts with at most two decimals. Past-year cells remain
+   gray and read-only. Tab/Shift+Tab moves between editable columns; Enter/Shift+Enter
+   moves vertically. Completely empty rows are ignored; amounts require a WBS.
+3. Click **Save new version**. Enter a name (the selected version's name is prefilled)
+   and choose Draft, Proposed, Approved, or Canceled. The new number is allocated
+   automatically as 1, 2, 3…; no major/minor choice remains.
+4. Select any older version to inspect or edit a copy. Saving always creates a new
+   version, including a status-only change. Existing budget values are preserved.
+5. **Cancel version** cancels the selected saved version after confirmation without
+   creating another number. Its amounts remain visible/exportable and cancellation
+   is audited. Cancellation cannot be undone, but the version can be copied and
+   saved as a new version with a different status.
 
 CSV exports include all saved WBS rows and exactly the current year through current
 year +14, excluding past years. Use the exported headers and UTF-8 encoding when
@@ -35,6 +40,6 @@ docker exec eppm_demo-app-1 python -m scripts.access_admin --database /app/data/
 docker restart eppm_demo-app-1
 ```
 
-Migration is additive and does not reseed business data or change existing role
-assignments. Finance remains independent of project budgets, project allocation
+The new migration preserves existing snapshots and numbers them in creation order.
+It does not reseed business data or change existing role assignments. Finance remains independent of project budgets, project allocation
 percentages, and database seeding workflows. See ADR 0021 for the detailed rules.

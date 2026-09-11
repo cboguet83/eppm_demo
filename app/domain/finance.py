@@ -14,18 +14,19 @@ AMOUNT = re.compile(r"[0-9]+(?:[.,][0-9]{1,2})?\Z")
 ERRORS = {
     "amount": "Row {row}, year {year}: use a nonnegative euro amount with at most two decimal places.",
     "code": "Row {row}: invalid WBS code. Use letters, numbers, dots, dashes or underscores, with an optional leading #.",
+    "missing_code": "Row {row}: enter a WBS code for these amounts.",
     "duplicate": "Row {row}: WBS code {code} appears more than once.",
     "rows": "Provide no more than 10,000 WBS rows with valid code and amount fields.",
     "years": "Row {row}: only years {first} to {last} can be changed. Past years are read-only.",
     "headers": "CSV headers must be wbs_code, description and every year from {first} to {last}, exactly once.",
     "csv": "Select a valid UTF-8 CSV file no larger than 2 MiB, using comma or semicolon separators.",
     "columns": "Row {row}: the number of cells does not match the CSV header.",
-    "name": "Enter a major-version name of 1 to 120 characters without control characters.",
+    "name": "Enter a name of 1 to 120 characters without control characters.",
     "missing": "The selected budget snapshot no longer exists or is invalid. Reload Finance.",
-    "stale": "This major version has a newer revision. Your changes are retained; reload the latest revision before saving.",
     "year_changed": "The calendar year has changed. Export or copy your changes, then reload Finance before saving.",
-    "mode": "Choose a new major version or a revision of the selected major version.",
-    "status": "Choose Proposed or Approved for the latest revision; its status must change.",
+    "action": "Choose a valid Finance action.",
+    "status": "Choose Draft, Proposed, Approved or Canceled.",
+    "canceled": "This budget version is already canceled.",
 }
 
 
@@ -50,13 +51,15 @@ class BudgetVersion:
     """Public immutable snapshot metadata, independent of database rows."""
 
     id: int
-    major: int
-    minor: int
+    number: int
     name: str
     status: str
     author: str
     created_at: int
     base_id: int | None
+    canceled_by: str | None = None
+    canceled_at: int | None = None
+    previous_status: str | None = None
 
 
 @dataclass(frozen=True)
@@ -97,7 +100,7 @@ def normalize_rows(raw: object, year: int, *, first_row: int = 1) -> tuple[Budge
         if not isinstance(item, dict) or set(item) != {"code", "amounts"}:
             raise FinanceError("rows")
         code, amounts = item["code"], item["amounts"]
-        if not isinstance(code, str) or not CODE.fullmatch(code.strip()):
+        if not isinstance(code, str):
             raise FinanceError("code", row=number)
         code = code.strip()
         if code in codes:
@@ -109,6 +112,12 @@ def normalize_rows(raw: object, year: int, *, first_row: int = 1) -> tuple[Budge
             parsed = parse_amount(value, number, int(key))
             if parsed is not None:
                 values[int(key)] = parsed
+        if not code and not values:
+            continue
+        if not code:
+            raise FinanceError("missing_code", row=number)
+        if not CODE.fullmatch(code):
+            raise FinanceError("code", row=number)
         result.append(BudgetRow(code, values))
         codes.add(code)
     return tuple(result)
@@ -125,7 +134,7 @@ def preserve_history(base: tuple[BudgetRow, ...], edited: tuple[BudgetRow, ...],
 
 
 def version_name(value: object) -> str:
-    """Validate the required name shared by every revision of a major version."""
+    """Validate the required descriptive name of a numbered version."""
     if (not isinstance(value, str) or not 1 <= len(value.strip()) <= 120
             or any(ord(char) < 32 or ord(char) == 127 for char in value)):
         raise FinanceError("name")

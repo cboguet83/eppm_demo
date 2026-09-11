@@ -12,6 +12,13 @@ from app.infrastructure.database.connection import get_db
 from app.infrastructure.repositories.access import SqliteAccessStore
 
 
+_VERSION_SELECT = """SELECT s.id,s.number,s.name,
+    CASE WHEN c.snapshot_id IS NULL THEN s.status ELSE 'Canceled' END,
+    s.author,s.created_at,s.base_id,c.author,c.occurred_at,c.previous_status
+    FROM finance_snapshot s LEFT JOIN finance_cancellation c ON c.snapshot_id=s.id
+    WHERE s.sealed=1"""
+
+
 class SqliteFinanceStore:
     """Read and append finance snapshots on a single authorized connection."""
 
@@ -20,16 +27,15 @@ class SqliteFinanceStore:
         self.security = SqliteAccessStore(connection)
 
     def versions(self) -> tuple[BudgetVersion, ...]:
-        """List snapshot metadata newest major and minor first."""
+        """List numbered snapshots with effective cancellation status, newest first."""
         return tuple(BudgetVersion(*row) for row in self.connection.execute(
-            "SELECT id,major,minor,name,status,author,created_at,base_id FROM finance_snapshot WHERE sealed=1 ORDER BY major DESC,minor DESC"))
+            _VERSION_SELECT + " ORDER BY s.number DESC"))
 
     def snapshot(self, snapshot_id: int) -> BudgetSnapshot:
         """Load one complete snapshot, with constant query count for all amounts."""
         if type(snapshot_id) is not int or not 0 < snapshot_id <= 9223372036854775807:
             raise FinanceError("missing")
-        record = self.connection.execute("""SELECT id,major,minor,name,status,author,created_at,base_id
-            FROM finance_snapshot WHERE id=? AND sealed=1""", (snapshot_id,)).fetchone()
+        record = self.connection.execute(_VERSION_SELECT + " AND s.id=?", (snapshot_id,)).fetchone()
         if record is None:
             raise FinanceError("missing")
         rows: dict[str, dict[int, int]] = {}
@@ -49,21 +55,29 @@ class SqliteFinanceStore:
         """Read the current global finance capability, including session validity."""
         return self.access.global_permission(self.security, Permission.FINANCE)
 
-    def latest(self, major: int | None = None) -> BudgetVersion | None:
+    def latest(self) -> BudgetVersion | None:
         """Find the current head under the caller's read or writer transaction."""
-        row = self.connection.execute("""SELECT id,major,minor,name,status,author,created_at,base_id
-            FROM finance_snapshot WHERE sealed=1 AND (? IS NULL OR major=?)
-            ORDER BY major DESC,minor DESC LIMIT 1""", (major, major)).fetchone()
+        row = self.connection.execute(_VERSION_SELECT + " ORDER BY s.number DESC LIMIT 1").fetchone()
         return BudgetVersion(*row) if row else None
 
-    def insert(self, rows: tuple[BudgetRow, ...], *, major: int, minor: int,
-               name: str, status: str, base_id: int | None) -> int:
-        """Append and seal a snapshot atomically; existing snapshots are never updated."""
+    def cancel(self, snapshot_id: int) -> None:
+        """Append the immutable cancellation audit without changing budget contents."""
+        self._require_write()
+        self.connection.execute("""INSERT INTO finance_cancellation
+            SELECT id,status,?,? FROM finance_snapshot WHERE id=? AND sealed=1""",
+            (self.access.audit_actor, self.access.policy.clock(), snapshot_id))
+
+    def _require_write(self) -> None:
         if not self.writable:
             raise FinanceStorageError("A finance writer transaction is required.")
         self.access.require(self.security, Permission.FINANCE)
-        cursor = self.connection.execute("""INSERT INTO finance_snapshot(major,minor,name,status,author,created_at,base_id)
-            VALUES(?,?,?,?,?,?,?)""", (major, minor, name, status, self.access.audit_actor,
+
+    def insert(self, rows: tuple[BudgetRow, ...], *, number: int,
+               name: str, status: str, base_id: int | None) -> int:
+        """Append and seal a snapshot atomically; existing snapshots are never updated."""
+        self._require_write()
+        cursor = self.connection.execute("""INSERT INTO finance_snapshot(number,name,status,author,created_at,base_id)
+            VALUES(?,?,?,?,?,?)""", (number, name, status, self.access.audit_actor,
                                        self.access.policy.clock(), base_id))
         snapshot_id = cursor.lastrowid
         assert snapshot_id is not None

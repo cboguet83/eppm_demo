@@ -116,7 +116,7 @@ def test_display_revision_upgrade_preserves_records_and_covers_business_sources(
         tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         excluded = {"schema_migration", "sqlite_sequence", "display_revision", "planning_summary_cache",
                     "pool_capacity_revision", "pool_capacity_cache", "pool_capacity_employee"}
-        finance_tables = {"finance_snapshot", "finance_row", "finance_amount"}
+        finance_tables = {"finance_snapshot", "finance_row", "finance_amount", "finance_cancellation"}
         assert tables - excluded - finance_tables - {name for name in tables if name.startswith("app_")} == DISPLAY_SOURCE_TABLES
         preserved = tables - excluded
         before = {name: connection.execute(f'SELECT * FROM "{name}" ORDER BY 1').fetchall() for name in preserved}

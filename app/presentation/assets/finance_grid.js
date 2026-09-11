@@ -8,11 +8,19 @@ export default function({data, parentElement, setTriggerValue}) {
     let model = root.financeModel;
     if (!model || model.token !== signature) {
         model = {token:signature,rows:clone(data.rows),dirty:false,scrollTop:0,scrollLeft:550,preview:null,
-                 copying:false,focus:null,selection:null};
+                 focus:null,selection:null};
         root.financeModel=model;
     }
     let busy=false, disposed=false, frame=0;
-    const editable = () => data.can_edit && (data.can_revise || !data.selected || model.copying);
+    const editable = () => data.can_edit;
+    const populated = row => row.code.trim() || Object.values(row.amounts).some(value=>value.trim());
+    const padRows = () => {
+        const last=model.rows.findLastIndex(populated);
+        const size=Math.min(10000,Math.max(25,last+11));
+        while(model.rows.length<size) model.rows.push({code:'',amounts:{}});
+        model.rows.length=Math.max(size,last+1);
+    };
+    padRows();
     const years = Array.from({length:20},(_,i)=>data.year-5+i);
     const historical = new Map(data.rows.map(row=>[row.code,Object.fromEntries(Object.entries(row.amounts).filter(([year])=>Number(year)<data.year))]));
     const descriptionFor=code=>Object.hasOwn(data.catalog,code)?data.catalog[code]:'';
@@ -29,7 +37,7 @@ export default function({data, parentElement, setTriggerValue}) {
     const versionSelect=element('select');versionSelect.setAttribute('aria-label',t('version'));
     if(!data.versions.length) {const option=element('option',t('empty_plan'));option.value='';versionSelect.append(option);}
     for(const version of data.versions) {
-        const option=element('option',`${version.major}.${version.minor} · ${version.name} · ${t(version.status)}`);
+        const option=element('option',String(version.number));
         option.value=String(version.id);versionSelect.append(option);
     }
     versionSelect.value=String(data.selected?.id || '');
@@ -52,31 +60,25 @@ export default function({data, parentElement, setTriggerValue}) {
     const saveDialog=()=>{
         error.textContent='';
         if(!validateRows()) return;
-        const choice=element('select');choice.setAttribute('aria-label',t('save_as'));
-        if(data.selected && data.can_revise && !model.copying) {
-            const option=element('option',t('revision'));option.value='revision';choice.append(option);
-        }
-        const option=element('option',t('major'));option.value='major';choice.append(option);
-        const name=element('input');name.maxLength=120;name.setAttribute('aria-label',t('version_name'));
+        const name=element('input');name.maxLength=120;name.value=data.selected?.name || '';name.setAttribute('aria-label',t('version_name'));
         const nameLabel=element('label',t('version_name'));nameLabel.append(name);
-        const modeLabel=element('label',t('save_as'));modeLabel.append(choice);
-        choice.onchange=()=>{nameLabel.hidden=choice.value!=='major';};choice.onchange();
-        modal.replaceChildren(element('h3',t('save_confirm')),element('p',t('draft_notice')),modeLabel,nameLabel);
+        const status=element('select');status.setAttribute('aria-label',t('status'));
+        const placeholder=element('option',t('choose_status'));placeholder.value='';placeholder.disabled=true;placeholder.selected=true;status.append(placeholder);
+        for(const value of ['Draft','Proposed','Approved','Canceled']) {const option=element('option',t(value));option.value=value;status.append(option);}
+        const statusLabel=element('label',t('status'));statusLabel.append(status);
+        modal.replaceChildren(element('h3',t('save_confirm')),element('p',t('save_notice')),nameLabel,statusLabel);
         const validation=element('div','','error');validation.setAttribute('role','alert');modal.append(validation);
         const actions=element('div','','toolbar');
         actions.append(button('cancel',()=>modal.close()),button('confirm',()=>{
-            if(choice.value==='major' && !name.value.trim()) {validation.textContent=t('name_required');return;}
-            modal.close();emit({kind:'save',rows:payload(),mode:choice.value,name:name.value,year:data.year});
+            if(!name.value.trim()) {validation.textContent=t('name_required');return;}
+            if(!status.value) {validation.textContent=t('choose_status');return;}
+            modal.close();emit({kind:'save',rows:payload(),status:status.value,name:name.value,year:data.year});
         }));modal.append(actions);modal.showModal();
     };
     const save=button('save',saveDialog);
-    const add=button('add',()=>{
-        if(model.rows.length>=10000) {error.textContent=t('row_limit');return;}
-        model.rows.push({code:'',amounts:{}});model.dirty=true;model.focus={row:model.rows.length-1,col:0};
-        viewport.scrollTop=model.rows.length*36;renderRows();updateControls();
-    });
     const cancel=button('reload',()=>discardThen(()=>emit({kind:'reload'})));
-    const copy=button('copy_major',()=>{model.copying=true;updateControls();renderRows();});
+    const cancelVersion=button('cancel_version',()=>discardThen(()=>
+        showDialog(t('cancel_version'),[element('p',t('cancel_notice'))],'confirm',()=>emit({kind:'cancel_version'}))));
     const file=element('input');file.type='file';file.accept='.csv,text/csv';file.hidden=true;
     const upload=button('import',()=>file.click());
     file.onchange=async()=>{
@@ -92,9 +94,7 @@ export default function({data, parentElement, setTriggerValue}) {
         const go=()=>{const a=element('a');a.href=data.download_url;a.download='budget.csv';root.append(a);a.click();a.remove();};
         if(model.dirty) showDialog(t('export'),[element('p',t('export_saved'))],'export',go);else go();
     });
-    const statusButtons=['Proposed','Approved'].map(status=>button(status==='Proposed'?'propose':'approve',()=>
-        showDialog(t('status_confirm'),[element('p',t('status_notice',{status:t(status)}))],'confirm',()=>emit({kind:'status',status}))));
-    toolbar.append(versionSelect,add,copy,save,cancel,upload,download,...statusButtons,file);
+    toolbar.append(versionSelect,save,cancel,upload,download,cancelVersion,file);
     const metadata=element('p', data.selected ? t('metadata',{author:data.selected.author,
         date:new Date(data.selected.created_at*1000).toLocaleString(),status:t(data.selected.status)}) : t('empty_hint'),'muted');
     const viewport=element('div','','viewport');viewport.setAttribute('aria-label',t('grid'));viewport.tabIndex=0;
@@ -106,23 +106,25 @@ export default function({data, parentElement, setTriggerValue}) {
         ...years.map(year=>element('th',String(year),'year'+(year<data.year?' past':'')+(year===data.year?' current':'')))].forEach(th=>header.append(th));
     head.append(header);const body=element('tbody');table.append(cols,head,body);viewport.append(table);
     const footer=element('div','','footer'),count=element('span'),dirty=element('span');footer.append(count,dirty);
-    root.replaceChildren(toolbar,metadata,error,message,viewport,footer,modal);
+    const nameDisplay=element('p',data.selected?.name || '', 'plan-name');
+    root.replaceChildren(toolbar,nameDisplay,metadata,error,message,viewport,footer,modal);
     const historyFor=code=>historical.get(code) || {};
     const hasHistory=code=>Object.keys(historyFor(code)).length>0;
     const valueAt=(row,col)=>col===0?row.code:col===1?descriptionFor(row.code):
         ((years[col-2]<data.year ? historyFor(row.code) : row.amounts)[years[col-2]] || '');
     function updateControls() {
-        add.disabled=save.disabled=upload.disabled=!editable() || busy;
-        cancel.disabled=versionSelect.disabled=busy;save.disabled ||= !model.dirty;
+        save.disabled=upload.disabled=!editable() || busy;
+        cancel.disabled=versionSelect.disabled=busy;
         download.disabled=!data.selected || busy;
-        copy.hidden=!data.can_edit || data.can_revise || !data.selected || model.copying;
-        statusButtons.forEach((el,i)=>el.disabled=!data.can_edit || !data.can_revise || !data.selected || busy || model.dirty || data.selected.status===['Proposed','Approved'][i]);
-        count.textContent=t('row_count',{count:model.rows.length});dirty.textContent=model.dirty?t('unsaved'):t('saved');
+        cancelVersion.disabled=!editable() || !data.selected || data.selected.status==='Canceled' || busy;
+        count.textContent=t('row_count',{count:model.rows.filter(row=>row.code.trim()).length});dirty.textContent=model.dirty?t('unsaved'):t('saved');
     }
     function validateRows(rows=model.rows) {
         const codes=new Set();
         for(let i=0;i<rows.length;i++) {
             const row=rows[i],code=row.code.trim();
+            if(!populated(row)) continue;
+            if(!code) {error.textContent=t('missing_code',{row:i+1});return false;}
             if(!/^#?[A-Za-z0-9._-]{1,128}$/.test(code)) {error.textContent=t('invalid_code',{row:i+1});return false;}
             if(codes.has(code)) {error.textContent=t('duplicate_code',{row:i+1,code});return false;}
             codes.add(code);
@@ -133,18 +135,21 @@ export default function({data, parentElement, setTriggerValue}) {
         return true;
     }
     function renderRows() {
+        const activeCell=root.getRootNode().activeElement?.closest?.('td[data-row][data-col]');
+        const focus=activeCell && body.contains(activeCell)?{row:activeCell.dataset.row,col:activeCell.dataset.col}:null;
         const first=Math.max(0,Math.floor(viewport.scrollTop/36)-4),last=Math.min(model.rows.length,first+28);
         const fragment=document.createDocumentFragment();
         const spacer=height=>{const tr=element('tr','','spacer'),td=element('td');td.colSpan=23;td.style.height=height+'px';tr.append(td);fragment.append(tr);};
         spacer(first*36);
         for(let index=first;index<last;index++) {
-            const row=model.rows[index],tr=element('tr');tr.dataset.row=String(index);
+            const row=model.rows[index],tr=element('tr','',row.code.trim()?'':'unused');tr.dataset.row=String(index);
             const remove=element('td','','frozen remove');
             const removeButton=button('remove',()=>{
                 if(hasHistory(row.code)) row.amounts={...historyFor(row.code)};else model.rows.splice(index,1);
+                padRows();
                 model.dirty=true;renderRows();updateControls();
             });removeButton.textContent='×';removeButton.setAttribute('aria-label',t('remove_row',{row:index+1}));
-            removeButton.disabled=!editable();remove.append(removeButton);tr.append(remove);
+            removeButton.disabled=!editable() || !populated(row);remove.append(removeButton);tr.append(remove);
             for(let column=0;column<22;column++) {
                 const year=years[column-2],locked=column===1 || (column>=2 && year<data.year);
                 const td=element('td','',''+(column===0?'frozen code':column===1?'frozen description':'year'+(locked?' past':'')));
@@ -166,22 +171,54 @@ export default function({data, parentElement, setTriggerValue}) {
                     input.oninput=()=>{
                         if(column===0) {row.code=input.value;const desc=tr.querySelector('.description');desc.textContent=descriptionFor(row.code);desc.title=desc.textContent || t('unmatched');}
                         else row.amounts[year]=input.value;
-                        model.dirty=true;updateControls();
+                        tr.classList.toggle('unused',!row.code.trim());
+                        padRows();const trailing=body.lastElementChild?.firstElementChild;
+                        if(trailing) trailing.style.height=Math.max(0,model.rows.length-last)*36+'px';
+                        removeButton.disabled=!populated(row);model.dirty=true;updateControls();
                     };
                     input.onchange=()=>{if(column===0) {
                         row.code=row.code.trim();
                         if(row.code!==originalCode && hasHistory(originalCode) && !model.rows.some(item=>item.code===originalCode))
-                            model.rows.push({code:originalCode,amounts:{...historyFor(originalCode)}});
-                        renderRows();updateControls();
+                            model.rows.splice(model.rows.findLastIndex(populated)+1,0,{code:originalCode,amounts:{...historyFor(originalCode)}});
+                        padRows();renderRows();updateControls();
                     }};
+                    input.onkeydown=event=>navigateCell(event,index,column);
                     td.append(input);
                 }
-                if(column===1 && !Object.hasOwn(data.catalog,row.code)) {td.textContent=t('unmatched');td.title=t('unmatched');td.classList.add('muted');}
+                if(column===1 && row.code.trim() && !Object.hasOwn(data.catalog,row.code)) {td.textContent=t('unmatched');td.title=t('unmatched');td.classList.add('muted');}
                 tr.append(td);
             }
             fragment.append(tr);
         }
         spacer(Math.max(0,model.rows.length-last)*36);body.replaceChildren(fragment);
+        if(focus) body.querySelector(`td[data-row="${focus.row}"][data-col="${focus.col}"] input`)?.focus({preventScroll:true});
+    }
+    function navigateCell(event,row,col) {
+        if(!['Tab','Enter'].includes(event.key)) return;
+        const columns=[0,...Array.from({length:15},(_,i)=>i+7)];
+        let nextRow=row,nextCol=col;
+        const direction=event.shiftKey?-1:1;
+        if(event.key==='Enter') nextRow+=direction;
+        else {
+            const index=columns.indexOf(col)+direction;
+            if(index<0) {nextRow--;nextCol=21;}
+            else if(index>=columns.length) {nextRow++;nextCol=0;}
+            else nextCol=columns[index];
+        }
+        if(nextRow<0 || nextRow>=10000) return;
+        event.preventDefault();event.currentTarget.blur();
+        while(model.rows.length<=nextRow) model.rows.push({code:'',amounts:{}});
+        const top=nextRow*36;
+        if(top<viewport.scrollTop) viewport.scrollTop=top;
+        else if(top+80>viewport.scrollTop+viewport.clientHeight) viewport.scrollTop=top+80-viewport.clientHeight;
+        renderRows();
+        const input=body.querySelector(`td[data-row="${nextRow}"][data-col="${nextCol}"] input`);
+        input?.focus({preventScroll:true});
+        if(nextCol>=7) {
+            const left=436+(nextCol-2)*110;
+            if(left<viewport.scrollLeft+436) viewport.scrollLeft=left-436;
+            else if(left+110>viewport.scrollLeft+viewport.clientWidth) viewport.scrollLeft=left+110-viewport.clientWidth;
+        }
     }
     const onPaste=event=>{
         const raw=event.clipboardData?.getData('text/plain');if(!raw || !raw.includes('\t') && !raw.includes('\n')) return;
@@ -207,7 +244,7 @@ export default function({data, parentElement, setTriggerValue}) {
             }
         }
         if(!validateRows(draft)) return;
-        model.rows=draft;model.dirty=true;error.textContent='';renderRows();updateControls();
+        model.rows=draft;padRows();model.dirty=true;error.textContent='';renderRows();updateControls();
     };
     const onCopy=event=>{
         if(!model.selection) return;
@@ -241,7 +278,7 @@ export default function({data, parentElement, setTriggerValue}) {
         showDialog(t('import_preview'),[element('p','⚠ '+t('replace_warning'),'warning'),element('p',t('row_count',{count:data.preview.rows.length}))],'continue',()=>{
             const rows=clone(data.preview.rows),codes=new Set(rows.map(row=>row.code));
             for(const [code,amounts] of historical) if(Object.keys(amounts).length && !codes.has(code)) rows.push({code,amounts:{...amounts}});
-            model.rows=rows;model.dirty=true;renderRows();updateControls();saveDialog();
+            model.rows=rows;padRows();model.dirty=true;renderRows();updateControls();saveDialog();
         });
     }
     return ()=>{

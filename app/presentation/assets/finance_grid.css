@@ -32,3 +32,7 @@
 .finance .selected-cell {outline:2px solid #C41039;outline-offset:-2px;}
 .finance .footer {display:flex;justify-content:space-between;gap:10px;margin-top:8px;}
 @media(max-width:700px) {.finance .viewport{height:480px;}}
+
+.finance tr.unused td {background:color-mix(in srgb,var(--st-text-color,#333) 5%,var(--st-background-color,white));}
+.finance tr.unused td.past {background:var(--st-secondary-background-color,#eceef1);}
+.finance .plan-name {font-weight:600;margin-bottom:4px;}

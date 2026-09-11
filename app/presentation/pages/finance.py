@@ -14,12 +14,12 @@ from app.presentation.i18n import t
 
 
 LABELS = (
-    "version", "empty_plan", "save_as", "revision", "major", "version_name", "save_confirm", "draft_notice",
-    "name_required", "save", "add", "reload", "copy_major", "import", "export", "export_saved", "propose", "approve",
-    "status_confirm", "status_notice", "metadata", "empty_hint", "grid", "code", "description", "remove",
-    "remove_row", "row_count", "unsaved", "saved", "invalid_code", "duplicate_code", "invalid_amount",
+    "version", "empty_plan", "version_name", "save_confirm", "save_notice", "status", "choose_status",
+    "name_required", "save", "reload", "import", "export", "export_saved", "cancel_version", "cancel_notice",
+    "metadata", "empty_hint", "grid", "code", "description", "remove",
+    "remove_row", "row_count", "unsaved", "saved", "invalid_code", "missing_code", "duplicate_code", "invalid_amount",
     "paste_bounds", "paste_locked", "unmatched", "row_limit", "file_error", "import_preview", "replace_warning",
-    "continue", "cancel", "confirm", "discard", "discard_warning", "Draft", "Proposed", "Approved",
+    "continue", "cancel", "confirm", "discard", "discard_warning", "Draft", "Proposed", "Approved", "Canceled",
 )
 
 
@@ -46,12 +46,12 @@ def _action(service: FinanceService, token: str, base_id: int | None) -> None:
     try:
         kind = action.get("kind")
         if kind == "save":
-            state["selected"] = service.save(action.get("rows"), base_id=base_id, mode=action.get("mode"),
+            state["selected"] = service.save(action.get("rows"), base_id=base_id, status=action.get("status"),
                                               name=action.get("name"), year=action.get("year"))
             state["message"] = t("finance.save_success")
-        elif kind == "status" and base_id is not None:
-            state["selected"] = service.change_status(base_id, action.get("status"))
-            state["message"] = t("finance.save_success")
+        elif kind == "cancel_version" and base_id is not None:
+            service.cancel(base_id)
+            state["message"] = t("finance.cancel_success")
         elif kind == "select":
             selected = service.view(action.get("snapshot_id")).selected
             state["selected"] = selected.version.id if selected else None
@@ -62,7 +62,7 @@ def _action(service: FinanceService, token: str, base_id: int | None) -> None:
             state["preview"] = {"id": action["nonce"], "rows": _rows(rows)}
             return
         else:
-            raise FinanceError("mode")
+            raise FinanceError("action")
         state["generation"] += 1
         state.pop("year", None)
     except FinanceError as error:
@@ -75,13 +75,12 @@ def _action(service: FinanceService, token: str, base_id: int | None) -> None:
 
 def _display(view: FinanceView, state: dict[str, object]) -> dict[str, object]:
     selected = view.selected.version if view.selected else None
-    latest = next((version for version in view.versions if selected and version.major == selected.major), None)
     year = state.setdefault("year", view.year)
     token = f"{selected.id if selected else 0}:{state['generation']}:{year}"
     return {"token": token, "selected": asdict(selected) if selected else None,
             "versions": [asdict(version) for version in view.versions],
             "rows": _rows(view.selected.rows) if view.selected else [], "catalog": view.catalog,
-            "can_edit": view.can_edit, "can_revise": selected is not None and latest.id == selected.id,
+            "can_edit": view.can_edit,
             "year": year, "labels": {key: t("finance." + key) for key in LABELS},
             "error": state.get("error", ""), "message": state.get("message", ""), "preview": state.get("preview"),
             "download_url": f"/downloads/finance/{selected.id}/budget.csv" if selected else ""}

@@ -44,19 +44,23 @@ def paste(locator, text):
 
 
 @pytest.mark.parametrize('popup_server', [_APP], indirect=True, ids=['finance-workflow'])
-def test_finance_grid_saves_revisions_imports_and_approvals_without_shell_reruns(popup_server,tmp_path):
+def test_finance_grid_saves_versions_imports_and_cancellations_without_shell_reruns(popup_server,tmp_path):
     with sync_playwright() as playwright:
         browser=playwright.chromium.launch(headless=True)
         try:
             page=browser.new_page(viewport={'width':1500,'height':1000})
             page.goto(popup_server)
             grid=page.locator('.finance')
-            expect(grid.get_by_role('button',name='Add WBS',exact=True)).to_be_visible(timeout=30000)
+            expect(grid.get_by_role('textbox',name='1 WBS code',exact=True)).to_be_visible(timeout=30000)
+            assert grid.locator('tbody tr[data-row]').count()==25
+            assert grid.locator('tbody tr.unused').count()==25
+            assert grid.get_by_role('button',name='Add WBS',exact=True).count()==0
             assert grid.locator('.viewport').evaluate('(node)=>node.scrollLeft')==550
-            grid.get_by_role('button',name='Add WBS',exact=True).click()
             grid.get_by_role('textbox',name='1 WBS code',exact=True).fill('A.1')
             grid.get_by_role('textbox',name='1 WBS code',exact=True).press('Tab')
             expect(grid.get_by_text('Known description',exact=True)).to_be_visible()
+            expect(grid.locator('tr[data-row="0"]')).not_to_have_class('unused')
+            expect(grid.get_by_role('textbox',name='1 2026',exact=True)).to_be_focused()
             amount=grid.get_by_role('textbox',name='1 2026',exact=True)
             amount.fill('123.45')
             amount.click()
@@ -65,16 +69,23 @@ def test_finance_grid_saves_revisions_imports_and_approvals_without_shell_reruns
             expect(grid.get_by_role('textbox',name='1 2027',exact=True)).to_have_value('20,50')
             assert grid.get_by_role('textbox',name='1 2025',exact=True).count()==0
             expect(page.get_by_text('Shell runs: 1',exact=True)).to_be_visible()
-            grid.get_by_role('button',name='Save changes',exact=True).click()
+            grid.get_by_role('button',name='Save new version',exact=True).click()
             dialog=grid.get_by_role('dialog')
-            dialog.get_by_role('textbox',name='Major-version name',exact=True).fill('Baseline')
+            dialog.get_by_role('textbox',name='Name',exact=True).fill('Baseline')
             dialog.get_by_role('button',name='Confirm',exact=True).click()
-            expect(grid.get_by_role('combobox',name='Budget version',exact=True)).to_contain_text('1.0 · Baseline · Draft')
-            expect(grid.get_by_role('button',name='Save changes',exact=True)).to_be_disabled()
+            expect(dialog.get_by_role('alert')).to_have_text('Choose a status.')
+            dialog.get_by_role('combobox',name='Status',exact=True).select_option('Draft')
+            dialog.get_by_role('button',name='Confirm',exact=True).click()
+            expect(grid.get_by_role('combobox',name='Budget version',exact=True)).to_have_text('1')
+            expect(grid.locator('.plan-name')).to_have_text('Baseline')
+            expect(grid.get_by_role('button',name='Save new version',exact=True)).to_be_enabled()
             page.screenshot(path=str(tmp_path/'finance-grid.png'),full_page=True)
-            grid.get_by_role('button',name='Approve',exact=True).click()
+            grid.get_by_role('button',name='Save new version',exact=True).click()
+            expect(grid.get_by_role('dialog').get_by_role('textbox',name='Name',exact=True)).to_have_value('Baseline')
+            grid.get_by_role('dialog').get_by_role('combobox',name='Status',exact=True).select_option('Approved')
             grid.get_by_role('dialog').get_by_role('button',name='Confirm',exact=True).click()
-            expect(grid.get_by_role('combobox',name='Budget version',exact=True)).to_contain_text('1.1 · Baseline · Approved')
+            expect(grid.get_by_role('combobox',name='Budget version',exact=True)).to_have_text('21')
+            expect(grid.locator('.muted').first).to_contain_text('Approved')
             # Export retrieval is covered against the real authenticated endpoint separately.
             with page.expect_download() as download:
                 grid.get_by_role('button',name='Export CSV',exact=True).click()
@@ -88,8 +99,9 @@ def test_finance_grid_saves_revisions_imports_and_approvals_without_shell_reruns
             grid.locator('input[type=file]').set_input_files({'name':'budget.csv','mimeType':'text/csv','buffer':valid.encode()})
             expect(grid.get_by_role('dialog')).to_contain_text('replaces the entire current/future grid')
             grid.get_by_role('dialog').get_by_role('button',name='Continue',exact=True).click()
+            grid.get_by_role('dialog').get_by_role('combobox',name='Status',exact=True).select_option('Draft')
             grid.get_by_role('dialog').get_by_role('button',name='Confirm',exact=True).click()
-            expect(grid.get_by_role('combobox',name='Budget version',exact=True)).to_contain_text('1.2 · Baseline · Draft')
+            expect(grid.get_by_role('combobox',name='Budget version',exact=True)).to_have_text('321')
             expect(grid.get_by_role('textbox',name='1 WBS code',exact=True)).to_have_value('#NEW')
             expect(grid.get_by_role('textbox',name='1 2026',exact=True)).to_have_value('77.25')
             # Invalid clipboard batches and cancelled navigation preserve unsaved values.
@@ -105,9 +117,17 @@ def test_finance_grid_saves_revisions_imports_and_approvals_without_shell_reruns
             expect(amount).to_have_value('88.00')
             versions.select_option(first_id)
             grid.get_by_role('dialog').get_by_role('button',name='Discard changes',exact=True).click()
-            expect(grid.get_by_role('button',name='Copy to new major version',exact=True)).to_be_visible()
-            expect(grid.get_by_role('button',name='Add WBS',exact=True)).to_be_disabled()
-            expect(grid.get_by_text('A.1',exact=True)).to_be_visible()
+            expect(grid.get_by_role('textbox',name='1 WBS code',exact=True)).to_have_value('A.1')
+            grid.get_by_role('button',name='Cancel version',exact=True).click()
+            grid.get_by_role('dialog').get_by_role('button',name='Confirm',exact=True).click()
+            expect(grid.get_by_role('button',name='Cancel version',exact=True)).to_be_disabled()
+            assert versions.locator('option').count()==3
+            grid.get_by_role('button',name='Save new version',exact=True).click()
+            grid.get_by_role('dialog').get_by_role('combobox',name='Status',exact=True).select_option('Proposed')
+            grid.get_by_role('dialog').get_by_role('button',name='Confirm',exact=True).click()
+            expect(versions).to_have_text('4321')
+            expect(grid.get_by_role('textbox',name='1 WBS code',exact=True)).to_have_value('A.1')
+            page.screenshot(path=str(tmp_path/'finance-grid.png'),full_page=True)
             expect(page.get_by_text('Shell runs: 1',exact=True)).to_be_visible()
             assert len(page.context.pages)==1
         finally:
@@ -127,7 +147,7 @@ actor=access.actor(cookie)
 with access.gateway.transaction(write=True) as store:
     store.set_status(actor.user_id,'active',1000)
 if fresh:
-    service.save([{'code':'A.1','amounts':{'2026':'42'}}],base_id=None,mode='major',name='Shared',year=2026)
+    service.save([{'code':'A.1','amounts':{'2026':'42'}}],base_id=None,status='Draft',name='Shared',year=2026)
 service=create_finance_service(database,access=BusinessAccess(actor,access.policy))
 service.today=lambda:date(2026,6,1)
 set_current_locale('fr')
@@ -142,8 +162,8 @@ def test_active_reader_sees_the_shared_plan_with_editing_disabled(popup_server):
             page=browser.new_page(viewport={'width':1500,'height':1000})
             page.goto(popup_server)
             grid=page.locator('.finance')
-            expect(grid.get_by_role('button',name='Ajouter un OTP',exact=True)).to_be_visible(timeout=30000)
-            for name in ['Ajouter un OTP','Enregistrer les modifications','Importer CSV','Proposer','Approuver']:
+            expect(grid.get_by_role('button',name='Enregistrer une nouvelle version',exact=True)).to_be_visible(timeout=30000)
+            for name in ['Enregistrer une nouvelle version','Importer CSV','Annuler la version']:
                 expect(grid.get_by_role('button',name=name,exact=True)).to_be_disabled()
             expect(grid.get_by_role('button',name='Exporter CSV',exact=True)).to_be_enabled()
             expect(grid.get_by_text('42.00',exact=True)).to_be_visible()
@@ -156,7 +176,7 @@ _LARGE_APP=_APP.replace("set_current_locale('en')", """
 if fresh:
     service.today=lambda:date(2021,6,1)
     service.save([{'code':f'WBS_{i}', 'amounts':{'2021':'1.00','2026':'2.00'}} for i in range(1000)],
-                 base_id=None,mode='major',name='Large plan',year=2021)
+                 base_id=None,status='Draft',name='Large plan',year=2021)
     service.today=lambda:date(2026,6,1)
 set_current_locale('en')
 """)
@@ -194,5 +214,42 @@ def test_large_finance_grid_virtualizes_rows_and_preserves_history_on_paste(popu
             expect(page.get_by_text('Shell runs: 1',exact=True)).to_be_visible()
             (tmp_path/'finance-1000-rows.json').write_text(json.dumps({'scroll_render_ms':elapsed,'rendered_rows':grid.locator('tbody tr[data-row]').count(),'shell_runs':1}),encoding='utf-8')
             assert elapsed<1000
+        finally:
+            browser.close()
+
+
+@pytest.mark.parametrize('popup_server', [_APP], indirect=True, ids=['spreadsheet-entry'])
+def test_blank_rows_grow_keyboard_navigation_and_missing_code_validation(popup_server):
+    with sync_playwright() as playwright:
+        browser=playwright.chromium.launch(headless=True)
+        try:
+            page=browser.new_page(viewport={'width':1500,'height':1000})
+            page.goto(popup_server)
+            grid=page.locator('.finance')
+            first=grid.get_by_role('textbox',name='1 WBS code',exact=True)
+            expect(first).to_be_visible(timeout=30000)
+            first.fill('A');first.press('Tab')
+            amount=grid.get_by_role('textbox',name='1 2026',exact=True)
+            expect(amount).to_be_focused()
+            amount.press('Enter')
+            expect(grid.get_by_role('textbox',name='2 2026',exact=True)).to_be_focused()
+            page.keyboard.press('Shift+Enter')
+            expect(amount).to_be_focused()
+            amount.press('Shift+Tab');expect(first).to_be_focused()
+            first.fill('');first.press('Tab')
+            expect(grid.locator('tr[data-row="0"]')).to_have_class('unused')
+            amount.fill('0')
+            grid.get_by_role('button',name='Save new version',exact=True).click()
+            expect(grid.get_by_role('alert').first).to_contain_text('Row 1')
+            first.fill('A');first.press('Tab');amount.fill('')
+            viewport=grid.locator('.viewport')
+            viewport.evaluate('node=>node.scrollTop=10000')
+            last=grid.get_by_role('textbox',name='25 WBS code',exact=True)
+            expect(last).to_be_visible()
+            last.fill('LAST');last.press('Enter')
+            expect(grid.get_by_role('textbox',name='26 WBS code',exact=True)).to_be_focused()
+            assert viewport.evaluate('node=>node.scrollHeight')>=35*36
+            expect(grid.get_by_text('2 WBS rows',exact=True)).to_be_visible()
+            expect(page.get_by_text('Shell runs: 1',exact=True)).to_be_visible()
         finally:
             browser.close()

@@ -4,7 +4,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
 
-from app.application.ports.finance import FinanceGateway, FinanceStore
+from app.application.ports.finance import FinanceGateway
 from app.domain.finance import (
     BudgetRow, BudgetSnapshot, BudgetVersion, FinanceError, export_csv, normalize_rows,
     parse_csv, preserve_history, version_name,
@@ -42,36 +42,28 @@ class FinanceService:
             self._year(year)
             return parse_csv(content, year)
 
-    def save(self, raw_rows: object, *, base_id: int | None, mode: str,
-             name: str = "", year: int) -> int:
-        """Create a Draft snapshot, numbering and preserving history atomically."""
+    def save(self, raw_rows: object, *, base_id: int | None, name: str,
+             status: str, year: int) -> int:
+        """Append a numbered snapshot with explicit status, preserving source history."""
         with self.gateway.transaction(write=True) as store:
             self._year(year)
             edited = normalize_rows(raw_rows, year)
             base = store.snapshot(base_id) if base_id is not None else None
-            if mode == "revision" and base is not None:
-                self._latest(store, base)
-                major, minor, label = base.version.major, base.version.minor + 1, base.version.name
-            elif mode == "major":
-                label = version_name(name)
-                latest = store.latest()
-                if base is None and latest is not None:
-                    raise FinanceError("stale")
-                major, minor = (latest.major + 1 if latest else 1), 0
-            else:
-                raise FinanceError("mode")
+            label = version_name(name)
+            if not isinstance(status, str) or status not in {"Draft", "Proposed", "Approved", "Canceled"}:
+                raise FinanceError("status")
+            latest = store.latest()
+            number = latest.number + 1 if latest else 1
             rows = preserve_history(base.rows if base else (), edited, year)
-            return store.insert(rows, major=major, minor=minor, name=label, status="Draft", base_id=base_id)
+            return store.insert(rows, number=number, name=label, status=status, base_id=base_id)
 
-    def change_status(self, snapshot_id: int, status: str) -> int:
-        """Append a Proposed/Approved revision while preserving the original status."""
+    def cancel(self, snapshot_id: int) -> None:
+        """Cancel any saved version without changing its number or budget contents."""
         with self.gateway.transaction(write=True) as store:
             base = store.snapshot(snapshot_id)
-            self._latest(store, base)
-            if not isinstance(status, str) or status not in {"Proposed", "Approved"} or status == base.version.status:
-                raise FinanceError("status")
-            return store.insert(base.rows, major=base.version.major, minor=base.version.minor + 1,
-                                name=base.version.name, status=status, base_id=base.version.id)
+            if base.version.status == "Canceled":
+                raise FinanceError("canceled")
+            store.cancel(snapshot_id)
 
     def export(self, snapshot_id: int) -> str:
         """Generate an export after current active-user authorization on every call."""
@@ -81,9 +73,3 @@ class FinanceService:
     def _year(self, year: int) -> None:
         if type(year) is not int or year != self.today().year:
             raise FinanceError("year_changed")
-
-    @staticmethod
-    def _latest(store: FinanceStore, base: BudgetSnapshot) -> None:
-        latest = store.latest(base.version.major)
-        if latest is None or latest.id != base.version.id:
-            raise FinanceError("stale")
