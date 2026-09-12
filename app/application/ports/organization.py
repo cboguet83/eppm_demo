@@ -1,14 +1,14 @@
 """Plain-data persistence contracts for organization transactions."""
 
-from collections.abc import Collection
+from collections.abc import Callable, Collection
 from app.domain.access.models import Permission
 
 
-from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import date
 from typing import Protocol
 from app.domain.hierarchy import HierarchyType
+from app.application.ports.references import EmployeeReference, FunctionReference
 
 from app.domain.organization.models import Employee, EmployeeCalendarException, FunctionType, OrgFunction, Team
 
@@ -31,6 +31,8 @@ class CalendarExceptionRow:
 class OrganizationStore(Protocol):
     """Organization queries and writes sharing a single transaction."""
 
+    def function_references(self) -> list[FunctionReference]: ...
+    def employee_references(self) -> list[EmployeeReference]: ...
     def get_all_function_types(self) -> list[FunctionType]: ...
     def get_all_hierarchy_types(self) -> list[HierarchyType]: ...
     def save_hierarchy_type(self, value: HierarchyType) -> int: ...
@@ -73,4 +75,5 @@ class OrganizationStore(Protocol):
 class OrganizationGateway(Protocol):
     """Supply a consistent reader or reserved writer through the storage port."""
 
-    def transaction(self, *, write: bool = False, permission: Permission | None = None, project_ids: Collection[int] | None = None) -> AbstractContextManager[OrganizationStore]: ...
+    def run[Result](self, operation: Callable[[OrganizationStore], Result], *, write: bool = False,
+                    permission: Permission | None = None, project_ids: Collection[int] | None = None) -> Result: ...

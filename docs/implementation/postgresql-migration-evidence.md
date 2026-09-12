@@ -40,7 +40,7 @@ preserves UI behavior and makes the existing regression suite reproducible.
 | 1. Baseline and decisions | Baseline captured | ADR, full baseline test results, workload and service timings recorded. Browser load comparison remains an acceptance gate. |
 | 2. PostgreSQL foundation | Additive foundation tested | Configuration, pool, migration runner, Compose, operator role provisioning and isolated tests implemented. Application lifecycle integration follows repository cutover. |
 | 3. Schema and enforcement | In progress | Native integrity, RLS, actor binding, protected-property audit and access administration tested; per-entity revisions and derived-cache storage remain. |
-| 4. Core repositories | Pending | Organization, templates/schema, projects, tags, collaboration, Decimal budgets. |
+| 4. Core repositories | In progress | Native organization adapter and callback service implemented; templates/schema, projects, tags, collaboration and Decimal budgets remain. |
 | 5. Planning and caches | Pending | Current planning, dependencies, allocations, capacity, per-entity revisions and snapshot tests. |
 | 6. Runtime cutover | In progress | Native authentication/access adapters and callback service integration implemented; composition, operator tools, seeds, benchmarks and legacy archive remain. |
 | 7. Acceptance and documentation | Pending | Full regression/coverage, browser/load runs, backup/restore, deployment and C4 documentation. |
@@ -93,6 +93,8 @@ available for that comparison before its runtime is archived.
   202 PostgreSQL and layer-boundary checks passed.
 - `b67acf9` — native audited access administration and concurrent bootstrap;
   232 PostgreSQL and layer-boundary checks passed, plus bootstrap rollback.
+- `57de07e` — PostgreSQL authentication and callback access workflows;
+  454 broad checks and 238 follow-up authentication checks passed.
 
 ## Native schema and integrity
 
@@ -307,3 +309,25 @@ the existing SQLite stores. Remaining work includes PostgreSQL business
 repositories, per-entity revisions/caches, operator and runtime composition,
 seed/reset/backup tools, legacy archive and all final acceptance gates. The
 Authlib HTTP checks are not the required 50-browser-user performance runs.
+
+## Native organization subsystem
+
+The organization store and service callback integration are implemented. Native
+CRUD uses explicit SQL, native booleans/dates, generated identities and existing
+DTOs. Team details/membership and employee/initial-calendar operations commit or
+roll back together. Native race tests verify whole-operation replay for team
+replacement and calendar overlap. `0009_organization_references.sql` preserves
+the existing name-only employee reference boundary while the underlying employee
+and calendar records remain private.
+
+Validation: **197 existing organization, hierarchy, UI, authorization and layer
+checks passed in 102.74 seconds**; **80 native organization, security and integrity
+checks passed in 42.88 seconds**. The new organization, hierarchy and business
+transaction modules have **168/168 statements covered**. Commands, C3 components,
+contracts and test scope are recorded in
+[PostgreSQL organization repository](postgresql-organization.md). Runtime
+composition and the remaining core repositories are still pending.
+
+The strengthened callback-race checks plus PostgreSQL foundation checks passed
+**47 checks in 15.80 seconds**, including observed retries and service-level
+calendar overlap revalidation. Output: `.local/postgresql-organization-replay.log`.

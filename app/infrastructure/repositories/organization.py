@@ -1,6 +1,6 @@
 """SQLite organization adapter; SQL methods share a caller-owned transaction."""
 
-from collections.abc import Collection
+from collections.abc import Callable, Collection
 from app.domain.access.models import Permission
 
 
@@ -14,6 +14,7 @@ from app.infrastructure.repositories.hierarchy import hierarchy_types
 
 from app.application.exceptions import OrganizationConflictError, OrganizationStorageError
 from app.application.ports.organization import CalendarExceptionRow, OrganizationStore
+from app.application.ports.references import EmployeeReference, FunctionReference
 from app.domain.organization.models import (
     Employee, EmployeeCalendarException, FunctionType, OrgFunction, Team,
 )
@@ -34,6 +35,16 @@ class SqliteOrganizationStore:
     def get_all_hierarchy_types(self) -> list[HierarchyType]:
         """Read the shared catalog using the current authorized connection."""
         return hierarchy_types(self.connection)
+
+    def function_references(self) -> list[FunctionReference]:
+        """Read only reporting labels for authorized project workflows."""
+        return [FunctionReference(*row) for row in self.connection.execute(
+            "SELECT function_id,name,hierarchy_level,manager_function_id FROM function ORDER BY hierarchy_level,name")]
+
+    def employee_references(self) -> list[EmployeeReference]:
+        """Read names without contact information or staffing attributes."""
+        return [EmployeeReference(*row) for row in self.connection.execute(
+            "SELECT function_id,firstname,lastname FROM employee ORDER BY lastname,firstname")]
 
     def save_hierarchy_type(self, value: HierarchyType) -> int:
         """Write a stable catalog entry and replace labels atomically."""
@@ -492,6 +503,12 @@ class SqliteOrganizationGateway:
         """Store the configured path without opening the database."""
         self.db_path = db_path
         self.access = access
+
+    def run[Result](self, operation: Callable[[OrganizationStore], Result], *, write: bool = False,
+                    permission: Permission | None = None, project_ids: Collection[int] | None = None) -> Result:
+        """Execute complete callbacks while the legacy runtime is being retired."""
+        with self.transaction(write=write, permission=permission, project_ids=project_ids) as store:
+            return operation(store)
 
     @contextmanager
     def transaction(self, *, write: bool = False, permission: Permission | None = None, project_ids: Collection[int] | None = None) -> Iterator[OrganizationStore]:

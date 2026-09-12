@@ -153,3 +153,9 @@ The launcher now uses the access callback contract but still composes the
 existing SQLite repositories explicitly. PostgreSQL authentication is exercised
 through native service and Authlib HTTP integration tests; production composition
 switches when the remaining business repositories are ready.
+
+The [organization repository](postgresql-organization.md) now uses the same
+callback runner and actor binding for native functions, teams, employees,
+calendar exceptions and optional hierarchy types. Its service integration and
+minimal name directory are implemented and tested; application composition
+remains staged until the remaining repositories are ported.
