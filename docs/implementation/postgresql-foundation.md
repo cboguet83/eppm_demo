@@ -59,6 +59,10 @@ flowchart LR
     Binding --> Authorization[Permanent session and permission helpers]
     Authorization --> DB
     Authorization --> Policies[Permanent business row policies]
+    Authorization --> Access[Bounded access administration]
+    Access --> Audit
+    Access --> Continuity[Bootstrap and last-admin lock]
+    Continuity --> DB
     Policies --> Guards[Owner and protected-property guards]
     Guards --> Audit[Atomic protected-change audit]
     Audit --> DB
@@ -78,3 +82,19 @@ and temporary relations before a different actor borrows the connection.
 `TransactionRunner` is the database-independent application port for subsequent
 gateway integration. Application composition and ASGI lifecycle integration are
 not yet switched in this additive milestone.
+
+Native administration functions enforce the access-management capability,
+configured MFA and recent authentication before registration, status changes,
+granting or revocation. Each operation includes mandatory audit and security
+revision changes in its caller-owned transaction. A narrowly scoped advisory
+lock and serializable replay preserve the last active administrator. Read
+policies expose each account's own profile/grants, with administration-only
+access to other accounts and audit. Separate scope-configuration functions
+expose eligible categorical references and bounded project labels without
+granting portfolio reads.
+
+`operator_appoint_admin` is executable only with separate operator credentials.
+It verifies a prior OIDC identity, performs bootstrap once, and requires explicit
+operator/correlation/reason data for recovery. Its caller must own a serializable
+transaction. Operator CLI/bootstrap and authentication repository integration
+are still pending; this documents the native operation, not a completed cutover.

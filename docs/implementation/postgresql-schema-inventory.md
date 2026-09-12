@@ -57,8 +57,9 @@ normalizer. Arbitrary scope-resolution functions have no runtime execution grant
 
 `0005_actor_authorization.sql` adds signed context and fixed permission mappings.
 `0006_business_security.sql` installs RLS and old/new-owner guards for all 45
-existing business tables. The remaining access tables have default-deny RLS
-pending bounded authentication/administration functions. Employee contact and
+existing business tables. `0007_access_administration.sql` adds self/admin read
+policies and bounded, audited administration operations; identity/session/state
+storage remains private pending the authenticated server interface. Employee contact and
 staffing rows require organization administration; a permanent manager-label
 projection preserves the portfolio catalog. A permanent task projection masks
 hidden predecessor IDs, and the base predecessor column has no runtime SELECT

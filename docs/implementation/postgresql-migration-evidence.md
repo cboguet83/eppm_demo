@@ -89,6 +89,8 @@ available for that comparison before its runtime is archived.
   112 PostgreSQL checks passed.
 - `977c0fd` — signed actor binding, fixed permission mapping and pool role checks;
   159 PostgreSQL checks passed.
+- `86b3d30` — business RLS, owner guards and protected-change audit;
+  202 PostgreSQL and layer-boundary checks passed.
 
 ## Native schema and integrity
 
@@ -216,3 +218,36 @@ project-ID regression, trusted finance attribution, protected list upserts and
 dependent-tag ownership checks. No application repository has been switched to
 the new runtime yet; full regression/coverage, authenticated browser performance,
 and restore acceptance remain pending.
+
+## Native access administration
+
+`0007_access_administration.sql` adds bounded registration, account status,
+grant and revocation functions with native access-management, MFA and recent
+authentication checks. They include immutable audit and security revision
+updates atomically. Fixed-role scopes are canonicalized before idempotent
+grant insertion; invalidated grants require explicit revocation/recreation.
+Scope-configuration functions expose categorical references and bounded project
+labels to access administrators without granting business/portfolio reads.
+Account and assignment reads are limited to self or an access administrator;
+pending accounts may read their own profile but not assignments.
+
+Bootstrap/recovery uses a separate operator-only function, requires a verified
+OIDC identity and explicit attribution/reason, and writes the completion marker,
+grant, account state and audit together. The narrow administration advisory lock
+plus serializable replay protects concurrent bootstrap and last-admin removal.
+Runtime actors have no direct security DML or operator-function privilege.
+
+The complete PostgreSQL and layer-boundary run passed 232 checks in 56.63 seconds
+(`.local/postgresql-access-final.log`). It includes concurrent self-disable and
+self-revocation by two administrators, competing initial bootstraps, invalid and
+stale categorical grants, scope catalog parity, mandatory audit rollback for
+registration/grant/revocation/status, and self/admin row isolation.
+
+The additional bootstrap audit-failure test passed in 0.24 seconds
+(`.local/postgresql-bootstrap-audit.log`), verifying rollback of activation,
+assignment and the once-only completion marker when required audit fails.
+
+Remaining security work includes signed pre-session OIDC/state/session operations,
+the PostgreSQL access repository and callback service integration, supported
+operator CLI integration, and revision/cache integration for protected changes.
+The application still uses SQLite; the milestone is not final migration acceptance.

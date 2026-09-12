@@ -273,4 +273,7 @@ def test_protected_trigger_helpers_are_not_publicly_executable(business):
         WHERE n.nspname='eppm' AND has_function_privilege(current_user,p.oid,'EXECUTE')""")
     assert {row[0] for row in exposed} == {
         "bind_actor", "current_actor", "has_global_permission", "permission_projects", "has_business_read",
+        "is_access_administrator", "admin_set_status", "admin_grant", "admin_revoke", "admin_register",
+        "admin_resolve_scope", "admin_project_choices", "access_security_revision",
+        "admin_scope_catalog",
     }

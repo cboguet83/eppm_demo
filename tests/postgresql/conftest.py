@@ -123,6 +123,7 @@ def authorized(pg_database: PostgreSQLFixture) -> AuthorizedFixture:
             operator.execute("INSERT INTO eppm.app_user(id,status,created_at,updated_at) VALUES (%s,'active',900,900)", (user_id,))
             operator.execute("INSERT INTO eppm.app_session VALUES (%s,%s,950,2000,980,false,false)",
                              (f"session-{user_id}", user_id))
+        operator.execute("SELECT setval(pg_get_serial_sequence('eppm.app_user','id'),(SELECT max(id) FROM eppm.app_user))")
         for user_id, role, scope in (
             (1, "project_editor", {"kind": "projects", "project_ids": [1]}),
             (1, "project_viewer", {"kind": "projects", "project_ids": [2]}),
