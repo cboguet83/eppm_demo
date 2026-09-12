@@ -1,10 +1,11 @@
 """SQLite adapter for resource-pool queries and caller-owned writes."""
 
-from collections.abc import Collection
+from collections.abc import Callable, Collection
 from app.domain.access.models import Permission
 
 
 from app.application.services.business_access import BusinessAccess
+from app.application.ports.resource_pools import ResourcePoolStore
 from collections.abc import Iterator
 from contextlib import closing, contextmanager
 import json
@@ -550,6 +551,12 @@ class SqliteResourcePoolGateway:
         """Retain the configured database path without opening a connection."""
         self.db_path = db_path
         self.access = access
+
+    def run[Result](self, operation: Callable[[ResourcePoolStore], Result], *, write: bool = False,
+                    permission: Permission | None = None, project_ids: Collection[int] | None = None) -> Result:
+        """Bridge complete callbacks while the legacy runtime awaits removal."""
+        with self.transaction(write=write, permission=permission, project_ids=project_ids) as store:
+            return operation(store)
 
     @contextmanager
     def transaction(self, *, write: bool = False, permission: Permission | None = None, project_ids: Collection[int] | None = None) -> Iterator[SqliteResourcePoolStore]:

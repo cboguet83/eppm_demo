@@ -185,3 +185,8 @@ callbacks, batched typed property writes and Decimal project budgets. Global WBS
 remainder is exposed through a bounded aggregate without hidden project IDs;
 explicit and generated project identities share narrowly scoped coordination.
 Browser money inputs and final runtime composition still require cutover work.
+
+[Resource pools and assignments](postgresql-resource-pools.md) now use native
+callbacks for catalog/tag saves, recursive groups, mapping upserts and scoped
+project/task demand. Concurrent graph and mapping changes, cascade rollback and
+preserved inputs are tested. Capacity calculations and cache revisions remain.

@@ -41,7 +41,7 @@ preserves UI behavior and makes the existing regression suite reproducible.
 | 2. PostgreSQL foundation | Additive foundation tested | Configuration, pool, migration runner, Compose, operator role provisioning and isolated tests implemented. Application lifecycle integration follows repository cutover. |
 | 3. Schema and enforcement | In progress | Native integrity, RLS, actor binding, protected-property audit and access administration tested; per-entity revisions and derived-cache storage remain. |
 | 4. Core repositories | Native adapters tested | Organization, schema, tags, collaboration, templates, projects, WBS and Decimal budget adapters use complete callbacks. Browser money inputs and runtime composition remain staged. |
-| 5. Planning and caches | Pending | Current planning, dependencies, allocations, capacity, per-entity revisions and snapshot tests. |
+| 5. Planning and caches | In progress | Native resource pools, recursive groups, mappings and scoped assignments tested. Scheduling/dependencies, capacity, portfolio and per-entity cache revisions remain. |
 | 6. Runtime cutover | In progress | Native authentication/access adapters and callback service integration implemented; composition, operator tools, seeds, benchmarks and legacy archive remain. |
 | 7. Acceptance and documentation | Pending | Full regression/coverage, browser/load runs, backup/restore, deployment and C4 documentation. |
 
@@ -105,6 +105,8 @@ available for that comparison before its runtime is archived.
   49 existing and 101 native/security checks passed.
 - `46eb0a5` — native collaboration and bounded project contact details;
   95 existing, 17 useful-link and 177 native/security checks passed.
+- `8c5ece1` — native projects, WBS allocations and Decimal budget reports;
+  177 existing and 177 native/security checks passed.
 
 ## Native schema and integrity
 
@@ -458,3 +460,28 @@ Commands and C3 components are documented in
 coverage: `.local/postgresql-projects-coverage.json`. Browser money inputs,
 planning/pools/capacity, portfolio/finance, cache revisions, runtime/tools cutover
 and final regression, responsiveness and recovery acceptance remain pending.
+
+## Native resource pools and assignments
+
+Pool details/tags, recursive group details/membership, target mapping upserts and
+project/task assignments now use complete native callbacks. Assignment queries
+and batches filter hidden owners through RLS before joins and return native
+dates through their existing ISO boundary. Compound failures restore prior
+details and cascading records. Concurrent cycle, upsert and pool/tag edits
+observe whole-operation retries; submitted models and lists remain unchanged
+by caller mutation between attempts.
+
+Validation: **75 existing checks passed in 13.72 seconds**. The broader native
+run passed **153 checks in 47.42 seconds**, with one new resource test expecting
+the wrong exception for a task-owner mismatch. The existing guard correctly
+denies that mismatch even for administrators. After correcting the expectation,
+the complete resource suite passed **17 checks in 7.53 seconds**. The service and
+native adapter have **272/272 statements covered (100%)**.
+
+Commands, C3 components and test scope are documented in
+[PostgreSQL resource pools](postgresql-resource-pools.md). Logs:
+`.local/postgresql-resource-pools-legacy.log`, `.local/postgresql-resource-pools-native.log`,
+`.local/postgresql-resource-pools-followup.log`; coverage:
+`.local/postgresql-resource-pools-coverage.json`. Capacity/cache revisions,
+scheduling/dependencies, portfolio/finance, browser monetary inputs, runtime/tools
+cutover and all final acceptance gates remain pending.

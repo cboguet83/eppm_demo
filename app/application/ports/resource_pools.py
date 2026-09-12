@@ -1,10 +1,9 @@
 """Typed storage contracts for resource-pool use cases."""
 
-from collections.abc import Collection
+from collections.abc import Callable, Collection
 from app.domain.access.models import Permission
 
 
-from contextlib import AbstractContextManager
 from typing import Protocol
 from app.domain.hierarchy import HierarchyType
 
@@ -67,6 +66,9 @@ class ResourcePoolStore(Protocol):
 
 
 class ResourcePoolGateway(Protocol):
-    """Supply a consistent reader or reserved writer."""
+    """Execute complete use cases in consistent, authorized transactions."""
 
-    def transaction(self, *, write: bool = False, permission: Permission | None = None, project_ids: Collection[int] | None = None) -> AbstractContextManager[ResourcePoolStore]: ...
+    def run[Result](self, operation: Callable[[ResourcePoolStore], Result], *, write: bool = False,
+                    permission: Permission | None = None, project_ids: Collection[int] | None = None) -> Result:
+        """Replay the complete callback only after a definite transaction rollback."""
+        ...
