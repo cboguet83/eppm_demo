@@ -105,8 +105,8 @@ Logs: `.local/postgresql-portfolio-validation.log`,
 
 ## Remaining migration work
 
-The dashboard reader still requires its native port, including the existing
-aggregate-only competing-demand behavior. Runtime/operator/seed/benchmark
+The [dashboard reader](postgresql-dashboard.md) now has its native port,
+including the existing aggregate-only competing-demand behavior. Runtime/operator/seed/benchmark
 cutover, shared process-state injection, project monetary-input conversion and
 SQLite runtime archival remain. Final application coverage, authenticated native
 browser operation, three 50-user measurements and backup/restore/restart gates

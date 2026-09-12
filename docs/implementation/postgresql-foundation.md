@@ -202,7 +202,7 @@ callbacks, scoped recursive graphs and batched task bundles. Concurrent saves,
 hidden endpoint protection, ISO date boundaries, all four summary warning rules
 and complete replacement rollback are verified. Migration 0014 preserves the
 existing template lag range. Native summary caches now separate read snapshots
-from guarded publication; dashboard queries and runtime cutover remain.
+from guarded publication; runtime cutover remains.
 
 [Capacity inputs and calculations](postgresql-capacity.md) now use bounded native
 staffing aggregates and scoped assignment snapshots. Project readers retain pool
@@ -223,5 +223,10 @@ and process-state injection remain part of the later PostgreSQL-only cutover.
 
 [Portfolio reads](postgresql-portfolio.md) now use native scoped counts, ID-first
 pagination, shared facet statistics, exact decimal transport and minimal manager
-references. The dashboard reader and its aggregate-only competing-demand logic
-remain to port before runtime composition can switch completely.
+references.
+
+[Dashboard reads](postgresql-dashboard.md) now preserve scoped catalogs, exact
+finance allocations and aggregate-only competing demand inside PostgreSQL.
+Opaque revisions track relevant sources, and quarterly resource/drill-through
+reads preserve current scope and calendar behavior. Runtime composition remains
+the next integration stage.

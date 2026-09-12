@@ -1,0 +1,132 @@
+"""Independent demand/calendar parity at the dashboard's private SQL boundary."""
+
+from datetime import date, timedelta
+import random
+
+import psycopg
+import pytest
+
+from app.domain.dashboard import quarterly_capacity, quarterly_shortfall
+from tests.postgresql.test_dashboard import DAY, reference_details, service
+from tests.postgresql.test_pool_capacity import staffing
+
+
+def assert_resources_match_domain(authorized, selected, day=DAY):
+    expected = reference_details(authorized, selected, day)
+    actual = service(authorized, 4, lambda: day).resources(selected)
+    assert actual == {'overallocation': quarterly_shortfall(expected, set(selected), day.year),
+                      'capacity': quarterly_capacity(expected, day.year)}
+    return actual
+
+
+def test_randomized_overlapping_project_and_task_demand_keeps_float_rounding_order(staffing):
+    rng = random.Random(42)
+    choices = [0, 0.0005, 0.0035, 0.0105, 0.3333, 1.0005, 1.125, 2.2222, 20.1235]
+    first = date(2026, 3, 20)
+    for iteration in range(20):
+        with psycopg.connect(staffing.setup.operator_url) as connection:
+            connection.execute('DELETE FROM eppm.resource_pool_assignment')
+            for pool in range(1, 6):
+                connection.execute('UPDATE eppm.resource_pool SET capacity_fte=%s WHERE id=%s',
+                                   (rng.choice(choices), pool))
+                for project in range(1, 4):
+                    for task in (None, project):
+                        start = first + timedelta(days=rng.randrange(12))
+                        end = start + timedelta(days=rng.randrange(12))
+                        connection.execute('''INSERT INTO eppm.resource_pool_assignment
+                            (pool_id,project_id,task_id,fte_assigned,start_date,end_date)
+                            VALUES (%s,%s,%s,%s,%s,%s)''', (pool, project, task, rng.choice(choices), start, end))
+        selected = [1] if iteration % 2 else [1, 2]
+        assert_resources_match_domain(staffing, selected)
+
+
+def test_calendar_peaks_are_concurrent_and_full_quarter_overrides_replace_baselines(staffing):
+    with psycopg.connect(staffing.setup.operator_url) as connection:
+        connection.execute('DELETE FROM eppm.resource_pool_assignment')
+        connection.execute('DELETE FROM eppm.resource_pool_mapping')
+        connection.execute('DELETE FROM eppm.employee_calendar_exception')
+        connection.execute("INSERT INTO eppm.resource_pool_mapping(pool_id,target_type,target_id,allocation_pct) "
+                           "VALUES (1,'employee',1,100),(2,'employee',4,100)")
+        connection.execute('UPDATE eppm.employee SET occupation_percentage=20 WHERE employee_id IN (1,4)')
+        connection.execute('''INSERT INTO eppm.employee_calendar_exception
+            (employee_id,start_date,end_date,occupation_percentage) VALUES
+            (1,'2026-01-01','2026-01-01',100),(4,'2026-02-01','2026-02-01',100),
+            (1,'2026-04-01','2026-06-30',0),(4,'2026-04-01','2026-06-30',0)''')
+        connection.execute('''INSERT INTO eppm.resource_pool_assignment
+            (pool_id,project_id,fte_assigned,start_date,end_date) VALUES
+            (1,1,2,'2026-01-01','2026-06-30'),(2,1,3,'2026-01-01','2026-06-30')''')
+    actual = assert_resources_match_domain(staffing, [1])
+    assert actual['capacity']['2026-Q1'] == 1.2
+    assert actual['capacity']['2026-Q2'] == 0
+    assert actual['capacity']['2026-Q3'] == 0.4
+    assert actual['overallocation']['2026-Q2'] == 5
+
+
+def test_undated_custom_partial_and_quarter_boundary_periods_keep_the_current_day_fallback(staffing):
+    with psycopg.connect(staffing.setup.operator_url) as connection:
+        connection.execute("INSERT INTO eppm.project(id,name) VALUES (4,'Undated')")
+        connection.execute('DELETE FROM eppm.resource_pool_assignment')
+        connection.execute('''INSERT INTO eppm.resource_pool_assignment
+            (pool_id,project_id,fte_assigned,start_date,end_date) VALUES
+            (2,4,3,NULL,NULL),(5,4,1,'2026-09-30',NULL),
+            (4,4,1,NULL,'2026-10-01')''')
+    dashboard = service(staffing, 4, lambda: date(2026, 9, 30))
+    before = dashboard.revision()
+    september = assert_resources_match_domain(staffing, [4], date(2026, 9, 30))
+    october = assert_resources_match_domain(staffing, [4], date(2026, 10, 1))
+    assert september['overallocation']['2026-Q3'] > october['overallocation']['2026-Q3']
+    assert october['overallocation']['2026-Q4'] > september['overallocation']['2026-Q4']
+    dashboard.today = lambda: date(2026, 10, 1)
+    assert dashboard.revision() != before
+
+
+def test_long_periods_keep_the_25_year_demand_cap_and_displayed_window(staffing):
+    with psycopg.connect(staffing.setup.operator_url) as connection:
+        connection.execute('DELETE FROM eppm.resource_pool_assignment')
+        connection.execute('''INSERT INTO eppm.resource_pool_assignment
+            (pool_id,project_id,fte_assigned,start_date,end_date) VALUES
+            (5,1,2,'2000-01-01','2099-12-31'),(5,3,30,'2000-01-01','2099-12-31')''')
+    actual = assert_resources_match_domain(staffing, [1])
+    assert actual['overallocation']['2024-Q4'] == 32
+    assert actual['overallocation']['2025-Q1'] == actual['overallocation']['2026-Q1'] == 0
+    assert len(actual['overallocation']) == 80
+
+
+def test_partial_period_resolving_backwards_does_not_invent_selected_consuming_days(staffing):
+    with psycopg.connect(staffing.setup.operator_url) as connection:
+        connection.execute('DELETE FROM eppm.resource_pool_assignment')
+        connection.execute('''INSERT INTO eppm.resource_pool_assignment
+            (pool_id,project_id,task_id,fte_assigned,start_date,end_date) VALUES
+            (5,1,1,3,'2026-01-10',NULL),(5,3,3,30,'2026-01-10','2026-01-10')''')
+    actual = assert_resources_match_domain(staffing, [1])
+    assert all(value == 0 for value in actual['overallocation'].values())
+    assert service(staffing).consuming_projects([1], '2026-Q1') == []
+
+
+def test_revision_and_resources_are_read_only_and_never_return_private_records(staffing):
+    def revisions(connection):
+        return tuple(connection.execute('SELECT project_id,generation,revision FROM eppm.project_cache_revision ORDER BY project_id'))
+    with psycopg.connect(staffing.setup.operator_url) as connection:
+        before = revisions(connection)
+    for user in (1, 4):
+        result = staffing.query('SELECT eppm.dashboard_resources(%s::bigint[],%s,%s)', ([1], DAY, '2026-Q1'), user_id=user)[0][0]
+        assert set(result) == {'capacity', 'overallocation', 'consumers'}
+        assert all(isinstance(value, (int, float)) for series in ('capacity', 'overallocation') for value in result[series].values())
+        assert not any(value in repr(result) for value in ('Private', 'Hidden', 'Ada', 'employee_id', 'session-'))
+        assert service(staffing, user).revision()
+    with psycopg.connect(staffing.setup.operator_url) as connection:
+        assert revisions(connection) == before
+
+
+@pytest.mark.parametrize('table, condition', [
+    ('pool_cache_revision', 'pool_id=1'), ('catalog_cache_revision', 'singleton'),
+    ('database_identity', 'singleton'),
+])
+def test_missing_required_revision_sources_fail_closed(staffing, table, condition):
+    from psycopg import sql
+    from app.application.exceptions import ProjectStorageError
+
+    with psycopg.connect(staffing.setup.operator_url) as connection:
+        connection.execute(sql.SQL('DELETE FROM eppm.{} WHERE ').format(sql.Identifier(table)) + sql.SQL(condition))
+    with pytest.raises(ProjectStorageError):
+        service(staffing).revision()

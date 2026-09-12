@@ -41,7 +41,7 @@ preserves UI behavior and makes the existing regression suite reproducible.
 | 2. PostgreSQL foundation | Additive foundation tested | Configuration, pool, migration runner, Compose, operator role provisioning and isolated tests implemented. Application lifecycle integration follows repository cutover. |
 | 3. Schema and enforcement | Native enforcement tested | Native integrity, RLS, actor binding, audit, access administration, per-entity revisions and private derived-cache storage implemented. Final cutover and clean deployment validation remain. |
 | 4. Core repositories | Native adapters tested | Organization, schema, tags, collaboration, templates, projects, WBS and Decimal budget adapters use complete callbacks. Browser money inputs and runtime composition remain staged. |
-| 5. Planning and caches | In progress | Native scheduling, resources, private staffing, revisions, guarded caches and bounded portfolio queries implemented. The dashboard reader, aggregate-only competing demand and final runtime integration remain. |
+| 5. Planning and caches | In progress | Native scheduling, resources, private staffing, revisions, guarded caches, bounded portfolio queries and aggregate-only dashboard reads implemented. Final runtime integration remains. |
 | 6. Runtime cutover | In progress | Native authentication/access adapters and callback service integration implemented; composition, operator tools, seeds, benchmarks and legacy archive remain. |
 | 7. Acceptance and documentation | Pending | Full regression/coverage, browser/load runs, backup/restore, deployment and C4 documentation. |
 
@@ -120,6 +120,8 @@ available for that comparison before its runtime is archived.
   528 native checks passed, with 100% native revision-adapter statement coverage.
 - `851f0d2` — authorized capacity/planning caches and separate publication;
   570 native checks passed, with 100% native cache-adapter statement coverage.
+- `3f8d4a1` — scoped portfolio paging, exact facets and Decimal component transport;
+  54 combined checks and 3 browser checks passed, with 100% native adapter coverage.
 
 ## Native schema and integrity
 
@@ -687,6 +689,36 @@ the 50-user browser acceptance measurement.
 
 Commands, component relationships and evidence paths are in
 [PostgreSQL portfolio](postgresql-portfolio.md). Dashboard storage and its
-aggregate-only competing-demand behavior remain to port. Runtime/operator/seed
+aggregate-only competing-demand behavior are now ported. Runtime/operator/seed
 and benchmark cutover, exact project-money inputs, legacy archival, final
 coverage, 50-user browser measurements and recovery acceptance remain pending.
+
+## Native dashboard reports and private aggregates
+
+The dashboard reader now reauthorizes scoped catalogs, requested finance statuses,
+Decimal WBS allocations and active blockers in repeatable-read snapshots. Active
+users with no business grants retain an empty dashboard. Explicit out-of-scope
+requests, invalid signatures and deployment actors are denied.
+
+Migration 0018 computes competing pool demand inside a narrowly granted SQL
+function. Only quarterly totals and currently visible drill-through IDs reach
+the application; hidden project/employee records remain private. Interval event
+ordering and the native rounding helper retain the domain's FTE calculations,
+date fallback, inclusive periods and 25-year cap. Quarterly peaks use concurrent
+totals, including quarters fully covered by calendar overrides. Opaque revision
+hashes invalidate relevant competing demand, source membership and finance status
+changes while ignoring session activity and unrelated hidden project/pool edits.
+
+The initial native dashboard/aggregate/integrity checks passed **54 tests in
+31.26 seconds**, with **134/136 native adapter statements covered (98.53%)**.
+Twenty randomized allocation workloads matched independent pure-domain results.
+Concurrent changes retain a consistent read snapshot and missing revision rows
+fail closed. The full native suite plus existing dashboard and layer regressions
+passed **638 tests in 258.60 seconds**, exit code **0**. Dashboard
+adapter/service/domain coverage is **275/277 statements (99.28%)**; native
+dashboard adapter coverage is **135/136 statements (99.26%)**.
+
+Commands, C3 components and detailed behavior are documented in
+[PostgreSQL dashboard](postgresql-dashboard.md). Runtime/operator/seed/benchmark
+cutover, exact project money inputs, legacy archival, full application coverage,
+authenticated 50-user browser measurements and recovery acceptance remain.
