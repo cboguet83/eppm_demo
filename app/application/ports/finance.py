@@ -1,6 +1,6 @@
 """Transaction and snapshot contracts for the shared finance plan."""
 
-from contextlib import AbstractContextManager
+from collections.abc import Callable
 from typing import Protocol
 
 from app.domain.finance import BudgetRow, BudgetSnapshot, BudgetVersion
@@ -22,4 +22,6 @@ class FinanceStore(Protocol):
 class FinanceGateway(Protocol):
     """Authorize reads/writes and provide atomic storage operations."""
 
-    def transaction(self, *, write: bool = False) -> AbstractContextManager[FinanceStore]: ...
+    def run[Result](self, operation: Callable[[FinanceStore], Result], *, write: bool = False) -> Result:
+        """Authorize and replay complete finance use cases after a definite rollback."""
+        ...

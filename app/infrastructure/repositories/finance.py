@@ -1,13 +1,15 @@
 """SQLite finance transactions with active-user reads and global write checks."""
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import closing, contextmanager
 import sqlite3
+from decimal import Decimal
 
 from app.application.services.business_access import BusinessAccess
+from app.application.ports.finance import FinanceStore
 from app.application.exceptions import FinanceStorageError
 from app.domain.access.models import Actor, Permission
-from app.domain.finance import BudgetRow, BudgetSnapshot, BudgetVersion, FinanceError
+from app.domain.finance import BudgetRow, BudgetSnapshot, BudgetVersion, FinanceError, euro_text
 from app.infrastructure.database.connection import get_db
 from app.infrastructure.repositories.access import SqliteAccessStore
 
@@ -38,13 +40,13 @@ class SqliteFinanceStore:
         record = self.connection.execute(_VERSION_SELECT + " AND s.id=?", (snapshot_id,)).fetchone()
         if record is None:
             raise FinanceError("missing")
-        rows: dict[str, dict[int, int]] = {}
+        rows: dict[str, dict[int, Decimal]] = {}
         for code, year, cents in self.connection.execute("""SELECT r.code,a.year,a.cents FROM finance_row r
             LEFT JOIN finance_amount a ON a.snapshot_id=r.snapshot_id AND a.code=r.code
             WHERE r.snapshot_id=? ORDER BY r.position,a.year""", (snapshot_id,)):
             values = rows.setdefault(code, {})
             if year is not None:
-                values[year] = cents
+                values[year] = Decimal(f'{cents // 100}.{cents % 100:02d}')
         return BudgetSnapshot(BudgetVersion(*record), tuple(BudgetRow(code, values) for code, values in rows.items()))
 
     def catalog(self) -> dict[str, str]:
@@ -84,7 +86,8 @@ class SqliteFinanceStore:
         self.connection.executemany("INSERT INTO finance_row VALUES(?,?,?)",
                                     [(snapshot_id, row.code, index) for index, row in enumerate(rows)])
         self.connection.executemany("INSERT INTO finance_amount VALUES(?,?,?,?)",
-                                    [(snapshot_id, row.code, year, cents) for row in rows for year, cents in row.amounts.items()])
+                                    [(snapshot_id, row.code, year, int(euro_text(amount).replace('.', '')))
+                                     for row in rows for year, amount in row.amounts.items()])
         self.connection.execute("UPDATE finance_snapshot SET sealed=1 WHERE id=?", (snapshot_id,))
         return snapshot_id
 
@@ -94,6 +97,11 @@ class SqliteFinanceGateway:
 
     def __init__(self, db_path: str, access: BusinessAccess) -> None:
         self.db_path, self.access = db_path, access
+
+    def run[Result](self, operation: Callable[[FinanceStore], Result], *, write: bool = False) -> Result:
+        """Bridge callbacks until the legacy cent-storage runtime is archived."""
+        with self.transaction(write=write) as store:
+            return operation(store)
 
     @contextmanager
     def transaction(self, *, write: bool = False) -> Iterator[SqliteFinanceStore]:

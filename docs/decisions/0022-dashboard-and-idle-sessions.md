@@ -1,6 +1,8 @@
 # ADR 0022: Authorized dashboard, allocated budgets, and sliding idle sessions
 
 - Status: Accepted and implemented from the approved dashboard plan
+- Monetary representation: superseded by [ADR 0024](0024-postgresql-runtime.md);
+  Decimal euros retain per-project/WBS/year half-up cent rounding and exact sums.
 - Date: 2026-09-11
 - Builds on ADR 0019 (identity/access), ADR 0020 (WBS), and ADR 0021 (Finance)
 

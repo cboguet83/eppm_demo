@@ -24,7 +24,7 @@ LABELS = (
 
 
 def _rows(rows: tuple[BudgetRow, ...]) -> list[dict[str, object]]:
-    return [{"code": row.code, "amounts": {str(year): euro_text(cents) for year, cents in row.amounts.items()}}
+    return [{"code": row.code, "amounts": {str(year): euro_text(amount) for year, amount in row.amounts.items()}}
             for row in rows]
 
 

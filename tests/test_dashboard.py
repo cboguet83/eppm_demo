@@ -19,11 +19,11 @@ from tests.test_business_transaction_security import business as business
 
 def test_allocated_budget_rounds_per_project_row_and_preserves_gaps_and_zero():
     snapshot=BudgetSnapshot(BudgetVersion(1,1,'Plan','Approved','test',0,None),
-        (BudgetRow('A',{2026:101,2027:0}),BudgetRow('B',{2026:10000})))
+        (BudgetRow('A',{2026:Decimal('1.01'),2027:Decimal('0.00')}),BudgetRow('B',{2026:Decimal('100.00')})))
     shares=[WbsShare(1,'A',50),WbsShare(2,'A',50),WbsShare(1,'B',10),WbsShare(1,'MISSING',100)]
     result=allocated_budget(shares+[shares[0]],snapshot,2026)
-    assert result.totals=={2026:1102,2027:0}
-    assert result.rows[0][1][2026]==51 and 2028 not in result.totals
+    assert result.totals=={2026:Decimal('11.02'),2027:Decimal('0')}
+    assert result.rows[0][1][2026]==Decimal('0.51') and 2028 not in result.totals
     assert result.unmatched==('MISSING',)
     assert not allocated_budget(shares,None,2026).totals
 
@@ -75,13 +75,13 @@ def test_dashboard_filters_scope_shared_capacity_approved_budget_and_issues(busi
     service=create_dashboard_service(path,access=editor);service.today=lambda:date(2026,1,1)
     catalog=service.catalog()
     assert [row['id'] for row in catalog.projects]==[1]
-    assert service.report([1]).budget.totals=={2026:10000}
+    assert service.report([1]).budget.totals=={2026:Decimal('100.00')}
     assert service.report([1]).issue_count==1
     assert service.issues([1],'en')[0]['title']=='Visible blocker'
     assert service.shortages([1])['2026-Q1']==1  # Hidden project's 2 FTE still competes.
     revision=service.revision()
     finance.cancel(newer)
-    assert service.revision()!=revision and service.report([1]).budget.totals=={2026:5000}
+    assert service.revision()!=revision and service.report([1]).budget.totals=={2026:Decimal('50.00')}
     for operation in [lambda:service.report([2]),lambda:service.shortages([2]),lambda:service.issues([2],'en')]:
         with pytest.raises(AccessDenied):operation()
     for assignment in access.assignments(admin,editor.actor.user_id):access.revoke(admin,assignment['id'])

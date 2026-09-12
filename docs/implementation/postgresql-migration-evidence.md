@@ -107,6 +107,9 @@ available for that comparison before its runtime is archived.
   95 existing, 17 useful-link and 177 native/security checks passed.
 - `8c5ece1` — native projects, WBS allocations and Decimal budget reports;
   177 existing and 177 native/security checks passed.
+- `93292d3` — native resource pools, groups, mappings and assignments;
+  75 existing and 17 final native resource checks passed, with broader integrity
+  and transaction regressions recorded below.
 
 ## Native schema and integrity
 
@@ -485,3 +488,31 @@ Commands, C3 components and test scope are documented in
 `.local/postgresql-resource-pools-coverage.json`. Capacity/cache revisions,
 scheduling/dependencies, portfolio/finance, browser monetary inputs, runtime/tools
 cutover and all final acceptance gates remain pending.
+
+## Native finance and Decimal allocated budgets
+
+Finance services now use native callbacks with active-account reads and global
+finance writes independently of project scope. Plans, sparse amounts and
+cancellation audit remain immutable. Decimal euros now flow through finance
+parsing, services, NUMERIC storage, exports and allocated dashboard budgets.
+Existing per-share half-up cent rounding and the amount limit remain unchanged;
+migration `0013_finance_amount_limit.sql` also enforces that limit in PostgreSQL.
+
+Validation: **79 existing checks passed in 8.46 seconds**, **20 initial native
+checks passed in 7.46 seconds**, and **186 broader native/security/HTTP/domain
+checks passed in 40.24 seconds**. The finance domain, service and native adapter
+have **246/246 statements covered (100%)**. Concurrent saves receive consecutive
+numbers after observed replay; concurrent cancellation commits one audit record.
+Tests also cover low-precision Decimal contexts, exact maxima, late rollback,
+unchanged submitted grids, revocation during retry and authenticated downloads.
+
+Real finance/dashboard browser checks passed **8 tests in 31.61 seconds** with
+directly captured pytest exit code **0**. Chart values retain the same rounded
+project shares. Playwright shutdown warnings remain in the test log; direct exit
+capture distinguishes those from test failures. Browser tests use staged SQLite
+composition; native storage/authentication are covered by the integration suite.
+
+Commands, C3 components and log paths are in
+[PostgreSQL finance](postgresql-finance.md). Runtime cutover, scheduling/capacity,
+portfolio/dashboard repositories, cache revisions, project monetary inputs,
+operator tools and all final regression, responsiveness and recovery gates remain.

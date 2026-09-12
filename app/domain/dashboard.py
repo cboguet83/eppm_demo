@@ -3,7 +3,7 @@
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date, timedelta
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, ROUND_HALF_UP, localcontext
 from typing import TypedDict
 
 from app.domain.finance import BudgetSnapshot
@@ -29,17 +29,26 @@ class WbsShare:
 
 @dataclass(frozen=True)
 class AllocatedBudget:
-    """Calculated cents by project/WBS/year and matching aggregate totals."""
+    """Calculated Decimal euros by project/WBS/year and matching aggregate totals."""
 
-    rows: tuple[tuple[WbsShare, dict[int, int]], ...]
-    totals: dict[int, int]
+    rows: tuple[tuple[WbsShare, dict[int, Decimal]], ...]
+    totals: dict[int, Decimal]
     unmatched: tuple[str, ...]
 
 
 def allocated_budget(shares: list[WbsShare], snapshot: BudgetSnapshot | None, year: int) -> AllocatedBudget:
-    """Round each project/WBS/year share once, then sum those exact cents."""
+    """Preserve per-share cent rounding and sum exact euros at sufficient precision."""
+    with localcontext() as context:
+        # Finance amounts have at most 19 digits; percentages and the number of
+        # contributions determine sufficient working precision for exact totals.
+        context.prec = max(28, 22 + len(str(len(shares))))
+        return _allocated_budget(shares, snapshot, year)
+
+
+def _allocated_budget(shares: list[WbsShare], snapshot: BudgetSnapshot | None, year: int) -> AllocatedBudget:
+    """Calculate under the caller's deliberately sized decimal context."""
     amounts = {row.code: row.amounts for row in snapshot.rows} if snapshot else {}
-    totals: dict[int, int] = {}
+    totals: dict[int, Decimal] = {}
     result, missing, seen = [], set(), set()
     for share in shares:
         key = share.project_id, share.code
@@ -48,10 +57,10 @@ def allocated_budget(shares: list[WbsShare], snapshot: BudgetSnapshot | None, ye
         seen.add(key)
         if share.code not in amounts:
             missing.add(share.code)
-        values = {y: int((Decimal(cents) * share.percentage / 100).quantize(Decimal(1), rounding=ROUND_HALF_UP))
-                  for y, cents in amounts.get(share.code, {}).items() if year - 5 <= y <= year + 14}
-        for y, cents in values.items():
-            totals[y] = totals.get(y, 0) + cents
+        values = {y: (amount * share.percentage / 100).quantize(Decimal('.01'), rounding=ROUND_HALF_UP)
+                  for y, amount in amounts.get(share.code, {}).items() if year - 5 <= y <= year + 14}
+        for y, amount in values.items():
+            totals[y] = totals.get(y, Decimal(0)) + amount
         result.append((share, values))
     return AllocatedBudget(tuple(result), totals, tuple(sorted(missing)))
 

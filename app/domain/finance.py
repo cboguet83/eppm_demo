@@ -8,7 +8,7 @@ from decimal import Decimal
 
 MAX_ROWS = 10000
 MAX_CSV_BYTES = 2 * 1024 * 1024
-MAX_CENTS = 9223372036854775807
+MAX_AMOUNT = Decimal('92233720368547758.07')
 CODE = re.compile(r"#?[A-Za-z0-9._-]{1,128}\Z")
 AMOUNT = re.compile(r"[0-9]+(?:[.,][0-9]{1,2})?\Z")
 ERRORS = {
@@ -40,10 +40,10 @@ class FinanceError(ValueError):
 
 @dataclass(frozen=True)
 class BudgetRow:
-    """A code and sparse absolute-year amounts in integer euro cents."""
+    """A code and sparse absolute-year amounts in exact Decimal euros."""
 
     code: str
-    amounts: dict[int, int] = field(default_factory=dict)
+    amounts: dict[int, Decimal] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -70,7 +70,7 @@ class BudgetSnapshot:
     rows: tuple[BudgetRow, ...]
 
 
-def parse_amount(value: object, row: int, year: int) -> int | None:
+def parse_amount(value: object, row: int, year: int) -> Decimal | None:
     """Parse plain decimal text exactly, retaining blank separately from zero."""
     if not isinstance(value, str) or len(value) > 24:
         raise FinanceError("amount", row=row, year=year)
@@ -79,15 +79,15 @@ def parse_amount(value: object, row: int, year: int) -> int | None:
         return None
     if not AMOUNT.fullmatch(value):
         raise FinanceError("amount", row=row, year=year)
-    cents = int(Decimal(value.replace(",", ".")) * 100)
-    if cents > MAX_CENTS:
+    amount = Decimal(value.replace(",", "."))
+    if amount > MAX_AMOUNT:
         raise FinanceError("amount", row=row, year=year)
-    return cents
+    return amount
 
 
-def euro_text(cents: int) -> str:
-    """Format stored cents without introducing a binary floating-point value."""
-    return f"{cents // 100}.{cents % 100:02d}"
+def euro_text(amount: Decimal) -> str:
+    """Format cent-precision euros without introducing a binary floating-point value."""
+    return format(amount, '.2f')
 
 
 def normalize_rows(raw: object, year: int, *, first_row: int = 1) -> tuple[BudgetRow, ...]:

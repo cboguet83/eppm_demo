@@ -3,6 +3,7 @@
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
 from datetime import date
+from decimal import Decimal
 import csv
 import io
 import sqlite3
@@ -28,9 +29,9 @@ def rows(code='A', amount='100.01', year=2026):
     return [{'code': code, 'amounts': {str(year): amount}}]
 
 
-@pytest.mark.parametrize('value,expected', [('', None), (' ', None), ('0', 0), ('0.10', 10),
-    ('100,01', 10001), ('92233720368547758.07', 9223372036854775807)])
-def test_finance_uses_exact_cents_and_distinguishes_blank_from_zero(value, expected):
+@pytest.mark.parametrize('value,expected', [('', None), (' ', None), ('0', Decimal('0')), ('0.10', Decimal('0.10')),
+    ('100,01', Decimal('100.01')), ('92233720368547758.07', Decimal('92233720368547758.07'))])
+def test_finance_uses_exact_decimal_euros_and_distinguishes_blank_from_zero(value, expected):
     assert parse_amount(value, 2, 2026) == expected
 
 
@@ -62,8 +63,8 @@ def test_numbered_versions_allow_old_sources_and_audited_cancellation(business):
     direct = service.save(rows('C'), base_id=approved, name='Stopped', status='Canceled', year=2026)
     assert [(v.number,v.status) for v in service.view().versions]==[(4,'Canceled'),(3,'Proposed'),(2,'Approved'),(1,'Canceled')]
     assert service.view(copy).selected.version.base_id==first
-    assert service.view(first).selected.rows[0].amounts=={2026:10001}
-    assert service.view(approved).selected.rows[0].amounts=={2026:20000}
+    assert service.view(first).selected.rows[0].amounts=={2026:Decimal('100.01')}
+    assert service.view(approved).selected.rows[0].amounts=={2026:Decimal('200.00')}
     assert service.export(first)
     for identity in [first,direct]:
         with pytest.raises(FinanceError,match='already canceled'): service.cancel(identity)
@@ -75,11 +76,11 @@ def test_calendar_rollover_and_csv_replacement_preserve_past_codes_and_zero(busi
     service = finance(path, manager)
     first = service.save(rows(amount='0') + rows('B'), base_id=None, status='Draft', name='Year 1', year=2026)
     next_year = finance(path, manager, 2027)
-    imported = next_year.validate_import(export_csv((BudgetRow('C',{2027:12345}),), {}, 2027), 2027)
+    imported = next_year.validate_import(export_csv((BudgetRow('C',{2027:Decimal('123.45')}),), {}, 2027), 2027)
     second = next_year.save([{'code':r.code,'amounts':{str(y):euro_text(v) for y,v in r.amounts.items()}} for r in imported],
                             base_id=first, status='Draft',name='Baseline', year=2027)
     saved = {row.code:row.amounts for row in next_year.view(second).selected.rows}
-    assert saved == {'A':{2026:0},'B':{2026:10001},'C':{2027:12345}}
+    assert saved == {'A':{2026:Decimal('0')},'B':{2026:Decimal('100.01')},'C':{2027:Decimal('123.45')}}
     assert '2026' not in next_year.export(second).splitlines()[0]
     assert len(parse_csv(next_year.export(second),2027)) == 3
     with pytest.raises(FinanceError, match='calendar year'):
@@ -87,14 +88,14 @@ def test_calendar_rollover_and_csv_replacement_preserve_past_codes_and_zero(busi
 
 
 def test_csv_round_trip_and_precise_import_errors():
-    source = (BudgetRow('-ABC',{2025:12,2026:10,2040:999}), BudgetRow('#FICTIVE',{}))
+    source = (BudgetRow('-ABC',{2025:Decimal('0.12'),2026:Decimal('0.10'),2040:Decimal('9.99')}), BudgetRow('#FICTIVE',{}))
     text = export_csv(source, {'-ABC':'=DO_NOT_EXECUTE()'}, 2026)
     assert "'-ABC;'=DO_NOT_EXECUTE()" in text
-    assert parse_csv('\ufeff'+text,2026) == (BudgetRow('-ABC',{2026:10,2040:999}),BudgetRow('#FICTIVE',{}))
+    assert parse_csv('\ufeff'+text,2026) == (BudgetRow('-ABC',{2026:Decimal('0.10'),2040:Decimal('9.99')}),BudgetRow('#FICTIVE',{}))
     csv_rows = list(csv.reader(io.StringIO(text),delimiter=';'))
     csv_rows[1][2] = '12,34'
     out = io.StringIO(); csv.writer(out).writerows(csv_rows)
-    assert parse_csv(out.getvalue(),2026)[0].amounts[2026] == 1234
+    assert parse_csv(out.getvalue(),2026)[0].amounts[2026] == Decimal('12.34')
     for content, key in [('wrong\n','headers'), (text+'too;short\n','columns'), (text.replace('0.10','-1'),'amount'),
                          (text+text.splitlines()[1]+'\n','duplicate'), ('\x00','csv'), ('x'*2097153,'csv')]:
         with pytest.raises(FinanceError) as caught:
@@ -169,7 +170,7 @@ def test_migrations_preserve_roles_security_triggers_and_snapshot_integrity(busi
                     f"INSERT INTO finance_row VALUES({first},'B',2)",
                     f"INSERT OR REPLACE INTO finance_snapshot(id,number,name,status,author,created_at) VALUES({first},1,'Replace','Draft','test',0)"]:
             with pytest.raises(sqlite3.IntegrityError): connection.execute(sql)
-    assert service.view(first).selected.rows[0].amounts=={2026:10001}
+    assert service.view(first).selected.rows[0].amounts=={2026:Decimal('100.01')}
 
 
 def test_existing_access_database_upgrades_without_losing_grants_or_scope_invalidation(tmp_path):
@@ -230,7 +231,7 @@ def test_finance_values_survive_project_and_catalog_reseeding(business):
     service=finance(path,manager)
     first=service.save(rows(),base_id=None,status='Draft',name='Keep',year=2026)
     create_maintenance_service(path).flush(flush_all=True)
-    assert service.view(first).selected.rows[0].amounts=={2026:10001}
+    assert service.view(first).selected.rows[0].amounts=={2026:Decimal('100.01')}
 
 
 def test_finance_saves_do_not_invalidate_portfolio_or_permission_caches(business):
@@ -247,7 +248,7 @@ def test_finance_saves_do_not_invalidate_portfolio_or_permission_caches(business
 
 def test_limits_account_for_history_multibyte_files_and_malformed_csv():
     with pytest.raises(FinanceError,match='10,000'):
-        preserve_history(tuple(BudgetRow(str(i),{2025:1}) for i in range(10000)),(BudgetRow('new',{}),),2026)
+        preserve_history(tuple(BudgetRow(str(i),{2025:Decimal('0.01')}) for i in range(10000)),(BudgetRow('new',{}),),2026)
     header=export_csv((),{},2026)
     for text in ['é'*1100000,'\ud800',header+'"unclosed',header+('A;'+';'*15+'\n')*10001]:
         with pytest.raises(FinanceError): parse_csv(text,2026)
@@ -290,7 +291,7 @@ def test_finance_download_returns_safe_storage_errors(business):
 
 
 def test_blank_grid_rows_are_ignored_and_amount_without_code_identifies_row():
-    assert normalize_rows([{'code':' ','amounts':{'2026':''}},*rows(),{'code':'','amounts':{}}],2026)==(BudgetRow('A',{2026:10001}),)
+    assert normalize_rows([{'code':' ','amounts':{'2026':''}},*rows(),{'code':'','amounts':{}}],2026)==(BudgetRow('A',{2026:Decimal('100.01')}),)
     with pytest.raises(FinanceError,match='Row 2'):
         normalize_rows([{'code':'','amounts':{}},{'code':'','amounts':{'2026':'0'}}],2026)
 
@@ -363,4 +364,4 @@ def test_concurrent_cancellation_records_one_audit_and_keeps_budget(business):
     with ThreadPoolExecutor(max_workers=2) as pool:
         assert sorted(pool.map(cancel_once,range(2)))==['canceled','success']
     assert len(service.view().versions)==1
-    assert service.view(identity).selected.rows==(BudgetRow('A',{2026:10001}),)
+    assert service.view(identity).selected.rows==(BudgetRow('A',{2026:Decimal('100.01')}),)

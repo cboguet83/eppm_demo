@@ -1,6 +1,8 @@
 # ADR 0021: Shared versioned WBS budget plan
 
 - Status: Accepted; simplified version workflow replaces the original major/minor decision
+- Monetary representation: superseded by [ADR 0024](0024-postgresql-runtime.md);
+  Decimal euros retain the existing range, cent precision and text interfaces.
 - Updated: 2026-09-11
 - Builds on ADR 0011 (project budget reporting), ADR 0019 (access policy), and ADR 0020 (shared WBS catalog)
 

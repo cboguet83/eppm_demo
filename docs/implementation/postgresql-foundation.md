@@ -190,3 +190,9 @@ Browser money inputs and final runtime composition still require cutover work.
 callbacks for catalog/tag saves, recursive groups, mapping upserts and scoped
 project/task demand. Concurrent graph and mapping changes, cascade rollback and
 preserved inputs are tested. Capacity calculations and cache revisions remain.
+
+[Finance plans](postgresql-finance.md) now use native immutable snapshots,
+Decimal euros and complete callbacks. Finance access remains independent of
+project scope. Concurrent numbering/cancellation, authenticated downloads,
+exact chart values and existing dashboard rounding are verified; final runtime
+composition and project-budget form conversions remain staged.

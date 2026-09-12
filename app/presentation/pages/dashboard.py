@@ -211,7 +211,7 @@ def _finance_chart(service: DashboardService, report) -> None:
     # Layered Vega charts can retain their old named dataset when only Arrow data
     # changes. Recreate this chart for different values, without rerunning the shell.
     chart_revision = sha256(repr((years.start, tuple(sorted(report.budget.totals.items())))).encode()).hexdigest()[:16]
-    values = pd.DataFrame([{'date': f'{year}-01-01', 'budget': report.budget.totals.get(year) / 100
+    values = pd.DataFrame([{'date': f'{year}-01-01', 'budget': float(report.budget.totals[year])
                             if year in report.budget.totals else None,
                             'series': _label('approved_budget')} for year in years])
     values['segment'] = values['budget'].isna().cumsum().astype(str)

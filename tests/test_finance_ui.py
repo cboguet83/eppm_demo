@@ -1,6 +1,7 @@
 """Finance action callbacks retain drafts on failures and recheck authorization."""
 
 from datetime import date
+from decimal import Decimal
 from unittest.mock import patch
 
 import pytest
@@ -58,7 +59,7 @@ def test_finance_callbacks_save_import_and_preserve_draft_tokens_on_errors(busin
     assert failed['error'] and failed['token']==first['token']
     proposed=act(app,'save',rows=[{'code':'A','amounts':{'2026':'1.01'}}],status='Proposed',name='Base',year=2026)
     assert proposed['selected']['number']==2 and proposed['selected']['status']=='Proposed'
-    imported=act(app,'import',content=export_csv((BudgetRow('B',{2026:22}),),{},2026),year=2026)
+    imported=act(app,'import',content=export_csv((BudgetRow('B',{2026:Decimal('0.22')}),),{},2026),year=2026)
     assert imported['preview']['rows']==[{'code':'B','amounts':{'2026':'0.22'}}]
     assert imported['token']==proposed['token'] and len(imported['versions'])==2
     bad=act(app,'import',content='bad',year=2026)

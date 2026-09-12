@@ -55,6 +55,10 @@ These choices follow PostgreSQL's
 [HMAC support](https://www.postgresql.org/docs/18/pgcrypto.html).
 
 Store euro amounts as NUMERIC and use Decimal through authoritative calculations.
+This also replaces the integer-cent representation described in ADRs 0021 and
+0022. Finance retains its existing maximum amount and cent precision; dashboard
+allocation retains half-up rounding once per project/WBS/year before summing.
+CSV and browser money fields keep the same plain decimal text interface.
 Use native dates, booleans, JSONB, and identity BIGINT keys with DTO adapters.
 Replace the global display revision with per-project/per-pool revisions plus
 shared-catalog and security revisions. Read scope and revisions in one snapshot;
