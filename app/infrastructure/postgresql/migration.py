@@ -77,6 +77,7 @@ def migrate(url: str, *, directory: Path = MIGRATION_DIRECTORY) -> tuple[str, ..
     """
     validate_database_url(url)
     migrations = discover_migrations(directory)
+    current_name = "initialization"
     try:
         with psycopg.connect(url, autocommit=True, connect_timeout=5) as connection:
             with connection.transaction():
@@ -95,11 +96,17 @@ def migrate(url: str, *, directory: Path = MIGRATION_DIRECTORY) -> tuple[str, ..
                 """)
                 applied = _verify_ledger(connection, migrations, complete=False)
                 for migration in migrations[applied:]:
+                    current_name = migration.name
                     connection.execute(migration.sql)
                     connection.execute(
                         "INSERT INTO eppm.schema_migration(version, name, checksum) VALUES (%s, %s, %s)",
                         (migration.version, migration.name, migration.checksum),
                     )
                 return tuple(migration.name for migration in migrations[applied:])
-    except psycopg.Error:
-        raise MigrationError("Database migration failed; no changes were applied.") from None
+    except psycopg.Error as error:
+        # Version and SQLSTATE are safe diagnostics. Never include driver messages,
+        # which can contain connection credentials, SQL, or application payloads.
+        raise MigrationError(
+            f"Database migration failed; no changes were applied. "
+            f"Migration: {current_name}; SQLSTATE: {error.sqlstate or 'unavailable'}."
+        ) from None

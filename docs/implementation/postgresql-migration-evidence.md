@@ -39,7 +39,7 @@ preserves UI behavior and makes the existing regression suite reproducible.
 | --- | --- | --- |
 | 1. Baseline and decisions | Baseline captured | ADR, full baseline test results, workload and service timings recorded. Browser load comparison remains an acceptance gate. |
 | 2. PostgreSQL foundation | Additive foundation tested | Configuration, pool, migration runner, Compose, operator role provisioning and isolated tests implemented. Application lifecycle integration follows repository cutover. |
-| 3. Schema and enforcement | Pending | Inventory all final SQLite invariants; native PostgreSQL schema, RLS, audit and concurrency tests. |
+| 3. Schema and enforcement | In progress | Native baseline and permanent integrity triggers tested; RLS, trusted actor binding, protected-property audit, security transitions and cache storage remain. |
 | 4. Core repositories | Pending | Organization, templates/schema, projects, tags, collaboration, Decimal budgets. |
 | 5. Planning and caches | Pending | Current planning, dependencies, allocations, capacity, per-entity revisions and snapshot tests. |
 | 6. Runtime cutover | Pending | Composition, authentication, operator tools, seeds, benchmarks, archive legacy migrations. |
@@ -81,5 +81,34 @@ available for that comparison before its runtime is archived.
 
 - `1387f1a` — bind the optional hierarchy label to the originating locale;
   20 affected Streamlit tests passed, including the new regression.
-- The baseline and additive PostgreSQL foundation form the next reviewed
-  milestone commit; its hash will be recorded with the subsequent schema work.
+- `00c5022` — additive PostgreSQL foundation, explicit operator setup, isolated
+  real-database checks and recorded SQLite baseline; 46 PostgreSQL checks passed.
+
+## Native schema and integrity
+
+`0002_business_schema.sql` translates the current business/access/finance tables
+with BIGINT identities, NUMERIC euro values, native booleans/dates and JSONB.
+No business records, users or grants are imported. Runtime business privileges
+remain absent pending permanent row-security policies. Cache storage is a
+separate required redesign, not a translation of the global revision hotspot.
+
+`0003_integrity.sql` preserves immutable finance and audit history, hierarchy
+codes, pool-group cycle checks, inclusive employee-calendar nonoverlap, WBS totals,
+assignment ownership and task date/progress validity. Runtime business writes
+must be serializable; operator provisioning remains separate. Narrow advisory
+locks and serializable retries protect concurrent calendar, WBS and group changes.
+Functions have explicit search paths and no public execution privilege.
+
+The native-schema run passed 76 PostgreSQL tests in 13.94 seconds with 147/148
+runtime statements covered. The final inventory check brought the suite to
+77 passing tests in 14.08 seconds. New checks exercised actual native types,
+immutable records, constraints and concurrency through a nonowner connection.
+These integrity fixtures temporarily grant business-table DML only within their
+isolated databases; they are not a substitute for the pending RLS acceptance
+suite. Schema-inventory parity covers every existing business table; lifecycle
+and derived-cache replacements are accounted for explicitly.
+
+`.github/workflows/tests.yml` now configures Python 3.14 and PostgreSQL 18.6,
+generates distinct ephemeral test credentials, runs full pytest with a 95%
+coverage gate, enables the authenticated browser fixture, and runs JavaScript
+checks. It has not run on GitHub because this branch has not been published.
