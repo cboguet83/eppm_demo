@@ -98,7 +98,8 @@ Logs: `.local/postgresql-derived-cache-validation.log` and
 `.local/postgresql-derived-cache-all-native.log`. Coverage:
 `.local/postgresql-derived-cache-coverage.json`.
 
-Portfolio reads and final composition/operator/seed/benchmark cutover remain.
+[Portfolio reads](postgresql-portfolio.md) are now ported. Dashboard reads and
+final composition/operator/seed/benchmark cutover remain.
 The migration also requires project monetary-input conversion, SQLite runtime
 archival, final application coverage, the 50-user browser measurements and
 backup/restore/restart acceptance. These cache tests do not establish browser

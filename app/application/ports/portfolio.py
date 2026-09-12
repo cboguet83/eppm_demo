@@ -1,12 +1,13 @@
 """Plain-data contracts for bounded portfolio queries and editor reference data."""
 
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import NotRequired, Protocol, TypedDict
 
 from app.domain.projects.project_types import PropertyDefinition
 from app.domain.projects.budgets import PortfolioMetrics
 
-Scalar = str | int | float | bool | None
+Scalar = str | int | float | Decimal | bool | None
 PortfolioRow = dict[str, Scalar]
 
 

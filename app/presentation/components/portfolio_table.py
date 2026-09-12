@@ -1,6 +1,7 @@
 """Streamlit Components v2 project table used by the portfolio overview."""
 
 from collections.abc import Callable
+from decimal import Decimal
 from typing import Any
 
 import streamlit as st
@@ -598,6 +599,17 @@ export default function(component) {
 """
 
 
+def _component_value(value: object) -> object:
+    """Preserve exact decimals as strings at the JSON component boundary."""
+    if isinstance(value, Decimal):
+        return str(value)
+    if isinstance(value, dict):
+        return {key: _component_value(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_component_value(item) for item in value]
+    return value
+
+
 def portfolio_project_table(
     rows: list[dict[str, Any]],
     columns: list[dict[str, str]],
@@ -615,7 +627,7 @@ def portfolio_project_table(
         js=_TABLE_JS,
     )
     result = _PORTFOLIO_PROJECT_TABLE(
-        data={"rows": rows, "columns": columns, "selected_id": selected_id, "page_info": page_info},
+        data=_component_value({"rows": rows, "columns": columns, "selected_id": selected_id, "page_info": page_info}),
         key=key,
         width="stretch",
         height="content",

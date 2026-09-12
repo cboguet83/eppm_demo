@@ -41,7 +41,7 @@ preserves UI behavior and makes the existing regression suite reproducible.
 | 2. PostgreSQL foundation | Additive foundation tested | Configuration, pool, migration runner, Compose, operator role provisioning and isolated tests implemented. Application lifecycle integration follows repository cutover. |
 | 3. Schema and enforcement | Native enforcement tested | Native integrity, RLS, actor binding, audit, access administration, per-entity revisions and private derived-cache storage implemented. Final cutover and clean deployment validation remain. |
 | 4. Core repositories | Native adapters tested | Organization, schema, tags, collaboration, templates, projects, WBS and Decimal budget adapters use complete callbacks. Browser money inputs and runtime composition remain staged. |
-| 5. Planning and caches | In progress | Native scheduling, resource pools, scoped demand, private staffing, per-entity revisions and guarded capacity/planning caches implemented. Portfolio queries and final runtime integration remain. |
+| 5. Planning and caches | In progress | Native scheduling, resources, private staffing, revisions, guarded caches and bounded portfolio queries implemented. The dashboard reader, aggregate-only competing demand and final runtime integration remain. |
 | 6. Runtime cutover | In progress | Native authentication/access adapters and callback service integration implemented; composition, operator tools, seeds, benchmarks and legacy archive remain. |
 | 7. Acceptance and documentation | Pending | Full regression/coverage, browser/load runs, backup/restore, deployment and C4 documentation. |
 
@@ -118,6 +118,8 @@ available for that comparison before its runtime is archived.
   37 existing and 40 final capacity/integrity checks passed.
 - `787c32c` — scoped project/pool revision fingerprints and independent writers;
   528 native checks passed, with 100% native revision-adapter statement coverage.
+- `851f0d2` — authorized capacity/planning caches and separate publication;
+  570 native checks passed, with 100% native cache-adapter statement coverage.
 
 ## Native schema and integrity
 
@@ -655,3 +657,36 @@ Commands, C3 components and logs are in
 [PostgreSQL derived caches](postgresql-derived-caches.md). Portfolio queries,
 runtime/operator cutover, one process-state injection, project money forms and
 all final application coverage, 50-user browser and recovery acceptance remain.
+
+## Native portfolio pages and facets
+
+The native portfolio reader applies current scope before counts, pages, facets,
+metrics and details. ID-first pagination hydrates only the requested page. One
+facet statement shares grouped values between exact statistics and bounded
+choices. Dynamic properties respect applicability; manager labels use the
+minimal directory and bounded, cycle-safe reporting ancestry. Decimal amounts
+remain exact through services and become strings at the component JSON boundary,
+so selected numeric facet values round-trip without binary floating-point loss.
+
+Validation: **52 initial checks passed in 11.75 seconds**, followed by **187
+broader native/service/security/cache checks in 74.83 seconds**. After query
+improvements, **14 native checks passed in 8.00 seconds**, covering all **160
+native statements (100%)**. **15 component tests** and **3 real-browser tests in
+9.29 seconds** passed, including exact decimal facet selection. Browser pytest
+exit code was captured as **0** despite existing Playwright shutdown warnings.
+
+The final combined portfolio/service/transport/layer run passed **54 tests in
+26.79 seconds**, covering **203/203 statements (100%)** across the portfolio
+service and native reader/query modules.
+
+A single-actor, 10,001-project query probe reduced two page reads plus a facet
+from **2.8143 s to 0.2220 s** by avoiding repeated property work. Final observations
+were **0.0597 s** for the first page, **0.0438 s** for the last page and **0.1184 s**
+for the facet. This limited service probe is not the representative workload or
+the 50-user browser acceptance measurement.
+
+Commands, component relationships and evidence paths are in
+[PostgreSQL portfolio](postgresql-portfolio.md). Dashboard storage and its
+aggregate-only competing-demand behavior remain to port. Runtime/operator/seed
+and benchmark cutover, exact project-money inputs, legacy archival, final
+coverage, 50-user browser measurements and recovery acceptance remain pending.
