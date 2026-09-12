@@ -50,6 +50,10 @@ concurrent pool-group, calendar and WBS integrity checks pass against PostgreSQL
 Application ownership/RLS, protected-property audit, security transitions, cache
 redesign and repository adapters remain required before runtime cutover.
 
+Private scope helpers and categorical-reference lifetime triggers are implemented
+in `0004_scope_resolution.sql`. Structure validation is checked against the domain
+normalizer. Arbitrary scope-resolution functions have no runtime execution grant.
+
 Finance amounts use euro NUMERIC with exact cent-grid validation. Project budgets
 accept finite NUMERIC values without a new scale or sign restriction. Capacity
 percentages remain nonmonetary floating-point quantities as in the existing domain.

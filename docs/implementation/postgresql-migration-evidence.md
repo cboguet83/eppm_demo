@@ -83,6 +83,8 @@ available for that comparison before its runtime is archived.
   20 affected Streamlit tests passed, including the new regression.
 - `00c5022` — additive PostgreSQL foundation, explicit operator setup, isolated
   real-database checks and recorded SQLite baseline; 46 PostgreSQL checks passed.
+- `6aa5b38` — native business schema, permanent integrity triggers, schema
+  inventory and CI configuration; 77 PostgreSQL and 7 layer-boundary checks passed.
 
 ## Native schema and integrity
 
@@ -112,3 +114,34 @@ and derived-cache replacements are accounted for explicitly.
 generates distinct ephemeral test credentials, runs full pytest with a 95%
 coverage gate, enables the authenticated browser fixture, and runs JavaScript
 checks. It has not run on GitHub because this branch has not been published.
+
+## Scope resolution
+
+`0004_scope_resolution.sql` adds private native scope validation/resolution and
+permanent categorical-reference registration, tombstoning and grant invalidation.
+Its functions are not granted to runtime callers: arbitrary scope evaluation
+must not become a way to enumerate hidden projects. The subsequent actor-bound
+policies will use these helpers for persisted, permission-bearing grants.
+
+The PostgreSQL suite passed 112 tests in 34.44 seconds, including 35 new checks
+for domain/native structural-validation parity, duplicate reference normalization,
+missing references, categorical intersections, value changes, retyping and
+deletion/recreation. The original fixed-role mapping, trusted session binding,
+row policies, protected-property audit and security transition enforcement still
+need implementation and direct-database acceptance tests.
+
+### Next implementation work
+
+1. Add actor-bound permission projections and RLS without granting arbitrary
+   scope resolution. Derive fixed role permissions from `ROLE_PERMISSIONS` and
+   test database/application parity, including MFA and distinct read/edit scopes.
+2. Protect old/new owners and indirect writes, mask hidden predecessor IDs and
+   employee details, and require atomic audit. Preserve scope invalidation when
+   internal triggers change assignments; avoid a user-settable bypass flag.
+3. Bind trusted session references transaction-locally. Verify pooled reuse,
+   expiration/revocation, bootstrap and last-administrator races. Synchronous
+   access work must leave the ASGI loop at cutover.
+4. Implement per-project/per-pool and shared/security cache revisions, then port
+   repositories and complete callback replay through application services.
+5. Complete all remaining milestones and acceptance gates in the agreed plan;
+   the application still uses SQLite and the migration is not ready for adoption.
