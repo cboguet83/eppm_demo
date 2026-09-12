@@ -11,6 +11,30 @@ from tests.test_layered_organization_ui import dialog as team_dialog
 from tests.test_layered_resource_pool_ui import dialog as pool_dialog
 
 
+def test_unassigned_hierarchy_label_uses_the_originating_session_locale():
+    """AppTest serializes values outside the script's language context."""
+    from app.presentation.i18n import get_current_locale, set_current_locale
+
+    previous = get_current_locale()
+    try:
+        set_current_locale("fr")
+        app = AppTest.from_string('''
+import streamlit as st
+from app.presentation.i18n import set_current_locale
+from app.presentation.components.hierarchy import hierarchy_type_selector
+set_current_locale("en")
+value = hierarchy_type_selector([])
+if st.button("Save"):
+    st.write("unassigned" if value is None else "assigned")
+''').run()
+        assert app.selectbox[0].options == ["None"]
+        app.button[0].click().run()
+        assert not app.exception
+        assert app.markdown[0].value == "unassigned"
+    finally:
+        set_current_locale(previous)
+
+
 @pytest.fixture
 def database(tmp_path):
     path = str(tmp_path / "hierarchy-ui.db")
