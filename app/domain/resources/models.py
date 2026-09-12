@@ -75,6 +75,7 @@ class ResourcePool:
         capacity_fte: Optional user-defined pool capacity limit. When omitted,
             the calculated assigned capacity supplies the limit.
         created_at: ISO timestamp of creation.
+        hierarchy_type_id: Optional shared hierarchy classification.
     """
 
     name: str
@@ -82,16 +83,18 @@ class ResourcePool:
     description: str = ""
     capacity_fte: float | None = None
     created_at: str | None = None
+    hierarchy_type_id: int | None = None
 
 
 @dataclass
 class ResourcePoolGroup:
-    """A named recursive collection of resource pools and other pool groups."""
+    """A recursive pool collection with an optional shared hierarchy classification."""
 
     name: str
     id: int | None = None
     description: str = ""
     created_at: str | None = None
+    hierarchy_type_id: int | None = None
 
 
 @dataclass

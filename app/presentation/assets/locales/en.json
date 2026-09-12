@@ -1,4 +1,18 @@
 {
+  "hierarchy": {
+    "title": "Hierarchy types",
+    "field": "Hierarchy type (optional)",
+    "none": "None",
+    "help": "Shared by teams, resource pools, and pool groups. Edit labels below; assigned types cannot be deleted.",
+    "type": "Hierarchy type",
+    "new": "Add hierarchy type",
+    "code": "Code",
+    "save": "Save hierarchy type",
+    "saved": "Hierarchy type saved.",
+    "delete_confirm": "Confirm deletion of this unused hierarchy type",
+    "delete": "Delete hierarchy type",
+    "deleted": "Hierarchy type deleted."
+  },
     "wbs": {
         "title": "WBS",
         "code": "WBS code",
@@ -760,7 +774,8 @@
     "status": "Status",
     "choose_status": "Choose a status.",
     "edit": "Edit",
-    "cancel_version": "Delete Version",
+    "cancel_version": "Delete this plan",
+    "exit_edit": "Exit edit mode",
     "cancel_notice": "Cancel this saved version? Its budget values remain available. Cancellation cannot be undone.",
     "Canceled": "Canceled",
     "cancel_success": "Budget version canceled.",

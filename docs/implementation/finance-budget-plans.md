@@ -17,10 +17,14 @@ application-wide **Finance editor** role; Business administrators already qualif
    automatically as 1, 2, 3…; no major/minor choice remains.
 4. Select any older version to inspect or edit a copy. Saving always creates a new
    version, including a status-only change. Existing budget values are preserved.
-5. **Delete Version** cancels the selected saved version after confirmation without
-   creating another number. Its amounts remain visible/exportable and cancellation
+5. In edit mode, **Delete this plan** cancels the selected saved version after
+   confirmation without creating another number. Its amounts remain visible/exportable and cancellation
    is audited. Cancellation cannot be undone, but the version can be copied and
    saved as a new version with a different status.
+6. **Exit edit mode** is visible only while editing. It restores the selected saved
+   version and returns to read-only mode. Unsaved changes require confirmation;
+   canceling that prompt keeps edit mode and the draft. **Delete this plan** is
+   also hidden outside edit mode.
 
 Saving releases the previous grid's navigation listeners before mounting the saved
 version. You can navigate immediately afterward. Leaving genuinely unsaved changes

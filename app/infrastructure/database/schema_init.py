@@ -16,6 +16,7 @@ from app.infrastructure.database.wbs_migration import migrate_wbs
 from app.infrastructure.database.finance_migration import migrate_finance
 from app.infrastructure.database.finance_versions_migration import migrate_finance_versions
 from app.infrastructure.database.dashboard_migration import migrate_dashboard
+from app.infrastructure.database.hierarchy_migration import migrate_hierarchy_types
 from app.shared.logging import get_logger
 
 logger = get_logger(__name__)
@@ -686,6 +687,7 @@ def init_db(db_path: Optional[str] = None) -> None:
         migrate_finance(conn)
         migrate_finance_versions(conn)
         migrate_dashboard(conn)
+        migrate_hierarchy_types(conn)
         from app.infrastructure.database.planning_summary_cache import ensure_planning_indexes
         from app.infrastructure.database.pool_capacity_cache import install_capacity_cache
         from app.infrastructure.database.display_revision import install_display_revision

@@ -9,6 +9,8 @@ from collections.abc import Iterator
 from contextlib import closing, contextmanager
 import json
 import sqlite3
+from app.domain.hierarchy import HierarchyType
+from app.infrastructure.repositories.hierarchy import hierarchy_types
 
 from app.application.exceptions import ResourcePoolConflictError, ResourcePoolStorageError
 from app.domain.resources.models import (
@@ -37,6 +39,10 @@ class SqliteResourcePoolStore:
         """Use the connection owned by the application operation."""
         self.connection = connection
 
+    def get_all_hierarchy_types(self) -> list[HierarchyType]:
+        """Read the shared catalog using the current authorized connection."""
+        return hierarchy_types(self.connection)
+
     def get_all_pools(self) -> list[ResourcePool]:
         """Retrieves all resource pools ordered by name."""
         conn = self.connection
@@ -44,7 +50,7 @@ class SqliteResourcePoolStore:
             ResourcePool(**dict(row))
             for row in conn.execute(
                 """
-            SELECT id, name, description, capacity_fte, created_at
+            SELECT id, name, description, capacity_fte, created_at, hierarchy_type_id
             FROM resource_pool
             ORDER BY name ASC
             """,
@@ -58,7 +64,7 @@ class SqliteResourcePoolStore:
         cursor = conn.cursor()
         cursor.execute(
             """
-            SELECT id, name, description, capacity_fte, created_at
+            SELECT id, name, description, capacity_fte, created_at, hierarchy_type_id
             FROM resource_pool
             WHERE id = ?
             """,
@@ -73,6 +79,7 @@ class SqliteResourcePoolStore:
             description=row[2] or "",
             capacity_fte=float(row[3]) if row[3] is not None else None,
             created_at=row[4],
+            hierarchy_type_id=row[5],
         )
 
     def create_pool(self, pool: ResourcePool) -> int:
@@ -81,10 +88,10 @@ class SqliteResourcePoolStore:
         cursor = conn.cursor()
         cursor.execute(
             """
-            INSERT INTO main.resource_pool (name, description, capacity_fte)
-            VALUES (?, ?, ?)
+            INSERT INTO main.resource_pool (name, description, capacity_fte, hierarchy_type_id)
+            VALUES (?, ?, ?, ?)
             """,
-            (pool.name.strip(), pool.description.strip(), pool.capacity_fte),
+            (pool.name.strip(), pool.description.strip(), pool.capacity_fte, pool.hierarchy_type_id),
         )
         return int(cursor.lastrowid)
 
@@ -95,10 +102,10 @@ class SqliteResourcePoolStore:
         cursor.execute(
             """
             UPDATE main.resource_pool
-            SET name = ?, description = ?, capacity_fte = ?
+            SET name = ?, description = ?, capacity_fte = ?, hierarchy_type_id = ?
             WHERE id = ?
             """,
-            (pool.name.strip(), pool.description.strip(), pool.capacity_fte, pool.id),
+            (pool.name.strip(), pool.description.strip(), pool.capacity_fte, pool.hierarchy_type_id, pool.id),
         )
         return cursor.rowcount > 0
 
@@ -125,7 +132,7 @@ class SqliteResourcePoolStore:
         cursor = conn.cursor()
         cursor.execute(
             """
-            SELECT id, name, description, created_at
+            SELECT id, name, description, created_at, hierarchy_type_id
             FROM resource_pool_group
             WHERE id = ?
             """,
@@ -139,6 +146,7 @@ class SqliteResourcePoolStore:
             name=str(row[1]),
             description=str(row[2] or ""),
             created_at=row[3],
+            hierarchy_type_id=row[4],
         )
 
     def create_pool_group(self, group: ResourcePoolGroup) -> int:
@@ -147,8 +155,8 @@ class SqliteResourcePoolStore:
         name = group.name.strip()
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT INTO main.resource_pool_group (name, description) VALUES (?, ?)",
-            (name, group.description.strip()),
+            "INSERT INTO main.resource_pool_group (name, description, hierarchy_type_id) VALUES (?, ?, ?)",
+            (name, group.description.strip(), group.hierarchy_type_id),
         )
         return int(cursor.lastrowid)
 
@@ -160,10 +168,10 @@ class SqliteResourcePoolStore:
         cursor.execute(
             """
             UPDATE main.resource_pool_group
-            SET name = ?, description = ?
+            SET name = ?, description = ?, hierarchy_type_id = ?
             WHERE id = ?
             """,
-            (name, group.description.strip(), group.id),
+            (name, group.description.strip(), group.hierarchy_type_id, group.id),
         )
         return cursor.rowcount > 0
 
@@ -487,7 +495,7 @@ class SqliteResourcePoolStore:
         return [
             ResourcePoolGroup(**dict(row))
             for row in self.connection.execute(
-                "SELECT id,name,description,created_at FROM resource_pool_group ORDER BY name"
+                "SELECT id,name,description,created_at,hierarchy_type_id FROM resource_pool_group ORDER BY name"
             )
         ]
 

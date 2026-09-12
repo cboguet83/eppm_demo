@@ -21,6 +21,7 @@ _OWNED_TABLES = {
     "project_tag": "project_id", "task_tag": "task_id",
 }
 _SHARED_TABLES = frozenset({
+    "hierarchy_type", "hierarchy_type_translation",
     "wbs",
     "schema_groups", "schema_parameters", "schema_param_options", "schema_parameter_translation",
     "project_type", "project_type_property", "project_type_property_rule", "project_type_property_default",

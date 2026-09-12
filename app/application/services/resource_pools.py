@@ -1,6 +1,7 @@
 """Resource-pool use cases and atomic catalog/group/tag operations."""
 
 from app.domain.access.models import Permission
+from app.domain.hierarchy import HierarchyType
 from app.application.ports.references import PoolReference, PoolGroupReference
 
 
@@ -63,6 +64,11 @@ class ResourcePoolService:
         """Get all pools within one application transaction."""
         with self._gateway.transaction(permission=Permission.SHARED) as store:
             return store.get_all_pools()
+
+    def get_all_hierarchy_types(self) -> list[HierarchyType]:
+        """Read shared classifications for optional pool and group assignments."""
+        with self._gateway.transaction(permission=Permission.SHARED) as store:
+            return store.get_all_hierarchy_types()
 
     def get_pool_by_id(self, pool_id: int) -> ResourcePool | None:
         """Get pool by id within one application transaction."""

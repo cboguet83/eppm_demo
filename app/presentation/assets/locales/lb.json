@@ -1,4 +1,18 @@
 {
+  "hierarchy": {
+    "title": "Hierarchietypen",
+    "field": "Hierarchietyp (optional)",
+    "none": "Keen",
+    "help": "Gemeinsam fir Ekippen, Ressourcepools a Poolgruppen. Benotzt Type kënnen net geläscht ginn.",
+    "type": "Hierarchietyp",
+    "new": "Hierarchietyp derbäisetzen",
+    "code": "Code",
+    "save": "Hierarchietyp späicheren",
+    "saved": "Hierarchietyp gespäichert.",
+    "delete_confirm": "Läsche vun dësem onbenotzten Hierarchietyp bestätegen",
+    "delete": "Hierarchietyp läschen",
+    "deleted": "Hierarchietyp geläscht."
+  },
     "wbs": {
         "title": "WBS",
         "code": "WBS-Code",
@@ -761,7 +775,8 @@
     "status": "Status",
     "choose_status": "Wielt e Status.",
     "edit": "Änneren",
-    "cancel_version": "Versioun läschen",
+    "cancel_version": "Dëse Plang läschen",
+    "exit_edit": "Beaarbechtungsmodus verloossen",
     "cancel_notice": "Dës gespäichert Versioun annuléieren? Hir Budgetwäerter bleiwen disponibel. Dës Annulatioun ass definitiv.",
     "Canceled": "Annuléiert",
     "cancel_success": "Budgetsversioun annuléiert.",

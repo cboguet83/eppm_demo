@@ -26,7 +26,7 @@ from app.presentation.components.resource_pool_dialogs import (
     _render_pool_groups_management,
     _render_pool_assignments_table,
 )
-from app.presentation.i18n import t
+from app.presentation.i18n import get_current_locale, t
 
 
 @pool_errors
@@ -120,6 +120,10 @@ def render_resource_pools(
                     f"### 🏊 **{current_detail.pool_name}** `[Pool #{current_detail.pool_id}]`"
                 )
                 pool_obj = service.get_pool_by_id(selected_pool_id)
+                if pool_obj and pool_obj.hierarchy_type_id is not None:
+                    hierarchy_labels = {record.id: record.label(get_current_locale())
+                                        for record in service.get_all_hierarchy_types()}
+                    st.text(t("hierarchy.type") + ": " + hierarchy_labels.get(pool_obj.hierarchy_type_id, ""))
                 if pool_obj and pool_obj.description:
                     st.caption(f"📝 {pool_obj.description}")
                 pool_tags = tags_frame(service.get_pool_tags(selected_pool_id))

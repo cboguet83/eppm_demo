@@ -32,6 +32,7 @@ def groups_frame(records: list[PoolGroupSummary]) -> pd.DataFrame:
             "name",
             "description",
             "created_at",
+            "hierarchy_type_id",
             "direct_pool_count",
             "child_group_count",
             "recursive_pool_count",

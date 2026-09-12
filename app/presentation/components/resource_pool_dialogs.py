@@ -7,6 +7,7 @@ import pandas as pd
 import streamlit as st
 
 from app.presentation.components.dialog import dialog
+from app.presentation.components.hierarchy import hierarchy_type_selector
 
 from app.application.exceptions import OrganizationStorageError, ResourcePoolStorageError
 from app.application.services.resource_pools import ResourcePoolService
@@ -28,7 +29,7 @@ from app.presentation.components.resource_pool_frames import (
     tags_frame,
     tag_choices_frame,
 )
-from app.presentation.i18n import t
+from app.presentation.i18n import get_current_locale, t
 
 
 def pool_errors[**P](render: Callable[P, None]) -> Callable[P, None]:
@@ -62,6 +63,7 @@ def _open_add_pool_dialog(service: ResourcePoolService) -> None:
         t("settings.field_pool_desc", default="Description"),
         placeholder="Purpose and specialty of this pool...",
     )
+    hierarchy_type_id = hierarchy_type_selector(service.get_all_hierarchy_types())
     new_capacity = st.number_input(
         t("settings.field_pool_capacity", default="Defined capacity (FTE)"),
         min_value=0.0,
@@ -98,6 +100,7 @@ def _open_add_pool_dialog(service: ResourcePoolService) -> None:
                 name=new_name.strip(),
                 description=new_desc.strip(),
                 capacity_fte=float(new_capacity),
+                hierarchy_type_id=hierarchy_type_id,
             ),
             tag_ids=selected_tag_ids,
         )
@@ -121,6 +124,7 @@ def _open_edit_pool_dialog(service: ResourcePoolService, pool_id: int) -> None:
     edit_desc = st.text_area(
         t("settings.field_pool_desc", default="Description"), value=pool.description
     )
+    hierarchy_type_id = hierarchy_type_selector(service.get_all_hierarchy_types(), pool.hierarchy_type_id)
     edit_capacity = st.number_input(
         t("settings.field_pool_capacity", default="Defined capacity (FTE)"),
         min_value=0.0,
@@ -166,6 +170,7 @@ def _open_edit_pool_dialog(service: ResourcePoolService, pool_id: int) -> None:
                     name=edit_name.strip(),
                     description=edit_desc.strip(),
                     capacity_fte=float(edit_capacity),
+                    hierarchy_type_id=hierarchy_type_id,
                 ),
                 tag_ids=selected_tag_ids,
             )
@@ -213,6 +218,7 @@ def _open_add_pool_group_dialog(service: ResourcePoolService) -> None:
     pool_labels, group_labels = _pool_group_option_maps(service)
     name = st.text_input("Group name *", placeholder="e.g. Digital delivery")
     description = st.text_area("Description", placeholder="Purpose of this pool group")
+    hierarchy_type_id = hierarchy_type_selector(service.get_all_hierarchy_types())
     selected_pool_ids = st.multiselect(
         "Direct pools", options=list(pool_labels), format_func=lambda pool_id: pool_labels[pool_id]
     )
@@ -225,7 +231,7 @@ def _open_add_pool_group_dialog(service: ResourcePoolService) -> None:
     save_col, cancel_col = st.columns(2)
     if save_col.button("💾 Save group", type="primary", width="stretch"):
         service.create_pool_group(
-            ResourcePoolGroup(name=name, description=description),
+            ResourcePoolGroup(name=name, description=description, hierarchy_type_id=hierarchy_type_id),
             pool_ids=selected_pool_ids,
             child_group_ids=selected_group_ids,
         )
@@ -253,6 +259,7 @@ def _open_edit_pool_group_dialog(service: ResourcePoolService, group_id: int) ->
     }
     name = st.text_input("Group name *", value=group.name)
     description = st.text_area("Description", value=group.description)
+    hierarchy_type_id = hierarchy_type_selector(service.get_all_hierarchy_types(), group.hierarchy_type_id)
     selected_pool_ids = st.multiselect(
         "Direct pools",
         options=list(pool_labels),
@@ -270,7 +277,7 @@ def _open_edit_pool_group_dialog(service: ResourcePoolService, group_id: int) ->
     if save_col.button("💾 Save changes", type="primary", width="stretch"):
         require_change(
             service.update_pool_group(
-                ResourcePoolGroup(id=group_id, name=name, description=description),
+                ResourcePoolGroup(id=group_id, name=name, description=description, hierarchy_type_id=hierarchy_type_id),
                 pool_ids=selected_pool_ids,
                 child_group_ids=selected_group_ids,
             )
@@ -314,11 +321,14 @@ def _render_pool_groups_management(service: ResourcePoolService) -> None:
         if groups.empty:
             st.info("No pool groups yet.")
             return
+        hierarchy_labels = {record.id: record.label(get_current_locale()) for record in service.get_all_hierarchy_types()}
+        groups["hierarchy_type"] = groups["hierarchy_type_id"].map(hierarchy_labels).fillna("")
         st.dataframe(
             groups[
                 [
                     "name",
                     "description",
+                    "hierarchy_type",
                     "direct_pool_count",
                     "child_group_count",
                     "recursive_pool_count",
@@ -327,6 +337,7 @@ def _render_pool_groups_management(service: ResourcePoolService) -> None:
             column_config={
                 "name": "Group",
                 "description": "Description",
+                "hierarchy_type": t("hierarchy.type"),
                 "direct_pool_count": "Direct pools",
                 "child_group_count": "Child groups",
                 "recursive_pool_count": "All pools",

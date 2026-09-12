@@ -3,6 +3,7 @@
 from dataclasses import replace
 from math import isfinite
 
+from app.domain.hierarchy import validate_hierarchy_type_id
 from app.domain.resources.models import (
     PoolAssignment,
     PoolMapping,
@@ -63,6 +64,7 @@ def validate_capacity_fte(capacity_fte: float) -> None:
 
 def normalize_pool(pool: ResourcePool) -> ResourcePool:
     """Validate pool capacity while preserving the unspecified-capacity fallback."""
+    validate_hierarchy_type_id(pool.hierarchy_type_id)
     validate_pool_name(pool.name)
     if pool.capacity_fte is not None:
         validate_capacity_fte(pool.capacity_fte)
@@ -71,6 +73,7 @@ def normalize_pool(pool: ResourcePool) -> ResourcePool:
 
 def normalize_group(group: ResourcePoolGroup) -> ResourcePoolGroup:
     """Require a group name without changing its identity."""
+    validate_hierarchy_type_id(group.hierarchy_type_id)
     if not group.name.strip():
         raise ValueError("Pool group name is required.")
     return replace(group, name=group.name.strip(), description=group.description.strip())

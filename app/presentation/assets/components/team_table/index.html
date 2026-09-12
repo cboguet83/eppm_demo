@@ -601,6 +601,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
             <th class="sortable col-name" onclick="sortTable('team_name')"><span id="th-name">Team Name</span> <span id="sort-team_name"></span></th>
             <th class="sortable" onclick="sortTable('manager_function_name')"><span id="th-mgr">Manager Function</span> <span id="sort-manager_function_name"></span></th>
             <th class="sortable" onclick="sortTable('leader_function_name')"><span id="th-leader">Team Leader</span> <span id="sort-leader_function_name"></span></th>
+            <th class="sortable" onclick="sortTable('hierarchy_type')"><span id="th-hierarchy">Hierarchy type</span> <span id="sort-hierarchy_type"></span></th>
           </tr>
           <tr class="filter-row">
             <th><input type="text" class="col-filter-input" id="flt-id" placeholder="#" oninput="setColFilter('team_id', this.value)" /></th>
@@ -622,6 +623,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
                 <span class="excel-trigger-icon">▼</span>
               </div>
             </th>
+            <th></th>
           </tr>
         </thead>
         <tbody id="table-body">
@@ -923,6 +925,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
             (d.team_name && String(d.team_name).toLowerCase().includes(globalSearchQuery)) ||
             (d.manager_function_name && String(d.manager_function_name).toLowerCase().includes(globalSearchQuery)) ||
             (d.leader_function_name && String(d.leader_function_name).toLowerCase().includes(globalSearchQuery)) ||
+            (d.hierarchy_type && String(d.hierarchy_type).toLowerCase().includes(globalSearchQuery)) ||
             (d.team_id && String(d.team_id).includes(globalSearchQuery));
           if (!matchGlobal) return false;
         }
@@ -959,7 +962,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         return sortAsc ? (valA > valB ? 1 : -1) : (valA < valB ? 1 : -1);
       });
 
-      ['team_id', 'team_name', 'manager_function_name', 'leader_function_name'].forEach(col => {
+      ['team_id', 'team_name', 'manager_function_name', 'leader_function_name', 'hierarchy_type'].forEach(col => {
         const iconSpan = document.getElementById(`sort-${col}`);
         if (iconSpan) iconSpan.innerText = (currentSortCol === col) ? (sortAsc ? ' ▲' : ' ▼') : '';
       });
@@ -967,7 +970,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       if (filteredData.length === 0) {
         tbody.innerHTML = `
           <tr>
-            <td colspan="4" class="empty-state">
+            <td colspan="5" class="empty-state">
               ${escapeHtml(translations.no_teams || 'No teams registered matching the filters.')}
             </td>
           </tr>
@@ -985,6 +988,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
             <td class="col-name">${escapeHtml(d.team_name)}</td>
             <td>${escapeHtml(d.manager_function_name || '—')}</td>
             <td>${escapeHtml(d.leader_function_name || '—')}</td>
+            <td>${escapeHtml(d.hierarchy_type || '—')}</td>
           `;
 
           tr.addEventListener('click', () => selectRow(d, tr));
@@ -1110,6 +1114,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       if (translations.col_team_name) document.getElementById('th-name').innerText = translations.col_team_name;
       if (translations.col_team_mgr) document.getElementById('th-mgr').innerText = translations.col_team_mgr;
       if (translations.col_team_leader) document.getElementById('th-leader').innerText = translations.col_team_leader;
+      if (translations.col_hierarchy_type) document.getElementById('th-hierarchy').innerText = translations.col_hierarchy_type;
 
       if (translations.action_add) document.getElementById('ctx-add-label').innerText = `${translations.action_add} Team`;
       if (translations.action_edit) document.getElementById('ctx-edit-label').innerText = `${translations.action_edit} Team`;

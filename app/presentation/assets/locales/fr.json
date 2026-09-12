@@ -1,4 +1,18 @@
 {
+  "hierarchy": {
+    "title": "Types de hiérarchie",
+    "field": "Type de hiérarchie (facultatif)",
+    "none": "Aucun",
+    "help": "Communs aux équipes, pools de ressources et groupes de pools. Modifiez les libellés ci-dessous ; les types utilisés ne peuvent pas être supprimés.",
+    "type": "Type de hiérarchie",
+    "new": "Ajouter un type de hiérarchie",
+    "code": "Code",
+    "save": "Enregistrer le type de hiérarchie",
+    "saved": "Type de hiérarchie enregistré.",
+    "delete_confirm": "Confirmer la suppression de ce type de hiérarchie inutilisé",
+    "delete": "Supprimer le type de hiérarchie",
+    "deleted": "Type de hiérarchie supprimé."
+  },
     "wbs": {
         "title": "OTP",
         "code": "Code OTP",
@@ -784,7 +798,8 @@
     "status": "Statut",
     "choose_status": "Choisissez un statut.",
     "edit": "Modifier",
-    "cancel_version": "Supprimer la version",
+    "cancel_version": "Supprimer ce plan",
+    "exit_edit": "Quitter le mode édition",
     "cancel_notice": "Annuler cette version enregistrée ? Ses montants restent disponibles. Cette annulation est définitive.",
     "Canceled": "Annulé",
     "cancel_success": "Version budgétaire annulée.",

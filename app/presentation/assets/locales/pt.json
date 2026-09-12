@@ -1,4 +1,18 @@
 {
+  "hierarchy": {
+    "title": "Tipos de hierarquia",
+    "field": "Tipo de hierarquia (opcional)",
+    "none": "Nenhum",
+    "help": "Partilhados por equipas, pools de recursos e grupos de pools. Edite as designações; os tipos utilizados não podem ser eliminados.",
+    "type": "Tipo de hierarquia",
+    "new": "Adicionar tipo de hierarquia",
+    "code": "Código",
+    "save": "Guardar tipo de hierarquia",
+    "saved": "Tipo de hierarquia guardado.",
+    "delete_confirm": "Confirmar a eliminação deste tipo de hierarquia não utilizado",
+    "delete": "Eliminar tipo de hierarquia",
+    "deleted": "Tipo de hierarquia eliminado."
+  },
     "wbs": {
         "title": "WBS",
         "code": "Código WBS",
@@ -784,7 +798,8 @@
     "status": "Estado",
     "choose_status": "Escolha um estado.",
     "edit": "Editar",
-    "cancel_version": "Eliminar versão",
+    "cancel_version": "Eliminar este plano",
+    "exit_edit": "Sair do modo de edição",
     "cancel_notice": "Cancelar esta versão guardada? Os valores continuam disponíveis. O cancelamento é definitivo.",
     "Canceled": "Cancelado",
     "cancel_success": "Versão do orçamento cancelada.",

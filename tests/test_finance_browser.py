@@ -182,11 +182,12 @@ def test_finance_grid_saves_versions_imports_and_cancellations_without_shell_rer
             grid.get_by_role('dialog').get_by_role('button',name='Discard changes',exact=True).click()
             grid.get_by_role('button',name='Edit',exact=True).click()
             expect(grid.get_by_role('textbox',name='1 WBS code',exact=True)).to_have_value('A.1')
-            grid.get_by_role('button',name='Delete Version',exact=True).click()
+            grid.get_by_role('button',name='Delete this plan',exact=True).click()
             grid.get_by_role('dialog').get_by_role('button',name='Confirm',exact=True).click()
-            expect(grid.get_by_role('button',name='Delete Version',exact=True)).to_be_disabled()
+            expect(grid.get_by_role('button',name='Delete this plan',exact=True)).to_be_hidden()
             assert versions.locator('option').count()==3
             grid.get_by_role('button',name='Edit',exact=True).click()
+            expect(grid.get_by_role('button',name='Delete this plan',exact=True)).to_be_disabled()
             grid.get_by_role('button',name='Save new version',exact=True).click()
             grid.get_by_role('dialog').get_by_role('combobox',name='Status',exact=True).select_option('Proposed')
             grid.get_by_role('dialog').get_by_role('button',name='Confirm',exact=True).click()
@@ -196,6 +197,72 @@ def test_finance_grid_saves_versions_imports_and_cancellations_without_shell_rer
             page.screenshot(path=str(tmp_path/'finance-grid.png'),full_page=True)
             expect(page.get_by_text('Shell runs: 1',exact=True)).to_be_visible()
             assert len(page.context.pages)==1
+        finally:
+            browser.close()
+
+
+_EXIT_APP = _APP.replace("set_current_locale('en')", """
+if fresh:
+    for amount in ['42', '99']:
+        service.save([{'code':'A.1','amounts':{'2026':amount}}],base_id=None,
+                     status='Draft',name='Plan '+amount,year=2026)
+set_current_locale('en')
+""")
+
+
+@pytest.mark.parametrize('popup_server', [_EXIT_APP], indirect=True, ids=['finance-exit-edit'])
+def test_exit_edit_mode_restores_selected_plan_and_confirms_unsaved_changes(popup_server):
+    """Read-only controls and explicit exit preserve the chosen saved version."""
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(viewport={'width':1500, 'height':1000})
+            errors = []
+            page.on('pageerror', lambda error: errors.append(str(error)))
+            page.goto(popup_server)
+            grid = page.locator('.finance')
+            edit = grid.get_by_role('button', name='Edit', exact=True)
+            delete = grid.get_by_role('button', name='Delete this plan', exact=True)
+            exit_edit = grid.get_by_role('button', name='Exit edit mode', exact=True)
+            save = grid.get_by_role('button', name='Save new version', exact=True)
+            expect(edit).to_be_visible(timeout=30000)
+            expect(delete).to_be_hidden()
+            expect(exit_edit).to_be_hidden()
+            versions = grid.get_by_role('combobox', name='Budget version', exact=True)
+            original_id = versions.locator('option').last.get_attribute('value')
+            versions.select_option(original_id)
+            expect(grid.locator('.plan-name')).to_have_text('Plan 42')
+            edit.click()
+            expect(delete).to_be_visible()
+            expect(delete).to_be_enabled()
+            expect(exit_edit).to_be_visible()
+            exit_edit.click()
+            expect(exit_edit).to_be_hidden()
+            expect(delete).to_be_hidden()
+            expect(save).to_be_disabled()
+            expect(grid.get_by_role('dialog')).not_to_be_visible()
+            edit.click()
+            amount = grid.get_by_role('textbox', name='1 2026', exact=True)
+            amount.fill('123')
+            exit_edit.click()
+            modal = grid.get_by_role('dialog')
+            modal.get_by_role('button', name='Cancel', exact=True).click()
+            expect(amount).to_have_value('123')
+            expect(exit_edit).to_be_visible()
+            expect(save).to_be_enabled()
+            exit_edit.click()
+            modal.get_by_role('button', name='Discard changes', exact=True).click()
+            expect(exit_edit).to_be_hidden()
+            expect(delete).to_be_hidden()
+            expect(save).to_be_disabled()
+            expect(versions).to_have_value(original_id)
+            assert versions.locator('option').count() == 2
+            assert grid.locator('tbody input').count() == 0
+            edit.click()
+            expect(amount).to_have_value('42.00')
+            expect(grid.get_by_role('button', name='Import CSV', exact=True)).to_be_enabled()
+            expect(page.get_by_text('Shell runs: 1', exact=True)).to_be_visible()
+            assert errors == []
         finally:
             browser.close()
 
@@ -229,8 +296,10 @@ def test_active_reader_sees_the_shared_plan_with_editing_disabled(popup_server):
             page.goto(popup_server)
             grid=page.locator('.finance')
             expect(grid.get_by_role('button',name='Enregistrer une nouvelle version',exact=True)).to_be_visible(timeout=30000)
-            for name in ['Enregistrer une nouvelle version','Importer CSV','Supprimer la version','Modifier']:
+            for name in ['Enregistrer une nouvelle version','Importer CSV','Modifier']:
                 expect(grid.get_by_role('button',name=name,exact=True)).to_be_disabled()
+            for name in ['Supprimer ce plan', 'Quitter le mode édition']:
+                expect(grid.get_by_role('button',name=name,exact=True)).to_be_hidden()
             expect(grid.get_by_role('button',name='Exporter CSV',exact=True)).to_be_enabled()
             expect(grid.get_by_text('42.00',exact=True)).to_be_visible()
             assert grid.locator('tbody input').count()==0

@@ -26,7 +26,7 @@ from app.presentation.components.organization_frames import (
     employees_frame, function_types_frame, functions_frame, teams_frame,
     enrich_employees, enrich_functions, enrich_teams,
 )
-from app.presentation.i18n import t
+from app.presentation.i18n import get_current_locale, t
 
 
 def _table(name: str, **kwargs: object) -> dict[str, object] | None:
@@ -192,6 +192,7 @@ def render_teams(service: OrganizationService) -> None:
     """Render the teams catalog only when its tab is open."""
     df_funcs = functions_frame(service.get_all_functions())
     df_teams = teams_frame(service.get_all_teams())
+    hierarchy_labels = {record.id: record.label(get_current_locale()) for record in service.get_all_hierarchy_types()}
     total_teams = len(df_teams)
     st.subheader(f"{t('settings.teams_title', default='Teams Management')} ({total_teams} {t('settings.stat_teams', default='Teams')})")
 
@@ -202,6 +203,7 @@ def render_teams(service: OrganizationService) -> None:
             teams_payload.append({
                 "team_id": int(row["team_id"]),
                 "team_name": str(row["team_name"]),
+                "hierarchy_type": hierarchy_labels.get(row.get("hierarchy_type_id"), ""),
                 "manager_function_id": int(row["manager_function_id"]) if pd.notna(row.get("manager_function_id")) else None,
                 "manager_function_name": str(row["manager_function_name"]) if pd.notna(row.get("manager_function_name")) else "—",
                 "leader_function_id": int(row["leader_function_id"]) if pd.notna(row.get("leader_function_id")) else None,
@@ -213,6 +215,7 @@ def render_teams(service: OrganizationService) -> None:
         translations={
             "col_id": "ID",
             "col_team_name": t("settings.col_team_name", default="Team Name"),
+            "col_hierarchy_type": t("hierarchy.type"),
             "col_team_mgr": t("settings.col_team_mgr", default="Manager Function"),
             "col_team_leader": t("settings.col_team_leader", default="Team Leader"),
             "action_add": t("settings.action_add", default="Add New"),

@@ -8,6 +8,7 @@ import pandas as pd
 import streamlit as st
 
 from app.presentation.components.dialog import dialog
+from app.presentation.components.hierarchy import hierarchy_type_selector
 
 from app.application.exceptions import OrganizationStorageError
 from app.application.services.organization import OrganizationService
@@ -229,6 +230,7 @@ def _open_add_team_dialog(
 ) -> None:
     """Modal dialog to create a new team."""
     new_name = st.text_input(t("settings.field_team_name", default="Team Name *"), placeholder="e.g. Equipe BIM")
+    hierarchy_type_id = hierarchy_type_selector(service.get_all_hierarchy_types())
 
     func_opts = [None] + (df_funcs["function_id"].tolist() if not df_funcs.empty else [])
     func_map = dict(zip(df_funcs["function_id"], df_funcs["name"])) if not df_funcs.empty else {}
@@ -261,6 +263,7 @@ def _open_add_team_dialog(
                     team_name=new_name,
                     manager_function_id=new_mgr,
                     leader_function_id=new_leader,
+                    hierarchy_type_id=hierarchy_type_id,
                 ), function_ids=new_members,
             )
             st.toast(t("settings.msg_team_created", name=new_name, default=f"Team '{new_name}' created (ID: {new_tid})!"), icon="✅")
@@ -289,6 +292,7 @@ def _open_edit_team_dialog(
 
     func_map = dict(zip(df_funcs["function_id"], df_funcs["name"])) if not df_funcs.empty else {}
     edit_name = st.text_input(t("settings.field_team_name", default="Team Name *"), value=team_obj.team_name)
+    hierarchy_type_id = hierarchy_type_selector(service.get_all_hierarchy_types(), team_obj.hierarchy_type_id)
 
     func_opts = [None] + (df_funcs["function_id"].tolist() if not df_funcs.empty else [])
     mgr_idx = func_opts.index(team_obj.manager_function_id) if team_obj.manager_function_id in func_opts else 0
@@ -327,6 +331,7 @@ def _open_edit_team_dialog(
                     team_name=edit_name,
                     manager_function_id=edit_mgr,
                     leader_function_id=edit_leader,
+                    hierarchy_type_id=hierarchy_type_id,
                 ), function_ids=edit_members,
             ))
             st.toast(t("settings.msg_team_updated", default="Team updated successfully!"), icon="✏️")

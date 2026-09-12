@@ -1,4 +1,18 @@
 {
+  "hierarchy": {
+    "title": "Hierarchietypen",
+    "field": "Hierarchietyp (optional)",
+    "none": "Keiner",
+    "help": "Gemeinsam für Teams, Ressourcenpools und Poolgruppen. Bezeichnungen sind bearbeitbar; verwendete Typen können nicht gelöscht werden.",
+    "type": "Hierarchietyp",
+    "new": "Hierarchietyp hinzufügen",
+    "code": "Code",
+    "save": "Hierarchietyp speichern",
+    "saved": "Hierarchietyp gespeichert.",
+    "delete_confirm": "Löschen dieses ungenutzten Hierarchietyps bestätigen",
+    "delete": "Hierarchietyp löschen",
+    "deleted": "Hierarchietyp gelöscht."
+  },
     "wbs": {
         "title": "WBS",
         "code": "WBS-Code",
@@ -761,7 +775,8 @@
     "status": "Status",
     "choose_status": "Wählen Sie einen Status.",
     "edit": "Bearbeiten",
-    "cancel_version": "Version löschen",
+    "cancel_version": "Diesen Plan löschen",
+    "exit_edit": "Bearbeitungsmodus verlassen",
     "cancel_notice": "Diese gespeicherte Version stornieren? Ihre Budgetwerte bleiben verfügbar. Die Stornierung ist endgültig.",
     "Canceled": "Storniert",
     "cancel_success": "Budgetversion storniert.",

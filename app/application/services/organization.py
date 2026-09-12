@@ -1,6 +1,7 @@
 """Organization use cases, validation, and atomic multi-record changes."""
 
 from app.domain.access.models import Permission
+from app.domain.hierarchy import HierarchyType, normalize_hierarchy_type, validate_hierarchy_type_id
 from app.application.ports.references import EmployeeReference, FunctionReference
 
 
@@ -38,6 +39,24 @@ class OrganizationService:
         """Get all function types within one organization transaction."""
         with self._gateway.transaction(permission=Permission.SHARED) as store:
             return store.get_all_function_types()
+
+    def get_all_hierarchy_types(self) -> list[HierarchyType]:
+        """Read the shared classification catalog with all localized labels."""
+        with self._gateway.transaction(permission=Permission.SHARED) as store:
+            return store.get_all_hierarchy_types()
+
+    def save_hierarchy_type(self, value: HierarchyType) -> int:
+        """Create a type or edit its labels while keeping its code stable."""
+        value = normalize_hierarchy_type(value)
+        validate_hierarchy_type_id(value.id)
+        with self._gateway.transaction(write=True, permission=Permission.SHARED) as store:
+            return store.save_hierarchy_type(value)
+
+    def delete_hierarchy_type(self, type_id: int) -> bool:
+        """Delete an unused type; database references protect existing assignments."""
+        validate_hierarchy_type_id(type_id)
+        with self._gateway.transaction(write=True, permission=Permission.SHARED) as store:
+            return store.delete_hierarchy_type(type_id)
 
     def get_function_type_by_id(self, type_id: int) -> FunctionType | None:
         """Get function type by id within one organization transaction."""

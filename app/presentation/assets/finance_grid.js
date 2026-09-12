@@ -79,6 +79,11 @@ export default function({data, parentElement, setTriggerValue}) {
         }));modal.append(actions);modal.showModal();
     };
     const edit=button('edit',()=>{model.editing=true;renderRows();updateControls();});
+    const exitEdit=button('exit_edit',()=>discardThen(()=>{
+        model.rows=clone(data.rows);model.dirty=false;model.editing=false;
+        model.focus=null;model.selection=null;model.preview=null;
+        error.textContent='';padRows();viewport.scrollTop=0;renderRows();updateControls();
+    }));
     const save=button('save',saveDialog);
     const cancel=button('reload',()=>discardThen(()=>emit({kind:'reload'})));
     const cancelVersion=button('cancel_version',()=>discardThen(()=>
@@ -98,7 +103,7 @@ export default function({data, parentElement, setTriggerValue}) {
         const go=()=>{const a=element('a');a.href=data.download_url;a.download='budget.csv';root.append(a);a.click();a.remove();};
         if(model.dirty) showDialog(t('export'),[element('p',t('export_saved'))],'export',go);else go();
     });
-    toolbar.append(versionSelect,edit,save,cancel,upload,download,cancelVersion,file);
+    toolbar.append(versionSelect,edit,exitEdit,save,cancel,upload,download,cancelVersion,file);
     const metadata=element('p', data.selected ? t('metadata',{author:data.selected.author,
         date:new Date(data.selected.created_at*1000).toLocaleString(),status:t(data.selected.status)}) : t('empty_hint'),'muted');
     const viewport=element('div','','viewport');viewport.setAttribute('aria-label',t('grid'));viewport.tabIndex=0;
@@ -118,10 +123,12 @@ export default function({data, parentElement, setTriggerValue}) {
         ((years[col-2]<data.year ? historyFor(row.code) : row.amounts)[years[col-2]] || '');
     function updateControls() {
         edit.disabled=!data.can_edit || model.editing || busy;
+        exitEdit.hidden=cancelVersion.hidden=!editable();
+        exitEdit.disabled=busy;
         save.disabled=upload.disabled=!editable() || busy;
         cancel.disabled=versionSelect.disabled=busy;
         download.disabled=!data.selected || busy;
-        cancelVersion.disabled=!data.can_edit || !data.selected || data.selected.status==='Canceled' || busy;
+        cancelVersion.disabled=!editable() || !data.selected || data.selected.status==='Canceled' || busy;
         count.textContent=t('row_count',{count:model.rows.filter(row=>row.code.trim()).length});dirty.textContent=model.dirty?t('unsaved'):t('saved');
     }
     function validateRows(rows=model.rows) {

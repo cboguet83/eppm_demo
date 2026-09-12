@@ -9,6 +9,8 @@ from collections.abc import Iterator
 from contextlib import closing, contextmanager
 from datetime import date
 import sqlite3
+from app.domain.hierarchy import HierarchyType
+from app.infrastructure.repositories.hierarchy import hierarchy_types
 
 from app.application.exceptions import OrganizationConflictError, OrganizationStorageError
 from app.application.ports.organization import CalendarExceptionRow, OrganizationStore
@@ -28,6 +30,40 @@ class SqliteOrganizationStore:
     def __init__(self, connection: sqlite3.Connection) -> None:
         """Use the connection owned by the gateway transaction."""
         self.connection = connection
+
+    def get_all_hierarchy_types(self) -> list[HierarchyType]:
+        """Read the shared catalog using the current authorized connection."""
+        return hierarchy_types(self.connection)
+
+    def save_hierarchy_type(self, value: HierarchyType) -> int:
+        """Write a stable catalog entry and replace labels atomically."""
+        type_id = value.id
+        if type_id is None:
+            type_id = int(self.connection.execute(
+                "INSERT INTO main.hierarchy_type(code) VALUES(?)", (value.code,)
+            ).lastrowid)
+        else:
+            current = self.connection.execute(
+                "SELECT code FROM hierarchy_type WHERE id=?", (type_id,)
+            ).fetchone()
+            if current is None:
+                raise ValueError("This hierarchy type no longer exists. Please refresh.")
+            if current[0] != value.code:
+                raise ValueError("Hierarchy type codes cannot be changed; edit the labels instead.")
+        self.connection.execute(
+            "DELETE FROM main.hierarchy_type_translation WHERE hierarchy_type_id=?", (type_id,)
+        )
+        self.connection.executemany(
+            "INSERT INTO main.hierarchy_type_translation(hierarchy_type_id,locale,label) VALUES(?,?,?)",
+            [(type_id, locale, label) for locale, label in value.translations.items()],
+        )
+        return type_id
+
+    def delete_hierarchy_type(self, type_id: int) -> bool:
+        """Delete an unreferenced catalog entry and its cascading translations."""
+        return self.connection.execute(
+            "DELETE FROM main.hierarchy_type WHERE id=?", (type_id,)
+        ).rowcount > 0
 
     def get_all_function_types(self) -> list[FunctionType]:
         """Retrieves all function types ordered by name."""
@@ -151,7 +187,7 @@ class SqliteOrganizationStore:
         """Retrieves all team records ordered by name."""
         conn = self.connection
         return [Team(**dict(row)) for row in conn.execute("""
-            SELECT team_id, team_name, manager_function_id, leader_function_id
+            SELECT team_id, team_name, manager_function_id, leader_function_id, hierarchy_type_id
             FROM team
             ORDER BY team_name ASC
         """, ()).fetchall()]
@@ -161,7 +197,7 @@ class SqliteOrganizationStore:
         conn = self.connection
         cursor = conn.cursor()
         cursor.execute("""
-            SELECT team_id, team_name, manager_function_id, leader_function_id
+            SELECT team_id, team_name, manager_function_id, leader_function_id, hierarchy_type_id
             FROM team
             WHERE team_id = ?
         """, (team_id,))
@@ -170,7 +206,7 @@ class SqliteOrganizationStore:
             return None
         return Team(
             team_id=row[0], team_name=row[1],
-            manager_function_id=row[2], leader_function_id=row[3],
+            manager_function_id=row[2], leader_function_id=row[3], hierarchy_type_id=row[4],
         )
 
     def create_team(self, team: Team) -> int:
@@ -178,9 +214,9 @@ class SqliteOrganizationStore:
         conn = self.connection
         cursor = conn.cursor()
         cursor.execute("""
-            INSERT INTO main.team (team_name, manager_function_id, leader_function_id)
-            VALUES (?, ?, ?)
-        """, (team.team_name, team.manager_function_id, team.leader_function_id))
+            INSERT INTO main.team (team_name, manager_function_id, leader_function_id, hierarchy_type_id)
+            VALUES (?, ?, ?, ?)
+        """, (team.team_name, team.manager_function_id, team.leader_function_id, team.hierarchy_type_id))
         return int(cursor.lastrowid)
 
     def update_team(self, team: Team) -> bool:
@@ -189,11 +225,11 @@ class SqliteOrganizationStore:
         cursor = conn.cursor()
         cursor.execute("""
             UPDATE main.team
-            SET team_name = ?, manager_function_id = ?, leader_function_id = ?
+            SET team_name = ?, manager_function_id = ?, leader_function_id = ?, hierarchy_type_id = ?
             WHERE team_id = ?
         """, (
             team.team_name, team.manager_function_id,
-            team.leader_function_id, team.team_id,
+            team.leader_function_id, team.hierarchy_type_id, team.team_id,
         ))
         return cursor.rowcount > 0
 

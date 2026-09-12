@@ -52,12 +52,14 @@ class Team:
         team_id: Unique primary key identifier.
         manager_function_id: Optional manager function ID for the team.
         leader_function_id: Optional team leader function ID.
+        hierarchy_type_id: Optional shared hierarchy classification.
     """
 
     team_name: str
     team_id: int | None = None
     manager_function_id: int | None = None
     leader_function_id: int | None = None
+    hierarchy_type_id: int | None = None
 
 
 @dataclass

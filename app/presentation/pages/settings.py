@@ -6,6 +6,7 @@ from app.presentation.i18n import t
 from app.presentation.navigation import PAGE_PLANNING
 from app.presentation.components.settings_workspace import SettingsWorkspace
 from app.presentation.pages.resource_pools import render_resource_pools
+from app.presentation.pages.hierarchy import render_hierarchy_types
 from app.presentation.pages.organization import (
     render_functions,
     render_function_types,
@@ -82,6 +83,7 @@ def render_settings_view(workspace: SettingsWorkspace) -> None:
         f"📚 {t('settings.tab_tag_dict', default='Tag Dictionary')}",
         f"📌 {t('settings.tab_proj_tags', default='Project Tags')}",
         f"📋 {t('settings.tab_task_tags', default='Task Tags')}",
+        t("hierarchy.title"),
         f"🏊 {t('settings.tab_resource_pools', default='Resource Pools')}",
     ]
     requested_tab = st.session_state.pop("settings_active_tab", None)
@@ -96,8 +98,12 @@ def render_settings_view(workspace: SettingsWorkspace) -> None:
         tab_tag_dict,
         tab_proj_tags,
         tab_task_tags,
+        tab_hierarchy,
         tab_pools,
     ) = st.tabs(settings_tab_labels, key="settings_tab_selection", on_change="rerun")
+    if tab_hierarchy.open:
+        with tab_hierarchy:
+            render_hierarchy_types(workspace.organization)
     if tab_funcs.open:
         with tab_funcs:
             render_functions(workspace.organization)

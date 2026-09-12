@@ -6,6 +6,7 @@ from datetime import date
 from math import isfinite
 import re
 
+from app.domain.hierarchy import validate_hierarchy_type_id
 from app.domain.organization.models import (
     Employee, EmployeeCalendarException, FunctionHierarchy, FunctionType, OrgFunction, Team,
 )
@@ -129,6 +130,7 @@ def normalize_function(value: OrgFunction) -> OrgFunction:
 
 def normalize_team(value: Team) -> Team:
     """Validate and trim a team name without changing its references."""
+    validate_hierarchy_type_id(value.hierarchy_type_id)
     validate_team(value.team_name)
     return replace(value, team_name=value.team_name.strip())
 
