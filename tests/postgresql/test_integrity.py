@@ -276,4 +276,6 @@ def test_protected_trigger_helpers_are_not_publicly_executable(business):
         "is_access_administrator", "admin_set_status", "admin_grant", "admin_revoke", "admin_register",
         "admin_resolve_scope", "admin_project_choices", "access_security_revision",
         "admin_scope_catalog",
+        "oidc_state_store", "oidc_state_consume", "session_lookup", "authenticate_identity",
+        "session_activity", "session_logout", "policy_scope_projects",
     }

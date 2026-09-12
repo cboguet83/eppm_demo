@@ -1,20 +1,20 @@
 """SQLite access persistence; no identity claims or permissions come from the UI."""
 
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import closing, contextmanager
 import json
 import sqlite3
 
 from app.application.ports.access import AssignmentRecord, SessionRecord, UserRecord
-from app.domain.access.models import ProjectScope, VerifiedIdentity
+from app.domain.access.models import AccessDenied, Actor, ProjectScope, VerifiedIdentity
 from app.infrastructure.database.connection import get_db
 
 
 class SqliteAccessStore:
     """Use one explicit connection for policy checks, security writes, and audit."""
 
-    def __init__(self, connection: sqlite3.Connection) -> None:
-        self.connection = connection
+    def __init__(self, connection: sqlite3.Connection, actor: Actor | None = None) -> None:
+        self.connection, self.actor = connection, actor
 
     def _execute(self, statement: str, parameters: Sequence[object] = ()) -> sqlite3.Cursor:
         """Use named security rows without changing the caller's business row factory."""
@@ -201,6 +201,89 @@ class SqliteAccessStore:
         """Read a bounded audit history; no update/delete API exists."""
         return [dict(row) for row in self._execute("SELECT * FROM app_security_audit ORDER BY id DESC LIMIT ?", (min(max(limit, 1), 500),))]
 
+    def _check_actor(self, actor: Actor) -> None:
+        if self.actor != actor:
+            raise AccessDenied()
+
+    def record_sign_in(self, identity: VerifiedIdentity, configured_issuer: str, session_hash: str,
+                       previous_hash: str | None, now: int, expires_at: int, correlation: str) -> None:
+        """Resolve identity, rotate session and append authentication audit together."""
+        if identity.issuer != configured_issuer:
+            raise AccessDenied()
+        user = self.resolve_identity(identity, now)
+        if previous_hash:
+            self.revoke_session(previous_hash)
+        self.create_session(session_hash, user["id"], identity, now, expires_at)
+        self.audit(now, "oidc", str(user["id"]), "authentication.success", correlation, {"status": user["status"]})
+
+    def register_account(self, issuer: str, subject: str, display_name: str, actor: Actor, now: int) -> int:
+        """Register a pending identity and its mandatory audit in one transaction."""
+        self._check_actor(actor)
+        user_id = self.register_user(issuer, subject, display_name, now)
+        self.audit(now, str(actor.user_id), str(user_id), "user.register", actor.correlation_id, {"status": "pending"})
+        return user_id
+
+    def change_status(self, user_id: int, status: str, actor: Actor, now: int) -> None:
+        """Preserve active administrator continuity and audit the prior status."""
+        self._check_actor(actor)
+        user = self.find_user(user_id)
+        if user is None:
+            raise AccessDenied()
+        self.set_status(user_id, status, now)
+        if self.active_admin_count() == 0:
+            raise ValueError("At least one active access administrator must remain.")
+        self.audit(now, str(actor.user_id), str(user_id), "user.status", actor.correlation_id,
+                   {"before": user["status"], "after": status})
+
+    def assign_role(self, user_id: int, role: str, scope: ProjectScope, actor: Actor, now: int) -> int:
+        """Persist a canonical assignment and audit, rejecting invalidated originals."""
+        self._check_actor(actor)
+        assignment_id = self.grant(user_id, role, scope, now, str(actor.user_id))
+        assignment = self.assignment(assignment_id)
+        if assignment is None or assignment["invalid_reason"]:
+            raise ValueError("Revoke the invalid assignment before granting its replacement.")
+        self.audit(now, str(actor.user_id), str(user_id), "role.grant", actor.correlation_id,
+                   {"assignment_id": assignment_id, "role": role, "scope": scope.to_dict()})
+        return assignment_id
+
+    def remove_assignment(self, assignment_id: int, actor: Actor, now: int) -> None:
+        """Revoke a grant with continuity enforcement and its required audit."""
+        self._check_actor(actor)
+        assignment = self.assignment(assignment_id)
+        if assignment is None:
+            raise AccessDenied()
+        self.revoke(assignment_id)
+        if self.active_admin_count() == 0:
+            raise ValueError("At least one active access administrator must remain.")
+        self.audit(now, str(actor.user_id), str(assignment["user_id"]), "role.revoke", actor.correlation_id,
+                   {"assignment_id": assignment_id, "role": assignment["role"]})
+
+    def end_session(self, actor: Actor, now: int) -> None:
+        """Revoke the actor's browser session and audit without global invalidation."""
+        self._check_actor(actor)
+        self.revoke_session(actor.session_hash)
+        self.audit(now, str(actor.user_id), str(actor.user_id), "session.logout", actor.correlation_id, {})
+
+    def record_activity(self, actor: Actor, now: int, expires_at: int) -> None:
+        """Extend only explicit activity, preserving the original authentication time."""
+        self._check_actor(actor)
+        self.touch_session(actor.session_hash, now, expires_at)
+
+    def appoint_administrator(self, user_id: int, operator: str, correlation: str, now: int,
+                              reason: str, *, initial: bool) -> None:
+        """Bootstrap or recover an administrator with one inseparable audit event."""
+        if self.actor is not None:
+            raise AccessDenied()
+        if initial and self.bootstrap_complete():
+            raise ValueError("Initial access setup is already complete. Use explicit recovery if needed.")
+        if not self.verified_user(user_id):
+            raise ValueError("Select an existing account with a verified OIDC login.")
+        self.set_status(user_id, "active", now)
+        self.grant(user_id, "access_admin", ProjectScope("all"), now, "operator:" + operator)
+        self.finish_bootstrap()
+        self.audit(now, "operator:" + operator, str(user_id), "access.bootstrap" if initial else "access.recover",
+                   correlation, {"reason": reason})
+
 
 class SqliteAccessGateway:
     """Use actual SQLite transactions and writer serialization for security changes."""
@@ -209,9 +292,15 @@ class SqliteAccessGateway:
         self.db_path = db_path
 
     @contextmanager
-    def transaction(self, *, write: bool = False) -> Iterator[SqliteAccessStore]:
+    def transaction(self, *, write: bool = False, actor: Actor | None = None) -> Iterator[SqliteAccessStore]:
         """Close every connection and roll back any policy, integrity, or audit failure."""
         with closing(get_db(self.db_path)) as connection, connection:
             connection.row_factory = sqlite3.Row
             connection.execute("BEGIN IMMEDIATE" if write else "BEGIN")
-            yield SqliteAccessStore(connection)
+            yield SqliteAccessStore(connection, actor)
+
+    def run[Result](self, operation: Callable[[SqliteAccessStore], Result], *, write: bool = False,
+                    actor: Actor | None = None) -> Result:
+        """Execute the callback contract while the legacy runtime is being retired."""
+        with self.transaction(write=write, actor=actor) as store:
+            return operation(store)

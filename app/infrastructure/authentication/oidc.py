@@ -1,7 +1,6 @@
 """Authlib OIDC integration with explicit provider and token validation policy."""
 
-from collections.abc import Callable
-from typing import Any
+from typing import Any, Protocol
 
 from authlib.integrations.starlette_client import OAuth, StarletteOAuth2App
 from authlib.integrations.starlette_client.integration import StarletteIntegration
@@ -9,8 +8,23 @@ from authlib.oidc.core import UserInfo
 from starlette.requests import Request
 
 from app.domain.access.models import AccessDenied, VerifiedIdentity
-from app.infrastructure.authentication.state import SqliteOidcState
 from app.shared.config.authentication import AuthenticationConfig, validate_url
+
+
+class OidcStateCache(Protocol):
+    """Persist opaque authorization state and consume it once across workers."""
+
+    async def set(self, key: str, value: str, expires: int) -> None:
+        """Store a request with a bounded lifetime in seconds."""
+        ...
+
+    async def get(self, key: str) -> str | None:
+        """Consume and return an unexpired request once."""
+        ...
+
+    async def delete(self, key: str) -> None:
+        """Discard any remaining request data."""
+        ...
 
 
 class ConfiguredOidcClient(StarletteOAuth2App):
@@ -63,10 +77,10 @@ class ConfiguredOidcClient(StarletteOAuth2App):
         return await super().parse_id_token(token, nonce, options, claims_cls, leeway=0)
 
 
-def create_oidc_client(config: AuthenticationConfig, db_path: str,
-                       clock: Callable[[], int]) -> ConfiguredOidcClient:
+def create_oidc_client(config: AuthenticationConfig,
+                       cache: OidcStateCache) -> ConfiguredOidcClient:
     """Compose the maintained OAuth client with single-use server-side PKCE state."""
-    oauth = OAuth(cache=SqliteOidcState(db_path, clock))
+    oauth = OAuth(cache=cache)
     return oauth.register(
         "provider", client_cls=ConfiguredOidcClient, authentication=config,
         client_id=config.client_id, client_secret=config.client_secret,

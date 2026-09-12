@@ -1,13 +1,14 @@
 """Current-session authorization and transactional access administration."""
 
-from collections.abc import Callable, Collection, Iterator
-from contextlib import contextmanager
+from collections.abc import Callable, Collection
 from dataclasses import dataclass
 import hashlib
 import json
 import logging
 
-from app.application.ports.access import AccessGateway, AccessStore, AssignmentRecord, SessionRecord, UserRecord
+from app.application.ports.access import (
+    AccessGateway, AccessStore, AssignmentRecord, DeploymentAccessGateway, SessionRecord, UserRecord,
+)
 from app.domain.access.models import (
     APPLICATION_ROLES, ROLE_PERMISSIONS, USER_STATES, AccessDenied, Actor,
     Permission, ProjectScope, ReauthenticationRequired, VerifiedIdentity,
@@ -118,22 +119,21 @@ class AccessService:
 
     def sign_in(self, identity: VerifiedIdentity, previous_cookie: str | None = None) -> str:
         """Accept only verified configured-provider identities and rotate the browser session."""
-        now = self.policy.clock()
-        if identity.issuer != self.issuer or identity.expires_at <= now or identity.auth_time > now + 30:
-            raise AccessDenied()
-        _safe_text(identity.subject, 512, required=True)
-        _safe_text(identity.email, 320)
-        _safe_text(identity.display_name, 256)
-        expiry = now + self.policy.limits.idle_seconds
         cookie = self.token_factory()
         digest = session_digest(cookie)
-        with self.gateway.transaction(write=True) as store:
-            user = store.resolve_identity(identity, now)
-            if previous_cookie:
-                store.revoke_session(session_digest(previous_cookie))
-            store.create_session(digest, user["id"], identity, now, expiry)
-            store.audit(now, "oidc", str(user["id"]), "authentication.success", self.token_factory(),
-                        {"status": user["status"]})
+        previous = session_digest(previous_cookie) if previous_cookie else None
+        correlation = self.token_factory()
+
+        def operation(store: AccessStore) -> None:
+            now = self.policy.clock()
+            if identity.issuer != self.issuer or identity.expires_at <= now or identity.auth_time > now + 30:
+                raise AccessDenied()
+            _safe_text(identity.subject, 512, required=True)
+            _safe_text(identity.email, 320)
+            _safe_text(identity.display_name, 256)
+            store.record_sign_in(identity, self.issuer, digest, previous, now,
+                                 now + self.policy.limits.idle_seconds, correlation)
+        self.gateway.run(operation, write=True)
         return cookie
 
     def actor(self, cookie: str) -> Actor:
@@ -143,98 +143,89 @@ class AccessService:
     def browser_identity(self, cookie: str) -> tuple[Actor, str, int]:
         """Validate a connection's current identity/status without extending its lifetime."""
         digest = session_digest(cookie)
-        with self.gateway.transaction() as store:
+        correlation = self.token_factory()
+        def operation(store: AccessStore) -> tuple[Actor, str, int]:
             session = store.session(digest)
             if session is None:
                 raise AccessDenied()
-            actor = Actor(session["user_id"], digest, self.token_factory())
+            actor = Actor(session["user_id"], digest, correlation)
             current = self.policy.session(store, actor, active=False)
             return actor, current["status"], store.security_revision()
+        return self.gateway.run(operation)
 
     def account(self, actor: Actor) -> UserRecord:
         """Pending/disabled screens may read only their own profile and status."""
-        with self.gateway.transaction() as store:
+        def operation(store: AccessStore) -> UserRecord:
             self.policy.session(store, actor, active=False)
             user = store.find_user(actor.user_id)
             if user is None:
                 raise AccessDenied()
             return user
+        return self.gateway.run(operation, actor=actor)
 
     def logout(self, actor: Actor) -> None:
         """Revoke one browser's application session, including associated open tabs."""
-        with self.gateway.transaction(write=True) as store:
+        def operation(store: AccessStore) -> None:
             self.policy.session(store, actor, active=False)
-            store.revoke_session(actor.session_hash)
-            store.audit(self.policy.clock(), str(actor.user_id), str(actor.user_id), "session.logout", actor.correlation_id, {})
+            store.end_session(actor, self.policy.clock())
+        self.gateway.run(operation, write=True, actor=actor)
 
     def activity(self, actor: Actor) -> None:
         """Touch only after an explicit user interaction, never on background polling."""
-        with self.gateway.transaction(write=True) as store:
+        def operation(store: AccessStore) -> None:
             self.policy.session(store, actor, active=False)
             now = self.policy.clock()
-            store.touch_session(actor.session_hash, now, now + self.policy.limits.idle_seconds)
+            store.record_activity(actor, now, now + self.policy.limits.idle_seconds)
+        self.gateway.run(operation, write=True, actor=actor)
 
     def list_users(self, actor: Actor, search: str = "") -> list[UserRecord]:
         """Access administrators can search application accounts independently of employees."""
-        with self._administration(actor) as store:
-            return store.list_users(_safe_text(search, 256))
+        return self._administration(actor, lambda store: store.list_users(_safe_text(search, 256)))
 
     def register(self, actor: Actor, issuer: str, subject: str, display_name: str) -> int:
         """Pre-register an exact configured issuer/subject without an email invitation."""
-        with self._administration(actor, write=True, recent=True) as store:
+        def operation(store: AccessStore) -> int:
             if issuer != self.issuer:
                 raise ValueError("Use the configured OIDC issuer.")
             _safe_text(subject, 512, required=True)
             _safe_text(display_name, 256)
-            user_id = store.register_user(issuer, subject, display_name, self.policy.clock())
-            store.audit(self.policy.clock(), str(actor.user_id), str(user_id), "user.register", actor.correlation_id, {"status": "pending"})
-            return user_id
+            return store.register_account(issuer, subject, display_name, actor, self.policy.clock())
+        return self._administration(actor, operation, write=True, recent=True)
 
     def set_status(self, actor: Actor, user_id: int, status: str) -> None:
         """Change current state atomically without allowing the last administrator to disappear."""
-        with self._administration(actor, write=True, recent=True) as store:
+        def operation(store: AccessStore) -> None:
             if status not in USER_STATES:
                 raise ValueError("Unknown user status.")
             user = store.find_user(user_id)
             if user is None:
                 raise AccessDenied()
-            store.set_status(user_id, status, self.policy.clock())
-            if store.active_admin_count() == 0:
-                raise ValueError("At least one active access administrator must remain.")
-            store.audit(self.policy.clock(), str(actor.user_id), str(user_id), "user.status", actor.correlation_id,
-                        {"before": user["status"], "after": status})
+            store.change_status(user_id, status, actor, self.policy.clock())
+        self._administration(actor, operation, write=True, recent=True)
 
     def grant(self, actor: Actor, user_id: int, role: str, scope_data: object) -> int:
         """Grant one fixed role and its own fully resolved scope, with recent authentication."""
-        with self._administration(actor, write=True, recent=True) as store:
+        def operation(store: AccessStore) -> int:
             scope = normalize_scope(scope_data)
             validate_assignment(role, scope)
             if store.find_user(user_id) is None:
                 raise AccessDenied()
             store.scope_projects(scope)
-            assignment_id = store.grant(user_id, role, scope, self.policy.clock(), str(actor.user_id))
-            assignment = store.assignment(assignment_id)
-            if assignment is None or assignment["invalid_reason"]:
-                raise ValueError("Revoke the invalid assignment before granting its replacement.")
-            store.audit(self.policy.clock(), str(actor.user_id), str(user_id), "role.grant", actor.correlation_id,
-                        {"assignment_id": assignment_id, "role": role, "scope": scope.to_dict()})
-            return assignment_id
+            return store.assign_role(user_id, role, scope, actor, self.policy.clock())
+        return self._administration(actor, operation, write=True, recent=True)
 
     def revoke(self, actor: Actor, assignment_id: int) -> None:
         """Remove a persisted grant and enforce continuity within the writer transaction."""
-        with self._administration(actor, write=True, recent=True) as store:
+        def operation(store: AccessStore) -> None:
             assignment = store.assignment(assignment_id)
             if assignment is None:
                 raise AccessDenied()
-            store.revoke(assignment_id)
-            if store.active_admin_count() == 0:
-                raise ValueError("At least one active access administrator must remain.")
-            store.audit(self.policy.clock(), str(actor.user_id), str(assignment["user_id"]), "role.revoke",
-                        actor.correlation_id, {"assignment_id": assignment_id, "role": assignment["role"]})
+            store.remove_assignment(assignment_id, actor, self.policy.clock())
+        self._administration(actor, operation, write=True, recent=True)
 
     def assignments(self, actor: Actor, user_id: int) -> list[dict[str, object]]:
         """Summarize grants and expose broken references for administrator repair."""
-        with self._administration(actor) as store:
+        def operation(store: AccessStore) -> list[dict[str, object]]:
             result = []
             for row in store.assignments(user_id):
                 item: dict[str, object] = dict(row)
@@ -250,20 +241,19 @@ class AccessService:
                     item["matching_projects"] = 0
                 result.append(item)
             return result
+        return self._administration(actor, operation)
 
     def scope_catalog(self, actor: Actor) -> list[dict[str, object]]:
         """Read only categorical reference labels needed to configure a scope."""
-        with self._administration(actor) as store:
-            return store.scope_catalog()
+        return self._administration(actor, lambda store: store.scope_catalog())
 
     def scope_project_choices(self, actor: Actor, search: str = "") -> list[dict[str, object]]:
         """Access administrators may search project labels solely for scope configuration."""
-        with self._administration(actor) as store:
-            return store.scope_project_choices(_safe_text(search, 256))
+        return self._administration(actor, lambda store: store.scope_project_choices(_safe_text(search, 256)))
 
     def capabilities(self, actor: Actor) -> frozenset[Permission]:
         """Describe currently usable capabilities for UI visibility, never for enforcement."""
-        with self.gateway.transaction() as store:
+        def operation(store: AccessStore) -> frozenset[Permission]:
             result = set()
             for permission in Permission:
                 for _, scope in self.policy.grants(store, actor, permission):
@@ -275,10 +265,11 @@ class AccessService:
                         result.add(permission)
                         break
             return frozenset(result)
+        return self.gateway.run(operation, actor=actor)
 
     def effective_access(self, actor: Actor, user_id: int, project_id: int) -> list[dict[str, object]]:
         """Explain which current assignments grant access without returning project details."""
-        with self._administration(actor) as store:
+        def operation(store: AccessStore) -> list[dict[str, object]]:
             user = store.find_user(user_id)
             if user is None:
                 raise AccessDenied()
@@ -298,19 +289,20 @@ class AccessService:
                                    "permissions": sorted(ROLE_PERMISSIONS[grant["role"]]),
                                    "requires_mfa": self.policy.limits.require_admin_mfa and grant["role"] in APPLICATION_ROLES})
             return result
+        return self._administration(actor, operation)
 
     def audit(self, actor: Actor) -> list[dict[str, object]]:
         """Read append-only security events with an explicit access-management grant."""
-        with self._administration(actor) as store:
-            return store.list_audit()
+        return self._administration(actor, lambda store: store.list_audit())
 
-    @contextmanager
-    def _administration(self, actor: Actor, *, write: bool = False, recent: bool = False) -> Iterator[AccessStore]:
-        """Reauthorize administration and record safe failure metadata after rollback."""
+    def _administration[Result](self, actor: Actor, operation: Callable[[AccessStore], Result], *,
+                               write: bool = False, recent: bool = False) -> Result:
+        """Reauthorize every replay and record one safe failure after rollback."""
+        def authorized(store: AccessStore) -> Result:
+            self.policy.require(store, actor, Permission.ACCESS, recent=recent)
+            return operation(store)
         try:
-            with self.gateway.transaction(write=write) as store:
-                self.policy.require(store, actor, Permission.ACCESS, recent=recent)
-                yield store
+            return self.gateway.run(authorized, write=write, actor=actor)
         except ValueError as error:
             denied = isinstance(error, AccessDenied)
             logger.warning("security.event %s", json.dumps({
@@ -326,7 +318,7 @@ class AccessService:
 class DeploymentAccessService:
     """Deployment-only bootstrap, account inspection, and reasoned recovery."""
 
-    def __init__(self, gateway: AccessGateway, clock: Callable[[], int], operator: str,
+    def __init__(self, gateway: DeploymentAccessGateway, clock: Callable[[], int], operator: str,
                  correlation_factory: Callable[[], str]) -> None:
         self.gateway, self.clock = gateway, clock
         self.operator = _safe_text(operator, 256, required=True)
@@ -336,27 +328,18 @@ class DeploymentAccessService:
         """Inspect pending profiles in reference order through deployment access only."""
         if type(after_id) is not int or after_id < 0 or type(limit) is not int or not 1 <= limit <= 200:
             raise ValueError("Use a nonnegative continuation reference and a limit between 1 and 200.")
-        with self.gateway.transaction() as store:
-            return store.list_users("", limit, after_id=after_id, status="pending")
+        return self.gateway.run(lambda store: store.list_users("", limit, after_id=after_id, status="pending"))
 
     def bootstrap(self, user_id: int) -> None:
         """Grant only access administration exactly once to a verified existing account."""
-        with self.gateway.transaction(write=True) as store:
-            if store.bootstrap_complete():
-                raise ValueError("Initial access setup is already complete. Use explicit recovery if needed.")
-            self._appoint(store, user_id, "access.bootstrap", "Initial deployment setup")
+        self._appoint(user_id, "Initial deployment setup", initial=True)
 
     def recover(self, user_id: int, reason: str) -> None:
         """Recover the explicitly verified account and record operator context and reason."""
         reason = _safe_text(reason, 1000, required=True)
-        with self.gateway.transaction(write=True) as store:
-            self._appoint(store, user_id, "access.recover", reason)
+        self._appoint(user_id, reason, initial=False)
 
-    def _appoint(self, store: AccessStore, user_id: int, action: str, reason: str) -> None:
-        if not store.verified_user(user_id):
-            raise ValueError("Select an existing account with a verified OIDC login.")
-        now = self.clock()
-        store.set_status(user_id, "active", now)
-        store.grant(user_id, "access_admin", ProjectScope("all"), now, "operator:" + self.operator)
-        store.finish_bootstrap()
-        store.audit(now, "operator:" + self.operator, str(user_id), action, self.correlation_factory(), {"reason": reason})
+    def _appoint(self, user_id: int, reason: str, *, initial: bool) -> None:
+        correlation = self.correlation_factory()
+        self.gateway.run(lambda store: store.appoint_administrator(
+            user_id, self.operator, correlation, self.clock(), reason, initial=initial), write=True)

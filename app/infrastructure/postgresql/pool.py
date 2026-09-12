@@ -1,6 +1,7 @@
 """Process-owned pooled connections and complete, bounded transaction replay."""
 
 from collections.abc import Callable
+from contextlib import AbstractContextManager
 import math
 from time import sleep
 
@@ -12,7 +13,58 @@ from app.infrastructure.postgresql.errors import (
     DatabaseUnavailableError, SchemaCompatibilityError, TransactionRetryError,
 )
 from app.infrastructure.postgresql.migration import check_schema
-from app.shared.config.database import DatabaseConfig
+from app.shared.config.database import DatabaseConfig, validate_database_url
+
+
+def run_transaction[Result](
+    acquire: Callable[[], AbstractContextManager[psycopg.Connection]],
+    operation: Callable[[psycopg.Connection], Result], *, write: bool = False,
+    bind: Callable[[psycopg.Connection], None] | None = None,
+) -> Result:
+    """Replay a complete callback only after a definite concurrency rollback.
+
+    Args:
+        acquire: Explicit runtime-pool or separate operator connection source.
+        operation: Replayable database work with no external side effects.
+        write: Select serializable writes instead of a repeatable-read snapshot.
+        bind: Reauthorize on each attempt before entering application code.
+    """
+    for attempt in range(3):
+        try:
+            with acquire() as connection:
+                with connection.transaction():
+                    connection.execute(
+                        "SET TRANSACTION ISOLATION LEVEL SERIALIZABLE READ WRITE" if write
+                        else "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY"
+                    )
+                    if bind is not None:
+                        bind(connection)
+                    return operation(connection)
+        except (SerializationFailure, DeadlockDetected):
+            if attempt == 2:
+                raise TransactionRetryError("Concurrent changes prevented this operation. Please try again.") from None
+            sleep(0.01 * (2 ** attempt))
+        except (psycopg.OperationalError, psycopg.InterfaceError, PoolTimeout, PoolClosed):
+            raise DatabaseUnavailableError("Database operation could not be completed. Please refresh.") from None
+    raise AssertionError("Unreachable transaction retry state.")
+
+
+class OperatorDatabase:
+    """Explicit short-lived deployment connections, isolated from the runtime pool."""
+
+    def __init__(self, url: str) -> None:
+        """Require an operator URL explicitly; never fall back from runtime settings."""
+        validate_database_url(url)
+        self._url = url
+
+    def _connection(self) -> psycopg.Connection:
+        return psycopg.connect(self._url, autocommit=True, connect_timeout=5,
+                               options="-c search_path=pg_catalog,eppm,pg_temp -c statement_timeout=10000",
+                               application_name="eppm-operator")
+
+    def run[Result](self, operation: Callable[[psycopg.Connection], Result], *, write: bool = False) -> Result:
+        """Replay complete operator work with the same definite-rollback rules."""
+        return run_transaction(self._connection, operation, write=write)
 
 
 class Database:
@@ -98,21 +150,4 @@ class Database:
             write: Select serializable read-write instead of repeatable-read read-only.
             bind: Trusted actor/session binding, rerun before every callback attempt.
         """
-        for attempt in range(3):
-            try:
-                with self._pool.connection() as connection:
-                    with connection.transaction():
-                        connection.execute(
-                            "SET TRANSACTION ISOLATION LEVEL SERIALIZABLE READ WRITE" if write
-                            else "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY"
-                        )
-                        if bind is not None:
-                            bind(connection)
-                        return operation(connection)
-            except (SerializationFailure, DeadlockDetected):
-                if attempt == 2:
-                    raise TransactionRetryError("Concurrent changes prevented this operation. Please try again.") from None
-                sleep(0.01 * (2 ** attempt))
-            except (psycopg.OperationalError, psycopg.InterfaceError, PoolTimeout, PoolClosed):
-                raise DatabaseUnavailableError("Database operation could not be completed. Please refresh.") from None
-        raise AssertionError("Unreachable transaction retry state.")
+        return run_transaction(self._pool.connection, operation, write=write, bind=bind)

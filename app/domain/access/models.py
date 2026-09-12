@@ -44,6 +44,10 @@ class ReauthenticationRequired(AccessDenied):
     """The verified provider authentication is too old for this operation."""
 
 
+class AccessStorageError(RuntimeError):
+    """Safe failure of an atomic access operation; no SQL or credentials escape."""
+
+
 @dataclass(frozen=True)
 class Actor:
     """Server-resolved session reference; never accept actor fields from components."""

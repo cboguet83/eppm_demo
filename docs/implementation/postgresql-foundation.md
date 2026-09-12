@@ -71,6 +71,18 @@ flowchart LR
     Pool --> DB
     Tests[Isolated PostgreSQL fixtures] --> Resource
     Tests --> Migration
+    Service[AccessService callbacks] --> Gateway[PostgresAccessGateway]
+    Gateway --> Resource
+    Gateway --> Signer[Purpose-specific server proof]
+    OIDC[Authlib with injected state cache] --> State[PostgresOidcState worker calls]
+    State --> Resource
+    State --> Signer
+    Signer --> Authentication[Native authentication functions]
+    Authentication --> DB
+    Authentication --> Audit
+    Deployment[DeploymentAccessService callbacks] --> OperatorGateway[PostgresDeploymentAccessGateway]
+    OperatorGateway --> OperatorConnection[Explicit short-lived operator connection]
+    OperatorConnection --> DB
 ```
 
 `Database.run` supplies repeatable-read read-only snapshots or serializable
@@ -96,5 +108,48 @@ granting portfolio reads.
 `operator_appoint_admin` is executable only with separate operator credentials.
 It verifies a prior OIDC identity, performs bootstrap once, and requires explicit
 operator/correlation/reason data for recovery. Its caller must own a serializable
-transaction. Operator CLI/bootstrap and authentication repository integration
-are still pending; this documents the native operation, not a completed cutover.
+transaction. `PostgresDeploymentAccessGateway` supplies separate, short-lived
+operator connections, verifies the schema and replays the complete service
+callback only after a definite rollback. Operator CLI wiring remains pending.
+
+## Authentication and callback contracts
+
+`AccessGateway.run` receives a complete operation and optional trusted actor.
+Every retry creates a fresh store and binds the actor against the new snapshot.
+Security store mutations include their audit and continuity checks as one
+operation; the service does not append a second audit event. Cookie and
+correlation generation happen outside replayable callbacks. Verified token
+expiry and current authorization are checked again inside each attempt.
+
+Before a session exists, `ServerRequestSigner` binds one exact request to its
+purpose, PostgreSQL backend and transaction start. Only the server owns the
+deployment signing key. The native functions verify that proof before storing
+or consuming OIDC state, looking up a cookie hash, or persisting a verified
+identity and rotating its session. A proof cannot be replayed on a different
+connection/transaction or used as actor context. Runtime SQL has no direct
+access to the identity, session, OIDC-state or private-key tables.
+
+`create_oidc_client` accepts an explicit async state-cache dependency.
+`PostgresOidcState` moves synchronous database work onto worker threads and
+consumes state with `DELETE RETURNING` in a serializable transaction. It preserves
+the opaque Authlib string exactly, hashes request keys and caps lifetime at ten
+minutes. Retries preserve the original storage deadline and recheck consumption
+expiry. Concurrent callbacks can receive a verifier only once.
+
+Bound activity and logout affect only the current browser session, preserve
+provider authentication time and do not advance the global security revision.
+Logout's audit and revocation commit or roll back together. Concurrent first
+logins for one issuer/subject resolve to a single account without duplicate
+session audit after retry. Native error diagnostics remain behind a safe access
+adapter boundary.
+
+The domain policy can resolve a scope through a separate server-signed operation
+only for a persisted grant belonging to the bound actor or an access
+administrator. Invalid/dangling references return a typed miss so the same
+read snapshot can still evaluate other grants. Public SQL permission helpers
+and business RLS continue to hide project IDs from finance-only users.
+
+The launcher now uses the access callback contract but still composes the
+existing SQLite repositories explicitly. PostgreSQL authentication is exercised
+through native service and Authlib HTTP integration tests; production composition
+switches when the remaining business repositories are ready.

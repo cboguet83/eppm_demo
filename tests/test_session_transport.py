@@ -19,6 +19,7 @@ from app.domain.access.models import VerifiedIdentity
 from app.infrastructure.authentication.http import AuthenticationRoutes, SESSION_COOKIE
 from app.infrastructure.authentication.middleware import BrowserSecurityMiddleware
 from app.infrastructure.authentication.oidc import create_oidc_client
+from app.infrastructure.authentication.state import SqliteOidcState
 from app.infrastructure.authentication.session_middleware import ApplicationSessionMiddleware, SESSION_HEADER
 from app.infrastructure.database.connection import get_db
 from app.infrastructure.database.schema_init import init_db
@@ -148,7 +149,7 @@ def test_server_push_cannot_deliver_data_after_session_or_permission_changes(tra
 @pytest.mark.parametrize("origin", [None, "https://foreign.example.test"])
 def test_logout_handler_independently_rejects_missing_or_foreign_origins(transport, origin):
     _, access, actor, cookie, settings, now, path = transport
-    client = create_oidc_client(settings, path, lambda: now[0])
+    client = create_oidc_client(settings, SqliteOidcState(path, lambda: now[0]))
     # Test the route's own defense even without the outer origin middleware.
     app = Starlette(routes=AuthenticationRoutes(client, access).routes(), middleware=[
         Middleware(SessionMiddleware, secret_key=settings.cookie_secret),
@@ -162,7 +163,7 @@ def test_logout_handler_independently_rejects_missing_or_foreign_origins(transpo
 
 def test_expired_same_origin_logout_clears_cookie_and_audit_failure_is_safe_and_atomic(transport, caplog):
     _, access, actor, cookie, settings, now, path = transport
-    client = create_oidc_client(settings, path, lambda: now[0])
+    client = create_oidc_client(settings, SqliteOidcState(path, lambda: now[0]))
     app = Starlette(routes=AuthenticationRoutes(client, access).routes(), middleware=[
         Middleware(SessionMiddleware, secret_key=settings.cookie_secret),
     ])

@@ -39,10 +39,10 @@ preserves UI behavior and makes the existing regression suite reproducible.
 | --- | --- | --- |
 | 1. Baseline and decisions | Baseline captured | ADR, full baseline test results, workload and service timings recorded. Browser load comparison remains an acceptance gate. |
 | 2. PostgreSQL foundation | Additive foundation tested | Configuration, pool, migration runner, Compose, operator role provisioning and isolated tests implemented. Application lifecycle integration follows repository cutover. |
-| 3. Schema and enforcement | In progress | Native baseline and permanent integrity triggers tested; RLS, trusted actor binding, protected-property audit, security transitions and cache storage remain. |
+| 3. Schema and enforcement | In progress | Native integrity, RLS, actor binding, protected-property audit and access administration tested; per-entity revisions and derived-cache storage remain. |
 | 4. Core repositories | Pending | Organization, templates/schema, projects, tags, collaboration, Decimal budgets. |
 | 5. Planning and caches | Pending | Current planning, dependencies, allocations, capacity, per-entity revisions and snapshot tests. |
-| 6. Runtime cutover | Pending | Composition, authentication, operator tools, seeds, benchmarks, archive legacy migrations. |
+| 6. Runtime cutover | In progress | Native authentication/access adapters and callback service integration implemented; composition, operator tools, seeds, benchmarks and legacy archive remain. |
 | 7. Acceptance and documentation | Pending | Full regression/coverage, browser/load runs, backup/restore, deployment and C4 documentation. |
 
 ## Performance acceptance
@@ -91,6 +91,8 @@ available for that comparison before its runtime is archived.
   159 PostgreSQL checks passed.
 - `86b3d30` — business RLS, owner guards and protected-change audit;
   202 PostgreSQL and layer-boundary checks passed.
+- `b67acf9` — native audited access administration and concurrent bootstrap;
+  232 PostgreSQL and layer-boundary checks passed, plus bootstrap rollback.
 
 ## Native schema and integrity
 
@@ -251,3 +253,57 @@ Remaining security work includes signed pre-session OIDC/state/session operation
 the PostgreSQL access repository and callback service integration, supported
 operator CLI integration, and revision/cache integration for protected changes.
 The application still uses SQLite; the milestone is not final migration acceptance.
+
+## Native authentication and access-service integration
+
+`0008_authentication.sql` and the PostgreSQL access/state adapters now implement
+verified identity creation, concurrent first login, session rotation/lookup,
+explicit activity, audited logout and single-use OIDC state. Purpose-specific
+server proofs bind each pre-session operation to its exact payload, backend and
+transaction. Raw runtime SQL cannot read private authentication tables, invoke
+unsigned operations, replay another transaction's proof or use a server proof as
+an actor. Internal scope evaluation also requires a signed request for the bound
+actor's persisted grant or access-administrator authority.
+
+The access and deployment services now use complete callbacks. Native mutation
+contracts own their mandatory audit and integrity checks; no duplicate
+application audit is appended. Every retry revalidates identity expiry and
+authorization. Cookie/correlation generation stays outside callbacks. Native
+definite-rollback tests verify one identity/session/audit after replay, bounded
+retry exhaustion and no partial changes on failed login/logout audit.
+
+Authlib now receives an explicitly injected async state store. Native HTTP tests
+use real Authlib/JOSE, PostgreSQL state and access services; only the external
+identity provider's HTTP transport is replaced. Tests cover PKCE, issuer,
+audience, nonce, expiry, secure cookies, rejected claims, foreign/replayed
+state, origin checks, activity versus authentication time and safe failure logs.
+State tests verify exact opaque-string retention, hashed keys, ten-minute TTL,
+single-use concurrent consumption and database work on worker threads. A retry
+rechecks consumption expiry and retains the original storage deadline.
+
+Validation used explicit test URLs from ignored `.local/postgresql.env` and
+individually created/dropped `eppm_test_<UUID>` databases:
+
+- Full PostgreSQL suite plus affected access, OIDC, session, launcher and layer
+  regressions: **454 passed in 149.82 seconds**. Command: project Python with
+  `-m dotenv -f .local/postgresql.env run --` followed by project Python
+  `-m pytest -q -p no:cacheprovider tests/postgresql tests/test_access_security.py
+  tests/test_access_operator.py tests/test_oidc_authentication.py
+  tests/test_session_transport.py tests/test_application_authentication_entry.py
+  tests/test_layer_boundaries.py`. Output: `.local/postgresql-auth-full.log`.
+- Follow-up authentication run, including additional context-denial, native
+  error translation, revocation and audit-failure cases: **238 passed in 47.41
+  seconds**. PostgreSQL files: `test_access_service.py`, `test_oidc_state.py`,
+  `test_oidc_http.py`, `test_server_proofs.py`; same affected top-level test files
+  as above. Output: `.local/postgresql-auth-adapters.log`.
+- Follow-up statement coverage for the access service, OIDC protocol adapter and
+  new PostgreSQL access/state adapters: **455/457 statements (99.56%)**; both new
+  PostgreSQL adapters have **100%**. Report:
+  `.local/postgresql-auth-adapters-coverage.json`. This is subsystem evidence,
+  not the pending full-codebase coverage gate.
+
+The launcher uses the new access callback contract while explicitly composing
+the existing SQLite stores. Remaining work includes PostgreSQL business
+repositories, per-entity revisions/caches, operator and runtime composition,
+seed/reset/backup tools, legacy archive and all final acceptance gates. The
+Authlib HTTP checks are not the required 50-browser-user performance runs.

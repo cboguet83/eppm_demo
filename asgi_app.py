@@ -20,6 +20,7 @@ from app.main import create_planning_service
 from app.presentation.i18n import t
 from app.infrastructure.authentication.middleware import BrowserSecurityMiddleware
 from app.infrastructure.authentication.oidc import create_oidc_client
+from app.infrastructure.authentication.state import SqliteOidcState
 from app.security import create_access_service
 from app.shared.config import config
 from app.shared.config.authentication import AuthenticationConfig
@@ -53,7 +54,7 @@ def application_security() -> tuple[list[BaseRoute], list[Middleware]]:
             or st.get_option("server.baseUrlPath")):
         raise ValueError("Enable the required Streamlit origin, XSRF, and session-binding configuration.")
     access = create_access_service(config.db_path, settings)
-    client = create_oidc_client(settings, config.db_path, lambda: int(time()))
+    client = create_oidc_client(settings, SqliteOidcState(config.db_path, lambda: int(time())))
 
     def export_template(actor: Actor, project_id: int) -> str:
         service = create_planning_service(config.db_path, access=BusinessAccess(actor, access.policy))
@@ -65,8 +66,7 @@ def application_security() -> tuple[list[BaseRoute], list[Middleware]]:
         from app.presentation.components.planning_transport import read_planning_batch
 
         business_access = BusinessAccess(actor, access.policy)
-        with access.gateway.transaction() as store:
-            business_access.require(store, Permission.READ, project_ids)
+        access.gateway.run(lambda store: business_access.require(store, Permission.READ, project_ids), actor=actor)
         workspace = create_planning_workspace(config.db_path, access=business_access)
         return read_planning_batch(workspace, project_ids, revision)
 
@@ -75,8 +75,7 @@ def application_security() -> tuple[list[BaseRoute], list[Middleware]]:
         from app.main import create_portfolio_service
 
         business_access = BusinessAccess(actor, access.policy)
-        with access.gateway.transaction() as store:
-            business_access.require(store, Permission.READ, project_ids)
+        access.gateway.run(lambda store: business_access.require(store, Permission.READ, project_ids), actor=actor)
         service = create_portfolio_service(config.db_path, access=business_access)
         return service.get_allocation_badges(project_ids, revision)
 
