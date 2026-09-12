@@ -41,7 +41,7 @@ def test_identifier_and_order_rules_use_canonical_codes_and_fill_gaps() -> None:
 
 def test_invalid_schema_inputs_are_rejected_before_opening_storage() -> None:
     class UnavailableGateway:
-        def transaction(self, *, write=False):
+        def run(self, operation, *, write=False, **kwargs):
             raise AssertionError("Invalid input must not open storage")
 
     service = SchemaService(UnavailableGateway())

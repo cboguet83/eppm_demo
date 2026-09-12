@@ -1,6 +1,6 @@
 """SQLite persistence for project-schema administration."""
 
-from collections.abc import Collection
+from collections.abc import Callable, Collection
 from app.domain.access.models import Permission
 
 
@@ -222,6 +222,12 @@ class SqliteSchemaGateway:
         """Store the database identity without opening a connection."""
         self._db_path = db_path
         self.access = access
+
+    def run[Result](self, operation: Callable[[SchemaStore], Result], *, write: bool = False,
+                    permission: Permission | None = None, project_ids: Collection[int] | None = None) -> Result:
+        """Execute a complete use case while the legacy runtime is staged for removal."""
+        with self.transaction(write=write, permission=permission, project_ids=project_ids) as store:
+            return operation(store)
 
     @contextmanager
     def transaction(self, *, write: bool = False, permission: Permission | None = None, project_ids: Collection[int] | None = None) -> Iterator[SchemaStore]:

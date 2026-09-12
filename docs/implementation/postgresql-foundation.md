@@ -164,3 +164,8 @@ remains staged until the remaining repositories are ported.
 also use native adapters and complete callbacks. Numeric defaults round-trip as
 Decimal, dates retain their ISO boundary, and property items are loaded with
 their parents through one scoped join.
+
+[Schema settings](postgresql-schema-settings.md) now use native catalogs and
+complete callbacks for definitions, choices, groups and translated aliases.
+Reference guards, atomic applicability edits and categorical grant lifetimes are
+verified with restricted PostgreSQL connections and concurrent service calls.

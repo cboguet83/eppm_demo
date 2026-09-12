@@ -40,7 +40,7 @@ preserves UI behavior and makes the existing regression suite reproducible.
 | 1. Baseline and decisions | Baseline captured | ADR, full baseline test results, workload and service timings recorded. Browser load comparison remains an acceptance gate. |
 | 2. PostgreSQL foundation | Additive foundation tested | Configuration, pool, migration runner, Compose, operator role provisioning and isolated tests implemented. Application lifecycle integration follows repository cutover. |
 | 3. Schema and enforcement | In progress | Native integrity, RLS, actor binding, protected-property audit and access administration tested; per-entity revisions and derived-cache storage remain. |
-| 4. Core repositories | In progress | Native organization and project-template adapters, typed property values and callback services implemented; schema, projects, tags, collaboration and Decimal budgets remain. |
+| 4. Core repositories | In progress | Native organization, schema and project-template adapters, typed property values and callback services implemented; projects, tags, collaboration and Decimal budgets remain. |
 | 5. Planning and caches | Pending | Current planning, dependencies, allocations, capacity, per-entity revisions and snapshot tests. |
 | 6. Runtime cutover | In progress | Native authentication/access adapters and callback service integration implemented; composition, operator tools, seeds, benchmarks and legacy archive remain. |
 | 7. Acceptance and documentation | Pending | Full regression/coverage, browser/load runs, backup/restore, deployment and C4 documentation. |
@@ -97,6 +97,8 @@ available for that comparison before its runtime is archived.
   454 broad checks and 238 follow-up authentication checks passed.
 - `26a2118` — native organization workflows and minimal reference projections;
   197 existing, 80 native and 47 replay/foundation checks passed.
+- `607ea06` — native project templates and exact typed property values;
+  82 existing, 139 native and 40 follow-up checks passed.
 
 ## Native schema and integrity
 
@@ -355,3 +357,25 @@ inputs. Details, command, C3 components and log paths are in
 values and template defaults without introducing rounding. Project budget and
 finance Decimal contracts, the remaining repositories, runtime composition,
 tools and final acceptance gates remain pending.
+
+## Native schema administration
+
+Schema settings now use complete callbacks and a native PostgreSQL adapter for
+groups, definitions, choices, translations and project-type applicability.
+Compound failures restore prior details, selections and protected-change audit;
+project/default reference guards include explicit nulls. The existing native
+scope triggers preserve option lifetimes and property tombstones.
+
+Validation: **47 existing checks passed in 19.21 seconds** and **165 native schema,
+template, scope, business-security and foundation checks passed in 64.47 seconds**.
+The schema service and native adapter have **175/175 statements covered (100%)**.
+Actual concurrent service calls verify fresh auto-allocated IDs/orders after
+rollback and option deletion racing with default creation. Additional checks
+cover consistent multi-query snapshots and unchanged original command inputs.
+
+Commands, C3 components and test boundaries are documented in
+[PostgreSQL schema settings](postgresql-schema-settings.md). Logs:
+`.local/postgresql-schema-legacy.log`, `.local/postgresql-schema-native.log`;
+coverage: `.local/postgresql-schema-coverage.json`. The remaining repositories,
+Decimal budgets, cache revisions, runtime/tools cutover and full acceptance
+gates are still pending.

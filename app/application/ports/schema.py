@@ -1,13 +1,10 @@
 """Typed persistence contracts for project-schema administration."""
 
-from collections.abc import Collection
-from app.domain.access.models import Permission
-
-
-from contextlib import AbstractContextManager
+from collections.abc import Callable, Collection
 from dataclasses import dataclass
 from typing import Protocol
 
+from app.domain.access.models import Permission
 from app.domain.projects.project_types import PropertyApplicability
 from app.domain.projects.schema import SchemaGroup, SchemaParameter, SchemaParamOption
 
@@ -49,4 +46,6 @@ class SchemaStore(Protocol):
 class SchemaGateway(Protocol):
     """Own connection lifetime and a consistent read or guarded write snapshot."""
 
-    def transaction(self, *, write: bool = False, permission: Permission | None = None, project_ids: Collection[int] | None = None) -> AbstractContextManager[SchemaStore]: ...
+    def run[Result](self, operation: Callable[[SchemaStore], Result], *, write: bool = False, permission: Permission | None = None, project_ids: Collection[int] | None = None) -> Result:
+        """Replay complete authorization, validation and writes after definite rollback."""
+        ...
