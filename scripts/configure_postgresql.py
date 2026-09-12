@@ -3,7 +3,7 @@
 import argparse
 import os
 from pathlib import Path
-from secrets import token_urlsafe
+from secrets import token_hex, token_urlsafe
 
 
 def configure(destination: Path) -> None:
@@ -19,6 +19,7 @@ def configure(destination: Path) -> None:
     values = {
         "POSTGRES_PASSWORD": operator_password,
         "EPPM_RUNTIME_PASSWORD": runtime_password,
+        "DATABASE_CONTEXT_KEY": token_hex(32),
         "DATABASE_URL": f"postgresql://eppm_app:{runtime_password}@postgres:5432/eppm",
         "DATABASE_OPERATOR_URL": f"postgresql://eppm_operator:{operator_password}@postgres:5432/eppm",
         "POSTGRES_TEST_ADMIN_URL": f"postgresql://eppm_operator:{operator_password}@127.0.0.1:15432/eppm",

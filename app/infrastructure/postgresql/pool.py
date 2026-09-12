@@ -37,7 +37,7 @@ class Database:
                 "autocommit": True,
                 "connect_timeout": math.ceil(settings.acquire_timeout),
                 "options": (
-                    "-c search_path=pg_catalog,eppm "
+                    "-c search_path=pg_catalog,eppm,pg_temp "
                     f"-c statement_timeout={math.ceil(settings.statement_timeout * 1000)} "
                     "-c idle_in_transaction_session_timeout=30000"
                 ),
@@ -59,13 +59,14 @@ class Database:
             self._pool.open(wait=True, timeout=self._settings.acquire_timeout)
             with self._pool.connection() as connection:
                 role = connection.execute("""
-                    SELECT r.rolsuper OR r.rolbypassrls OR r.rolcreatedb OR r.rolcreaterole
-                        OR has_schema_privilege(current_user, 'eppm', 'CREATE')
+                    SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_roles r
+                    WHERE (r.rolname = current_user OR pg_has_role(current_user, r.oid, 'SET'))
+                      AND (r.rolsuper OR r.rolbypassrls OR r.rolcreatedb OR r.rolcreaterole
+                        OR has_schema_privilege(r.oid, 'eppm', 'CREATE')
                         OR EXISTS (
-                            SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+                            SELECT 1 FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
                             WHERE n.nspname = 'eppm' AND c.relowner = r.oid
-                        )
-                    FROM pg_roles r WHERE r.rolname = current_user
+                        )))
                 """).fetchone()
                 if role is None or role[0]:
                     raise SchemaCompatibilityError("Application credentials must use a restricted runtime role.")

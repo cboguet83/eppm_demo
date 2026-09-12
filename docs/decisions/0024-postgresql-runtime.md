@@ -33,6 +33,27 @@ including authorization and validation, at most three times for a serialization
 failure or deadlock. Never retry an uncertain commit or external side effect.
 Use narrow locks for hierarchy, bootstrap, and last-administrator invariants.
 
+Actor binding uses an HMAC-SHA256 proof over the server-resolved session, injected
+policy inputs, backend PID and transaction start. A custom PostgreSQL setting
+alone is not a trusted identity: an ordinary SQL caller can change it. Python
+signs with an explicit deployment key; a private PostgreSQL `pgcrypto` helper
+verifies it using the separately provisioned key. This extension has the concrete
+purpose of preventing SQL callers from forging actor or operator context.
+Permission helpers still resolve persisted sessions, account status and grants
+in the current transaction snapshot; the proof is not a cached authorization.
+Write binding locks the current session, account and assignments so earlier
+revocation causes replay and reauthorization, while later revocation waits.
+
+The key and fixed role mapping have no runtime data privileges and default-deny
+row security. Only the bounded actor/permission helper interface is executable.
+Privileged helpers place `pg_temp` explicitly last in their search path, including
+previously installed helpers hardened by a new migration. Startup also rejects
+elevated roles reachable through `SET ROLE`, including non-inherited membership.
+These choices follow PostgreSQL's
+[security-definer guidance](https://www.postgresql.org/docs/18/sql-createfunction.html),
+[role privilege checks](https://www.postgresql.org/docs/18/functions-info.html), and
+[HMAC support](https://www.postgresql.org/docs/18/pgcrypto.html).
+
 Store euro amounts as NUMERIC and use Decimal through authoritative calculations.
 Use native dates, booleans, JSONB, and identity BIGINT keys with DTO adapters.
 Replace the global display revision with per-project/per-pool revisions plus

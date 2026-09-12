@@ -9,6 +9,7 @@ from psycopg import sql
 
 from app.infrastructure.postgresql.errors import MigrationError, SchemaCompatibilityError
 from app.infrastructure.postgresql.migration import check_schema, migrate
+from app.infrastructure.postgresql.authorization import configure_signing_key
 from app.shared.config.database import validate_database_url
 from app.shared.logging import get_logger, setup_logging
 
@@ -47,7 +48,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--env-file", help="Ignored operator environment file; never loaded implicitly")
     parser.add_argument("--url-variable", default="DATABASE_OPERATOR_URL")
-    parser.add_argument("command", choices=("provision", "migrate", "check"))
+    parser.add_argument("command", choices=("provision", "migrate", "check", "configure-security"))
     arguments = parser.parse_args()
     if arguments.env_file:
         load_dotenv(arguments.env_file, override=True)
@@ -60,6 +61,8 @@ def main() -> None:
         elif arguments.command == "migrate":
             names = migrate(url)
             logger.info("PostgreSQL migrations applied: %s", ", ".join(names) or "already current")
+        elif arguments.command == "configure-security":
+            configure_signing_key(url, os.environ.get("DATABASE_CONTEXT_KEY", ""))
         else:
             with psycopg.connect(url, autocommit=True, connect_timeout=5) as connection:
                 check_schema(connection)

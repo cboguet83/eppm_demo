@@ -15,6 +15,8 @@ def test_local_configuration_has_distinct_roles_and_refuses_overwrite(tmp_path: 
     settings = dotenv_values(destination)
     assert len(settings["POSTGRES_PASSWORD"]) >= 32
     assert settings["POSTGRES_PASSWORD"] != settings["EPPM_RUNTIME_PASSWORD"]
+    assert len(bytes.fromhex(settings["DATABASE_CONTEXT_KEY"])) == 32
+    assert settings["DATABASE_CONTEXT_KEY"] not in {settings["POSTGRES_PASSWORD"], settings["EPPM_RUNTIME_PASSWORD"]}
     assert "eppm_app:" in settings["DATABASE_URL"]
     assert "eppm_operator:" in settings["DATABASE_OPERATOR_URL"]
     with pytest.raises(FileExistsError):

@@ -54,7 +54,7 @@ def test_native_baseline_contains_every_current_business_table(pg_database):
     expected = set(baseline["row_counts"]) - replaced
     with psycopg.connect(pg_database.operator_url) as operator:
         actual = {row[0] for row in operator.execute("SELECT tablename FROM pg_tables WHERE schemaname='eppm'")}
-    assert actual == expected | {"schema_migration", "database_identity"}
+    assert actual == expected | {"schema_migration", "database_identity", "request_binding_key", "role_permission"}
 
 
 def test_native_money_dates_booleans_and_json_round_trip_exactly(business):
@@ -248,5 +248,8 @@ def test_concurrent_aggregate_and_hierarchy_writes_preserve_integrity(business, 
 
 
 def test_protected_trigger_helpers_are_not_publicly_executable(business):
-    assert execute(business, """SELECT p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
-        WHERE n.nspname='eppm' AND has_function_privilege(current_user,p.oid,'EXECUTE')""") == []
+    exposed = execute(business, """SELECT p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+        WHERE n.nspname='eppm' AND has_function_privilege(current_user,p.oid,'EXECUTE')""")
+    assert {row[0] for row in exposed} == {
+        "bind_actor", "current_actor", "has_global_permission", "permission_projects", "has_business_read",
+    }

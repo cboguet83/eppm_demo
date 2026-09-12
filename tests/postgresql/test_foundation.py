@@ -1,8 +1,11 @@
 """Migration atomicity, restricted pools, snapshot reads and whole-operation retry."""
 
 from concurrent.futures import ThreadPoolExecutor
+from secrets import token_urlsafe
 from threading import Barrier, Event
 from time import perf_counter
+from urllib.parse import urlsplit, urlunsplit
+from uuid import uuid4
 
 import psycopg
 from psycopg import sql
@@ -112,6 +115,25 @@ def test_startup_rejects_owner(pg_database):
     with pytest.raises(SchemaCompatibilityError, match="restricted"):
         owner.open()
     assert owner._pool.closed
+
+
+def test_startup_rejects_privileges_available_only_through_set_role(pg_database):
+    login, elevated = "eppm_login_" + uuid4().hex, "eppm_elevated_" + uuid4().hex
+    password = token_urlsafe(36)
+    with psycopg.connect(pg_database.operator_url, autocommit=True) as operator:
+        operator.execute(sql.SQL("CREATE ROLE {} LOGIN PASSWORD {}").format(sql.Identifier(login), sql.Literal(password)))
+        operator.execute(sql.SQL("CREATE ROLE {} NOLOGIN BYPASSRLS").format(sql.Identifier(elevated)))
+        try:
+            operator.execute(sql.SQL("GRANT eppm_runtime TO {}").format(sql.Identifier(login)))
+            operator.execute(sql.SQL("GRANT {} TO {} WITH INHERIT FALSE, SET TRUE").format(sql.Identifier(elevated), sql.Identifier(login)))
+            parsed = urlsplit(pg_database.runtime_url)
+            url = urlunsplit(parsed._replace(netloc=f"{login}:{password}@{parsed.hostname}:{parsed.port}"))
+            resource = Database(DatabaseConfig(url, pool_min=1, pool_max=1))
+            with pytest.raises(SchemaCompatibilityError, match="restricted"):
+                resource.open()
+            assert resource._pool.closed
+        finally:
+            operator.execute(sql.SQL("DROP ROLE {}, {}").format(sql.Identifier(login), sql.Identifier(elevated)))
 
 
 def test_startup_does_not_automigrate(empty_database):

@@ -85,6 +85,8 @@ available for that comparison before its runtime is archived.
   real-database checks and recorded SQLite baseline; 46 PostgreSQL checks passed.
 - `6aa5b38` — native business schema, permanent integrity triggers, schema
   inventory and CI configuration; 77 PostgreSQL and 7 layer-boundary checks passed.
+- `28e66e0` — private scope resolution and categorical-reference lifetimes;
+  112 PostgreSQL checks passed.
 
 ## Native schema and integrity
 
@@ -145,3 +147,28 @@ need implementation and direct-database acceptance tests.
    repositories and complete callback replay through application services.
 5. Complete all remaining milestones and acceptance gates in the agreed plan;
    the application still uses SQLite and the migration is not ready for adoption.
+
+## Trusted actor binding
+
+`0005_actor_authorization.sql` adds signed transaction-local context, session
+validation and the fixed role/permission projection. The private signing key
+and role mapping are protected by privileges and default-deny RLS. Only the
+actor/permission interface is executable by runtime connections. Arbitrary
+scope resolution remains private. Business-table RLS and atomic access changes
+are still separate pending work.
+
+The initial actor-binding run passed 158 PostgreSQL tests in 31.61 seconds.
+It exercised actual runtime connections, HMAC forgery/replay, malformed signed
+context, account/session validity, MFA, distinct read/edit scopes, permission
+mapping parity, key rotation, and session/account/grant revocation locks.
+Earlier revocation forces complete replay and reauthorization; later revocation
+waits for the authorized writer. Reads do not extend authentication/activity.
+The new migration also hardens all earlier helper search paths against temporary
+object shadowing without changing their applied migration files.
+
+Final validation passed 159 PostgreSQL tests in 31.64 seconds, including denial
+of a login able to `SET ROLE` to a non-inherited BYPASSRLS role. The PostgreSQL
+runtime/config subset covered 180/181 statements (99.45%); actor binding covered
+all 33 statements. This subset measurement does not replace the full-codebase
+95% acceptance gate. Commands and full output are retained in
+`.local/postgresql-actor-final.log`.
