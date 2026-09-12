@@ -34,7 +34,7 @@ def database(tmp_path: Path) -> str:
 def test_application_validates_inputs_before_opening_storage() -> None:
     """Invalid user input needs no infrastructure and cannot start a write."""
     class UnavailableGateway:
-        def transaction(self, *, write: bool = False):
+        def run(self, operation, **options):
             raise AssertionError("Storage must not be opened for invalid input")
 
     service = ProjectTypeService(UnavailableGateway())

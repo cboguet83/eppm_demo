@@ -1,10 +1,9 @@
 """Transactional persistence contracts for project-type use cases."""
 
-from collections.abc import Collection
+from collections.abc import Callable, Collection
 from app.domain.access.models import Permission
 
 
-from contextlib import AbstractContextManager
 from typing import Protocol
 
 from app.domain.projects.project_types import (
@@ -78,6 +77,7 @@ class ProjectTypeStore(Protocol):
 class ProjectTypeGateway(Protocol):
     """Provide committed-or-rolled-back sessions without exposing DB objects."""
 
-    def transaction(self, *, write: bool = False, permission: Permission | None = None, project_ids: Collection[int] | None = None) -> AbstractContextManager[ProjectTypeStore]:
-        """Open a consistent read or an atomic guarded write operation."""
+    def run[Result](self, operation: Callable[[ProjectTypeStore], Result], *, write: bool = False,
+                    permission: Permission | None = None, project_ids: Collection[int] | None = None) -> Result:
+        """Execute or replay a complete authorized operation in one snapshot."""
         ...

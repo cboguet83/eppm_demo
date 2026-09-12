@@ -40,7 +40,7 @@ preserves UI behavior and makes the existing regression suite reproducible.
 | 1. Baseline and decisions | Baseline captured | ADR, full baseline test results, workload and service timings recorded. Browser load comparison remains an acceptance gate. |
 | 2. PostgreSQL foundation | Additive foundation tested | Configuration, pool, migration runner, Compose, operator role provisioning and isolated tests implemented. Application lifecycle integration follows repository cutover. |
 | 3. Schema and enforcement | In progress | Native integrity, RLS, actor binding, protected-property audit and access administration tested; per-entity revisions and derived-cache storage remain. |
-| 4. Core repositories | In progress | Native organization adapter and callback service implemented; templates/schema, projects, tags, collaboration and Decimal budgets remain. |
+| 4. Core repositories | In progress | Native organization and project-template adapters, typed property values and callback services implemented; schema, projects, tags, collaboration and Decimal budgets remain. |
 | 5. Planning and caches | Pending | Current planning, dependencies, allocations, capacity, per-entity revisions and snapshot tests. |
 | 6. Runtime cutover | In progress | Native authentication/access adapters and callback service integration implemented; composition, operator tools, seeds, benchmarks and legacy archive remain. |
 | 7. Acceptance and documentation | Pending | Full regression/coverage, browser/load runs, backup/restore, deployment and C4 documentation. |
@@ -95,6 +95,8 @@ available for that comparison before its runtime is archived.
   232 PostgreSQL and layer-boundary checks passed, plus bootstrap rollback.
 - `57de07e` — PostgreSQL authentication and callback access workflows;
   454 broad checks and 238 follow-up authentication checks passed.
+- `26a2118` — native organization workflows and minimal reference projections;
+  197 existing, 80 native and 47 replay/foundation checks passed.
 
 ## Native schema and integrity
 
@@ -331,3 +333,25 @@ composition and the remaining core repositories are still pending.
 The strengthened callback-race checks plus PostgreSQL foundation checks passed
 **47 checks in 15.80 seconds**, including observed retries and service-level
 calendar overlap revalidation. Output: `.local/postgresql-organization-replay.log`.
+
+## Native project templates and property values
+
+Project-type services now execute whole callbacks through their PostgreSQL
+gateway. Native SQL preserves General-type guards, unique names, applicability,
+nullable overrides, retained inactive defaults and atomic protected-change audit.
+The shared property adapter loads parent values and list items with one scoped
+join. Null, empty text, empty list and absent values remain distinct; numbers
+round-trip as Decimal and dates keep their ISO-string boundary.
+
+Validation: **82 existing checks passed in 13.99 seconds**, **139 native checks
+passed in 40.10 seconds**, and **40 follow-up checks passed in 1.41 seconds**.
+The two new PostgreSQL adapters have **110/110 statements covered**. Actual
+serializable races verify combined rule/default updates and type deletion versus
+exclusive property assignment; a forced rollback verifies retained command
+inputs. Details, command, C3 components and log paths are in
+[PostgreSQL project templates](postgresql-project-types.md).
+
+`0010_finite_property_numbers.sql` adds the native finite-number check to project
+values and template defaults without introducing rounding. Project budget and
+finance Decimal contracts, the remaining repositories, runtime composition,
+tools and final acceptance gates remain pending.

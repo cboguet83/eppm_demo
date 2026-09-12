@@ -7,6 +7,7 @@ from app.domain.projects.project_types import (
     validate_deletion, validate_rename,
 )
 from app.domain.projects.property_values import encode_property_value
+from decimal import Decimal
 
 
 def test_required_name_and_general_protection() -> None:
@@ -73,6 +74,8 @@ def test_template_inheritance_and_explicit_empty_defaults_are_independent() -> N
 @pytest.mark.parametrize("kind,value,encoded_kind", [
     ("TEXT", "hello", "text"), ("TEXT", None, "null"), ("TEXT", "", "empty"),
     ("NUMBER", 0, "number"), ("NUMBER", 1.25, "number"),
+    ("NUMBER", Decimal("9007199254740993.123456789"), "number"),
+    ("NUMBER", 10 ** 400, "number"),
     ("DATE", "2026-09-08", "date"), ("ENUM", "A", "text"),
     ("MULTI_ENUM", ["B", "A"], "list"), ("MULTI_ENUM", [], "list"),
     ("TAGS", ["free text"], "list"), ("URL", "https://example.org", "text"),
@@ -91,6 +94,8 @@ def test_supported_property_values_preserve_their_kind(
 @pytest.mark.parametrize("kind,value", [
     ("UNKNOWN", "text"), ("NUMBER", True), ("NUMBER", "12"),
     ("NUMBER", float("nan")), ("NUMBER", float("inf")),
+    ("NUMBER", Decimal("NaN")), ("NUMBER", Decimal("sNaN")),
+    ("NUMBER", Decimal("Infinity")), ("NUMBER", Decimal("-Infinity")),
     ("TEXT", 12), ("ENUM", "unknown"), ("MULTI_ENUM", "A"),
     ("MULTI_ENUM", [1]), ("MULTI_ENUM", ["A", "A"]),
     ("MULTI_ENUM", ["unknown"]), ("DATE", "20260908"),

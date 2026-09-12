@@ -2,9 +2,10 @@
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import TypedDict
 
-type PropertyValue = str | int | float | list[str] | None
+type PropertyValue = str | int | float | Decimal | list[str] | None
 
 
 @dataclass(frozen=True)

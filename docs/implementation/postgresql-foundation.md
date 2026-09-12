@@ -159,3 +159,8 @@ callback runner and actor binding for native functions, teams, employees,
 calendar exceptions and optional hierarchy types. Its service integration and
 minimal name directory are implemented and tested; application composition
 remains staged until the remaining repositories are ported.
+
+[Project templates and typed property values](postgresql-project-types.md) now
+also use native adapters and complete callbacks. Numeric defaults round-trip as
+Decimal, dates retain their ISO boundary, and property items are loaded with
+their parents through one scoped join.

@@ -3,11 +3,12 @@
 import datetime
 import math
 from collections.abc import Collection
+from decimal import Decimal
 
 SUPPORTED_PROPERTY_TYPES = (
     "TEXT", "ENUM", "MULTI_ENUM", "TAGS", "URL", "DATE", "NUMBER", "HYPERLINK",
 )
-type EncodedValue = tuple[str, str | None, int | float | None, str | None, list[str]]
+type EncodedValue = tuple[str, str | None, int | float | Decimal | None, str | None, list[str]]
 
 
 def encode_property_value(
@@ -43,7 +44,10 @@ def encode_property_value(
             raise ValueError(f"{param_id}: invalid selection")
         return ("list", None, None, None, list(value))
     if param_type == "NUMBER":
-        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+        if isinstance(value, bool) or not isinstance(value, (int, float, Decimal)):
+            raise ValueError(f"{param_id}: expected a finite number")
+        if (isinstance(value, Decimal) and not value.is_finite()
+                or isinstance(value, float) and not math.isfinite(value)):
             raise ValueError(f"{param_id}: expected a finite number")
         return ("number", None, value, None, [])
     if not isinstance(value, str):
