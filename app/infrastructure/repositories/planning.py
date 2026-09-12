@@ -1,6 +1,6 @@
 """SQLite task persistence with caller-owned transactions and typed projections."""
 
-from collections.abc import Collection
+from collections.abc import Callable, Collection
 from app.domain.access.models import Permission
 
 
@@ -14,6 +14,7 @@ from app.application.exceptions import PlanningConflictError, PlanningStorageErr
 from app.application.ports.planning import (
     ExternalTask,
     PlanningTaskBundle,
+    PlanningStore,
     PlanningTotals,
     ProjectSummary,
     TaskChoice,
@@ -451,6 +452,12 @@ class SqlitePlanningGateway:
         """Retain configuration without opening storage."""
         self.db_path = db_path
         self.access = access
+
+    def run[Result](self, operation: Callable[[PlanningStore], Result], *, write: bool = False,
+                    permission: Permission | None = None, project_ids: Collection[int] | None = None) -> Result:
+        """Bridge callbacks while the legacy schedule runtime awaits archival."""
+        with self.transaction(write=write, permission=permission, project_ids=project_ids) as store:
+            return operation(store)
 
     @contextmanager
     def transaction(self, *, write: bool = False, permission: Permission | None = None, project_ids: Collection[int] | None = None) -> Iterator[SqlitePlanningStore]:

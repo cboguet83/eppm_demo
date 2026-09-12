@@ -196,3 +196,10 @@ Decimal euros and complete callbacks. Finance access remains independent of
 project scope. Concurrent numbering/cancellation, authenticated downloads,
 exact chart values and existing dashboard rounding are verified; final runtime
 composition and project-budget form conversions remain staged.
+
+[Task scheduling and dependencies](postgresql-planning.md) now use complete native
+callbacks, scoped recursive graphs and batched task bundles. Concurrent saves,
+hidden endpoint protection, ISO date boundaries, all four summary warning rules
+and complete replacement rollback are verified. Migration 0014 preserves the
+existing template lag range. Cache revisions and separated summary publication
+remain pending alongside capacity and portfolio queries.

@@ -1,10 +1,9 @@
 """Transactional task storage and bounded planning query contracts."""
 
-from collections.abc import Collection
+from collections.abc import Callable, Collection
 from app.domain.access.models import Permission
 
 
-from contextlib import AbstractContextManager
 from dataclasses import dataclass, field
 from typing import NotRequired, Protocol, TypedDict
 
@@ -121,6 +120,9 @@ class PlanningStore(Protocol):
 
 
 class PlanningGateway(Protocol):
-    """Provide a consistent reader or reserve the writer before related changes."""
+    """Execute complete schedule operations in authorized, consistent transactions."""
 
-    def transaction(self, *, write: bool = False, permission: Permission | None = None, project_ids: Collection[int] | None = None) -> AbstractContextManager[PlanningStore]: ...
+    def run[Result](self, operation: Callable[[PlanningStore], Result], *, write: bool = False,
+                    permission: Permission | None = None, project_ids: Collection[int] | None = None) -> Result:
+        """Replay complete scheduling callbacks only after a definite rollback."""
+        ...

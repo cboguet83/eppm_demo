@@ -110,6 +110,8 @@ available for that comparison before its runtime is archived.
 - `93292d3` — native resource pools, groups, mappings and assignments;
   75 existing and 17 final native resource checks passed, with broader integrity
   and transaction regressions recorded below.
+- `98beab7` — native immutable finance plans and Decimal allocated budgets;
+  79 existing, 186 broader native/security/HTTP/domain and 8 browser checks passed.
 
 ## Native schema and integrity
 
@@ -516,3 +518,32 @@ Commands, C3 components and log paths are in
 [PostgreSQL finance](postgresql-finance.md). Runtime cutover, scheduling/capacity,
 portfolio/dashboard repositories, cache revisions, project monetary inputs,
 operator tools and all final regression, responsiveness and recovery gates remain.
+
+## Native scheduling and dependency graphs
+
+Task services now use complete PostgreSQL callbacks for details, dependencies,
+imports, deletes and schedule replacement. Read projections batch metadata and
+filter hidden owners/endpoints before totals, labels, warning flags and recursive
+closure. The permanent predecessor view masks hidden primary links; guarded
+cleanup cannot detach hidden or uneditable references. Scoped summary SQL retains
+all four dependency rules, task-endpoint precedence and empty-project behavior.
+Migration `0014_dependency_lag_range.sql` preserves the existing template format's
+signed 64-bit lag range without changing applied migrations.
+
+Validation: **146 existing checks passed in 24.50 seconds**, **194 broader native
+planning/resource/security/integrity/schema/foundation checks passed in 65.91
+seconds**, and **45 final native scheduling checks passed in 18.83 seconds**.
+The service and native adapters cover **305/309 statements (98.71%)**, including
+all native adapter statements. Real concurrent replacements resolve fresh local
+task IDs within each complete attempt; concurrent date/progress edits keep both
+fields. Known-rollback replay retains copied nested inputs. Late failures restore
+deleted tasks, dependencies, tags and allocations, and snapshot reads retain a
+consistent bundle during a concurrent replacement.
+
+Commands, C3 components and log paths are in
+[PostgreSQL planning](postgresql-planning.md). This completes the scheduling
+portion of milestone 5, not its cache/capacity/portfolio work. Native summary SQL
+currently computes fresh data; the staged public summary call still requests a
+writer for the legacy cache. Per-entity revisions, opaque tokens, separated and
+guarded publication, runtime/operator cutover, project money forms and all final
+application coverage, 50-user responsiveness and recovery gates remain pending.
