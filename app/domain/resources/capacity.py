@@ -2,7 +2,7 @@
 
 from datetime import date
 
-from app.domain.resources.inputs import CapacityInputs
+from app.domain.resources.inputs import CapacityInputs, CapacityStaffing
 from app.domain.resources.models import (
     CapacityAssignment,
     PoolCapacityDetail,
@@ -180,17 +180,31 @@ def resolve_assignments(inputs: CapacityInputs, today: date) -> list[CapacityAss
     return result
 
 
-def calculate_capacity(inputs: CapacityInputs, today: date) -> PoolCapacityDetail:
-    """Calculate effective capacity and deduplicated demand without storage or UI."""
+def calculate_staffing(inputs: CapacityInputs) -> CapacityStaffing:
+    """Aggregate explicit staffing inputs with the established rounding order."""
     contributions = resource_contributions(inputs)
     assigned = 0.0
     for contribution in contributions:
         assigned += contribution.effective_fte
     assigned = round(assigned, 3)
-    daily_capacity = _calendar_capacity(inputs, contributions, assigned)
+    return CapacityStaffing(
+        assigned, bool(contributions), _calendar_capacity(inputs, contributions, assigned), contributions,
+    )
+
+
+def calculate_capacity(inputs: CapacityInputs, today: date) -> PoolCapacityDetail:
+    """Combine staffing aggregates and scoped demand without storage or UI.
+
+    A reader can supply safe pool-level staffing without disclosing employee
+    records. Explicit domain snapshots retain the same pure staffing calculation.
+    Person details do not determine whether assigned capacity takes precedence.
+    """
+    staffing = inputs.staffing if inputs.staffing is not None else calculate_staffing(inputs)
+    assigned = staffing.assigned_capacity_fte
+    daily_capacity = staffing.daily_assigned_capacity
     defined = inputs.pool.capacity_fte if inputs.pool else None
     theoretical = round(float(defined), 3) if defined is not None else assigned
-    effective = assigned if contributions else theoretical
+    effective = assigned if staffing.has_assigned_resources else theoretical
     assignments = resolve_assignments(inputs, today)
     daily_usage = demand_timeline(assignments)
     scalar: dict[int, list[float]] = {}
@@ -200,7 +214,7 @@ def calculate_capacity(inputs: CapacityInputs, today: date) -> PoolCapacityDetai
     overassignments = calculate_daily_overassignments(
         daily_usage,
         effective,
-        daily_capacity if contributions else None,
+        daily_capacity if staffing.has_assigned_resources else None,
     )
     return PoolCapacityDetail(
         pool_id=inputs.pool_id,
@@ -209,8 +223,8 @@ def calculate_capacity(inputs: CapacityInputs, today: date) -> PoolCapacityDetai
         assigned_capacity_fte=assigned,
         defined_capacity_fte=defined,
         effective_capacity_fte=effective,
-        has_assigned_resources=bool(contributions),
-        contributing_resources=contributions,
+        has_assigned_resources=staffing.has_assigned_resources,
+        contributing_resources=staffing.contributing_resources,
         daily_assigned_capacity=daily_capacity,
         assignments=assignments,
         daily_usage=daily_usage,

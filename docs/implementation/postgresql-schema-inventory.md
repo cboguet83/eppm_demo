@@ -21,6 +21,11 @@ Applied SQLite migration sources remain unchanged until archival outside runtime
 | Planning repositories/services | Tasks, dependencies, dates, progress, tags, external endpoints and owner matching; explicit deletion semantics; signed 64-bit template lags | Native dates/FKs and permanent guards; BIGINT lags restored by migration 0014; retain current planning behavior, no planning-version columns |
 | `display_revision`, capacity and planning caches | Business-only invalidation; scope isolation; stale publication prevention; cached employee memberships | Replace global revision rows with project/pool revisions, shared/security revisions and database epoch; separate cache publication |
 
+Migration `0015_pool_staffing.sql` supplies bounded pool availability without
+expanding employee/calendar RLS. Private contribution and binary64 rounding
+helpers have no runtime execution privilege; only the actor-authorized aggregate
+API is exposed. Native capacity revisions and cache storage remain pending.
+
 The source has 59 application tables (including its migration ledger and global
 revision/cache tables). Native migration metadata and the database epoch replace
 SQLite lifecycle storage. Cache storage is redesigned as required by the plan,

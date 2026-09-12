@@ -112,6 +112,8 @@ available for that comparison before its runtime is archived.
   and transaction regressions recorded below.
 - `98beab7` — native immutable finance plans and Decimal allocated budgets;
   79 existing, 186 broader native/security/HTTP/domain and 8 browser checks passed.
+- `80a0ef4` — native task scheduling, dependency graphs and atomic replacements;
+  146 existing, 194 broader native and 45 final scheduling checks passed.
 
 ## Native schema and integrity
 
@@ -547,3 +549,35 @@ currently computes fresh data; the staged public summary call still requests a
 writer for the legacy cache. Per-entity revisions, opaque tokens, separated and
 guarded publication, runtime/operator cutover, project money forms and all final
 application coverage, 50-user responsiveness and recovery gates remain pending.
+
+## Native capacity inputs and private staffing aggregates
+
+Capacity reads now collect requested pool definitions, aggregate staffing,
+RLS-filtered demand and relevant project dates in one repeatable-read snapshot.
+Migration `0015_pool_staffing.sql` adds a bounded actor-authorized aggregate API;
+raw employee/calendar RLS remains unchanged and calculation helpers stay private.
+Project readers receive availability without individual staffing records. Shared
+administrators receive the established contribution details, with a permission
+recheck before returning them.
+
+The new domain aggregate boundary preserves zero-assigned-resource precedence,
+deduplicated demand, daily overloads and date fallback rules. Native staffing
+matches the existing team/direct-employee override, vacant-function and calendar
+behavior. A private binary64 rounding helper retains exact historical rounding
+order at half-millifte boundaries; euro arithmetic remains Decimal and separate.
+
+Validation: **37 existing capacity/timeline/cache-race/layer checks passed in
+4.38 seconds**. The broader native run passed **137 checks in 48.96 seconds**,
+with one expected public-function allowlist update required for the new API.
+After updating that explicit list, **40 native capacity/integrity checks passed
+in 20.32 seconds**. The native reader and pure capacity/input modules have
+**167/167 statements covered (100%)**. Tests cover 5,004 rounding values, 15
+randomized staffing configurations, actor/helper privacy, scoped assignments,
+25-year calendar bounds, permission revocation, concurrent snapshot reads and
+safe outages.
+
+Commands, C3 components and log paths are in
+[PostgreSQL capacity](postgresql-capacity.md). Native cache storage, per-entity
+revisions, opaque scope/revision tokens and guarded publication remain required.
+Portfolio queries, runtime/operator cutover, project monetary inputs and all
+final regression, 50-user responsiveness and recovery gates also remain pending.

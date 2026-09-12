@@ -278,6 +278,6 @@ def test_protected_trigger_helpers_are_not_publicly_executable(business):
         "admin_scope_catalog",
         "oidc_state_store", "oidc_state_consume", "session_lookup", "authenticate_identity",
         "session_activity", "session_logout", "policy_scope_projects",
-        "project_contacts",
+        "project_contacts", "pool_staffing",
         "wbs_options", "project_id_preview", "allocate_project_id",
     }

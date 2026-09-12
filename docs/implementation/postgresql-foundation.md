@@ -203,3 +203,10 @@ hidden endpoint protection, ISO date boundaries, all four summary warning rules
 and complete replacement rollback are verified. Migration 0014 preserves the
 existing template lag range. Cache revisions and separated summary publication
 remain pending alongside capacity and portfolio queries.
+
+[Capacity inputs and calculations](postgresql-capacity.md) now use bounded native
+staffing aggregates and scoped assignment snapshots. Project readers retain pool
+availability without gaining employee/calendar access; individual contributions
+remain restricted to shared administration. Exact parity tests preserve the
+existing nonmonetary rounding and team/employee override rules. Native cache
+storage, per-entity revisions, opaque scope tokens and guarded publication remain.

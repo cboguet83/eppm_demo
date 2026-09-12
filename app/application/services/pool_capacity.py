@@ -29,6 +29,7 @@ class PoolCapacityService:
         on_date: date | None = None,
     ) -> list[PoolCapacityDetail]:
         """Read all requested inputs once and evaluate on the same day."""
+        pool_ids = list(pool_ids)
         day = on_date if on_date is not None else self._today()
         inputs = self._reader.read(pool_ids)
         return self._reader.visible_details(
