@@ -453,6 +453,10 @@ class SqlitePlanningGateway:
         self.db_path = db_path
         self.access = access
 
+    def get_project_summaries(self, project_ids: list[int]) -> list[ProjectSummary]:
+        """Retain legacy cache transactions until the SQLite runtime is archived."""
+        return self.run(lambda store: store.get_project_summaries(project_ids), write=True)
+
     def run[Result](self, operation: Callable[[PlanningStore], Result], *, write: bool = False,
                     permission: Permission | None = None, project_ids: Collection[int] | None = None) -> Result:
         """Bridge callbacks while the legacy schedule runtime awaits archival."""

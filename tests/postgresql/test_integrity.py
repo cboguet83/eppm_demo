@@ -75,6 +75,7 @@ def test_native_baseline_contains_every_current_business_table(pg_database):
     assert actual == expected | {
         "schema_migration", "database_identity", "request_binding_key", "role_permission",
         "project_cache_revision", "pool_cache_revision", "catalog_cache_revision",
+        "pool_capacity_cache", "planning_summary_cache",
     }
 
 
@@ -281,6 +282,6 @@ def test_protected_trigger_helpers_are_not_publicly_executable(business):
         "admin_scope_catalog",
         "oidc_state_store", "oidc_state_consume", "session_lookup", "authenticate_identity",
         "session_activity", "session_logout", "policy_scope_projects",
-        "project_contacts", "pool_staffing", "display_cache_revisions",
+        "project_contacts", "pool_staffing", "display_cache_revisions", "read_derived_cache", "publish_derived_cache",
         "wbs_options", "project_id_preview", "allocate_project_id",
     }

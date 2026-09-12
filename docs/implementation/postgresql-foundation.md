@@ -189,7 +189,7 @@ Browser money inputs and final runtime composition still require cutover work.
 [Resource pools and assignments](postgresql-resource-pools.md) now use native
 callbacks for catalog/tag saves, recursive groups, mapping upserts and scoped
 project/task demand. Concurrent graph and mapping changes, cascade rollback and
-preserved inputs are tested. Capacity calculations and cache revisions remain.
+preserved inputs are tested. Capacity and cache ports are described below.
 
 [Finance plans](postgresql-finance.md) now use native immutable snapshots,
 Decimal euros and complete callbacks. Finance access remains independent of
@@ -201,18 +201,22 @@ composition and project-budget form conversions remain staged.
 callbacks, scoped recursive graphs and batched task bundles. Concurrent saves,
 hidden endpoint protection, ISO date boundaries, all four summary warning rules
 and complete replacement rollback are verified. Migration 0014 preserves the
-existing template lag range. Cache revisions and separated summary publication
-remain pending alongside capacity and portfolio queries.
+existing template lag range. Native summary caches now separate read snapshots
+from guarded publication; portfolio queries and runtime cutover remain.
 
 [Capacity inputs and calculations](postgresql-capacity.md) now use bounded native
 staffing aggregates and scoped assignment snapshots. Project readers retain pool
 availability without gaining employee/calendar access; individual contributions
 remain restricted to shared administration. Exact parity tests preserve the
-existing nonmonetary rounding and team/employee override rules. Native cache
-storage, per-entity revisions, opaque scope tokens and guarded publication remain.
+existing nonmonetary rounding and team/employee override rules. Revision and
+cache integration are described below.
 
 [Cache revision foundations](postgresql-cache-revisions.md) now add private
 project/pool generations and counters plus a shared-catalog revision. Authorized
 metadata reads combine effective scope, security and source fingerprints in one
-snapshot. Project writers avoid a global counter and shared pool revisions;
-native cache storage, guarded publication and runtime integration remain pending.
+snapshot. Project writers avoid a global counter and shared pool revisions.
+
+[Native derived caches](postgresql-derived-caches.md) now persist scoped capacity
+and planning payloads, reauthorize memory hits, bound process memory and publish
+only with transaction-bound proofs and current source keys. Runtime composition
+and process-state injection remain part of the later PostgreSQL-only cutover.

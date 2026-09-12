@@ -2,6 +2,7 @@
 
 from collections.abc import Callable, Collection, Sequence
 from datetime import date
+from typing import cast
 
 import psycopg
 from psycopg.rows import dict_row
@@ -14,6 +15,7 @@ from app.application.services.business_access import BusinessAccess
 from app.domain.access.models import Permission
 from app.domain.planning.records import DependencyInput, DependencySchedule, ProjectBounds, TaskInput, TaskValues
 from app.infrastructure.postgresql.business import run_business
+from app.infrastructure.postgresql.derived_cache import CacheRecord, DerivedCacheState, PostgresDerivedCache
 from app.infrastructure.postgresql.errors import DatabaseUnavailableError, TransactionRetryError
 from app.infrastructure.postgresql.planning_summaries import read_project_summaries
 from app.infrastructure.postgresql.pool import Database
@@ -279,9 +281,20 @@ class PostgresPlanningStore:
 class PostgresPlanningGateway:
     """Own complete schedule callbacks, current authorization and safe failures."""
 
-    def __init__(self, database: Database, key: bytes, *, access: BusinessAccess) -> None:
+    def __init__(self, database: Database, key: bytes, *, access: BusinessAccess,
+                 cache_state: DerivedCacheState | None = None) -> None:
         """Inject the restricted pool, server key and current actor policy."""
         self.database, self.key, self.access = database, key, access
+        self.cache = PostgresDerivedCache(database, key, cache_state if cache_state is not None else DerivedCacheState(), access=access)
+
+    def get_project_summaries(self, project_ids: list[int]) -> list[ProjectSummary]:
+        """Calculate in repeatable read and publish only against current sources."""
+        def calculate(selected: list[int]) -> list[CacheRecord]:
+            return [CacheRecord(row['id'], dict(row), dict(row)) for row in
+                    self.run(lambda store: store.get_project_summaries(selected))]
+        # Headers have no day-dependent values; the cache format uses one fixed
+        # day for this projection. Typed dictionaries cross the JSON boundary.
+        return cast(list[ProjectSummary], self.cache.load('planning', project_ids, date(2000, 1, 1), calculate))
 
     def run[Result](self, operation: Callable[[PlanningStore], Result], *, write: bool = False,
                     permission: Permission | None = None, project_ids: Collection[int] | None = None) -> Result:

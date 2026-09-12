@@ -100,8 +100,8 @@ Logs: `.local/postgresql-capacity-legacy.log`,
 `.local/postgresql-capacity-native-final.log`. Coverage:
 `.local/postgresql-capacity-coverage.json`.
 
-This ports capacity inputs and calculations. Native cache storage, per-entity
-revisions, scope tokens and guarded publication remain pending; no temporary
-native cache is substituted for those requirements. Portfolio queries, native
-runtime/operator cutover, project money forms, full application coverage, the
-50-user browser benchmark and backup/restore/restart acceptance also remain.
+This ports capacity inputs and calculations. [Native derived
+caches](postgresql-derived-caches.md) now add private storage, current scoped
+tokens, bounded process memory and guarded publication. Portfolio queries,
+native runtime/operator cutover, project money forms, full application coverage,
+the 50-user browser benchmark and backup/restore/restart acceptance remain.

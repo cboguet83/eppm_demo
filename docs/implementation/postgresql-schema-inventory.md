@@ -24,13 +24,18 @@ Applied SQLite migration sources remain unchanged until archival outside runtime
 Migration `0015_pool_staffing.sql` supplies bounded pool availability without
 expanding employee/calendar RLS. Private contribution and binary64 rounding
 helpers have no runtime execution privilege; only the actor-authorized aggregate
-API is exposed. Native capacity revisions and cache storage remain pending.
+API is exposed. Revisions and private cache storage are added separately below.
 
 Migration `0016_cache_revisions.sql` adds private project/pool generation records
 and shared-catalog revisions. Source-trigger coverage matches the baseline display
 sources while excluding sessions, audit and derived writes. Scoped metadata reads
-combine current membership and security with those revisions. Native cache payload
-storage and guarded publication remain pending.
+combine current membership and security with those revisions.
+
+Migration `0017_derived_caches.sql` adds private capacity and planning payload
+tables with actor/session/entity keys and cascading owner foreign keys. Authorized
+reads generate current keys before matching persisted or process entries.
+Transaction-bound server proofs and current-key comparisons guard separate
+serializable publication; all cache tables remain outside revision triggers.
 
 The source has 59 application tables (including its migration ledger and global
 revision/cache tables). Native migration metadata and the database epoch replace

@@ -97,10 +97,10 @@ Logs: `.local/postgresql-planning-legacy-expanded.log`,
 `.local/postgresql-planning-native-final.log`. Coverage:
 `.local/postgresql-planning-coverage.json`.
 
-Per-project/pool/shared/security cache revisions, opaque tokens and guarded cache
-publication remain pending. Native summary SQL currently computes fresh data;
-the public service still requests a serializable transaction for the staged
-legacy summary cache. Separating summary reads from cache publication remains
-part of that required cache port. Capacity and portfolio repositories, native
-runtime/operator tooling, project money forms, full regression coverage, the
-50-user browser acceptance runs and backup/restore/restart gates also remain.
+[Native derived caches](postgresql-derived-caches.md) now separate summary reads
+from publication. The native gateway computes missing headers in repeatable read,
+publishes against current source/security keys in a separate serializable
+transaction, and reauthorizes all memory and database hits. Capacity inputs and
+caches are also ported. Portfolio queries, native runtime/operator tooling,
+project money forms, full regression coverage, the 50-user browser acceptance
+runs and backup/restore/restart gates remain.

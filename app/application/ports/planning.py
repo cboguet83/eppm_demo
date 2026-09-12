@@ -122,6 +122,10 @@ class PlanningStore(Protocol):
 class PlanningGateway(Protocol):
     """Execute complete schedule operations in authorized, consistent transactions."""
 
+    def get_project_summaries(self, project_ids: list[int]) -> list[ProjectSummary]:
+        """Read current headers, publishing derived cache entries separately."""
+        ...
+
     def run[Result](self, operation: Callable[[PlanningStore], Result], *, write: bool = False,
                     permission: Permission | None = None, project_ids: Collection[int] | None = None) -> Result:
         """Replay complete scheduling callbacks only after a definite rollback."""

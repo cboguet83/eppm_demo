@@ -299,8 +299,7 @@ class PlanningService:
 
     def get_project_summaries(self, project_ids: list[int]) -> list[ProjectSummary]:
         """Read or refresh derived headers without publishing over a concurrent edit."""
-        project_ids = list(project_ids)
-        return self._gateway.run(lambda store: store.get_project_summaries(project_ids), write=True)
+        return self._gateway.get_project_summaries(list(project_ids))
 
     def affected_task_projects(self, task_id: int) -> tuple[set[int], set[int]]:
         """Find the edited project, dependent projects, and pools requiring refresh."""

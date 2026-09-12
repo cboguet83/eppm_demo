@@ -98,10 +98,9 @@ Logs: `.local/postgresql-revisions-native.log`,
 `.local/postgresql-revisions-native-final.log`. Coverage:
 `.local/postgresql-revisions-coverage.json`.
 
-Native capacity/planning cache storage and guarded publication are still required.
-The new fingerprints have not yet replaced the staged runtime's cache integration.
-The next cache work must validate current source/security fingerprints before
-reuse and publication, isolate actors, bound process memory and separate cache
-publication from consistent business reads. Portfolio queries, runtime/operator
-cutover, project monetary inputs and all final application coverage, 50-user
-browser and recovery acceptance gates also remain pending.
+[Native capacity/planning caches](postgresql-derived-caches.md) now use these
+fingerprints for current reads and guarded publication. The digest serialization
+matches PostgreSQL JSONB array formatting, verified against both cache kinds and
+multiple scopes. Runtime composition remains staged. Portfolio queries,
+runtime/operator cutover, project monetary inputs and all final application
+coverage, 50-user browser and recovery acceptance gates remain pending.

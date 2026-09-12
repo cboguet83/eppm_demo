@@ -39,9 +39,9 @@ preserves UI behavior and makes the existing regression suite reproducible.
 | --- | --- | --- |
 | 1. Baseline and decisions | Baseline captured | ADR, full baseline test results, workload and service timings recorded. Browser load comparison remains an acceptance gate. |
 | 2. PostgreSQL foundation | Additive foundation tested | Configuration, pool, migration runner, Compose, operator role provisioning and isolated tests implemented. Application lifecycle integration follows repository cutover. |
-| 3. Schema and enforcement | In progress | Native integrity, RLS, actor binding, protected-property audit and access administration tested; per-entity revisions and derived-cache storage remain. |
+| 3. Schema and enforcement | Native enforcement tested | Native integrity, RLS, actor binding, audit, access administration, per-entity revisions and private derived-cache storage implemented. Final cutover and clean deployment validation remain. |
 | 4. Core repositories | Native adapters tested | Organization, schema, tags, collaboration, templates, projects, WBS and Decimal budget adapters use complete callbacks. Browser money inputs and runtime composition remain staged. |
-| 5. Planning and caches | In progress | Native resource pools, recursive groups, mappings and scoped assignments tested. Scheduling/dependencies, capacity, portfolio and per-entity cache revisions remain. |
+| 5. Planning and caches | In progress | Native scheduling, resource pools, scoped demand, private staffing, per-entity revisions and guarded capacity/planning caches implemented. Portfolio queries and final runtime integration remain. |
 | 6. Runtime cutover | In progress | Native authentication/access adapters and callback service integration implemented; composition, operator tools, seeds, benchmarks and legacy archive remain. |
 | 7. Acceptance and documentation | Pending | Full regression/coverage, browser/load runs, backup/restore, deployment and C4 documentation. |
 
@@ -116,6 +116,8 @@ available for that comparison before its runtime is archived.
   146 existing, 194 broader native and 45 final scheduling checks passed.
 - `e5723db` — native capacity snapshots and private staffing aggregates;
   37 existing and 40 final capacity/integrity checks passed.
+- `787c32c` — scoped project/pool revision fingerprints and independent writers;
+  528 native checks passed, with 100% native revision-adapter statement coverage.
 
 ## Native schema and integrity
 
@@ -617,8 +619,39 @@ regression also passed, verifying both pool memberships and old/new project
 revisions without a pool-counter write.
 
 Commands and C3 components are in
-[PostgreSQL cache revisions](postgresql-cache-revisions.md). Native cache payload
-storage, guarded publication and runtime cache integration remain required;
-this is their revision foundation. Portfolio queries, runtime/operator cutover,
-project money forms and final regression, 50-user browser and recovery acceptance
-remain pending.
+[PostgreSQL cache revisions](postgresql-cache-revisions.md). This milestone is the
+revision foundation; the native payload and publication work follows below.
+
+## Native derived-cache storage and publication
+
+Migration `0017_derived_caches.sql` adds private session/entity cache rows and
+database-generated current keys. Cache reads reauthorize before using persisted
+or memory results. Publication verifies a transaction-bound server proof and all
+current source/security keys before an atomic insert/update. Frozen payload bytes
+survive complete serializable retries and supply the same process-memory result.
+
+Capacity and planning adapters calculate outside cache locks and publish
+separately from repeatable-read input snapshots. Process memory has entry/byte
+limits, retains details across summary reads and returns independent objects.
+Current permission checks hide staffing details and scoped assignment/dependency
+queries prevent hidden owners from entering results. Revoked sessions fail with
+the existing access-denied contract, including warm memory hits.
+
+Validation: the initial affected native/existing suite passed **184 tests in
+61.15 seconds**. The expanded cache/planning/service/layer suite passed **164
+tests in 53.75 seconds**, covering **456/458 statements (99.56%)** across the
+planning service and native planning/cache adapters. All **308 native adapter
+statements are covered (100%)**. Tests include both fingerprint implementations,
+day/format misses, hidden source isolation, source/security changes during
+calculation, forged proofs, large bodies, serialization retries, late rollback,
+owner deletion, memory bounds and concurrent calculations without a cache lock.
+
+The full native PostgreSQL suite passed **570 tests in 220.64 seconds**, covering
+all current native ports, access/authentication, integrity and transaction tests
+with the new cache migration installed. Log:
+`.local/postgresql-derived-cache-all-native.log`.
+
+Commands, C3 components and logs are in
+[PostgreSQL derived caches](postgresql-derived-caches.md). Portfolio queries,
+runtime/operator cutover, one process-state injection, project money forms and
+all final application coverage, 50-user browser and recovery acceptance remain.

@@ -73,8 +73,8 @@ class RevisionSnapshot:
 
 
 def _digest(value: tuple) -> str:
-    """Use stable compact JSON for internal tuples made solely of primitive data."""
-    return sha256(json.dumps(value, ensure_ascii=False, separators=(',', ':')).encode('utf-8')).hexdigest()
+    """Match PostgreSQL JSONB array formatting for database-checked fingerprints."""
+    return sha256(json.dumps(value, ensure_ascii=False).encode('utf-8')).hexdigest()
 
 
 def read_revisions(connection: psycopg.Connection, access: BusinessAccess) -> RevisionSnapshot:
