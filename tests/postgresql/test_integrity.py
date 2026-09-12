@@ -72,7 +72,10 @@ def test_native_baseline_contains_every_current_business_table(pg_database):
     expected = set(baseline["row_counts"]) - replaced
     with psycopg.connect(pg_database.operator_url) as operator:
         actual = {row[0] for row in operator.execute("SELECT tablename FROM pg_tables WHERE schemaname='eppm'")}
-    assert actual == expected | {"schema_migration", "database_identity", "request_binding_key", "role_permission"}
+    assert actual == expected | {
+        "schema_migration", "database_identity", "request_binding_key", "role_permission",
+        "project_cache_revision", "pool_cache_revision", "catalog_cache_revision",
+    }
 
 
 def test_native_money_dates_booleans_and_json_round_trip_exactly(business):
@@ -278,6 +281,6 @@ def test_protected_trigger_helpers_are_not_publicly_executable(business):
         "admin_scope_catalog",
         "oidc_state_store", "oidc_state_consume", "session_lookup", "authenticate_identity",
         "session_activity", "session_logout", "policy_scope_projects",
-        "project_contacts", "pool_staffing",
+        "project_contacts", "pool_staffing", "display_cache_revisions",
         "wbs_options", "project_id_preview", "allocate_project_id",
     }

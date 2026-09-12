@@ -114,6 +114,8 @@ available for that comparison before its runtime is archived.
   79 existing, 186 broader native/security/HTTP/domain and 8 browser checks passed.
 - `80a0ef4` — native task scheduling, dependency graphs and atomic replacements;
   146 existing, 194 broader native and 45 final scheduling checks passed.
+- `e5723db` — native capacity snapshots and private staffing aggregates;
+  37 existing and 40 final capacity/integrity checks passed.
 
 ## Native schema and integrity
 
@@ -581,3 +583,42 @@ Commands, C3 components and log paths are in
 revisions, opaque scope/revision tokens and guarded publication remain required.
 Portfolio queries, runtime/operator cutover, project monetary inputs and all
 final regression, 50-user responsiveness and recovery gates also remain pending.
+
+## Native cache revision foundations
+
+Migration `0016_cache_revisions.sql` adds private project/pool generations and
+counters plus a shared-catalog revision. It covers all baseline display sources
+while excluding session activity, audit and derived writes. Project/assignment
+changes update their affected project revisions; they never write one global
+business counter or a shared pool revision. Pool configuration and shared-catalog
+changes retain separate ownership.
+
+Authorized revision snapshots read effective scope, security state and batched
+source metadata consistently. Project fingerprints include only visible
+predecessor revisions; pool fingerprints include only visible consuming project
+sources. Generations prevent reuse after numeric identity recreation, and the
+database OID distinguishes a new database with a copied epoch. Opaque tokens
+remain comparison values and do not bypass current authorization.
+
+Validation: **196 broader native checks passed in 75.82 seconds**, with one
+schema-inventory expectation requiring the three new revision tables. After that
+explicit inventory update and batched metadata aggregation, **46 final native
+revision/integrity checks passed in 15.23 seconds**. The revision adapter has
+**51/51 statements covered (100%)**. Checks include independent writers under held
+revision locks, hidden-demand isolation, cycles, rollback, missing metadata,
+property-driven membership, unchanged-scope permission changes, session activity,
+database recreation and consistent reads during concurrent edits.
+
+The complete native PostgreSQL suite then passed **528 tests in 189.53 seconds**,
+covering every current native business port, authentication, authorization,
+migration and transaction tests with the new triggers installed. Log:
+`.local/postgresql-revisions-all-native.log`. The additional last-assignment move
+regression also passed, verifying both pool memberships and old/new project
+revisions without a pool-counter write.
+
+Commands and C3 components are in
+[PostgreSQL cache revisions](postgresql-cache-revisions.md). Native cache payload
+storage, guarded publication and runtime cache integration remain required;
+this is their revision foundation. Portfolio queries, runtime/operator cutover,
+project money forms and final regression, 50-user browser and recovery acceptance
+remain pending.

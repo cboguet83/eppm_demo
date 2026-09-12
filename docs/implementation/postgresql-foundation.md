@@ -210,3 +210,9 @@ availability without gaining employee/calendar access; individual contributions
 remain restricted to shared administration. Exact parity tests preserve the
 existing nonmonetary rounding and team/employee override rules. Native cache
 storage, per-entity revisions, opaque scope tokens and guarded publication remain.
+
+[Cache revision foundations](postgresql-cache-revisions.md) now add private
+project/pool generations and counters plus a shared-catalog revision. Authorized
+metadata reads combine effective scope, security and source fingerprints in one
+snapshot. Project writers avoid a global counter and shared pool revisions;
+native cache storage, guarded publication and runtime integration remain pending.

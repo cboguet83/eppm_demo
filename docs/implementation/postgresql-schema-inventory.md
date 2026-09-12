@@ -26,6 +26,12 @@ expanding employee/calendar RLS. Private contribution and binary64 rounding
 helpers have no runtime execution privilege; only the actor-authorized aggregate
 API is exposed. Native capacity revisions and cache storage remain pending.
 
+Migration `0016_cache_revisions.sql` adds private project/pool generation records
+and shared-catalog revisions. Source-trigger coverage matches the baseline display
+sources while excluding sessions, audit and derived writes. Scoped metadata reads
+combine current membership and security with those revisions. Native cache payload
+storage and guarded publication remain pending.
+
 The source has 59 application tables (including its migration ledger and global
 revision/cache tables). Native migration metadata and the database epoch replace
 SQLite lifecycle storage. Cache storage is redesigned as required by the plan,
