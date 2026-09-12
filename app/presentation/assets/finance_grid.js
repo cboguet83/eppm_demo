@@ -85,7 +85,6 @@ export default function({data, parentElement, setTriggerValue}) {
         error.textContent='';padRows();viewport.scrollTop=0;renderRows();updateControls();
     }));
     const save=button('save',saveDialog);
-    const cancel=button('reload',()=>discardThen(()=>emit({kind:'reload'})));
     const cancelVersion=button('cancel_version',()=>discardThen(()=>
         showDialog(t('cancel_version'),[element('p',t('cancel_notice'))],'confirm',()=>emit({kind:'cancel_version'}))));
     const file=element('input');file.type='file';file.accept='.csv,text/csv';file.hidden=true;
@@ -103,7 +102,7 @@ export default function({data, parentElement, setTriggerValue}) {
         const go=()=>{const a=element('a');a.href=data.download_url;a.download='budget.csv';root.append(a);a.click();a.remove();};
         if(model.dirty) showDialog(t('export'),[element('p',t('export_saved'))],'export',go);else go();
     });
-    toolbar.append(versionSelect,edit,exitEdit,save,cancel,upload,download,cancelVersion,file);
+    toolbar.append(versionSelect,edit,exitEdit,save,upload,download,cancelVersion,file);
     const metadata=element('p', data.selected ? t('metadata',{author:data.selected.author,
         date:new Date(data.selected.created_at*1000).toLocaleString(),status:t(data.selected.status)}) : t('empty_hint'),'muted');
     const viewport=element('div','','viewport');viewport.setAttribute('aria-label',t('grid'));viewport.tabIndex=0;
@@ -126,7 +125,7 @@ export default function({data, parentElement, setTriggerValue}) {
         exitEdit.hidden=cancelVersion.hidden=!editable();
         exitEdit.disabled=busy;
         save.disabled=upload.disabled=!editable() || busy;
-        cancel.disabled=versionSelect.disabled=busy;
+        versionSelect.disabled=busy;
         download.disabled=!data.selected || busy;
         cancelVersion.disabled=!editable() || !data.selected || data.selected.status==='Canceled' || busy;
         count.textContent=t('row_count',{count:model.rows.filter(row=>row.code.trim()).length});dirty.textContent=model.dirty?t('unsaved'):t('saved');

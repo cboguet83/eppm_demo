@@ -65,7 +65,7 @@ def test_finance_callbacks_save_import_and_preserve_draft_tokens_on_errors(busin
     assert bad['error'] and bad['preview'] is None
     selected=act(app,'select',snapshot_id=first['selected']['id'])
     assert selected['selected']['id']==first['selected']['id']
-    assert act(app,'reload')['selected']['id']==proposed['selected']['id']
+    assert act(app,'select',snapshot_id=proposed['selected']['id'])['selected']['id']==proposed['selected']['id']
     canceled=act(app,'cancel_version')
     assert canceled['selected']['status']=='Canceled' and len(canceled['versions'])==2
     assert act(app,'cancel_version')['error']

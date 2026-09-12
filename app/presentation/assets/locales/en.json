@@ -717,7 +717,6 @@
     "save_confirm": "Save budget plan",
     "name_required": "Enter a name.",
     "save": "Save new version",
-    "reload": "Reload latest",
     "import": "Import CSV",
     "export": "Export CSV",
     "export_saved": "This exports the selected saved snapshot. Your unsaved changes are excluded.",

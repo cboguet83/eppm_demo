@@ -741,7 +741,6 @@
     "save_confirm": "Guardar plano orçamental",
     "name_required": "Introduza um nome.",
     "save": "Guardar nova versão",
-    "reload": "Recarregar versão mais recente",
     "import": "Importar CSV",
     "export": "Exportar CSV",
     "export_saved": "É exportada a versão guardada selecionada, sem alterações por guardar.",

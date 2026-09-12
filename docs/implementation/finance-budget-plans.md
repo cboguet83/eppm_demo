@@ -5,7 +5,7 @@ plan. To edit, import, save or cancel, an access administrator assigns the
 application-wide **Finance editor** role; Business administrators already qualify.
 
 1. Click **Edit** to enable the initially read-only grid, CSV import, and **Save new version**.
-   Saving, reloading, or selecting a version returns to read-only mode. Enter WBS
+   Saving or selecting a version returns to read-only mode. Enter WBS
    codes and amounts directly in the blank spreadsheet grid, paste plain
    Excel values, or import CSV. Matching descriptions appear automatically; French
    labels use OTP. Unused rows are gray until a WBS is entered. Rows grow as needed.

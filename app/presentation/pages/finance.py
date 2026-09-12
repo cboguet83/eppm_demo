@@ -15,7 +15,7 @@ from app.presentation.i18n import t
 
 LABELS = (
     "version", "empty_plan", "version_name", "save_confirm", "save_notice", "status", "choose_status",
-    "name_required", "edit", "save", "reload", "import", "export", "export_saved", "cancel_version", "cancel_notice",
+    "name_required", "edit", "save", "import", "export", "export_saved", "cancel_version", "cancel_notice",
     "exit_edit", "metadata", "empty_hint", "grid", "code", "description", "remove",
     "remove_row", "row_count", "unsaved", "saved", "invalid_code", "missing_code", "duplicate_code", "invalid_amount",
     "paste_bounds", "paste_locked", "unmatched", "row_limit", "file_error", "import_preview", "replace_warning",
@@ -55,8 +55,6 @@ def _action(service: FinanceService, token: str, base_id: int | None) -> None:
         elif kind == "select":
             selected = service.view(action.get("snapshot_id")).selected
             state["selected"] = selected.version.id if selected else None
-        elif kind == "reload":
-            state["selected"] = None
         elif kind == "import":
             rows = service.validate_import(action.get("content"), action.get("year"))
             state["preview"] = {"id": action["nonce"], "rows": _rows(rows)}

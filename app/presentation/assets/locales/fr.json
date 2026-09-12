@@ -741,7 +741,6 @@
     "save_confirm": "Enregistrer le plan budgétaire",
     "name_required": "Saisissez un nom.",
     "save": "Enregistrer une nouvelle version",
-    "reload": "Recharger la dernière version",
     "import": "Importer CSV",
     "export": "Exporter CSV",
     "export_saved": "L’export utilise la version enregistrée sélectionnée. Les modifications non enregistrées sont exclues.",

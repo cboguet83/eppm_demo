@@ -718,7 +718,6 @@
     "save_confirm": "Budgetplan speichern",
     "name_required": "Geben Sie einen Namen ein.",
     "save": "Neue Version speichern",
-    "reload": "Neueste Version laden",
     "import": "CSV importieren",
     "export": "CSV exportieren",
     "export_saved": "Exportiert wird der gewählte gespeicherte Stand ohne ungespeicherte Änderungen.",
