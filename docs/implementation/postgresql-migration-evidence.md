@@ -40,7 +40,7 @@ preserves UI behavior and makes the existing regression suite reproducible.
 | 1. Baseline and decisions | Baseline captured | ADR, full baseline test results, workload and service timings recorded. Browser load comparison remains an acceptance gate. |
 | 2. PostgreSQL foundation | Additive foundation tested | Configuration, pool, migration runner, Compose, operator role provisioning and isolated tests implemented. Application lifecycle integration follows repository cutover. |
 | 3. Schema and enforcement | In progress | Native integrity, RLS, actor binding, protected-property audit and access administration tested; per-entity revisions and derived-cache storage remain. |
-| 4. Core repositories | In progress | Native organization, schema and project-template adapters, typed property values and callback services implemented; projects, tags, collaboration and Decimal budgets remain. |
+| 4. Core repositories | In progress | Native organization, schema, tags and project-template adapters, typed property values and callback services implemented; projects, collaboration and Decimal budgets remain. |
 | 5. Planning and caches | Pending | Current planning, dependencies, allocations, capacity, per-entity revisions and snapshot tests. |
 | 6. Runtime cutover | In progress | Native authentication/access adapters and callback service integration implemented; composition, operator tools, seeds, benchmarks and legacy archive remain. |
 | 7. Acceptance and documentation | Pending | Full regression/coverage, browser/load runs, backup/restore, deployment and C4 documentation. |
@@ -99,6 +99,8 @@ available for that comparison before its runtime is archived.
   197 existing, 80 native and 47 replay/foundation checks passed.
 - `607ea06` — native project templates and exact typed property values;
   82 existing, 139 native and 40 follow-up checks passed.
+- `768efc1` — native schema settings and atomic callback edits;
+  47 existing and 165 native checks passed.
 
 ## Native schema and integrity
 
@@ -379,3 +381,27 @@ Commands, C3 components and test boundaries are documented in
 coverage: `.local/postgresql-schema-coverage.json`. The remaining repositories,
 Decimal budgets, cache revisions, runtime/tools cutover and full acceptance
 gates are still pending.
+
+## Native tag catalogs and assignments
+
+Tag catalogs, project/task/pool assignments, batched links and task-tag paging now
+use native PostgreSQL SQL and complete callbacks. RLS filters rows before label
+joins, usage totals, filtering and paging; native guards protect both old and new
+project owners. Dictionary deletion is atomic across its assignments, and pool
+upserts return a single identity for concurrent duplicate requests.
+
+Validation: **49 existing checks passed in 10.67 seconds** and **101 native tag,
+business-security, authorization and layer checks passed in 30.51 seconds**.
+The native tag adapter has **155/155 statements covered (100%)**; combined with
+the tag service, this run covers **274/278 statements (98.56%)**. Existing tests
+also exercise the service's invalid paging/filter input branches.
+
+Native tests verify literal searches, numeric/text/null ordering, bounded
+selectors, hidden-row exclusion from batches and counts, stable count/page
+snapshots during deletion, old/new owner checks, safe failures, concurrent pool
+upsert replay and copied command inputs. Commands and C3 components are in
+[PostgreSQL tags](postgresql-tags.md). Logs:
+`.local/postgresql-tags-legacy.log`, `.local/postgresql-tags-native.log`;
+coverage: `.local/postgresql-tags-coverage.json`. Projects, collaboration,
+planning/resource pools, Decimal budgets/finance, cache revisions, runtime/tools
+cutover and full acceptance gates remain pending.

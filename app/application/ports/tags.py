@@ -1,11 +1,9 @@
 """Typed transaction contracts for tagging use cases."""
 
-from collections.abc import Collection
-from app.domain.access.models import Permission
-
-
-from contextlib import AbstractContextManager
+from collections.abc import Callable, Collection
 from typing import Protocol
+
+from app.domain.access.models import Permission
 from app.application.ports.tag_records import (
     DictionaryRow,
     EntityChoice,
@@ -112,6 +110,8 @@ class TagStore(Protocol):
 
 
 class TagGateway(Protocol):
-    """Supply a consistent reader or reserved writer."""
+    """Execute whole operations over consistent read or write snapshots."""
 
-    def transaction(self, *, write: bool = False, permission: Permission | None = None, project_ids: Collection[int] | None = None) -> AbstractContextManager[TagStore]: ...
+    def run[Result](self, operation: Callable[[TagStore], Result], *, write: bool = False, permission: Permission | None = None, project_ids: Collection[int] | None = None) -> Result:
+        """Replay complete use cases after definite transaction rollback."""
+        ...

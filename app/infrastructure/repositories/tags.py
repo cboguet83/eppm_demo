@@ -1,6 +1,6 @@
 """SQLite persistence for tag catalogs and assignments."""
 
-from collections.abc import Collection
+from collections.abc import Callable, Collection
 from app.domain.access.models import Permission
 
 
@@ -9,6 +9,7 @@ from collections.abc import Iterator, Sequence
 from contextlib import closing, contextmanager
 import sqlite3
 from app.application.exceptions import TagConflictError, TagStorageError
+from app.application.ports.tags import TagStore
 from app.application.ports.tag_records import (
     DictionaryRow,
     EntityChoice,
@@ -762,6 +763,12 @@ class SqliteTagGateway:
         """Retain the path without opening a connection."""
         self.db_path = db_path
         self.access = access
+
+    def run[Result](self, operation: Callable[[TagStore], Result], *, write: bool = False,
+                    permission: Permission | None = None, project_ids: Collection[int] | None = None) -> Result:
+        """Run a complete use case while the legacy composition is staged for removal."""
+        with self.transaction(write=write, permission=permission, project_ids=project_ids) as store:
+            return operation(store)
 
     @contextmanager
     def transaction(self, *, write: bool = False, permission: Permission | None = None, project_ids: Collection[int] | None = None) -> Iterator[SqliteTagStore]:

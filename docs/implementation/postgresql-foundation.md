@@ -169,3 +169,8 @@ their parents through one scoped join.
 complete callbacks for definitions, choices, groups and translated aliases.
 Reference guards, atomic applicability edits and categorical grant lifetimes are
 verified with restricted PostgreSQL connections and concurrent service calls.
+
+[Tags](postgresql-tags.md) now use the same callback runner for native catalog
+management, scoped assignments, batched links and consistent task-tag pages.
+Native policies apply before counts and paging, and old/new owner guards protect
+assignment moves. Application composition remains staged for the later cutover.
