@@ -87,6 +87,8 @@ available for that comparison before its runtime is archived.
   inventory and CI configuration; 77 PostgreSQL and 7 layer-boundary checks passed.
 - `28e66e0` — private scope resolution and categorical-reference lifetimes;
   112 PostgreSQL checks passed.
+- `977c0fd` — signed actor binding, fixed permission mapping and pool role checks;
+  159 PostgreSQL checks passed.
 
 ## Native schema and integrity
 
@@ -172,3 +174,45 @@ runtime/config subset covered 180/181 statements (99.45%); actor binding covered
 all 33 statements. This subset measurement does not replace the full-codebase
 95% acceptance gate. Commands and full output are retained in
 `.local/postgresql-actor-final.log`.
+
+## Business row security and audit
+
+`0006_business_security.sql` installs RLS and permanent write guards on all 45
+existing business tables. Scope filters apply before aggregate, page and join
+results. Runtime users cannot read hidden predecessor columns; the permanent
+task projection masks hidden endpoints, and dependency rows require both ends
+to be visible. Raw employee contact/staffing records require shared-business
+administration; the existing portfolio manager-label projection stays available.
+
+Writes check old and new owners, including conflict targets and indirect task
+references. Protected categorical/template mutations append audit with the
+signed actor/correlation, and a failed audit insert rolls back the entire save.
+No-op protected upserts remain allowed without audit noise. Task tags and
+assignments are checked/deleted before the owner disappears, preserving safe
+native cascades. Runtime pool reset also discards temporary tables, verified by
+reusing the same backend for an administrator and a scoped reader.
+
+Finance reads remain available to any valid active account, independently of
+portfolio grants. Finance writes require the separate global capability and
+persist trusted attribution. Its all-scope marker cannot enumerate project IDs
+through permission helpers. Private scope evaluation remains unexposed.
+
+The first combined RLS, PostgreSQL regression and layer-boundary run passed
+198 checks in 47.02 seconds. Additional indirect task-tag upserts and protected
+list-item cases passed in the 35-test security run (11.15 seconds). Final finance
+scope/attribution checks follow in the final validation record below.
+
+Next required work: bounded native access-administration/authentication
+operations, bootstrap/last-admin concurrency and security audit, security/cache
+revision redesign, all repository ports and the runtime cutover. Business RLS
+is not evidence of completion of these remaining requirements. Existing integrity
+fixtures now use a real bound business administrator and production grants;
+they no longer grant blanket runtime DML privileges in their test databases.
+
+Final validation passed 202 checks in 48.56 seconds, comprising 195 real
+PostgreSQL/configuration checks and 7 layer-boundary checks. The complete command
+output is in `.local/postgresql-business-final.log`. It includes the finance-only
+project-ID regression, trusted finance attribution, protected list upserts and
+dependent-tag ownership checks. No application repository has been switched to
+the new runtime yet; full regression/coverage, authenticated browser performance,
+and restore acceptance remain pending.

@@ -47,12 +47,24 @@ so table-count equality is not an acceptance criterion.
 The native business baseline and permanent integrity triggers are implemented in
 `0002_business_schema.sql` and `0003_integrity.sql`. Native type round trips and
 concurrent pool-group, calendar and WBS integrity checks pass against PostgreSQL.
-Application ownership/RLS, protected-property audit, security transitions, cache
-redesign and repository adapters remain required before runtime cutover.
+Business ownership/RLS and protected-property audit are implemented in
+`0006_business_security.sql`. Security transitions, cache redesign and repository
+adapters remain required before runtime cutover.
 
 Private scope helpers and categorical-reference lifetime triggers are implemented
 in `0004_scope_resolution.sql`. Structure validation is checked against the domain
 normalizer. Arbitrary scope-resolution functions have no runtime execution grant.
+
+`0005_actor_authorization.sql` adds signed context and fixed permission mappings.
+`0006_business_security.sql` installs RLS and old/new-owner guards for all 45
+existing business tables. The remaining access tables have default-deny RLS
+pending bounded authentication/administration functions. Employee contact and
+staffing rows require organization administration; a permanent manager-label
+projection preserves the portfolio catalog. A permanent task projection masks
+hidden predecessor IDs, and the base predecessor column has no runtime SELECT
+privilege. Application-wide finance scope does not enumerate portfolio IDs.
+Dependent task tags and assignments are authorized before their parent deletion;
+native constraints and cascades remain installed.
 
 Finance amounts use euro NUMERIC with exact cent-grid validation. Project budgets
 accept finite NUMERIC values without a new scale or sign restriction. Capacity

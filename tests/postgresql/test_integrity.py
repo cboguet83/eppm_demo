@@ -1,28 +1,43 @@
-"""Native values and permanent invariants through a real non-owner connection.
+"""Native values and permanent invariants through an authorized nonowner pool."""
 
-Business table grants are supplied only inside these isolated test databases
-while the additive baseline has not yet installed authorization policies.
-Authorization parity is a separate required migration milestone.
-"""
-
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 import json
 from pathlib import Path
+from secrets import token_bytes
 from threading import Barrier
 
 import psycopg
 from psycopg import sql
-from psycopg.types.json import Jsonb
 import pytest
 
 from app.infrastructure.postgresql.pool import Database
+from app.infrastructure.postgresql.authorization import ActorBinding, configure_signing_key
+from app.application.services.access import AuthorizationPolicy, SessionLimits
+from app.application.services.business_access import BusinessAccess
+from app.domain.access.models import Actor
 from app.shared.config.database import DatabaseConfig
+
+
+@dataclass(frozen=True)
+class BoundBusinessDatabase:
+    """Use the production pool and permissions for a real test administrator."""
+
+    database: Database
+    binding: ActorBinding
+
+    def run[Result](self, operation: Callable[[psycopg.Connection], Result], *, write: bool = False) -> Result:
+        """Preserve complete callback execution with the fixture's trusted actor."""
+        return self.database.run(operation, write=write, bind=self.binding)
 
 
 @pytest.fixture
 def business(pg_database):
+    key = token_bytes(32)
+    configure_signing_key(pg_database.operator_url, key.hex())
     with psycopg.connect(pg_database.operator_url) as operator:
         operator.execute("INSERT INTO eppm.project_type(name,is_general) VALUES ('General',true)")
         operator.execute("INSERT INTO eppm.project(name) VALUES ('First'),('Second')")
@@ -30,12 +45,15 @@ def business(pg_database):
         operator.execute("INSERT INTO eppm.resource_pool(name) VALUES ('Pool')")
         operator.execute("INSERT INTO eppm.resource_pool_group(name) VALUES ('First'),('Second'),('Third')")
         operator.execute("INSERT INTO eppm.employee(firstname,lastname,email,employee_code) VALUES ('Test','Person','person@example.invalid','TEST')")
-        operator.execute("GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA eppm TO eppm_runtime")
-        operator.execute("GRANT USAGE ON ALL SEQUENCES IN SCHEMA eppm TO eppm_runtime")
+        operator.execute("INSERT INTO eppm.app_user(status,created_at,updated_at) VALUES ('active',900,900)")
+        operator.execute("INSERT INTO eppm.app_session VALUES ('business-session',1,950,2000,980,true,false)")
+        operator.execute("""INSERT INTO eppm.app_role_assignment(user_id,role,scope_json,created_at,created_by)
+            VALUES (1,'business_admin','{"kind":"all"}',900,'test setup')""")
     resource = Database(DatabaseConfig(pg_database.runtime_url, pool_min=1, pool_max=3))
     resource.open()
     try:
-        yield resource
+        access = BusinessAccess(Actor(1, "business-session", "integrity-check"), AuthorizationPolicy(lambda: 1000, SessionLimits()))
+        yield BoundBusinessDatabase(resource, ActorBinding(access, key))
     finally:
         resource.close()
 
@@ -65,8 +83,6 @@ def test_native_money_dates_booleans_and_json_round_trip_exactly(business):
         VALUES (1,'Task',%s,%s) RETURNING id,start_date,end_date""", (date(2026, 1, 1), date(2026, 1, 2)), write=True)
     assert type(rows[0][0]) is int and rows[0][1:] == (date(2026, 1, 1), date(2026, 1, 2))
     assert execute(business, "SELECT is_general FROM eppm.project_type") == [(True,)]
-    execute(business, "INSERT INTO eppm.app_oidc_state VALUES ('hash',%s,10)", (Jsonb({"nested": [1, True]}),), write=True)
-    assert execute(business, "SELECT data FROM eppm.app_oidc_state") == [({"nested": [1, True]},)]
 
 
 @pytest.mark.parametrize("value", [Decimal("NaN"), Decimal("Infinity"), Decimal("-Infinity")])
@@ -78,6 +94,9 @@ def test_project_budgets_reject_nonfinite_amounts(business, value):
 def test_runtime_direct_writes_require_serializable_transactions(pg_database, business):
     with psycopg.connect(pg_database.runtime_url) as connection:
         with pytest.raises(psycopg.errors.ActiveSqlTransaction, match="serializable"):
+            business.binding(connection)
+    with psycopg.connect(pg_database.runtime_url) as connection:
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
             connection.execute("UPDATE eppm.project SET name='not committed' WHERE id=1")
     assert execute(business, "SELECT name FROM eppm.project WHERE id=1") == [("First",)]
 
@@ -154,7 +173,7 @@ def test_task_and_assignment_ownership_and_date_invariants(business):
         VALUES (1,'Task','2026-01-01','2026-01-02') RETURNING id""", write=True)[0][0]
     with pytest.raises(psycopg.errors.CheckViolation):
         execute(business, "UPDATE eppm.project_task SET end_date='2025-01-01'", write=True)
-    with pytest.raises(psycopg.errors.CheckViolation):
+    with pytest.raises(psycopg.errors.InsufficientPrivilege):
         execute(business, "INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,fte_assigned) VALUES (1,2,%s,1)", (task,), write=True)
     execute(business, "INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,fte_assigned) VALUES (1,1,%s,1)", (task,), write=True)
     with pytest.raises(psycopg.errors.CheckViolation):
@@ -206,12 +225,14 @@ def test_finance_rejects_negative_nonfinite_and_subcent_values_without_rounding(
         execute(business, "INSERT INTO eppm.finance_amount VALUES (1,'WBS',2026,%s)", (amount,), write=True)
 
 
-def test_audit_history_is_append_only(business):
-    execute(business, """INSERT INTO eppm.app_security_audit(occurred_at,actor,target,action,outcome,correlation_id,details_json)
-        VALUES (1,'test','target','action','success','correlation','{}')""", write=True)
-    for source in ("UPDATE eppm.app_security_audit SET action='changed'", "DELETE FROM eppm.app_security_audit"):
-        with pytest.raises(psycopg.errors.CheckViolation, match="immutable"):
-            execute(business, source, write=True)
+def test_audit_history_is_append_only_even_for_the_operator(pg_database, business):
+    # An ordinary authorized protected write creates its mandatory audit event.
+    execute(business, "INSERT INTO eppm.project_type(name) VALUES ('Audited')", write=True)
+    with psycopg.connect(pg_database.operator_url, autocommit=True) as operator:
+        assert operator.execute("SELECT count(*) FROM eppm.app_security_audit").fetchone()[0] == 1
+        for source in ("UPDATE eppm.app_security_audit SET action='changed'", "DELETE FROM eppm.app_security_audit"):
+            with pytest.raises(psycopg.errors.CheckViolation, match="immutable"):
+                operator.execute(source)
 
 
 @pytest.mark.parametrize("kind", ["wbs", "calendar", "group"])

@@ -52,6 +52,7 @@ class Database:
         # session-level changes before another actor borrows this connection.
         connection.execute("RESET ROLE")
         connection.execute("RESET ALL")
+        connection.execute("DISCARD TEMP")
 
     def open(self) -> None:
         """Wait for minimum connections and reject privileged or incompatible runtime."""

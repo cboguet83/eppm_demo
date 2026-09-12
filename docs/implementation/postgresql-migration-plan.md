@@ -2,8 +2,9 @@
 
 Planning date: 2026-09-10.
 
-Status: agreed implementation plan; implementation has not started. Scope is the
-PostgreSQL migration only.
+Status: implementation in progress on `codex/postgresql-migration`; acceptance
+remains incomplete. See [current evidence](postgresql-migration-evidence.md).
+Scope is the PostgreSQL migration only.
 
 ## 1. Instructions to the implementing agent
 

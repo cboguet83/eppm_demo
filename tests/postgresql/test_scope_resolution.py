@@ -88,23 +88,28 @@ def test_categorical_conditions_intersect_and_track_value_edits(pg_database, bus
         resolve(pg_database, categorical_scope(f"enum:{scope_id}", [options[0], 999]))
 
 
-def add_grant(business, scope):
-    execute(business, "INSERT INTO eppm.app_user(created_at,updated_at) VALUES (1,1) ON CONFLICT DO NOTHING", write=True)
-    return execute(business, """INSERT INTO eppm.app_role_assignment(user_id,role,scope_json,created_at,created_by)
-        VALUES (1,'project_viewer',%s,1,'test') RETURNING id""", (Jsonb(scope),), write=True)[0][0]
+def add_grant(pg_database, scope):
+    with psycopg.connect(pg_database.operator_url) as operator:
+        return operator.execute("""INSERT INTO eppm.app_role_assignment(user_id,role,scope_json,created_at,created_by)
+            VALUES (1,'project_viewer',%s,1,'test') RETURNING id""", (Jsonb(scope),)).fetchone()[0]
+
+
+def invalid_reason(pg_database, grant):
+    with psycopg.connect(pg_database.operator_url) as operator:
+        return operator.execute("SELECT invalid_reason FROM eppm.app_role_assignment WHERE id=%s", (grant,)).fetchone()[0]
 
 
 @pytest.mark.parametrize("change", ["delete", "replace"])
 def test_deleted_and_replaced_categorical_options_permanently_invalidate_grants(pg_database, business, change):
     scope_id, options = seed_categorical(business)
     scope = categorical_scope(f"enum:{scope_id}", [options[0]])
-    grant = add_grant(business, scope)
+    grant = add_grant(pg_database, scope)
     if change == "delete":
         execute(business, "DELETE FROM eppm.schema_param_options WHERE id=%s", (options[0],), write=True)
     else:
         execute(business, "UPDATE eppm.schema_param_options SET option_value='Other' WHERE id=%s", (options[0],), write=True)
         execute(business, "UPDATE eppm.schema_param_options SET option_value='North' WHERE id=%s", (options[0],), write=True)
-    assert execute(business, "SELECT invalid_reason FROM eppm.app_role_assignment WHERE id=%s", (grant,))[0][0]
+    assert invalid_reason(pg_database, grant)
 
 
 def test_retyped_scope_property_is_tombstoned_instead_of_reusing_its_identity(pg_database, business):
@@ -120,14 +125,14 @@ def test_retyped_scope_property_is_tombstoned_instead_of_reusing_its_identity(pg
 
 
 @pytest.mark.parametrize("kind", ["project", "project_type"])
-def test_deleted_named_scope_references_do_not_revive_after_id_reuse(business, kind):
+def test_deleted_named_scope_references_do_not_revive_after_id_reuse(pg_database, business, kind):
     if kind == "project":
-        grant = add_grant(business, {"kind": "projects", "project_ids": [1]})
+        grant = add_grant(pg_database, {"kind": "projects", "project_ids": [1]})
         execute(business, "DELETE FROM eppm.project WHERE id=1", write=True)
         execute(business, "INSERT INTO eppm.project(id,name) VALUES (1,'Different project')", write=True)
     else:
         execute(business, "INSERT INTO eppm.project_type(id,name) VALUES (2,'Unused')", write=True)
-        grant = add_grant(business, categorical_scope("project_type_id", [2]))
+        grant = add_grant(pg_database, categorical_scope("project_type_id", [2]))
         execute(business, "DELETE FROM eppm.project_type WHERE id=2", write=True)
         execute(business, "INSERT INTO eppm.project_type(id,name) VALUES (2,'Different type')", write=True)
-    assert execute(business, "SELECT invalid_reason FROM eppm.app_role_assignment WHERE id=%s", (grant,))[0][0]
+    assert invalid_reason(pg_database, grant)

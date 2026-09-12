@@ -58,6 +58,10 @@ flowchart LR
     Resource --> Binding[ActorBinding HMAC proof]
     Binding --> Authorization[Permanent session and permission helpers]
     Authorization --> DB
+    Authorization --> Policies[Permanent business row policies]
+    Policies --> Guards[Owner and protected-property guards]
+    Guards --> Audit[Atomic protected-change audit]
+    Audit --> DB
     Resource --> Check[Read-only schema compatibility check]
     Check --> DB
     Pool --> DB
@@ -69,7 +73,8 @@ flowchart LR
 read-write callbacks. It repeats trusted actor binding and the entire callback
 only for definite serialization/deadlock rollbacks, at most three attempts.
 Connection loss, statement timeouts and uncertain commits are not replayed.
-Commit/rollback finishes before pool return; reset discards session-level changes.
+Commit/rollback finishes before pool return; reset discards session-level changes
+and temporary relations before a different actor borrows the connection.
 `TransactionRunner` is the database-independent application port for subsequent
 gateway integration. Application composition and ASGI lifecycle integration are
 not yet switched in this additive milestone.
