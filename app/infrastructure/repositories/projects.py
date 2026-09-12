@@ -1,6 +1,6 @@
 """SQLite adapter for project master data and typed custom values."""
 
-from collections.abc import Collection
+from collections.abc import Callable, Collection
 from app.domain.access.models import Permission
 from app.application.ports.business_permissions import PermissionSnapshot
 from app.infrastructure.repositories.access import SqliteAccessStore
@@ -76,8 +76,8 @@ class SqliteProjectStore(SqliteWbsStore):
                 project.id,
                 project.name,
                 project.status,
-                project.planned_budget,
-                project.actual_budget,
+                float(project.planned_budget),
+                float(project.actual_budget),
                 project.function_id,
                 project.project_type_id,
             ),
@@ -94,8 +94,8 @@ class SqliteProjectStore(SqliteWbsStore):
             (
                 project.name,
                 project.status,
-                project.planned_budget,
-                project.actual_budget,
+                float(project.planned_budget),
+                float(project.actual_budget),
                 project.function_id,
                 project.project_type_id,
                 project.id,
@@ -156,6 +156,12 @@ class SqliteProjectGateway:
         """Retain the database identity without opening a connection."""
         self._db_path = db_path
         self.access = access
+
+    def run[Result](self, operation: Callable[[ProjectStore], Result], *, write: bool = False,
+                    permission: Permission | None = None, project_ids: Collection[int] | None = None) -> Result:
+        """Execute a callback while the legacy REAL-valued runtime is staged for removal."""
+        with self.transaction(write=write, permission=permission, project_ids=project_ids) as store:
+            return operation(store)
 
     def permission_snapshot(self) -> PermissionSnapshot:
         """Resolve all permission scopes in one consistent, actor-bound transaction."""

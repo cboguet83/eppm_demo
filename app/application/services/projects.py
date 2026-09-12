@@ -5,6 +5,7 @@ from app.application.ports.business_permissions import PermissionSnapshot
 
 
 from app.application.ports.projects import PlanningProject, ProjectGateway, ProjectStore
+from app.domain.projects.budgets import EuroInput, ZERO, euro_amount
 from app.domain.projects.project import Project, normalize_project_name, prepare_project_values
 from app.domain.projects.project_types import PropertyValue
 from app.domain.projects.links import LinkValues, normalize_link
@@ -34,8 +35,7 @@ class ProjectService:
 
     def get_project_by_id(self, project_id: int) -> Project | None:
         """Read a project's complete values, including inactive properties."""
-        with self._gateway.transaction() as store:
-            return store.find(project_id)
+        return self._gateway.run(lambda store: store.find(project_id))
 
     def get_planning_catalog(self, property_ids: tuple[str, ...] = ()) -> list[PlanningProject]:
         """Read project identities and only the dynamic filter properties requested."""
@@ -43,17 +43,15 @@ class ProjectService:
 
     def exists(self, project_id: int) -> bool:
         """Check existence without loading custom values."""
-        with self._gateway.transaction() as store:
-            return store.exists(project_id)
+        return self._gateway.run(lambda store: store.exists(project_id))
 
     def generate_project_id(self) -> int:
         """Suggest the next ID for display; the database allocates IDs on save."""
-        with self._gateway.transaction(permission=Permission.CREATE) as store:
-            return store.next_id()
+        return self._gateway.run(lambda store: store.next_id(), permission=Permission.CREATE)
 
     def create_project(
         self, project_id: int | None = None, name: str = "", status: str = "Draft",
-        planned_budget: float = 0.0, actual_budget: float = 0.0,
+        planned_budget: EuroInput = ZERO, actual_budget: EuroInput = ZERO,
         dynamic_attributes: dict[str, PropertyValue] | None = None,
         function_id: int | None = None, project_type_id: int | None = None,
         custom_links: list[LinkValues] | None = None,
@@ -63,21 +61,25 @@ class ProjectService:
         name = normalize_project_name(name)
         links = [normalize_link(link["url"], link["alias"]) for link in custom_links or []]
         allocations = normalize_allocations(wbs_allocations) if wbs_allocations is not None else []
-        with self._gateway.transaction(write=True, permission=Permission.CREATE) as store:
+        submitted = {key: list(value) if isinstance(value, list) else value
+                     for key, value in (dynamic_attributes or {}).items()}
+        planned, actual = euro_amount(planned_budget), euro_amount(actual_budget)
+        def operation(store: ProjectStore) -> int:
             type_id = store.default_type_id() if project_type_id is None else project_type_id
             created_id = create_in_transaction(store, Project(
-                project_id, name, status, planned_budget, actual_budget,
-                dynamic_attributes or {}, function_id, type_id,
+                project_id, name, status, planned, actual,
+                submitted, function_id, type_id,
             ))
             if links:
                 store.replace_links(created_id, links)
             if allocations:
                 store.replace_wbs(created_id, allocations)
             return created_id
+        return self._gateway.run(operation, write=True, permission=Permission.CREATE)
 
     def update_project(
-        self, project_id: int, name: str, status: str, planned_budget: float,
-        actual_budget: float, dynamic_attributes: dict[str, PropertyValue],
+        self, project_id: int, name: str, status: str, planned_budget: EuroInput,
+        actual_budget: EuroInput, dynamic_attributes: dict[str, PropertyValue],
         function_id: int | None = None, project_type_id: int | None = None,
         custom_links: list[LinkValues] | None = None,
         wbs_allocations: list[WbsAllocation] | None = None,
@@ -85,41 +87,41 @@ class ProjectService:
         """Update active values atomically, preserving inactive values for later."""
         links = None if custom_links is None else [normalize_link(link["url"], link["alias"]) for link in custom_links]
         allocations = None if wbs_allocations is None else normalize_allocations(wbs_allocations)
-        with self._gateway.transaction(write=True, permission=Permission.EDIT, project_ids=[project_id]) as store:
+        submitted = {key: list(value) if isinstance(value, list) else value for key, value in dynamic_attributes.items()}
+        planned, actual = euro_amount(planned_budget), euro_amount(actual_budget)
+        def operation(store: ProjectStore) -> bool:
             existing = store.find(project_id)
             if existing is None:
                 return False
-            name = normalize_project_name(name)
+            clean_name = normalize_project_name(name)
             type_id = existing.project_type_id if project_type_id is None else project_type_id
             values = prepare_project_values(
-                store.template(type_id), store.choices(), dynamic_attributes,
+                store.template(type_id), store.choices(), submitted,
                 creating=False, existing=existing.dynamic_attributes,
             )
-            store.update(Project(project_id, name, status, planned_budget,
-                                 actual_budget, values, function_id, type_id))
+            store.update(Project(project_id, clean_name, status, planned,
+                                 actual, values, function_id, type_id))
             if links is not None:
                 store.replace_links(project_id, links)
             if allocations is not None:
                 store.replace_wbs(project_id, allocations)
             return True
+        return self._gateway.run(operation, write=True, permission=Permission.EDIT, project_ids=[project_id])
 
     def get_wbs_options(self, project_id: int | None = None) -> list[WbsOption]:
         """Read available whole percentages for a new or currently visible project."""
         permission = Permission.CREATE if project_id is None else Permission.READ
-        with self._gateway.transaction(permission=permission, project_ids=None if project_id is None else [project_id]) as store:
-            return store.wbs_options(project_id)
+        return self._gateway.run(lambda store: store.wbs_options(project_id), permission=permission,
+                                 project_ids=None if project_id is None else [project_id])
 
     def get_wbs_allocations(self, project_id: int) -> list[WbsAllocation]:
         """Read the project's WBS shares with current project authorization."""
-        with self._gateway.transaction(permission=Permission.READ, project_ids=[project_id]) as store:
-            return store.wbs_allocations(project_id)
+        return self._gateway.run(lambda store: store.wbs_allocations(project_id), permission=Permission.READ, project_ids=[project_id])
 
     def get_links(self, project_id: int) -> list[LinkValues]:
         """Read custom links for project inspection or editing."""
-        with self._gateway.transaction() as store:
-            return store.get_links(project_id)
+        return self._gateway.run(lambda store: store.get_links(project_id))
 
     def delete_project(self, project_id: int) -> bool:
         """Remove a project and its dependent records in one transaction."""
-        with self._gateway.transaction(write=True, permission=Permission.DELETE) as store:
-            return store.delete(project_id)
+        return self._gateway.run(lambda store: store.delete(project_id), write=True, permission=Permission.DELETE)

@@ -179,3 +179,9 @@ assignment moves. Application composition remains staged for the later cutover.
 for contacts, roles, log events and useful links. A bounded native contact
 function resolves phones only for assignments in a requested actor-visible
 project; general function selectors continue to use the minimal name directory.
+
+[Projects, WBS and budget reports](postgresql-projects.md) now use complete native
+callbacks, batched typed property writes and Decimal project budgets. Global WBS
+remainder is exposed through a bounded aggregate without hidden project IDs;
+explicit and generated project identities share narrowly scoped coordination.
+Browser money inputs and final runtime composition still require cutover work.

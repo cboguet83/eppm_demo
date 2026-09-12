@@ -18,16 +18,13 @@ class WbsService:
 
     def list_catalog(self) -> list[WbsOption]:
         """Read catalog descriptions and unallocated totals for administrators."""
-        with self._gateway.transaction(permission=Permission.SHARED) as store:
-            return store.wbs_options(None)
+        return self._gateway.run(lambda store: store.wbs_options(None), permission=Permission.SHARED)
 
     def save(self, code: str, description: str = "", wbs_id: int | None = None) -> int:
         """Create or edit a reference without changing its project assignments."""
         code, description = normalize_wbs(code, description)
-        with self._gateway.transaction(write=True, permission=Permission.SHARED) as store:
-            return store.save_wbs(code, description, wbs_id)
+        return self._gateway.run(lambda store: store.save_wbs(code, description, wbs_id), write=True, permission=Permission.SHARED)
 
     def delete(self, wbs_id: int) -> None:
         """Delete an unused reference; assigned WBS entries must be detached first."""
-        with self._gateway.transaction(write=True, permission=Permission.SHARED) as store:
-            store.delete_wbs(wbs_id)
+        self._gateway.run(lambda store: store.delete_wbs(wbs_id), write=True, permission=Permission.SHARED)

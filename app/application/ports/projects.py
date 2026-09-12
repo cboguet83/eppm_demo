@@ -1,11 +1,10 @@
 """Storage contracts for transactional project operations."""
 
-from collections.abc import Collection
+from collections.abc import Callable, Collection
 from app.domain.access.models import Permission
 from app.application.ports.business_permissions import PermissionSnapshot
 
 
-from contextlib import AbstractContextManager
 from typing import Protocol, TypedDict
 
 from app.domain.projects.project import Project
@@ -45,6 +44,8 @@ class ProjectStore(WbsStore, Protocol):
 class ProjectGateway(Protocol):
     """Own the lifetime of a consistent read or atomic write transaction."""
 
-    def transaction(self, *, write: bool = False, permission: Permission | None = None, project_ids: Collection[int] | None = None) -> AbstractContextManager[ProjectStore]: ...
+    def run[Result](self, operation: Callable[[ProjectStore], Result], *, write: bool = False, permission: Permission | None = None, project_ids: Collection[int] | None = None) -> Result:
+        """Replay complete authorized use cases after a definite rollback."""
+        ...
     def read_planning_catalog(self, property_ids: tuple[str, ...]) -> list[PlanningProject]: ...
     def permission_snapshot(self) -> PermissionSnapshot: ...

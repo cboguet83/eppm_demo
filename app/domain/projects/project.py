@@ -1,7 +1,9 @@
 """Project records and effective-template rules, independent of storage and UI."""
 
 from dataclasses import dataclass, field
+from decimal import Decimal
 
+from app.domain.projects.budgets import ZERO, euro_amount
 from app.domain.projects.project_types import PropertyValue, TemplateProperty
 from app.domain.projects.property_values import encode_property_value
 
@@ -12,19 +14,23 @@ PROJECT_STATUSES = ("Draft", "In Progress", "On Hold", "Completed", "Cancelled")
 class Project:
     """Project master data, including inactive values retained for restoration.
 
-    Budgets retain the existing demo's storage-compatible euro representation.
-    Reporting converts these boundary values to Decimal before arithmetic. An
-    authoritative financial ledger still requires an explicit storage migration.
+    Budgets are finite Decimal euro amounts. Numeric form/legacy constructor
+    inputs are converted at this boundary before any financial arithmetic.
     """
 
     id: int | None = None
     name: str = ""
     status: str = "Draft"
-    planned_budget: float = 0.0
-    actual_budget: float = 0.0
+    planned_budget: Decimal = ZERO
+    actual_budget: Decimal = ZERO
     dynamic_attributes: dict[str, PropertyValue] = field(default_factory=dict)
     function_id: int | None = None
     project_type_id: int = 1
+
+    def __post_init__(self) -> None:
+        """Normalize monetary inputs once while preserving exact Decimal values."""
+        self.planned_budget = euro_amount(self.planned_budget)
+        self.actual_budget = euro_amount(self.actual_budget)
 
 
 def normalize_project_name(name: str) -> str:

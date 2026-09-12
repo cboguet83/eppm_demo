@@ -40,7 +40,7 @@ preserves UI behavior and makes the existing regression suite reproducible.
 | 1. Baseline and decisions | Baseline captured | ADR, full baseline test results, workload and service timings recorded. Browser load comparison remains an acceptance gate. |
 | 2. PostgreSQL foundation | Additive foundation tested | Configuration, pool, migration runner, Compose, operator role provisioning and isolated tests implemented. Application lifecycle integration follows repository cutover. |
 | 3. Schema and enforcement | In progress | Native integrity, RLS, actor binding, protected-property audit and access administration tested; per-entity revisions and derived-cache storage remain. |
-| 4. Core repositories | In progress | Native organization, schema, tags, collaboration and project-template adapters, typed property values and callback services implemented; projects and Decimal budgets remain. |
+| 4. Core repositories | Native adapters tested | Organization, schema, tags, collaboration, templates, projects, WBS and Decimal budget adapters use complete callbacks. Browser money inputs and runtime composition remain staged. |
 | 5. Planning and caches | Pending | Current planning, dependencies, allocations, capacity, per-entity revisions and snapshot tests. |
 | 6. Runtime cutover | In progress | Native authentication/access adapters and callback service integration implemented; composition, operator tools, seeds, benchmarks and legacy archive remain. |
 | 7. Acceptance and documentation | Pending | Full regression/coverage, browser/load runs, backup/restore, deployment and C4 documentation. |
@@ -103,6 +103,8 @@ available for that comparison before its runtime is archived.
   47 existing and 165 native checks passed.
 - `78b96cb` — native tag catalogs, assignments and scoped paging;
   49 existing and 101 native/security checks passed.
+- `46eb0a5` — native collaboration and bounded project contact details;
+  95 existing, 17 useful-link and 177 native/security checks passed.
 
 ## Native schema and integrity
 
@@ -433,3 +435,26 @@ Commands, C3 components and privacy contracts are documented in
 `.local/postgresql-collaboration-coverage.json`. Projects, Decimal budgets/finance,
 planning/resource pools, cache revisions, runtime/tools cutover and full
 acceptance remain pending.
+
+## Native projects, WBS and budget reports
+
+Project and WBS services now use native complete callbacks. Project master data,
+properties, links and WBS shares commit or roll back together; property writes
+and planning catalog applicability are batched. Native NUMERIC amounts remain
+Decimal through project records and the minimal scoped budget report reader.
+Migration `0012_project_operations.sql` adds bounded WBS remainder and project
+identity functions without exposing hidden project identities.
+
+Validation: **177 existing project, WBS, budget, UI and layer checks passed in
+33.98 seconds** and **177 native project, budget, template, schema, integrity,
+security and foundation checks passed in 53.80 seconds**. The native project,
+WBS, budget and property adapters have **195/195 statements covered (100%)**.
+Observed retries cover competing WBS claims and preserved submitted values;
+other checks cover exact money, identity races, rollback and protected audit.
+
+Commands and C3 components are documented in
+[PostgreSQL projects](postgresql-projects.md). Logs:
+`.local/postgresql-projects-legacy.log`, `.local/postgresql-projects-native.log`;
+coverage: `.local/postgresql-projects-coverage.json`. Browser money inputs,
+planning/pools/capacity, portfolio/finance, cache revisions, runtime/tools cutover
+and final regression, responsiveness and recovery acceptance remain pending.
