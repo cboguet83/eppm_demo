@@ -1,12 +1,9 @@
 """Typed projections and transaction contracts for project collaboration."""
 
-from collections.abc import Collection
-from app.domain.access.models import Permission
-
-
-from contextlib import AbstractContextManager
+from collections.abc import Callable, Collection
 from typing import Protocol, TypedDict
 
+from app.domain.access.models import Permission
 from app.domain.projects.collaboration import CatalogKind, EventValues
 from app.domain.projects.links import LinkValues
 
@@ -68,6 +65,7 @@ class CollaborationStore(Protocol):
     def save_catalog(self, kind: CatalogKind, name: str, item_id: int | None) -> int: ...
     def delete_catalog(self, kind: CatalogKind, item_id: int) -> None: ...
     def list_functions(self) -> list[FunctionContact]: ...
+    def function_choices(self) -> list[FunctionChoice]: ...
     def list_contacts(self, project_id: int, locale: str) -> list[ProjectContact]: ...
     def save_contact(
         self, project_id: int, role_id: int, function_id: int, contact_id: int | None
@@ -81,9 +79,11 @@ class CollaborationStore(Protocol):
 
 
 class CollaborationGateway(Protocol):
-    """Supply a consistent reader or an atomic reserved writer."""
+    """Execute whole operations over consistent read or write snapshots."""
 
-    def transaction(
-        self, *, write: bool = False, permission: Permission | None = None,
+    def run[Result](
+        self, operation: Callable[[CollaborationStore], Result], *, write: bool = False, permission: Permission | None = None,
         project_ids: Collection[int] | None = None
-    ) -> AbstractContextManager[CollaborationStore]: ...
+    ) -> Result:
+        """Replay complete authorization, validation and persistence after rollback."""
+        ...

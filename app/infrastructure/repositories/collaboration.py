@@ -1,6 +1,6 @@
 """SQLite collaboration persistence with explicit transaction ownership."""
 
-from collections.abc import Collection
+from collections.abc import Callable, Collection
 from app.domain.access.models import Permission
 
 
@@ -13,6 +13,8 @@ import sqlite3
 from app.application.exceptions import CollaborationConflictError, CollaborationStorageError
 from app.application.ports.collaboration import (
     CatalogEntry,
+    CollaborationStore,
+    FunctionChoice,
     FunctionContact,
     ProjectContact,
     ProjectEvent,
@@ -136,6 +138,11 @@ class SqliteCollaborationStore:
         )
         return [ProjectContact(**(dict(row) | functions[row["function_id"]])) for row in rows]
 
+    def function_choices(self) -> list[FunctionChoice]:
+        """Keep the existing selector projection while the legacy runtime is staged."""
+        return [FunctionChoice(function_id=row['function_id'], function_name=row['function_name'], person=row['person'])
+                for row in self.list_functions()]
+
     def save_contact(
         self, project_id: int, role_id: int, function_id: int, contact_id: int | None
     ) -> int:
@@ -226,6 +233,12 @@ class SqliteCollaborationGateway:
         """Retain the configured database path without opening a connection."""
         self.db_path = db_path
         self.access = access
+
+    def run[Result](self, operation: Callable[[CollaborationStore], Result], *, write: bool = False,
+                    permission: Permission | None = None, project_ids: Collection[int] | None = None) -> Result:
+        """Execute a complete callback while the legacy composition is staged."""
+        with self.transaction(write=write, permission=permission, project_ids=project_ids) as store:
+            return operation(store)
 
     @contextmanager
     def transaction(self, *, write: bool = False, permission: Permission | None = None, project_ids: Collection[int] | None = None) -> Iterator[SqliteCollaborationStore]:

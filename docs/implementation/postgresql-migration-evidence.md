@@ -40,7 +40,7 @@ preserves UI behavior and makes the existing regression suite reproducible.
 | 1. Baseline and decisions | Baseline captured | ADR, full baseline test results, workload and service timings recorded. Browser load comparison remains an acceptance gate. |
 | 2. PostgreSQL foundation | Additive foundation tested | Configuration, pool, migration runner, Compose, operator role provisioning and isolated tests implemented. Application lifecycle integration follows repository cutover. |
 | 3. Schema and enforcement | In progress | Native integrity, RLS, actor binding, protected-property audit and access administration tested; per-entity revisions and derived-cache storage remain. |
-| 4. Core repositories | In progress | Native organization, schema, tags and project-template adapters, typed property values and callback services implemented; projects, collaboration and Decimal budgets remain. |
+| 4. Core repositories | In progress | Native organization, schema, tags, collaboration and project-template adapters, typed property values and callback services implemented; projects and Decimal budgets remain. |
 | 5. Planning and caches | Pending | Current planning, dependencies, allocations, capacity, per-entity revisions and snapshot tests. |
 | 6. Runtime cutover | In progress | Native authentication/access adapters and callback service integration implemented; composition, operator tools, seeds, benchmarks and legacy archive remain. |
 | 7. Acceptance and documentation | Pending | Full regression/coverage, browser/load runs, backup/restore, deployment and C4 documentation. |
@@ -101,6 +101,8 @@ available for that comparison before its runtime is archived.
   82 existing, 139 native and 40 follow-up checks passed.
 - `768efc1` — native schema settings and atomic callback edits;
   47 existing and 165 native checks passed.
+- `78b96cb` — native tag catalogs, assignments and scoped paging;
+  49 existing and 101 native/security checks passed.
 
 ## Native schema and integrity
 
@@ -405,3 +407,29 @@ upsert replay and copied command inputs. Commands and C3 components are in
 coverage: `.local/postgresql-tags-coverage.json`. Projects, collaboration,
 planning/resource pools, Decimal budgets/finance, cache revisions, runtime/tools
 cutover and full acceptance gates remain pending.
+
+## Native project collaboration
+
+Contacts, roles, event types, log events and useful links now use complete
+callbacks and a native collaboration store. Migration
+`0011_project_contacts.sql` exposes occupant phones only through assignments in
+a requested actor-visible project. Its safe search path, explicit EXECUTE
+privileges and current-actor scope filtering are verified with direct runtime
+SQL. General selectors use only the minimal name directory; employee records
+remain restricted to shared administration.
+
+Validation: **95 existing collaboration/scoped UI/layer checks passed in 24.79
+seconds**, **17 useful-link/project UI checks passed in 4.53 seconds**, and **177
+native collaboration, business-security, integrity, authorization and foundation
+checks passed in 50.17 seconds**. The service and native adapter have **136/136
+statements covered (100%)**. Tests also cover atomic catalog translations,
+current occupant resolution, project-qualified mutations, date/time formatting,
+consistent snapshots and observed whole-callback retries for concurrent renames.
+
+Commands, C3 components and privacy contracts are documented in
+[PostgreSQL collaboration](postgresql-collaboration.md). Logs:
+`.local/postgresql-collaboration-legacy.log`, `.local/postgresql-collaboration-links.log`,
+`.local/postgresql-collaboration-native.log`; coverage:
+`.local/postgresql-collaboration-coverage.json`. Projects, Decimal budgets/finance,
+planning/resource pools, cache revisions, runtime/tools cutover and full
+acceptance remain pending.

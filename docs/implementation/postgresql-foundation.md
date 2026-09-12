@@ -174,3 +174,8 @@ verified with restricted PostgreSQL connections and concurrent service calls.
 management, scoped assignments, batched links and consistent task-tag pages.
 Native policies apply before counts and paging, and old/new owner guards protect
 assignment moves. Application composition remains staged for the later cutover.
+
+[Project collaboration](postgresql-collaboration.md) now uses native callbacks
+for contacts, roles, log events and useful links. A bounded native contact
+function resolves phones only for assignments in a requested actor-visible
+project; general function selectors continue to use the minimal name directory.
