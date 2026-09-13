@@ -223,3 +223,23 @@ tested in `tests/postgresql/test_oidc_state.py`. The original
 contracts now run in `tests/postgresql/test_oidc_authentication.py`, with additional
 native persistence and audit checks in `test_oidc_http.py`. Pure login-destination
 validation remains in the root tests. No old SQLite authentication data is imported.
+## Database, seed and historical schema-upgrade mapping
+
+The original database, pool-scenario, seed-backup and legacy-schema-upgrade test
+modules are archived unchanged. PostgreSQL starts fresh under ADR 0024; renaming
+old SQLite tables, converting prefixed SQLite IDs and adding columns to old
+SQLite employee tables remain historical upgrade mechanics, not an import path.
+
+| Retained contract | Active PostgreSQL evidence |
+| --- | --- |
+| Core tables, employee availability default, explicit migration reentry | `test_database_contracts.py`, `test_foundation.py`, `test_integrity.py` |
+| Independent parameter names, all enum choices, required defaults, aliases and effective project templates | `test_database_contracts.py` |
+| Default counts, idempotent seeding and forced reset | `test_database_contracts.py`, `test_maintenance_defaults.py`, `test_seed_projects_reset.py` |
+| All 25 units/four staffing categories, real employee capacity, two allocations per pool, five units per service and preserved project data | `test_pool_seed_scenarios.py` |
+| Empty/task-free workloads and additive scenario reentry | `test_pool_seed_scenarios.py`, `test_bulk_seed.py` |
+| One pre-mutation native archive, append preservation, actual restore and failure before mutation | `test_maintenance_write.py`, `test_bulk_seed.py`, `test_maintenance_defaults.py` |
+
+Test paths above are relative to `tests/postgresql/`. A migrated PostgreSQL
+database already contains schema/metadata, so its first explicit seed also gets
+a native archive. SQLite's initial nonexistent-file case required none. Runtime
+requests neither install schema nor initialize demo data in the new architecture.

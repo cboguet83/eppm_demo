@@ -1945,3 +1945,28 @@ is archived, while pure destination checks remain storage-independent. With no
 active importers, the legacy `SqliteOidcState` implementation moves outside `app`
 into the SQLite archive. Native runtime authentication remains backed by the
 shared restricted PostgreSQL pool.
+## Native default-catalog contracts and seed-suite archival
+
+Six independent database/default-seed tests now use PostgreSQL operator migrations
+and real native archives. They retain exact group/parameter/enum definitions,
+aliases, required defaults, project-manager references, effective template values,
+default counts, idempotence and forced reset. The obsolete employee-column upgrade
+case becomes a fresh native default/reentry check; the complete SQLite original
+remains archived with its historical migration semantics.
+
+An additional native pool-scenario check verifies persisted employee capacity for
+every staffing category, 25 units with four pools each, two allocations per pool,
+five units per service and preservation of project/task/dependency/property rows.
+Existing native tests verify additive/task-free generation, pre-mutation archive
+restoration, append preservation and backup failure before any write. The now
+superseded SQLite scenario/backup tests and SQLite-to-SQLite schema upgrades move
+to the archive, with a contract map in its README. No SQLite data import is added.
+
+Validation: the combined native seed/scenario/backup run had **70 passed and one
+catalog fixture failure**, corrected to use the template's dictionary contract.
+The final catalog/migration/integrity run passed **82 tests in 26.50 seconds** in
+`.local/postgresql-catalog-retirement-confirmed.log`; the earlier combined results
+are in `.local/postgresql-seed-legacy-contracts-native.log`. A separate initial
+fixture signature correction is recorded in `.local/postgresql-database-contracts-native.log`.
+The remaining directly SQLite-backed test suite is legacy access security; full
+regression, coverage, runtime archival, benchmark and recovery gates remain open.

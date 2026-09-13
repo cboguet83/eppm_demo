@@ -1,5 +1,6 @@
 """Real PostgreSQL additive plans, non-mutating previews and source protection."""
 
+from collections import Counter
 from dataclasses import FrozenInstanceError
 from datetime import date
 
@@ -145,3 +146,41 @@ def test_missing_source_metadata_fails_closed(pg_database, table):
         connection.execute(f'DELETE FROM eppm.{table}')
     with pytest.raises(ValueError, match='metadata is unavailable'):
         operator.run(source_fingerprint)
+
+
+def test_native_scenario_categories_match_actual_staffing_and_preserve_project_records(pg_database):
+    """Check every generated category against persisted employee and allocation data."""
+    operator = OperatorDatabase(pg_database.operator_url)
+    operator.run(install, write=True)
+    tables = ('project', 'project_task', 'task_dependencies', 'project_property_value', 'project_property_value_item')
+    with psycopg.connect(pg_database.operator_url) as connection:
+        before = {table: connection.execute(f'SELECT * FROM eppm.{table} ORDER BY 1,2').fetchall() for table in tables}
+    plan = operator.run(lambda c: prepare_pool_scenarios(c, year=2026, seed=20260908))
+    assert operator.run(lambda c: apply_pool_scenarios(c, plan), write=True)['applied']
+    with psycopg.connect(pg_database.operator_url) as connection:
+        assert {table: connection.execute(f'SELECT * FROM eppm.{table} ORDER BY 1,2').fetchall() for table in tables} == before
+        rows = connection.execute('''SELECT g.id,p.id,p.name,p.capacity_fte,
+            coalesce(sum(e.occupation_percentage*m.allocation_pct/10000),0),count(e.employee_id)
+            FROM eppm.resource_pool_group g JOIN eppm.resource_pool_group_member gm ON gm.group_id=g.id
+            JOIN eppm.resource_pool p ON p.id=gm.pool_id
+            LEFT JOIN eppm.resource_pool_mapping m ON m.pool_id=p.id AND m.target_type='employee'
+            LEFT JOIN eppm.employee e ON e.employee_id=m.target_id
+            WHERE g.description=%s GROUP BY g.id,p.id ORDER BY g.id,p.id''', (MARKER,)).fetchall()
+        groups = Counter(row[0] for row in rows)
+        assert len(groups) == 25 and set(groups.values()) == {4}
+        for _, _, name, theoretical, nominal, employees in rows:
+            if name.endswith('/ Unallocated'):
+                assert employees == 0 and theoretical > 0
+            elif name.endswith('/ Overassigned'):
+                assert nominal > theoretical
+            elif name.endswith('/ Underassigned'):
+                assert 0 < nominal < theoretical
+            else:
+                assert name.endswith('/ Fully assigned') and nominal == theoretical
+        assignments = connection.execute('''SELECT pool_id,count(*) FROM eppm.resource_pool_assignment
+            WHERE pool_id=ANY(%s::bigint[]) GROUP BY pool_id ORDER BY pool_id''', ([row[1] for row in rows],)).fetchall()
+        assert assignments == [(pool_id, 2) for pool_id in sorted(row[1] for row in rows)]
+        services = connection.execute('''SELECT g.id,count(m.child_group_id) FROM eppm.resource_pool_group g
+            JOIN eppm.resource_pool_group_member m ON m.group_id=g.id
+            WHERE g.name LIKE 'Service %%' AND g.description<>%s GROUP BY g.id''', (MARKER,)).fetchall()
+        assert len(services) == 5 and {count for _, count in services} == {5}
