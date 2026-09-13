@@ -1906,3 +1906,25 @@ Validation: **76 passed in 30.17 seconds** across native operator commands, acce
 services and access-administration integrity, recorded in
 `.local/postgresql-access-operator-port.log`. No deployment or ordinary database
 was altered; all persistence checks used isolated PostgreSQL test databases.
+## Native dashboard, allocation, sign-in and portfolio browser fixtures
+
+The remaining database-backed browser screens now use the shared native server
+harness, opaque account cookies and restricted PostgreSQL runtime pools. Parent
+fixtures seed data through separate operator connections before starting each
+screen. Original SQLite browser sources are archived unchanged; the independent
+exact-decimal component check remains in the root portfolio-layout module.
+
+Real browser assertions retain dashboard project-share chart values, tooltips,
+1,000-project paging, collapsed project details, issue dialog read-only behavior,
+retained chart/shell mounts and resource-chart navigation. Allocation dialogs keep
+pool/FTE edits local until submit. Public sign-in stays in the same browser tab.
+Portfolio tests retain applied-filter styling, master/detail spacing, planning
+shortcuts and complete visible detail frames despite delayed catalog reads.
+
+The shared pure-component fixture no longer starts a separate Playwright driver
+just to inspect the executable path; every test owns and closes the driver it
+actually uses. The initial nine-check run passed but exposed an unconsumed driver
+initialization task from that redundant precheck. After removing it, all native
+ports, the pure decimal browser check and shared dialog checks passed cleanly:
+**13 passed in 53.75 seconds**, `.local/postgresql-browser-ports-confirmed.log`.
+This completes these DOM/CSS fixture ports; it is not the 50-user latency gate.

@@ -64,9 +64,7 @@ requestAnimationFrame(sample);
 
 @pytest.fixture(scope="module")
 def popup_server(tmp_path_factory, request):
-    with sync_playwright() as playwright:
-        if not Path(playwright.chromium.executable_path).is_file():
-            pytest.skip("Install the optional Playwright Chromium browser")
+    """Start one screen server; each test owns and closes its browser driver."""
     directory = tmp_path_factory.mktemp("dialog-browser")
     script = directory / "popup_app.py"
     script.write_text(getattr(request, "param", _APP), encoding="utf-8")
