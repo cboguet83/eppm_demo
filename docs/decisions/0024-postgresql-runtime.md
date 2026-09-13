@@ -80,6 +80,13 @@ must meet p95 <= 1 second. A database-only microbenchmark does not prove that ga
 Publish a C4 map of implemented components as they become operational. Do not
 merge or publish this migration until separately requested and acceptance passes.
 
+The explicit 2026-09-13 request to merge into `main` and push is being applied to
+the validated committed checkpoint through `6ce9348`, with CI setup and browser
+regression fixes. The unfinished runtime cutover remains uncommitted on the
+feature branch. This interim merge does not declare PostgreSQL-only migration
+acceptance; the final runtime cutover still requires the acceptance gates above.
+See the [checkpoint evidence](../implementation/postgresql-migration-evidence.md#interim-main-checkpoint-requested-on-2026-09-13).
+
 ## Versions verified at implementation start
 
 - [PostgreSQL 18.6](https://www.postgresql.org/docs/release/18.6/), released 2026-08-13.

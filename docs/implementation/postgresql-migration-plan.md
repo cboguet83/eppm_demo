@@ -6,6 +6,12 @@ Status: implementation in progress on `codex/postgresql-migration`; acceptance
 remains incomplete. See [current evidence](postgresql-migration-evidence.md).
 Scope is the PostgreSQL migration only.
 
+The 2026-09-13 merge/push request releases the validated committed checkpoint,
+while preserving the unfinished runtime cutover on the feature branch. See the
+[interim checkpoint evidence](postgresql-migration-evidence.md#interim-main-checkpoint-requested-on-2026-09-13)
+and the delivery note in [ADR 0024](../decisions/0024-postgresql-runtime.md).
+The final migration acceptance checklist remains open.
+
 ## 1. Instructions to the implementing agent
 
 Implement this plan when the user provides it as the implementation task. Read
