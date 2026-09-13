@@ -1445,3 +1445,20 @@ Validation: **22 passed in 5.31 seconds**, recorded in
 `.local/postgresql-repository-service-workflows.log`. These replace the original
 repository tests and the two persistence-dependent cases from `test_services.py`.
 The full native regression, coverage, performance and recovery gates remain open.
+
+## Native planning summary consistency and publication
+
+The planning read contracts now check all four dependency types at their date
+boundaries, including positive/negative lags and whole-project dependencies,
+against real PostgreSQL summary queries. A trigger-induced publication failure
+leaves no partial cache rows and the same pooled service remains usable. An
+independent writer commits while the calculation retains its original snapshot;
+stale publication is rejected, recalculation returns the new project name, and
+the next read reuses the current cache. Failed task edits retain usable cache
+entries, and repeated checksummed migration runs preserve populated cache keys
+and actual trigger definitions.
+
+Validation: **29 passed in 14.55 seconds**, recorded in
+`.local/postgresql-planning-read-contracts.log`. PostgreSQL snapshot and revision
+checks replace SQLite-specific physical-connection and database-wide lock
+assertions. Full migration acceptance remains incomplete.
