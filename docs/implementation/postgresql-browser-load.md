@@ -120,3 +120,11 @@ period, and run the complete prescribed workload. The runner deliberately leaves
 `acceptance_complete` false. The final application regression/coverage gate also
 needs refreshing after performance fixes. Pilot-report and active-import guards
 passed **11 tests in 2.29 seconds**; native recovery remains recorded separately.
+
+The later [property-save pilot](benchmarks/property-save-pilot-results.json) uses
+the separate `eppm-demo:postgresql-property-candidate` image at `aedc105`. It
+completed 18 attempts including warmup without workflow failures. Service update
+time was 0.599 seconds across eight updates; six measured browser saves had p95
+1,323.3 ms. The single measured task load still took 13,137.4 ms, with repeated
+HTTP revision conflicts in the run. This confirms remaining refresh work and
+does not meet the required workload or one-second acceptance target.

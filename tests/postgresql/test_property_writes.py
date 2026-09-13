@@ -138,6 +138,7 @@ def test_selection_position_gaps_are_normalized_even_when_decoded_order_matches(
 
 def test_unchanged_values_do_not_bypass_owner_or_protected_property_permissions(authorized, properties):
     _save(_service(authorized), properties)
+    _save(_service(authorized), properties, project_id=2)
     before = _storage(authorized)
 
     with pytest.raises(AccessDenied):

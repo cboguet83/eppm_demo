@@ -2210,5 +2210,22 @@ option revalidation, denied owners/protected changes and full-form overwrites.
 The broader security/revision/project-dialog/import run passed **105 checks in
 61.89 seconds** before the final alternate-date-format refinement. Logs are
 `.local/postgresql-property-write-final.log` and
-`.local/postgresql-property-write-security-ui.log`. The rebuilt application still
-requires another browser pilot and final load/regression acceptance.
+`.local/postgresql-property-write-security-ui.log`. A strengthened regression
+also confirmed that a direct caller cannot submit identical existing values to
+a read-only project (**one check passed in 0.60 seconds**).
+
+The separately tagged `eppm-demo:postgresql-property-candidate` was built from
+`aedc10566f9fc5fcfc7f15c79ae094ec803439e5`. Its subsequent unprofiled three-session
+pilot completed **18 attempts including warmup, zero workflow failures and zero
+recorded database failures**. Eight service updates took 0.599 seconds cumulatively
+(maximum 0.117 seconds); measured browser save p95 was 1,323.3 ms across six saves.
+Paging p95 was 1,055.9 ms across six samples. One measured task load took 13,137.4
+ms; four task HTTP responses and seven badge responses reported changed revisions.
+The repeated refresh path remains an open bottleneck. The sample is too small
+for acceptance or a statistical comparison with earlier profiled runs.
+
+Image/host metadata, scenario counts and timings are retained in
+[the property-save pilot result](benchmarks/property-save-pilot-results.json).
+The run log is `.local/postgresql-load-property-pilot.log`; its owned deployment
+was removed. The complete workload and final regression/coverage acceptance remain
+open.
