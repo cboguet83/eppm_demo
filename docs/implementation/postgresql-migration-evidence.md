@@ -1553,3 +1553,19 @@ monetary fixtures use exact integer amounts and create no database.
 Validation: **8 passed in 8.13 seconds**, recorded in
 `.local/postgresql-application-workflows.log`. This does not change the runtime
 startup policy: schema migration and demo seeding remain explicit operator work.
+
+## Native generated portfolio and empty-option contracts
+
+Seed/reset workflow tests now call the explicit native maintenance service,
+preserving project/task bounds, dependency structures, project-only cleanup and
+zero-task generation. Real dump archives precede seed/reset writes. The three
+categorical property kinds are checked with both optional and mandatory rules:
+generation never invents missing choices, mutates option dictionaries or creates
+accounts; mandatory empty dictionaries fail before any projects are created.
+
+Validation: **9 passed in 7.98 seconds**, recorded in
+`.local/postgresql-seed-workflows.log`. Full collection now reaches **2,245 tests
+with 3 remaining legacy collection errors**, recorded in
+`.local/postgresql-test-port-inventory-current.log`. Collecting the suite is not
+the full native regression or coverage gate; runtime archival, remaining tools,
+authenticated load testing and representative recovery checks are still pending.
