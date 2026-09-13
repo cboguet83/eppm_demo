@@ -138,3 +138,19 @@ only restricted PostgreSQL credentials and rejects indirect legacy storage
 imports. The existing native operator-command test covers explicit CLI seeding,
 archive creation, unchanged data after archive failure and safe exit status;
 the UI never calls that operator path.
+
+## Dashboard test mapping
+
+`tests/test_dashboard.py` preserves the unchanged SQLite module. The active root
+suite retains pure money rounding, filter, hierarchy and quarterly capacity
+calculations. `tests/postgresql/test_dashboard_workflows.py` retains catalog
+facets, scoped reports and issues, competing hidden demand, finance cancellation,
+calendar-day invalidation, drillthrough and safe actual pool-outage behavior.
+`tests/postgresql/test_dashboard_ui.py` retains all ten UI cases with a native
+scoped editor, separate administrators and real persistent budget plans.
+
+The retired dashboard migration's one-time SQLite session revocation is not
+performed when starting a fresh PostgreSQL database. Native migration reentry
+instead verifies preservation of event contents, stable blocker codes and both
+active and revoked current sessions. SQLite data and upgrade source remain
+historical artifacts; no native import or compatibility path is introduced.

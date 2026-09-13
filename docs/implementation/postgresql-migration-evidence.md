@@ -1608,3 +1608,17 @@ Validation: **16 passed in 20.89 seconds**, recorded in
 `.local/postgresql-shell-port.log`, including the existing native CLI seeding and
 archive-failure test. The full suite is running separately against unchanged
 source; these checks do not establish the full regression or coverage gate.
+
+## Native dashboard workflow and rendering regressions
+
+Dashboard calculation tests no longer initialize SQLite. The native service port
+retains report/issue scopes, hidden competing demand, finance cancellation,
+organization labels, pool facets, current-day invalidation and authorized
+drillthrough. Storage failure uses an actual closed PostgreSQL pool. Repeated
+migration execution preserves events, stable blocker codes and session states.
+All ten existing UI workflows now use native accounts, grants and budget plans,
+including collapsed project details, exact rounded budget shares and empty scope.
+
+Validation: **22 passed in 31.35 seconds**, recorded in
+`.local/postgresql-dashboard-port.log`. Full application coverage, legacy runtime
+archival, browser/load acceptance and representative recovery remain open.

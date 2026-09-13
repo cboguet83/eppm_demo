@@ -1,6 +1,6 @@
 """Dashboard presentation, five-row paging, filters, and shared WBS budget view."""
 
-from contextlib import closing
+import psycopg
 from datetime import date
 import json
 
@@ -8,9 +8,29 @@ import pytest
 
 from streamlit.testing.v1 import AppTest
 
-from app.infrastructure.database.connection import get_db
 from app.main import create_finance_service
-from tests.test_business_transaction_security import business as business
+from app.application.services.access import AccessService
+from app.infrastructure.postgresql.access import PostgresAccessGateway
+from tests.postgresql.ui import runtime
+
+
+@pytest.fixture
+def business(authorized, runtime):
+    """Use two native projects with one scoped editor and separate administrators."""
+    with psycopg.connect(authorized.setup.operator_url) as connection:
+        connection.execute("DELETE FROM eppm.project WHERE id=3")
+        connection.execute("UPDATE eppm.project SET name=CASE id WHEN 1 THEN 'Visible' ELSE 'Hidden' END")
+        connection.execute("DELETE FROM eppm.app_role_assignment WHERE user_id=1 AND role='project_viewer'")
+        connection.execute("INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date) "
+                           "VALUES(10,1,'Visible task','2026-01-01','2026-01-05'),"
+                           "(20,2,'Hidden task','2026-01-01','2026-01-05')")
+        connection.execute("INSERT INTO eppm.resource_pool(id,name,capacity_fte) VALUES(1,'Reference pool',3)")
+        connection.execute("INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,fte_assigned) "
+                           "VALUES(1,1,10,1),(1,2,20,2)")
+    editor, manager = authorized.binding(1).access, authorized.binding(4).access
+    service = AccessService(PostgresAccessGateway(runtime.database, runtime.key, editor.policy),
+                            editor.policy, 'https://issuer.example.test', lambda: 'unused')
+    return runtime, service, authorized.binding(5).access.actor, editor, manager
 
 
 def screen(path, actor):
@@ -32,10 +52,10 @@ def table_data(app):
                            if item.proto.id.endswith('-dashboard_project_table')))
 
 
-def test_dashboard_lazy_table_and_filters_cover_all_results(business):
+def test_dashboard_lazy_table_and_filters_cover_all_results(business, authorized):
     path,_,_,_,manager=business
-    with closing(get_db(path)) as conn,conn:
-        conn.executemany('INSERT INTO project(id,name) VALUES(?,?)',[(i,f'Project {i}') for i in range(3,13)])
+    with psycopg.connect(authorized.setup.operator_url) as conn:
+        conn.cursor().executemany('INSERT INTO eppm.project(id,name) VALUES(%s,%s)',[(i,f'Project {i}') for i in range(3,13)])
     app=AppTest.from_function(screen,args=(path,manager.actor),default_timeout=15).run()
     assert not app.exception
     assert not app.header
@@ -105,11 +125,11 @@ def budget_screen(path, actor, project_id):
     render_project_budget(project_id, service)
 
 
-def test_project_budget_and_dashboard_use_identical_rounded_shares_and_missing_values(business):
+def test_project_budget_and_dashboard_use_identical_rounded_shares_and_missing_values(business, authorized):
     path, _, _, _, manager = business
-    with closing(get_db(path)) as conn, conn:
-        conn.execute("INSERT INTO wbs(id,code,description) VALUES(1,'A','Matched'),(2,'B','Unmatched')")
-        conn.execute('INSERT INTO project_wbs VALUES(1,1,50),(1,2,100)')
+    with psycopg.connect(authorized.setup.operator_url) as conn:
+        conn.execute("INSERT INTO eppm.wbs(id,code,description) VALUES(1,'A','Matched'),(2,'B','Unmatched')")
+        conn.execute('INSERT INTO eppm.project_wbs VALUES(1,1,50),(1,2,100)')
     finance = create_finance_service(path, access=manager)
     finance.today = lambda: date(2026, 6, 1)
     finance.save([{'code': 'A', 'amounts': {'2026': '100.01', '2027': '0'}}],
@@ -142,11 +162,11 @@ def test_project_budget_empty_states_and_authorization(business):
     assert not denied.exception and denied.error and not denied.dataframe
 
 
-def test_project_budget_displays_latest_approved_proposed_and_draft_with_requested_columns(business):
+def test_project_budget_displays_latest_approved_proposed_and_draft_with_requested_columns(business, authorized):
     path, _, _, _, manager = business
-    with closing(get_db(path)) as conn, conn:
-        conn.execute("INSERT INTO wbs(id,code,description) VALUES(1,'A','Example')")
-        conn.execute('INSERT INTO project_wbs VALUES(1,1,50)')
+    with psycopg.connect(authorized.setup.operator_url) as conn:
+        conn.execute("INSERT INTO eppm.wbs(id,code,description) VALUES(1,'A','Example')")
+        conn.execute('INSERT INTO eppm.project_wbs VALUES(1,1,50)')
     finance = create_finance_service(path, access=manager)
     finance.today = lambda: date(2026, 6, 1)
     for status, amount in [('Approved','100'),('Proposed','200'),('Draft','300'),('Proposed','400')]:
