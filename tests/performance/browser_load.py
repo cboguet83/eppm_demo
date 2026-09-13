@@ -21,6 +21,7 @@ from app.infrastructure.authentication.http import SESSION_COOKIE
 from app.presentation.navigation import PAGE_PLANNING
 from tests.performance.deployment import grant_accounts, load_deployment
 from tests.performance.browser_metrics import metric_delta, read_metrics, summarize_browser
+from tests.performance.identities import LoadAccount
 from tests.performance.diagnostics import summarize_phases
 from tests.performance.planning_explain import SOURCE as PLANNING_EXPLAIN
 from tests.performance.resource_monitor import sample_containers
@@ -56,6 +57,7 @@ class Session:
     sequence: int = 0
     operation_stage: str | None = None
     metrics: "CDPSession | None" = None
+    user_id: int | None = None
 
 
 ARM = """({predicate, values, click}) => {
@@ -85,14 +87,13 @@ async def _elapsed(area: "Page | Frame") -> float:
     return await area.evaluate("window.__loadTiming.finished - window.__loadTiming.started")
 
 
-async def _login(page: "Page", server: BrowserDeployment, editor: bool) -> None:
+async def _login(page: "Page", server: BrowserDeployment, username: str, password_key: str) -> None:
     from playwright.async_api import Error
 
     try:
         await page.goto(server.origin + "/auth/login")
-        await page.get_by_label("Username", exact=True).fill("alex.admin" if editor else "robin.viewer")
-        key = "KEYCLOAK_ALEX_PASSWORD" if editor else "KEYCLOAK_ROBIN_PASSWORD"
-        await page.get_by_label("Password", exact=True).fill(server.environment[key])
+        await page.get_by_label("Username", exact=True).fill(username)
+        await page.get_by_label("Password", exact=True).fill(server.environment[password_key])
         await page.get_by_role("button", name="Sign In", exact=True).click()
         await page.wait_for_url(server.origin + "/", timeout=60000)
     except Error:
@@ -316,23 +317,29 @@ async def run_browser(server: BrowserDeployment, backend: str, options: Options,
             session.metrics = await context.new_cdp_session(page)
             await session.metrics.send("Performance.enable", {"timeDomain": "timeTicks"})
             sessions.append(session)
-            await _login(page, server, scenario == "simple_save")
+            account = LoadAccount(index, scenario == "simple_save")
+            await _login(page, server, account.username, account.password_key)
+            session.user_id = await _reference(page)
             print(json.dumps({"stage":"logged_in", "session":index, "scenario":scenario}), flush=True)
             return session
 
         try:
-            admin = await new_session(0, "simple_save")
-            admin_id = await _reference(admin.page)
-            viewer = await new_session(0, "portfolio_paging")
-            viewer_id = await _reference(viewer.page)
+            admin_context = await browser.new_context()
+            admin_page = await admin_context.new_page()
+            await _login(admin_page, server, "alex.admin", "KEYCLOAK_ALEX_PASSWORD")
+            admin_id = await _reference(admin_page)
             await asyncio.to_thread(server.operator, "-m", "scripts.access_admin", "bootstrap-admin", "--user-id", str(admin_id))
-            cookie = next(item["value"] for item in await admin.context.cookies() if item["name"] == SESSION_COOKIE)
-            await asyncio.to_thread(grant_accounts, server, backend, cookie, viewer_id)
-            del cookie
-            for index in range(1, options.readers):
+            for index in range(options.readers):
                 await new_session(index, "portfolio_paging" if index < options.readers // 2 else "visible_task_loading")
-            for index in range(1, options.editors):
+            for index in range(options.editors):
                 await new_session(index, "simple_save")
+            account_roles = [(session.user_id, LoadAccount(session.index, session.scenario == "simple_save").role)
+                             for session in sessions]
+            assert admin_id not in {user_id for user_id, _ in account_roles}
+            cookie = next(item["value"] for item in await admin_context.cookies() if item["name"] == SESSION_COOKIE)
+            await asyncio.to_thread(grant_accounts, server, backend, cookie, account_roles)
+            del cookie
+            await admin_context.close()
             semaphore = asyncio.Semaphore(2)
             async def prepare(session: Session) -> None:
                 async with semaphore:
@@ -365,6 +372,8 @@ async def run_browser(server: BrowserDeployment, backend: str, options: Options,
             editor_projects = [session.project_id for session in sessions if session.scenario == "simple_save"]
             assert len(set(editor_projects)) == options.editors, "Editors must use distinct projects."
             report["independent_authenticated_sessions"] = len(sessions)
+            report["distinct_authenticated_users"] = len({session.user_id for session in sessions})
+            assert report["distinct_authenticated_users"] == len(sessions)
             print(json.dumps({"stage": "sessions_ready", "backend": backend, "count": len(sessions)}), flush=True)
             for number in range(1, options.rounds + 1):
                 report['phases'].append(await _period(sessions, options, options.warmup_seconds, number, True, samples))
@@ -394,7 +403,8 @@ def main() -> int:
             or not all(math.isfinite(value) and value > 0 for value in
                        (options.warmup_seconds, options.measurement_seconds)):
         parser.error("Require at least two readers, one to ten editors, and positive periods.")
-    with load_deployment(arguments.backend, arguments.image, profile=arguments.profile) as (server, directory, fixture):
+    with load_deployment(arguments.backend, arguments.image, profile=arguments.profile,
+                         readers=options.readers, editors=options.editors) as (server, directory, fixture):
         report = {"fixture": fixture, "options": asdict(options), "acceptance_complete": False,
                   "diagnostics": {"runtime": "data/runtime-timings.jsonl", "postgresql": "data/postgresql-timings.jsonl",
                                   "containers": "container-timings.jsonl"},

@@ -2557,3 +2557,27 @@ Log: `.local/postgresql-load-observer-final.log`.
 Next work is to validate the distinct-user fixture and profile server/connection
 occupancy and session-activity contention. No pool limits, retry guarantees or
 acceptance thresholds were relaxed. The diagnostic deployment was removed.
+
+## Distinct authenticated workload identities
+
+The comparison fixture now provisions one fictional OIDC subject, password and
+application user per workload slot on both backends. Readers receive
+`project_viewer` and editors receive `project_editor`; the setup administrator
+has its own session outside the measured population. The runner verifies distinct
+application user IDs, cookies and editor projects before offering work. The base
+Keycloak realm and ordinary deployment remain unchanged. Generated realm files
+contain environment placeholders, while passwords stay in ignored private files.
+
+The fixture and reporting checks passed **24 tests in 1.71 seconds**. Actual
+three-user pilots verified login and grants through both applications' access
+services. PostgreSQL completed without workflow failures, but measured paging
+p95 was 1,409.7 ms and saves 2,292.8 ms, above the one-second target. SQLite
+recorded one failed paging attempt; task and save p95 were 8,726.4 ms and
+5,064.3 ms. These very short runs establish fixture operation, not acceptance or
+a reliable speedup ratio. Earlier pilots used administrator editor permissions
+and are not an identical workload. See [fixture results](benchmarks/distinct-user-fixture-results.json).
+
+Logs: `.local/postgresql-distinct-identities-checks.log`,
+`.local/postgresql-distinct-users-pilot.log`, `.local/sqlite-distinct-users-pilot.log`.
+Both disposable deployments were removed. The next diagnostic profiles 40
+distinct readers and 10 distinct editors before the full-duration comparison.

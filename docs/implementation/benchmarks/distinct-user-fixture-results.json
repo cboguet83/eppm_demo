@@ -1,0 +1,46 @@
+{
+  "scope": "Short distinct-user fixture checks; not performance acceptance",
+  "application_source_commit": "73e91ced033ea0d1ad6fa87d9601bed12f0b91e0",
+  "workload": {
+    "readers": 2,
+    "editors": 1,
+    "reader_role": "project_viewer",
+    "editor_role": "project_editor",
+    "administrator_in_workload": false,
+    "rounds": 1,
+    "warmup_seconds": 4,
+    "measurement_seconds": 12
+  },
+  "runs": [
+    {
+      "backend": "postgresql",
+      "source_directory": ".local/browser-load/a60f35bb553e",
+      "distinct_authenticated_users": 3,
+      "independent_authenticated_sessions": 3,
+      "workflow_exit_code": 0,
+      "measured_scenarios": {
+        "portfolio_paging": {"attempts": 6, "failures": 0, "p95_ms": 1409.7},
+        "visible_task_loading": {"attempts": 6, "failures": 0, "p95_ms": 905.7},
+        "simple_save": {"attempts": 4, "failures": 0, "p95_ms": 2292.8}
+      }
+    },
+    {
+      "backend": "sqlite",
+      "source_directory": ".local/browser-load/1e2f665aeff6",
+      "distinct_authenticated_users": 3,
+      "independent_authenticated_sessions": 3,
+      "workflow_exit_code": 1,
+      "measured_scenarios": {
+        "portfolio_paging": {"attempts": 1, "failures": 1, "p95_ms": null},
+        "visible_task_loading": {"attempts": 3, "failures": 0, "p95_ms": 8726.4},
+        "simple_save": {"attempts": 2, "failures": 0, "p95_ms": 5064.3}
+      }
+    }
+  ],
+  "acceptance_complete": false,
+  "limitations": [
+    "These short pilots verify distinct identities and role provisioning, not the prescribed load or duration.",
+    "Earlier pilots used business_admin editors; latency changes cannot be attributed solely to identity separation.",
+    "The preserved SQLite paging failure remains part of the baseline evidence."
+  ]
+}

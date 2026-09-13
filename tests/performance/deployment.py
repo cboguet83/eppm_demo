@@ -13,6 +13,7 @@ import subprocess
 from uuid import uuid4
 
 from scripts.configure_local_oidc import local_environment
+from tests.performance.identities import workload_accounts, workload_realm
 from tests.postgresql.recovery_support import operator_json
 from tests.test_oidc_browser_e2e import BrowserDeployment, ROOT, wait_for_server
 
@@ -76,7 +77,6 @@ print(json.dumps(counts))
 """
 GRANT = """
 import os
-from app.application.services.business_access import BusinessAccess
 from app.security import create_access_service
 from app.shared.config.authentication import AuthenticationConfig
 from app.runtime import RuntimeResources
@@ -85,11 +85,12 @@ resources.database.open()
 try:
     access = create_access_service(resources, AuthenticationConfig.from_environment(os.environ))
     actor = access.actor(os.environ['LOAD_ADMIN_COOKIE'])
-    access.grant(actor, actor.user_id, 'business_admin', {'kind':'all'})
-    viewer = int(os.environ['LOAD_VIEWER_ID'])
-    access.set_status(actor, viewer, 'active')
-    access.grant(actor, viewer, 'project_viewer', {'kind':'all'})
-    print(json.dumps({'granted': True}))
+    accounts = json.loads(os.environ['LOAD_ACCOUNT_ROLES'])
+    for user_id, role in accounts:
+        assert role in {'project_editor','project_viewer'}
+        access.set_status(actor, user_id, 'active')
+        access.grant(actor, user_id, role, {'kind':'all'})
+    print(json.dumps({'granted': len(accounts)}))
 finally:
     resources.database.close()
 """
@@ -101,26 +102,35 @@ def baseline_source(action: str) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def grant_accounts(server: BrowserDeployment, backend: str, admin_cookie: str, viewer_id: int) -> None:
+def grant_accounts(server: BrowserDeployment, backend: str, admin_cookie: str, accounts: list[tuple[int, str]]) -> None:
     """Grant real verified identities through their image's original access service."""
-    source = GRANT if backend == "postgresql" else baseline_source("grant")
+    if not accounts or len({user_id for user_id, _ in accounts}) != len(accounts) or any(
+        type(user_id) is not int or user_id <= 0 or role not in {"project_editor", "project_viewer"}
+        for user_id, role in accounts
+    ):
+        raise ValueError("Every workload account needs a distinct ID and a reader/editor role.")
+    source = GRANT if backend == "postgresql" else baseline_source("grant_workload")
     result = operator_json(server, source, stage="load account grants", variables={
-        "LOAD_ADMIN_COOKIE": admin_cookie, "LOAD_VIEWER_ID": str(viewer_id),
+        "LOAD_ADMIN_COOKIE": admin_cookie, "LOAD_ACCOUNT_ROLES": json.dumps(accounts),
     })
-    assert result == {"granted": True}
+    assert result == {"granted": len(accounts)}
 
 
 @contextmanager
-def load_deployment(backend: str, image: str | None = None, *, profile: bool = False) -> Iterator[tuple[BrowserDeployment, Path, dict[str, object]]]:
+def load_deployment(backend: str, image: str | None = None, *, profile: bool = False,
+                    readers: int = 40, editors: int = 10) -> Iterator[tuple[BrowserDeployment, Path, dict[str, object]]]:
     """Provision and remove only a newly named deployment and its own volumes.
 
     Args:
         backend: Explicit comparison image family; no runtime database fallback.
         image: Optional explicitly built image tag for a new native candidate.
         profile: Collect diagnostic thread profiles; these are not acceptance timings.
+        readers: Number of distinct fictional reader identities to provision.
+        editors: Number of distinct fictional editor identities to provision.
     """
     if backend not in IMAGES:
         raise ValueError("Choose the PostgreSQL candidate or preserved SQLite baseline.")
+    accounts = workload_accounts(readers, editors)
     with socket.socket() as app_port, socket.socket() as oidc_port:
         app_port.bind(("127.0.0.1", 0))
         oidc_port.bind(("127.0.0.1", 0))
@@ -138,6 +148,10 @@ def load_deployment(backend: str, image: str | None = None, *, profile: bool = F
     directory = ROOT / ".local/browser-load" / identity
     data = directory / "data"
     data.mkdir(parents=True)
+    realm_path = directory / "load-realm.json"
+    realm = workload_realm(json.loads((ROOT / "deployment/keycloak/eppm-realm.json").read_text(encoding="utf-8")), accounts)
+    realm_path.write_text(json.dumps(realm) + "\n", encoding="utf-8")
+    values.update({account.password_key: token_urlsafe(36) for account in accounts})
     values["EPPM_DATA_DIRECTORY"] = data.as_posix()
     source = ROOT / ".local/migration-baseline/baseline.db"
     source_hash = None
@@ -160,12 +174,21 @@ def load_deployment(backend: str, image: str | None = None, *, profile: bool = F
         "  postgres:\n    command: [postgres, -c, max_connections=100, -c, shared_preload_libraries=pg_stat_statements, -c, track_io_timing=on]\n"
         if backend == "postgresql" else ""
     )
+    keycloak_workload = (
+        "  keycloak:\n    environment:\n" + "".join(
+            f"      {account.password_key}: ${{{account.password_key}}}\n" for account in accounts)
+        + "    volumes: !override\n      - type: bind\n"
+        + f"        source: {json.dumps(realm_path.as_posix())}\n"
+        + "        target: /opt/keycloak/data/import/eppm-realm.json\n        read_only: true\n"
+        + "      - keycloak-local-data:/opt/keycloak/data\n"
+    )
     override.write_text(
         "services:\n  app:\n    environment:\n      DB_NAME: /app/data/benchmark.db\n"
         f"      APP_RUN_MODE: demo\n      LOAD_BACKEND: {backend}\n      PYTHONPATH: /app:/benchmark\n"
         "      LOAD_PROFILE: ${LOAD_PROFILE}\n"
         "    entrypoint: [python, /benchmark/launch.py]\n    volumes: !override\n      - type: bind\n"
-        "        source: ${EPPM_DATA_DIRECTORY}\n        target: /app/data\n" + observer_mounts + postgres_observation,
+        "        source: ${EPPM_DATA_DIRECTORY}\n        target: /app/data\n"
+        + observer_mounts + postgres_observation + keycloak_workload,
         encoding="utf-8",
     )
     server = BrowserDeployment(origin, [
@@ -206,6 +229,7 @@ print(json.dumps({'installed':True}))
                                        else "Explicit ANALYZE of the disposable SQLite copy"),
             "deployment": deployment_metadata(server, backend),
             "diagnostic_profiling": profile,
+            "identity_population": {"readers": readers, "editors": editors, "administrator_in_workload": False},
         }
     finally:
         (data / "monitor.stop").touch()
