@@ -1311,3 +1311,27 @@ closure are deliberately replaced by these PostgreSQL lifecycle contracts.
 Validation: **26 passed in 8.49 seconds**, recorded in
 `.local/postgresql-organization-pool-contracts.log`. Capacity cache ports and the
 remaining full migration acceptance checks are still outstanding.
+
+## Native capacity behavior and cache workflow ports
+
+The remaining capacity tests use native snapshots and caches. They preserve
+rounding, date fallback, overassignment intervals, zero-day capacity, mapping
+changes, assignment retargeting, stale-publication retries, explicit calculation
+days and persisted-cache reuse with fresh process memory. An incompatible native
+cache format is recomputed before its payload is decoded. Driver instrumentation
+counts actual read queries and interleaves a committed writer between reads,
+verifying constant query counts and consistent snapshots.
+
+The adopted native revision design treats employees and calendars as shared
+catalog sources, so their changes invalidate all capacity keys. The old SQLite
+calendar test's physical row-deletion assertion is replaced by that current-key
+contract. Pool mapping changes remain targeted and explicitly preserve the other
+pool's cache hit. Memory checks verify both the configured entry bound and byte
+accounting; a real closed pool prevents reuse of unverifiable warm data.
+
+Validation: **110 passed in 84.77 seconds**, covering native capacity, revisions,
+cache security, dialogs and pool workflows. All **399/399 statements (100%)** in
+the capacity domain/rules/service and native reader/cache adapters are covered.
+Logs: `.local/postgresql-capacity-native-complete.log` and
+`.local/postgresql-capacity-native-coverage.json`. Full application coverage and
+browser performance/recovery acceptance remain open.

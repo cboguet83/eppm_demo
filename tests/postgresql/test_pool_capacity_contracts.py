@@ -1,11 +1,9 @@
 """Pure capacity boundaries, batched snapshots, and concurrent cache publication."""
 
-from app.operator_services import deployment_access
-from contextlib import closing
 from dataclasses import asdict
 from datetime import date
-from pathlib import Path
-import sqlite3
+import psycopg
+from psycopg.conninfo import conninfo_to_dict
 from unittest.mock import patch
 
 import pytest
@@ -27,10 +25,14 @@ from app.domain.resources.capacity_rules import (
 )
 from app.domain.resources.inputs import CapacityInputs
 from app.domain.resources.models import DailyOverassignment, PoolMapping, ResourcePool
-from app.infrastructure.database.connection import get_db
-from app.infrastructure.database.pool_capacity_cache import CapacityCacheState, SqliteCapacityCache
-from app.infrastructure.repositories.pool_capacity import SqliteCapacityReader
-from app.infrastructure.database.schema_init import init_db
+from app.infrastructure.postgresql.capacity_cache import PostgresCapacityCache
+from app.infrastructure.postgresql.derived_cache import DerivedCacheState
+from app.infrastructure.postgresql.pool_capacity import PostgresCapacityReader
+from app.infrastructure.postgresql.resource_pools import PostgresResourcePoolStore
+from app.application.services.business_access import BusinessAccess
+from app.runtime import RuntimeResources
+from tests.postgresql.conftest import AuthorizedFixture
+from tests.postgresql.ui import runtime as runtime, access as access
 
 DAY = date(2026, 9, 8)
 
@@ -49,19 +51,18 @@ def test_capacity_keeps_historical_rounding_order_at_half_millifte_boundary() ->
 
 
 @pytest.fixture
-def database(tmp_path: Path) -> str:
-    path = str(tmp_path / "capacity.db")
-    init_db(path)
-    with closing(sqlite3.connect(path)) as connection, connection:
-        connection.execute("INSERT INTO project(id,name) VALUES(1,'No dates')")
-        connection.executemany(
-            "INSERT INTO resource_pool(id,name,capacity_fte) VALUES(?,?,?)",
+def database(runtime: RuntimeResources, authorized: AuthorizedFixture) -> RuntimeResources:
+    """Seed date-free demand through the separate fixture operator connection."""
+    with psycopg.connect(authorized.setup.operator_url) as connection, connection.cursor() as cursor:
+        connection.execute("UPDATE eppm.project SET name='No dates' WHERE id=1")
+        cursor.executemany(
+            "INSERT INTO eppm.resource_pool(id,name,capacity_fte) VALUES(%s,%s,%s)",
             [(1, "A", 2), (2, "B", 3)],
         )
         connection.execute(
-            "INSERT INTO resource_pool_assignment(pool_id,project_id,fte_assigned) VALUES(1,1,1)"
+            "INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,fte_assigned) VALUES(1,1,1)"
         )
-    return path
+    return runtime
 
 
 def test_direct_override_zero_capacity_and_vacant_function_fallback() -> None:
@@ -148,59 +149,64 @@ def test_overassignment_intervals_preserve_gaps_peak_and_invalid_date_handling()
 
 
 def test_snapshot_reader_uses_constant_queries_and_keeps_concurrent_versions_separate(
-    database: str,
+    database: RuntimeResources, access: BusinessAccess, authorized: AuthorizedFixture,
 ) -> None:
-    with closing(sqlite3.connect(database)) as connection:
-        connection.execute("PRAGMA journal_mode=WAL")
+    """Count real driver queries and commit a writer between snapshot reads."""
     queries = []
     changed = False
+    runtime_login = conninfo_to_dict(authorized.setup.runtime_url)['user']
+    execute = psycopg.Cursor.execute
+    assignments = PostgresResourcePoolStore.get_assignments
 
-    def traced_connection(path: str) -> sqlite3.Connection:
-        connection = get_db(path)
+    def trace(cursor, query, params=None, **kwargs):
+        # The login inherits eppm_runtime; pool reset statements can run in a
+        # worker, so count actual read queries rather than connection cleanup.
+        if (
+            cursor.connection.info.user == runtime_login
+            and isinstance(query, str)
+            and query.lstrip().startswith('SELECT ')
+        ):
+            queries.append(query)
+        return execute(cursor, query, params, **kwargs)
 
-        def trace(sql: str) -> None:
-            nonlocal changed
-            queries.append(sql)
-            if "FROM team_function" in sql and not changed:
-                changed = True
-                with closing(sqlite3.connect(path)) as writer, writer:
-                    writer.execute("UPDATE resource_pool SET name='Changed' WHERE id=1")
-                    writer.execute(
-                        "UPDATE resource_pool_assignment SET fte_assigned=2 WHERE pool_id=1"
-                    )
+    def interleaved_assignments(store, *args, **kwargs):
+        nonlocal changed
+        if not changed:
+            changed = True
+            with psycopg.connect(authorized.setup.operator_url) as writer:
+                writer.execute("UPDATE eppm.resource_pool SET name='Changed' WHERE id=1")
+                writer.execute("UPDATE eppm.resource_pool_assignment SET fte_assigned=2 WHERE pool_id=1")
+        return assignments(store, *args, **kwargs)
 
-        connection.set_trace_callback(trace)
-        return connection
-
-    with patch("app.infrastructure.repositories.resource_pools.get_db", traced_connection):
-        snapshot = SqliteCapacityReader(database, access=deployment_access()).read([1, 2])
+    reader = PostgresCapacityReader(database.database, database.key, access=access)
+    with patch.object(psycopg.Cursor, 'execute', autospec=True, side_effect=trace), \
+            patch.object(PostgresResourcePoolStore, 'get_assignments', autospec=True, side_effect=interleaved_assignments):
+        snapshot = reader.read([1, 2])
         two_pool_queries = len(queries)
         queries.clear()
-        next_snapshot = SqliteCapacityReader(database, access=deployment_access()).read([1])
-    assert len(queries) == two_pool_queries
+        next_snapshot = reader.read([1])
+    assert two_pool_queries > 0 and len(queries) == two_pool_queries
     assert snapshot[1].pool.name == "A" and snapshot[1].assignments[0]["fte_assigned"] == 1
-    assert (
-        next_snapshot[1].pool.name == "Changed"
-        and next_snapshot[1].assignments[0]["fte_assigned"] == 2
-    )
-    assert snapshot[1].functions is snapshot[2].functions
+    assert next_snapshot[1].pool.name == "Changed" and next_snapshot[1].assignments[0]["fte_assigned"] == 2
+    assert snapshot[1].project_bounds is snapshot[2].project_bounds
+    assert snapshot[1].employees == snapshot[2].employees == []
 
 
 def test_cache_rejects_stale_publication_and_preserves_explicit_calculation_day(
-    database: str,
+    database: RuntimeResources, access: BusinessAccess, authorized: AuthorizedFixture,
 ) -> None:
-    state = CapacityCacheState()
-    cache = SqliteCapacityCache(database, state, lambda: DAY, access=deployment_access())
-    service = PoolCapacityService(SqliteCapacityReader(database, access=deployment_access()), cache, lambda: DAY)
+    state = DerivedCacheState()
+    cache = PostgresCapacityCache(database.database, database.key, state, lambda: DAY, access=access)
+    service = PoolCapacityService(PostgresCapacityReader(database.database, database.key, access=access), cache, lambda: DAY)
     calls = []
 
     def calculate(ids: list[int], day: date):
         details = service.calculate_many(ids, day)
         calls.append((ids, day))
         if len(calls) == 1:
-            with closing(sqlite3.connect(database)) as connection, connection:
+            with psycopg.connect(authorized.setup.operator_url) as connection:
                 connection.execute(
-                    "UPDATE resource_pool_assignment SET fte_assigned=4 WHERE pool_id=1"
+                    "UPDATE eppm.resource_pool_assignment SET fte_assigned=4 WHERE pool_id=1"
                 )
         return details
 
@@ -209,47 +215,48 @@ def test_cache_rejects_stale_publication_and_preserves_explicit_calculation_day(
     assert detail.daily_usage == {"2026-09-08": 4}
     assert project_pool_status(1, detail)["excess_fte"] == 2
     assert project_pool_status(99, detail)["assignments_count"] == 0
-    state.entries.clear()
+    cache.cache.state = DerivedCacheState()
     with patch.object(
         service, "calculate_many", side_effect=AssertionError("warm disk cache recalculated")
     ):
         assert asdict(service.get_details([1])[0]) == asdict(detail)
         assert service.get_summaries([1])[0].is_overassigned
         assert service.get_summaries([]) == []
-    next_cache = SqliteCapacityCache(database, state, lambda: date(2026, 9, 9), access=deployment_access())
+    next_cache = PostgresCapacityCache(database.database, database.key, state, lambda: date(2026, 9, 9), access=access)
     tomorrow = next_cache.load(service.calculate_many, details=True, pool_ids=[1])[0]
     assert tomorrow.daily_usage == {"2026-09-09": 4}
 
 
-def test_cache_reports_repeated_edits_safely_without_publishing_stale_rows(database: str) -> None:
-    cache = SqliteCapacityCache(database, CapacityCacheState(), lambda: DAY, access=deployment_access())
-    service = PoolCapacityService(SqliteCapacityReader(database, access=deployment_access()), cache, lambda: DAY)
+def test_cache_reports_repeated_edits_safely_without_publishing_stale_rows(database: RuntimeResources, access: BusinessAccess, authorized: AuthorizedFixture) -> None:
+    cache = PostgresCapacityCache(database.database, database.key, DerivedCacheState(), lambda: DAY, access=access)
+    service = PoolCapacityService(PostgresCapacityReader(database.database, database.key, access=access), cache, lambda: DAY)
 
     def changing(ids: list[int], day: date):
         details = service.calculate_many(ids, day)
-        with closing(sqlite3.connect(database)) as connection, connection:
-            connection.execute("UPDATE resource_pool SET capacity_fte=capacity_fte+1 WHERE id=1")
+        with psycopg.connect(authorized.setup.operator_url) as connection:
+            connection.execute("UPDATE eppm.resource_pool SET capacity_fte=capacity_fte+1 WHERE id=1")
         return details
 
     with pytest.raises(ResourcePoolStorageError, match="changed repeatedly"):
         cache.load(changing, pool_ids=[1])
-    with closing(sqlite3.connect(database)) as connection:
-        assert connection.execute("SELECT COUNT(*) FROM pool_capacity_cache").fetchone()[0] == 0
+    with psycopg.connect(authorized.setup.operator_url) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM eppm.pool_capacity_cache").fetchone()[0] == 0
 
 
-def test_cache_translates_storage_failures_and_bounds_process_memory(database: str) -> None:
-    state = CapacityCacheState()
-    cache = SqliteCapacityCache(database, state, lambda: DAY, access=deployment_access())
-    service = PoolCapacityService(SqliteCapacityReader(database, access=deployment_access()), cache, lambda: DAY)
+def test_cache_translates_storage_failures_and_bounds_process_memory(
+    database: RuntimeResources, access: BusinessAccess, caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Bound native memory across dates and fail safely before reusing warm data."""
+    state = DerivedCacheState(max_entries=8)
+    cache = PostgresCapacityCache(database.database, database.key, state, lambda: DAY, access=access)
+    service = PoolCapacityService(PostgresCapacityReader(database.database, database.key, access=access), cache, lambda: DAY)
     for day in range(1, 11):
         cache.today = lambda day=day: date(2026, 9, day)
         service.get_summaries([1])
     assert len(state.entries) == 8
-    with patch(
-        "app.infrastructure.database.pool_capacity_cache.get_db",
-        side_effect=sqlite3.OperationalError("internal path"),
-    ):
-        with pytest.raises(ResourcePoolStorageError) as failure:
-            service.get_summaries([1])
-    assert "internal path" not in str(failure.value)
-    assert isinstance(failure.value.__cause__, sqlite3.OperationalError)
+    assert state.size_bytes == sum(len(entry.raw) for entry in state.entries.values()) <= state.max_bytes
+    database.database.close()
+    with pytest.raises(ResourcePoolStorageError) as failure:
+        service.get_summaries([1])
+    assert 'postgresql://' not in str(failure.value) + caplog.text
+    assert failure.value.__cause__ is None
