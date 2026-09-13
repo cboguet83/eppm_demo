@@ -175,3 +175,12 @@ The final reporting/sampling/import run passed 33 checks in 1.68 seconds, includ
 continued attempts after a failed workflow and a failed viewport diagnostic.
 That failure-continuation refinement was made after the second pilot started and
 is covered by the focused regression, not claimed as part of that pilot's run.
+
+The [migration 0026 pilots](benchmarks/task-pool-browser-pilot-results.json)
+had no task HTTP revision conflicts, but each still failed one save confirmation.
+The longer run retained three badge HTTP 409 responses. It found the expected new
+title in the visible details panel after the editor closed, with no alert and
+no success confirmation text. The root cause remains under investigation.
+The failed editor reduced the offered write load, so the subsecond reader
+samples do not satisfy acceptance. Save failures now include their workflow
+stage and safe boolean/count/timing observations; no form values are retained.

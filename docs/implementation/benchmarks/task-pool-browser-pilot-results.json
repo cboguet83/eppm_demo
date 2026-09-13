@@ -1,0 +1,313 @@
+{
+  "scope": "Two short migration 0026 pilots with failed save confirmation; not load acceptance",
+  "runs": [
+    {
+      "source_directory": ".local/browser-load/7be5ac669ccd",
+      "fixture": {
+        "backend": "postgresql",
+        "image": "eppm-demo:postgresql-task-pools-candidate",
+        "counts": {
+          "project": 10001,
+          "project_task": 73929,
+          "task_dependencies": 66173,
+          "resource_pool": 103,
+          "resource_pool_group": 31,
+          "resource_pool_assignment": 10201,
+          "app_user": 0
+        },
+        "fixture_seed": 42,
+        "min_tasks": 0,
+        "max_tasks": 15,
+        "sqlite_source_sha256": null,
+        "statistics_preparation": "Native operator seed refreshes application statistics",
+        "deployment": {
+          "host": {
+            "cpus": 8,
+            "memory_bytes": 16529354752,
+            "engine": "29.7.2"
+          },
+          "containers": {
+            "app": {
+              "image_id": "sha256:e3b24ccada5fdfb8b9c5a1860692e6cb7fb6311343256bcc27f8a3a48cda5d21",
+              "nano_cpus": 0,
+              "memory_bytes": 0,
+              "cpu_quota": 0,
+              "cpu_period": 0,
+              "cpuset": "",
+              "source_commit": "7ca8ee43b313b6f1962f7723e317980390b52700"
+            },
+            "postgres": {
+              "image_id": "sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280",
+              "nano_cpus": 0,
+              "memory_bytes": 0,
+              "cpu_quota": 0,
+              "cpu_period": 0,
+              "cpuset": "",
+              "source_commit": null
+            },
+            "keycloak": {
+              "image_id": "sha256:9d1f1b2b7261ff53c66cb1092dfcdc34a5fb77e81f9e6a6e75b8b6a795de8067",
+              "nano_cpus": 0,
+              "memory_bytes": 0,
+              "cpu_quota": 0,
+              "cpu_period": 0,
+              "cpuset": "",
+              "source_commit": "df15afa5a3a8a2b10021f879ffa93b30fb36c73a"
+            }
+          },
+          "application_versions": {
+            "python": "3.14.7",
+            "streamlit": "1.63.0"
+          }
+        },
+        "diagnostic_profiling": false
+      },
+      "options": {
+        "readers": 2,
+        "editors": 1,
+        "rounds": 1,
+        "warmup_seconds": 4.0,
+        "measurement_seconds": 12.0,
+        "cadence_seconds": 2
+      },
+      "browser": {
+        "version": "151.0.7922.34",
+        "arguments": [
+          "--disable-background-timer-throttling",
+          "--disable-renderer-backgrounding",
+          "--disable-backgrounding-occluded-windows"
+        ],
+        "load_generator": "Python/Playwright on the Windows Docker host",
+        "viewport": [
+          1500,
+          1100
+        ]
+      },
+      "independent_authenticated_sessions": 3,
+      "attempts_including_warmup": 19,
+      "workflow_failures": 1,
+      "periods": [
+        {
+          "round": 1,
+          "scenarios": {
+            "portfolio_paging": {
+              "attempts": 6,
+              "failures": 0,
+              "successes": 6,
+              "p95_ms": 485.9,
+              "max_ms": 485.9
+            },
+            "visible_task_loading": {
+              "attempts": 6,
+              "failures": 0,
+              "successes": 6,
+              "p95_ms": 309.4,
+              "max_ms": 309.4
+            },
+            "simple_save": {
+              "attempts": 1,
+              "failures": 1,
+              "successes": 0,
+              "p95_ms": null,
+              "max_ms": null
+            }
+          }
+        }
+      ],
+      "failures": [
+        {
+          "session": 0,
+          "scenario": "simple_save",
+          "round": 1,
+          "warmup": false,
+          "ok": false,
+          "error_type": "TimeoutError",
+          "source_file": "_connection.py",
+          "source_line": 632,
+          "workflow_seconds": 30.397
+        }
+      ],
+      "database_failure_count": 0,
+      "http_responses": [
+        {
+          "path": "/api/planning/tasks",
+          "status": 200,
+          "count": 8
+        },
+        {
+          "path": "/api/portfolio/allocations",
+          "status": 200,
+          "count": 13
+        }
+      ],
+      "acceptance_complete": false
+    },
+    {
+      "source_directory": ".local/browser-load/ba9a34837236",
+      "fixture": {
+        "backend": "postgresql",
+        "image": "eppm-demo:postgresql-task-pools-candidate",
+        "counts": {
+          "project": 10001,
+          "project_task": 73929,
+          "task_dependencies": 66173,
+          "resource_pool": 103,
+          "resource_pool_group": 31,
+          "resource_pool_assignment": 10201,
+          "app_user": 0
+        },
+        "fixture_seed": 42,
+        "min_tasks": 0,
+        "max_tasks": 15,
+        "sqlite_source_sha256": null,
+        "statistics_preparation": "Native operator seed refreshes application statistics",
+        "deployment": {
+          "host": {
+            "cpus": 8,
+            "memory_bytes": 16529354752,
+            "engine": "29.7.2"
+          },
+          "containers": {
+            "app": {
+              "image_id": "sha256:e3b24ccada5fdfb8b9c5a1860692e6cb7fb6311343256bcc27f8a3a48cda5d21",
+              "nano_cpus": 0,
+              "memory_bytes": 0,
+              "cpu_quota": 0,
+              "cpu_period": 0,
+              "cpuset": "",
+              "source_commit": "7ca8ee43b313b6f1962f7723e317980390b52700"
+            },
+            "postgres": {
+              "image_id": "sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280",
+              "nano_cpus": 0,
+              "memory_bytes": 0,
+              "cpu_quota": 0,
+              "cpu_period": 0,
+              "cpuset": "",
+              "source_commit": null
+            },
+            "keycloak": {
+              "image_id": "sha256:9d1f1b2b7261ff53c66cb1092dfcdc34a5fb77e81f9e6a6e75b8b6a795de8067",
+              "nano_cpus": 0,
+              "memory_bytes": 0,
+              "cpu_quota": 0,
+              "cpu_period": 0,
+              "cpuset": "",
+              "source_commit": "df15afa5a3a8a2b10021f879ffa93b30fb36c73a"
+            }
+          },
+          "application_versions": {
+            "python": "3.14.7",
+            "streamlit": "1.63.0"
+          }
+        },
+        "diagnostic_profiling": false
+      },
+      "options": {
+        "readers": 2,
+        "editors": 1,
+        "rounds": 1,
+        "warmup_seconds": 4.0,
+        "measurement_seconds": 30.0,
+        "cadence_seconds": 2
+      },
+      "browser": {
+        "version": "151.0.7922.34",
+        "arguments": [
+          "--disable-background-timer-throttling",
+          "--disable-renderer-backgrounding",
+          "--disable-backgrounding-occluded-windows"
+        ],
+        "load_generator": "Python/Playwright on the Windows Docker host",
+        "viewport": [
+          1500,
+          1100
+        ]
+      },
+      "independent_authenticated_sessions": 3,
+      "attempts_including_warmup": 39,
+      "workflow_failures": 1,
+      "periods": [
+        {
+          "round": 1,
+          "scenarios": {
+            "portfolio_paging": {
+              "attempts": 15,
+              "failures": 0,
+              "successes": 15,
+              "p95_ms": 542.3,
+              "max_ms": 542.3
+            },
+            "visible_task_loading": {
+              "attempts": 15,
+              "failures": 0,
+              "successes": 15,
+              "p95_ms": 396.6,
+              "max_ms": 396.6
+            },
+            "simple_save": {
+              "attempts": 3,
+              "failures": 1,
+              "successes": 2,
+              "p95_ms": 936.7,
+              "max_ms": 936.7
+            }
+          }
+        }
+      ],
+      "failures": [
+        {
+          "session": 0,
+          "scenario": "simple_save",
+          "round": 1,
+          "warmup": false,
+          "ok": false,
+          "error_type": "TimeoutError",
+          "source_file": "browser_load.py",
+          "source_line": 81,
+          "operation_stage": "confirmation",
+          "save_diagnostic": {
+            "panels": [
+              {
+                "connected": true,
+                "visible": true,
+                "ready": "true",
+                "expectedName": true
+              }
+            ],
+            "dialogCount": 0,
+            "confirmationPresent": false,
+            "alertCount": 0,
+            "timing": {
+              "started": 16455.80000001192,
+              "finished": null
+            }
+          },
+          "workflow_seconds": 30.914
+        }
+      ],
+      "database_failure_count": 0,
+      "http_responses": [
+        {
+          "path": "/api/planning/tasks",
+          "status": 200,
+          "count": 17
+        },
+        {
+          "path": "/api/portfolio/allocations",
+          "status": 200,
+          "count": 21
+        },
+        {
+          "path": "/api/portfolio/allocations",
+          "status": 409,
+          "count": 3
+        }
+      ],
+      "acceptance_complete": false
+    }
+  ],
+  "interpretation": "The diagnostic failure had the expected title in a visible details panel, no open editor or alert, and no success confirmation text. Root cause remains unresolved. Failed editors reduced offered write load; reader latency does not demonstrate acceptance.",
+  "ordinary_deployment_modified": false,
+  "acceptance_complete": false
+}

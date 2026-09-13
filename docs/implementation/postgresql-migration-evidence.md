@@ -15,9 +15,9 @@
 
 The ordinary local application's configured PostgreSQL database has 19 applied
 migrations, ending at `0019_operator_seed_state.sql`. Its bind-mounted application
-package contains 24 migrations. A read-only `check_schema` call using the existing
+package contains 26 migrations. A read-only `check_schema` call using the existing
 runtime credentials raises `SchemaCompatibilityError`: the local deployment is
-behind the feature branch and requires migrations 0020 through 0024 followed by
+behind the feature branch and requires migrations 0020 through 0026 followed by
 deployment validation. Container health alone does not establish schema
 compatibility. This inspection did not migrate, restart or modify the deployment.
 
@@ -2439,3 +2439,37 @@ graph growth (18.193/20.441 ms). Logs:
 
 Browser validation of this refinement and final acceptance remain pending. The
 ordinary database has not been migrated; final deployment includes migration 0026.
+
+## Migration 0026 browser pilots and current acceptance gap
+
+Two isolated three-session pilots used the `7ca8ee4` image with migration 0026.
+Both failed one save confirmation and remain failed runs. The first measured six
+paging actions (p95 485.9 ms), six task loads (309.4 ms), and one failed save.
+The longer diagnostic pilot measured 15 paging actions (542.3 ms), 15 task loads
+(396.6 ms), two successful saves (936.7 ms) and one failed save. Neither pilot
+reported a task HTTP 409 or a native database failure. The longer pilot still
+recorded three badge HTTP 409 responses; the first recorded none.
+
+Safe browser diagnostics locate the latter failure at the confirmation wait:
+one connected, visible, ready details panel contained the expected new title;
+no dialog or alert remained, but the success confirmation text was absent.
+This narrows the next investigation to save acknowledgement/rendering and its
+measurement; it does not establish why the acknowledgement was missed. The
+failed editor waited over 30 seconds and offered fewer subsequent actions, so
+the reader timings do not establish performance under the intended write load.
+See [the two failed pilot results](benchmarks/task-pool-browser-pilot-results.json).
+
+The load harness now retains save workflow stages and boolean/count/timing
+diagnostics without storing form contents or browser/session credentials.
+Diagnostic errors preserve the original failed action. Both disposable
+deployments were removed. A separate read-only recheck confirmed the ordinary
+deployment remains at schema 0019 and is incompatible with the 26-file package.
+
+The final focused reporting, diagnostic and layer-boundary run passed **31 checks
+in 1.71 seconds**, including preservation of a failed save when its diagnostic
+also fails. Log: `.local/postgresql-save-diagnostic-final.log`.
+
+All business adapters are ported; no SQLite business/user/grant import is planned.
+Remaining acceptance is the save confirmation investigation, browser-rendering
+breakdown, complete 50-session comparison, refreshed full Python/JavaScript and
+coverage checks, and deployment/restart/restore validation through migration 0026.

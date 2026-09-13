@@ -36,7 +36,10 @@ def test_nearest_rank_percentile_includes_the_required_ninety_fifth_sample() -> 
     assert summarize(samples)["simple_save"]["p95_ms"] == 95
 
 
-def test_failed_worker_keeps_offering_actions_and_failed_diagnostics_do_not_erase_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize('scenario', ['portfolio_paging', 'simple_save'])
+def test_failed_worker_keeps_offering_actions_and_failed_diagnostics_do_not_erase_failure(
+    monkeypatch: pytest.MonkeyPatch, scenario: str,
+) -> None:
     calls = []
 
     async def action(session) -> float:
@@ -49,12 +52,18 @@ def test_failed_worker_keeps_offering_actions_and_failed_diagnostics_do_not_eras
         def locator(self, selector):
             raise ValueError('diagnostic unavailable')
 
-    monkeypatch.setitem(browser_load.OPERATIONS, 'portfolio_paging', action)
-    session = SimpleNamespace(index=0, scenario='portfolio_paging', sequence=0, page=BrokenPage())
+        async def evaluate(self, script, values):
+            raise ValueError('diagnostic unavailable')
+
+    monkeypatch.setitem(browser_load.OPERATIONS, scenario, action)
+    session = SimpleNamespace(index=0, scenario=scenario, sequence=0, page=BrokenPage(),
+                              project_id=1, operation_stage='confirmation')
     samples = []
     phase = asyncio.run(browser_load._period([session], browser_load.Options(cadence_seconds=.01), .1, 1, False, samples))
     assert len(calls) >= 2
     assert samples[0]['ok'] is False and samples[0]['error_type'] == 'RuntimeError'
     assert samples[0]['diagnostic_error_type'] == 'ValueError'
+    if scenario == 'simple_save':
+        assert samples[0]['operation_stage'] == 'confirmation'
     assert all(sample['ok'] for sample in samples[1:])
     assert phase['ended_epoch'] >= phase['started_epoch']

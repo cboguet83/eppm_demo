@@ -53,6 +53,7 @@ class Session:
     frame: "Frame | None" = None
     project_id: int | None = None
     sequence: int = 0
+    operation_stage: str | None = None
 
 
 ARM = """({predicate, values, click}) => {
@@ -172,16 +173,22 @@ async def _save(session: Session) -> float:
     from playwright.async_api import expect
 
     page = session.page
+    session.operation_stage = "open_editor"
     await page.get_by_role("button", name="Edit details", exact=True).click()
     dialog = page.get_by_role("dialog")
     value = f"Load editor {session.index:02d} save {session.sequence:05d}"
+    session.operation_stage = "fill_editor"
     await dialog.get_by_label("Project Title *", exact=True).fill(value)
     await _arm(page, "document.querySelector('.st-key-project_details_panel_'+values.project)?.textContent.includes(values.name) "
                "&& document.body.textContent.includes('Project details updated.')",
                {"project": session.project_id, "name": value}, click=True)
+    session.operation_stage = "submit"
     await dialog.get_by_role("button", name=re.compile("Update Project")).click()
+    session.operation_stage = "confirmation"
     elapsed = await _elapsed(page)
+    session.operation_stage = "dismissal"
     await expect(dialog).not_to_be_visible()
+    session.operation_stage = "complete"
     return elapsed
 
 
@@ -222,7 +229,11 @@ async def _period(sessions: list[Session], options: Options, seconds: float,
             except Exception as error:
                 # Boundary around fictional browser actions: preserve failure
                 # category but never arbitrary browser URLs or identity payloads.
-                location = traceback.extract_tb(error.__traceback__)[-1]
+                locations = traceback.extract_tb(error.__traceback__)
+                location = next(
+                    (frame for frame in reversed(locations) if Path(frame.filename).name == "browser_load.py"),
+                    locations[-1],
+                )
                 entry.update(ok=False, error_type=type(error).__name__,
                              source_file=Path(location.filename).name, source_line=location.lineno)
                 if session.scenario == "portfolio_paging":
@@ -239,6 +250,24 @@ async def _period(sessions: list[Session], options: Options, seconds: float,
                         })""")
                     except Exception as diagnostic_error:
                         # A broken viewport must not erase the original failed action.
+                        entry['diagnostic_error_type'] = type(diagnostic_error).__name__
+                elif session.scenario == 'simple_save':
+                    entry['operation_stage'] = session.operation_stage
+                    try:
+                        entry['save_diagnostic'] = await session.page.evaluate("""values => ({
+                            panels:[...document.querySelectorAll('.st-key-project_details_panel_'+values.project)].map(panel => ({
+                                connected:panel.isConnected,
+                                visible:panel.getBoundingClientRect().height>0 && getComputedStyle(panel).visibility!=='hidden',
+                                ready:panel.dataset.eppmDetailsReady,
+                                expectedName:panel.textContent.includes(values.name)
+                            })),
+                            dialogCount:document.querySelectorAll('[role="dialog"]').length,
+                            confirmationPresent:document.body.textContent.includes('Project details updated.'),
+                            alertCount:document.querySelectorAll('[data-testid="stAlert"]').length,
+                            timing:window.__loadTiming
+                        })""", {'project': session.project_id,
+                                'name': f'Load editor {session.index:02d} save {session.sequence:05d}'})
+                    except Exception as diagnostic_error:
                         entry['diagnostic_error_type'] = type(diagnostic_error).__name__
             entry["workflow_seconds"] = round(monotonic() - began, 3)
             samples.append(entry)
