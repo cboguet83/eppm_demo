@@ -128,3 +128,10 @@ time was 0.599 seconds across eight updates; six measured browser saves had p95
 1,323.3 ms. The single measured task load still took 13,137.4 ms, with repeated
 HTTP revision conflicts in the run. This confirms remaining refresh work and
 does not meet the required workload or one-second acceptance target.
+
+The [revision-query pilot](benchmarks/revision-browser-pilot-results.json) uses
+`eppm-demo:postgresql-revision-candidate` at `e53d924`, including migration 0023.
+It completed 19 attempts including warmup with zero workflow failures. Measured
+p95 values were 651.8 ms paging, 1,104.1 ms saves and 7,605.9 ms task loading, from
+six, six and two samples respectively. Task and badge revision conflicts remain
+visible in the report. These results keep the complete load gate open.

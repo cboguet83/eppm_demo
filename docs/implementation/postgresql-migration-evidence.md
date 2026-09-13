@@ -2258,3 +2258,20 @@ cannot change its planner configuration. Logs are
 `.local/postgresql-revision-plan-final.log`. The
 [recorded database results](benchmarks/revision-query-plan-results.json) remain
 separate from pending browser responsiveness and final regression acceptance.
+
+The subsequent isolated browser pilot used
+`eppm-demo:postgresql-revision-candidate`, built from
+`e53d92448cc2c85e6f7b4926adbefd69ce432d1c`. All **19 attempts including warmup
+completed without workflow failures**, and no database failures were recorded.
+Six measured paging samples had p95 **651.8 ms**; six saves had p95 **1,104.1 ms**;
+two task-loading samples had p95 **7,605.9 ms**. Four task and six badge HTTP
+responses reported changed revisions. These tiny samples remain diagnostic,
+not acceptance or a statistical comparison with the previous pilot.
+
+The [browser result](benchmarks/revision-browser-pilot-results.json) records the
+image/host limits, workload, separate scenario counts, cold loads and service/cache
+timers. Log: `.local/postgresql-load-revision-pilot.log`. Its owned deployment was
+removed. Next investigation remains the repeated task/badge refresh path and
+bounded cache-key reads: `current_cache_keys` currently constructs full revision
+metadata before filtering selected entities. Full responsiveness, monitoring and
+regression/coverage acceptance remain open.

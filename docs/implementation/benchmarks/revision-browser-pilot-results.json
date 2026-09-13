@@ -1,0 +1,198 @@
+{
+  "scope": "Short three-session browser pilot after revision query plan fix; not load acceptance",
+  "source_directory": ".local/browser-load/ae0b30319bb2",
+  "fixture": {
+    "backend": "postgresql",
+    "image": "eppm-demo:postgresql-revision-candidate",
+    "counts": {
+      "project": 10001,
+      "project_task": 73929,
+      "task_dependencies": 66173,
+      "resource_pool": 103,
+      "resource_pool_group": 31,
+      "resource_pool_assignment": 10201,
+      "app_user": 0
+    },
+    "fixture_seed": 42,
+    "min_tasks": 0,
+    "max_tasks": 15,
+    "sqlite_source_sha256": null,
+    "statistics_preparation": "Native operator seed refreshes application statistics",
+    "deployment": {
+      "host": {
+        "cpus": 8,
+        "memory_bytes": 16529354752,
+        "engine": "29.7.2"
+      },
+      "containers": {
+        "app": {
+          "image_id": "sha256:5247668e41371cc49318f7f93cea789d7a40a8c444b0d7686569ecf03b57e139",
+          "nano_cpus": 0,
+          "memory_bytes": 0,
+          "cpu_quota": 0,
+          "cpu_period": 0,
+          "cpuset": "",
+          "source_commit": "e53d92448cc2c85e6f7b4926adbefd69ce432d1c"
+        },
+        "postgres": {
+          "image_id": "sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280",
+          "nano_cpus": 0,
+          "memory_bytes": 0,
+          "cpu_quota": 0,
+          "cpu_period": 0,
+          "cpuset": "",
+          "source_commit": null
+        },
+        "keycloak": {
+          "image_id": "sha256:9d1f1b2b7261ff53c66cb1092dfcdc34a5fb77e81f9e6a6e75b8b6a795de8067",
+          "nano_cpus": 0,
+          "memory_bytes": 0,
+          "cpu_quota": 0,
+          "cpu_period": 0,
+          "cpuset": "",
+          "source_commit": "df15afa5a3a8a2b10021f879ffa93b30fb36c73a"
+        }
+      },
+      "application_versions": {
+        "python": "3.14.7",
+        "streamlit": "1.63.0"
+      }
+    },
+    "diagnostic_profiling": false
+  },
+  "options": {
+    "readers": 2,
+    "editors": 1,
+    "rounds": 1,
+    "warmup_seconds": 4.0,
+    "measurement_seconds": 12.0,
+    "cadence_seconds": 2
+  },
+  "browser": {
+    "version": "151.0.7922.34",
+    "arguments": [
+      "--disable-background-timer-throttling",
+      "--disable-renderer-backgrounding",
+      "--disable-backgrounding-occluded-windows"
+    ],
+    "load_generator": "Python/Playwright on the Windows Docker host",
+    "viewport": [
+      1500,
+      1100
+    ]
+  },
+  "independent_authenticated_sessions": 3,
+  "attempts_including_warmup": 19,
+  "workflow_failures": 0,
+  "periods": [
+    {
+      "round": 1,
+      "scenarios": {
+        "portfolio_paging": {
+          "attempts": 6,
+          "failures": 0,
+          "successes": 6,
+          "p95_ms": 651.8,
+          "max_ms": 651.8
+        },
+        "visible_task_loading": {
+          "attempts": 2,
+          "failures": 0,
+          "successes": 2,
+          "p95_ms": 7605.9,
+          "max_ms": 7605.9
+        },
+        "simple_save": {
+          "attempts": 6,
+          "failures": 0,
+          "successes": 6,
+          "p95_ms": 1104.1,
+          "max_ms": 1104.1
+        }
+      }
+    }
+  ],
+  "cold_loads": [
+    {
+      "session": 0,
+      "scenario": "portfolio_paging",
+      "elapsed_seconds": 2.505
+    },
+    {
+      "session": 0,
+      "scenario": "simple_save",
+      "elapsed_seconds": 4.22
+    },
+    {
+      "session": 1,
+      "scenario": "visible_task_loading",
+      "elapsed_seconds": 5.547
+    }
+  ],
+  "runtime_boundary_timings": {
+    "server_script": {
+      "count": 35,
+      "seconds": 35.771962718106806,
+      "max_seconds": 4.5918469239841215
+    },
+    "cache_read": {
+      "count": 63,
+      "seconds": 11.752149146981537,
+      "max_seconds": 0.35447552503319457
+    },
+    "cache_publish": {
+      "count": 27,
+      "seconds": 5.577653750020545,
+      "max_seconds": 0.44539771002018824
+    },
+    "cache_load": {
+      "count": 36,
+      "seconds": 23.588175945042167,
+      "max_seconds": 1.7917483400087804
+    },
+    "server_http_portfolio": {
+      "count": 17,
+      "seconds": 17.465468359936494,
+      "max_seconds": 2.063980698992964
+    },
+    "service_project_update": {
+      "count": 8,
+      "seconds": 0.5742732290527783,
+      "max_seconds": 0.16128429397940636
+    },
+    "server_http_planning": {
+      "count": 6,
+      "seconds": 1.5800209939479828,
+      "max_seconds": 0.4458319830009714
+    }
+  },
+  "http_responses": [
+    {
+      "path": "/api/planning/tasks",
+      "status": 200,
+      "count": 3
+    },
+    {
+      "path": "/api/planning/tasks",
+      "status": 409,
+      "count": 4
+    },
+    {
+      "path": "/api/portfolio/allocations",
+      "status": 200,
+      "count": 12
+    },
+    {
+      "path": "/api/portfolio/allocations",
+      "status": 409,
+      "count": 6
+    }
+  ],
+  "database_failure_count": 0,
+  "acceptance_complete": false,
+  "remaining": [
+    "Task/badge revision refreshes and remaining save latency",
+    "Complete monitoring and 50-session workload",
+    "Final full regression/coverage refresh"
+  ]
+}
