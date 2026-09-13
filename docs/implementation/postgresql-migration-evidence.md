@@ -2708,7 +2708,29 @@ passed **374 checks in 188.74 seconds**. See [reproduction and regression eviden
 Logs: `.local/postgresql-session-point-regression.log` and
 `.local/postgresql-session-point-security.log`.
 
-The session-plan fix still needs its deployed load comparison. Final acceptance
-also requires the full-duration workload, refreshed full regression/coverage,
-and fresh setup/restart/restore checks with all 28 migrations. The ordinary
-deployment remains separate and was not upgraded.
+## Session-plan candidate: current load result
+
+The `2052775` image completed a short profiled diagnostic with 40 distinct readers
+and 10 distinct editors against all 28 migrations. It failed **seven of 143
+measured workflows**: paging p95 was 27,642.9 ms (56 successes, no failures),
+task loading 19,611.9 ms (77 successes, no failures), and saves 4,507.7 ms
+(three successes, seven failures). Save latency describes only the successful
+attempts. Three failed attempts timed out opening the editor and four filling
+it; their root cause is not yet established. Including warmup, 14 of 234 attempts
+failed. See [the latest diagnostic](benchmarks/session-point-fifty-profile-results.json).
+
+The measured runtime window recorded three database-call serialization failures,
+including retries, and 1,789 queued acquisitions with 686.10 aggregate seconds
+waiting. These counters do not identify the number or cause of failed business
+operations. Fewer observed database conflicts have not resolved browser delays
+or editor failures. A manual host observation recorded 99% CPU and 2,720 MB
+available memory; it does not attribute the pressure to a particular process.
+The profiler and same-host browser load generator may affect the measurements.
+
+This run offered a 15-second warmup and 45-second measurement, not the required
+three ten-minute measurements after two-minute warmups. Final acceptance remains
+open: investigate the editor failures and resource/connection contention, validate
+the complete responsiveness workload, refresh full regression/coverage, and
+repeat fresh setup/restart/restore with the final migration package.
+Log: `.local/postgresql-session-point-fifty-profile.log`. The isolated deployment
+was removed; the ordinary deployment was not upgraded.

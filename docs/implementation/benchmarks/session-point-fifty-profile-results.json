@@ -1,0 +1,81 @@
+{
+  "scope": "Short profiled fifty-user session-plan candidate; not full acceptance",
+  "source_directory": ".local/browser-load/9209036eb165",
+  "source_report": ".local/browser-load/9209036eb165/browser-results.json",
+  "application_source_commit": "2052775e094a2fe911df4ec087bc84c87da06ef2",
+  "application_image": "eppm-demo:postgresql-session-point-candidate",
+  "application_image_id": "sha256:44a2f4d29ca9478a02245a8d7a2d9bdb0f0b4a55506397464bd637588d8456f5",
+  "migration_count": 28,
+  "independent_authenticated_sessions": 50,
+  "distinct_authenticated_users": 50,
+  "options": {
+    "readers": 40,
+    "editors": 10,
+    "rounds": 1,
+    "warmup_seconds": 15,
+    "measurement_seconds": 45,
+    "cadence_seconds": 2,
+    "profile": true
+  },
+  "measured_scenarios": {
+    "portfolio_paging": {
+      "attempts": 56,
+      "failures": 0,
+      "successes": 56,
+      "p95_ms": 27642.9,
+      "max_ms": 29491.8
+    },
+    "visible_task_loading": {
+      "attempts": 77,
+      "failures": 0,
+      "successes": 77,
+      "p95_ms": 19611.9,
+      "max_ms": 19903.1
+    },
+    "simple_save": {
+      "attempts": 10,
+      "failures": 7,
+      "successes": 3,
+      "p95_ms": 4507.7,
+      "max_ms": 4507.7
+    }
+  },
+  "measured_failed_save_stages": {
+    "open_editor": 3,
+    "fill_editor": 4
+  },
+  "all_phases_workflows": {
+    "attempts": 234,
+    "failures": 14
+  },
+  "measured_runtime": {
+    "observed_seconds": 59.8494291305542,
+    "database_call_serialization_failures_including_retries": 3,
+    "pool_requests": 2118,
+    "pool_requests_queued": 1789,
+    "pool_requests_wait_ms": 686102,
+    "maximum_waiting_requests": 29
+  },
+  "manual_host_observation": {
+    "source": ".local/browser-load/9209036eb165/host-observation.json",
+    "host_logical_processors": 8,
+    "host_cpu_percent": 99,
+    "available_memory_mb": 2720,
+    "pages_input_per_second": 61,
+    "browser_processes_before": 53,
+    "browser_processes_after": 53,
+    "observed_browser_cpu_seconds": 3.484375,
+    "browser_window_seconds": 2.6878349,
+    "browser_cpu_percent_per_core_scale": 129.635008459783,
+    "limitations": "Browser CPU covers processes present at both endpoints; host CPU is a separate instantaneous sample."
+  },
+  "acceptance_complete": false,
+  "limitations": [
+    "The offered duration is shorter than acceptance; slow in-flight actions extended the actual windows and reduced achieved cadence.",
+    "Latency percentiles describe successful workflows; seven measured editor workflows failed before submitting a save.",
+    "Database-call failure counts include retries and cannot establish failed business-operation counts.",
+    "Aggregate pool wait time overlaps across concurrent requests and is not elapsed wall time.",
+    "Profiling and a browser load generator on the Docker host may affect latency; host pressure has not been attributed to a specific process.",
+    "Routine response times and failures remain outside acceptance; the ordinary local deployment was not upgraded."
+  ]
+}
