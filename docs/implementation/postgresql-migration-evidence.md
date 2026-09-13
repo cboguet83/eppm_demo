@@ -122,6 +122,8 @@ available for that comparison before its runtime is archived.
   570 native checks passed, with 100% native cache-adapter statement coverage.
 - `3f8d4a1` — scoped portfolio paging, exact facets and Decimal component transport;
   54 combined checks and 3 browser checks passed, with 100% native adapter coverage.
+- `c344f53` — scoped dashboard reports and private competing-demand aggregates;
+  638 native/dashboard/layer checks passed, with 99.26% native dashboard adapter coverage.
 
 ## Native schema and integrity
 
@@ -722,3 +724,17 @@ Commands, C3 components and detailed behavior are documented in
 [PostgreSQL dashboard](postgresql-dashboard.md). Runtime/operator/seed/benchmark
 cutover, exact project money inputs, legacy archival, full application coverage,
 authenticated 50-user browser measurements and recovery acceptance remain.
+
+## Process resource lifetime for runtime integration
+
+`RuntimeResources` now groups the restricted pool, signing key and bounded cache
+state for explicit composition. Its ASGI lifespan opens/checks and closes in
+worker threads, without schema initialization or seeding. Failures and
+cancellation retain shutdown cleanup; configuration has no operator-credential
+fallback and representations omit secrets. This resource is staged for the
+coordinated business/authentication launcher cutover.
+
+Native lifecycle, pool/foundation and layer checks passed **58 tests in
+10.66 seconds**, exit code **0**, with **31/31 resource-module statements covered
+(100%)**. Log: `.local/postgresql-runtime-resources.log`; coverage:
+`.local/postgresql-runtime-resources-coverage.json`.

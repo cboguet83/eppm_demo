@@ -53,7 +53,9 @@ flowchart LR
     Migration --> SQL[Ordered SQL package]
     Migration --> DB[(PostgreSQL 18.6)]
     Provision --> DB
-    Config[DatabaseConfig] --> Resource[Database process resource]
+    Config[DatabaseConfig] --> Lifetime[RuntimeResources lifecycle]
+    Lifetime --> Resource[Database process resource]
+    Lifetime --> Cache[Bounded DerivedCacheState]
     Resource --> Pool[Psycopg thread-safe pool]
     Resource --> Binding[ActorBinding HMAC proof]
     Binding --> Authorization[Permanent session and permission helpers]
@@ -230,3 +232,17 @@ finance allocations and aggregate-only competing demand inside PostgreSQL.
 Opaque revisions track relevant sources, and quarterly resource/drill-through
 reads preserve current scope and calendar behavior. Runtime composition remains
 the next integration stage.
+
+`RuntimeResources` now groups a closed restricted pool, the request signing key
+and one bounded derived-cache state for explicit injection by the launcher. Its
+ASGI lifespan opens/checks the database and closes it in worker threads, with
+cleanup on normal shutdown, application failure and cancellation. Construction
+does not connect; startup does not migrate or seed. An opaque process identity
+is available for resetting presentation state after a restart, independently of
+the database-incarnation checks in source cache tokens. The ordinary launcher
+has not yet switched to this resource.
+
+Native lifecycle, pool/foundation and layer checks passed **58 tests in
+10.66 seconds**, with **31/31 resource-module statements covered (100%)**.
+Log: `.local/postgresql-runtime-resources.log`; coverage:
+`.local/postgresql-runtime-resources-coverage.json`.
