@@ -382,6 +382,7 @@ def _portfolio_grid(workspace: ProjectWorkspace, columns: list[dict], search: st
     revision = workspace.portfolio.revision()
     context = hashlib.sha256(json.dumps([revision, columns, search],
                                        sort_keys=True).encode()).hexdigest()
+    view_context = hashlib.sha256(json.dumps([columns, search], sort_keys=True).encode()).hexdigest()
     component_state = st.session_state.get(_PORTFOLIO_TABLE_KEY, {})
     request = (component_state.get("request") if isinstance(component_state, dict)
                else getattr(component_state, "request", None)) or {}
@@ -390,7 +391,12 @@ def _portfolio_grid(workspace: ProjectWorkspace, columns: list[dict], search: st
     query = dict(raw_query) if isinstance(raw_query, dict) else {}
     query.update(search=search, templates=[])
     current_request = request.get("context") == context
-    offset = request.get("offset", 0) if current_request else 0
+    # A committed edit invalidates cached rows, but the user's next scroll still
+    # requests the same page. Query configuration changes retain the reset rule;
+    # every page is read again under current server-side authorization.
+    same_view_page = request.get("kind") == "page" and request.get("view_context") == view_context
+    accepted_request = current_request or same_view_page
+    offset = request.get("offset", 0) if accepted_request else 0
     try:
         offset = max(0, int(offset)) // 100 * 100
     except (TypeError, ValueError, OverflowError):
@@ -408,11 +414,12 @@ def _portfolio_grid(workspace: ProjectWorkspace, columns: list[dict], search: st
         page["rows"], columns, st.session_state.get(_SELECTED_PROJECT_KEY),
         key=_PORTFOLIO_TABLE_KEY,
         page_info={**{k: v for k, v in page.items() if k != "rows"},
-                   "context": context, "query": query,
+                   "context": context, "view_context": view_context, "query": query,
                    "allocation_endpoint": "/api/portfolio/allocations",
                    "revision": portfolio_revision_token(revision),
-                   "request_id": request.get("nonce") if current_request else None,
-                   "preserve_position": st.session_state.pop("portfolio_preserve_grid_position", False),
+                   "request_id": request.get("nonce") if accepted_request else None,
+                   "preserve_position": st.session_state.pop("portfolio_preserve_grid_position", False)
+                       or (same_view_page and not current_request),
                    "facet": facet},
         on_selection_change=_select_portfolio_project,
     )

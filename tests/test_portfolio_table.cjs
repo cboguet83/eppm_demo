@@ -131,6 +131,19 @@ test('a saved project refresh retains scroll while a changed filter resets it', 
   assert.equal(app.root.querySelector('.table-scroll').scrollTop, 0);
 });
 
+test('scroll requests carry the view identity and retain their page across data refreshes', () => {
+  const app = harness();
+  app.render(0, {view_context: 'same-columns-and-search'});
+  app.scroll(220);
+  assert.equal(app.requests.at(-1).view_context, 'same-columns-and-search');
+  const offset = app.requests.at(-1).offset;
+  const top = app.root.querySelector('.table-scroll').scrollTop;
+  app.render(offset, {context: 'another-editor-saved', view_context: 'same-columns-and-search', preserve_position: true});
+  assert.equal(app.root.querySelector('.table-scroll').scrollTop, top);
+  assert.equal(app.root._portfolio.pending, null);
+  assert.ok(app.root._portfolio.pages.has(offset));
+});
+
 test('scroll jumps fetch the required batch and the browser cache stays bounded', () => {
   const app = harness(); app.render();
   for (let offset = 500; offset <= 4500; offset += 500) {

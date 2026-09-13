@@ -305,7 +305,7 @@ changed since planning.
 - [x] Authorization, audit, transaction, cache, and monetary guarantees verified.
 - [x] Active runtime and tests use PostgreSQL; legacy SQLite migration history retained.
 - [x] Relevant intermediate commits made with passing checks and reviewed diffs.
-- [x] Full regression and coverage requirements satisfied.
+- [ ] Full regression and coverage requirements refreshed after final performance fixes (original native checkpoint passed).
 - [ ] Fifty-user responsiveness target met with recorded evidence.
 - [x] Fresh setup, restart, backup/restore, and recovery procedures verified.
 - [ ] Final handoff lists commits, checks, benchmark results, and any remaining limitations.

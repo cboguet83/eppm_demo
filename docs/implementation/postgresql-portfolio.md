@@ -104,11 +104,30 @@ Logs: `.local/postgresql-portfolio-validation.log`,
 `.local/postgresql-portfolio-native-coverage.json`. Probe timings:
 `.local/postgresql-portfolio-large.xml`.
 
+## Paging during concurrent edits
+
+A committed project edit changes the data revision. The next scroll request now
+retains its requested page when columns and search are unchanged, while fetching
+fresh rows and discarding the old browser row cache. Changing the search or column
+configuration still resets browsing. A separate view token describes only that
+configuration; it never authorizes a read. Revoking a grant is checked before the
+refreshed page is returned, including requests with an unchanged view token.
+
+The authenticated pilot reproduced the former jump to page one in both preserved
+SQLite and the initial native image. PostgreSQL/Streamlit, project-modal and browser
+layout checks passed **91 tests in 94.58 seconds** after the fix; a further direct
+revocation regression passed **one test in 2.16 seconds**. All **16 JavaScript
+portfolio checks** passed. Log: `.local/postgresql-concurrent-paging-validation.log`.
+The final candidate's full application regression and concurrent measurements
+still need to be refreshed after the performance fixes.
+
 ## Remaining migration work
 
 The [dashboard reader](postgresql-dashboard.md) now has its native port,
 including the existing aggregate-only competing-demand behavior. Runtime, tools,
 shared process state and exact project money forms are ported; SQLite runtime
-sources are archived. Full regression/coverage, three authenticated 50-user
-measurements and representative deployed backup/restore/restart acceptance remain
-required. Focused browser results are recorded in the migration evidence log.
+sources are archived. Full regression/coverage and representative deployed
+backup/restore/restart passed at the original native checkpoint. The three
+authenticated 50-user measurements remain outstanding; final code changes also
+require refreshed regression evidence. Focused results are recorded in the
+migration evidence log.

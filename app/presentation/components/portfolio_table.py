@@ -261,7 +261,7 @@ export default function(component) {
     };
     const request = (kind, extra = {}) => {
         const nonce = String(Date.now()) + '-' + (++model.sequence);
-        const payload = {kind, context: model.context, query: model.query,
+        const payload = {kind, context: model.context, view_context: info.view_context, query: model.query,
             offset: Math.floor(Math.max(0, model.top - HEADER_HEIGHT) / ROW_HEIGHT / PAGE_SIZE) * PAGE_SIZE,
             ...extra, nonce};
         model.pending = payload;

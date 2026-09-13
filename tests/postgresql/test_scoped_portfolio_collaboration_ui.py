@@ -168,6 +168,60 @@ def test_portfolio_facet_requests_and_invalid_offsets_keep_scoped_rows_and_stati
         assert info["request_id"] == "facet-request"
 
 
+@pytest.mark.parametrize('search_changed', [False, True])
+def test_scroll_after_another_committed_edit_preserves_page_only_for_the_same_view(business, pg_database, search_changed):
+    """Refresh stale data without replacing an unchanged scroll request by page one."""
+    path, _, _, _, manager = business
+    with psycopg.connect(pg_database.operator_url) as connection:
+        connection.execute("INSERT INTO eppm.project(id,name) SELECT id,'Page entry '||id FROM generate_series(3,232) id")
+    with patch('app.presentation.pages.portfolio.portfolio_project_table') as table:
+        app = AppTest.from_function(portfolio_app, args=(path, manager.actor)).run()
+        previous = table.call_args.kwargs['page_info']
+        app.session_state['portfolio_master_table'] = {'request': {
+            'kind': 'page', 'context': previous['context'], 'view_context': previous['view_context'],
+            'offset': 200, 'nonce': 'scroll-after-edit', 'query': {},
+        }}
+        with psycopg.connect(pg_database.operator_url) as connection:
+            connection.execute("UPDATE eppm.project SET name='Updated by another editor' WHERE id=2")
+        if search_changed:
+            app.text_input[0].set_value('Visible')
+        app.run()
+        assert not app.exception and not app.error
+        current = table.call_args.kwargs['page_info']
+        assert current['context'] != previous['context']
+        if search_changed:
+            assert current['view_context'] != previous['view_context']
+            assert current['offset'] == 0 and current['request_id'] is None
+            assert not current['preserve_position']
+        else:
+            assert current['view_context'] == previous['view_context']
+            assert current['offset'] == 200 and current['request_id'] == 'scroll-after-edit'
+            assert current['preserve_position']
+            assert len(table.call_args.args[0]) == 32
+
+
+def test_retained_scroll_rechecks_scope_after_a_read_grant_is_revoked(business):
+    """The stable view token cannot reuse rows from a formerly broader scope."""
+    path, service, admin, editor, _ = business
+    original = {row['id'] for row in service.assignments(admin, editor.actor.user_id)}
+    service.grant(admin, editor.actor.user_id, 'project_viewer', {'kind': 'all'})
+    added = next(row['id'] for row in service.assignments(admin, editor.actor.user_id) if row['id'] not in original)
+    with patch('app.presentation.pages.portfolio.portfolio_project_table') as table:
+        app = AppTest.from_function(portfolio_app, args=(path, editor.actor)).run()
+        previous = table.call_args.kwargs['page_info']
+        assert previous['total'] == 2
+        app.session_state['portfolio_master_table'] = {'request': {
+            'kind': 'page', 'context': previous['context'], 'view_context': previous['view_context'],
+            'offset': 0, 'nonce': 'read-after-revoke', 'query': {},
+        }}
+        service.revoke(admin, added)
+        app.run()
+        assert not app.exception and not app.error
+        current = table.call_args.kwargs['page_info']
+        assert current['request_id'] == 'read-after-revoke' and current['total'] == 1
+        assert {row['project_id'] for row in table.call_args.args[0]} == {1}
+
+
 def test_portfolio_cached_facet_is_not_served_after_access_revocation(business):
     path, service, admin, editor, _ = business
     with patch("app.presentation.pages.portfolio.portfolio_project_table") as table:
