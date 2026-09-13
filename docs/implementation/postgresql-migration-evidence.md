@@ -1430,3 +1430,18 @@ single-day employee-exception behavior with native capacity calculations.
 Validation: **32 passed in 12.93 seconds**, recorded in
 `.local/postgresql-project-planning-contracts.log`. Remaining legacy tests,
 tool/runtime archival and the full migration acceptance gates are still open.
+
+## Native repository and schema service workflows
+
+Repository workflows now use native project, schema and planning services with
+real business-admin sessions. They preserve property and task cascades, batch
+date bounds and external task maps, multiple dependencies, manager references,
+mandatory properties and aliases. Separate native schema tests preserve generated
+parameter IDs and display ordering. Pure budget, parser and presentation tests
+no longer initialize an unused SQLite database; monetary fixtures use exact
+integer amounts.
+
+Validation: **22 passed in 5.31 seconds**, recorded in
+`.local/postgresql-repository-service-workflows.log`. These replace the original
+repository tests and the two persistence-dependent cases from `test_services.py`.
+The full native regression, coverage, performance and recovery gates remain open.

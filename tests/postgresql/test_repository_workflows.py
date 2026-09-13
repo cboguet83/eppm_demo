@@ -1,40 +1,33 @@
-"""Unit tests for Data Access Repositories."""
+"""Repository workflows through native PostgreSQL services and actors."""
 
-from app.operator_services import create_project_service
-from app.operator_services import create_schema_service
-
-from app.presentation.components import planning_frames
-from app.presentation.components import schema_frames
-import pandas as pd
-
-from contextlib import closing
-
-import os
-import shutil
-import tempfile
 import unittest
 
-from app.infrastructure.database.connection import get_db
-from app.infrastructure.database.schema_init import init_db
-from app.operator_services import create_planning_service
+import pandas as pd
+import psycopg
+import pytest
 
+from app.application.services.business_access import BusinessAccess
+from app.main import create_planning_service, create_project_service, create_schema_service
+from app.presentation.components import planning_frames, schema_frames
+from app.runtime import RuntimeResources
+from tests.postgresql.conftest import AuthorizedFixture
+from tests.postgresql.ui import runtime as runtime, access as access
 
 class TestRepositories(unittest.TestCase):
     """Test suite for create_schema_service, create_project_service, and create_planning_service."""
 
-    def setUp(self) -> None:
-        """Arrange: Create isolated temporary database and initialize tables."""
-        self.test_dir = tempfile.mkdtemp()
-        self.temp_db_path = os.path.join(self.test_dir, "test_repos.db")
-        init_db(self.temp_db_path)
-
-        self.schema_repo = create_schema_service(self.temp_db_path)
-        self.project_repo = create_project_service(self.temp_db_path)
-        self.milestone_repo = create_planning_service(self.temp_db_path)
-
-    def tearDown(self) -> None:
-        """Clean up temporary test database."""
-        shutil.rmtree(self.test_dir, ignore_errors=True)
+    @pytest.fixture(autouse=True)
+    def native_setup(
+        self, authorized: AuthorizedFixture, runtime: RuntimeResources,
+        access: BusinessAccess,
+    ) -> None:
+        """Use a real business-admin session and an isolated PostgreSQL database."""
+        self.authorized = authorized
+        self.resources = runtime
+        self.access = access
+        self.schema_repo = create_schema_service(runtime, access=access)
+        self.project_repo = create_project_service(runtime, access=access)
+        self.milestone_repo = create_planning_service(runtime, access=access)
 
     def test_schema_group_crud(self) -> None:
         """Verify creating, editing, and deleting a schema group."""
@@ -100,8 +93,8 @@ class TestRepositories(unittest.TestCase):
             project_id=100,
             name="Modernization Core",
             status='In Progress',
-            planned_budget=250000.0,
-            actual_budget=100000.0,
+            planned_budget=250000,
+            actual_budget=100000,
             dynamic_attributes={"PRM_001": "Value"},
         )
         self.assertTrue(created)
@@ -234,8 +227,8 @@ class TestRepositories(unittest.TestCase):
 
     def test_batch_milestone_queries(self) -> None:
         """Verify batch query methods across multiple projects."""
-        self.project_repo.create_project(1, "Batch 1", "Active", 0, 0, {})
-        self.project_repo.create_project(2, "Batch 2", "Active", 0, 0, {})
+        self.project_repo.update_project(1, "Batch 1", "Active", 0, 0, {})
+        self.project_repo.update_project(2, "Batch 2", "Active", 0, 0, {})
 
         m1 = self.milestone_repo.create_milestone(1, "Task 1", "Phase 1", "2026-01-01", "2026-01-10", 50)
         m2 = self.milestone_repo.create_milestone(1, "Task 2", "Phase 1", "2026-01-11", "2026-01-20", 0)
@@ -273,26 +266,26 @@ class TestRepositories(unittest.TestCase):
 
     def test_project_manager_foreign_key_crud(self) -> None:
         """Verify creating, reading, and updating a project with function_id (Project Manager)."""
-        with closing(get_db(self.temp_db_path)) as conn, conn:
-            cursor = conn.cursor()
-            cursor.execute("INSERT INTO function_type (function_type_id, function_type) VALUES (1, 'Chef de Projet')")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id) VALUES (10, 'Alice PM', 3, 1)")
-            cursor.execute("INSERT INTO function (function_id, name, hierarchy_level, function_type_id) VALUES (20, 'Bob PM', 3, 1)")
+        with psycopg.connect(self.authorized.setup.operator_url) as conn, conn.cursor() as cursor:
+            cursor.execute("INSERT INTO eppm.function_type (function_type_id, function_type) VALUES (1, 'Chef de Projet')")
+            cursor.execute("INSERT INTO eppm.function (function_id, name, hierarchy_level, function_type_id) VALUES (10, 'Alice PM', 3, 1)")
+            cursor.execute("INSERT INTO eppm.function (function_id, name, hierarchy_level, function_type_id) VALUES (20, 'Bob PM', 3, 1)")
 
         # Create project with function_id 10
         created = self.project_repo.create_project(
             project_id=101,
             name="PM Test Project",
             status="Active",
-            planned_budget=10000.0,
-            actual_budget=5000.0,
+            planned_budget=10000,
+            actual_budget=5000,
             dynamic_attributes={},
             function_id=10,
         )
         self.assertTrue(created)
 
         # Read project
-        df = pd.DataFrame(create_project_service(self.temp_db_path).get_planning_catalog(tuple(parameter.param_id for parameter in create_schema_service(self.temp_db_path).get_all_parameters())))
+        parameter_ids = tuple(parameter.param_id for parameter in self.schema_repo.get_all_parameters())
+        df = pd.DataFrame(self.project_repo.get_planning_catalog(parameter_ids))
         proj = df[df["id"] == 101].iloc[0]
         self.assertEqual(proj["function_id"], 10)
 
@@ -301,14 +294,14 @@ class TestRepositories(unittest.TestCase):
             project_id=101,
             name="PM Test Project Updated",
             status="Completed",
-            planned_budget=12000.0,
-            actual_budget=6000.0,
+            planned_budget=12000,
+            actual_budget=6000,
             dynamic_attributes={},
             function_id=20,
         )
         self.assertTrue(updated)
 
-        df_updated = pd.DataFrame(create_project_service(self.temp_db_path).get_planning_catalog(tuple(parameter.param_id for parameter in create_schema_service(self.temp_db_path).get_all_parameters())))
+        df_updated = pd.DataFrame(self.project_repo.get_planning_catalog(parameter_ids))
         proj_updated = df_updated[df_updated["id"] == 101].iloc[0]
         self.assertEqual(proj_updated["function_id"], 20)
 

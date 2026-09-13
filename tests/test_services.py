@@ -3,7 +3,6 @@
 from app.domain.planning.constraints import evaluate_constraints
 from app.domain.planning.csv_import import get_csv_template
 from app.domain.planning.csv_import import parse_csv
-from app.operator_services import create_schema_service
 from app.domain.projects.budgets import BudgetAmounts, euro_amount, summarize_budgets
 from app.presentation.components.planning_catalog import enrich_projects_with_organization
 from app.presentation.components.planning_catalog import flatten_dynamic_attributes
@@ -11,41 +10,26 @@ from app.presentation.components.planning_catalog import get_level_3_managing_fu
 from app.presentation.components.planning_imports import csv_text
 
 import io
-import os
-import shutil
-import tempfile
 import unittest
 
 import pandas as pd
 
-from app.infrastructure.database.schema_init import init_db
-
 
 class TestServices(unittest.TestCase):
-    """Test suite for PortfolioService, SchemaService, and MilestoneService."""
-
-    def setUp(self) -> None:
-        """Arrange: Create isolated temporary directory for test database."""
-        self.test_dir = tempfile.mkdtemp()
-        self.temp_db_path = os.path.join(self.test_dir, "test_services.db")
-        init_db(self.temp_db_path)
-
-    def tearDown(self) -> None:
-        """Clean up temporary test directory."""
-        shutil.rmtree(self.test_dir, ignore_errors=True)
+    """Pure budget, planning, and presentation logic without database setup."""
 
     def test_calculate_portfolio_metrics(self) -> None:
         """Verify calculations for planned, actual, variance, and burn rate."""
         df = pd.DataFrame([
-            {"planned_budget": 100000.0, "actual_budget": 40000.0},
-            {"planned_budget": 200000.0, "actual_budget": 110000.0},
+            {"planned_budget": 100000, "actual_budget": 40000},
+            {"planned_budget": 200000, "actual_budget": 110000},
         ])
         metrics = summarize_budgets(BudgetAmounts(euro_amount(row.planned_budget), euro_amount(row.actual_budget)) for row in df.itertuples())
 
         self.assertEqual(metrics.total_projects, 2)
-        self.assertEqual(metrics.total_planned, 300000.0)
-        self.assertEqual(metrics.total_actual, 150000.0)
-        self.assertEqual(metrics.variance, 150000.0)
+        self.assertEqual(metrics.total_planned, 300000)
+        self.assertEqual(metrics.total_actual, 150000)
+        self.assertEqual(metrics.variance, 150000)
         self.assertEqual(metrics.burn_rate, 50.0)
 
     def test_calculate_portfolio_metrics_empty(self) -> None:
@@ -86,24 +70,6 @@ class TestServices(unittest.TestCase):
         self.assertEqual(flattened.loc[flattened["id"] == 1, "PRM_001"].values[0], ["Python", "Docker"])
         self.assertEqual(flattened.loc[flattened["id"] == 2, "PRM_001"].values[0], ["SingleTag"])
 
-    def test_schema_service_generate_param_id(self) -> None:
-        """Verify sequential parameter ID generation."""
-        repo = create_schema_service(self.temp_db_path)
-        pid1 = create_schema_service(self.temp_db_path).generate_param_id()
-        self.assertEqual(pid1, "PRM_001")
-
-        repo.create_parameter("PRM_001", None, "Param 1", 'TEXT')
-        pid2 = create_schema_service(self.temp_db_path).generate_param_id()
-        self.assertEqual(pid2, "PRM_002")
-
-    def test_schema_service_next_available_group_order(self) -> None:
-        """Verify next available group order computation."""
-        repo = create_schema_service(self.temp_db_path)
-        self.assertEqual(create_schema_service(self.temp_db_path).get_next_available_group_order(), 1)
-
-        repo.create_group("Group A", 1)
-        repo.create_group("Group B", 2)
-        self.assertEqual(create_schema_service(self.temp_db_path).get_next_available_group_order(), 3)
 
     def test_milestone_service_parse_csv(self) -> None:
         """Verify parsing valid step/milestone CSV data including description, predecessor_id and 0-duration milestones."""
