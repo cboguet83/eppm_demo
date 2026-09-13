@@ -1,19 +1,19 @@
-"""Scoped portfolio component requests and collaboration workflows on real SQLite."""
+"""Scoped portfolio component requests and collaboration workflows on real PostgreSQL."""
 
-from contextlib import closing
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+import psycopg
 import pytest
 from streamlit.testing.v1 import AppTest
 
 from app.domain.access.models import Actor
-from app.infrastructure.database.connection import get_db
+from app.runtime import RuntimeResources
 from app.main import create_collaboration_service
-from tests.test_business_transaction_security import business as business
+from tests.postgresql.business import business
 
 
-def portfolio_app(path: str, actor: Actor) -> None:
+def portfolio_app(path: RuntimeResources, actor: Actor) -> None:
     """Inject only the authenticated transport into the production portfolio page."""
     import streamlit as st
     from app.application.services.access import AuthorizationPolicy, SessionLimits
@@ -30,7 +30,7 @@ def portfolio_app(path: str, actor: Actor) -> None:
     render_portfolio_overview(create_project_workspace(path, access=access))
 
 
-def project_details_fragment_app(path: str, actor: Actor) -> None:
+def project_details_fragment_app(path: RuntimeResources, actor: Actor) -> None:
     """Rerun the production details fragment with its previously displayed row."""
     import pandas as pd
     from app.application.services.access import AuthorizationPolicy, SessionLimits
@@ -73,7 +73,7 @@ def test_project_details_fragment_stops_displaying_a_deleted_project(business):
     assert not app.button and not app.tabs
 
 
-def test_business_administrator_can_open_project_creation_from_the_scoped_portfolio(business):
+def test_business_administrator_can_open_project_creation_from_the_scoped_portfolio(pg_database, business):
     from tests.test_fragment_reruns import FragmentRun
     path, _, _, _, manager = business
     with patch("app.presentation.pages.portfolio.portfolio_project_table"):
@@ -81,8 +81,8 @@ def test_business_administrator_can_open_project_creation_from_the_scoped_portfo
         FragmentRun("btn_create_project_from_portfolio", widget_trigger=True).run(app)
     assert not app.exception and not app.error
     assert app.session_state["portfolio_project_modal_state"].form["submit"] == "Create project"
-    with closing(get_db(path)) as connection:
-        assert connection.execute("SELECT id FROM project ORDER BY id").fetchall() == [(1,), (2,)]
+    with psycopg.connect(pg_database.operator_url) as connection:
+        assert connection.execute("SELECT id FROM eppm.project ORDER BY id").fetchall() == [(1,), (2,)]
 
 
 @pytest.mark.parametrize("field", ["row_click", "gantt_click"])
@@ -185,14 +185,14 @@ def test_portfolio_cached_facet_is_not_served_after_access_revocation(business):
         table.assert_not_called()
 
 
-def test_numeric_portfolio_statistics_and_cached_facets_follow_each_actor_scope(business):
+def test_numeric_portfolio_statistics_and_cached_facets_follow_each_actor_scope(pg_database, business):
     from app.main import create_portfolio_service
     from app.presentation.pages.portfolio import _load_portfolio_facet
 
     path, service, admin, editor, manager = business
-    with closing(get_db(path)) as connection, connection:
-        connection.execute("INSERT INTO schema_parameters(param_id,param_name,param_type,applies_to_all) VALUES('SCORE','complexity','NUMBER',1)")
-        connection.execute("INSERT INTO project_property_value(project_id,param_id,kind,number_value) VALUES(1,'SCORE','number',3),(2,'SCORE','number',99)")
+    with psycopg.connect(pg_database.operator_url) as connection:
+        connection.execute("INSERT INTO eppm.schema_parameters(param_id,param_name,param_type,applies_to_all) VALUES('SCORE','complexity','NUMBER',true)")
+        connection.execute("INSERT INTO eppm.project_property_value(project_id,param_id,kind,number_value) VALUES(1,'SCORE','number',3),(2,'SCORE','number',99)")
     columns = [{"key": "property:SCORE", "param_id": "SCORE", "format": "number"}]
     for access, count, maximum in [(manager, 2, 99), (editor, 1, 3)]:
         reader = create_portfolio_service(path, access=access)
@@ -220,7 +220,7 @@ def test_portfolio_detail_button_opens_the_persisted_project_for_editing(busines
     assert "Update Project" in form["submit"]
 
 
-def task_query_app(path: str, actor: Actor) -> None:
+def task_query_app(path: RuntimeResources, actor: Actor) -> None:
     """Apply the production component callback before rendering its real scoped query."""
     import streamlit as st
     from app.application.services.access import AuthorizationPolicy, SessionLimits
@@ -244,10 +244,10 @@ def task_query_app(path: str, actor: Actor) -> None:
     ({"filters": {"project_name": "Hidden"}, "project_ids": [2], "permission": "all"}, []),
     ([], [10]),
 ])
-def test_task_tag_component_query_callback_preserves_scoped_counts_and_allowlisted_arguments(business, query, expected):
+def test_task_tag_component_query_callback_preserves_scoped_counts_and_allowlisted_arguments(pg_database, business, query, expected):
     path, _, _, editor, _ = business
-    with closing(get_db(path)) as connection, connection:
-        connection.execute("INSERT INTO task_tag(id,task_id,free_tag) VALUES(10,10,'Visible tag'),(20,20,'Hidden tag')")
+    with psycopg.connect(pg_database.operator_url) as connection:
+        connection.execute("INSERT INTO eppm.task_tag(id,task_id,free_tag) VALUES(10,10,'Visible tag'),(20,20,'Hidden tag')")
     with patch("streamlit.components.v1.declare_component") as factory:
         factory.return_value.return_value = None
         app = AppTest.from_function(task_query_app, args=(path, editor.actor))
@@ -263,12 +263,12 @@ def test_task_tag_component_query_callback_preserves_scoped_counts_and_allowlist
 
 
 @pytest.fixture
-def contacts(business):
+def contacts(pg_database, business):
     """Create visible/hidden assignments and an unrelated employee for payload checks."""
     path, _, _, editor, manager = business
-    with closing(get_db(path)) as connection, connection:
-        connection.execute("INSERT INTO function(function_id,name,hierarchy_level) VALUES(10,'Visible function',1),(20,'Hidden function',1),(30,'Unrelated function',1)")
-        connection.execute("INSERT INTO employee(firstname,lastname,email,employee_code,function_id) VALUES('Rae','Visible','visible@example.test','V',10),('Robin','Hidden','hidden@example.test','H',20),('Unrelated','Person','unrelated@example.test','U',30)")
+    with psycopg.connect(pg_database.operator_url) as connection:
+        connection.execute("INSERT INTO eppm.function(function_id,name,hierarchy_level) VALUES(10,'Visible function',1),(20,'Hidden function',1),(30,'Unrelated function',1)")
+        connection.execute("INSERT INTO eppm.employee(firstname,lastname,email,employee_code,function_id) VALUES('Rae','Visible','visible@example.test','V',10),('Robin','Hidden','hidden@example.test','H',20),('Unrelated','Person','unrelated@example.test','U',30)")
     shared = create_collaboration_service(path, access=manager)
     role_id = shared.save_catalog("role", "Sponsor")
     visible_id = shared.save_contact(1, role_id, 10)
@@ -276,7 +276,7 @@ def contacts(business):
     return path, editor, visible_id, hidden_id
 
 
-def collaboration_app(path: str, actor: Actor, surface: str, contact_id: int | None = None) -> None:
+def collaboration_app(path: RuntimeResources, actor: Actor, surface: str, contact_id: int | None = None) -> None:
     """Render production contact and log entry points with an explicit actor."""
     from app.application.services.access import AuthorizationPolicy, SessionLimits
     from app.application.services.business_access import BusinessAccess
@@ -300,7 +300,7 @@ def collaboration_app(path: str, actor: Actor, surface: str, contact_id: int | N
 
 @pytest.mark.parametrize("action", ["reassign", "remove"])
 @pytest.mark.parametrize("target", ["visible", "hidden", "malformed"])
-def test_contact_table_actions_are_limited_to_current_visible_assignments(contacts, action, target):
+def test_contact_table_actions_are_limited_to_current_visible_assignments(pg_database, contacts, action, target):
     path, editor, visible_id, hidden_id = contacts
     identifier = {"visible": visible_id, "hidden": hidden_id, "malformed": True}[target]
     component = Mock(return_value=SimpleNamespace(action={"id": identifier, "action": action}))
@@ -316,8 +316,8 @@ def test_contact_table_actions_are_limited_to_current_visible_assignments(contac
     assert ("project_contacts_1_modal_state" in app.session_state) == (target == "visible")
     if target == "visible" and action == "reassign":
         assert app.session_state["project_contacts_1_modal_state"]["form"]["fields"][0]["disabled"]
-    with closing(get_db(path)) as connection:
-        assert connection.execute("SELECT COUNT(*) FROM project_contact").fetchone()[0] == 2
+    with psycopg.connect(pg_database.operator_url) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM eppm.project_contact").fetchone()[0] == 2
 
 
 def test_viewer_contacts_include_visible_people_without_exposing_edit_actions(business, contacts):
@@ -337,19 +337,19 @@ def test_viewer_contacts_include_visible_people_without_exposing_edit_actions(bu
 
 
 @pytest.mark.parametrize("stale", ["removed", "moved"])
-def test_contact_reassignment_detects_a_changed_owner_before_submitting(contacts, stale):
+def test_contact_reassignment_detects_a_changed_owner_before_submitting(pg_database, contacts, stale):
     path, editor, visible_id, _ = contacts
     app = AppTest.from_function(collaboration_app, args=(path, editor.actor, "reassign", visible_id)).run()
-    with closing(get_db(path)) as connection, connection:
+    with psycopg.connect(pg_database.operator_url) as connection:
         if stale == "removed":
-            connection.execute("DELETE FROM project_contact WHERE id=?", (visible_id,))
+            connection.execute("DELETE FROM eppm.project_contact WHERE id=%s", (visible_id,))
         else:
-            connection.execute("UPDATE project_contact SET project_id=2 WHERE id=?", (visible_id,))
+            connection.execute("UPDATE eppm.project_contact SET project_id=2 WHERE id=%s", (visible_id,))
     app.run()
     assert not app.exception and "no longer exists" in app.error[0].value
     assert not app.selectbox
-    with closing(get_db(path)) as connection:
-        assert connection.execute("SELECT project_id,function_id FROM project_contact WHERE id=?", (visible_id,)).fetchall() == ([] if stale == "removed" else [(2, 10)])
+    with psycopg.connect(pg_database.operator_url) as connection:
+        assert connection.execute("SELECT project_id,function_id FROM eppm.project_contact WHERE id=%s", (visible_id,)).fetchall() == ([] if stale == "removed" else [(2, 10)])
 
 
 def test_log_creation_requires_configured_event_types_and_preserves_multiline_values(business):

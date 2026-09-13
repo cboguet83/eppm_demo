@@ -131,11 +131,11 @@ def _apply_immediate_gantt_update(
         if end_date < start_date:
             return False
         updated = workspace.planning.update_dates(step_id_int, new_start, new_end)
-        if updated:
-            st.toast(
-                t("planning.toast_dates_updated", id=step_id_int, start=new_start, end=new_end),
-                icon="📅",
-            )
+        require_change(updated)
+        st.toast(
+            t("planning.toast_dates_updated", id=step_id_int, start=new_start, end=new_end),
+            icon="📅",
+        )
         return updated
     if action == "update_progress":
         try:
@@ -143,11 +143,11 @@ def _apply_immediate_gantt_update(
         except (TypeError, ValueError):
             return False
         updated = workspace.planning.update_progress(step_id_int, new_progress)
-        if updated:
-            st.toast(
-                t("planning.toast_progress_updated", id=step_id_int, progress=new_progress),
-                icon="📊",
-            )
+        require_change(updated)
+        st.toast(
+            t("planning.toast_progress_updated", id=step_id_int, progress=new_progress),
+            icon="📊",
+        )
         return updated
     return False
 

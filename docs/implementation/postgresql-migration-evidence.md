@@ -1829,3 +1829,23 @@ upgrade. Native portfolio cache tests plus pure hashing checks also passed:
 **11 passed in 2.41 seconds**, `.local/postgresql-authorized-cache-port.log`.
 The original authorized-cache SQLite tests are archived unchanged. Full-suite
 coverage, remaining legacy ports, load and deployed recovery acceptance remain open.
+## Native scoped collaboration, Settings and Gantt workflows
+
+Six scoped UI suites now use native business resources and operator-only fixture
+inspection: portfolio/collaboration, collaboration modals, schema Settings,
+resource Settings, planning updates and Gantt step reruns. Retained assertions
+cover hidden payloads, disabled/revoked accounts, atomic modal saves, fragment
+isolation, preserved drafts, numeric filters and capacity refreshes.
+
+The native port exposed silent failed Gantt date/progress saves when RLS made a
+target unavailable. The UI now applies the existing `require_change` check before
+showing a success toast. Hidden and nonexistent targets produce the same safe
+failure, with no success toast and no change to task or allocation records.
+This does not introduce planning revision checks or stale-form overwrite protection.
+
+The initial six-suite run had **106 passed and 2 failed** in
+`.local/postgresql-scoped-ui-port.log`. Both failures were corrected, with missing
+target cases added. The final affected planning suites, native planning contracts
+and service regressions passed **122 tests in 86.23 seconds** in
+`.local/postgresql-scoped-planning-native.log`. Full collection succeeds with
+**2,280 tests** in `.local/postgresql-test-inventory-scoped-ports.log`.

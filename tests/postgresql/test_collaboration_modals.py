@@ -1,15 +1,14 @@
 """Real scoped modal submissions preserve sibling sections and current write guards."""
 
-from contextlib import closing
 from unittest.mock import patch
 
+import psycopg
 import pytest
 from streamlit.testing.v1 import AppTest
 
 from app.application.services.collaboration import CollaborationService
-from app.infrastructure.database.connection import get_db
-from tests.test_business_transaction_security import business as business
-from tests.test_scoped_portfolio_collaboration_ui import contacts as contacts
+from tests.postgresql.business import business
+from tests.postgresql.test_scoped_portfolio_collaboration_ui import contacts as contacts
 from tests.test_fragment_reruns import FragmentRun
 
 
@@ -51,7 +50,7 @@ def interaction(app, surface, values, before=lambda: None):
 
 
 @pytest.mark.parametrize("surface", ["contacts", "log"])
-def test_successful_modal_save_updates_only_its_list_and_ignores_a_replayed_submit(contacts, surface):
+def test_successful_modal_save_updates_only_its_list_and_ignores_a_replayed_submit(pg_database, contacts, surface):
     path, editor, contact_id, _ = contacts
     app = AppTest.from_function(modal_app, args=(path, editor.actor, surface, contact_id))
     reads = []
@@ -73,16 +72,16 @@ def test_successful_modal_save_updates_only_its_list_and_ignores_a_replayed_subm
     repeated = FragmentRun(f"project_{surface}_1_modal", widget_json=rerun.widget_json)
     repeated.run(app)
     repeated.assert_isolated()
-    with closing(get_db(path)) as connection:
+    with psycopg.connect(pg_database.operator_url) as connection:
         if surface == "contacts":
-            assert connection.execute("SELECT function_id FROM project_contact WHERE id=?", (contact_id,)).fetchone() == (30,)
+            assert connection.execute("SELECT function_id FROM eppm.project_contact WHERE id=%s", (contact_id,)).fetchone() == (30,)
         else:
-            assert connection.execute("SELECT title,description FROM project_log_event WHERE project_id=1").fetchall() == [("Saved locally", "First\nSecond")]
+            assert connection.execute("SELECT title,description FROM eppm.project_log_event WHERE project_id=1").fetchall() == [("Saved locally", "First\nSecond")]
 
 
 @pytest.mark.parametrize("surface", ["contacts", "log"])
 @pytest.mark.parametrize("change", ["disabled", "revoked"])
-def test_retained_modal_submission_cannot_write_after_access_is_removed(business, contacts, surface, change):
+def test_retained_modal_submission_cannot_write_after_access_is_removed(pg_database, business, contacts, surface, change):
     path, service, admin, editor, _ = business
     contact_id = contacts[2]
     app = AppTest.from_function(modal_app, args=(path, editor.actor, surface, contact_id))
@@ -97,17 +96,17 @@ def test_retained_modal_submission_cannot_write_after_access_is_removed(business
     interaction(app, surface, {"function_id": "30"} if surface == "contacts" else {"title": "Forbidden"}, remove_access)
     assert app.session_state["summary_runs"] == 1
     assert "not permitted" in app.error[0].value
-    with closing(get_db(path)) as connection:
-        assert connection.execute("SELECT function_id FROM project_contact WHERE id=?", (contact_id,)).fetchone() == (10,)
-        assert connection.execute("SELECT count(*) FROM project_log_event").fetchone() == (0,)
+    with psycopg.connect(pg_database.operator_url) as connection:
+        assert connection.execute("SELECT function_id FROM eppm.project_contact WHERE id=%s", (contact_id,)).fetchone() == (10,)
+        assert connection.execute("SELECT count(*) FROM eppm.project_log_event").fetchone() == (0,)
 
 
 @pytest.mark.parametrize("values", [{"function_id": "nan"}, {"function_id": "0"}, {"function_id": True}, {"id": "999"}])
-def test_malformed_contact_submissions_remain_in_the_modal_without_writing(contacts, values):
+def test_malformed_contact_submissions_remain_in_the_modal_without_writing(pg_database, contacts, values):
     path, editor, contact_id, _ = contacts
     app = AppTest.from_function(modal_app, args=(path, editor.actor, "contacts", contact_id))
     interaction(app, "contacts", values)
     assert app.session_state["project_contacts_1_modal_state"]["form"]["error"]
     assert app.session_state["summary_runs"] == 1
-    with closing(get_db(path)) as connection:
-        assert connection.execute("SELECT function_id FROM project_contact WHERE id=?", (contact_id,)).fetchone() == (10,)
+    with psycopg.connect(pg_database.operator_url) as connection:
+        assert connection.execute("SELECT function_id FROM eppm.project_contact WHERE id=%s", (contact_id,)).fetchone() == (10,)

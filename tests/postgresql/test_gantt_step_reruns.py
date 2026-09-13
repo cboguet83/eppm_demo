@@ -7,7 +7,7 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 from app.main import create_planning_service
-from tests.test_business_transaction_security import business as business
+from tests.postgresql.business import business
 from tests.test_fragment_reruns import FragmentRun
 
 

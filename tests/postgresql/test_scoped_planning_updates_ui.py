@@ -1,20 +1,21 @@
 """Gantt callbacks preserve scoped task and resource data while updating the chart."""
 
-from contextlib import closing
 import json
+from datetime import date
 from unittest.mock import patch
 
+import psycopg
 import pytest
 from streamlit.testing.v1 import AppTest
 
-from app.infrastructure.database.connection import get_db
-from tests.test_business_transaction_security import business as business, scoped_planning_app
+from tests.postgresql.business import business
+from tests.business_ui import scoped_planning_app
 
 
 def filtered_planning_app(path, actor):
     """Include shell markers to detect full-app reruns from chart callbacks."""
     import streamlit as st
-    from tests.test_business_transaction_security import scoped_planning_app
+    from tests.business_ui import scoped_planning_app
 
     st.sidebar.text("Retained navigation")
     st.text("Retained page shell")
@@ -22,7 +23,7 @@ def filtered_planning_app(path, actor):
 
 
 @pytest.mark.parametrize("action", ["update_dates", "update_progress"])
-def test_inline_gantt_updates_refresh_only_authorized_tasks_and_pool_demand(business, action):
+def test_inline_gantt_updates_refresh_only_authorized_tasks_and_pool_demand(pg_database, business, action):
     path, _, _, editor, _ = business
     with patch("app.presentation.pages.planning._interactive_gantt", return_value=None) as component:
         app = AppTest.from_function(scoped_planning_app, args=(path, editor.actor), default_timeout=30).run()
@@ -43,12 +44,12 @@ def test_inline_gantt_updates_refresh_only_authorized_tasks_and_pool_demand(busi
             assert delta["resource_pools"]
         app.run()
         assert not app.exception and not app.error
-    with closing(get_db(path)) as connection:
-        visible = connection.execute("SELECT start_date,end_date,progress_pct FROM project_task WHERE id=10").fetchone()
-        hidden = connection.execute("SELECT start_date,end_date,progress_pct FROM project_task WHERE id=20").fetchone()
-        assert visible == (("2026-02-02", "2026-02-06", 0) if action == "update_dates" else ("2026-01-01", "2026-01-05", 40))
-        assert hidden == ("2026-01-01", "2026-01-05", 0)
-        assert connection.execute("SELECT id,fte_assigned FROM resource_pool_assignment ORDER BY id").fetchall() == [(1, 1), (2, 2)]
+    with psycopg.connect(pg_database.operator_url) as connection:
+        visible = connection.execute("SELECT start_date,end_date,progress_pct FROM eppm.project_task WHERE id=10").fetchone()
+        hidden = connection.execute("SELECT start_date,end_date,progress_pct FROM eppm.project_task WHERE id=20").fetchone()
+        assert visible == ((date(2026, 2, 2), date(2026, 2, 6), 0) if action == "update_dates" else (date(2026, 1, 1), date(2026, 1, 5), 40))
+        assert hidden == (date(2026, 1, 1), date(2026, 1, 5), 0)
+        assert connection.execute("SELECT id,fte_assigned FROM eppm.resource_pool_assignment ORDER BY id").fetchall() == [(1, 1), (2, 2)]
 
 
 def test_lazy_gantt_hydration_discards_invalid_hidden_and_duplicate_project_ids(business):
@@ -88,13 +89,13 @@ def test_project_context_filter_refreshes_the_planning_fragment_once_with_curren
     assert not any(message.metadata.delta_path[0] == 1 for message in rerun.messages if message.WhichOneof("type") == "delta")
 
 
-def test_changing_the_chart_selection_reads_current_capacity_once_per_rebuild(business):
+def test_changing_the_chart_selection_reads_current_capacity_once_per_rebuild(pg_database, business):
     from app.presentation.components.planning_workspace import PlanningWorkspace
     from tests.test_fragment_reruns import FragmentRun
 
     path, access, administrator, editor, _ = business
-    with closing(get_db(path)) as connection, connection:
-        connection.execute("INSERT INTO project(id,name) VALUES(3,'Other visible project')")
+    with psycopg.connect(pg_database.operator_url) as connection:
+        connection.execute("INSERT INTO eppm.project(id,name) VALUES(3,'Other visible project')")
     access.grant(administrator, editor.actor.user_id, "project_viewer", {"kind": "projects", "project_ids": [3]})
     reads = []
     original = PlanningWorkspace.pool_details
@@ -139,36 +140,39 @@ def test_project_filter_rechecks_a_disabled_account_without_a_full_application_r
     {"action": "update_dates", "id": [], "start_date": "2026-02-02", "end_date": "2026-02-06"},
     {"action": "update_dates", "id": 20, "start_date": "2026-02-02", "end_date": "2026-02-06"},
 ])
-def test_invalid_or_unauthorized_inline_updates_leave_tasks_and_allocations_unchanged(business, event):
+def test_invalid_or_unauthorized_inline_updates_leave_tasks_and_allocations_unchanged(pg_database, business, event):
     path, _, _, editor, _ = business
-    with closing(get_db(path)) as connection:
-        tasks = connection.execute("SELECT * FROM project_task ORDER BY id").fetchall()
-        allocations = connection.execute("SELECT * FROM resource_pool_assignment ORDER BY id").fetchall()
+    with psycopg.connect(pg_database.operator_url) as connection:
+        tasks = connection.execute("SELECT * FROM eppm.project_task ORDER BY id").fetchall()
+        allocations = connection.execute("SELECT * FROM eppm.resource_pool_assignment ORDER BY id").fetchall()
     with patch("app.presentation.pages.planning._interactive_gantt", return_value=None):
         app = AppTest.from_function(scoped_planning_app, args=(path, editor.actor), default_timeout=30).run()
         app.session_state["before_event"] = event
         app.run()
         assert not app.exception
-    with closing(get_db(path)) as connection:
-        assert connection.execute("SELECT * FROM project_task ORDER BY id").fetchall() == tasks
-        assert connection.execute("SELECT * FROM resource_pool_assignment ORDER BY id").fetchall() == allocations
+    with psycopg.connect(pg_database.operator_url) as connection:
+        assert connection.execute("SELECT * FROM eppm.project_task ORDER BY id").fetchall() == tasks
+        assert connection.execute("SELECT * FROM eppm.resource_pool_assignment ORDER BY id").fetchall() == allocations
 
 
 @pytest.mark.parametrize("action", ["update_dates", "update_progress"])
-@pytest.mark.parametrize("task_id", [10, 20])
-def test_gantt_returned_events_enforce_the_same_task_scope_as_callbacks(business, action, task_id):
+@pytest.mark.parametrize("task_id", [10, 20, 999])
+def test_gantt_returned_events_enforce_the_same_task_scope_as_callbacks(pg_database, business, action, task_id):
     path, _, _, editor, _ = business
     event = {"action": action, "id": task_id, "start_date": "2026-02-02", "end_date": "2026-02-06",
              "progress": 40, "nonce": "returned-event"}
     with patch("app.presentation.pages.planning._interactive_gantt", side_effect=[event, None]):
         app = AppTest.from_function(scoped_planning_app, args=(path, editor.actor), default_timeout=30).run()
     assert not app.exception
-    assert bool(app.error) == (task_id == 20)
-    with closing(get_db(path)) as connection:
-        tasks = connection.execute("SELECT id,start_date,end_date,progress_pct FROM project_task ORDER BY id").fetchall()
-        expected = (10, "2026-02-02", "2026-02-06", 0) if action == "update_dates" else (10, "2026-01-01", "2026-01-05", 40)
-        assert tasks == [expected if task_id == 10 else (10, "2026-01-01", "2026-01-05", 0), (20, "2026-01-01", "2026-01-05", 0)]
-        assert connection.execute("SELECT id,fte_assigned FROM resource_pool_assignment ORDER BY id").fetchall() == [(1, 1), (2, 2)]
+    assert bool(app.error) == (task_id != 10)
+    if task_id != 10:
+        assert not app.toast
+        assert "Hidden" not in app.error[0].value
+    with psycopg.connect(pg_database.operator_url) as connection:
+        tasks = connection.execute("SELECT id,start_date,end_date,progress_pct FROM eppm.project_task ORDER BY id").fetchall()
+        expected = (10, date(2026, 2, 2), date(2026, 2, 6), 0) if action == "update_dates" else (10, date(2026, 1, 1), date(2026, 1, 5), 40)
+        assert tasks == [expected if task_id == 10 else (10, date(2026, 1, 1), date(2026, 1, 5), 0), (20, date(2026, 1, 1), date(2026, 1, 5), 0)]
+        assert connection.execute("SELECT id,fte_assigned FROM eppm.resource_pool_assignment ORDER BY id").fetchall() == [(1, 1), (2, 2)]
 
 
 @pytest.mark.parametrize("action", ["filter_project", "clear_resource_pool_filter"])
@@ -190,7 +194,7 @@ def test_gantt_menu_filter_reruns_retain_only_current_authorized_projects(busine
 
 
 def test_forged_resource_settings_navigation_does_not_grant_shared_administration(business):
-    from tests.test_scoped_resource_settings_ui import resource_settings_app
+    from tests.postgresql.test_scoped_resource_settings_ui import resource_settings_app
 
     path, _, _, editor, _ = business
     event = {"action": "go_to_pool_details", "pool_id": 1, "nonce": "resource-navigation"}
@@ -205,15 +209,15 @@ def test_forged_resource_settings_navigation_does_not_grant_shared_administratio
 
 
 @pytest.mark.parametrize("group", [False, True])
-def test_gantt_pool_and_group_allocation_menus_open_only_scoped_rows(business, group):
+def test_gantt_pool_and_group_allocation_menus_open_only_scoped_rows(pg_database, business, group):
     import streamlit as st
     from types import SimpleNamespace
     from unittest.mock import Mock
 
     path, _, _, editor, _ = business
-    with closing(get_db(path)) as connection, connection:
-        connection.execute("INSERT INTO resource_pool_group(id,name) VALUES(1,'Delivery group')")
-        connection.execute("INSERT INTO resource_pool_group_member(group_id,pool_id) VALUES(1,1)")
+    with psycopg.connect(pg_database.operator_url) as connection:
+        connection.execute("INSERT INTO eppm.resource_pool_group(id,name) VALUES(1,'Delivery group')")
+        connection.execute("INSERT INTO eppm.resource_pool_group_member(group_id,pool_id) VALUES(1,1)")
     event = {"action": "show_pool_allocations", "pool_id": 0 if group else 1,
              "group_id": 1 if group else None, "nonce": "allocations-menu"}
     table = Mock(return_value=SimpleNamespace(action=None))
@@ -230,10 +234,10 @@ def test_gantt_pool_and_group_allocation_menus_open_only_scoped_rows(business, g
 
 
 @pytest.mark.parametrize("selection", [[1, 3], [3]])
-def test_pool_filter_can_retain_other_filters_without_broadening_project_access(business, selection):
+def test_pool_filter_can_retain_other_filters_without_broadening_project_access(pg_database, business, selection):
     path, service, admin, editor, _ = business
-    with closing(get_db(path)) as connection, connection:
-        connection.execute("INSERT INTO project(id,name) VALUES(3,'Other visible project')")
+    with psycopg.connect(pg_database.operator_url) as connection:
+        connection.execute("INSERT INTO eppm.project(id,name) VALUES(3,'Other visible project')")
     service.grant(admin, editor.actor.user_id, "project_viewer", {"kind": "projects", "project_ids": [3]})
     event = {"action": "filter_by_resource_pool", "pool_id": 1, "pool_name": "Reference pool",
              "start_date": "2026-01-01", "end_date": "2026-01-05", "clear_other_filters": False,
@@ -259,16 +263,16 @@ def test_active_user_without_project_grants_gets_no_planning_payload(business):
     assert not app.multiselect and not app.button
 
 
-def test_numeric_flex_filters_preserve_null_values_and_replace_an_incompatible_selection(business):
+def test_numeric_flex_filters_preserve_null_values_and_replace_an_incompatible_selection(pg_database, business):
     from app.main import create_schema_service
 
     path, service, admin, editor, manager = business
     schema = create_schema_service(path, access=manager)
     schema.create_parameter("SCORE", None, "Numeric score", "NUMBER", alias="Score")
     schema.create_parameter("WEIGHT", None, "Numeric weight", "NUMBER", alias="Score")
-    with closing(get_db(path)) as connection, connection:
-        connection.execute("INSERT INTO project(id,name) VALUES(3,'Other visible project')")
-        connection.execute("INSERT INTO project_property_value(project_id,param_id,kind,number_value) VALUES(1,'SCORE','number',42),(2,'SCORE','number',99)")
+    with psycopg.connect(pg_database.operator_url) as connection:
+        connection.execute("INSERT INTO eppm.project(id,name) VALUES(3,'Other visible project')")
+        connection.execute("INSERT INTO eppm.project_property_value(project_id,param_id,kind,number_value) VALUES(1,'SCORE','number',42),(2,'SCORE','number',99)")
     service.grant(admin, editor.actor.user_id, "project_viewer", {"kind": "projects", "project_ids": [3]})
     with patch("app.presentation.pages.planning._interactive_gantt", return_value=None) as component:
         app = AppTest.from_function(scoped_planning_app, args=(path, editor.actor), default_timeout=30)
@@ -286,13 +290,13 @@ def test_numeric_flex_filters_preserve_null_values_and_replace_an_incompatible_s
         assert "Hidden" not in json.dumps(component.call_args.kwargs, default=str)
 
 
-def test_scoped_task_updates_refresh_only_the_affected_pool_within_nested_groups(business):
+def test_scoped_task_updates_refresh_only_the_affected_pool_within_nested_groups(pg_database, business):
     path, _, _, editor, _ = business
-    with closing(get_db(path)) as connection, connection:
-        connection.execute("INSERT INTO resource_pool(id,name,capacity_fte) VALUES(2,'Unused pool',1)")
-        connection.execute("INSERT INTO resource_pool_group(id,name) VALUES(1,'First group'),(2,'Second group')")
-        connection.execute("INSERT INTO resource_pool_group_member(group_id,child_group_id) VALUES(1,2)")
-        connection.execute("INSERT INTO resource_pool_group_member(group_id,pool_id) VALUES(1,1),(2,2)")
+    with psycopg.connect(pg_database.operator_url) as connection:
+        connection.execute("INSERT INTO eppm.resource_pool(id,name,capacity_fte) VALUES(2,'Unused pool',1)")
+        connection.execute("INSERT INTO eppm.resource_pool_group(id,name) VALUES(1,'First group'),(2,'Second group')")
+        connection.execute("INSERT INTO eppm.resource_pool_group_member(group_id,child_group_id) VALUES(1,2)")
+        connection.execute("INSERT INTO eppm.resource_pool_group_member(group_id,pool_id) VALUES(1,1),(2,2)")
     with patch("app.presentation.pages.planning._interactive_gantt", return_value=None) as component:
         app = AppTest.from_function(scoped_planning_app, args=(path, editor.actor), default_timeout=30).run()
         assert not app.exception and not app.error

@@ -1,19 +1,19 @@
 """Resource Settings entry points retain role, pool and allocation boundaries."""
 
-from contextlib import closing
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+import psycopg
 import pytest
 import streamlit as st
 from streamlit.testing.v1 import AppTest
 
 from app.domain.access.models import Actor
-from app.infrastructure.database.connection import get_db
-from tests.test_business_transaction_security import business as business
+from app.runtime import RuntimeResources
+from tests.postgresql.business import business
 
 
-def resource_settings_app(path: str, actor: Actor) -> None:
+def resource_settings_app(path: RuntimeResources, actor: Actor) -> None:
     """Run the production resource Settings page with an explicit application actor."""
     from app.application.services.access import AuthorizationPolicy, SessionLimits
     from app.application.services.business_access import BusinessAccess
@@ -43,14 +43,14 @@ def expanded_groups():
 
 
 @pytest.mark.parametrize("action", ["create_pool", "edit_pool", "delete_pool", "new_group", "edit_group", "delete_group", "add_mapping"])
-def test_business_administrator_resource_controls_open_actual_dialogs_without_premature_writes(business, expanded_groups, action):
+def test_business_administrator_resource_controls_open_actual_dialogs_without_premature_writes(pg_database, business, expanded_groups, action):
     path, _, _, _, manager = business
-    with closing(get_db(path)) as connection, connection:
-        connection.execute("INSERT INTO resource_pool_group(id,name) VALUES(1,'Delivery group')")
-        connection.execute("INSERT INTO tag_dictionnary(id,tag) VALUES(1,'Priority')")
-        connection.execute("INSERT INTO resource_pool_tag(pool_id,tag_id) VALUES(1,1)")
-        connection.execute("UPDATE resource_pool SET description='Pool details' WHERE id=1")
-        before = {table: connection.execute(f"SELECT * FROM {table} ORDER BY 1").fetchall() for table in (
+    with psycopg.connect(pg_database.operator_url) as connection:
+        connection.execute("INSERT INTO eppm.resource_pool_group(id,name) VALUES(1,'Delivery group')")
+        connection.execute("INSERT INTO eppm.tag_dictionnary(id,tag) VALUES(1,'Priority')")
+        connection.execute("INSERT INTO eppm.resource_pool_tag(pool_id,tag_id) VALUES(1,1)")
+        connection.execute("UPDATE eppm.resource_pool SET description='Pool details' WHERE id=1")
+        before = {table: connection.execute(f"SELECT * FROM eppm.{table} ORDER BY 1").fetchall() for table in (
             "resource_pool", "resource_pool_group", "resource_pool_assignment", "resource_pool_mapping", "app_role_assignment",
         )}
     app = AppTest.from_function(resource_settings_app, args=(path, manager.actor), default_timeout=30).run()
@@ -69,8 +69,8 @@ def test_business_administrator_resource_controls_open_actual_dialogs_without_pr
         assert app.warning
     else:
         assert app.get("dialog")[0].text_input
-    with closing(get_db(path)) as connection:
-        assert {table: connection.execute(f"SELECT * FROM {table} ORDER BY 1").fetchall() for table in before} == before
+    with psycopg.connect(pg_database.operator_url) as connection:
+        assert {table: connection.execute(f"SELECT * FROM eppm.{table} ORDER BY 1").fetchall() for table in before} == before
 
 
 def test_empty_resource_group_inspector_does_not_invent_members_or_offer_editing(business, expanded_groups):
@@ -82,7 +82,7 @@ def test_empty_resource_group_inspector_does_not_invent_members_or_offer_editing
     assert app.button(key="btn_edit_pool_1")
 
 
-def test_mapping_dialog_empty_employee_branch_prevents_saving_an_invalid_target(business):
+def test_mapping_dialog_empty_employee_branch_prevents_saving_an_invalid_target(pg_database, business):
     path, _, _, _, manager = business
 
     def dialog(path, actor):
@@ -100,17 +100,17 @@ def test_mapping_dialog_empty_employee_branch_prevents_saving_an_invalid_target(
     assert not app.exception and not app.error
     assert any("No employees available" in item.value for item in app.warning)
     assert not app.button and not app.selectbox
-    with closing(get_db(path)) as connection:
-        assert connection.execute("SELECT * FROM resource_pool_mapping").fetchall() == []
+    with psycopg.connect(pg_database.operator_url) as connection:
+        assert connection.execute("SELECT * FROM eppm.resource_pool_mapping").fetchall() == []
 
 
 @pytest.mark.parametrize("target", [1, 3])
-def test_allocation_row_unassignment_can_only_open_for_an_assignment_in_the_selected_pool(business, target):
+def test_allocation_row_unassignment_can_only_open_for_an_assignment_in_the_selected_pool(pg_database, business, target):
     import streamlit as st
     path, _, _, _, manager = business
-    with closing(get_db(path)) as connection, connection:
-        connection.execute("INSERT INTO resource_pool(id,name,capacity_fte) VALUES(2,'Other pool',1)")
-        connection.execute("INSERT INTO resource_pool_assignment(id,pool_id,project_id,fte_assigned) VALUES(3,2,1,1)")
+    with psycopg.connect(pg_database.operator_url) as connection:
+        connection.execute("INSERT INTO eppm.resource_pool(id,name,capacity_fte) VALUES(2,'Other pool',1)")
+        connection.execute("INSERT INTO eppm.resource_pool_assignment(id,pool_id,project_id,fte_assigned) VALUES(3,2,1,1)")
     component = Mock(return_value=SimpleNamespace(action={"id": target, "action": "unassign"}))
     register = st.components.v2.component
     with patch("streamlit.components.v2.component", side_effect=lambda name, **kwargs:
@@ -123,5 +123,5 @@ def test_allocation_row_unassignment_can_only_open_for_an_assignment_in_the_sele
     assert bool(app.get("dialog")) == (target == 1)
     if target == 1:
         assert app.button(key="confirm_unassign_1")
-    with closing(get_db(path)) as connection:
-        assert connection.execute("SELECT id FROM resource_pool_assignment ORDER BY id").fetchall() == [(1,), (2,), (3,)]
+    with psycopg.connect(pg_database.operator_url) as connection:
+        assert connection.execute("SELECT id FROM eppm.resource_pool_assignment ORDER BY id").fetchall() == [(1,), (2,), (3,)]
