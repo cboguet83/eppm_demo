@@ -1,30 +1,30 @@
 """Database-side scrolling, global header filters, and lazy portfolio rendering."""
 
-from contextlib import closing
-import tempfile
 import unittest
-from pathlib import Path
+import psycopg
+import pytest
 
-from app.infrastructure.database.connection import get_db
-from app.infrastructure.database.schema_init import init_db
-from app.operator_services import create_portfolio_service
-from app.infrastructure.repositories.portfolio import portfolio_revision
-from app.infrastructure.database.seed_projects import create_seed_project
-from app.operator_services import create_project_service
-from app.operator_services import create_project_type_service
-from app.operator_services import create_schema_service
+from app.application.services.business_access import BusinessAccess
+from app.runtime import RuntimeResources
+from tests.postgresql.conftest import AuthorizedFixture
+from tests.postgresql.ui import native_screen, runtime as runtime, access as access
+
+from app.main import create_portfolio_service
+from app.infrastructure.postgresql.seed_projects import create_seed_project
+from app.main import create_project_service
+from app.main import create_project_type_service
+from app.main import create_schema_service
 
 
 class PortfolioPagingTests(unittest.TestCase):
-    def setUp(self):
-        self.directory = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
-        self.addCleanup(self.directory.cleanup)
-        self.path = str(Path(self.directory.name) / 'portfolio.db')
-        init_db(self.path)
-        self.projects = create_project_service(self.path)
-        self.repo = create_portfolio_service(self.path)
-        self.schema = create_schema_service(self.path)
-        self.types = create_project_type_service(self.path)
+    @pytest.fixture(autouse=True)
+    def native_setup(self, authorized: AuthorizedFixture, runtime: RuntimeResources, access: BusinessAccess) -> None:
+        """Build a native 255-project portfolio with values beyond the first page."""
+        self.setup, self.resources, self.access = authorized.setup, runtime, access
+        self.projects = create_project_service(runtime, access=access)
+        self.repo = create_portfolio_service(runtime, access=access)
+        self.schema = create_schema_service(runtime, access=access)
+        self.types = create_project_type_service(runtime, access=access)
         self.special = self.types.create_type('Special')
         self.schema.create_parameter('phase', None, 'phase', 'TEXT', applies_to_all=False,
                                      project_type_ids=[self.special])
@@ -33,12 +33,14 @@ class PortfolioPagingTests(unittest.TestCase):
             {'key': 'planned_budget', 'format': 'currency'},
             {'key': 'property:phase', 'param_id': 'phase', 'format': 'text'},
         ]
-        with closing(get_db(self.path)) as conn:
-            with conn:
-                for i in range(1, 256):
-                    create_seed_project(conn, name=f'Project {i:03d}',
-                        planned_budget=i, project_type_id=self.special if i % 2 else 1,
-                        dynamic_attributes={'phase': 'Late' if i > 200 else 'Early'} if i % 2 else {})
+        for i in range(1, 4):
+            self.projects.update_project(i, f'Project {i:03d}', 'Draft', i, 0,
+                {'phase': 'Early'} if i % 2 else {}, project_type_id=self.special if i % 2 else 1)
+        with psycopg.connect(self.setup.operator_url) as connection:
+            for i in range(4, 256):
+                create_seed_project(connection, name=f'Project {i:03d}',
+                    planned_budget=i, project_type_id=self.special if i % 2 else 1,
+                    dynamic_attributes={'phase': 'Late' if i > 200 else 'Early'} if i % 2 else {})
 
     def test_bounded_pages_stable_global_sort_search_and_metrics(self):
         first = self.repo.get_page(self.columns, {})
@@ -79,31 +81,30 @@ class PortfolioPagingTests(unittest.TestCase):
         self.assertEqual(self.repo.get_page(self.columns, query)['total'], 127)
 
     def test_inactive_values_are_hidden_and_cache_revision_tracks_writes(self):
-        before = portfolio_revision(self.path)
+        before = self.repo.revision()
         self.projects.update_project(255, 'Changed', 'Draft', 255, 0, {}, project_type_id=1)
-        self.assertNotEqual(before, portfolio_revision(self.path))
+        self.assertNotEqual(before, self.repo.revision())
         row = self.repo.get_page(self.columns, {'search': 'Changed'})['rows'][0]
         self.assertIsNone(row['property:phase'])
         self.assertEqual(self.projects.get_project_by_id(255).dynamic_attributes['phase'], 'Late')
 
     def test_portfolio_does_not_eagerly_load_all_projects(self):
-        from streamlit.testing.v1 import AppTest
-        app = AppTest.from_string(f'''
+        app = native_screen('''
 import importlib
 import streamlit as st
 from unittest.mock import patch
 from app.presentation.i18n import set_current_locale
-from app.operator_services import create_project_service
-from app.operator_services import create_schema_service
+from app.main import create_project_service
+from app.main import create_schema_service
 import app.presentation.components.portfolio_table as component
 importlib.reload(component)
 from app.presentation.pages.portfolio import render_portfolio_overview
-from app.operator_services import create_project_workspace
-from app.infrastructure.repositories.projects import SqliteProjectGateway
+from app.main import create_project_workspace
+from app.infrastructure.postgresql.projects import PostgresProjectGateway
 set_current_locale('en')
-with patch.object(SqliteProjectGateway, 'read_planning_catalog', side_effect=AssertionError('eager load')):
-    render_portfolio_overview(create_project_workspace({self.path!r}))
-''', default_timeout=15).run()
+with patch.object(PostgresProjectGateway, 'read_planning_catalog', side_effect=AssertionError('eager load')):
+    render_portfolio_overview(create_project_workspace(runtime, access=access))
+''', self.resources, self.access).run()
         self.assertFalse(app.exception, [e.message for e in app.exception])
         self.assertIn('Projects Master List', [h.value for h in app.subheader])
         self.assertNotIn('Filter by project template', [w.label for w in app.multiselect])

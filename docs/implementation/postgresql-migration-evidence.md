@@ -1379,3 +1379,16 @@ coverage is **479/484 statements (98.97%)**. Output:
 `.local/postgresql-template-native-coverage.json`. Current full collection:
 **2,018 tests, 21 legacy collection errors**. Full application coverage and the
 remaining runtime/tool/browser performance/recovery work are still incomplete.
+
+## Native portfolio paging and display-cache contracts
+
+The portfolio service tests now use native 105- and 255-project fixtures. They
+retain bounded enrichment, deferred allocation badges, stable paging, global
+filters/facets, exact aggregates, hidden inactive properties, safe malformed
+component inputs and lazy page rendering. A second independently migrated
+database verifies that identical actor/project IDs cannot share cached rows;
+an actual project update changes the source revision and refreshes the page.
+
+Validation: **6 passed in 14.01 seconds**, recorded in
+`.local/postgresql-portfolio-contract-paging.log`. These bounded-query and
+AppTest checks do not replace the separate 50-user browser timing requirement.
