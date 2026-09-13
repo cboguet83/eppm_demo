@@ -61,7 +61,10 @@ def publish_raw(authorized, body, *, user_id=1, proof=None, purpose='cache.publi
 
 
 def test_sql_cache_keys_match_python_revisions_and_filter_requested_visible_entities(staffing):
-    staffing.query('INSERT INTO eppm.task_dependencies(task_id,predecessor_task_id) VALUES (1,2),(2,1),(1,3)', user_id=4, write=True)
+    staffing.query("INSERT INTO eppm.project(id,name) VALUES (4,'Whole-project source')", user_id=4, write=True)
+    staffing.query('INSERT INTO eppm.task_dependencies(task_id,predecessor_task_id) VALUES (1,2),(2,1)', user_id=4, write=True)
+    staffing.query('INSERT INTO eppm.task_dependencies(task_id,predecessor_project_id) VALUES (1,4)', user_id=4, write=True)
+    staffing.query('UPDATE eppm.project_task SET predecessor_id=3 WHERE id=1', user_id=4, write=True)
     for user_id in (1, 2, 4):
         derived = cache(staffing, user_id)
         revisions = snapshot(staffing.database, staffing.key, staffing.binding(user_id).access)

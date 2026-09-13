@@ -1,0 +1,62 @@
+{
+  "scope": "Synthetic native cache-key growth regression; not browser-load acceptance",
+  "original_runtime_source_commit": "3534ea3",
+  "original_key_function_source": "0017_derived_caches.sql",
+  "migration": "0024_bounded_cache_keys.sql",
+  "fixture": {
+    "projects": 10001,
+    "initial_tasks": 70007,
+    "initial_dependencies": 70006,
+    "pools": 100,
+    "added_unrelated_tasks": 5000,
+    "added_unrelated_dependencies": 5000,
+    "preparation": "VACUUM ANALYZE of disposable project_cache_revision before both measurements"
+  },
+  "database_measurements": {
+    "original": {
+      "planning": {
+        "full_cache_ms": 120.338,
+        "full_cache_blocks": 4556.0,
+        "selected_cache_ms": 89.744,
+        "selected_cache_blocks": 4466.0,
+        "after_unrelated_tasks_cache_ms": 98.696,
+        "after_unrelated_tasks_cache_blocks": 4735.0
+      },
+      "capacity": {
+        "full_cache_ms": 102.848,
+        "full_cache_blocks": 4463.0,
+        "selected_cache_ms": 85.473,
+        "selected_cache_blocks": 4463.0,
+        "after_unrelated_tasks_cache_ms": 94.184,
+        "after_unrelated_tasks_cache_blocks": 4732.0
+      }
+    },
+    "bounded": {
+      "planning": {
+        "full_cache_ms": 97.505,
+        "full_cache_blocks": 5612.0,
+        "selected_cache_ms": 10.697,
+        "selected_cache_blocks": 645.0,
+        "after_unrelated_tasks_cache_ms": 13.538,
+        "after_unrelated_tasks_cache_blocks": 642.0
+      },
+      "capacity": {
+        "full_cache_ms": 20.751,
+        "full_cache_blocks": 1874.0,
+        "selected_cache_ms": 7.426,
+        "selected_cache_blocks": 973.0,
+        "after_unrelated_tasks_cache_ms": 8.086,
+        "after_unrelated_tasks_cache_blocks": 970.0
+      }
+    }
+  },
+  "validation": {
+    "original_growth_checks_failed": 2,
+    "final_targeted_passed": 10,
+    "final_seconds": 22.21,
+    "related_passed": 155,
+    "existing_entries_survive_upgrade": true,
+    "previous_ledger_checksums_preserved": true
+  },
+  "acceptance_complete": false
+}

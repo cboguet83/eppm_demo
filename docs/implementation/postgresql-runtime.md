@@ -107,9 +107,12 @@ business-service factories that bypass a runtime actor.
 
 Native tests exercise scoped navigation, revoked sessions, shared resource/cache
 identity, concurrent initial construction, actual Streamlit entry handling,
-explicit initialization and operator wrappers. The local deployment has applied
-the full migration chain, installed the fresh default demo under one native
-archive, and completed a real Keycloak login and audited administrator setup.
+explicit initialization and operator wrappers. At the initial runtime checkpoint,
+the local deployment applied the then-current migration chain, installed the fresh
+default demo under one native archive, and completed a real Keycloak login and
+audited administrator setup. A read-only check on 2026-09-13 found that deployment
+still at schema 0019 while the current application package expects 0024; its schema
+compatibility check fails until migrations 0020 through 0024 are explicitly applied.
 See [migration evidence](postgresql-migration-evidence.md) for recorded results.
 
 The final native/composition check passed 806 tests with no skips. An actual

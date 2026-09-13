@@ -15,6 +15,24 @@ select entities; an old token cannot select an old payload. Known process-memory
 tokens only suppress payload transfer when they match the current database keys.
 Every hit therefore performs current authorization in a repeatable-read snapshot.
 
+Migration `0024_bounded_cache_keys.sql` generates selected keys directly from
+their entities and relevant sources. Planning keys inspect the selected projects'
+task, whole-project and legacy predecessor references; capacity keys inspect
+visible consumers of the selected pools. The native scope resolver's sorted
+membership vector is reused in the access fingerprint. Database identity,
+catalog/security revisions and all required revision-row checks remain complete,
+including for an empty selection. The resulting keys are identical to the
+original implementation, so persisted entries survive the upgrade unchanged.
+
+A real PostgreSQL regression adds 5,000 unrelated tasks and dependencies to an
+existing 10,001-project graph. Selected query work stays stable: planning uses
+645/642 buffer accesses before/after the added rows, and capacity uses 973/970.
+The preserved old helper uses 4,466/4,735 and 4,463/4,732 respectively, failing the
+same regression. The disposable fixture explicitly vacuums bulk-seed revision
+rows before both measurements, avoiding dependence on autovacuum timing. These
+query-work checks and [recorded results](benchmarks/bounded-cache-key-results.json)
+remain separate from browser-load acceptance.
+
 On a miss, the server calculates outside cache locks and transactions. Capacity
 inputs and planning header aggregates are read in their own consistent snapshots.
 Publication runs separately in a serializable transaction. It validates all

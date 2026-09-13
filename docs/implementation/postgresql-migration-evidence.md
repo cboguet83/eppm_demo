@@ -11,6 +11,23 @@
   edit controls, including removal of Reload latest.
 - No planning-revision or stale-form feature is part of this migration.
 
+## Current deployment status checked on 2026-09-13
+
+The ordinary local application's configured PostgreSQL database has 19 applied
+migrations, ending at `0019_operator_seed_state.sql`. Its bind-mounted application
+package contains 24 migrations. A read-only `check_schema` call using the existing
+runtime credentials raises `SchemaCompatibilityError`: the local deployment is
+behind the feature branch and requires migrations 0020 through 0024 followed by
+deployment validation. Container health alone does not establish schema
+compatibility. This inspection did not migrate, restart or modify the deployment.
+
+All business adapters and the native runtime are implemented. Final acceptance
+still requires the complete authenticated 50-session comparison and a refreshed
+full regression/coverage run after the performance fixes. Representative deployed
+restart/restore passed at schema 0022; final deployment checks must cover the later
+migrations too. Historical milestone notes below describe their recorded
+checkpoints rather than the current deployment.
+
 ## Host recorded on 2026-09-12
 
 - Windows host; Python 3.14.6 in the project virtual environment.
@@ -38,16 +55,17 @@ preserves UI behavior and makes the existing regression suite reproducible.
 | Milestone | State | Evidence / remaining work |
 | --- | --- | --- |
 | 1. Baseline and decisions | Baseline captured | ADR, full baseline test results, workload and service timings recorded. Browser load comparison remains an acceptance gate. |
-| 2. PostgreSQL foundation | Implemented, focused checks pass | Configuration, restricted process pool/lifecycle, 23 explicit migrations, Compose, operator provisioning and isolated tests. Final deployment acceptance remains. |
+| 2. PostgreSQL foundation | Implemented, focused checks pass | Configuration, restricted process pool/lifecycle, 24 explicit migrations, Compose, operator provisioning and isolated tests. Final deployment acceptance remains. |
 | 3. Schema and enforcement | Implemented, full regression passes | Native integrity, RLS, actor binding, immutable Finance/audit, access administration and private derived caches are exercised in the completed full suite. |
 | 4. Core repositories | Implemented, focused checks pass | All business adapters use native callbacks; exact money inputs and database-backed browser fixtures are ported. |
 | 5. Planning and caches | Implemented, focused checks pass | Native scheduling, resources, staffing, cache invalidation, bounded portfolio/dashboard queries and HTTP task reads. Fifty-user performance acceptance remains. |
 | 6. Runtime cutover | Implemented, focused checks pass | Composition, authentication, operator/seed tools and planning diagnostics use PostgreSQL. Legacy runtime and test history is archived outside active packages. |
-| 7. Acceptance and documentation | Partially complete | Full regression passes with 98.92% coverage; C4 and native documentation are updated. Authenticated 50-user comparison and representative deployed recovery/restart remain. |
+| 7. Acceptance and documentation | Partially complete | Earlier full regression passed with 98.92% coverage and representative deployed recovery/restart passed at schema 0022. C4 and native documentation are updated. Authenticated 50-user comparison, final regression refresh and deployment checks covering later migrations remain. |
 
 ## Performance acceptance
 
-Browser acceptance is not yet measured or accepted. Fixture: 10,001 projects, seed 42, existing task
+Short browser pilots are recorded below; the complete acceptance workload has
+not been run or accepted. Fixture: 10,001 projects, seed 42, existing task
 bounds 0–15, representative dependencies and allocations. Compare SQLite and
 PostgreSQL under equivalent recorded conditions. Run 40 readers and 10 editors
 at approximately two-second intervals, three ten-minute measurements after
@@ -2275,3 +2293,41 @@ removed. Next investigation remains the repeated task/badge refresh path and
 bounded cache-key reads: `current_cache_keys` currently constructs full revision
 metadata before filtering selected entities. Full responsiveness, monitoring and
 regression/coverage acceptance remain open.
+
+## Bounded native cache-key generation
+
+Migration `0024_bounded_cache_keys.sql` removes full-portfolio dependency/demand
+expansion from selected cache reads and publication checks. It retains the exact
+existing key format and complete access membership, actor/session identity,
+catalog/security revisions and required metadata checks. Source rows are selected
+before dependency and pool-consumer versions are collected. No applied migration,
+public cache-reader signature, table, runtime role or browser freshness check was
+changed.
+
+The first query investigation separated selected graph work from bulk-seed row
+versions. The regression now starts with explicitly vacuumed revision rows in its
+disposable fixture and measures how adding 5,000 unrelated tasks/dependencies
+affects the selected query. A ratio against a full bulk read was unsuitable for
+capacity: bulk sequential scans can use fewer buffers per entity than individual
+index lookups. The final check directly measures the intended independence from
+unrelated graph growth and rejects the preserved old implementation for both
+cache kinds.
+
+On the same synthetic workload, old planning-key buffer accesses increased from
+4,466 to 4,735 and old capacity-key accesses from 4,463 to 4,732. New planning
+reads used 645/642 and capacity reads 973/970. Recorded selected execution times
+were 10.697 ms planning and 7.426 ms capacity before the extra rows. These are
+diagnostic database measurements, not 50-session browser acceptance. See
+[the bounded-key evidence](benchmarks/bounded-cache-key-results.json).
+
+The related native/cache/permission/migration/HTTP/import run passed 155 checks.
+Its new upgrade fixture initially omitted the required session-limit configuration;
+after correcting that fixture, the final **ten targeted checks passed in 22.21
+seconds**. They verify unchanged keys, bounded work, missing-metadata rejection,
+hidden-project isolation and reuse of entries published against schema 0023.
+The upgrade preserves all previous ledger checksums. Expanded parity cases cover
+task dependencies, whole-project dependencies and legacy predecessor references.
+Logs: `.local/postgresql-bounded-cache-functional.log`,
+`.local/postgresql-old-cache-growth.log` and
+`.local/postgresql-bounded-cache-final.log`. Browser validation of this migration
+and final acceptance remain pending.
