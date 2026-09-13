@@ -24,10 +24,11 @@ this change does not apply the finance grid's cent rounding to project budgets.
 `PostgresBudgetReader` selects only visible project identity, name, status and
 budget amounts. Row policies filter before reporting, and no custom property
 hydration is needed. Tests verify exact stored amounts and report arithmetic.
-The browser project editors still use numeric form values; removing that float
-round trip remains required before end-to-end monetary acceptance. The staged
-SQLite adapter converts Decimal only at its existing REAL storage boundary and
-will be archived with the legacy runtime.
+The browser project editors now transport decimal strings and validate them
+before saving, including values beyond JavaScript's exact integer range. The
+deployed smoke check and native regressions are recorded in the
+[runtime guide](postgresql-runtime.md#exact-project-money-forms). The former
+SQLite adapter is retained only in the historical archive.
 
 ## Identity and shared WBS capacity
 
@@ -89,9 +90,10 @@ statements covered (100%)** in this run.
 ```
 
 Output: `.local/postgresql-projects-native.log`; coverage:
-`.local/postgresql-projects-coverage.json`. Runtime composition remains staged.
-Planning, pools/capacity, portfolio/finance, cache revisions, tools, browser money
-inputs and the full regression, performance and recovery gates remain pending.
+`.local/postgresql-projects-coverage.json`. All business/runtime/tool ports and
+exact browser money inputs are now implemented. Full regression/coverage,
+authenticated performance and representative deployed recovery remain required;
+see [current migration evidence](postgresql-migration-evidence.md).
 ## Whole-share storage after runtime cutover
 
 Migration 0021 prevents PostgreSQL's implicit integer rounding from accepting

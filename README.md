@@ -16,6 +16,10 @@ load testing and recovery acceptance remain open. The
 checks already performed. Existing SQLite files are retained without importing
 their business data or application accounts into PostgreSQL.
 
+The [PostgreSQL C4 architecture](docs/implementation/postgresql-architecture.md)
+separates system context, containers, runtime components and a concrete planning
+code example, including the operator/runtime credential boundary.
+
 The layered migration now covers **project types, project creation/editing/deletion,
 portfolio browsing, schema administration, organization management, resource pools,
 capacity calculations, tag management, planning, project collaboration, and budget

@@ -1,8 +1,8 @@
 # PostgreSQL organization repository
 
-This is an implemented part of the migration branch. The current application
-composition still uses the existing SQLite repositories until the remaining
-business subsystems are ready for cutover.
+The application composes this native repository through the restricted PostgreSQL
+runtime. The previous SQLite implementation is retained only in the historical
+archive; see the [runtime guide](postgresql-runtime.md) for current composition.
 
 ## Contracts and behavior
 

@@ -48,10 +48,9 @@ no day-dependent values and use a fixed cache day.
 
 `PostgresCapacityCache` implements the existing capacity-cache port.
 `PostgresPlanningGateway.get_project_summaries` owns summary caching, so the public
-planning service no longer requires all summary reads to use a writer. The legacy
-gateway retains its existing transaction behavior until runtime archival. Final
-composition must inject one `DerivedCacheState` per process into native gateways;
-the PostgreSQL runtime cutover remains a separate unfinished milestone.
+planning service no longer requires all summary reads to use a writer. Runtime
+composition injects one process-owned `DerivedCacheState` into the native gateways.
+The previous SQLite gateway is retained only in the historical archive.
 
 ## C3: components
 
@@ -99,8 +98,8 @@ Logs: `.local/postgresql-derived-cache-validation.log` and
 `.local/postgresql-derived-cache-coverage.json`.
 
 [Portfolio reads](postgresql-portfolio.md) and [dashboard reads](postgresql-dashboard.md)
-are now ported. Final composition/operator/seed/benchmark cutover remains.
-The migration also requires project monetary-input conversion, SQLite runtime
-archival, final application coverage, the 50-user browser measurements and
-backup/restore/restart acceptance. These cache tests do not establish browser
-performance or completion of the overall migration.
+are ported, as are runtime/operator/seed/benchmark composition and exact project
+money inputs. SQLite runtime sources are archived. Full regression/coverage,
+50-user browser measurements and representative backup/restore/restart acceptance
+remain required. These cache tests do not establish browser performance or
+completion of the overall migration.

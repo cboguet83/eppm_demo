@@ -75,8 +75,9 @@ seconds**, with **160/160 native statements covered (100%)**. The real-browser
 suite passed **3 tests in 9.29 seconds**, including exact decimal facet selection
 through the component; the captured pytest exit code is **0**. Existing Playwright
 shutdown warnings remain in that log. **15 JavaScript component tests** passed.
-Browser layout tests still use staged legacy composition; the decimal test uses
-the real component with an explicit exact-value fixture.
+Those browser layout results used the then-staged legacy composition; the decimal
+test uses the real component with an explicit exact-value fixture. Layout fixtures
+have since been ported to PostgreSQL; see the current migration evidence log.
 
 The final combined portfolio/service/transport/layer run passed **54 tests in
 26.79 seconds**, covering **203/203 statements (100%)** across the portfolio
@@ -106,8 +107,8 @@ Logs: `.local/postgresql-portfolio-validation.log`,
 ## Remaining migration work
 
 The [dashboard reader](postgresql-dashboard.md) now has its native port,
-including the existing aggregate-only competing-demand behavior. Runtime/operator/seed/benchmark
-cutover, shared process-state injection, project monetary-input conversion and
-SQLite runtime archival remain. Final application coverage, authenticated native
-browser operation, three 50-user measurements and backup/restore/restart gates
-are still required before the migration can be accepted.
+including the existing aggregate-only competing-demand behavior. Runtime, tools,
+shared process state and exact project money forms are ported; SQLite runtime
+sources are archived. Full regression/coverage, three authenticated 50-user
+measurements and representative deployed backup/restore/restart acceptance remain
+required. Focused browser results are recorded in the migration evidence log.

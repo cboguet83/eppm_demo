@@ -3,8 +3,9 @@
 The foundation milestones below record the staged migration. Application,
 authentication and operator composition now use PostgreSQL on the feature
 branch; see [current runtime deployment](postgresql-runtime.md). Existing SQLite
-archives and Keycloak files/volumes are retained. Final migration acceptance,
-legacy test/tool porting and representative browser/recovery gates remain open.
+archives and Keycloak files/volumes are retained. Legacy runtime sources are
+archived and active tests/tools are ported. Full regression/coverage and
+representative browser-load/deployed recovery acceptance remain open.
 
 ## Local isolated PostgreSQL setup
 
@@ -100,9 +101,8 @@ only for definite serialization/deadlock rollbacks, at most three attempts.
 Connection loss, statement timeouts and uncertain commits are not replayed.
 Commit/rollback finishes before pool return; reset discards session-level changes
 and temporary relations before a different actor borrows the connection.
-`TransactionRunner` is the database-independent application port for subsequent
-gateway integration. Application composition and ASGI lifecycle integration are
-not yet switched in this additive milestone.
+`TransactionRunner` is the database-independent application port. Application
+composition and ASGI lifecycle integration now use the restricted native pool.
 
 Native administration functions enforce the access-management capability,
 configured MFA and recent authentication before registration, status changes,
@@ -119,7 +119,8 @@ It verifies a prior OIDC identity, performs bootstrap once, and requires explici
 operator/correlation/reason data for recovery. Its caller must own a serializable
 transaction. `PostgresDeploymentAccessGateway` supplies separate, short-lived
 operator connections, verifies the schema and replays the complete service
-callback only after a definite rollback. Operator CLI wiring remains pending.
+callback only after a definite rollback. The native access-administration CLI
+uses this separate operator gateway.
 
 ## Authentication and callback contracts
 
@@ -158,16 +159,15 @@ administrator. Invalid/dangling references return a typed miss so the same
 read snapshot can still evaluate other grants. Public SQL permission helpers
 and business RLS continue to hide project IDs from finance-only users.
 
-The launcher now uses the access callback contract but still composes the
-existing SQLite repositories explicitly. PostgreSQL authentication is exercised
-through native service and Authlib HTTP integration tests; production composition
-switches when the remaining business repositories are ready.
+The launcher uses the access callback contract and native PostgreSQL repositories.
+Authentication is exercised through native service, Authlib HTTP integration and
+real provider/browser tests. Historical SQLite implementations are archived.
 
 The [organization repository](postgresql-organization.md) now uses the same
 callback runner and actor binding for native functions, teams, employees,
 calendar exceptions and optional hierarchy types. Its service integration and
-minimal name directory are implemented and tested; application composition
-remains staged until the remaining repositories are ported.
+minimal name directory are implemented and tested, and application composition
+now injects the native gateway.
 
 [Project templates and typed property values](postgresql-project-types.md) now
 also use native adapters and complete callbacks. Numeric defaults round-trip as
@@ -182,7 +182,7 @@ verified with restricted PostgreSQL connections and concurrent service calls.
 [Tags](postgresql-tags.md) now use the same callback runner for native catalog
 management, scoped assignments, batched links and consistent task-tag pages.
 Native policies apply before counts and paging, and old/new owner guards protect
-assignment moves. Application composition remains staged for the later cutover.
+assignment moves. Application composition injects the native gateway.
 
 [Project collaboration](postgresql-collaboration.md) now uses native callbacks
 for contacts, roles, log events and useful links. A bounded native contact
@@ -193,7 +193,7 @@ project; general function selectors continue to use the minimal name directory.
 callbacks, batched typed property writes and Decimal project budgets. Global WBS
 remainder is exposed through a bounded aggregate without hidden project IDs;
 explicit and generated project identities share narrowly scoped coordination.
-Browser money inputs and final runtime composition still require cutover work.
+Browser money inputs and runtime composition now retain exact native amounts.
 
 [Resource pools and assignments](postgresql-resource-pools.md) now use native
 callbacks for catalog/tag saves, recursive groups, mapping upserts and scoped
@@ -203,15 +203,15 @@ preserved inputs are tested. Capacity and cache ports are described below.
 [Finance plans](postgresql-finance.md) now use native immutable snapshots,
 Decimal euros and complete callbacks. Finance access remains independent of
 project scope. Concurrent numbering/cancellation, authenticated downloads,
-exact chart values and existing dashboard rounding are verified; final runtime
-composition and project-budget form conversions remain staged.
+exact chart values and existing dashboard rounding are verified. Runtime
+composition and exact project-budget forms are implemented in the runtime guide.
 
 [Task scheduling and dependencies](postgresql-planning.md) now use complete native
 callbacks, scoped recursive graphs and batched task bundles. Concurrent saves,
 hidden endpoint protection, ISO date boundaries, all four summary warning rules
 and complete replacement rollback are verified. Migration 0014 preserves the
 existing template lag range. Native summary caches now separate read snapshots
-from guarded publication; runtime cutover remains.
+from guarded publication and share the process-owned native cache.
 
 [Capacity inputs and calculations](postgresql-capacity.md) now use bounded native
 staffing aggregates and scoped assignment snapshots. Project readers retain pool
@@ -228,7 +228,7 @@ snapshot. Project writers avoid a global counter and shared pool revisions.
 [Native derived caches](postgresql-derived-caches.md) now persist scoped capacity
 and planning payloads, reauthorize memory hits, bound process memory and publish
 only with transaction-bound proofs and current source keys. Runtime composition
-and process-state injection remain part of the later PostgreSQL-only cutover.
+injects the same process-owned state into native gateways.
 
 [Portfolio reads](postgresql-portfolio.md) now use native scoped counts, ID-first
 pagination, shared facet statistics, exact decimal transport and minimal manager
@@ -237,8 +237,8 @@ references.
 [Dashboard reads](postgresql-dashboard.md) now preserve scoped catalogs, exact
 finance allocations and aggregate-only competing demand inside PostgreSQL.
 Opaque revisions track relevant sources, and quarterly resource/drill-through
-reads preserve current scope and calendar behavior. Runtime composition remains
-the next integration stage.
+reads preserve current scope and calendar behavior. Runtime composition is
+implemented in the [native runtime guide](postgresql-runtime.md).
 
 `RuntimeResources` now groups a closed restricted pool, the request signing key
 and one bounded derived-cache state for explicit injection by the launcher. Its
@@ -247,7 +247,7 @@ cleanup on normal shutdown, application failure and cancellation. Construction
 does not connect; startup does not migrate or seed. An opaque process identity
 is available for resetting presentation state after a restart, independently of
 the database-incarnation checks in source cache tokens. The ordinary launcher
-has not yet switched to this resource.
+owns this resource through the supported Streamlit lifespan.
 
 Native lifecycle, pool/foundation and layer checks passed **58 tests in
 10.66 seconds**, with **31/31 resource-module statements covered (100%)**.
@@ -259,8 +259,8 @@ demo definitions, template validation, exact budgets, editable hierarchy
 catalogs and retained account/finance history. The complete native maintenance
 port and CLI now include bulk projects, pool scenarios and configurable
 allocation previews. Reviewed allocation plans reuse pure capacity rules and
-apply atomically under one archive. Ordinary startup and legacy wrappers await
-the coordinated runtime/authentication cutover.
+apply atomically under one archive. Command wrappers use native maintenance;
+ordinary startup performs no automatic seeding or migration.
 
 [PostgreSQL archives and isolated restoration](postgresql-backups.md) now use
 native clients with private connection environments and safe errors. The

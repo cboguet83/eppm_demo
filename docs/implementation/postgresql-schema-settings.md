@@ -50,10 +50,9 @@ flowchart LR
     SQL --> Guards[RLS, constraints, scope lifetimes and protected-change audit]
 ```
 
-The existing SQLite gateway provides a temporary callback bridge for the running
-application. It remains staged for removal with the other legacy repositories;
-there is no PostgreSQL adapter around SQLite SQL or runtime fallback. Runtime
-composition changes only after the remaining repositories are ready.
+Application composition injects the native gateway with the shared restricted
+pool and current actor. The former SQLite callback bridge is archived outside
+the runtime; there is no SQLite SQL adapter or fallback.
 
 ## Validation
 
@@ -79,5 +78,6 @@ The broader verification command is:
 
 Output: `.local/postgresql-schema-native.log`. Subsystem results are recorded in
 [migration evidence](postgresql-migration-evidence.md). These checks do not prove
-the pending full-codebase coverage, runtime cutover, backup/restore or 50-browser-
-user performance gates.
+the pending full-codebase coverage, representative deployed recovery or 50-user
+browser performance gates. Runtime cutover is implemented separately in the
+[native runtime guide](postgresql-runtime.md).

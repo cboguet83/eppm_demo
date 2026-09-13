@@ -96,7 +96,7 @@ acceptance remain pending.
 
 ## Remaining migration work
 
-The native business read/write ports are now staged for runtime integration.
-Composition, authentication lifecycle, process cache injection, operator/seed
-and benchmark tools, exact project money inputs and legacy archival still need
-the PostgreSQL-only cutover. No final load-performance claim is made here.
+Native runtime composition, authentication lifecycle, shared caches, operator/
+seed/benchmark tools and exact project money inputs are implemented. SQLite
+runtime sources are archived. Full regression/coverage, authenticated 50-user
+responsiveness and representative deployed recovery remain acceptance gates.

@@ -2032,3 +2032,20 @@ startup, the layered application screens, operator commands and all diagnostics:
 `.local/postgresql-runtime-archive-validation.log`. Full regression/95% coverage,
 authenticated load comparison, representative deployed recovery/restart and final
 documentation review remain open acceptance gates.
+
+## Native architecture and documentation review
+
+The [implemented C4 architecture](postgresql-architecture.md) separates system
+context, runtime/operator containers, application components and a focused planning
+code diagram. Names, injected dependencies, callback ownership and pool lifecycle
+were checked against the current composition, service, gateway, store and binding
+implementations. Subsystem guides now distinguish their historical staged test
+results from current native composition, exact money forms and archived SQLite
+sources. Seventy-eight relative documentation links were checked successfully.
+
+The complete JavaScript component suite passed **71 tests, no failures or skips**
+in `.local/postgresql-javascript-full-native.log`. The current application built
+successfully as the separate local image `eppm-demo:postgresql-acceptance`, recorded
+in `.local/postgresql-acceptance-build.log`. The full Python/native/Streamlit and
+real Keycloak browser run is tracked separately; these build/component results do
+not establish full application coverage or load/recovery acceptance.

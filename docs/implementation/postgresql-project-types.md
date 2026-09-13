@@ -4,8 +4,8 @@ Project-type services now use complete callbacks through
 `PostgresProjectTypeGateway`. Each attempt binds the actor and rechecks
 authorization, rename/deletion guards and property applicability in the same
 transaction. The service copies list defaults before starting an operation so a
-retry uses the original selection input. The current application composition
-remains on SQLite until all required repositories are ready for cutover.
+retry uses the original selection input. Application composition injects the
+native gateway with the process pool and current business actor.
 
 ## Preserved contracts
 
@@ -39,8 +39,8 @@ Integer and Decimal inputs persist exactly; existing numeric form inputs are
 converted once at the storage boundary. New migration
 `0010_finite_property_numbers.sql` enforces the finite-number invariant for both
 project values and template defaults, including direct SQL writes. It adds no
-rounding or numeric scale. This does not complete the separate pending port of
-project budget fields and financial calculations to Decimal.
+rounding or numeric scale. Project budget fields and financial calculations use
+their separately implemented Decimal paths; see the project and Finance guides.
 
 Rules, default values, selection items and their required protected-change audit
 commit or roll back together. Native database diagnostics are translated to the
@@ -88,5 +88,6 @@ The broad native command was:
 .venv/Scripts/python.exe -m dotenv -f .local/postgresql.env run -- .venv/Scripts/python.exe -m pytest -q -p no:cacheprovider tests/postgresql/test_project_types.py tests/postgresql/test_business_security.py tests/postgresql/test_scope_resolution.py tests/postgresql/test_foundation.py --cov=app.infrastructure.postgresql.project_types --cov=app.infrastructure.postgresql.property_store --cov-report=term-missing
 ```
 
-These results validate this subsystem. Full-codebase coverage, runtime cutover,
-browser performance and recovery acceptance remain separate pending gates.
+These results validate this subsystem. Runtime cutover is implemented; full
+regression/coverage, browser performance and representative deployed recovery
+remain separate acceptance gates.

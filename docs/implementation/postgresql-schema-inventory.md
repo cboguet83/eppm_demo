@@ -3,7 +3,8 @@
 Source: the final SQLite schema produced by accepted commit `f564a5b`, captured
 from the isolated 10,001-project fixture. The complete generated `sqlite_schema`
 inventory is retained locally at `.local/migration-baseline/sqlite-schema.json`.
-Applied SQLite migration sources remain unchanged until archival outside runtime.
+Applied SQLite migration sources are preserved unchanged in
+`docs/archive/sqlite/app/infrastructure/database/`, outside the active runtime.
 
 ## Existing invariants to preserve
 
@@ -64,8 +65,8 @@ The native business baseline and permanent integrity triggers are implemented in
 `0002_business_schema.sql` and `0003_integrity.sql`. Native type round trips and
 concurrent pool-group, calendar and WBS integrity checks pass against PostgreSQL.
 Business ownership/RLS and protected-property audit are implemented in
-`0006_business_security.sql`. Security transitions, cache redesign and repository
-adapters remain required before runtime cutover.
+`0006_business_security.sql`. Security transitions, native caches and repository
+adapters are implemented in the later migrations and runtime modules.
 
 Private scope helpers and categorical-reference lifetime triggers are implemented
 in `0004_scope_resolution.sql`. Structure validation is checked against the domain
@@ -75,7 +76,7 @@ normalizer. Arbitrary scope-resolution functions have no runtime execution grant
 `0006_business_security.sql` installs RLS and old/new-owner guards for all 45
 existing business tables. `0007_access_administration.sql` adds self/admin read
 policies and bounded, audited administration operations; identity/session/state
-storage remains private pending the authenticated server interface. Employee contact and
+storage is private and accessed through signed server operations. Employee contact and
 staffing rows require organization administration; a permanent manager-label
 projection preserves the portfolio catalog. A permanent task projection masks
 hidden predecessor IDs, and the base predecessor column has no runtime SELECT

@@ -53,7 +53,7 @@ for each endpoint. Overload intervals and warnings use the same pure calculation
 
 Staffing details are checked against current shared permission again before the
 calculation returns. Revision/scope validation around cache reuse and publication
-remains part of the separate required cache port.
+is implemented by the [native derived caches](postgresql-derived-caches.md).
 
 ## C3: components
 
@@ -103,5 +103,6 @@ Logs: `.local/postgresql-capacity-legacy.log`,
 This ports capacity inputs and calculations. [Native derived
 caches](postgresql-derived-caches.md) now add private storage, current scoped
 tokens, bounded process memory and guarded publication. Portfolio queries,
-native runtime/operator cutover, project money forms, full application coverage,
-the 50-user browser benchmark and backup/restore/restart acceptance remain.
+runtime/operator composition and project money forms are ported. Full application
+coverage, the 50-user browser benchmark and representative deployed
+backup/restore/restart acceptance remain required.

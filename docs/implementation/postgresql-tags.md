@@ -2,9 +2,9 @@
 
 `TagService` now uses whole-operation callbacks through `PostgresTagGateway`.
 The native store implements tag groups, dictionary entries, project/task/pool
-assignments, batched links, and paged task-tag queries. The existing SQLite
-gateway provides a temporary callback bridge until the remaining repositories
-and application composition are replaced. No new SQL migration is required.
+assignments, batched links, and paged task-tag queries. Application composition
+injects the native gateway; the former SQLite callback bridge is archived.
+This adapter port required no additional SQL migration.
 
 ## Behavior and authorization
 
@@ -75,5 +75,6 @@ retained original pool commands after rollback.
 Output: `.local/postgresql-tags-native.log`; coverage:
 `.local/postgresql-tags-coverage.json`. Results are recorded in
 [migration evidence](postgresql-migration-evidence.md). These are subsystem
-checks; runtime cutover, the remaining repositories, cache revisions, full
-coverage and the 50-browser-user performance/recovery gates remain pending.
+checks. The runtime, repositories and cache ports are now implemented. Full
+regression/coverage, 50-user browser performance and representative deployed
+recovery remain acceptance gates.

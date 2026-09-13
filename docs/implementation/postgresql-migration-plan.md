@@ -2,12 +2,14 @@
 
 Planning date: 2026-09-10.
 
-Status: implementation in progress on `codex/postgresql-migration`; acceptance
-remains incomplete. See [current evidence](postgresql-migration-evidence.md).
+Status: native runtime, tools and test ports are implemented on
+`codex/postgresql-migration`; final acceptance remains incomplete. See
+[current evidence](postgresql-migration-evidence.md) and the
+[implemented C4 architecture](postgresql-architecture.md).
 Scope is the PostgreSQL migration only.
 
 The 2026-09-13 merge/push request releases the validated committed checkpoint,
-while preserving the unfinished runtime cutover on the feature branch. See the
+while preserving the then-unfinished runtime cutover on the feature branch. See the
 [interim checkpoint evidence](postgresql-migration-evidence.md#interim-main-checkpoint-requested-on-2026-09-13)
 and the delivery note in [ADR 0024](../decisions/0024-postgresql-runtime.md).
 The final migration acceptance checklist remains open.
@@ -295,14 +297,14 @@ changed since planning.
 
 ## 7. Completion checklist
 
-- [ ] Migration branch and starting commit recorded; unrelated work preserved.
-- [ ] Superseding ADR and accurate C4 documentation completed.
-- [ ] PostgreSQL schema, migrations, connections, and deployment tooling complete.
-- [ ] Preparatory version columns, planning revisions, and stale-edit handling remain outside this plan.
-- [ ] All repositories, authentication storage, maintenance tools, and benchmarks ported.
+- [x] Migration branch and starting commit recorded; unrelated work preserved.
+- [x] Superseding ADR and accurate C4 documentation completed.
+- [x] PostgreSQL schema, migrations, connections, and deployment tooling complete.
+- [x] Preparatory version columns, planning revisions, and stale-edit handling remain outside this plan.
+- [x] All repositories, authentication storage, maintenance tools, and benchmarks ported.
 - [ ] Authorization, audit, transaction, cache, and monetary guarantees verified.
-- [ ] Active runtime and tests use PostgreSQL; legacy SQLite migration history retained.
-- [ ] Relevant intermediate commits made with passing checks and reviewed diffs.
+- [x] Active runtime and tests use PostgreSQL; legacy SQLite migration history retained.
+- [x] Relevant intermediate commits made with passing checks and reviewed diffs.
 - [ ] Full regression and coverage requirements satisfied.
 - [ ] Fifty-user responsiveness target met with recorded evidence.
 - [ ] Fresh setup, restart, backup/restore, and recovery procedures verified.

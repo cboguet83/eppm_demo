@@ -101,6 +101,6 @@ Logs: `.local/postgresql-revisions-native.log`,
 [Native capacity/planning caches](postgresql-derived-caches.md) now use these
 fingerprints for current reads and guarded publication. The digest serialization
 matches PostgreSQL JSONB array formatting, verified against both cache kinds and
-multiple scopes. Runtime composition remains staged. Portfolio queries,
-runtime/operator cutover, project monetary inputs and all final application
-coverage, 50-user browser and recovery acceptance gates remain pending.
+multiple scopes. Runtime composition, portfolio queries, operator tools and exact
+project money inputs now use the native adapters. Full application coverage,
+50-user browser and representative deployed recovery acceptance remain required.

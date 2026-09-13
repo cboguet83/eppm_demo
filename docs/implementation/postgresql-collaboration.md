@@ -26,8 +26,7 @@ details. A subsequent transaction sees changed assignments and current grants.
 General `function_choices` use the existing minimal employee-name directory and
 return only function identity/name and occupant names. They never fetch phone
 fields. Shared-administration `list_functions` uses the employee table under its
-existing management-only row policies. The legacy SQLite adapter retains its
-existing projection during staging; no employee read policy is broadened.
+existing management-only row policies. No employee read policy is broadened.
 
 Contacts retain repeated-role behavior, unique `(project, role, function)`
 assignments and current-occupant resolution. Multiple occupants use stable
@@ -69,9 +68,9 @@ flowchart LR
     Tables --> Guards[RLS, owner guards and native constraints]
 ```
 
-The application still explicitly composes SQLite while remaining repositories
-are ported. Its collaboration gateway provides a temporary callback bridge; the
-final runtime will use PostgreSQL without a fallback or SQLite data import.
+The application composes the native collaboration gateway through the restricted
+PostgreSQL runtime. The temporary SQLite callback bridge is retained only in the
+historical archive; there is no runtime fallback or SQLite data import.
 
 ## Validation
 
@@ -94,6 +93,6 @@ canonical name and English translation match after both edits finish.
 
 Output: `.local/postgresql-collaboration-native.log`; coverage:
 `.local/postgresql-collaboration-coverage.json`. Results are recorded in
-[migration evidence](postgresql-migration-evidence.md). Remaining repositories,
-cache revisions, runtime/tools cutover, full coverage, browser performance and
-recovery acceptance remain pending.
+[migration evidence](postgresql-migration-evidence.md). Runtime, repository, cache
+and tool ports are implemented. Full regression/coverage, browser performance and
+representative deployed recovery remain acceptance gates.

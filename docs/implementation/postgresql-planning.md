@@ -3,8 +3,8 @@
 `PlanningService` now executes complete database callbacks through
 `PostgresPlanningGateway`. The native adapter covers task reads and edits, CSV
 imports/exports, schedule templates, dependencies, recursive project filters,
-summary headers and batched task metadata. The legacy gateway has a temporary
-callback bridge while application composition awaits the PostgreSQL-only cutover.
+summary headers and batched task metadata. Application composition injects the
+native gateway; the former SQLite callback bridge is archived outside runtime.
 
 ## Transactions and scheduling contracts
 

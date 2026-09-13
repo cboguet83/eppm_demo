@@ -72,6 +72,7 @@ passed **17 checks in 7.53 seconds**. Logs: `.local/postgresql-resource-pools-na
 `.local/postgresql-resource-pools-followup.log`. Coverage:
 `.local/postgresql-resource-pools-coverage.json`.
 
-The runtime remains staged on SQLite. Capacity calculations/cache revisions,
-scheduling, portfolio/finance, browser monetary inputs, runtime/tools cutover and
-full regression, browser responsiveness and recovery acceptance remain pending.
+The runtime, capacity/cache integration, scheduling, portfolio/finance, exact
+money inputs and tools now use PostgreSQL. Full regression/coverage, authenticated
+browser responsiveness and representative deployed recovery remain acceptance
+gates; see [current migration evidence](postgresql-migration-evidence.md).

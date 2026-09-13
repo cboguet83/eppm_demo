@@ -23,10 +23,9 @@ A deliberately sized local Decimal context protects calculations from an
 unrelated caller's low precision. The Vega chart converts final display
 coordinates to float; tables and exports retain exact decimal text.
 
-The legacy SQLite adapter temporarily converts its integer cent columns only at
-the storage boundary and will be archived at runtime cutover. The separate
-project-budget form widgets still need their float round-trip removed; this
-finance milestone does not claim those forms are done.
+The legacy SQLite adapter is retained only in the historical archive. Separate
+project-budget forms now transport exact decimal strings; their native/browser
+validation is recorded in the [runtime guide](postgresql-runtime.md#exact-project-money-forms).
 
 ## History, atomicity and replay
 
@@ -89,8 +88,10 @@ flowchart LR
   `.local/postgresql-finance-browser-exit.txt`. Playwright emits shutdown-task
   warnings; an earlier shell-redirection run reported an error despite eight
   passing tests, so the follow-up captured process status directly. Browser
-  tests use the staged SQLite composition. Native storage and sessions are
-  exercised by the PostgreSQL integration/HTTP suite.
+  tests used the then-staged SQLite composition. Those original tests are now
+  archived and their native browser ports are recorded in the current
+  [migration evidence](postgresql-migration-evidence.md). Native storage and
+  sessions are exercised by the PostgreSQL integration/HTTP suite.
 
 ```powershell
 .venv/Scripts/python.exe -m dotenv -f .local/postgresql.env run -- .venv/Scripts/python.exe -m pytest -q --tb=short -p no:cacheprovider tests/postgresql/test_finance.py tests/postgresql/test_finance_http.py tests/postgresql/test_integrity.py tests/postgresql/test_business_security.py tests/postgresql/test_foundation.py tests/test_finance.py tests/test_dashboard.py --cov=app.infrastructure.postgresql.finance --cov=app.application.services.finance --cov=app.domain.finance --cov-report=term-missing --cov-report=json:.local/postgresql-finance-coverage.json
@@ -100,6 +101,6 @@ Native checks also cover exact maximum amounts under low Decimal precision,
 direct database amount bounds, sealed-history tampering, old-source saves,
 consistent reads, copied inputs after rollback, revocation before retried
 binding, safe errors and account checks on every authenticated download.
-Runtime composition, planning/capacity, portfolio/dashboard repositories, cache
-revisions, project money inputs, tools and final regression, responsiveness and
-recovery gates remain pending.
+Runtime composition, all business repositories/caches, exact project money inputs
+and tools are ported. Full regression/coverage, authenticated responsiveness and
+representative deployed recovery remain acceptance gates.
