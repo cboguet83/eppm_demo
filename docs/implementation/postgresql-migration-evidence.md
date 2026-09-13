@@ -1230,3 +1230,22 @@ Validation: **20 passed in 14.30 seconds**, recorded in
 `.local/postgresql-planning-ui-port.log`. Browser responsiveness and the remaining
 legacy planning/cache/tool ports are still pending; this callback suite is not
 the 50-user browser acceptance measurement.
+
+## Native lazy Settings, tag paging and planning hydration
+
+Settings laziness now uses explicitly created native pools with and without
+demand. It retains selection across reruns, row actions and capacity details
+while forbidding the removed daily chart and reads for hidden tabs. The tag
+paging suite uses 350 native task/tag rows and preserves stable page boundaries,
+literal wildcard search, bounded task choices, deferred editor data and tag saves.
+
+Lazy planning uses native services and caches. After changing a predecessor,
+the current-revision cache interface rejects that project's and its successor's
+old summaries while preserving the unrelated project's valid entry. This tests
+the native revision contract instead of SQLite's physical cache-row deletion.
+Summary-first rendering, bounded hydration, targeted edit patches, stale scope
+tokens and remount behavior retain their original assertions.
+
+Validation: **8 passed in 7.50 seconds**, recorded in
+`.local/postgresql-lazy-ui-final.log`. This does not satisfy the separate full
+regression, deployed recovery or 50-user browser responsiveness requirements.

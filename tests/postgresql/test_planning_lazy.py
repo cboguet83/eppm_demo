@@ -1,28 +1,23 @@
 """Planning summary, bounded hydration and targeted edit regression tests."""
 
-from contextlib import closing
-
-import sqlite3
-import tempfile
-from pathlib import Path
+from datetime import date
 from unittest import TestCase
 from unittest.mock import patch
 
+import pytest
 from streamlit.testing.v1 import AppTest
-from app.infrastructure.database.seeder import seed_default_data_if_empty
-from app.operator_services import create_project_service
-from app.operator_services import create_planning_service
+from app.main import create_project_service, create_planning_service, create_planning_workspace
 from app.application.services.planning import PlanningService
-from app.infrastructure.repositories.portfolio import portfolio_revision
-from app.operator_services import create_planning_workspace
+from app.infrastructure.postgresql.derived_cache import PostgresDerivedCache
 from app.presentation.components.planning_data import load_project_summaries
+from tests.postgresql.ui import runtime as runtime, access as access
 
 
-def lazy_app(db_path):
+def lazy_app(resources, access):
     import streamlit as st
-    from app.operator_services import create_planning_workspace
+    from app.main import create_planning_workspace
     from app.presentation.pages.planning import render_planning_milestones, _handle_gantt_component_change
-    workspace = create_planning_workspace(db_path)
+    workspace = create_planning_workspace(resources, access=access)
     event = st.session_state.pop('test_event', None)
     if event:
         st.session_state['planning_lazy_gantt'] = event
@@ -32,13 +27,11 @@ def lazy_app(db_path):
 
 
 class LazyPlanningTests(TestCase):
-    def setUp(self):
-        self.directory = tempfile.TemporaryDirectory()
-        self.addCleanup(self.directory.cleanup)
-        self.path = str(Path(self.directory.name) / 'test.db')
-        seed_default_data_if_empty(self.path)
-        self.projects = create_project_service(self.path)
-        self.tasks = create_planning_service(self.path)
+    @pytest.fixture(autouse=True)
+    def native_setup(self, runtime, access):
+        self.resources, self.access = runtime, access
+        self.projects = create_project_service(runtime, access=access)
+        self.tasks = create_planning_service(runtime, access=access)
         self.pids = [self.projects.create_project(name='Lazy '+str(i), dynamic_attributes={}) for i in range(3)]
         self.a = self.tasks.create_milestone(self.pids[0], 'Predecessor', 'General', '2026-01-01', '2026-01-10', 0)
         self.b = self.tasks.create_milestone(self.pids[1], 'Successor', 'General', '2026-01-05', '2026-01-06', 0,
@@ -46,16 +39,22 @@ class LazyPlanningTests(TestCase):
         self.c = self.tasks.create_milestone(self.pids[2], 'Unrelated', 'General', '2026-02-01', '2026-02-02', 0)
 
     def test_persistent_summaries_invalidate_the_project_and_linked_successors(self):
-        rows = load_project_summaries(create_planning_workspace(self.path), portfolio_revision(self.path), tuple(self.pids))
+        workspace = create_planning_workspace(self.resources, access=self.access)
+        rows = load_project_summaries(workspace, workspace.revision(), tuple(self.pids))
         self.assertTrue(next(p for p in rows if p['id']==self.pids[1])['hasViolations'])
+        cache = PostgresDerivedCache(self.resources.database, self.resources.key, self.resources.caches,
+                                     access=self.access)
+        before = cache.read('planning', self.pids, date(2000, 1, 1), False, [])
+        self.assertEqual({row[0] for row in before if row[3]}, set(self.pids))
         self.tasks.update_dates(self.a, '2026-01-01', '2026-01-03')
-        with closing(sqlite3.connect(self.path)) as conn, conn:
-            self.assertEqual(conn.execute('SELECT project_id FROM planning_summary_cache').fetchall(), [(self.pids[2],)])
-        rows = load_project_summaries(create_planning_workspace(self.path), portfolio_revision(self.path), tuple(self.pids))
+        # Current source tokens reject affected entries; unrelated data stays valid.
+        after = cache.read('planning', self.pids, date(2000, 1, 1), False, [])
+        self.assertEqual({row[0] for row in after if row[3]}, {self.pids[2]})
+        rows = load_project_summaries(workspace, workspace.revision(), tuple(self.pids))
         self.assertFalse(next(p for p in rows if p['id']==self.pids[1])['hasViolations'])
 
     def test_summary_first_hydration_and_edit_patch_never_resend_unrelated_projects(self):
-        app = AppTest.from_function(lazy_app, args=(self.path,), default_timeout=30)
+        app = AppTest.from_function(lazy_app, args=(self.resources, self.access), default_timeout=30)
         app.session_state['ms_multi_projects'] = self.pids
         with patch('app.presentation.pages.planning._interactive_gantt', return_value=None) as component:
             app.run()
