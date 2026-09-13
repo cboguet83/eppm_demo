@@ -15,9 +15,9 @@
 
 The last read-only check of the ordinary local application's configured PostgreSQL database recorded 19 applied
 migrations, ending at `0019_operator_seed_state.sql`. Its bind-mounted application
-package now contains 27 migrations. A read-only `check_schema` call using the existing
+package now contains 28 migrations. A read-only `check_schema` call using the existing
 runtime credentials raises `SchemaCompatibilityError`: the local deployment is
-behind the feature branch and requires migrations 0020 through 0027 followed by
+behind the feature branch and requires migrations 0020 through 0028 followed by
 deployment validation. Container health alone does not establish schema
 compatibility. This inspection did not migrate, restart or modify the deployment.
 
@@ -55,7 +55,7 @@ preserves UI behavior and makes the existing regression suite reproducible.
 | Milestone | State | Evidence / remaining work |
 | --- | --- | --- |
 | 1. Baseline and decisions | Baseline captured | ADR, full baseline test results, workload and service timings recorded. Browser load comparison remains an acceptance gate. |
-| 2. PostgreSQL foundation | Implemented, focused checks pass | Configuration, restricted process pool/lifecycle, 27 explicit migrations, Compose, operator provisioning and isolated tests. Final deployment acceptance remains. |
+| 2. PostgreSQL foundation | Implemented, focused checks pass | Configuration, restricted process pool/lifecycle, 28 explicit migrations, Compose, operator provisioning and isolated tests. Final deployment acceptance remains. |
 | 3. Schema and enforcement | Implemented, full regression passes | Native integrity, RLS, actor binding, immutable Finance/audit, access administration and private derived caches are exercised in the completed full suite. |
 | 4. Core repositories | Implemented, focused checks pass | All business adapters use native callbacks; exact money inputs and database-backed browser fixtures are ported. |
 | 5. Planning and caches | Implemented, focused checks pass | Native scheduling, resources, staffing, cache invalidation, bounded portfolio/dashboard queries and HTTP task reads. Fifty-user performance acceptance remains. |
@@ -2671,3 +2671,44 @@ Logs: `.local/postgresql-compact-revision-browser.log` and
 The ordinary deployment was not upgraded. The candidate must be deployed with
 all 27 migrations for its next load comparison; final full-duration performance,
 regression/coverage and restart/restore acceptance remain open.
+
+## Compact-candidate load result and session predicate conflict
+
+The `e29fe16` image's short profiled run still failed **19 of 142 measured
+attempts**: paging p95 29,327.9 ms (57 successes, three failures), tasks
+22,679.3 ms (64 successes, eight failures), and saves 6,484.3 ms (two successes,
+eight failures). Including warmup, 32 of 228 attempts failed. PostgreSQL recorded
+36.31 aggregate execution seconds in its 75.02-second window; the runtime still
+recorded 833.37 aggregate seconds of pool waiting and 140 database-call
+serialization failures, including retries. The cheaper revision query does not
+establish end-to-end acceptance. See [the failed load result](benchmarks/compact-fifty-profile-results.json).
+Log: `.local/postgresql-compact-fifty-profile.log`; the isolated deployment was
+removed.
+
+A separate two-session experiment reproduced an avoidable conflict after
+`ANALYZE`. Before statistics refresh, both activity updates completed in one
+attempt and held tuple-level session predicates. After refresh, the planner
+selected sequential scans, both transactions held relation-level session
+predicates, and one update needed a second complete attempt. Favoring existing
+indexes for the actor/session functions restored tuple-level session predicates
+and both updates completed in one attempt. This identifies one reproducible
+source of serialization retries; it does not account for every load failure.
+
+Migration `0028_session_point_plans.sql` applies that function-local planner
+preference to `bind_actor`, `current_actor`, and `session_activity`. The caller's
+planner settings are restored on return. Function bodies, ownership, privileges,
+signed proofs, row locks, isolation and whole-operation retry rules are preserved.
+
+Five focused native regressions passed in 5.03 seconds. They exercise two
+simultaneous activity updates within populations of two or fifty accounts,
+before/after statistics refresh, and verify persisted activity, planner-setting
+restoration and migration history/authority. The broader native foundation,
+authorization, access-administration, business-security and live-session suite
+passed **374 checks in 188.74 seconds**. See [reproduction and regression evidence](benchmarks/session-activity-point-plan-results.json).
+Logs: `.local/postgresql-session-point-regression.log` and
+`.local/postgresql-session-point-security.log`.
+
+The session-plan fix still needs its deployed load comparison. Final acceptance
+also requires the full-duration workload, refreshed full regression/coverage,
+and fresh setup/restart/restore checks with all 28 migrations. The ordinary
+deployment remains separate and was not upgraded.

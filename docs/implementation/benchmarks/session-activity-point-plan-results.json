@@ -1,0 +1,27 @@
+{
+  "scope": "Isolated independent-session conflict reproduction and native regression; not fifty-user acceptance",
+  "experiment": {
+    "log": ".local/postgresql-session-point-plans.log",
+    "xml": ".local/postgresql-session-point-plans.xml",
+    "simultaneous_activity_updates": 2,
+    "cases": [
+      {"table_statistics_refreshed": false, "index_preference": false,
+       "attempt_counts": [1, 1], "session_predicate_granularity": "tuple"},
+      {"table_statistics_refreshed": true, "index_preference": false,
+       "attempt_counts": [1, 2], "session_predicate_granularity": "relation"},
+      {"table_statistics_refreshed": true, "index_preference": true,
+       "attempt_counts": [1, 1], "session_predicate_granularity": "tuple"}
+    ],
+    "expected_regression_failure": "The analyzed, unmodified baseline required a retry for independent session activity."
+  },
+  "migration": "0028_session_point_plans.sql",
+  "validation": [
+    {"checks_passed": 5, "elapsed_seconds": 5.03,
+     "scope": "Two concurrent updates within populations of two or fifty accounts, before/after ANALYZE; migration authority/history",
+     "log": ".local/postgresql-session-point-regression.log"},
+    {"checks_passed": 374, "elapsed_seconds": 188.74,
+     "scope": "Native foundation, authorization, business security, access administration, live session transport and concurrency",
+     "log": ".local/postgresql-session-point-security.log"}
+  ],
+  "acceptance_complete": false
+}

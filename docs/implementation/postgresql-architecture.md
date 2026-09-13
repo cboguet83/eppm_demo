@@ -96,6 +96,11 @@ transactions. The transaction runner retries only complete callbacks after SQLST
 Unknown commit outcomes and unrelated errors are not automatically replayed.
 Database row policies and guards also enforce access for direct runtime SQL.
 
+The actor/session functions favor their existing indexes so an `ANALYZE` of
+small security tables does not turn independent activity lookups into broad
+serializable predicate reads. This planner preference is local to the functions;
+their proofs, permissions, row-lock protocol and transaction isolation are unchanged.
+
 Derived cache publication checks current scope and source fingerprints. Cache
 records are not financial or business truth: approved Finance and audit records
 remain immutable, while authoritative monetary values use decimal/numeric storage
