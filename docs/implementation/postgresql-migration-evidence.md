@@ -1409,3 +1409,24 @@ Validation: **13 passed in 6.01 seconds**, recorded in
 its dedicated feature branch; full native regression/coverage, remaining tools,
 actual authenticated browser benchmarks and representative recovery/restart
 acceptance are still pending.
+
+## Native project and planning use-case contracts
+
+Project and task suites now preserve type-switch behavior, master/property
+rollback, dependency cleanup, caller-owned seed transactions, safe outages,
+planning validation, CSV parser boundaries and bounded task choices through
+native services. Real trigger failures verify that no partial property, task,
+dependency or delete operation survives. An overlapping writer commits while a
+read retains its original task/dependency snapshot; failed writes return usable
+pool leases without locking an independent project.
+
+The project-dialog race now uses the actual monotonically increasing preview
+identity. Another create consumes that preview, while the original draft saves
+under the next identity without losing its fields. Missing project edits assert
+the native authorization denial; invalid predecessor references retain their
+safe planning conflict. Portfolio warnings retain positive-consumer overlap and
+single-day employee-exception behavior with native capacity calculations.
+
+Validation: **32 passed in 12.93 seconds**, recorded in
+`.local/postgresql-project-planning-contracts.log`. Remaining legacy tests,
+tool/runtime archival and the full migration acceptance gates are still open.
