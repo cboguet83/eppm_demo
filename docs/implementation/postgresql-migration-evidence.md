@@ -1849,3 +1849,39 @@ target cases added. The final affected planning suites, native planning contract
 and service regressions passed **122 tests in 86.23 seconds** in
 `.local/postgresql-scoped-planning-native.log`. Full collection succeeds with
 **2,280 tests** in `.local/postgresql-test-inventory-scoped-ports.log`.
+## Native display invalidation, capacity races and dependency filters
+
+The last three callers of the temporary SQLite business fixture now use native
+PostgreSQL resources; that fixture is removed. Original display-revision,
+capacity-race and dependency-filter suites are archived unchanged.
+
+Display regressions retain current authorization checks on old cache keys,
+permission changes without scope changes, committed versus rolled-back business
+updates, ignored derived-cache writes and stable paging/chart state after session
+activity. Explicit operator migrations preserve every native table's records and
+the display key on repeated execution. Native `test_revisions.py` separately
+verifies the complete tracked-source inventory. SQLite journal-mode variants and
+implicit request-time schema upgrades are archived as obsolete storage contracts;
+PostgreSQL foundation tests verify explicit migration and runtime DDL restrictions.
+
+Capacity regressions retain mid-calculation scope and staffing-permission changes,
+safe failure after three continuously invalidated calculations, independent caller
+copies, overlapping pages, summary/detail reuse and actor isolation. Additional
+checks prove missing native cache tables cannot be recreated by runtime reads.
+When an old pool changes while an independent new pool is calculated, native
+per-pool tokens retain the valid new result and recalculate only the changed pool.
+
+The dependency traversal test executes the actual restricted service query with
+`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` on its actor-bound connection. With 5,000
+unrelated tasks, total shared buffers increase from **120,459 to 120,747** when
+the connected project set grows from two to eleven. This retains the original
+less-than-1.5x work bound using PostgreSQL buffer operations instead of SQLite VM
+instructions. Visible task/project/legacy links are followed without crossing a
+hidden-project bridge. This is not browser latency or 50-user acceptance evidence.
+
+Validation: **37 passed in 20.53 seconds** in
+`.local/postgresql-display-revision-native.log`; **71 passed in 45.93 seconds** in
+`.local/postgresql-capacity-races-native.log`; **4 passed in 5.95 seconds** in
+`.local/postgresql-dependency-filter-native.log`, with measured counters in its
+matching XML file. Full regression/coverage, remaining legacy tools/browser
+fixtures, active SQLite archival and load/recovery acceptance remain outstanding.
