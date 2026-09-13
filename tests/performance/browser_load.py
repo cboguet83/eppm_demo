@@ -20,6 +20,7 @@ from urllib.parse import urlencode, urlsplit
 from app.infrastructure.authentication.http import SESSION_COOKIE
 from app.presentation.navigation import PAGE_PLANNING
 from tests.performance.deployment import grant_accounts, load_deployment
+from tests.performance.browser_metrics import metric_delta, read_metrics, summarize_browser
 from tests.performance.diagnostics import summarize_phases
 from tests.performance.planning_explain import SOURCE as PLANNING_EXPLAIN
 from tests.performance.resource_monitor import sample_containers
@@ -27,7 +28,7 @@ from tests.postgresql.recovery_support import operator_json
 from tests.test_oidc_browser_e2e import BrowserDeployment
 
 if TYPE_CHECKING:
-    from playwright.async_api import Browser, BrowserContext, Frame, Page
+    from playwright.async_api import Browser, BrowserContext, CDPSession, Frame, Page
 
 
 @dataclass(frozen=True)
@@ -54,6 +55,7 @@ class Session:
     project_id: int | None = None
     sequence: int = 0
     operation_stage: str | None = None
+    metrics: "CDPSession | None" = None
 
 
 ARM = """({predicate, values, click}) => {
@@ -221,6 +223,7 @@ async def _period(sessions: list[Session], options: Options, seconds: float,
         while due < deadline:
             await asyncio.sleep(max(0, due - monotonic()))
             began = monotonic()
+            browser_before = await read_metrics(session.metrics)
             entry = {"session": session.index, "scenario": session.scenario, "round": round_index,
                      "warmup": warmup, "started_epoch": time()}
             try:
@@ -269,6 +272,7 @@ async def _period(sessions: list[Session], options: Options, seconds: float,
                                 'name': f'Load editor {session.index:02d} save {session.sequence:05d}'})
                     except Exception as diagnostic_error:
                         entry['diagnostic_error_type'] = type(diagnostic_error).__name__
+            entry["browser_processing"] = metric_delta(browser_before, await read_metrics(session.metrics))
             entry["workflow_seconds"] = round(monotonic() - began, 3)
             samples.append(entry)
             session.sequence += 1
@@ -278,7 +282,9 @@ async def _period(sessions: list[Session], options: Options, seconds: float,
 
     await asyncio.gather(*(worker(session) for session in sessions))
     return {'round': round_index, 'warmup': warmup, 'started_epoch': started_epoch,
-            'ended_epoch': time(), 'scheduled_seconds': seconds}
+            'ended_epoch': time(), 'scheduled_seconds': seconds,
+            'browser_processing': summarize_browser([
+                row for row in samples if row['round'] == round_index and row['warmup'] == warmup])}
 
 
 async def run_browser(server: BrowserDeployment, backend: str, options: Options,
@@ -307,6 +313,8 @@ async def run_browser(server: BrowserDeployment, backend: str, options: Options,
                                  "status": response.status, "epoch": time()})
             page.on("response", response_seen)
             session = Session(index, scenario, context, page)
+            session.metrics = await context.new_cdp_session(page)
+            await session.metrics.send("Performance.enable", {"timeDomain": "timeTicks"})
             sessions.append(session)
             await _login(page, server, scenario == "simple_save")
             print(json.dumps({"stage":"logged_in", "session":index, "scenario":scenario}), flush=True)
@@ -390,7 +398,12 @@ def main() -> int:
         report = {"fixture": fixture, "options": asdict(options), "acceptance_complete": False,
                   "diagnostics": {"runtime": "data/runtime-timings.jsonl", "postgresql": "data/postgresql-timings.jsonl",
                                   "containers": "container-timings.jsonl"},
-                  "remaining_instrumentation": ["browser rendering breakdown", "full prescribed workload"]}
+                  "browser_processing_method": {
+                      "source": "Chromium CDP Performance target counters",
+                      "window": "Complete workflow, including preparation and confirmation; separate from action latency",
+                      "limitations": "Layout/style/script/task times can overlap. GPU and paint duration are not separately measured.",
+                  },
+                  "remaining_validation": ["full prescribed workload", "per-scenario target and failure review"]}
         result = 0
         try:
             services = ('app', 'postgres', 'keycloak') if arguments.backend == 'postgresql' else ('app', 'keycloak')

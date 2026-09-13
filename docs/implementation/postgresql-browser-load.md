@@ -184,3 +184,25 @@ no success confirmation text. The root cause remains under investigation.
 The failed editor reduced the offered write load, so the subsecond reader
 samples do not satisfy acceptance. Save failures now include their workflow
 stage and safe boolean/count/timing observations; no form values are retained.
+
+## Browser processing observations
+
+Every authenticated browser target enables Chromium's CDP `Performance` counters.
+Before and after each workflow, the runner reads only numeric layout/style/script/
+task durations and layout/style recalculation counts. It retains the differences
+and the browser clock's observed interval in each sample's `browser_processing`.
+The workflow includes editor opening or task-collapse preparation; these diagnostic
+windows are deliberately separate from the existing browser-action-to-result
+latency. Missing observations and counter/clock resets cannot become zero cost.
+
+Each warmup/measurement phase reports processing per scenario, including failed
+workflows and the number of missing observations. Nested script/layout/style/task
+durations can overlap and must not be summed into total latency. These counters
+measure renderer processing, not GPU execution or separate paint duration; the
+usable-result timer still waits for a browser animation frame. No CDP trace,
+page content, arbitrary metric fields, request URLs or credentials are retained.
+
+The observer and reporting checks passed **42 tests in 2.32 seconds**, including
+real Chromium layout/style work and safe handling of invalid/missing counters.
+Log: `.local/postgresql-browser-metrics-final.log`. An actual application pilot
+and the full prescribed comparison still need to verify these streams under load.

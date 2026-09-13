@@ -57,7 +57,7 @@ def test_failed_worker_keeps_offering_actions_and_failed_diagnostics_do_not_eras
 
     monkeypatch.setitem(browser_load.OPERATIONS, scenario, action)
     session = SimpleNamespace(index=0, scenario=scenario, sequence=0, page=BrokenPage(),
-                              project_id=1, operation_stage='confirmation')
+                              project_id=1, operation_stage='confirmation', metrics=None)
     samples = []
     phase = asyncio.run(browser_load._period([session], browser_load.Options(cadence_seconds=.01), .1, 1, False, samples))
     assert len(calls) >= 2
