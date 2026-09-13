@@ -203,3 +203,47 @@ from app.presentation.pages.tags import {render}
         assert component.call_args.kwargs[key][0]["tag_count"] == 1
     if key == "tags":
         assert component.call_args.kwargs[key][0]["usage_count"] == 1
+
+
+@pytest.mark.parametrize('kind', ['group', 'dictionary', 'project', 'task'])
+@pytest.mark.parametrize('operation', ['edit', 'delete'])
+def test_table_actions_open_the_selected_native_record_and_consume_the_event_once(database, access, kind, operation):
+    """Route selected row identities and values through each real dialog boundary."""
+    service = create_tag_service(database, access=access)
+    group_name = 'Task_Tag' if kind == 'task' else 'Project Tags'
+    group = service.create_tag_group(TagGroup(tag_group_name=group_name))
+    expected = group_name
+    event = {'group_id': str(group), 'tag_group_name': group_name}
+    render, table, entity = 'render_tag_groups', '_interactive_tag_group_table', 'tag_group'
+    if kind != 'group':
+        tag = service.create_tag(TagDictionary(tag='Selected tag', tag_group_id=group))
+        expected = 'Selected tag'
+        event = {'tag_id': str(tag), 'tag': expected, 'tag_group_id': str(group)}
+        render, table, entity = 'render_tag_dictionary', '_interactive_tag_dictionary_table', 'tag'
+        if kind in ('project', 'task'):
+            expected = 'Selected free text'
+            if kind == 'project':
+                assignment = service.create_project_tag(ProjectTag(project_id=1, tag_id=tag, free_tag=expected))
+                event.update(pt_id=str(assignment), project_id='1')
+            else:
+                assignment = service.create_task_tag(TaskTag(task_id=1, tag_id=tag, free_tag=expected))
+                event.update(tt_id=str(assignment), task_id='1')
+            event.update(free_tag=expected, tag_label=expected)
+            render, table, entity = f'render_{kind}_tags', f'_interactive_{kind}_tag_table', f'{kind}_tag'
+    event.update(action=f'{operation}_{entity}', nonce='selected-record')
+    with patch(f'app.presentation.pages.tags.{table}', return_value=event):
+        app = native_screen(f'''
+from app.main import create_tag_service
+from app.presentation.i18n import set_current_locale
+from app.presentation.pages.tags import {render}
+set_current_locale('en')
+{render}(create_tag_service(runtime, access=access))
+''', database, access).run()
+        assert not app.exception and not app.error
+        assert app.button
+        if operation == 'edit':
+            assert expected in [item.value for item in app.text_input]
+        else:
+            assert expected in '\n'.join(item.value for item in [*app.markdown, *app.warning])
+        app.run()
+        assert not app.exception and not app.button

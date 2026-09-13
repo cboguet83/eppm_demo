@@ -1249,3 +1249,28 @@ tokens and remount behavior retain their original assertions.
 Validation: **8 passed in 7.50 seconds**, recorded in
 `.local/postgresql-lazy-ui-final.log`. This does not satisfy the separate full
 regression, deployed recovery or 50-user browser responsiveness requirements.
+
+## Native tag workflow and transaction contracts
+
+The remaining tag workflow and layered contract suites now use native services
+and real actors. Dictionary/group CRUD, combined/free assignments, pool-tag
+replacement, typed projections, all cascade paths, batch reads and validation
+retain their behavior checks. A trigger failure during dictionary deletion
+rolls back the earlier assignment deletions. Page counts and rows stay consistent
+when another PostgreSQL transaction inserts a matching tag between those reads.
+An independent project writer can commit while a tag transaction is open; tag
+rollback and a subsequent SQL error both leave the pool usable.
+
+Assignments to unknown project/task owners now assert the native authorization
+denial instead of the old deployment-bypass fixture's foreign-key error. Missing
+dictionary references still produce the safe conflict response. This preserves
+the native policy of not exposing hidden versus nonexistent project ownership.
+Additional UI regressions route edit/delete row events for all four tag tables,
+verify the selected record's form values/labels and consume repeated nonces once.
+
+Validation: **62 passed in 32.96 seconds**. Measured tag modules have
+**705/729 statements covered (96.71%)**; domain, application service, native
+gateway and tag page each have 100% statement coverage. Output:
+`.local/postgresql-tag-native-complete.log` and
+`.local/postgresql-tag-native-coverage.json`. Full application coverage, remaining
+legacy ports and the performance/recovery gates remain open.

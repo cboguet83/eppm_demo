@@ -4,40 +4,32 @@ from app.domain.tags.rules import validate_tag
 
 from app.presentation.components import tag_frames
 
-import os
-import tempfile
 import unittest
+import pytest
 
-from app.infrastructure.database.schema_init import init_db
 from app.domain.resources.models import ResourcePool
 from app.domain.tags.rules import validate_tag_group, validate_assignment
 from app.domain.tags.models import ProjectTag, ResourcePoolTag, TagDictionary, TagGroup, TaskTag
-from app.operator_services import create_planning_service
-from app.operator_services import create_project_service
-from app.operator_services import create_resource_pool_service
-from app.operator_services import create_tag_service
+from app.main import create_planning_service, create_project_service, create_resource_pool_service, create_tag_service
+from tests.postgresql.ui import runtime as runtime, access as access
 
 
 class TestTagsSystem(unittest.TestCase):
     """Test suite for tag groups, tag dictionary, project tags, and task tags."""
 
-    def setUp(self) -> None:
-        """Create a temporary database and initialize schemas."""
-        self.temp_db = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
-        self.db_path = self.temp_db.name
-        self.temp_db.close()
-
-        init_db(self.db_path)
-        self.tag_repo = create_tag_service(self.db_path)
-        self.project_repo = create_project_service(self.db_path)
-        self.milestone_repo = create_planning_service(self.db_path)
-        self.pool_repo = create_resource_pool_service(self.db_path)
+    @pytest.fixture(autouse=True)
+    def native_setup(self, runtime, access) -> None:
+        """Use real services on a separately migrated native test database."""
+        self.tag_repo = create_tag_service(runtime, access=access)
+        self.project_repo = create_project_service(runtime, access=access)
+        self.milestone_repo = create_planning_service(runtime, access=access)
+        self.pool_repo = create_resource_pool_service(runtime, access=access)
 
         # Create a sample project and task for tagging tests
         self.project_id = self.project_repo.create_project(
             name="Cloud Platform Alpha",
             status="In Progress",
-            planned_budget=500000.0,
+            planned_budget='500000.00',
         )
         self.task_id = self.milestone_repo.create_milestone(
             project_id=self.project_id,
@@ -47,16 +39,6 @@ class TestTagsSystem(unittest.TestCase):
             end_date="2026-06-30",
             progress_pct=50,
         )
-
-    def tearDown(self) -> None:
-        """Clean up the temporary database."""
-        import gc
-        gc.collect()
-        if os.path.exists(self.db_path):
-            try:
-                os.remove(self.db_path)
-            except OSError:
-                pass
 
     # -------------------------------------------------------------------------
     # Tag Group Tests
