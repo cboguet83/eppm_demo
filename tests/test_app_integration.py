@@ -1,87 +1,12 @@
-"""Integration tests for PPM Studio Pro."""
+"""Application import, navigation, CLI and projection integration checks."""
 
-from app.operator_services import create_budget_service
-from app.operator_services import create_project_service
-from app.operator_services import create_schema_service
+import unittest
 
 from app.presentation.components.planning_catalog import flatten_dynamic_attributes
 
-from app.presentation.components import schema_frames
-import pandas as pd
-
-import os
-import shutil
-import tempfile
-import unittest
-
-from app.infrastructure.database.schema_init import init_db
-from app.infrastructure.database.seeder import seed_default_data_if_empty
-from app.operator_services import create_planning_service
-
 
 class TestIntegration(unittest.TestCase):
-    """End-to-end workflow integration tests across repositories and services."""
-
-    def setUp(self) -> None:
-        """Arrange: Isolated test database initialized with seed data."""
-        self.test_dir = tempfile.mkdtemp()
-        self.temp_db_path = os.path.join(self.test_dir, "test_integration.db")
-        init_db(self.temp_db_path)
-        seed_default_data_if_empty(self.temp_db_path)
-
-        self.schema_repo = create_schema_service(self.temp_db_path)
-        self.project_repo = create_project_service(self.temp_db_path)
-        self.milestone_repo = create_planning_service(self.temp_db_path)
-
-    def tearDown(self) -> None:
-        """Clean up test directory."""
-        shutil.rmtree(self.test_dir, ignore_errors=True)
-
-    def test_full_portfolio_lifecycle(self) -> None:
-        """Verify full lifecycle: create schema -> create project -> add milestone -> calculate KPIs -> delete."""
-        # 1. Add new schema group and parameter
-        grp_id = self.schema_repo.create_group("Cloud Operations", 10)
-        self.schema_repo.create_parameter("PRM_CLD", grp_id, "Cloud Target", "ENUM")
-        self.schema_repo.add_option("PRM_CLD", "GCP", 1)
-        self.schema_repo.add_option("PRM_CLD", "Azure", 2)
-
-        # 2. Add new project using the dynamic parameter
-        new_pid = 101
-        self.project_repo.create_project(
-            project_id=new_pid,
-            name="Cloud Migration",
-            status="In Progress",
-            planned_budget=100000.0,
-            actual_budget=40000.0,
-            dynamic_attributes={"PRM_CLD": "GCP"},
-        )
-
-        # 3. Add milestones
-        self.milestone_repo.create_milestone(
-            project_id=new_pid,
-            task_name="Assessment",
-            phase="Phase 1",
-            start_date="2026-01-01",
-            end_date="2026-02-01",
-            progress_pct=100,
-        )
-
-        # 4. Fetch projects and verify metrics & attribute flattening
-        df_projects = pd.DataFrame(create_project_service(self.temp_db_path).get_planning_catalog(tuple(parameter.param_id for parameter in create_schema_service(self.temp_db_path).get_all_parameters())))
-        df_params = schema_frames.parameters_frame(self.schema_repo.get_all_parameters())
-        metrics = create_budget_service(self.temp_db_path).get_report().metrics
-        df_flattened = flatten_dynamic_attributes(df_projects, df_params)
-
-        self.assertIn("PRM_CLD", df_flattened.columns)
-        self.assertEqual(
-            df_flattened.loc[df_flattened["id"] == new_pid, "PRM_CLD"].values[0],
-            "GCP",
-        )
-        self.assertGreaterEqual(metrics.total_projects, 4)
-
-        # 5. Clean up project
-        self.project_repo.delete_project(new_pid)
-        self.assertFalse(self.project_repo.exists(new_pid))
+    """Keep import and presentation contracts independent of database setup."""
 
     def test_all_application_modules_import_cleanly(self) -> None:
         """Verify application modules import without unresolved dependencies."""
@@ -92,6 +17,7 @@ class TestIntegration(unittest.TestCase):
         for module_info in pkgutil.walk_packages(app.__path__, prefix="app."):
             mod = importlib.import_module(module_info.name)
             self.assertIsNotNone(mod)
+
 
     def test_no_direct_app_sidebar_nav_assignment_in_views(self) -> None:
         """Verify that presentation views do not write directly to st.session_state['app_sidebar_nav'].
@@ -118,6 +44,7 @@ class TestIntegration(unittest.TestCase):
             f"Views must use 'nav_redirect' instead of modifying 'app_sidebar_nav' directly: {violations}",
         )
 
+
     def test_allowed_dynamic_params_excludes_code_station(self) -> None:
         """Verify code_station is excluded from project master list grid but allowed params remain."""
         from app.presentation.pages.portfolio import ALLOWED_DYNAMIC_PARAMS
@@ -132,6 +59,7 @@ class TestIntegration(unittest.TestCase):
             "complexity",
         }
         self.assertEqual(ALLOWED_DYNAMIC_PARAMS, expected_allowed)
+
 
     def test_portfolio_row_click_is_applied_before_table_render(self) -> None:
         """The component event must synchronize the stable project ID before mounting."""
@@ -151,6 +79,7 @@ class TestIntegration(unittest.TestCase):
         finally:
             st.session_state.pop(component_key, None)
             st.session_state.pop(selection_key, None)
+
 
     def test_parse_cli_args(self) -> None:
         """Verify parsing of CLI arguments for database force-reseeding and project count."""
@@ -176,6 +105,7 @@ class TestIntegration(unittest.TestCase):
             self.assertFalse(force)
             self.assertEqual(count, 0)
 
+
     def test_flatten_dynamic_attributes_preserves_raw_column(self) -> None:
         """Verify flatten_dynamic_attributes preserves dynamic_attributes column."""
         import pandas as pd
@@ -185,8 +115,8 @@ class TestIntegration(unittest.TestCase):
                 "id": 1,
                 "name": "Test Alpha",
                 "status": "Active",
-                "planned_budget": 1000.0,
-                "actual_budget": 500.0,
+                "planned_budget": 1000,
+                "actual_budget": 500,
                 "dynamic_attributes": {"code_courrier": "CC-001", "lot": "Lot A"},
             }
         ])
@@ -200,7 +130,3 @@ class TestIntegration(unittest.TestCase):
         self.assertIn("code_courrier", df_flat.columns)
         self.assertEqual(df_flat.iloc[0]["code_courrier"], "CC-001")
         self.assertEqual(df_flat.iloc[0]["lot"], "Lot A")
-
-
-if __name__ == "__main__":
-    unittest.main()

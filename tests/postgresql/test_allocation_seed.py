@@ -195,6 +195,45 @@ def test_reviewed_source_change_rejects_apply_before_backup_and_preserves_new_ed
     assert list(tmp_path.iterdir()) == []
 
 
+def test_invalid_mix_is_rejected_before_apply_or_backup(allocations, tmp_path):
+    before = allocations.database.run(snapshot)
+    with pytest.raises(ValueError, match='average between'):
+        MaintenanceService(allocations).generate_pool_allocations(
+            replace(MIX, average_allocation_pct=20), apply=True,
+        )
+    assert allocations.database.run(snapshot) == before
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_failed_clear_retains_demand_and_successful_clear_preserves_membership(allocations, tmp_path):
+    service = MaintenanceService(allocations)
+
+    def reject_clear(connection: psycopg.Connection) -> None:
+        connection.execute("""CREATE FUNCTION eppm.reject_test_clear() RETURNS trigger
+            LANGUAGE plpgsql AS $$ BEGIN
+                RAISE EXCEPTION 'private clear detail' USING ERRCODE='23514'; END $$""")
+        connection.execute("""CREATE TRIGGER reject_clear BEFORE DELETE ON eppm.resource_pool_assignment
+            FOR EACH ROW EXECUTE FUNCTION eppm.reject_test_clear()""")
+
+    allocations.database.run(reject_clear, write=True)
+    before = allocations.database.run(source_fingerprint)
+    with pytest.raises(DatabaseMaintenanceError, match='could not complete') as error:
+        service.clear_pool_allocations()
+    assert 'private clear detail' not in str(error.value)
+    assert allocations.database.run(source_fingerprint) == before
+    assert len(list(tmp_path.glob('*.dump'))) == 1
+    allocations.database.run(lambda c: c.execute(
+        'DROP TRIGGER reject_clear ON eppm.resource_pool_assignment',
+    ), write=True)
+
+    assert service.clear_pool_allocations() == 1
+    assert service.clear_pool_allocations() == 0
+    assert allocations.database.run(lambda c: c.execute('SELECT count(*) FROM eppm.resource_pool_assignment').fetchone()) == (0,)
+    assert allocations.database.run(lambda c: c.execute('SELECT count(*) FROM eppm.resource_pool_mapping').fetchone()) == (10,)
+    assert allocations.database.run(lambda c: c.execute('SELECT count(*) FROM eppm.resource_pool').fetchone()) == (10,)
+    assert len(list(tmp_path.glob('*.dump'))) == 3
+
+
 def test_native_foreign_key_failure_rolls_back_deletion_staffing_and_inserted_demand(allocations):
     before = allocations.database.run(source_fingerprint)
     plan = allocations.database.run(lambda c: prepare_allocation_plan(c, MIX, today=DAY))

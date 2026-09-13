@@ -1569,3 +1569,28 @@ with 3 remaining legacy collection errors**, recorded in
 `.local/postgresql-test-port-inventory-current.log`. Collecting the suite is not
 the full native regression or coverage gate; runtime archival, remaining tools,
 authenticated load testing and representative recovery checks are still pending.
+
+## Complete collection after application and planning ports
+
+The cross-layer portfolio lifecycle now uses native schema, project, task and
+budget services. Database-independent import, navigation, CLI and projection
+checks no longer seed SQLite. Planning tests retain requested-property loading,
+revision refresh, real supporting indexes, lazy project expansion, cached full
+capacity scope and exact filtered usage. The original demo is installed through
+explicit archive-protected native maintenance; its generated project IDs are
+used directly instead of assuming identity reuse.
+
+Validation: **7 passed in 1.86 seconds** in
+`.local/postgresql-application-integration.log`, and **5 passed in 10.39 seconds**
+in `.local/postgresql-planning-performance-workflows.log`.
+
+The allocation archive mapping was checked against native behavior and two gaps
+were filled: invalid mixes must fail before an archive or mutation, and failed
+clears must retain demand while successful repeated clears retain membership.
+**35 passed in 12.91 seconds** in `.local/postgresql-allocation-contract-complete.log`,
+including independent deterministic allocation baseline comparisons.
+
+Full collection now succeeds: **2,272 tests collected in 1.91 seconds**, with no
+collection errors, in `.local/postgresql-test-port-inventory-current.log`. This
+does not establish full-suite execution, PostgreSQL-only runtime/test archival,
+complete application coverage or final performance/recovery acceptance.

@@ -103,3 +103,25 @@ real PostgreSQL constraints reject blank aliases and the backed-up operator
 reset removes links. The retired SQLite index-collision migration test maps to
 the actual pending-DDL rollback and ledger tests in `test_foundation.py`, which
 are run alongside the ported workflow suite.
+
+## Allocation generation test mapping
+
+`tests/test_allocation_generation.py` preserves the unchanged original module.
+The active root module retains pure rounding, request validation and capacity
+period boundaries, using the native capacity-period helper. Its former SQLite
+integration cases are covered in `tests/postgresql/test_allocation_seed.py`:
+
+| Historical behavior | Native evidence |
+| --- | --- |
+| Read-only preview, requested daily mix, one backup and retained project/task data | Preview/apply/archive-restore test and actor-bound capacity comparison |
+| Stale preview and writer-time fingerprint checks | Reviewed-source-change test checks both the service and typed plan application |
+| Impossible mixes before writes or backup | Invalid-mix test and three unfulfillable-source cases |
+| Failed clear, preserved demand, retained pool/mapping rows and repeated clear | Failed-clear and successful-clear membership test with actual dump archives |
+| Foreign-key failure restores earlier deletes | Native failed plan test verifies original demand and staffing |
+| Zero mappings retain identity; empty pools receive staff and fallback capacity | Zero-percent mapping and empty-pool tests |
+| Deterministic report and mutation parity | `test_allocation_seed_golden.py` compares independent baseline hashes |
+
+PostgreSQL applies typed frozen plans inside the complete operator callback.
+The retired generic SQLite SQL-list executor and database-wide writer lock are
+not part of that native contract; actual serializable replay and a single
+pre-operation archive are verified directly.
