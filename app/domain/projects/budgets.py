@@ -2,7 +2,7 @@
 
 from collections.abc import Iterable
 from dataclasses import dataclass
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_EVEN, localcontext
 from typing import Literal
 
 ZERO = Decimal(0)
@@ -57,48 +57,86 @@ class BudgetAnalysis:
     health: BudgetHealth
 
 
+def _working_precision(*amounts: Decimal) -> int:
+    """Cover every finite input place, a carry and multiplication by 100."""
+    return max(28, max(amount.adjusted() for amount in amounts)
+               - min(int(amount.as_tuple().exponent) for amount in amounts) + 3)
+
+
 def analyze_budget(amounts: BudgetAmounts) -> BudgetAnalysis:
     """Apply the existing variance and 85-percent health threshold rules.
 
     An actual amount against a zero budget has no defined percentage; zero
     planned and zero actual retain the existing zero-percent display.
     """
-    planned, actual = amounts.planned_budget, amounts.actual_budget
-    burn_rate = actual / planned * HUNDRED if planned else (None if actual else ZERO)
-    if actual > planned:
-        health = "over_budget"
-    elif burn_rate is not None and burn_rate >= Decimal(85):
-        health = "near_capacity"
-    else:
-        health = "on_track"
-    return BudgetAnalysis(planned - actual, burn_rate, health)
+    planned, actual = euro_amount(amounts.planned_budget), euro_amount(amounts.actual_budget)
+    with localcontext(prec=_working_precision(planned, actual), rounding=ROUND_HALF_EVEN):
+        burn_rate = actual * HUNDRED / planned if planned else (None if actual else ZERO)
+        if actual > planned:
+            health = "over_budget"
+        elif planned < ZERO or planned > ZERO and actual * HUNDRED >= planned * Decimal(85):
+            # Compare exact amounts; a rounded percentage can cross the threshold.
+            health = "near_capacity"
+        else:
+            health = "on_track"
+        return BudgetAnalysis(planned - actual, burn_rate, health)
 
 
 def summarize_budgets(projects: Iterable[BudgetAmounts]) -> PortfolioMetrics:
     """Aggregate a stream without retaining project rows or using float sums."""
     count, planned, actual = 0, ZERO, ZERO
-    for project in projects:
-        count += 1
-        planned += project.planned_budget
-        actual += project.actual_budget
-    return PortfolioMetrics(
-        count,
-        planned,
-        actual,
-        planned - actual,
-        actual / planned * HUNDRED if planned > ZERO else ZERO,
-    )
+    with localcontext(prec=28, rounding=ROUND_HALF_EVEN) as context:
+        for project in projects:
+            count += 1
+            next_planned, next_actual = euro_amount(project.planned_budget), euro_amount(project.actual_budget)
+            context.prec = max(context.prec, _working_precision(planned, next_planned),
+                               _working_precision(actual, next_actual))
+            planned += next_planned
+            actual += next_actual
+        context.prec = max(context.prec, _working_precision(planned, actual))
+        return PortfolioMetrics(
+            count, planned, actual, planned - actual,
+            actual * HUNDRED / planned if planned > ZERO else ZERO,
+        )
+
+
+def decimal_mean(total: Decimal, count: int) -> Decimal:
+    """Divide an exact total without losing a terminating fractional tail.
+
+    Nonterminating means use at least 28 significant digits. The count must
+    be a positive integer; its bit length bounds extra digits from factors of
+    two and five in a terminating decimal division.
+
+    Args:
+        total: Exact finite sum of the input values.
+        count: Number of values contributing to that sum.
+
+    Returns:
+        A Decimal mean, calculated independently of the caller's precision.
+
+    Raises:
+        ValueError: If the total is nonfinite or the count is not positive.
+    """
+    if type(count) is not int or count < 1:
+        raise ValueError('A mean requires a positive item count.')
+    total = euro_amount(total)
+    precision = _working_precision(total, Decimal(count)) + count.bit_length()
+    with localcontext(prec=precision, rounding=ROUND_HALF_EVEN):
+        return total / count
 
 
 def monetary_statistics(amounts: Iterable[Decimal]) -> tuple[Decimal, Decimal, Decimal] | None:
     """Calculate minimum, mean, and maximum for monetary column statistics."""
     count, total = 0, ZERO
     low = high = None
-    for amount in amounts:
-        count += 1
-        total += amount
-        low = amount if low is None else min(low, amount)
-        high = amount if high is None else max(high, amount)
-    if low is None or high is None:
-        return None
-    return low, total / count, high
+    with localcontext(prec=28, rounding=ROUND_HALF_EVEN) as context:
+        for value in amounts:
+            amount = euro_amount(value)
+            count += 1
+            context.prec = max(context.prec, _working_precision(total, amount))
+            total += amount
+            low = amount if low is None else min(low, amount)
+            high = amount if high is None else max(high, amount)
+        if low is None or high is None:
+            return None
+        return low, decimal_mean(total, count), high

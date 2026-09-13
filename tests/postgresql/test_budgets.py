@@ -1,6 +1,6 @@
 """Native budget report projections and exact, scoped monetary results."""
 
-from decimal import Decimal
+from decimal import Decimal, localcontext
 
 import psycopg
 import pytest
@@ -37,3 +37,34 @@ def test_native_null_budgets_report_as_decimal_zero_and_outages_are_safe(authori
     with pytest.raises(ProjectStorageError) as error:
         reader(authorized).read_budgets()
     assert 'postgresql://' not in str(error.value) + caplog.text
+
+
+def test_high_precision_budget_report_matches_native_numeric_aggregates_under_a_small_context(authorized):
+    with psycopg.connect(authorized.setup.operator_url) as connection:
+        connection.execute("UPDATE eppm.project SET planned_budget=9007199254740993.1234567890123456789,actual_budget=0.0000000000000000001 WHERE id=1")
+        connection.execute("UPDATE eppm.project SET planned_budget=0.0000000000000000001,actual_budget=0 WHERE id=2")
+        expected = connection.execute('SELECT sum(planned_budget),sum(actual_budget),sum(planned_budget)-sum(actual_budget) FROM eppm.project WHERE id IN (1,2)').fetchone()
+        variance = connection.execute('SELECT planned_budget-actual_budget FROM eppm.project WHERE id=1').fetchone()[0]
+    with localcontext() as context:
+        context.prec = 4
+        report = BudgetService(reader(authorized)).get_report()
+    assert (report.metrics.total_planned, report.metrics.total_actual, report.metrics.variance) == expected
+    assert report.rows[0].analysis.variance == variance
+
+
+def test_native_portfolio_statistics_preserve_digits_added_by_a_terminating_mean(authorized):
+    from app.infrastructure.postgresql.portfolio import PostgresPortfolioReader
+
+    amount = Decimal('12345678901234567890123456789012345')
+    with psycopg.connect(authorized.setup.operator_url) as connection:
+        connection.execute('UPDATE eppm.project SET planned_budget=0')
+        connection.execute('UPDATE eppm.project SET planned_budget=%s WHERE id=1', (amount,))
+        connection.execute("INSERT INTO eppm.project(name) SELECT 'Mean item ' || number FROM generate_series(1,61) AS number")
+    with localcontext() as context:
+        context.prec = 100
+        expected = amount / 64
+    with localcontext() as context:
+        context.prec = 4
+        browse = PostgresPortfolioReader(authorized.database, authorized.key, access=authorized.binding(4).access)
+        facet = browse.get_facet([{'key': 'planned_budget', 'format': 'currency'}], {}, 'planned_budget')
+    assert dict(facet['stats'])['Average'] == expected

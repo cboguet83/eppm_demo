@@ -1069,3 +1069,32 @@ ported suite. Combined Finance UI, native persistence and HTTP checks passed
 statements (100%)**. Log: `.local/postgresql-finance-ui-port.log`. The complete
 Finance browser fixture still needs conversion, alongside the other remaining
 legacy UI/tool ports and final migration acceptance gates.
+
+## Exact budget calculations and native budget reporting UI
+
+High-precision form tests exposed a separate calculation defect: the shared
+project-budget rules used the caller's Decimal context, which rounded stored
+values even at the default 28-digit precision. Four initial regressions failed
+for large totals/variances, cancellation and classification just below the 85%
+threshold. Log: `.local/postgresql-budget-precision-before.log`.
+
+Totals and variances now grow their working precision from the actual values
+without materializing the project stream. Health classification compares exact
+amounts. A shared Decimal mean retains terminating division tails; native
+portfolio statistics use the same rule. Zero/negative budget conventions remain
+unchanged, and nonterminating means/percentages use at least 28 significant
+digits. No binary floating-point arithmetic was introduced.
+
+The former SQLite budget reporting/screen suite is now a PostgreSQL suite. It
+retains fractional-euro reporting, portfolio parity, numeric facets, empty/error
+screens, integer project IDs and health presentation. Its concurrent-snapshot
+check now performs a real PostgreSQL write while the report is being projected.
+New native regressions compare high-precision report totals/variances directly
+with PostgreSQL numeric aggregates and verify a precise 64-row portfolio mean.
+
+The final affected suite passed **69 tests in 20.26 seconds**, exit code **0**.
+Coverage is **222/222 statements (100%)** across shared project-budget rules,
+the native portfolio adapter and the budget page. Log:
+`.local/postgresql-budget-precision-final.log`. The remaining legacy UI/tool
+ports, full PostgreSQL-only coverage and final browser/recovery gates are still
+required before migration acceptance.

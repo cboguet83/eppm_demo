@@ -1,9 +1,8 @@
-"""Decimal budget rules, real SQLite reporting, and budget screen regressions."""
+"""Decimal budget rules, native PostgreSQL reporting, and budget screen regressions."""
 
-from app.operator_services import deployment_access
-from contextlib import closing
 from decimal import Decimal
 
+import psycopg
 import pytest
 from streamlit.testing.v1 import AppTest
 
@@ -14,18 +13,23 @@ from app.domain.projects.budgets import (
     monetary_statistics,
     summarize_budgets,
 )
-from app.infrastructure.database.connection import get_db
-from app.infrastructure.repositories.portfolio import SqlitePortfolioReader
-from app.operator_services import create_budget_service, create_portfolio_service, create_project_service
+from app.infrastructure.postgresql.portfolio import PostgresPortfolioReader
+from app.main import create_budget_service, create_portfolio_service, create_project_service
 from app.presentation.components.budget_frames import budget_frame
-from app.infrastructure.database.schema_init import init_db
+from app.runtime import RuntimeResources
 
 
 @pytest.fixture
-def database(tmp_path):
-    path = str(tmp_path / "budgets.db")
-    init_db(path)
-    return path
+def runtime(authorized):
+    """Start an empty business catalog in this test's isolated PostgreSQL database."""
+    with psycopg.connect(authorized.setup.operator_url) as connection:
+        connection.execute('DELETE FROM eppm.project')
+    return RuntimeResources(authorized.database, authorized.key)
+
+
+@pytest.fixture
+def access(authorized):
+    return authorized.binding(4).access
 
 
 def test_decimal_budget_totals_preserve_fractional_euros():
@@ -87,103 +91,103 @@ def test_monetary_column_statistics_use_decimal_mean():
     )
 
 
-def test_sqlite_budget_report_and_portfolio_totals_share_decimal_rules(database):
-    projects = create_project_service(database)
-    projects.create_project(name="Small A", planned_budget=0.1, actual_budget=0.01)
-    projects.create_project(name="Small B", planned_budget=0.2, actual_budget=0.02)
-    report = create_budget_service(database).get_report()
-    assert report.metrics == create_portfolio_service(database).get_metrics()
+def test_native_budget_report_and_portfolio_totals_share_decimal_rules(runtime, access, authorized):
+    projects = create_project_service(runtime, access=access)
+    projects.create_project(name="Small A", planned_budget='0.1', actual_budget='0.01')
+    projects.create_project(name="Small B", planned_budget='0.2', actual_budget='0.02')
+    report = create_budget_service(runtime, access=access).get_report()
+    assert report.metrics == create_portfolio_service(runtime, access=access).get_metrics()
     assert report.metrics.total_planned == Decimal("0.3")
     assert report.metrics.variance == Decimal("0.27")
     assert report.rows[0].project.amounts.planned_budget == Decimal("0.1")
-    with closing(get_db(database)) as connection:
+    with psycopg.connect(authorized.setup.operator_url) as connection:
         assert (
-            connection.execute("SELECT typeof(planned_budget) FROM project LIMIT 1").fetchone()[0]
-            == "real"
+            connection.execute("SELECT pg_typeof(planned_budget)::text FROM eppm.project LIMIT 1").fetchone()[0]
+            == "numeric"
         )
-    facet = SqlitePortfolioReader(database, access=deployment_access()).get_facet(
+    facet = PostgresPortfolioReader(runtime.database, runtime.key, access=access).get_facet(
         [{"key": "planned_budget", "format": "currency"}],
         {},
         "planned_budget",
     )
-    assert dict(facet["stats"])["Average"] == 0.15
+    assert dict(facet["stats"])["Average"] == Decimal('0.15')
 
 
-def test_budget_report_rows_and_totals_share_a_concurrent_snapshot(database, monkeypatch):
-    import app.infrastructure.repositories.budgets as adapter
+def test_budget_report_rows_and_totals_share_a_concurrent_snapshot(runtime, access, authorized, monkeypatch):
+    import app.infrastructure.postgresql.budgets as adapter
 
-    projects = create_project_service(database)
+    projects = create_project_service(runtime, access=access)
     projects.create_project(name="First", planned_budget=10, actual_budget=1)
     projects.create_project(name="Second", planned_budget=20, actual_budget=2)
-    with closing(get_db(database)) as connection:
-        connection.execute("PRAGMA journal_mode=WAL")
-    convert = adapter.euro_amount
+    convert = adapter.BudgetAmounts
     changed = False
 
-    def change_after_read(value):
+    def change_after_read(planned, actual):
         nonlocal changed
         if not changed:
             changed = True
-            with closing(get_db(database)) as writer, writer:
-                writer.execute("UPDATE project SET actual_budget=200 WHERE name='Second'")
-        return convert(value)
+            with psycopg.connect(authorized.setup.operator_url) as writer:
+                writer.execute("UPDATE eppm.project SET actual_budget=200 WHERE name='Second'")
+        return convert(planned, actual)
 
     with monkeypatch.context() as patch:
-        patch.setattr(adapter, "euro_amount", change_after_read)
-        report = create_budget_service(database).get_report()
+        patch.setattr(adapter, "BudgetAmounts", change_after_read)
+        report = create_budget_service(runtime, access=access).get_report()
     assert report.metrics.total_actual == Decimal(3)
     assert report.rows[1].project.amounts.actual_budget == Decimal(2)
-    assert create_budget_service(database).get_report().metrics.total_actual == Decimal(201)
+    assert create_budget_service(runtime, access=access).get_report().metrics.total_actual == Decimal(201)
 
 
 
 
-def render_budget(database):
-    return AppTest.from_string(
-        f"""
-from app.operator_services import create_budget_service
-from app.presentation.pages.budgets import render_budget_tracking
-from app.presentation.i18n import set_current_locale
-set_current_locale('en')
-render_budget_tracking(create_budget_service({database!r}))
-""",
-        default_timeout=15,
-    ).run()
+def budget_screen(service):
+    """Render the production page with its real actor-bound native service."""
+    from app.presentation.pages.budgets import render_budget_tracking
+    from app.presentation.i18n import set_current_locale
+
+    set_current_locale('en')
+    render_budget_tracking(service)
 
 
-def test_budget_screen_renders_integer_project_ids_and_computed_health(database):
-    projects = create_project_service(database)
-    projects.create_project(name="On track", planned_budget=100, actual_budget=10)
-    projects.create_project(name="Near", planned_budget=100, actual_budget=85)
-    app = render_budget(database)
+def render_budget(runtime, access):
+    service = create_budget_service(runtime, access=access)
+    return AppTest.from_function(budget_screen, args=(service,), default_timeout=15).run()
+
+
+def test_budget_screen_renders_integer_project_ids_and_computed_health(runtime, access):
+    projects = create_project_service(runtime, access=access)
+    first = projects.create_project(name="On track", planned_budget=100, actual_budget=10)
+    second = projects.create_project(name="Near", planned_budget=100, actual_budget=85)
+    app = render_budget(runtime, access)
     assert not app.exception
     assert len(app.get("plotly_chart")) == 3
     assert len(app.success) == 1
     assert app.metric[0].value == "€200.00"
     assert app.metric[2].value == "€105.00"
     rows = app.dataframe[0].value
-    assert rows["id"].tolist() == ["1", "2"]
+    assert rows["id"].tolist() == [str(first), str(second)]
     assert rows["health_status"].tolist() == ["🟢 On Track", "🟡 Near Capacity"]
 
 
-def test_budget_screen_displays_overspend_without_infinite_zero_budget_percentage(database):
-    create_project_service(database).create_project(
+def test_budget_screen_displays_overspend_without_infinite_zero_budget_percentage(runtime, access):
+    create_project_service(runtime, access=access).create_project(
         name="No budget", planned_budget=0, actual_budget=5
     )
-    report = create_budget_service(database).get_report()
+    report = create_budget_service(runtime, access=access).get_report()
     assert budget_frame(report).iloc[0]["burn_rate_pct"] is None
-    app = render_budget(database)
+    app = render_budget(runtime, access)
     assert not app.exception
     assert "€5.00" in app.warning[0].value
     assert app.dataframe[0].value["burn_rate_pct"].isna().all()
     assert app.dataframe[0].value["health_status"].tolist() == ["🔴 Over Budget"]
 
 
-def test_budget_screen_handles_empty_database_and_safe_read_errors(database, tmp_path):
-    empty = render_budget(database)
+def test_budget_screen_handles_empty_database_and_safe_read_errors(runtime, access):
+    empty = render_budget(runtime, access)
     assert not empty.exception
     assert empty.info and not empty.metric
-    failed = render_budget(str(tmp_path / "missing-dir" / "private.db"))
+    runtime.database.close()
+    failed = render_budget(runtime, access)
     assert not failed.exception
     assert failed.error and not failed.metric
-    assert "private.db" not in failed.error[0].value
+    assert "postgresql://" not in failed.error[0].value

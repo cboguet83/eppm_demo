@@ -2,7 +2,7 @@
 
 from collections.abc import Callable
 from dataclasses import replace
-from decimal import Decimal, localcontext
+from decimal import Decimal
 import json
 from typing import cast
 
@@ -17,7 +17,7 @@ from app.application.ports.portfolio import (
     ProjectCatalog, PropertyGroup, PropertyOption, Scalar,
 )
 from app.application.services.business_access import BusinessAccess
-from app.domain.projects.budgets import BudgetAmounts, summarize_budgets
+from app.domain.projects.budgets import BudgetAmounts, decimal_mean, summarize_budgets
 from app.infrastructure.postgresql.business import run_business
 from app.infrastructure.postgresql.errors import DatabaseUnavailableError, TransactionRetryError
 from app.infrastructure.postgresql.pool import Database
@@ -28,11 +28,6 @@ from app.shared.logging import get_logger
 
 
 logger = get_logger(__name__)
-
-
-def _precision(*amounts: Decimal) -> int:
-    """Size decimal working precision from native totals, including their scales."""
-    return max(28, max(value.adjusted() for value in amounts) - min(value.as_tuple().exponent for value in amounts) + 3)
 
 
 class PostgresPortfolioReader:
@@ -61,9 +56,7 @@ class PostgresPortfolioReader:
         def operation(connection: psycopg.Connection) -> PortfolioMetrics:
             count, planned, actual = connection.execute('SELECT count(*),coalesce(sum(planned_budget),0),'
                 'coalesce(sum(actual_budget),0) FROM eppm.project').fetchone()
-            with localcontext() as context:
-                context.prec = _precision(planned, actual)
-                return replace(summarize_budgets([BudgetAmounts(planned, actual)]), total_projects=count)
+            return replace(summarize_budgets([BudgetAmounts(planned, actual)]), total_projects=count)
         return self._run(operation)
 
     def get_page(self, columns: list[PortfolioColumn], query: dict, offset: int = 0) -> PortfolioPage:
@@ -116,9 +109,7 @@ class PostgresPortfolioReader:
             return stats
         if fmt in ('currency', 'number'):
             if numeric_count:
-                with localcontext() as context:
-                    context.prec = _precision(low, total, high)
-                    stats.extend([['Minimum', low], ['Average', total / numeric_count], ['Maximum', high]])
+                stats.extend([['Minimum', low], ['Average', decimal_mean(total, numeric_count)], ['Maximum', high]])
         else:
             stats.append(['Most common', f'{top} ({frequency})'])
         return stats

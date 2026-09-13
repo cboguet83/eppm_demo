@@ -142,3 +142,10 @@ without rounding, then restored the demo project's original budgets. This
 verifies form transport and persistence; it is not the final concurrent
 performance gate. Finance continues to use decimal-string cells with its
 existing cent-precision domain validation.
+
+Budget totals and variances now size Decimal working precision from the actual
+stored amounts. Budget health compares exact amounts at the 85% threshold;
+it does not classify a rounded percentage. Shared mean calculation retains
+terminating fractional digits and supplies both budget and native portfolio
+statistics. Nonterminating ratios remain decimal approximations with at least
+28 significant digits. Existing zero/negative budget conventions are retained.
