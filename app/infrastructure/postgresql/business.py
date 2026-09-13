@@ -37,10 +37,30 @@ def run_business[Result](database: Database, key: bytes, access: BusinessAccess,
         signer, binding = ServerRequestSigner(key), ActorBinding(access, key)
 
         def callback(connection: psycopg.Connection) -> Result:
+            if write and project_ids is not None:
+                # Prefer owner indexes on small tables too: a sequential scan
+                # records a whole-table serializable predicate for a point save.
+                # SET LOCAL expires with this attempt, including on rollback.
+                connection.execute("SET LOCAL enable_seqscan=off")
             security = PostgresAccessStore(connection, signer, access.policy, access.actor, writable=write)
-            if permission is not None:
+            global_read = access.global_permission(security, Permission.READ)
+            if (permission is not None and project_ids is not None and global_read
+                    and access.global_permission(security, permission)):
+                # Global grants do not require reading every mutable project.
+                # Keep the policy's nonempty, existing-owner requirement using
+                # this transaction's RLS-protected, explicitly targeted read.
+                owners = set(project_ids)
+                if not owners or any(type(owner) is not int or not 1 <= owner <= 9223372036854775807
+                                     for owner in owners):
+                    raise AccessDenied()
+                existing = {row[0] for row in connection.execute(
+                    "SELECT id FROM eppm.project WHERE id=ANY(%s::bigint[])", (list(owners),))}
+                if existing != owners:
+                    raise AccessDenied()
+            elif permission is not None:
                 access.require(security, permission, project_ids)
-            access.projects(security)
+            if not global_read:
+                access.projects(security)
             return operation(connection)
 
         try:

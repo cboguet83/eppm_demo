@@ -100,6 +100,9 @@ def test_runtime_direct_writes_require_serializable_transactions(pg_database, bu
         with pytest.raises(psycopg.errors.ActiveSqlTransaction, match="serializable"):
             business.binding(connection)
     with psycopg.connect(pg_database.runtime_url) as connection:
+        # Exercise missing identity after satisfying the independent isolation
+        # gate; planner-time scope evaluation must not determine error order.
+        connection.isolation_level = psycopg.IsolationLevel.SERIALIZABLE
         with pytest.raises(psycopg.errors.InsufficientPrivilege):
             connection.execute("UPDATE eppm.project SET name='not committed' WHERE id=1")
     assert execute(business, "SELECT name FROM eppm.project WHERE id=1") == [("First",)]
@@ -285,4 +288,5 @@ def test_protected_trigger_helpers_are_not_publicly_executable(business):
         "project_contacts", "pool_staffing", "display_cache_revisions", "read_derived_cache", "publish_derived_cache",
         "dashboard_revision", "dashboard_resources",
         "wbs_options", "project_id_preview", "allocate_project_id",
+        "planning_task_source_keys", "portfolio_cache_revision",
     }

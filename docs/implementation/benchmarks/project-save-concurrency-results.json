@@ -1,0 +1,38 @@
+{
+  "scope": "Isolated PostgreSQL planning and native project-save concurrency regression",
+  "migration": "0029_owned_global_read.sql",
+  "fixture": {
+    "projects": 10,
+    "min_tasks": 0,
+    "max_tasks": 15,
+    "random_seed": 42,
+    "year": 2026,
+    "distinct_editors": 10,
+    "synchronization": "All initial project reads complete before any writer proceeds"
+  },
+  "before": {
+    "source_commit": "af79fa9d93dd24dc854e6ccb771adce35f7a02f1",
+    "attempted_saves": 10,
+    "failed_saves": 7,
+    "failure": "Whole-operation serialization retries exhausted",
+    "project_predicates": "relation",
+    "evidence": ".local/postgresql-project-save-contention-recheck.xml"
+  },
+  "planning_only_comparison": {
+    "query": "EXPLAIN without ANALYZE of a point project lookup",
+    "legacy_unnest_project_predicates": ["relation"],
+    "scalar_subquery_project_predicates": []
+  },
+  "after": {
+    "global_editors": {"successful_saves": 10, "failed_saves": 0, "attempts_per_editor": 1},
+    "project_scoped_editors": {"successful_saves": 10, "failed_saves": 0, "attempts_per_editor": 1},
+    "persisted_titles_verified": true,
+    "combined_regression_tests_passed": 26,
+    "combined_regression_elapsed_seconds": 12.56,
+    "evidence": ".local/postgresql-project-save-scope-regression.xml"
+  },
+  "limitations": [
+    "This ten-writer native regression does not establish 50-user browser responsiveness.",
+    "The final full regression, coverage, deployment and recovery gates remain open."
+  ]
+}

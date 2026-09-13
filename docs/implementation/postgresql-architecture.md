@@ -101,6 +101,15 @@ small security tables does not turn independent activity lookups into broad
 serializable predicate reads. This planner preference is local to the functions;
 their proofs, permissions, row-lock protocol and transaction isolation are unchanged.
 
+Project and child-row policies resolve scoped project arrays through scalar
+subqueries. This prevents the planner from evaluating the full scope merely to
+estimate an `unnest` result. Global read permission short-circuits scope resolution.
+The Python business gateway likewise avoids materializing a global project list
+when it only needs permission and existence checks for explicitly supplied owners.
+Scoped write callbacks favor existing indexes with a transaction-local planner
+setting to avoid whole-table predicates on small analyzed tables; ordinary reads
+keep their default planner behavior.
+
 Derived cache publication checks current scope and source fingerprints. Cache
 records are not financial or business truth: approved Finance and audit records
 remain immutable, while authoritative monetary values use decimal/numeric storage

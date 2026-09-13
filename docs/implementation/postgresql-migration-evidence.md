@@ -15,9 +15,10 @@
 
 The last read-only check of the ordinary local application's configured PostgreSQL database recorded 19 applied
 migrations, ending at `0019_operator_seed_state.sql`. Its bind-mounted application
-package now contains 28 migrations. A read-only `check_schema` call using the existing
-runtime credentials raises `SchemaCompatibilityError`: the local deployment is
-behind the feature branch and requires migrations 0020 through 0028 followed by
+package now contains 29 migrations. At the recorded checkpoint, a read-only
+`check_schema` call using the existing runtime credentials raised
+`SchemaCompatibilityError`: the local deployment is
+behind the feature branch and requires migrations 0020 through 0029 followed by
 deployment validation. Container health alone does not establish schema
 compatibility. This inspection did not migrate, restart or modify the deployment.
 
@@ -2804,3 +2805,61 @@ and `.local/postgresql-editor-saves-final.log`; XML:
 `.local/postgresql-editor-saves-final.xml`. The next deployed workload must include
 both form fixes. Full-duration performance, refreshed full coverage/regression,
 and final setup/restart/restore acceptance remain outstanding.
+
+## Global scopes and independent project saves
+
+The `af79fa9` image included both project-modal fixes. Its subsequent short
+50-user diagnostic still failed eight of ten measured save workflows. Paging
+p95 was 22,694 ms (77 successes), task loading 16,771.2 ms (94 successes), and
+successful saves 22,801.2 ms (two successes). These are diagnostics after a
+15-second warmup and 45-second measurement, not the full-duration acceptance
+workload. Corrected shadow-DOM diagnostics showed open dialogs and validation
+alerts; eight editors had already failed confirmation during warmup. Logs and
+raw measurements are in `.local/postgresql-editor-save-fifty.log` and
+`.local/browser-load/6ac6d2449991/`.
+
+A separate actual-browser check saved all ten seeded project titles sequentially
+in 17.26 seconds. A synchronized native-service reproduction with ten different
+editors saving different projects instead exhausted retries for seven writers.
+The initial project reads held whole-table serializable predicates. Rechecking
+the unchanged reproduction again failed seven writers before this fix.
+
+An isolated `EXPLAIN` without `ANALYZE` established a planning-time cause: the
+old `unnest(permission_projects(...))` policy reads the entire project table
+while estimating its result size, even though global read permission makes
+executing that policy branch unnecessary. Migration `0029_owned_global_read.sql`
+uses a scalar scope subquery for project and nine project-owned tables. Planning
+the same point query then takes no project predicate. Child rows retain their
+mandatory project references; their visibility uses the same global/scoped read
+permission, and independent mutation/audit guards remain in force.
+
+The Python business gateway retains its current policy checks, but a global
+reader with the requested global capability checks only the supplied owners'
+existence. Empty or missing owner sets remain denied. It no longer materializes
+an unused full read scope for a global reader. Explicitly scoped write callbacks
+prefer existing indexes with transaction-local `enable_seqscan=off`; on this
+small analyzed fixture, restoring normal sequential-scan selection reproduced
+the seven failed writers. Bitmap and index-only scan preferences were unnecessary
+and are not changed. Isolation, actor binding, revocation and three-attempt
+whole-callback replay are unchanged.
+
+The first combined native regression passed 26 tests in 12.56 seconds, including
+ten global editors and ten project-scoped editors each completing in one attempt,
+persisted title checks, planning-only evidence, missing/empty owners, distinct
+read/edit permissions, administrator MFA and planner-setting cleanup after both
+commit and rollback. Evidence: `.local/postgresql-project-save-scope-regression.xml`.
+The broader native migration, integrity, scope, authorization, access, project
+and browser run passed 463 tests and exposed two outdated integrity-test
+expectations. The unsigned-write check now selects serializable isolation before
+testing missing identity, separately from its explicit isolation rejection. The
+helper allowlist now includes the already-public task-source and portfolio-revision
+functions from migrations 0025 and 0027. After those test corrections, all 58
+integrity, gateway, concurrency and seeded-browser checks passed in 39.21 seconds.
+The pooled-setting regression uses one connection to verify cleanup across actors
+after both success and rollback. Logs: `.local/postgresql-bounded-project-security.log`
+and `.local/postgresql-bounded-project-final.log`; their matching XML files retain
+individual cases. See [the concurrency evidence](benchmarks/project-save-concurrency-results.json).
+
+A deployed load comparison is still required. Full regression/coverage and final
+deployment/recovery gates remain open; this native regression does not establish
+50-user browser acceptance.
