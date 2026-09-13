@@ -1189,3 +1189,25 @@ Validation: **13 passed in 12.79 seconds**; output in
 `.local/postgresql-organization-pool-ui-port.log`. Native gateway regressions
 were already included in the preceding hierarchy validation. Other legacy
 UI/domain/tool ports and final migration acceptance are still pending.
+
+## Native tag, schema and project-template Settings
+
+The tag, schema and project-template UI suites now use restricted native
+services with explicit actor bindings. The tag workflows retain dictionary
+deletion/cascades, combined and free-text assignments, selected tasks outside
+search pages, missing records and component event routing. Schema workflows
+retain group/property/option editing, template applicability, referenced-value
+guards and rollback of failed multi-option creation. Failure cases use actual
+PostgreSQL triggers. Project-template editing retains required overrides and
+explicit defaults, including callbacks across different host/app locales.
+
+The source launcher still exposes its explicit seeding flags. Its no-OIDC
+startup check now uses a fresh isolated PostgreSQL database and verifies that
+the `eppm` schema remains absent after the real subprocess exits; the old check
+for a missing SQLite file is retired.
+
+Validation: **13 tag/schema UI tests passed in 14.61 seconds** and **11 project-
+template/startup/authentication-entry tests passed in 6.78 seconds**. Logs:
+`.local/postgresql-tags-schema-ui-port.log` and
+`.local/postgresql-project-type-ui-port.log`. Other legacy ports and full
+application/performance/recovery acceptance remain open.

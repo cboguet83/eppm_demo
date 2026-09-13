@@ -4,15 +4,18 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from secrets import token_hex
 
+import psycopg
 import pytest
 from streamlit.testing.v1 import AppTest
 
-from app.operator_services import create_project_type_service
-from app.infrastructure.database.schema_init import init_db
-from app.operator_services import create_schema_service
+from app.application.services.business_access import BusinessAccess
+from app.main import create_project_type_service, create_schema_service
+from app.runtime import RuntimeResources
+from tests.postgresql.ui import runtime as runtime, access as access
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 @pytest.fixture
@@ -26,16 +29,16 @@ def french_host_locale():
     set_current_locale(previous)
 
 
-def project_types_app(db_path: str) -> None:
+def project_types_app(runtime: RuntimeResources, access: BusinessAccess) -> None:
     """Host the new screen with dependencies constructed outside presentation."""
     import pandas as pd
-    from app.operator_services import create_project_type_service
+    from app.main import create_project_type_service
     from app.presentation.pages.project_types import render_project_types
     from app.presentation.i18n import set_current_locale
 
     set_current_locale("en")
     render_project_types(
-        create_project_type_service(db_path),
+        create_project_type_service(runtime, access=access),
         pd.DataFrame(columns=["param_id", "option_value"]),
     )
 
@@ -45,12 +48,10 @@ def button(app: AppTest, label: str):
     return next(item for item in app.button if item.label == label)
 
 
-def test_project_type_screen_create_rename_duplicate_and_delete(tmp_path: Path) -> None:
+def test_project_type_screen_create_rename_duplicate_and_delete(runtime: RuntimeResources, access: BusinessAccess) -> None:
     """User actions reach the application service and preserve the General type."""
-    path = str(tmp_path / "screen.db")
-    init_db(path)
-    service = create_project_type_service(path)
-    app = AppTest.from_function(project_types_app, args=(path,), default_timeout=15).run()
+    service = create_project_type_service(runtime, access=access)
+    app = AppTest.from_function(project_types_app, args=(runtime, access), default_timeout=15).run()
     assert not app.exception
     assert button(app, "Delete unused template").disabled
     button(app, "Create template").click().run()
@@ -73,14 +74,12 @@ def test_project_type_screen_create_rename_duplicate_and_delete(tmp_path: Path) 
 
 
 def test_project_type_screen_saves_required_overrides_and_explicit_defaults(
-    tmp_path: Path, french_host_locale: None,
+    runtime: RuntimeResources, access: BusinessAccess, french_host_locale: None,
 ) -> None:
     """The migrated UI can enable, edit, and remove a template's default value."""
-    path = str(tmp_path / "rules.db")
-    init_db(path)
-    create_schema_service(path).create_parameter("p", None, "Detail", "TEXT")
-    service = create_project_type_service(path)
-    app = AppTest.from_function(project_types_app, args=(path,), default_timeout=15).run()
+    create_schema_service(runtime, access=access).create_parameter("p", None, "Detail", "TEXT")
+    service = create_project_type_service(runtime, access=access)
+    app = AppTest.from_function(project_types_app, args=(runtime, access), default_timeout=15).run()
     assert not app.exception
     app.selectbox(key="rule_1_p").select("required").run()
     app.checkbox(key="has_default_1_p").check().run()
@@ -98,11 +97,10 @@ def test_project_type_screen_saves_required_overrides_and_explicit_defaults(
     assert service.get_template(1)[0]["has_default"] is False
 
 
-@pytest.mark.parametrize("launcher", ["streamlit_app.py", "streamlit_app.py"])
-def test_existing_and_new_cli_help_preserve_startup_arguments(launcher: str) -> None:
-    """Both source launchers continue to expose the original seeding flags."""
+def test_source_launcher_cli_help_preserves_startup_arguments() -> None:
+    """The supported source launcher exposes the original explicit seeding flags."""
     result = subprocess.run(
-        [sys.executable, launcher, "--help"], cwd=ROOT,
+        [sys.executable, 'streamlit_app.py', "--help"], cwd=ROOT,
         capture_output=True, text=True, check=False, timeout=30,
     )
     assert result.returncode == 0, result.stderr
@@ -110,17 +108,16 @@ def test_existing_and_new_cli_help_preserve_startup_arguments(launcher: str) -> 
     assert "--projects" in result.stdout
 
 
-@pytest.mark.parametrize("launcher", ["streamlit_app.py", "streamlit_app.py"])
-def test_launchers_fail_closed_without_oidc_and_never_initialize_storage(
-    launcher: str, tmp_path: Path,
-) -> None:
+def test_source_launcher_fails_closed_without_oidc_and_never_initializes_postgresql(empty_database) -> None:
     """An isolated process tests actual startup without reusing test module state."""
-    db_path = tmp_path / "startup.db"
-    env = {**{key: value for key, value in os.environ.items() if not key.startswith("OIDC_")}, "DB_NAME": str(db_path), "FORCE_RESEED": "false",
-           "SEED_PROJECTS_COUNT": "0"}
+    env = {key: value for key, value in os.environ.items() if not key.startswith('OIDC_') and key not in {
+        'DB_NAME', 'DATABASE_OPERATOR_URL', 'POSTGRES_TEST_ADMIN_URL', 'POSTGRES_PASSWORD', 'EPPM_RUNTIME_PASSWORD',
+    }}
+    env.update(DATABASE_URL=empty_database.runtime_url, DATABASE_CONTEXT_KEY=token_hex(32),
+               FORCE_RESEED='false', SEED_PROJECTS_COUNT='0')
     code = (
         "from streamlit.testing.v1 import AppTest; "
-        f"app = AppTest.from_file({launcher!r}, default_timeout=30).run(); "
+        "app = AppTest.from_file('streamlit_app.py', default_timeout=30).run(); "
         "assert not app.exception, [error.message for error in app.exception]; "
         "assert not app.sidebar.radio; assert app.error"
     )
@@ -129,4 +126,5 @@ def test_launchers_fail_closed_without_oidc_and_never_initialize_storage(
         capture_output=True, text=True, check=False, timeout=45,
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    assert not db_path.exists()
+    with psycopg.connect(empty_database.operator_url) as connection:
+        assert connection.execute("SELECT to_regnamespace('eppm')").fetchone() == (None,)
