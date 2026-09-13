@@ -2734,3 +2734,27 @@ the complete responsiveness workload, refresh full regression/coverage, and
 repeat fresh setup/restart/restore with the final migration package.
 Log: `.local/postgresql-session-point-fifty-profile.log`. The isolated deployment
 was removed; the ordinary deployment was not upgraded.
+
+## Numeric project-property modal serialization
+
+Native `NUMBER` properties and template defaults are returned as `Decimal`.
+The custom project modal passed those objects into its JSON payload. Streamlit
+1.63's fallback serialized the entire form as a string, so the component could
+not construct its dialog. Two native create/edit regressions reproduced this
+failure without concurrent load. This establishes a data-dependent dialog bug;
+it does not yet establish the cause of every failed load-test attempt.
+
+Numeric properties now cross the component boundary as decimal text and are
+parsed into finite `Decimal` values before the existing native services save.
+Unchanged values and creation defaults retain their precision, blank values
+clear the property, and invalid input retains the editable draft. No database
+migration, permission change, or float conversion is required.
+
+The affected native modal, permissions, exact-money and actual-browser suite
+passed **88 tests in 93.25 seconds**. The browser regression opens a project with
+a precise native numeric property, saves only its title without rounding the
+property, then corrects invalid numeric input and persists an exact edited value.
+Logs: `.local/postgresql-numeric-form-before.log` (two expected pre-fix failures)
+and `.local/postgresql-numeric-form-final.log`; XML:
+`.local/postgresql-numeric-form-final.xml`. A deployed fifty-user run with this
+fix remains necessary before drawing a load-workflow conclusion.

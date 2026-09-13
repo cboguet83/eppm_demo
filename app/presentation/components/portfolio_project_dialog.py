@@ -2,8 +2,7 @@
 
 from dataclasses import dataclass, field
 from datetime import date
-from decimal import Decimal
-from sys import float_info
+from decimal import Decimal, InvalidOperation
 from typing import Any
 from uuid import uuid4
 
@@ -89,6 +88,8 @@ def _project_form(workspace: ProjectWorkspace, draft: ProjectDraft, type_id: int
                 project.dynamic_attributes or {}).get(param_id)
             value = draft.edited.get(key, value)
             values[key] = value.isoformat() if isinstance(value, date) else value
+            if kind == "NUMBER":
+                values[key] = "" if value is None else str(value)
             choices = references.options[references.options.param_id == param_id].option_value.tolist()
             if kind in {"MULTI_ENUM", "TAGS"}:
                 values[key] = value if isinstance(value, list) else [value] if value else []
@@ -99,7 +100,7 @@ def _project_form(workspace: ProjectWorkspace, draft: ProjectDraft, type_id: int
             title = alias.strip() if isinstance(alias, str) and alias.strip() else str(parameter["param_name"])
             if parameter.get("mandatory"):
                 title += " *"
-            add(key, title, {"NUMBER": "number", "DATE": "date", "ENUM": "select",
+            add(key, title, {"NUMBER": "decimal", "DATE": "date", "ENUM": "select",
                             "MULTI_ENUM": "multi", "TAGS": "tags"}.get(kind, "text"),
                 options=[(str(value), str(value)) for value in choices],
                 disabled=kind == "ENUM" and not can_scope, tab=label)
@@ -160,8 +161,6 @@ def _accept_values(draft: ProjectDraft, event: dict[str, Any]) -> dict[str, Any]
         kind = kinds[key]
         if kind in {"multi", "tags"}:
             valid = isinstance(value, list) and all(isinstance(item, str) for item in value)
-        elif kind == "number":
-            valid = value is None or type(value) in {int, float} and -float_info.max <= value <= float_info.max
         else:
             valid = isinstance(value, str)
         if not valid:
@@ -179,17 +178,32 @@ def _accept_values(draft: ProjectDraft, event: dict[str, Any]) -> dict[str, Any]
     return values
 
 
+def _numeric_property(value: str) -> Decimal | None:
+    """Parse a numeric property without rounding its browser text through float."""
+    if not value.strip():
+        return None
+    try:
+        number = Decimal(value)
+    except InvalidOperation as exc:
+        raise ValueError("Enter a finite numeric property value.") from exc
+    if not number.is_finite():
+        raise ValueError("Enter a finite numeric property value.")
+    return number
+
+
 def _save(workspace: ProjectWorkspace, draft: ProjectDraft, values: dict[str, Any]) -> int:
     name = values["name"].strip()
     if not name:
         raise ValueError(t("master_data.err_required_fields"))
     if any(not isinstance(values[key], str) or not values[key].strip() for key in ("planned_budget", "actual_budget")):
         raise ValueError("Enter planned and actual budget amounts.")
+    kinds = {field["key"]: field["kind"] for field in draft.form["fields"]}
     arguments = dict(
         name=name, status=values["status"], planned_budget=values["planned_budget"], actual_budget=values["actual_budget"],
         function_id=int(values["function_id"]) if values["function_id"] else None,
         project_type_id=int(values["project_type_id"]),
-        dynamic_attributes={key[2:]: value for key, value in values.items() if key.startswith("p:")},
+        dynamic_attributes={key[2:]: _numeric_property(value) if kinds[key] == "decimal" else value
+                            for key, value in values.items() if key.startswith("p:")},
         custom_links=[link for link in draft.form["links"] if link["alias"] or link["url"]],
         wbs_allocations=draft.form["wbs"],
     )
