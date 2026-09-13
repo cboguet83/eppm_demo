@@ -1697,3 +1697,39 @@ projects without rerunning retained navigation or sibling sections.
 Validation: **42 passed in 91.70 seconds**, recorded in
 `.local/postgresql-project-modal-port.log`. This preserves existing UI draft
 tokens; it introduces no planning revision or stale-form overwrite protection.
+
+## Native Streamlit project-editor isolation
+
+The remaining native Streamlit editor tests now use restricted PostgreSQL
+resources and a separate access administrator. Creation controls use the actual
+nonbinding ID preview, and saves inspect the generated identity. Cases retain
+lazy reference-read bounds, text/date drafts across tabs, disabled/downgraded
+actors, creation permission changes and deletion while a form remains open.
+Their shared renderer is independent of legacy storage fixtures.
+
+Validation: **20 passed in 39.69 seconds**, recorded in
+`.local/postgresql-project-dialog-port.log`.
+
+## Completed full-suite inventory before the latest fixture ports
+
+The full run against application/test source at `232cefe` completed, with the
+README-only `2888610` commit made while it ran. It reported **1,756 passed,
+416 failed, 100 setup errors, 68 warnings and 5 passed subtests in 3,672.57
+seconds**. No failure or setup error was in `tests/postgresql/`. Full application
+statement coverage was **84.45% (13,120 / 15,536 statements)**, below the required
+95%; this is not acceptance evidence for a passing regression or coverage gate.
+
+The detailed log, coverage JSON and payload-free inventory are retained in
+`.local/postgresql-full-suite-current.log`,
+`.local/postgresql-full-suite-current-coverage.json` and
+`.local/postgresql-full-suite-summary.json`. This run intentionally retained its
+original source while the newer fixture ports were developed in an isolated
+checkout. Their focused passing results above supersede the corresponding old
+fixture failures, but a new full run remains required after the remaining ports.
+
+Large remaining groups include old business-transaction security adapters,
+administration integrity screens, scoped collaboration/planning/resource screens,
+planning and portfolio HTTP fixtures, WBS workflows and legacy browser fixtures.
+The native runtime archive, remaining benchmark tools, authenticated 50-user
+measurements and representative deployed recovery/restart acceptance also remain
+open. No coverage exclusions or reduced acceptance target were introduced.
