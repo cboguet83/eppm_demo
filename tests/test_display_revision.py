@@ -147,7 +147,7 @@ def test_missing_display_revision_fails_safely(business, missing):
 
 
 def test_portfolio_paging_keeps_context_and_requested_offset_after_activity(business, monkeypatch):
-    from tests.test_scoped_portfolio_collaboration_ui import portfolio_app
+    from tests.test_fragment_reruns import portfolio_app
 
     path, service, _, _, manager = business
     with closing(get_db(path)) as connection, connection:
@@ -170,7 +170,7 @@ def test_portfolio_paging_keeps_context_and_requested_offset_after_activity(busi
 
 
 def test_planning_reuses_chart_snapshot_after_activity(business, monkeypatch):
-    from tests.test_business_transaction_security import scoped_planning_app
+    from tests.business_ui import scoped_planning_app
 
     path, service, _, editor, _ = business
     with patch("app.presentation.pages.planning._interactive_gantt", return_value=None) as gantt:

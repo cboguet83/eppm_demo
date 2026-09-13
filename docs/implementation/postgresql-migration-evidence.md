@@ -1803,3 +1803,29 @@ the next tab interaction and complete preparation before emitting a summary.
 Validation: **19 passed in 12.03 seconds**, recorded in
 `.local/postgresql-popup-details-port.log`, including pure popup completion
 checks. Their active helpers no longer depend on SQLite fixtures.
+## Native scoped business security and authorized caches
+
+The full 150-case business-transaction regression suite now uses real PostgreSQL
+accounts, grants and restricted runtime resources. Its shared native fixture
+authenticates accounts through the access gateway; operator credentials are used
+only for setup and independent inspection. Pure UI renderers are separated from
+storage fixtures. The original SQLite module is archived unchanged; its temporary
+fixture remains only for three pending cache/dependency regression ports.
+
+Direct SQL checks cover hidden-target no-op behavior under RLS, forged owners,
+upserts, protected properties, mandatory audit rollback and private log payloads.
+SQLite foreign-key PRAGMA checks are replaced with PostgreSQL constraint checks
+and retained child-row assertions; native integrity tests validate the constraints.
+Migration `0022_project_returning_visibility.sql` fixes INSERT ... RETURNING for
+globally authorized project creators: current global project-read permission is
+checked directly rather than requiring the new row in a pre-insert ID list.
+Scoped visibility, Finance-only isolation and mutation guards remain enforced.
+Applied migrations are unchanged.
+
+Validation: **313 passed in 162.14 seconds** in
+`.local/postgresql-business-security-native.log`, including the full port,
+authorization, RLS, scope resolution, migration foundation and an actual schema
+upgrade. Native portfolio cache tests plus pure hashing checks also passed:
+**11 passed in 2.41 seconds**, `.local/postgresql-authorized-cache-port.log`.
+The original authorized-cache SQLite tests are archived unchanged. Full-suite
+coverage, remaining legacy ports, load and deployed recovery acceptance remain open.
