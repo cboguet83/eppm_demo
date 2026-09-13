@@ -1,6 +1,6 @@
 # ADR 0024: PostgreSQL runtime and replayable transactions
 
-- Status: Accepted; implementation in progress
+- Status: Accepted; implementation stopped at the requested single-user checkpoint
 - Date: 2026-09-12
 - Starting commit: `f564a5b4b49c237902415754c61fe9e77f07f7bc`
 - Branch: `codex/postgresql-migration`
@@ -86,6 +86,16 @@ regression fixes. The unfinished runtime cutover remains uncommitted on the
 feature branch. This interim merge does not declare PostgreSQL-only migration
 acceptance; the final runtime cutover still requires the acceptance gates above.
 See the [checkpoint evidence](../implementation/postgresql-migration-evidence.md#interim-main-checkpoint-requested-on-2026-09-13).
+
+On 2026-09-13 the user subsequently requested stopping at a functional,
+acceptably fast single-user implementation and leaving a Python business-logic
+refactor for later. The `64dde8a` image passed the requested single-user check;
+see [the measured checkpoint](../implementation/benchmarks/single-user-checkpoint-results.json).
+The remaining full-load, refreshed regression/coverage and final operational
+acceptance are deferred. The future refactor is a separate task: business rules
+and workflows should live in Python domain/application services, with PostgreSQL
+retaining data integrity and transaction responsibilities. This checkpoint does
+not remove any current authorization, audit or financial protection.
 
 ## Versions verified at implementation start
 

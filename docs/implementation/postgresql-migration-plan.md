@@ -2,8 +2,9 @@
 
 Planning date: 2026-09-10.
 
-Status: native runtime, tools and test ports are implemented on
-`codex/postgresql-migration`; final acceptance remains incomplete. See
+Status: implementation stopped at the user-requested, verified single-user
+checkpoint on `codex/postgresql-migration`. Full migration acceptance remains
+incomplete and is deferred. See
 [current evidence](postgresql-migration-evidence.md) and the
 [implemented C4 architecture](postgresql-architecture.md).
 Scope is the PostgreSQL migration only.
@@ -13,6 +14,17 @@ while preserving the then-unfinished runtime cutover on the feature branch. See 
 [interim checkpoint evidence](postgresql-migration-evidence.md#interim-main-checkpoint-requested-on-2026-09-13)
 and the delivery note in [ADR 0024](../decisions/0024-postgresql-runtime.md).
 The final migration acceptance checklist remains open.
+
+On 2026-09-13 the user requested stopping implementation once the application
+was functional and acceptably fast for one user, with a separate later refactor
+placing business rules in Python. The current image passed that stopping check:
+39 sequential browser actions on 10,001 projects succeeded, with measured p95
+of 361.5 ms for paging, 235.6 ms for task loading, and 429.5 ms for saving.
+See [the checkpoint evidence](benchmarks/single-user-checkpoint-results.json).
+Further concurrent-load optimization, refreshed full regression/coverage and
+final deployment/recovery acceptance are deferred, not passed. Resume those or
+the architectural refactor only on a new user request. The original plan below
+retains the outstanding requirements for future work.
 
 ## 1. Instructions to the implementing agent
 

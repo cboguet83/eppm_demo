@@ -1,0 +1,161 @@
+{
+  "scope": "Single-user proof-of-concept checkpoint, sequential real browser actions",
+  "source_commit": "64dde8a27dcb40a8a37e704f4805c1d6ef0b05d4",
+  "image": "eppm-demo:postgresql-selection-order-candidate",
+  "deployment": {
+    "host": {
+      "cpus": 8,
+      "memory_bytes": 16529354752,
+      "engine": "29.7.2"
+    },
+    "containers": {
+      "app": {
+        "image_id": "sha256:8e23060c0f9595a8daee9c7df0aec68b2995a1bfbbe04d04f2af74224495e272",
+        "nano_cpus": 0,
+        "memory_bytes": 0,
+        "cpu_quota": 0,
+        "cpu_period": 0,
+        "cpuset": "",
+        "source_commit": "64dde8a27dcb40a8a37e704f4805c1d6ef0b05d4"
+      },
+      "postgres": {
+        "image_id": "sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280",
+        "nano_cpus": 0,
+        "memory_bytes": 0,
+        "cpu_quota": 0,
+        "cpu_period": 0,
+        "cpuset": "",
+        "source_commit": null
+      },
+      "keycloak": {
+        "image_id": "sha256:9d1f1b2b7261ff53c66cb1092dfcdc34a5fb77e81f9e6a6e75b8b6a795de8067",
+        "nano_cpus": 0,
+        "memory_bytes": 0,
+        "cpu_quota": 0,
+        "cpu_period": 0,
+        "cpuset": "",
+        "source_commit": "df15afa5a3a8a2b10021f879ffa93b30fb36c73a"
+      }
+    },
+    "application_versions": {
+      "python": "3.14.7",
+      "streamlit": "1.63.0",
+      "database_pool": {
+        "pool_min": 2,
+        "pool_max": 20,
+        "acquire_timeout": 5.0,
+        "statement_timeout": 10.0
+      }
+    }
+  },
+  "migrations": 29,
+  "fixture_counts": {
+    "project": 10001,
+    "project_task": 73929,
+    "task_dependencies": 66173,
+    "resource_pool": 103,
+    "resource_pool_group": 31,
+    "resource_pool_assignment": 10201,
+    "app_user": 0
+  },
+  "fixture_seed": 42,
+  "simultaneous_workload_users": 1,
+  "browser_version": "151.0.7922.34",
+  "warmup_attempts_per_scenario": 3,
+  "measured_attempts_per_scenario": 10,
+  "total_attempts": 39,
+  "total_failures": 0,
+  "navigation": [
+    {
+      "scenario": "portfolio_paging",
+      "elapsed_seconds": 1.481
+    },
+    {
+      "scenario": "visible_task_loading",
+      "elapsed_seconds": 3.304
+    },
+    {
+      "scenario": "simple_save",
+      "elapsed_seconds": 1.569
+    }
+  ],
+  "scenarios": {
+    "portfolio_paging": {
+      "attempts": 10,
+      "failures": 0,
+      "successes": 10,
+      "p95_ms": 361.5,
+      "max_ms": 361.5,
+      "median_ms": 233.69999998807907,
+      "median_full_workflow_seconds": 0.241,
+      "max_full_workflow_seconds": 0.37
+    },
+    "visible_task_loading": {
+      "attempts": 10,
+      "failures": 0,
+      "successes": 10,
+      "p95_ms": 235.60000002384186,
+      "max_ms": 235.60000002384186,
+      "median_ms": 211.05000001192093,
+      "median_full_workflow_seconds": 0.41,
+      "max_full_workflow_seconds": 0.427
+    },
+    "simple_save": {
+      "attempts": 10,
+      "failures": 0,
+      "successes": 10,
+      "p95_ms": 429.5,
+      "max_ms": 429.5,
+      "median_ms": 364.09999999403954,
+      "median_full_workflow_seconds": 0.833,
+      "max_full_workflow_seconds": 0.883
+    }
+  },
+  "single_user_checkpoint_verified": true,
+  "full_migration_acceptance": false,
+  "user_decision": "Stop implementation at a functional single-user checkpoint; refactor business logic into Python in a separate later task.",
+  "latest_fifty_user_diagnostic": {
+    "source_commit": "64dde8a27dcb40a8a37e704f4805c1d6ef0b05d4",
+    "periods": [
+      {
+        "round": 1,
+        "scenarios": {
+          "portfolio_paging": {
+            "attempts": 40,
+            "failures": 7,
+            "successes": 33,
+            "p95_ms": 37944,
+            "max_ms": 38062.3
+          },
+          "visible_task_loading": {
+            "attempts": 24,
+            "failures": 0,
+            "successes": 24,
+            "p95_ms": 15798.6,
+            "max_ms": 15856.2
+          },
+          "simple_save": {
+            "attempts": 10,
+            "failures": 8,
+            "successes": 2,
+            "p95_ms": 4499.7,
+            "max_ms": 4499.7
+          }
+        }
+      }
+    ],
+    "total_attempts_including_warmup": 129,
+    "total_failures_including_warmup": 15,
+    "acceptance_complete": false,
+    "raw_results": ".local/browser-load/fc568748acc3/browser-results.json"
+  },
+  "raw_results": ".local/browser-load/4f2cc94406d7/single-user-results.json",
+  "command": ".venv/Scripts/python.exe .local/check-postgresql-single-user.py",
+  "method": "Reuse the benchmark OIDC, preparation, paging, task-expansion and save helpers; close the administrator browser before one editor sequentially performs all three workflows.",
+  "limitations": [
+    "One user and short sample count; this does not establish concurrent load acceptance.",
+    "Page preparation is reported separately from action-to-usable-result latency.",
+    "The fixture provisions two additional reader accounts that are never logged in or used.",
+    "The most recent full regression/coverage run predates this checkpoint; subsequent focused regressions are recorded separately."
+  ]
+}

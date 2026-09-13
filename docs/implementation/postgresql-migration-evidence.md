@@ -2949,3 +2949,47 @@ versions after ten title saves (`.local/postgresql-selection-order-final.xml`).
 This removes a proven source of unnecessary property writes; it does not yet
 establish how much of the concurrent save failure it explains. A deployed
 comparison and the full migration acceptance gates remain outstanding.
+
+## Requested single-user stopping point
+
+The user requested stopping further implementation once single-user functionality
+and speed were acceptable, and deferring a refactor of business rules into Python.
+After the already-running fifty-user diagnostic exited and removed its disposable
+deployment, the committed `64dde8a` image was tested in a fresh isolated deployment
+with all 29 migrations and 10,001 deterministic projects. One editor performed
+all three workflows sequentially. The setup administrator's browser was closed
+before the workload; the two additionally provisioned reader accounts were never
+logged in. Each scenario had three warmup actions and ten measured actions.
+
+All 39 actions succeeded. Measured p95 was 361.5 ms for uncached portfolio paging,
+235.6 ms for visible task loading, and 429.5 ms from save submission to confirmed
+result. The longest complete save workflow, including opening and filling the
+editor, took 0.883 seconds. Initial Portfolio preparation took 1.481 seconds,
+Planning 3.304 seconds, and preparing the selected project for saving 1.569 seconds.
+The browser uses the same OIDC login, readiness checks and action timers as the
+existing load harness. See [the reproducible-method and measurement record](benchmarks/single-user-checkpoint-results.json).
+Raw evidence: `.local/browser-load/4f2cc94406d7/single-user-results.json`;
+runner: `.local/check-postgresql-single-user.py`; log:
+`.local/postgresql-single-user-check.log`. The runner exited successfully after
+its disposable deployment cleanup.
+
+The preceding fifty-user run remains a failed diagnostic: fifteen of 74 measured
+workflows failed, with p95 37,944 ms paging, 15,798.6 ms tasks and 4,499.7 ms for
+the two successful saves. Including warmup, fifteen of 129 workflows failed.
+Read-only heap-counter samples showed no property parent updates or selection
+rewrites after the multiselect fix; that eliminated unnecessary writes but did
+not resolve concurrent-load acceptance. Raw evidence:
+`.local/browser-load/fc568748acc3/browser-results.json` and its `heap-samples.jsonl`.
+
+Implementation stops at the verified single-user checkpoint as requested. Full
+concurrent-load acceptance, another complete regression/coverage run, and final
+current-package deployment/restart/restore checks remain deferred. The earlier
+full suite passed 2,278 Python tests plus five subtests and 71 JavaScript tests,
+with 98.9229% Python statement coverage at `1a38d05`; subsequent focused native
+and browser regressions are recorded above. Those earlier full-suite results
+are not represented as a fresh complete run of `64dde8a`.
+
+The later architecture task should move business calculations and workflows to
+Python domain/application services while retaining database integrity and
+transaction protection and preserving existing authorization, audit and financial
+semantics. No such refactor is implemented at this checkpoint.
