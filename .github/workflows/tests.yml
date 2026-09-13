@@ -1,9 +1,7 @@
 name: Application and PostgreSQL checks
 
 on:
-  push:
-    branches: [main, codex/postgresql-migration]
-  pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read

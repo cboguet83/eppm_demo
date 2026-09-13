@@ -131,6 +131,10 @@ node --test tests/*.cjs
 
 ---
 
+GitHub Actions runs only on manual request. Open **Actions → Application and
+PostgreSQL checks → Run workflow**, choose the branch, and start the checks.
+Pushes and pull requests do not start CI automatically.
+
 ## Project types and custom properties
 
 Manage project types in **Parameters Definition → Project types**. Each template
