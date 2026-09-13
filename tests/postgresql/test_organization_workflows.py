@@ -12,35 +12,23 @@ from app.presentation.components.organization_frames import enrich_teams
 
 from app.presentation.components import organization_frames
 
-import os
-import tempfile
 import unittest
 from datetime import date
+import pytest
 
-from app.infrastructure.database.schema_init import init_db
 from app.domain.organization.rules import validate_employee_calendar_exception
 from app.domain.organization.models import Employee, EmployeeCalendarException, FunctionType, OrgFunction, Team
-from app.operator_services import create_organization_service
+from app.main import create_organization_service
+from tests.postgresql.ui import runtime as runtime, access as access
 
 
 class TestOrganization(unittest.TestCase):
     """Test suite covering create_organization_service and OrganizationService."""
 
-    def setUp(self) -> None:
-        """Sets up a temporary SQLite database for test isolation."""
-        self.temp_db = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
-        self.db_path = self.temp_db.name
-        self.temp_db.close()
-        init_db(self.db_path)
-        self.repo = create_organization_service(self.db_path)
-
-    def tearDown(self) -> None:
-        """Cleans up the temporary SQLite database."""
-        if os.path.exists(self.db_path):
-            try:
-                os.unlink(self.db_path)
-            except PermissionError:
-                pass
+    @pytest.fixture(autouse=True)
+    def native_setup(self, runtime, access) -> None:
+        """Exercise organization workflows with a restricted native actor."""
+        self.repo = create_organization_service(runtime, access=access)
 
     def test_function_type_crud(self) -> None:
         """Verify Create, Read, Update, Delete operations for Function Types."""

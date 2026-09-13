@@ -7,21 +7,16 @@ from app.domain.resources.capacity_rules import project_pool_status
 from app.domain.resources.rules import validate_allocation_pct
 from app.domain.resources.rules import validate_fte
 from app.domain.resources.rules import validate_pool_name
-from app.operator_services import create_pool_capacity_service
+from app.main import create_pool_capacity_service
 
 from app.presentation.components import resource_pool_frames
 
-from contextlib import closing
-
-import os
-import sqlite3
-import tempfile
 import unittest
 from datetime import date
 from unittest.mock import MagicMock, patch
 
-from app.infrastructure.database.connection import get_db
-from app.infrastructure.database.schema_init import init_db
+import psycopg
+import pytest
 from app.domain.organization.models import Employee, EmployeeCalendarException, OrgFunction, Team
 from app.domain.resources.models import (
     PoolAssignment,
@@ -30,35 +25,22 @@ from app.domain.resources.models import (
     ResourcePoolGroup,
 )
 from app.presentation.i18n import set_current_locale
-from app.operator_services import create_planning_service
-from app.operator_services import create_organization_service
-from app.operator_services import create_project_service
-from app.operator_services import create_resource_pool_service
+from app.main import create_planning_service, create_organization_service, create_project_service, create_resource_pool_service
+from tests.postgresql.ui import runtime as runtime, access as access
 
 
 class TestResourcePools(unittest.TestCase):
     """Test suite covering create_resource_pool_service and ResourcePoolService."""
 
-    def setUp(self) -> None:
-        """Sets up a temporary SQLite database for test isolation."""
+    @pytest.fixture(autouse=True)
+    def native_setup(self, authorized, runtime, access) -> None:
+        """Use native services and a restricted actor in a separately migrated database."""
         set_current_locale("en")
-        self.temp_db = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
-        self.db_path = self.temp_db.name
-        self.temp_db.close()
-        init_db(self.db_path)
-
-        self.pool_repo = create_resource_pool_service(self.db_path)
-        self.org_repo = create_organization_service(self.db_path)
-        self.project_repo = create_project_service(self.db_path)
-        self.milestone_repo = create_planning_service(self.db_path)
-
-    def tearDown(self) -> None:
-        """Cleans up the temporary SQLite database."""
-        if os.path.exists(self.db_path):
-            try:
-                os.unlink(self.db_path)
-            except PermissionError:
-                pass
+        self.setup, self.resources, self.access = authorized.setup, runtime, access
+        self.pool_repo = create_resource_pool_service(runtime, access=access)
+        self.org_repo = create_organization_service(runtime, access=access)
+        self.project_repo = create_project_service(runtime, access=access)
+        self.milestone_repo = create_planning_service(runtime, access=access)
 
     def test_pool_crud(self) -> None:
         """Verify Create, Read, Update, Delete for ResourcePool."""
@@ -114,13 +96,13 @@ class TestResourcePools(unittest.TestCase):
         # Validation happens before replacement, so rejected edits preserve members.
         self.assertEqual(self.pool_repo.get_group_direct_member_ids(leaf), ([pool_a], []))
 
-        with closing(get_db(self.db_path)) as conn, conn:
-            with self.assertRaisesRegex(sqlite3.IntegrityError, "cycle"):
+        with psycopg.connect(self.setup.operator_url) as conn:
+            with self.assertRaisesRegex(psycopg.errors.CheckViolation, "cycle"):
                 conn.execute(
                     """
-                    INSERT INTO resource_pool_group_member
+                    INSERT INTO eppm.resource_pool_group_member
                         (group_id, pool_id, child_group_id)
-                    VALUES (?, NULL, ?)
+                    VALUES (%s, NULL, %s)
                     """,
                     (leaf, top),
                 )
@@ -131,9 +113,9 @@ class TestResourcePools(unittest.TestCase):
         from app.presentation.pages.planning import _build_resource_pool_hierarchy
 
         pool_c = self.pool_repo.create_pool(ResourcePool(name="Ungrouped Pool"))
-        from app.operator_services import create_planning_workspace
+        from app.main import create_planning_workspace
         hierarchy = _build_resource_pool_hierarchy(
-            create_planning_workspace(self.db_path),
+            create_planning_workspace(self.resources, access=self.access),
             [
                 {"id": pool_a, "name": "Pool A"},
                 {"id": pool_b, "name": "Pool B"},
@@ -200,7 +182,7 @@ class TestResourcePools(unittest.TestCase):
         )
 
         # 4. Calculate capacity
-        cap_detail = create_pool_capacity_service(self.db_path).calculate_many([p_id])[0]
+        cap_detail = create_pool_capacity_service(self.resources, access=self.access).calculate_many([p_id])[0]
 
         # F1 must be counted strictly ONCE!
         # If counted twice, total capacity would be: 1.0 (team) + 1.0 (team) + 0.5 (direct) = 2.5 FTE.
@@ -267,7 +249,7 @@ class TestResourcePools(unittest.TestCase):
             )
         )
 
-        detail = create_pool_capacity_service(self.db_path).calculate_many([pool_id])[0]
+        detail = create_pool_capacity_service(self.resources, access=self.access).calculate_many([pool_id])[0]
 
         self.assertEqual(detail.defined_capacity_fte, 2.5)
         self.assertEqual(detail.total_capacity_fte, 2.5)
@@ -294,7 +276,7 @@ class TestResourcePools(unittest.TestCase):
             project_id=9,
             name="Fallback Project",
             status="In Progress",
-            planned_budget=0.0,
+            planned_budget=0,
             actual_budget=0.0,
             dynamic_attributes={},
         )
@@ -309,7 +291,7 @@ class TestResourcePools(unittest.TestCase):
             )
         )
 
-        detail = create_pool_capacity_service(self.db_path).calculate_many([pool_id])[0]
+        detail = create_pool_capacity_service(self.resources, access=self.access).calculate_many([pool_id])[0]
 
         self.assertFalse(detail.has_assigned_resources)
         self.assertEqual(detail.assigned_capacity_fte, 0.0)
@@ -356,7 +338,7 @@ class TestResourcePools(unittest.TestCase):
             project_id=11,
             name="Long Period Project",
             status="In Progress",
-            planned_budget=0.0,
+            planned_budget=0,
             actual_budget=0.0,
             dynamic_attributes={},
         )
@@ -381,7 +363,7 @@ class TestResourcePools(unittest.TestCase):
             )
         )
 
-        detail = create_pool_capacity_service(self.db_path).calculate_many([pool_id])[0]
+        detail = create_pool_capacity_service(self.resources, access=self.access).calculate_many([pool_id])[0]
 
         self.assertEqual(detail.total_capacity_fte, 2.0)
         self.assertEqual(detail.effective_capacity_fte, 1.0)
@@ -393,7 +375,7 @@ class TestResourcePools(unittest.TestCase):
         self.assertEqual(detail.daily_overassignments[0].assigned_fte, 0.75)
         self.assertEqual(detail.peak_excess_fte, 0.25)
 
-        project_status = project_pool_status(11, create_pool_capacity_service(self.db_path).calculate_many([pool_id])[0])
+        project_status = project_pool_status(11, create_pool_capacity_service(self.resources, access=self.access).calculate_many([pool_id])[0])
         self.assertTrue(project_status["is_overassigned"])
         self.assertEqual(project_status["overallocated_dates"], ["2026-04-15"])
         self.assertEqual(project_status["minimum_capacity_fte"], 0.5)
@@ -414,7 +396,7 @@ class TestResourcePools(unittest.TestCase):
             project_id=10,
             name="Alpha Project",
             status="In Progress",
-            planned_budget=100000.0,
+            planned_budget=100000,
             actual_budget=20000.0,
             dynamic_attributes={},
         )
@@ -447,7 +429,7 @@ class TestResourcePools(unittest.TestCase):
         )
 
         # First evaluation: Only Assignment 1 -> 1.5 FTE <= 2.0 FTE -> NOT overassigned
-        cap_detail_1 = create_pool_capacity_service(self.db_path).calculate_many([p_id])[0]
+        cap_detail_1 = create_pool_capacity_service(self.resources, access=self.access).calculate_many([p_id])[0]
         self.assertFalse(cap_detail_1.is_overassigned)
         self.assertEqual(cap_detail_1.peak_assigned_fte, 1.5)
         self.assertEqual(len(cap_detail_1.daily_overassignments), 0)
@@ -465,7 +447,7 @@ class TestResourcePools(unittest.TestCase):
         )
 
         # Second evaluation: Overassigned on overlapping days!
-        cap_detail_2 = create_pool_capacity_service(self.db_path).calculate_many([p_id])[0]
+        cap_detail_2 = create_pool_capacity_service(self.resources, access=self.access).calculate_many([p_id])[0]
         self.assertTrue(cap_detail_2.is_overassigned)
         self.assertEqual(cap_detail_2.peak_assigned_fte, 2.5)
         self.assertEqual(cap_detail_2.peak_excess_fte, 0.5)
@@ -492,7 +474,7 @@ class TestResourcePools(unittest.TestCase):
             project_id=20,
             name="Beta Project",
             status="In Progress",
-            planned_budget=50000.0,
+            planned_budget=50000,
             actual_budget=10000.0,
             dynamic_attributes={},
         )
@@ -518,7 +500,7 @@ class TestResourcePools(unittest.TestCase):
             )
         )
 
-        cap_detail = create_pool_capacity_service(self.db_path).calculate_many([p_id])[0]
+        cap_detail = create_pool_capacity_service(self.resources, access=self.access).calculate_many([p_id])[0]
         self.assertTrue(cap_detail.is_overassigned)
         self.assertEqual(len(cap_detail.daily_overassignments), 15)
         self.assertEqual(cap_detail.daily_overassignments[0].date, "2026-06-01")
@@ -534,7 +516,7 @@ class TestResourcePools(unittest.TestCase):
             project_id=30,
             name="Gamma Project",
             status="In Progress",
-            planned_budget=80000.0,
+            planned_budget=80000,
             actual_budget=0.0,
             dynamic_attributes={},
         )
@@ -551,7 +533,7 @@ class TestResourcePools(unittest.TestCase):
             )
         )
 
-        proj_status = project_pool_status(30, create_pool_capacity_service(self.db_path).calculate_many([p_id])[0])
+        proj_status = project_pool_status(30, create_pool_capacity_service(self.resources, access=self.access).calculate_many([p_id])[0])
         self.assertTrue(proj_status["is_overassigned"])
         self.assertEqual(proj_status["project_peak_assigned_fte"], 1.5)
         self.assertEqual(proj_status["excess_fte"], 0.5)
@@ -581,7 +563,7 @@ class TestResourcePools(unittest.TestCase):
             project_id=40,
             name="Project Gamma",
             status="Draft",
-            planned_budget=20000.0,
+            planned_budget=20000,
             actual_budget=0.0,
             dynamic_attributes={},
         )
@@ -637,7 +619,7 @@ class TestResourcePools(unittest.TestCase):
         p_id = self.pool_repo.create_pool(ResourcePool(name="QA Pool"))
         self.pool_repo.create_mapping(PoolMapping(pool_id=p_id, target_type="function", target_id=f_id, allocation_pct=100.0))
 
-        summary = create_pool_capacity_service(self.db_path).get_details([pool.id for pool in self.pool_repo.get_all_pools()])
+        summary = create_pool_capacity_service(self.resources, access=self.access).get_details([pool.id for pool in self.pool_repo.get_all_pools()])
         self.assertIsInstance(summary, list)
         self.assertGreaterEqual(len(summary), 1)
         self.assertEqual(summary[0].pool_name, "QA Pool")
@@ -659,7 +641,7 @@ class TestResourcePools(unittest.TestCase):
         self.assertEqual(df_all.iloc[0]["name"], "DevOps Pool")
 
         # 2. Calculate the pool detail through the capacity service
-        detail = create_pool_capacity_service(self.db_path).calculate_many([p_id])[0]
+        detail = create_pool_capacity_service(self.resources, access=self.access).calculate_many([p_id])[0]
         self.assertEqual(detail.pool_id, p_id)
         self.assertEqual(detail.total_capacity_fte, 1.0)
 
@@ -677,12 +659,12 @@ class TestResourcePools(unittest.TestCase):
             project_id=50,
             name="Architecture Revamp",
             status="In Progress",
-            planned_budget=100000.0,
+            planned_budget=100000,
             actual_budget=0.0,
             dynamic_attributes={},
         )
         # Capacity = 2.0 FTE
-        cap_detail = create_pool_capacity_service(self.db_path).calculate_many([p_id])[0]
+        cap_detail = create_pool_capacity_service(self.resources, access=self.access).calculate_many([p_id])[0]
         self.assertEqual(cap_detail.total_capacity_fte, 2.0)
 
         # Create tasks on project 50
@@ -737,7 +719,7 @@ class TestResourcePools(unittest.TestCase):
         )
 
         # Calculate pool status
-        detail = create_pool_capacity_service(self.db_path).calculate_many([p_id])[0]
+        detail = create_pool_capacity_service(self.resources, access=self.access).calculate_many([p_id])[0]
 
         # In interval 1 (07-01 to 07-05): max(1.5, 1.0) = 1.5 FTE (NOT 2.5!)
         self.assertEqual(detail.daily_usage["2026-07-01"], 1.5)
@@ -761,7 +743,7 @@ class TestResourcePools(unittest.TestCase):
             )
         )
 
-        detail_over = create_pool_capacity_service(self.db_path).calculate_many([p_id])[0]
+        detail_over = create_pool_capacity_service(self.resources, access=self.access).calculate_many([p_id])[0]
         # Task level = 2.0 + 0.5 = 2.5 FTE. Project level = 1.5 FTE. max(1.5, 2.5) = 2.5 FTE.
         self.assertEqual(detail_over.daily_usage["2026-07-06"], 2.5)
         self.assertTrue(detail_over.is_overassigned)
@@ -776,7 +758,7 @@ class TestResourcePools(unittest.TestCase):
             project_id=60,
             name="PMO Transformation",
             status="In Progress",
-            planned_budget=50000.0,
+            planned_budget=50000,
             actual_budget=0.0,
             dynamic_attributes={},
         )
@@ -829,7 +811,7 @@ class TestResourcePools(unittest.TestCase):
             project_id=70,
             name="Interval Initiative",
             status="In Progress",
-            planned_budget=40000.0,
+            planned_budget=40000,
             actual_budget=0.0,
             dynamic_attributes={},
         )
@@ -866,7 +848,7 @@ class TestResourcePools(unittest.TestCase):
             )
         )
 
-        detail = create_pool_capacity_service(self.db_path).calculate_many([p_id])[0]
+        detail = create_pool_capacity_service(self.resources, access=self.access).calculate_many([p_id])[0]
 
         self.assertEqual(detail.daily_usage, {
             "2026-01-01": 0.5, "2026-01-02": 0.5, "2026-01-03": 0.5,
@@ -883,7 +865,7 @@ class TestResourcePools(unittest.TestCase):
             project_id=80,
             name="Timeline Initiative",
             status="In Progress",
-            planned_budget=75000.0,
+            planned_budget=75000,
             actual_budget=0.0,
             dynamic_attributes={},
         )
@@ -925,7 +907,7 @@ class TestResourcePools(unittest.TestCase):
             )
         )
 
-        detail = create_pool_capacity_service(self.db_path).calculate_many([p_id])[0]
+        detail = create_pool_capacity_service(self.resources, access=self.access).calculate_many([p_id])[0]
 
         self.assertEqual(len(detail.assignments), 1)
         assign = detail.assignments[0]
@@ -958,7 +940,7 @@ class TestResourcePools(unittest.TestCase):
             project_id=81,
             name="Cloud Migration Project",
             status="In Progress",
-            planned_budget=120000.0,
+            planned_budget=120000,
             actual_budget=0.0,
             dynamic_attributes={},
         )
@@ -998,7 +980,7 @@ class TestResourcePools(unittest.TestCase):
             )
         )
 
-        detail = create_pool_capacity_service(self.db_path).calculate_many([p_id])[0]
+        detail = create_pool_capacity_service(self.resources, access=self.access).calculate_many([p_id])[0]
 
         self.assertEqual(detail.total_capacity_fte, 2.0)
 

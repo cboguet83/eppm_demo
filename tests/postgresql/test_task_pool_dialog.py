@@ -2,33 +2,32 @@
 
 from app.presentation.components import resource_pool_frames
 
-from contextlib import closing
-
 import datetime
-import sqlite3
-import tempfile
 import unittest
-from pathlib import Path
 from unittest.mock import patch
 
+import psycopg
+import pytest
 from streamlit.testing.v1 import AppTest
 
-from app.infrastructure.database.schema_init import init_db
-from app.operator_services import create_resource_pool_service
+from app.application.services.business_access import BusinessAccess
+from app.main import create_resource_pool_service
+from app.runtime import RuntimeResources
+from tests.postgresql.ui import runtime as runtime, access as access
 
 
-def task_pool_app(db_path: str, task_id: int = 1) -> None:
+def task_pool_app(resources: RuntimeResources, access: BusinessAccess, task_id: int = 1) -> None:
     """Render the real injected dialog against an isolated database."""
-    from app.operator_services import create_planning_workspace
+    from app.main import create_planning_workspace
     from app.presentation.pages.planning import _manage_task_resource_pools_dialog
-    _manage_task_resource_pools_dialog(task_id, 'Test task', 1, create_planning_workspace(db_path))
+    _manage_task_resource_pools_dialog(task_id, 'Test task', 1, create_planning_workspace(resources, access=access))
 
 
-def project_pool_app(db_path: str) -> None:
+def project_pool_app(resources: RuntimeResources, access: BusinessAccess) -> None:
     """Render project allocation against the same many-pool fixture."""
-    from app.operator_services import create_planning_workspace
+    from app.main import create_planning_workspace
     from app.presentation.pages.planning import _manage_project_resource_pools_dialog
-    _manage_project_resource_pools_dialog(1, 'Project', create_planning_workspace(db_path))
+    _manage_project_resource_pools_dialog(1, 'Project', create_planning_workspace(resources, access=access))
 
 
 
@@ -37,10 +36,10 @@ class TaskPoolDialogTests(unittest.TestCase):
 
     def test_project_popup_batches_only_assigned_pools_and_reuses_the_result(self) -> None:
         from app.application.services.pool_capacity import PoolCapacityService
-        with closing(sqlite3.connect(self.path)) as conn, conn:
-            conn.execute('INSERT INTO resource_pool_assignment(pool_id,project_id,fte_assigned) VALUES(1,1,0.5)')
+        with psycopg.connect(self.setup.operator_url) as conn:
+            conn.execute('INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,fte_assigned) VALUES(1,1,0.5)')
         original = PoolCapacityService.get_details
-        app = AppTest.from_function(project_pool_app, args=(self.path,))
+        app = AppTest.from_function(project_pool_app, args=(self.resources, self.access))
         with patch.object(PoolCapacityService, 'get_details', autospec=True, side_effect=original) as reads:
             app.run()
             self.assert_healthy(app)
@@ -51,37 +50,35 @@ class TaskPoolDialogTests(unittest.TestCase):
             self.assert_healthy(app)
             self.assertEqual(reads.call_count, 0)
 
-    def setUp(self) -> None:
+    @pytest.fixture(autouse=True)
+    def native_setup(self, authorized, runtime, access) -> None:
         """Create real tasks, duplicate assignments and many unrelated pools."""
-        directory = tempfile.TemporaryDirectory()
-        self.addCleanup(directory.cleanup)
-        self.path = str(Path(directory.name) / 'dialog.db')
-        init_db(self.path)
-        self.repo = create_resource_pool_service(self.path)
-        with closing(sqlite3.connect(self.path)) as conn, conn:
-            conn.execute("INSERT INTO project(id,name) VALUES(1,'Project')")
-            conn.executemany(
-                'INSERT INTO project_task(id,project_id,task_name,start_date,end_date) '
-                'VALUES(?,1,?,?,?)',
+        self.setup, self.resources, self.access = authorized.setup, runtime, access
+        self.repo = create_resource_pool_service(runtime, access=access)
+        with psycopg.connect(self.setup.operator_url) as conn, conn.cursor() as cursor:
+            conn.execute("UPDATE eppm.project SET name='Project' WHERE id=1")
+            cursor.executemany(
+                'INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date) '
+                'VALUES(%s,1,%s,%s,%s)',
                 [(1, 'Assigned task', '2026-01-01', '2026-12-31'),
                  (2, 'Empty task', '2026-02-01', '2026-02-28')],
             )
             conn.execute(
-                'INSERT INTO employee(employee_id,firstname,lastname,email,employee_code) '
+                'INSERT INTO eppm.employee(employee_id,firstname,lastname,email,employee_code) '
                 "VALUES(1,'Test','Employee','test@example.invalid','TEST')"
             )
-            conn.executemany(
-                'INSERT INTO resource_pool(id,name,capacity_fte) VALUES(?,?,?)',
+            cursor.executemany(
+                'INSERT INTO eppm.resource_pool(id,name,capacity_fte) VALUES(%s,%s,%s)',
                 [(1, 'Employee pool', 2), (2, 'Fallback pool', 3), (3, 'Zero pool', 0)]
                 + [(pid, f'Unrelated pool {pid}', 4) for pid in range(5, 105)],
             )
             conn.execute(
-                'INSERT INTO resource_pool_mapping(pool_id,target_type,target_id) '
+                'INSERT INTO eppm.resource_pool_mapping(pool_id,target_type,target_id) '
                 "VALUES(1,'employee',1)"
             )
-            conn.executemany(
-                'INSERT INTO resource_pool_assignment(pool_id,project_id,task_id,fte_assigned) '
-                'VALUES(1,1,1,?)', [(0.25,), (0.25,)],
+            cursor.executemany(
+                'INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,fte_assigned) '
+                'VALUES(1,1,1,%s)', [(0.25,), (0.25,)],
             )
 
     def app(self, task_id: int = 1) -> AppTest:
@@ -93,7 +90,7 @@ class TaskPoolDialogTests(unittest.TestCase):
         Returns:
             Test session backed by the fixture database.
         """
-        return AppTest.from_function(task_pool_app, args=(self.path, task_id), default_timeout=30)
+        return AppTest.from_function(task_pool_app, args=(self.resources, self.access, task_id), default_timeout=30)
 
     def assert_healthy(self, app: AppTest) -> None:
         """Assert that the dialog rendered without a Streamlit exception.
@@ -129,10 +126,10 @@ class TaskPoolDialogTests(unittest.TestCase):
                    side_effect=AssertionError('Unassigned task calculated demand')):
             app.run()
             self.assert_healthy(app)
-        with closing(sqlite3.connect(self.path)) as conn, conn:
-            conn.execute("INSERT INTO resource_pool(id,name) VALUES(4,'Legacy pool')")
+        with psycopg.connect(self.setup.operator_url) as conn:
+            conn.execute("INSERT INTO eppm.resource_pool(id,name) VALUES(4,'Legacy pool')")
             conn.execute(
-                'INSERT INTO resource_pool_mapping(pool_id,target_type,target_id) '
+                'INSERT INTO eppm.resource_pool_mapping(pool_id,target_type,target_id) '
                 "VALUES(4,'employee',1)"
             )
         from app.application.services.pool_capacity import PoolCapacityService
@@ -147,18 +144,18 @@ class TaskPoolDialogTests(unittest.TestCase):
     def test_external_calendar_and_assignment_changes_refresh_warnings(self) -> None:
         """A single zero-capacity day remains visible after a cached modal rerun."""
         app = self.app().run()
-        with closing(sqlite3.connect(self.path)) as conn, conn:
+        with psycopg.connect(self.setup.operator_url) as conn:
             conn.execute(
-                'INSERT INTO employee_calendar_exception(employee_id,start_date,end_date,occupation_percentage) '
+                'INSERT INTO eppm.employee_calendar_exception(employee_id,start_date,end_date,occupation_percentage) '
                 "VALUES(1,'2026-06-15','2026-06-15',0)"
             )
-            conn.execute("UPDATE resource_pool SET capacity_fte=5 WHERE id=2")
+            conn.execute("UPDATE eppm.resource_pool SET capacity_fte=5 WHERE id=2")
         app.run()
         self.assert_healthy(app)
         self.assertEqual(sum('Overassigned (Peak: 0.50' in item.value for item in app.markdown), 2)
         self.assertIn('🏊 Fallback pool (Cap: 5.00 FTE)', app.selectbox[0].options)
-        with closing(sqlite3.connect(self.path)) as conn, conn:
-            conn.execute('DELETE FROM resource_pool_assignment WHERE task_id=1')
+        with psycopg.connect(self.setup.operator_url) as conn:
+            conn.execute('DELETE FROM eppm.resource_pool_assignment WHERE task_id=1')
         app.run()
         self.assert_healthy(app)
         self.assertFalse(any('Overassigned (Peak:' in item.value for item in app.markdown))

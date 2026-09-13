@@ -1274,3 +1274,22 @@ gateway and tag page each have 100% statement coverage. Output:
 `.local/postgresql-tag-native-complete.log` and
 `.local/postgresql-tag-native-coverage.json`. Full application coverage, remaining
 legacy ports and the performance/recovery gates remain open.
+
+## Native organization, resource-pool and allocation-dialog workflows
+
+The organization and resource-pool workflow suites now use native services,
+restricted actors and independently migrated PostgreSQL databases. Their existing
+CRUD, hierarchy, employee-calendar, membership, capacity, allocation and display
+assertions remain active. The database cycle guard is exercised directly through
+PostgreSQL, and monetary setup values use exact integers.
+
+Task and project allocation dialogs retain the 103-pool fixture, duplicate
+assignments, custom-date validation, bounded capacity reads, cached reruns and
+refresh after external calendar or assignment changes. These tests use the real
+native capacity calculations and database revisions.
+
+Validation: **35 passed in 27.72 seconds**, recorded in
+`.local/merge-request-pool-organization-tests.log`. Full collection now reaches
+**1,943 tests with 29 remaining legacy collection errors**; the migration is
+still incomplete and this checkpoint does not satisfy full-suite, coverage,
+performance or recovery acceptance.
