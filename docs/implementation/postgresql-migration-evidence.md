@@ -1057,3 +1057,15 @@ Runtime commit: `b5106c5`; main's CI/configuration fixes were incorporated by
 continues on its feature branch. Legacy test/tool conversion and archival,
 full PostgreSQL-only application coverage, the authenticated 50-user benchmark,
 and representative deployed recovery/restart acceptance remain required.
+
+## Native Finance UI callbacks
+
+The Finance action-callback suite now uses native resources, actual database
+accounts/grants and signed actor transactions. It retains draft/error behavior,
+imports, version selection/deletion, stale component-event handling, revoked
+write access and disabled-account checks. No SQLite fixture is imported by the
+ported suite. Combined Finance UI, native persistence and HTTP checks passed
+**30 tests in 13.86 seconds**, exit code **0**, covering **69/69 Finance page
+statements (100%)**. Log: `.local/postgresql-finance-ui-port.log`. The complete
+Finance browser fixture still needs conversion, alongside the other remaining
+legacy UI/tool ports and final migration acceptance gates.
