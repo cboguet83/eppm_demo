@@ -1970,3 +1970,24 @@ are in `.local/postgresql-seed-legacy-contracts-native.log`. A separate initial
 fixture signature correction is recorded in `.local/postgresql-database-contracts-native.log`.
 The remaining directly SQLite-backed test suite is legacy access security; full
 regression, coverage, runtime archival, benchmark and recovery gates remain open.
+## Final legacy access-security suite port
+
+The last directly SQLite-backed test suite now evaluates permissions through
+complete PostgreSQL callbacks bound to the actual subject. Inspection helpers use
+separate operator connections only to verify persisted grants, revoked sessions,
+administrator counts and the durable bootstrap marker; they do not confer runtime
+permissions. The native fixture authenticates real accounts and retains the old
+independent project/property examples and controllable clock.
+
+All original authorization, session, audit and concurrency contracts are retained,
+including corrupted scopes, reused identifiers, long active sessions, mixed
+administrator-removal races, recovery audit failure and immutable audit records.
+Business-reset checks use native archives and explicit operator maintenance.
+Pure scope/configuration validators stay in the root module, and the full original
+SQLite suite is archived unchanged.
+
+Validation: **52 passed in 19.77 seconds**, recorded in
+`.local/postgresql-final-access-security-port.log`. Active test sources no longer
+directly import SQLite database/repository adapters. Remaining work includes
+benchmark tooling, retirement of the unused SQLite runtime modules and final
+full-suite coverage, authenticated load and deployed recovery acceptance.

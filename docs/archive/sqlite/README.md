@@ -243,3 +243,20 @@ Test paths above are relative to `tests/postgresql/`. A migrated PostgreSQL
 database already contains schema/metadata, so its first explicit seed also gets
 a native archive. SQLite's initial nonexistent-file case required none. Runtime
 requests neither install schema nor initialize demo data in the new architecture.
+## Complete access-security contract mapping
+
+The unchanged `tests/test_access_security.py` is retained here. Its database-backed
+contracts now run in `tests/postgresql/test_access_security_contracts.py`, with
+native actor-bound callbacks for permission evaluation and separate operator
+connections for independent persisted-state inspection. Scope/session-configuration
+validators remain in the root test module without storage imports.
+
+The port retains structured private-data-free logs, damaged-grant isolation,
+cookie rotation, pending/disabled last-admin protection, malformed and missing
+references, deleted/reused identifiers, reset preservation, access explanations,
+issuer/subject separation, current-value scopes, immediate revocation, idle expiry
+beyond token/eight-hour boundaries, shared-cookie activity, competing bootstrap,
+mixed disable/revoke races, mandatory recovery audit rollback and verified MFA.
+Native audit UPDATE/DELETE rejection uses real PostgreSQL constraints and savepoints.
+Reset checks use explicit backed-up native maintenance, with native foreign-key
+integrity covered by the existing integrity suites.
