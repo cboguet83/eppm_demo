@@ -204,3 +204,12 @@ Migration 0021 retains exact numeric input until whole-percentage/range checks
 pass. Application and dashboard reads explicitly retain integer DTO values.
 Additional native tests cover fractional/nonfinite INSERT and UPDATE, upgrade
 from the previous applied schema and exact preservation of 0/35/100% shares.
+## Shared popup test mapping
+
+The unchanged original `tests/test_dialog.py` is retained here. Root tests keep
+storage-independent completion and wrapper-convention checks. Native popup
+tests check fresh permissions on fragment interactions, use actual project-ID
+previews, and dispatch Cancel for nine creation dialogs. A repeatable-read
+fingerprint of every native table and sequence verifies that cancellation
+changes no persisted state. Project-detail preparation and reference-cache
+tests also moved to native fixtures and retain their read/order bounds.

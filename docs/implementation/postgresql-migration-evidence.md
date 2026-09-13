@@ -1791,3 +1791,15 @@ unassignment confirmation.
 Validation: **43 passed in 33.28 seconds**, recorded in
 `.local/postgresql-administration-ui-port.log`. No application permission or
 integrity rule was weakened to port these screens.
+## Native popup cancellation and project-detail read bounds
+
+Native dialog tests now receive restricted runtime resources and business
+access explicitly. Nine Cancel workflows dispatch the retained fragment and
+verify that all PostgreSQL table rows and sequence values are unchanged.
+Creation permission checks use the actual nonbinding project-ID preview.
+Project-detail tests retain one read per render, fresh template references on
+the next tab interaction and complete preparation before emitting a summary.
+
+Validation: **19 passed in 12.03 seconds**, recorded in
+`.local/postgresql-popup-details-port.log`, including pure popup completion
+checks. Their active helpers no longer depend on SQLite fixtures.

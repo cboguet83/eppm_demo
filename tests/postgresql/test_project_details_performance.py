@@ -6,9 +6,9 @@ from streamlit.testing.v1 import AppTest
 
 from app.application.services.projects import ProjectService
 from app.application.services.portfolio import PortfolioService
-from tests.test_business_transaction_security import business as business
+from tests.postgresql.test_portfolio_project_modal import business, dashboard_business, runtime
 from tests.test_fragment_reruns import FragmentRun
-from tests.test_scoped_portfolio_collaboration_ui import project_details_fragment_app
+from tests.test_fragment_reruns import project_details_fragment_app
 
 
 def test_project_details_read_once_per_render_and_refresh_reads_on_tab_interaction(business):
