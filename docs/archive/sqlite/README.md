@@ -173,3 +173,18 @@ Its native evidence is provided by these real PostgreSQL suites:
 
 The old empty-file initialization case becomes explicit migration of a fresh
 native database. No SQLite file-opening behavior remains in the supported tools.
+## HTTP and session transport test mapping
+
+The original `test_session_transport.py`, `test_planning_http.py` and
+`test_portfolio_http.py` are retained unchanged under this archive's `tests/`.
+Their database-backed cases now run in `tests/postgresql/`; root session tests
+retain pure CSV boundary validation. Native fixtures use actual PostgreSQL
+sessions, restricted process resources and a separate operator bootstrap.
+
+The port preserves live WebSocket revocation, spoofed-header rejection, origin
+checks, atomic logout/audit failure, bounded requests, scoped task/dependency
+hydration, scoped allocation badges, session-activity neutrality and rejection
+of responses whose data or permissions changed during calculation. The former
+SQLite progress-handler assertion now measures the actual native query with
+`EXPLAIN (ANALYZE, BUFFERS)`, including row scan bounds after 5,000 unrelated
+tasks and dependencies are inserted.

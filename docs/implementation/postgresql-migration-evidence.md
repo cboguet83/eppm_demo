@@ -1733,3 +1733,25 @@ planning and portfolio HTTP fixtures, WBS workflows and legacy browser fixtures.
 The native runtime archive, remaining benchmark tools, authenticated 50-user
 measurements and representative deployed recovery/restart acceptance also remain
 open. No coverage exclusions or reduced acceptance target were introduced.
+## Native HTTP transport and bounded dependency visibility
+
+Planning and portfolio HTTP tests now use real PostgreSQL authentication and
+application services, with separate operator setup. Session transport tests
+also use native OIDC state and preserve live WebSocket revocation, spoofed
+session-header rejection, same-origin logout, mandatory audit rollback and
+safe storage failures. Pure CSV boundary checks remain database-independent.
+
+The native query-work regression exposed complete visible-task hash scans
+inside task/dependency RLS. Migration `0020_bounded_task_visibility.sql` changes
+SELECT/UPDATE/DELETE visibility predicates for task tags and dependencies to
+correlated primary-key endpoint reads. Those reads retain the existing parent
+RLS and both-endpoint visibility checks; mutation guards remain in force.
+Applied migrations are unchanged. With 5,000 unrelated visible tasks and
+dependencies, the actual restricted dependency query stays within its bounded
+buffer budget and scans only requested endpoint rows.
+
+Validation: **245 passed in 89.48 seconds** in
+`.local/postgresql-http-port-native.log`, covering HTTP/session workflows,
+business RLS, actor authorization, migration/transaction foundation and
+planning read contracts. This is a focused regression result; the full suite,
+95% coverage gate and authenticated 50-user benchmark remain outstanding.
