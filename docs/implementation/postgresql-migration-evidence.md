@@ -1293,3 +1293,21 @@ Validation: **35 passed in 27.72 seconds**, recorded in
 **1,943 tests with 29 remaining legacy collection errors**; the migration is
 still incomplete and this checkpoint does not satisfy full-suite, coverage,
 performance or recovery acceptance.
+
+## Native organization and resource-pool transaction contracts
+
+The remaining layered organization and resource-pool tests now exercise native
+gateways. Their normalization, missing-record, CRUD, frame, membership, mapping
+identity and calendar-ordering assertions are preserved. Actual PostgreSQL
+transactions verify profile/initial-calendar rollback after a trigger failure,
+concurrent overlapping calendar writes, concurrent opposite group edges, and
+rollback of invalid membership edits.
+
+Connection checks now verify committed versus rolled-back writes, successful
+independent writers, safe error translation and usable pooled leases after
+failures. SQLite's database-wide writer lock and per-call physical connection
+closure are deliberately replaced by these PostgreSQL lifecycle contracts.
+
+Validation: **26 passed in 8.49 seconds**, recorded in
+`.local/postgresql-organization-pool-contracts.log`. Capacity cache ports and the
+remaining full migration acceptance checks are still outstanding.

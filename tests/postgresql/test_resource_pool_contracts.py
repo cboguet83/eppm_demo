@@ -1,18 +1,20 @@
-"""Resource-pool rules, SQLite integrity, atomic use cases, and display projections."""
+"""Resource-pool rules, PostgreSQL integrity, atomic use cases, and display projections."""
 
-from app.operator_services import deployment_access
 from app.application.exceptions import ResourcePoolConflictError
 
 from app.presentation.components import resource_pool_frames
 
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import closing
 from dataclasses import replace
-from pathlib import Path
-import sqlite3
+import psycopg
 from threading import Barrier
 
 import pytest
+
+from app.application.services.business_access import BusinessAccess
+from app.runtime import RuntimeResources
+from tests.postgresql.conftest import AuthorizedFixture
+from tests.postgresql.ui import runtime as runtime, access as access
 
 from app.application.exceptions import ResourcePoolStorageError
 from app.domain.resources.models import (
@@ -30,23 +32,20 @@ from app.domain.resources.rules import (
     normalize_mapping,
     normalize_pool,
 )
-from app.infrastructure.repositories.resource_pools import SqliteResourcePoolGateway
-from app.operator_services import create_resource_pool_service
-from app.infrastructure.database.schema_init import init_db
+from app.infrastructure.postgresql.resource_pools import PostgresResourcePoolGateway, PostgresResourcePoolStore
+from app.main import create_resource_pool_service
 
 
 @pytest.fixture
-def database(tmp_path: Path) -> str:
-    """Create the real existing schema with a minimal assignment/tag catalog."""
-    path = str(tmp_path / "pools.db")
-    init_db(path)
-    with closing(sqlite3.connect(path)) as connection, connection:
-        connection.execute("INSERT INTO project(id,name) VALUES(1,'Delivery')")
+def database(authorized: AuthorizedFixture, runtime: RuntimeResources) -> RuntimeResources:
+    """Seed the assignment and tag catalog outside the restricted application role."""
+    with psycopg.connect(authorized.setup.operator_url) as connection:
+        connection.execute("UPDATE eppm.project SET name='Delivery' WHERE id=1")
         connection.execute(
-            "INSERT INTO project_task(id,project_id,task_name,start_date,end_date) VALUES(1,1,'Build','2026-09-01','2026-09-03')"
+            "INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date) VALUES(1,1,'Build','2026-09-01','2026-09-03')"
         )
-        connection.execute("INSERT INTO tag_dictionnary(id,tag) VALUES(1,'Priority')")
-    return path
+        connection.execute("INSERT INTO eppm.tag_dictionnary(id,tag) VALUES(1,'Priority')")
+    return runtime
 
 
 @pytest.mark.parametrize("value", [-1, float("nan"), float("inf"), -float("inf")])
@@ -77,8 +76,8 @@ def test_group_traversal_terminates_on_cycles_and_deduplicates_shared_pools() ->
         normalize_group(ResourcePoolGroup(" "))
 
 
-def test_pool_and_tags_roll_back_together_on_create_and_edit(database: str) -> None:
-    service = create_resource_pool_service(database)
+def test_pool_and_tags_roll_back_together_on_create_and_edit(database: RuntimeResources, access: BusinessAccess) -> None:
+    service = create_resource_pool_service(database, access=access)
     with pytest.raises(ValueError, match="tag IDs"):
         service.create_pool(ResourcePool("Failed"), tag_ids=[99])
     assert service.get_all_pools() == []
@@ -100,8 +99,8 @@ def test_pool_and_tags_roll_back_together_on_create_and_edit(database: str) -> N
         service.set_pool_tags(99, [1])
 
 
-def test_group_details_and_membership_save_or_roll_back_as_one(database: str) -> None:
-    service = create_resource_pool_service(database)
+def test_group_details_and_membership_save_or_roll_back_as_one(database: RuntimeResources, access: BusinessAccess) -> None:
+    service = create_resource_pool_service(database, access=access)
     pool_id = service.create_pool(ResourcePool("Pool"))
     child = service.create_pool_group(ResourcePoolGroup("Child"), pool_ids=[pool_id])
     parent = service.create_pool_group(ResourcePoolGroup("Parent"), child_group_ids=[child])
@@ -130,8 +129,8 @@ def test_group_details_and_membership_save_or_roll_back_as_one(database: str) ->
     assert service.get_pool_by_id(pool_id) is not None
 
 
-def test_concurrent_opposite_group_edges_cannot_commit_a_cycle(database: str) -> None:
-    service = create_resource_pool_service(database)
+def test_concurrent_opposite_group_edges_cannot_commit_a_cycle(database: RuntimeResources, access: BusinessAccess) -> None:
+    service = create_resource_pool_service(database, access=access)
     first = service.create_pool_group(ResourcePoolGroup("First"))
     second = service.create_pool_group(ResourcePoolGroup("Second"))
     barrier = Barrier(2)
@@ -150,9 +149,9 @@ def test_concurrent_opposite_group_edges_cannot_commit_a_cycle(database: str) ->
     assert len(service.get_all_group_members()) == 1
 
 
-def test_assignment_filters_missing_records_and_mapping_upsert_identity(database: str) -> None:
-    service = create_resource_pool_service(database)
-    other_service = create_resource_pool_service(database)
+def test_assignment_filters_missing_records_and_mapping_upsert_identity(database: RuntimeResources, access: BusinessAccess) -> None:
+    service = create_resource_pool_service(database, access=access)
+    other_service = create_resource_pool_service(database, access=access)
     pool = service.create_pool(ResourcePool("Pool"))
     mapping = PoolMapping(pool, "function", 1)
     first = service.create_mapping(mapping)
@@ -193,30 +192,29 @@ def test_assignment_filters_missing_records_and_mapping_upsert_identity(database
     assert resource_pool_frames.assignments_frame(other_service.get_assignments()).empty and resource_pool_frames.mappings_frame(other_service.get_all_mappings()).empty
 
 
-def test_gateway_reserves_writes_rolls_back_and_closes_connections(database: str) -> None:
-    gateway = SqliteResourcePoolGateway(database, access=deployment_access())
+def test_gateway_rolls_back_reuses_the_pool_and_allows_an_independent_writer(
+    database: RuntimeResources, access: BusinessAccess, authorized: AuthorizedFixture,
+) -> None:
+    """Application and database failures roll back while retaining usable leases."""
+    gateway = PostgresResourcePoolGateway(database.database, database.key, access=access)
+
+    def fail_after_write(store: PostgresResourcePoolStore) -> None:
+        store.create_pool(ResourcePool("Rolled back"))
+        with psycopg.connect(authorized.setup.operator_url) as contender:
+            contender.execute("SET LOCAL statement_timeout='1s'")
+            contender.execute("UPDATE eppm.project SET name='Independent' WHERE id=2")
+        raise ValueError("abort")
+
     with pytest.raises(ValueError, match="abort"):
-        with gateway.transaction(write=True) as store:
-            connection = store.connection
-            store.create_pool(ResourcePool("Rolled back"))
-            with closing(sqlite3.connect(database, timeout=0)) as contender:
-                with pytest.raises(sqlite3.OperationalError, match="locked"):
-                    contender.execute("BEGIN IMMEDIATE")
-            raise ValueError("abort")
-    with pytest.raises(sqlite3.ProgrammingError, match="closed"):
-        connection.execute("SELECT 1")
-    with gateway.transaction() as store:
-        assert store.get_all_pools() == []
-        connection = store.connection
-    with pytest.raises(sqlite3.ProgrammingError, match="closed"):
-        connection.execute("SELECT 1")
+        gateway.run(fail_after_write, write=True)
+    assert gateway.run(lambda store: store.get_all_pools()) == []
+    assert authorized.query('SELECT name FROM eppm.project WHERE id=2', user_id=4) == [('Independent',)]
     with pytest.raises(ResourcePoolConflictError) as failure:
-        with gateway.transaction(write=True) as store:
-            store.create_assignment(PoolAssignment(99, 1, 1))
-    assert isinstance(failure.value.__cause__, sqlite3.IntegrityError)
+        gateway.run(lambda store: store.create_assignment(PoolAssignment(99, 1, 1)), write=True)
+    assert failure.value.__cause__ is None
     with pytest.raises(ResourcePoolStorageError, match="could not be accessed") as failure:
-        with gateway.transaction() as store:
-            store.connection.execute("SELECT * FROM missing_table")
+        gateway.run(lambda store: store.connection.execute('SELECT * FROM eppm.missing_table'))
     assert "missing_table" not in str(failure.value)
     with pytest.raises(ResourcePoolConflictError):
-        create_resource_pool_service(database).create_assignment(PoolAssignment(99, 1, 1))
+        create_resource_pool_service(database, access=access).create_assignment(PoolAssignment(99, 1, 1))
+    assert gateway.run(lambda store: store.get_all_pools()) == []

@@ -1,19 +1,21 @@
-"""Organization rules, real SQLite transactions, and display projections."""
+"""Organization rules, real PostgreSQL transactions, and display projections."""
 
-from app.operator_services import deployment_access
 from app.application.exceptions import OrganizationConflictError, OrganizationStorageError
 
 from app.presentation.components import organization_frames
 
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import closing
 from dataclasses import replace
 from datetime import date
-from pathlib import Path
-import sqlite3
+import psycopg
 from threading import Barrier
 
 import pytest
+
+from app.application.services.business_access import BusinessAccess
+from app.runtime import RuntimeResources
+from tests.postgresql.conftest import AuthorizedFixture
+from tests.postgresql.ui import runtime as runtime, access as access
 
 from app.domain.organization.models import (
     Employee, EmployeeCalendarException, FunctionType, OrgFunction, Team,
@@ -23,17 +25,14 @@ from app.domain.organization.rules import (
     normalize_function_type, normalize_team, validate_employee_calendar_exception,
     validate_function, validate_occupation_percentage,
 )
-from app.infrastructure.repositories.organization import SqliteOrganizationGateway
-from app.operator_services import create_organization_service
-from app.infrastructure.database.schema_init import init_db
+from app.infrastructure.postgresql.organization import PostgresOrganizationGateway, PostgresOrganizationStore
+from app.main import create_organization_service
 
 
 @pytest.fixture
-def database(tmp_path: Path) -> str:
-    """Create the real existing schema in a disposable database."""
-    path = str(tmp_path / "organization.db")
-    init_db(path)
-    return path
+def database(runtime: RuntimeResources) -> RuntimeResources:
+    """Use a separately migrated database and the process-shaped native resources."""
+    return runtime
 
 
 def employee(code: str = "EMP-001") -> Employee:
@@ -91,9 +90,9 @@ def test_domain_normalization_and_existing_function_capacity_contract() -> None:
         normalize_exception(exception(1, 10, 1))
 
 
-def test_application_crud_and_display_frames_handle_missing_records(database: str) -> None:
-    service = create_organization_service(database)
-    other_service = create_organization_service(database)
+def test_application_crud_and_display_frames_handle_missing_records(database: RuntimeResources, access: BusinessAccess) -> None:
+    service = create_organization_service(database, access=access)
+    other_service = create_organization_service(database, access=access)
     assert service.get_all_function_types() == service.get_all_functions() == []
     assert service.get_all_teams() == service.get_all_employees() == []
     assert service.get_employee_calendar_exceptions() == []
@@ -137,7 +136,7 @@ def test_application_crud_and_display_frames_handle_missing_records(database: st
 
     with pytest.raises(OrganizationConflictError) as conflict:
         service.delete_function_type(type_id)
-    assert isinstance(conflict.value.__cause__, sqlite3.IntegrityError)
+    assert conflict.value.__cause__ is None
     with pytest.raises(OrganizationConflictError):
         other_service.delete_function(function_id)
     with pytest.raises(OrganizationConflictError):
@@ -153,8 +152,8 @@ def test_application_crud_and_display_frames_handle_missing_records(database: st
 
 
 @pytest.mark.parametrize("with_id", [False, True])
-def test_updates_preserve_missing_record_boolean_contracts(database: str, with_id: bool) -> None:
-    service = create_organization_service(database)
+def test_updates_preserve_missing_record_boolean_contracts(database: RuntimeResources, access: BusinessAccess, with_id: bool) -> None:
+    service = create_organization_service(database, access=access)
     missing = -1 if with_id else None
     assert not service.update_function_type(FunctionType("Absent", missing))
     assert not service.update_function(OrgFunction("Absent", 1, missing))
@@ -163,8 +162,8 @@ def test_updates_preserve_missing_record_boolean_contracts(database: str, with_i
     assert not service.update_employee_calendar_exception(replace(exception(1), exception_id=missing))
 
 
-def test_team_details_and_membership_rollback_together(database: str) -> None:
-    service = create_organization_service(database)
+def test_team_details_and_membership_rollback_together(database: RuntimeResources, access: BusinessAccess) -> None:
+    service = create_organization_service(database, access=access)
     member = service.create_function(OrgFunction("Member", 1))
     with pytest.raises(OrganizationConflictError):
         service.create_team(Team("Partial"), function_ids=[member, 999])
@@ -174,7 +173,7 @@ def test_team_details_and_membership_rollback_together(database: str) -> None:
         service.update_team(Team("Partial rename", team_id), function_ids=[999])
     assert service.get_team_by_id(team_id).team_name == "Original"
     assert service.get_team_functions(team_id) == [member]
-    pools = create_organization_service(database)
+    pools = create_organization_service(database, access=access)
     with pytest.raises(OrganizationConflictError):
         pools.set_team_functions(team_id, [member, 999])
     assert pools.get_team_functions(team_id) == [member]
@@ -186,19 +185,21 @@ def test_team_details_and_membership_rollback_together(database: str) -> None:
     assert service.get_team_functions(team_id) == []
 
 
-def test_employee_and_initial_exception_rollback_on_validation_and_sql_failure(database: str) -> None:
-    service = create_organization_service(database)
+def test_employee_and_initial_exception_rollback_on_validation_and_sql_failure(database: RuntimeResources, access: BusinessAccess, authorized: AuthorizedFixture) -> None:
+    service = create_organization_service(database, access=access)
     with pytest.raises(ValueError):
         service.create_employee(employee(), initial_exception=exception(999, 10, 1))
     assert service.get_all_employees() == []
-    with closing(sqlite3.connect(database)) as connection, connection:
-        connection.execute("""CREATE TRIGGER reject_exception BEFORE INSERT ON employee_calendar_exception
-                              BEGIN SELECT RAISE(ABORT, 'test rejection'); END""")
+    with psycopg.connect(authorized.setup.operator_url) as connection:
+        connection.execute("""CREATE FUNCTION eppm.reject_exception() RETURNS trigger LANGUAGE plpgsql AS $$
+            BEGIN RAISE EXCEPTION 'test rejection' USING ERRCODE='23514'; END $$""")
+        connection.execute("""CREATE TRIGGER reject_exception BEFORE INSERT ON eppm.employee_calendar_exception
+            FOR EACH ROW EXECUTE FUNCTION eppm.reject_exception()""")
     with pytest.raises(OrganizationConflictError):
         service.create_employee(employee(), initial_exception=exception(999))
     assert service.get_all_employees() == service.get_employee_calendar_exceptions() == []
-    with closing(sqlite3.connect(database)) as connection, connection:
-        connection.execute("DROP TRIGGER reject_exception")
+    with psycopg.connect(authorized.setup.operator_url) as connection:
+        connection.execute("DROP TRIGGER reject_exception ON eppm.employee_calendar_exception")
     employee_id = service.create_employee(employee(), initial_exception=exception(999))
     rows = service.get_employee_calendar_exceptions(employee_id)
     assert len(rows) == 1 and rows[0].employee_id == employee_id
@@ -210,8 +211,8 @@ def test_employee_and_initial_exception_rollback_on_validation_and_sql_failure(d
     assert service.get_employee_calendar_exceptions() == []
 
 
-def test_calendar_edits_exclude_current_record_and_preserve_ordering(database: str) -> None:
-    other_service = create_organization_service(database)
+def test_calendar_edits_exclude_current_record_and_preserve_ordering(database: RuntimeResources, access: BusinessAccess) -> None:
+    other_service = create_organization_service(database, access=access)
     employee_id = other_service.create_employee(employee())
     first = other_service.create_employee_calendar_exception(exception(employee_id))
     second = other_service.create_employee_calendar_exception(exception(employee_id, 11, 20))
@@ -226,15 +227,15 @@ def test_calendar_edits_exclude_current_record_and_preserve_ordering(database: s
     assert not other_service.delete_employee_calendar_exception(first)
 
 
-def test_concurrent_calendar_writers_cannot_insert_overlapping_periods(database: str) -> None:
-    service = create_organization_service(database)
+def test_concurrent_calendar_writers_cannot_insert_overlapping_periods(database: RuntimeResources, access: BusinessAccess) -> None:
+    service = create_organization_service(database, access=access)
     employee_id = service.create_employee(employee())
     start = Barrier(2)
 
     def save() -> str:
         start.wait(timeout=5)
         try:
-            create_organization_service(database).create_employee_calendar_exception(exception(employee_id))
+            create_organization_service(database, access=access).create_employee_calendar_exception(exception(employee_id))
             return "saved"
         except ValueError as exc:
             assert "overlaps" in str(exc)
@@ -247,36 +248,48 @@ def test_concurrent_calendar_writers_cannot_insert_overlapping_periods(database:
 
 
 @pytest.mark.parametrize("operation", ["read", "write", "rollback"])
-def test_gateway_reserves_writers_and_closes_connections(database: str, monkeypatch, operation: str) -> None:
-    from app.infrastructure.database.connection import get_db
+def test_gateway_commits_or_rolls_back_and_reuses_the_pool(
+    database: RuntimeResources, access: BusinessAccess,
+    authorized: AuthorizedFixture, operation: str,
+) -> None:
+    """Returning a lease preserves atomic writes without a database-wide writer lock."""
+    gateway = PostgresOrganizationGateway(database.database, database.key, access=access)
 
-    captured = get_db(database)
-    monkeypatch.setattr("app.infrastructure.repositories.organization.get_db", lambda _: captured)
-    gateway = SqliteOrganizationGateway(database, access=deployment_access())
+    def execute(store: PostgresOrganizationStore) -> None:
+        assert store.get_all_teams() == []
+        if operation != "read":
+            store.create_team(Team("Committed"))
+            with psycopg.connect(authorized.setup.operator_url) as contender:
+                contender.execute("SET LOCAL statement_timeout='1s'")
+                contender.execute("UPDATE eppm.project SET name='Independent' WHERE id=2")
+        if operation == "rollback":
+            raise ValueError("cancel")
+
     if operation == "rollback":
         with pytest.raises(ValueError, match="cancel"):
-            with gateway.transaction(write=True) as store:
-                store.create_team(Team("Rolled back"))
-                raise ValueError("cancel")
+            gateway.run(execute, write=True)
     else:
-        with gateway.transaction(write=operation == "write") as store:
-            assert store.get_all_teams() == []
-            if operation == "write":
-                with closing(sqlite3.connect(database, timeout=0)) as contender:
-                    with pytest.raises(sqlite3.OperationalError, match="locked"):
-                        contender.execute("BEGIN IMMEDIATE")
-                store.create_team(Team("Committed"))
-    with pytest.raises(sqlite3.ProgrammingError, match="closed"):
-        captured.execute("SELECT 1")
-    with closing(sqlite3.connect(database)) as check:
-        assert check.execute("SELECT COUNT(*) FROM team").fetchone()[0] == (operation == "write")
+        gateway.run(execute, write=operation == "write")
+
+    teams = gateway.run(lambda store: store.get_all_teams())
+    assert [team.team_name for team in teams] == (["Committed"] if operation == "write" else [])
+    if operation != "read":
+        assert authorized.query('SELECT name FROM eppm.project WHERE id=2', user_id=4) == [('Independent',)]
+    with pytest.raises(OrganizationStorageError) as failure:
+        gateway.run(lambda store: store.connection.execute('SELECT * FROM eppm.missing_table'))
+    assert "missing_table" not in str(failure.value)
+    assert gateway.run(lambda store: store.get_all_teams()) == teams
 
 
-def test_organization_storage_errors_are_safe_across_services_and_frames(tmp_path: Path) -> None:
-    path = str(tmp_path / "missing" / "organization.db")
+def test_organization_storage_errors_are_safe_across_services_and_frames(
+    database: RuntimeResources, access: BusinessAccess, caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A real pool outage produces the existing safe application error."""
+    service = create_organization_service(database, access=access)
+    database.database.close()
     with pytest.raises(OrganizationStorageError) as error:
-        create_organization_service(path).get_all_functions()
-    assert path not in str(error.value)
-    assert isinstance(error.value.__cause__, sqlite3.OperationalError)
+        service.get_all_functions()
+    assert "postgresql://" not in str(error.value) + caplog.text
+    assert error.value.__cause__ is None
     with pytest.raises(OrganizationStorageError):
-        organization_frames.functions_frame(create_organization_service(path).get_all_functions())
+        organization_frames.functions_frame(service.get_all_functions())
