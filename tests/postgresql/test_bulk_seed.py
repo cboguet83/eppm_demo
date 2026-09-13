@@ -113,6 +113,23 @@ def test_unfrozen_randomness_is_rejected_at_the_transaction_helper_boundary(pg_d
         OperatorDatabase(pg_database.operator_url).run(lambda c: generate_projects(c, SeedRequest(random_seed=None), year=2026), write=True)
 
 
+def test_operator_bulk_seed_refreshes_planner_statistics_before_initial_and_append_reads(pg_database, tmp_path, clients):
+    """Do not rely on a later autovacuum to make the newly seeded workload usable."""
+    tables = ('project', 'project_task', 'task_dependencies', 'project_property_value', 'resource_pool_assignment')
+    with psycopg.connect(pg_database.operator_url) as connection:
+        for name in tables:
+            connection.execute(psycopg.sql.SQL('ALTER TABLE eppm.{} SET (autovacuum_enabled=false)').format(psycopg.sql.Identifier(name)))
+    operator = OperatorDatabase(pg_database.operator_url)
+    backup = PostgresBackup(pg_database.operator_url, tmp_path, tools=clients)
+    for count in (30, 10):
+        maintenance.seed_projects(operator, backup, SeedRequest(projects=count, min_tasks=1, max_tasks=3, random_seed=42))
+        with psycopg.connect(pg_database.operator_url) as connection:
+            for name in tables:
+                actual = connection.execute(psycopg.sql.SQL('SELECT count(*) FROM eppm.{}').format(psycopg.sql.Identifier(name))).fetchone()[0]
+                estimated = connection.execute('SELECT reltuples FROM pg_catalog.pg_class WHERE oid=%s::regclass', ('eppm.' + name,)).fetchone()[0]
+                assert actual > 0 and estimated == actual, name
+
+
 def test_empty_workload_and_optional_empty_categories_preserve_valid_custom_catalogs(pg_database):
     operator = OperatorDatabase(pg_database.operator_url)
     operator.run(ensure_reference_catalog, write=True)

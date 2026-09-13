@@ -4,6 +4,9 @@ from datetime import date
 from dataclasses import replace
 from secrets import randbits
 
+import psycopg
+from psycopg import sql
+
 from app.application.ports.maintenance import AllocationSeedReport, DatabaseCounts, PoolSeedReport, SeedRequest
 from app.application.services.maintenance import validate_seed_request
 from app.domain.resources.allocation_generation import AllocationGenerationRequest, validate_generation_request
@@ -41,12 +44,22 @@ def reset_database(database: OperatorDatabase, backup: PostgresBackup, *, flush_
 
 
 def seed_projects(database: OperatorDatabase, backup: PostgresBackup, request: SeedRequest) -> dict[str, int]:
-    """Freeze options once and run the full project generator under one archive."""
+    """Seed under one archive and prepare planner statistics before first use."""
     validate_seed_request(request)
     frozen = replace(request, random_seed=randbits(128)) if request.random_seed is None else request
     year = date.today().year
+
+    def generate(connection: psycopg.Connection) -> dict[str, int]:
+        result = generate_projects(connection, frozen, year=year)
+        tables = connection.execute(
+            "SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname='eppm' ORDER BY tablename"
+        ).fetchall()
+        for name, in tables:
+            connection.execute(sql.SQL('ANALYZE eppm.{}').format(sql.Identifier(name)))
+        return result
+
     return backed_up_write(database, backup, reason='seed-projects', fingerprint=database.run(source_fingerprint),
-        operation=lambda connection: generate_projects(connection, frozen, year=year))
+        operation=generate)
 
 
 def counts(database: OperatorDatabase) -> DatabaseCounts:

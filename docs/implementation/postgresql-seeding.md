@@ -219,6 +219,22 @@ matching zero-percent employee mapping or add a positive employee. Applying a
 zero-allocation request still clears existing demand. Impossible capacity mixes
 fail before an archive or write.
 
+Bulk project seeding refreshes PostgreSQL planner statistics for the application
+schema before its transaction completes. This prevents the first large planning
+read from depending on a later automatic analyze. Both initial generation and
+append use this preparation; the existing single archive and atomic write policy
+remain in force. Runtime requests do not run `ANALYZE`.
+
+This addresses a reproduced 10-second planning-summary statement timeout on the
+10,001-project fixture. Explicitly refreshing statistics in the isolated pilot
+allowed the same full planning view to open in 5.799 seconds without a SQL timeout.
+That is cold-load evidence, not the one-second warm responsiveness target. A real
+PostgreSQL regression disables automatic analysis on the test's selected tables
+and verifies current row estimates immediately after initial and appended seeds.
+The seed, archive/transaction, maintenance-gateway, load-report and import-boundary
+checks passed **58 tests in 42.09 seconds** in
+`.local/postgresql-seed-statistics-validation.log`.
+
 `PostgresMaintenanceGateway` implements the complete `MaintenanceGateway` port.
 The native CLI routes seeds, allocation generation, resets and counts through
 `MaintenanceService`. Its explicit operator initialization applies migrations
