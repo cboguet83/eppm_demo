@@ -2139,3 +2139,46 @@ comparison boundaries are documented in [backup validation](postgresql-backups.m
 This fulfills representative setup/restart/recovery acceptance. The full
 functional/coverage gate remains at 98.92% with unchanged application code. The
 authenticated 50-user comparison and final acceptance handoff remain open.
+
+## Authenticated pilot findings and performance fixes
+
+The actual browser load runner now provisions both comparison images with real
+Keycloak login, independent sessions and the equivalent deterministic fixture.
+Its short pilots use two readers and one editor; they do not satisfy the required
+50 sessions or measurement durations. Actual Docker/image limits, code revision,
+row counts, browser version, cold preparations and separate scenario outcomes are
+recorded in [the pilot summary](benchmarks/browser-pilot-results.json).
+
+Native full-scope planning initially hit its 10-second statement timeout in
+`planning_summaries.read_project_summaries`. Safe runtime timing/stack observation
+and a signed-reader query plan identified the path. Refreshing planner statistics
+allowed the same full planning screen to open without a timeout. Commit `80abb88`
+prepares application statistics at the end of bulk seeding, under its existing
+archive and transaction. The relevant native and report/boundary run passed 58
+checks in 42.09 seconds.
+
+The pilots also reproduced a pending scroll being discarded after another
+project's committed edit in both the initial native and preserved SQLite images.
+The component remained connected and idle but had reset to offset zero. Commit
+`89b5b0e` separates the query-configuration identity from the data cache revision:
+the pending page is retained for unchanged columns/search, and every read still
+uses current authorization. Validation passed 91 Python/browser checks plus one
+additional revocation regression and 16 JavaScript checks.
+
+The rebuilt `eppm-demo:postgresql-load-candidate` contains runtime commit
+`89b5b0ec5291df50d099e25df0041225ddbb33de`; its image ID is
+`sha256:0d058f62a8929f652a6d25ab94f5cddda35f0b53b9a9d56015620ed4a966f8a9`.
+The previous acceptance and baseline images remain retained. All 18 candidate
+pilot attempts, including warmup, completed without workflow failures. The
+measured sample counts remain very small and task loading/saving still exceed the
+one-second target. The baseline pilot lost offered load after three failures;
+its timings are not an equivalent-throughput comparison.
+
+No pilot-owned containers remain. Ordinary deployment databases and volumes were
+not modified. The SQLite fixture hash was unchanged after the copy-based run.
+The [runner documentation](postgresql-browser-load.md) distinguishes available
+diagnostics from remaining container-utilization/rendering aggregation and full
+workload measurements. Report/import guards passed 11 checks in 2.29 seconds.
+Performance acceptance remains incomplete, and the full regression/coverage gate
+must be refreshed after the final code fixes; its earlier native checkpoint is
+retained as historical evidence.

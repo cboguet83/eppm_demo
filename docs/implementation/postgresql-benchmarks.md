@@ -40,6 +40,11 @@ They do not test OIDC login, the production HTTP task endpoint or the migration'
 50-user responsiveness criterion. Those require the separate authenticated full
 application browser acceptance run.
 
+The [authenticated browser load runner](postgresql-browser-load.md) now exercises
+both isolated images through actual OIDC sessions and application controls. Its
+recorded three-session pilots identified statistics and concurrent-paging fixes;
+the complete 50-session responsiveness gate remains open.
+
 The original SQLite baseline collector is preserved in
 `docs/archive/sqlite/scripts/benchmark_migration_sqlite.py`. Run historical SQLite
 measurements from the preserved SQLite revision/image described in

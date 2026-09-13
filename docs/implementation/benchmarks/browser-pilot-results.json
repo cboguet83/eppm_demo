@@ -1,0 +1,268 @@
+{
+  "scope": "Short three-session diagnostic pilots; not migration acceptance or a statistical backend comparison",
+  "acceptance_complete": false,
+  "pilots": {
+    "sqlite": {
+      "fixture": {
+        "backend": "sqlite",
+        "image": "eppm-demo:sqlite-migration-baseline",
+        "counts": {
+          "project": 10001,
+          "project_task": 73929,
+          "task_dependencies": 66173,
+          "resource_pool": 103,
+          "resource_pool_group": 31,
+          "resource_pool_assignment": 10201,
+          "app_user": 0
+        },
+        "fixture_seed": 42,
+        "min_tasks": 0,
+        "max_tasks": 15,
+        "sqlite_source_sha256": "bd94b28396dc2b2a1a2b3daf07f2b2667b0b53a14575f8a58a5a1a2be8d360a9",
+        "statistics_preparation": "Explicit ANALYZE of the disposable fixture before browser startup",
+        "deployment": {
+          "host": {
+            "cpus": 8,
+            "memory_bytes": 16529354752,
+            "engine": "29.7.2"
+          },
+          "containers": {
+            "app": {
+              "image_id": "sha256:6ccd482cf6e528e1359b17af5a3ed03f821fb8827a4baa67f03bfca47eb72b9a",
+              "nano_cpus": 0,
+              "memory_bytes": 0,
+              "cpu_quota": 0,
+              "cpu_period": 0,
+              "cpuset": ""
+            },
+            "keycloak": {
+              "image_id": "sha256:9d1f1b2b7261ff53c66cb1092dfcdc34a5fb77e81f9e6a6e75b8b6a795de8067",
+              "nano_cpus": 0,
+              "memory_bytes": 0,
+              "cpu_quota": 0,
+              "cpu_period": 0,
+              "cpuset": ""
+            }
+          },
+          "application_versions": {
+            "python": "3.14.7",
+            "streamlit": "1.63.0"
+          }
+        }
+      },
+      "options": {
+        "readers": 2,
+        "editors": 1,
+        "rounds": 1,
+        "warmup_seconds": 4.0,
+        "measurement_seconds": 12.0,
+        "cadence_seconds": 2
+      },
+      "browser": {
+        "version": "151.0.7922.34",
+        "arguments": [
+          "--disable-background-timer-throttling",
+          "--disable-renderer-backgrounding",
+          "--disable-backgrounding-occluded-windows"
+        ],
+        "load_generator": "Python/Playwright on the Windows Docker host",
+        "viewport": [
+          1500,
+          1100
+        ]
+      },
+      "authenticated_sessions": 3,
+      "cold_loads": [
+        {
+          "session": 0,
+          "scenario": "portfolio_paging",
+          "elapsed_seconds": 4.501
+        },
+        {
+          "session": 0,
+          "scenario": "simple_save",
+          "elapsed_seconds": 7.306
+        },
+        {
+          "session": 1,
+          "scenario": "visible_task_loading",
+          "elapsed_seconds": 6.309
+        }
+      ],
+      "measurement_periods": [
+        {
+          "round": 1,
+          "scenarios": {
+            "portfolio_paging": {
+              "attempts": 1,
+              "failures": 1,
+              "successes": 0,
+              "p95_ms": null,
+              "max_ms": null
+            },
+            "visible_task_loading": {
+              "attempts": 1,
+              "failures": 0,
+              "successes": 1,
+              "p95_ms": 10659.3,
+              "max_ms": 10659.3
+            },
+            "simple_save": {
+              "attempts": 3,
+              "failures": 1,
+              "successes": 2,
+              "p95_ms": 2000.8,
+              "max_ms": 2000.8
+            }
+          }
+        }
+      ],
+      "all_workflow_attempts_including_warmup": 10,
+      "failures_including_warmup": 3,
+      "raw_evidence_directory": ".local/browser-load/6ecca5e655b6"
+    },
+    "postgresql": {
+      "fixture": {
+        "backend": "postgresql",
+        "image": "eppm-demo:postgresql-load-candidate",
+        "counts": {
+          "project": 10001,
+          "project_task": 73929,
+          "task_dependencies": 66173,
+          "resource_pool": 103,
+          "resource_pool_group": 31,
+          "resource_pool_assignment": 10201,
+          "app_user": 0
+        },
+        "fixture_seed": 42,
+        "min_tasks": 0,
+        "max_tasks": 15,
+        "sqlite_source_sha256": null,
+        "statistics_preparation": "Native operator seed refreshes application statistics",
+        "deployment": {
+          "host": {
+            "cpus": 8,
+            "memory_bytes": 16529354752,
+            "engine": "29.7.2"
+          },
+          "containers": {
+            "app": {
+              "image_id": "sha256:0d058f62a8929f652a6d25ab94f5cddda35f0b53b9a9d56015620ed4a966f8a9",
+              "nano_cpus": 0,
+              "memory_bytes": 0,
+              "cpu_quota": 0,
+              "cpu_period": 0,
+              "cpuset": "",
+              "source_commit": "89b5b0ec5291df50d099e25df0041225ddbb33de"
+            },
+            "postgres": {
+              "image_id": "sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280",
+              "nano_cpus": 0,
+              "memory_bytes": 0,
+              "cpu_quota": 0,
+              "cpu_period": 0,
+              "cpuset": "",
+              "source_commit": null
+            },
+            "keycloak": {
+              "image_id": "sha256:9d1f1b2b7261ff53c66cb1092dfcdc34a5fb77e81f9e6a6e75b8b6a795de8067",
+              "nano_cpus": 0,
+              "memory_bytes": 0,
+              "cpu_quota": 0,
+              "cpu_period": 0,
+              "cpuset": "",
+              "source_commit": "df15afa5a3a8a2b10021f879ffa93b30fb36c73a"
+            }
+          },
+          "application_versions": {
+            "python": "3.14.7",
+            "streamlit": "1.63.0"
+          }
+        }
+      },
+      "options": {
+        "readers": 2,
+        "editors": 1,
+        "rounds": 1,
+        "warmup_seconds": 4.0,
+        "measurement_seconds": 12.0,
+        "cadence_seconds": 2
+      },
+      "browser": {
+        "version": "151.0.7922.34",
+        "arguments": [
+          "--disable-background-timer-throttling",
+          "--disable-renderer-backgrounding",
+          "--disable-backgrounding-occluded-windows"
+        ],
+        "load_generator": "Python/Playwright on the Windows Docker host",
+        "viewport": [
+          1500,
+          1100
+        ]
+      },
+      "authenticated_sessions": 3,
+      "cold_loads": [
+        {
+          "session": 0,
+          "scenario": "portfolio_paging",
+          "elapsed_seconds": 3.028
+        },
+        {
+          "session": 0,
+          "scenario": "simple_save",
+          "elapsed_seconds": 4.272
+        },
+        {
+          "session": 1,
+          "scenario": "visible_task_loading",
+          "elapsed_seconds": 5.752
+        }
+      ],
+      "measurement_periods": [
+        {
+          "round": 1,
+          "scenarios": {
+            "portfolio_paging": {
+              "attempts": 6,
+              "failures": 0,
+              "successes": 6,
+              "p95_ms": 966.7,
+              "max_ms": 966.7
+            },
+            "visible_task_loading": {
+              "attempts": 2,
+              "failures": 0,
+              "successes": 2,
+              "p95_ms": 10257.7,
+              "max_ms": 10257.7
+            },
+            "simple_save": {
+              "attempts": 5,
+              "failures": 0,
+              "successes": 5,
+              "p95_ms": 1844.4,
+              "max_ms": 1844.4
+            }
+          }
+        }
+      ],
+      "all_workflow_attempts_including_warmup": 18,
+      "failures_including_warmup": 0,
+      "raw_evidence_directory": ".local/browser-load/d67045d82db8"
+    }
+  },
+  "findings": [
+    "Initial native planning exceeded its 10-second statement timeout before planner statistics were refreshed",
+    "Automatic post-seed statistics refresh is committed as 80abb88",
+    "Both original images reset pending portfolio paging after concurrent project edits",
+    "Candidate 89b5b0e preserves the requested page and passes all short-pilot workflows",
+    "Candidate task-loading and simple-save samples still exceed the one-second target"
+  ],
+  "remaining": [
+    "Investigate task-loading and simple-save latency under concurrent edits",
+    "Complete container utilization and browser-rendering measurements and aggregate diagnostics per period",
+    "Run the prescribed 50-session, three-period comparison with two-minute warmups and ten-minute measurements",
+    "Refresh full regression/coverage and final acceptance evidence after performance fixes"
+  ]
+}

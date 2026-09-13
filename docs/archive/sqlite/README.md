@@ -276,3 +276,10 @@ It is intentionally outside the active PostgreSQL tools and is not an import or
 fallback path. The original fixture and archives remain retained. Native planning
 diagnostics are described in
 [PostgreSQL planning diagnostics](../../implementation/postgresql-benchmarks.md).
+
+The new `benchmarks/` comparison probes are separate from those unchanged
+historical sources. They inspect a disposable copy of the preserved fixture,
+grant real verified benchmark identities through the old image's access service,
+and observe its native client timings. They execute exclusively in the preserved
+SQLite image; they are not active runtime adapters or an import path. See the
+[authenticated load runner](../../implementation/postgresql-browser-load.md).
