@@ -1885,3 +1885,24 @@ Validation: **37 passed in 20.53 seconds** in
 `.local/postgresql-dependency-filter-native.log`, with measured counters in its
 matching XML file. Full regression/coverage, remaining legacy tools/browser
 fixtures, active SQLite archival and load/recovery acceptance remain outstanding.
+## Native access-operator contract completion
+
+The remaining SQLite access-operator module is archived unchanged after extending
+the existing native command suite. It now checks repeated explicit migration,
+nonexistent bootstrap targets, current pending-account inspection, disabled-account
+recovery, rejection of an empty recovery reason and trusted operator audit details.
+The supported operator recovery path permanently closes initial setup even after
+its grant is removed. Direct unauthenticated SQLite store grants are historical;
+native appointments require the separate operator workflow and verified identity.
+
+The pending-account command filters 202 active accounts before limiting and pages
+the remaining three accounts without omissions. Missing PostgreSQL databases are
+not created by inspection; unmigrated and damaged schemas fail safely without
+exposing connection credentials. Existing native access tests additionally retain
+atomic auditing, single bootstrap, concurrent administrator removal and recovery
+permission checks.
+
+Validation: **76 passed in 30.17 seconds** across native operator commands, access
+services and access-administration integrity, recorded in
+`.local/postgresql-access-operator-port.log`. No deployment or ordinary database
+was altered; all persistence checks used isolated PostgreSQL test databases.

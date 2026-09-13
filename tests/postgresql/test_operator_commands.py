@@ -81,26 +81,81 @@ def test_access_command_bootstraps_only_verified_native_accounts_and_records_rec
     actor = pg_access.service.actor(cookie)
     monkeypatch.setenv('EPPM_TEST_ACCESS_URL', pg_access.setup.operator_url)
     prefix = ['--url-variable', 'EPPM_TEST_ACCESS_URL']
+    assert run(prefix + ['migrate']) == 0
+    assert run(prefix + ['migrate']) == 0
+    assert run(prefix + ['bootstrap-admin', '--user-id', '999']) == 1
     assert run(prefix + ['pending-accounts']) == 0
     rows = json.loads(capsys.readouterr().out)
     assert [row['id'] for row in rows] == [actor.user_id]
     assert run(prefix + ['bootstrap-admin', '--user-id', str(actor.user_id)]) == 0
     assert run(prefix + ['bootstrap-admin', '--user-id', str(actor.user_id)]) == 1
+    with psycopg.connect(pg_access.setup.operator_url) as connection:
+        connection.execute("UPDATE eppm.app_user SET status='disabled' WHERE id=%s", (actor.user_id,))
+    assert run(prefix + ['recover-admin', '--user-id', str(actor.user_id), '--reason', '']) == 1
+    with psycopg.connect(pg_access.setup.operator_url) as connection:
+        assert connection.execute('SELECT status FROM eppm.app_user WHERE id=%s', (actor.user_id,)).fetchone() == ('disabled',)
     assert run(prefix + ['recover-admin', '--user-id', str(actor.user_id), '--reason', 'Verified local recovery']) == 0
     with psycopg.connect(pg_access.setup.operator_url) as connection:
         assert connection.execute("SELECT count(*) FROM eppm.app_role_assignment WHERE user_id=%s AND role='access_admin'", (actor.user_id,)).fetchone() == (1,)
         assert connection.execute("SELECT count(*) FROM eppm.app_user WHERE status='active'").fetchone() == (1,)
+        event = connection.execute("SELECT actor,details_json->>'reason' FROM eppm.app_security_audit WHERE action='access.recover'").fetchone()
+        assert event[0].startswith('operator:') and event[1] == 'Verified local recovery'
 
 
 def test_access_command_migrates_explicitly_and_reports_unmigrated_storage_safely(empty_database, monkeypatch, capsys):
     from scripts.access_admin import run
+    from tests.postgresql.conftest import database_url
+    from uuid import uuid4
 
-    monkeypatch.setenv('EPPM_TEST_ACCESS_URL', empty_database.operator_url)
+    missing = 'eppm_missing_' + uuid4().hex
+    monkeypatch.setenv('EPPM_TEST_ACCESS_URL', database_url(empty_database.operator_url, missing))
     prefix = ['--url-variable', 'EPPM_TEST_ACCESS_URL']
+    assert run(prefix + ['pending-accounts']) == 1
+    with psycopg.connect(empty_database.operator_url) as connection:
+        assert connection.execute('SELECT count(*) FROM pg_database WHERE datname=%s', (missing,)).fetchone() == (0,)
+    monkeypatch.setenv('EPPM_TEST_ACCESS_URL', empty_database.operator_url)
     assert run(prefix + ['pending-accounts']) == 1
     assert run(prefix + ['migrate']) == 0
     assert run(prefix + ['pending-accounts']) == 0
     assert json.loads(capsys.readouterr().out) == []
+    with psycopg.connect(empty_database.operator_url) as connection:
+        connection.execute('DROP TABLE eppm.app_user CASCADE')
+    assert run(prefix + ['pending-accounts']) == 1
+    assert empty_database.operator_url not in capsys.readouterr().err
+
+
+def test_operator_recovery_permanently_closes_initial_setup_after_grant_removal(pg_access, monkeypatch):
+    from scripts.access_admin import run
+
+    actor = pg_access.service.actor(pg_access.service.sign_in(identity('recovered-first-admin')))
+    monkeypatch.setenv('EPPM_TEST_ACCESS_URL', pg_access.setup.operator_url)
+    prefix = ['--url-variable', 'EPPM_TEST_ACCESS_URL']
+    assert run(prefix + ['recover-admin', '--user-id', str(actor.user_id), '--reason', 'Verified deployment appointment']) == 0
+    with psycopg.connect(pg_access.setup.operator_url) as connection:
+        connection.execute("DELETE FROM eppm.app_role_assignment WHERE role='access_admin'")
+        assert connection.execute('SELECT bootstrap_complete FROM eppm.app_security_state').fetchone() == (True,)
+    assert run(prefix + ['bootstrap-admin', '--user-id', str(actor.user_id)]) == 1
+
+
+def test_pending_account_command_filters_before_limiting_and_pages_without_omissions(pg_database, monkeypatch, capsys):
+    from scripts.access_admin import run
+
+    with psycopg.connect(pg_database.operator_url) as connection:
+        connection.execute("""INSERT INTO eppm.app_user(id,status,display_name,created_at,updated_at)
+            SELECT i,CASE WHEN i<=202 THEN 'active' ELSE 'pending' END,'Account ' || i,1000,1000
+            FROM generate_series(1,205) i""")
+        connection.execute("""INSERT INTO eppm.app_identity(user_id,issuer,subject)
+            SELECT i,'https://issuer.example.test','subject-' || i FROM generate_series(1,205) i""")
+    monkeypatch.setenv('EPPM_TEST_ACCESS_URL', pg_database.operator_url)
+    prefix = ['--url-variable', 'EPPM_TEST_ACCESS_URL', 'pending-accounts']
+    assert run(prefix + ['--limit', '2']) == 0
+    assert [row['id'] for row in json.loads(capsys.readouterr().out)] == [203, 204]
+    assert run(prefix + ['--after-id', '204', '--limit', '2']) == 0
+    assert [row['id'] for row in json.loads(capsys.readouterr().out)] == [205]
+    assert run(prefix + ['--after-id', '205']) == 0
+    assert json.loads(capsys.readouterr().out) == []
+    assert run(prefix + ['--after-id', '-1']) == 1
+    assert run(prefix + ['--limit', '201']) == 1
 
 
 def test_explicit_application_cli_seeds_postgresql_and_reports_archive_failure_without_rendering_ui(pg_database, clients, tmp_path, monkeypatch):
