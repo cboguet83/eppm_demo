@@ -1,26 +1,24 @@
 """Deployment-only application account inspection, bootstrap and recovery commands."""
 
 from argparse import ArgumentParser
-import getpass
 import json
-from pathlib import Path
-import secrets
-import socket
-import sqlite3
+import os
 import sys
-import time
 
-from app.application.services.access import DeploymentAccessService
-from app.infrastructure.database.schema_init import init_db
-from app.infrastructure.repositories.access import SqliteAccessGateway
-from app.shared.config import config
+from dotenv import load_dotenv
+
+from app.domain.access.models import AccessStorageError
+from app.infrastructure.postgresql.errors import MigrationError, SchemaCompatibilityError
+from app.infrastructure.postgresql.migration import migrate
+from app.operator_services import create_deployment_access_service
 from app.shared.logging import get_logger, setup_logging
 
 
 def parser() -> ArgumentParser:
     """Expose targeted deployment operations without public authentication shortcuts."""
     result = ArgumentParser(description=__doc__, allow_abbrev=False)
-    result.add_argument("--database", default=config.db_path, help="Deployment SQLite database path.")
+    result.add_argument('--env-file', help='Explicit operator environment file; never loaded implicitly.')
+    result.add_argument('--url-variable', default='DATABASE_OPERATOR_URL')
     commands = result.add_subparsers(dest="command", required=True)
     commands.add_parser("migrate", help="Apply idempotent database migrations before starting the application.")
     pending = commands.add_parser("pending-accounts", help="List pending application user references for verification.")
@@ -35,21 +33,19 @@ def parser() -> ArgumentParser:
 
 
 def run(argv: list[str] | None = None) -> int:
-    """Run with the deployment operator's filesystem authority and record OS context."""
+    """Use separate PostgreSQL operator authority and record the OS audit context."""
     args = parser().parse_args(argv)
     setup_logging(stream=sys.stderr)
     logger = get_logger(__name__)
     try:
-        path = str(Path(args.database).resolve())
+        if args.env_file:
+            load_dotenv(args.env_file, override=True)
+        url = os.environ.get(args.url_variable, '')
         if args.command == "migrate":
-            init_db(path)
+            migrate(url)
             logger.info("Application database migrations completed.")
             return 0
-        if not Path(path).is_file():
-            raise ValueError("Database not found. Run migrations on the intended deployment database first.")
-        service = DeploymentAccessService(SqliteAccessGateway(path), lambda: int(time.time()),
-                                          f"{getpass.getuser()}@{socket.gethostname()}",
-                                          lambda: secrets.token_urlsafe(16))
+        service = create_deployment_access_service(url)
         if args.command == "pending-accounts":
             # Structured command output, not application diagnostics or identity tokens.
             sys.stdout.write(json.dumps(service.pending_accounts(after_id=args.after_id, limit=args.limit),
@@ -63,8 +59,8 @@ def run(argv: list[str] | None = None) -> int:
         return 0
     except ValueError as error:
         logger.error("%s", error)
-    except (OSError, sqlite3.Error):
-        logger.error("Access operation failed. Verify the database path, migrations and operator permissions.")
+    except (OSError, AccessStorageError, MigrationError, SchemaCompatibilityError):
+        logger.error('Access operation failed. Verify PostgreSQL configuration, migrations and operator permissions.')
     return 1
 
 

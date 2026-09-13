@@ -1,9 +1,10 @@
 # PostgreSQL foundation operations
 
-This documents the additive migration stage. The application still uses SQLite
-until all PostgreSQL repositories and authentication storage are ready. Existing
-SQLite and Keycloak files/volumes are retained. Do not deploy an incomplete
-cutover by pointing the current application at PostgreSQL.
+The foundation milestones below record the staged migration. Application,
+authentication and operator composition now use PostgreSQL on the feature
+branch; see [current runtime deployment](postgresql-runtime.md). Existing SQLite
+archives and Keycloak files/volumes are retained. Final migration acceptance,
+legacy test/tool porting and representative browser/recovery gates remain open.
 
 ## Local isolated PostgreSQL setup
 

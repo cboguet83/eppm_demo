@@ -3,7 +3,7 @@
 # ==============================================================================
 
 # Stage 1: Build Dependencies
-FROM python:3.14-slim AS builder
+FROM python:3.14-slim-trixie AS builder
 
 WORKDIR /build
 
@@ -15,7 +15,22 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --user -r requirements.txt
 
 # Stage 2: Runtime Image
-FROM python:3.14-slim AS runtime
+FROM python:3.14-slim-trixie AS runtime
+
+# Native archives require clients matching the PostgreSQL 18 server generation.
+# Official signed repository: https://www.postgresql.org/download/linux/debian/
+ARG POSTGRES_CLIENT_VERSION=18.6-*
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates curl \
+    && install -d /usr/share/postgresql-common/pgdg \
+    && curl --fail --silent --show-error \
+       https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+       -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+    && echo 'deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt trixie-pgdg main' \
+       > /etc/apt/sources.list.d/pgdg.list \
+    && apt-get update && apt-get install -y --no-install-recommends \
+       "postgresql-client-18=${POSTGRES_CLIENT_VERSION}" \
+    && rm -rf /var/lib/apt/lists/*
 
 # Set security and performance environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -24,7 +39,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     STREAMLIT_SERVER_PORT=8501 \
     STREAMLIT_SERVER_ADDRESS=0.0.0.0 \
     STREAMLIT_SERVER_HEADLESS=true \
-    DB_NAME=/app/data/ppm_mock.db
+    DATABASE_BACKUP_DIRECTORY=/app/data/backups/postgresql
 
 WORKDIR /app
 

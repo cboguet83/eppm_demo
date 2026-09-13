@@ -23,8 +23,7 @@ def local_environment(origin: str = "http://localhost:8501", *, provider_port: i
               "APP_FILE_WATCHER_TYPE": "", "APP_ORIGIN": origin,
               "OIDC_ISSUER": f"http://localhost:{provider_port}/realms/eppm",
               "OIDC_LOCAL_PORT": str(provider_port), "APP_LOCAL_PORT": str(parsed.port),
-              "OIDC_CLIENT_ID": "eppm", "OIDC_ALLOW_LOCAL_HTTP": "true",
-              "DB_NAME": "data/ppm_mock.db"}
+              "OIDC_CLIENT_ID": "eppm", "OIDC_ALLOW_LOCAL_HTTP": "true"}
     for name in ("APP_COOKIE_SECRET", "OIDC_CLIENT_SECRET", "KEYCLOAK_ADMIN_PASSWORD",
                  "KEYCLOAK_ALEX_PASSWORD", "KEYCLOAK_SAM_PASSWORD", "KEYCLOAK_ROBIN_PASSWORD"):
         values[name] = secrets.token_urlsafe(48)

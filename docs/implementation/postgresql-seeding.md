@@ -143,8 +143,8 @@ backed-up mutation and `--seed` selects its reproducible random seed.
 No-op default/scenario installation and previews create no archive. Mutating
 commands create one archive even when they invoke nested catalog/scenario
 helpers. `clear-allocations` removes demand while preserving resource mappings.
-The existing application launcher and legacy maintenance wrappers have not yet
-cut over to these native entry points.
+The retained maintenance wrappers now use these native entry points with
+explicit operator configuration. See [runtime and command setup](postgresql-runtime.md).
 
 ## Bulk projects and schedules
 
@@ -223,8 +223,8 @@ fail before an archive or write.
 The native CLI routes seeds, allocation generation, resets and counts through
 `MaintenanceService`. Its explicit operator initialization applies migrations
 and initial references; constructing the gateway performs no I/O. This is not
-application startup. The launcher and legacy wrappers await the coordinated
-runtime/authentication cutover.
+application startup. The launcher now uses the restricted PostgreSQL runtime
+pool; retained maintenance wrappers use separate native operator credentials.
 
 The allocation regressions restore a real pre-operation archive, check native
 actor-bound capacity and employee privacy, and compare complete report/mutation

@@ -1,9 +1,14 @@
 """Process resources owned by the launcher and injected into application services."""
 
+from __future__ import annotations
+
 from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
+from functools import cache
+import os
 from secrets import token_hex
+from threading import Lock
 
 from anyio import CancelScope
 from starlette.concurrency import run_in_threadpool
@@ -12,6 +17,28 @@ from app.infrastructure.postgresql.authorization import signing_key
 from app.infrastructure.postgresql.derived_cache import DerivedCacheState
 from app.infrastructure.postgresql.pool import Database
 from app.shared.config.database import DatabaseConfig
+
+
+_creation_lock = Lock()
+
+
+@cache
+def _configured_runtime() -> RuntimeResources:
+    """Construct the launcher's closed resource once from process configuration."""
+    return RuntimeResources.from_environment(os.environ)
+
+
+def process_runtime() -> RuntimeResources:
+    """Resolve the same launch-owned resource for ASGI and Streamlit reruns.
+
+    Only composition entry points use this provider; services receive the
+    resource explicitly. Serialize cache misses so simultaneous callers cannot
+    construct multiple pools. Streamlit's user-facing cache clearing does not
+    replace the pool owned by the ASGI lifespan. Configuration changes require
+    a process restart.
+    """
+    with _creation_lock:
+        return _configured_runtime()
 
 
 @dataclass(frozen=True)

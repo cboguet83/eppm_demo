@@ -929,3 +929,51 @@ See [native seed operations](postgresql-seeding.md) and the committed
 runtime/authentication cutover, remaining legacy wrappers and benchmarks,
 exact money forms, SQLite archival, full application coverage and final
 authenticated 50-user browser and deployed recovery/restart gates remain open.
+
+## Native application and operator runtime cutover
+
+The application entry point, ASGI authentication, custom HTTP routes and all
+business/workspace factories now use native PostgreSQL. A concurrency-safe
+process provider owns one closed `RuntimeResources`; the ASGI lifespan opens
+and closes its restricted pool. Services receive the pool, signing key and
+bounded cache explicitly. Startup does not migrate, seed or bootstrap accounts.
+Operator wrappers use separate credentials, retain archive/confirmation rules,
+and no longer expose deployment actors as runtime business-service factories.
+See [runtime composition and deployment](postgresql-runtime.md).
+
+The full native PostgreSQL suite plus application-entry, launcher, configuration
+and layer checks passed **806 tests in 339.67 seconds**, exit code **0**, with
+no skips. Measured coverage is **3,417/3,443 statements (99.24%)** across native
+adapters, composition and operator wrappers. PostgreSQL modules retain
+**2,895/2,899 statements**; `app.main`, `app.runtime`, `app.security`,
+`app.operator_services` and `scripts.access_admin` have 100% statement coverage.
+Logs: `.local/postgresql-runtime-all-native.log` and
+`.local/postgresql-runtime-all-native-coverage.json`. Legacy application tests
+still require porting, so this is not full PostgreSQL-only application coverage.
+
+The local image built successfully with Python **3.14.7** and native PostgreSQL
+**18.6** archive clients. The running application has the runtime URL and request
+key, and has neither the operator URL nor `DB_NAME`. A fresh deployment database
+received migrations **0001 through 0019** and the default demo under one native
+pre-seed archive. Existing SQLite data, archives and all database/provider
+volumes were retained; no legacy users or grants were imported.
+
+Real Keycloak login initially produced a pending native account. Explicit,
+audited operator bootstrap followed by a normal authenticated access grant
+enabled the fictional administrator. Browser checks opened Dashboard, Finance,
+Portfolio, Planning, Settings and Application access without application
+exceptions. The browser also changed a demo project title and restored it,
+verifying the database after each save and preserving both exact stored budgets.
+The Finance Reload latest button remains absent.
+
+An application-only container restart preserved all **5 projects**, **1 account**,
+**2 grants**, exact project budgets and the complete business-source fingerprint.
+The restarted app became healthy and a fresh real Keycloak login reopened the
+portfolio. Evidence: `.local/postgresql-edit.log`,
+`.local/postgresql-runtime-restart.log`, `.local/postgresql-runtime-restart.json`,
+and `.local/postgresql-page-checks.json`. Cookies and archives remain ignored.
+
+These demo checks do not establish high-precision money transport, the 50-user
+browser target or representative recovery/restart acceptance. Those gates,
+remaining legacy tools/tests, SQLite archival and full application coverage
+remain open.

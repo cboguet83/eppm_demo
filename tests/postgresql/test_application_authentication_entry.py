@@ -1,18 +1,19 @@
 """Exercise the actual application entry point with isolated browser transport."""
 
-from dataclasses import replace
 from pathlib import Path
 import secrets
 import time
 
+import psycopg
 import pytest
 from streamlit.testing.v1 import AppTest
 
-from app.application.services.access import DeploymentAccessService
 from app.domain.access.models import VerifiedIdentity
-from app.infrastructure.database.schema_init import init_db
+from app.infrastructure.postgresql.authorization import configure_signing_key
+from app.infrastructure.postgresql.migration import migrate
+from app.operator_services import create_deployment_access_service
+from app.runtime import RuntimeResources
 from app.security import create_access_service
-from app.shared.config import config
 from app.shared.config.authentication import AuthenticationConfig
 from scripts.configure_local_oidc import local_environment
 
@@ -22,7 +23,7 @@ def application_entry(cookie: str = "", binding: str = "") -> None:
     from types import SimpleNamespace
     from unittest.mock import patch
 
-    from app.main import run_app
+    from app.main import main
     from app.presentation.i18n import set_current_locale
 
     set_current_locale("en")
@@ -31,25 +32,31 @@ def application_entry(cookie: str = "", binding: str = "") -> None:
         headers={"x-eppm-browser-session": binding},
     )
     with patch("streamlit.context", transport):
-        run_app()
+        main()
 
 
 @pytest.fixture
-def configured_entry(tmp_path: Path, monkeypatch):
+def configured_entry(empty_database, monkeypatch):
     """Use generated in-memory test configuration, never deployment credentials."""
     environment = local_environment()
     for name, value in environment.items():
         monkeypatch.setenv(name, value)
-    path = tmp_path / "entry.db"
-    monkeypatch.setattr("app.shared.config.config", replace(config, db_path=str(path)))
-    return path, AuthenticationConfig.from_environment(environment)
+    runtime = RuntimeResources.from_environment({
+        'DATABASE_URL': empty_database.runtime_url,
+        'DATABASE_CONTEXT_KEY': secrets.token_hex(32),
+    })
+    monkeypatch.setattr('app.runtime.process_runtime', lambda: runtime)
+    try:
+        yield empty_database, runtime, AuthenticationConfig.from_environment(environment)
+    finally:
+        runtime.database.close()
 
 
 @pytest.mark.parametrize("configured", [False, True])
 def test_public_startup_never_initializes_storage_or_routes_to_business_pages(
     configured_entry, monkeypatch, configured,
 ):
-    path, _ = configured_entry
+    setup, runtime, _ = configured_entry
     if not configured:
         monkeypatch.delenv("OIDC_CLIENT_ID")
     app = AppTest.from_function(application_entry, default_timeout=30)
@@ -61,36 +68,41 @@ def test_public_startup_never_initializes_storage_or_routes_to_business_pages(
     else:
         assert "not configured" in app.error[0].value
     app.run()
-    assert not app.exception and not path.exists()
+    assert not app.exception
+    assert runtime.database.statistics().get('connections_num', 0) == 0
+    with psycopg.connect(setup.operator_url) as connection:
+        assert connection.execute("SELECT to_regnamespace('eppm')").fetchone() == (None,)
 
 
-def active_browser(path: Path, settings: AuthenticationConfig):
+def active_browser(setup, runtime: RuntimeResources, settings: AuthenticationConfig):
     """Create a verified active account through isolated persistence fixtures."""
-    init_db(str(path))
-    service = create_access_service(str(path), settings)
+    migrate(setup.operator_url)
+    configure_signing_key(setup.operator_url, runtime.key.hex())
+    runtime.database.open()
+    service = create_access_service(runtime, settings)
     now = int(time.time())
     cookie = service.sign_in(VerifiedIdentity(
         settings.issuer, "entry-subject", "entry@example.test", "Entry User",
         now, now + 3600, True,
     ))
     actor = service.actor(cookie)
-    with service.gateway.transaction(write=True) as store:
-        store.set_status(actor.user_id, "active", now)
+    with psycopg.connect(setup.operator_url) as connection:
+        connection.execute("UPDATE eppm.app_user SET status='active' WHERE id=%s", (actor.user_id,))
     return service, cookie, actor
 
 
 @pytest.mark.parametrize("binding", ["", "untrusted-browser-value"])
 def test_valid_cookie_cannot_bypass_the_application_transport_binding(configured_entry, binding):
-    path, settings = configured_entry
-    _, cookie, _ = active_browser(path, settings)
+    setup, runtime, settings = configured_entry
+    _, cookie, _ = active_browser(setup, runtime, settings)
     app = AppTest.from_function(application_entry, args=(cookie, binding), default_timeout=30).run()
     assert not app.exception and not app.radio and not app.dataframe
     assert len(app.error) == 1 and "ASGI authentication launcher" in app.error[0].value
 
 
 def test_security_revision_change_requires_a_fresh_runtime_before_admin_rendering(configured_entry):
-    path, settings = configured_entry
-    service, cookie, actor = active_browser(path, settings)
+    setup, runtime, settings = configured_entry
+    service, cookie, actor = active_browser(setup, runtime, settings)
     current, status, revision = service.browser_identity(cookie)
     binding = settings.session_binding(current.session_hash, status, revision)
     app = AppTest.from_function(application_entry, args=(cookie, binding), default_timeout=30).run()
@@ -99,10 +111,7 @@ def test_security_revision_change_requires_a_fresh_runtime_before_admin_renderin
     assert not app.header
     assert app.expander[0].label == "0 matching projects"
 
-    DeploymentAccessService(
-        service.gateway, lambda: int(time.time()), "entry-test",
-        lambda: secrets.token_urlsafe(16),
-    ).bootstrap(actor.user_id)
+    create_deployment_access_service(setup.operator_url).bootstrap(actor.user_id)
     app.run()
     assert not app.exception and not app.radio
     assert "ASGI authentication launcher" in app.error[0].value
@@ -128,7 +137,7 @@ def test_script_failure_records_code_location_without_payload_or_browser_details
 
     # The actual launcher configures logging. Preserve pytest's handlers across it.
     monkeypatch.setattr(logging.getLogger(), "handlers", [])
-    launcher = Path(__file__).resolve().parents[1] / "asgi_app.py"
+    launcher = Path(__file__).resolve().parents[2] / "asgi_app.py"
     specification = importlib.util.spec_from_file_location("isolated_asgi_error", launcher)
     module = importlib.util.module_from_spec(specification)
     specification.loader.exec_module(module)

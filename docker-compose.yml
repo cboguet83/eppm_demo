@@ -9,7 +9,13 @@ services:
     ports:
       - "127.0.0.1:8501:8501"
     environment:
-      - DB_NAME=/app/data/ppm_mock.db
+      - DATABASE_URL=${DATABASE_URL:?Configure the restricted PostgreSQL runtime URL}
+      - DATABASE_CONTEXT_KEY=${DATABASE_CONTEXT_KEY:?Configure the PostgreSQL request signing key}
+      - DATABASE_POOL_MIN=${DATABASE_POOL_MIN:-2}
+      - DATABASE_POOL_MAX=${DATABASE_POOL_MAX:-20}
+      - DATABASE_ACQUIRE_TIMEOUT=${DATABASE_ACQUIRE_TIMEOUT:-5}
+      - DATABASE_STATEMENT_TIMEOUT=${DATABASE_STATEMENT_TIMEOUT:-10}
+      - DATABASE_BACKUP_DIRECTORY=/app/data/backups/postgresql
       - LOG_LEVEL=INFO
       - APP_ENV=${APP_ENV:-production}
       - APP_RUN_MODE=${APP_RUN_MODE:-auto}
@@ -25,7 +31,7 @@ services:
       - SESSION_IDLE_SECONDS=${SESSION_IDLE_SECONDS:-900}
       - SESSION_REAUTHENTICATION_SECONDS=${SESSION_REAUTHENTICATION_SECONDS:-300}
     volumes:
-      # Persist the development SQLite database directly in the project folder.
+      # Retain existing archives and store explicit operator backups separately.
       - ${EPPM_DATA_DIRECTORY:-./data}:/app/data
       # Development bind mounts: Streamlit hot-reloads application changes
       # without rebuilding the image. Dependencies remain image-managed.

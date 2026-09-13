@@ -1,5 +1,5 @@
-# Additive migration stage: the application still runs SQLite until cutover.
-# docker compose --env-file .local/postgresql.env -f docker-compose.postgresql.yml up -d
+# PostgreSQL storage stays independent of application lifecycle and old archives.
+# Standalone server: docker compose --env-file .local/postgresql.env -f docker-compose.postgresql.yml up -d
 services:
   postgres:
     image: postgres:18.6

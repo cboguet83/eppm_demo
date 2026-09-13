@@ -20,9 +20,9 @@ from app.main import create_planning_service
 from app.presentation.i18n import t
 from app.infrastructure.authentication.middleware import BrowserSecurityMiddleware
 from app.infrastructure.authentication.oidc import create_oidc_client
-from app.infrastructure.authentication.state import SqliteOidcState
+from app.infrastructure.postgresql.oidc_state import PostgresOidcState
+from app.runtime import RuntimeResources, process_runtime
 from app.security import create_access_service
-from app.shared.config import config
 from app.shared.config.authentication import AuthenticationConfig
 from app.shared.logging import get_logger, setup_logging
 
@@ -45,7 +45,7 @@ def script_error(error: Exception) -> bool:
     return True
 
 
-def application_security() -> tuple[list[BaseRoute], list[Middleware]]:
+def application_security(resources: RuntimeResources) -> tuple[list[BaseRoute], list[Middleware]]:
     """Fail closed on missing configuration and compose supported Streamlit ASGI routes."""
     setup_logging()
     settings = AuthenticationConfig.from_environment(os.environ)
@@ -53,11 +53,11 @@ def application_security() -> tuple[list[BaseRoute], list[Middleware]]:
             or not st.get_option("server.enableCORS") or not st.get_option("server.enableXsrfProtection")
             or st.get_option("server.baseUrlPath")):
         raise ValueError("Enable the required Streamlit origin, XSRF, and session-binding configuration.")
-    access = create_access_service(config.db_path, settings)
-    client = create_oidc_client(settings, SqliteOidcState(config.db_path, lambda: int(time())))
+    access = create_access_service(resources, settings)
+    client = create_oidc_client(settings, PostgresOidcState(resources.database, resources.key, lambda: int(time())))
 
     def export_template(actor: Actor, project_id: int) -> str:
-        service = create_planning_service(config.db_path, access=BusinessAccess(actor, access.policy))
+        service = create_planning_service(resources, access=BusinessAccess(actor, access.policy))
         return service.export_project_template(project_id)
 
     def read_tasks(actor: Actor, project_ids: list[int], revision: str) -> dict[str, object]:
@@ -67,7 +67,7 @@ def application_security() -> tuple[list[BaseRoute], list[Middleware]]:
 
         business_access = BusinessAccess(actor, access.policy)
         access.gateway.run(lambda store: business_access.require(store, Permission.READ, project_ids), actor=actor)
-        workspace = create_planning_workspace(config.db_path, access=business_access)
+        workspace = create_planning_workspace(resources, access=business_access)
         return read_planning_batch(workspace, project_ids, revision)
 
     def read_allocations(actor: Actor, project_ids: list[int], revision: str) -> dict[str, object]:
@@ -76,14 +76,14 @@ def application_security() -> tuple[list[BaseRoute], list[Middleware]]:
 
         business_access = BusinessAccess(actor, access.policy)
         access.gateway.run(lambda store: business_access.require(store, Permission.READ, project_ids), actor=actor)
-        service = create_portfolio_service(config.db_path, access=business_access)
+        service = create_portfolio_service(resources, access=business_access)
         return service.get_allocation_badges(project_ids, revision)
 
     from app.main import create_finance_service
     from app.infrastructure.authentication.finance import FinanceDownloadRoutes
 
     def export_budget(actor: Actor, snapshot_id: int) -> str:
-        return create_finance_service(config.db_path, access=BusinessAccess(actor, access.policy)).export(snapshot_id)
+        return create_finance_service(resources, access=BusinessAccess(actor, access.policy)).export(snapshot_id)
 
     routes = (AuthenticationRoutes(client, access).routes() + DownloadRoutes(access, export_template).routes()
               + FinanceDownloadRoutes(access, export_budget).routes()
@@ -96,7 +96,8 @@ def application_security() -> tuple[list[BaseRoute], list[Middleware]]:
     return routes, middleware
 
 
-routes, middleware = application_security()
+resources = process_runtime()
+routes, middleware = application_security(resources)
 # Streamlit's AST-based launcher discovery requires a direct constructor assignment.
 app = st.App(Path(__file__).with_name("streamlit_app.py"), routes=routes,
-             middleware=middleware, on_script_error=script_error)
+             middleware=middleware, on_script_error=script_error, lifespan=resources.lifespan)

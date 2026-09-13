@@ -7,8 +7,7 @@ import sys
 if __package__ in (None, ""):
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.operator_services import create_maintenance_service
-from scripts.maintenance_cli import cli_errors
+from scripts.maintenance_cli import add_operator_arguments, cli_errors, maintenance_service
 from app.shared.logging import get_logger, setup_logging
 
 
@@ -18,12 +17,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Flush all projects and tasks from the EPPM database."
     )
-    parser.add_argument(
-        "--db-path",
-        type=str,
-        default=None,
-        help="Optional path to custom SQLite database file.",
-    )
+    add_operator_arguments(parser)
     parser.add_argument(
         "-y",
         "--yes",
@@ -46,7 +40,7 @@ def main() -> None:
             get_logger(__name__).info("Flush operation cancelled.")
             sys.exit(0)
 
-    result = create_maintenance_service(args.db_path).flush()
+    result = maintenance_service(args).flush()
     get_logger(__name__).info("Database reset completed: %s", result)
 
 

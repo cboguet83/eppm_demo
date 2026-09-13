@@ -7,8 +7,7 @@ import sys
 if __package__ in (None, ""):
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.operator_services import create_maintenance_service
-from scripts.maintenance_cli import cli_errors
+from scripts.maintenance_cli import add_operator_arguments, cli_errors, maintenance_service
 from app.shared.logging import get_logger, setup_logging
 from app.application.ports.maintenance import SeedRequest
 
@@ -37,12 +36,7 @@ def main() -> None:
         default=15,
         help="Maximum tasks per project (default: 15).",
     )
-    parser.add_argument(
-        "--db-path",
-        type=str,
-        default=None,
-        help="Optional path to SQLite database file.",
-    )
+    add_operator_arguments(parser)
     parser.add_argument(
         "--clean",
         action="store_true",
@@ -65,7 +59,7 @@ def main() -> None:
     args = parser.parse_args()
 
     setup_logging()
-    result = create_maintenance_service(args.db_path).seed_projects(
+    result = maintenance_service(args).seed_projects(
         SeedRequest(
             projects=args.projects,
             min_tasks=args.min_tasks,

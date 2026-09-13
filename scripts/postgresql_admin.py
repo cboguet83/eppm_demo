@@ -56,7 +56,7 @@ def main(*, archive_tools: PostgresTools | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--env-file", help="Ignored operator environment file; never loaded implicitly")
     parser.add_argument("--url-variable", default="DATABASE_OPERATOR_URL")
-    parser.add_argument("--backup-directory", type=Path, default=Path('.local/backups'))
+    parser.add_argument("--backup-directory", type=Path)
     parser.add_argument("--archive", type=Path, help="Existing PostgreSQL archive for an empty restore target")
     parser.add_argument('--force', action='store_true', help='Replace the demo and references when seeding defaults')
     parser.add_argument('--without-projects', action='store_true', help='Install the default catalog without example projects')
@@ -79,6 +79,8 @@ def main(*, archive_tools: PostgresTools | None = None) -> None:
     arguments = parser.parse_args()
     if arguments.env_file:
         load_dotenv(arguments.env_file, override=True)
+    if arguments.backup_directory is None:
+        arguments.backup_directory = Path(os.environ.get('DATABASE_BACKUP_DIRECTORY', '.local/backups'))
     setup_logging()
     try:
         url = os.environ.get(arguments.url_variable, "")
