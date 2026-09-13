@@ -26,7 +26,8 @@ def local_environment(origin: str = "http://localhost:8501", *, provider_port: i
               "OIDC_CLIENT_ID": "eppm", "OIDC_ALLOW_LOCAL_HTTP": "true",
               "DB_NAME": "data/ppm_mock.db"}
     for name in ("APP_COOKIE_SECRET", "OIDC_CLIENT_SECRET", "KEYCLOAK_ADMIN_PASSWORD",
-                 "KEYCLOAK_ALEX_PASSWORD", "KEYCLOAK_SAM_PASSWORD", "KEYCLOAK_ROBIN_PASSWORD"):
+                 "KEYCLOAK_ALEX_PASSWORD", "KEYCLOAK_SAM_PASSWORD", "KEYCLOAK_ROBIN_PASSWORD",
+                 "KEYCLOAK_CLEMENT_PASSWORD"):
         values[name] = secrets.token_urlsafe(48)
     AuthenticationConfig.from_environment(values)
     return values

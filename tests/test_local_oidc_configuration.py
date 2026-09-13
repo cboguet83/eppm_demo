@@ -1,6 +1,7 @@
 """Local provisioning creates independent secrets and never overwrites existing ones."""
 
 from pathlib import Path
+import re
 
 import pytest
 
@@ -19,13 +20,22 @@ def test_streamlit_discovers_the_asgi_wrapper_instead_of_rendering_an_empty_laun
 def test_local_environment_uses_distinct_random_secrets_and_real_oidc():
     first, second = local_environment(), local_environment()
     names = [name for name in first if name.endswith(("SECRET", "PASSWORD"))]
-    assert len(names) == 6
+    assert len(names) == 7
     assert len({first[name] for name in names}) == len(names)
     assert all(first[name] != second[name] and len(first[name]) >= 32 for name in names)
     settings = AuthenticationConfig.from_environment(first)
     assert settings.issuer == "http://localhost:8080/realms/eppm"
     assert settings.callback_url == "http://localhost:8501/auth/callback"
     assert not settings.secure_cookies
+
+
+def test_local_environment_provides_every_required_keycloak_compose_credential():
+    compose = (Path(__file__).resolve().parents[1] / "docker-compose.oidc.yml").read_text(encoding="utf-8")
+    required = set(re.findall(r"\$\{(KEYCLOAK_[A-Z_]+):\?", compose))
+    values = local_environment()
+    assert required
+    assert required <= values.keys()
+    assert all(len(values[name]) >= 32 for name in required)
 
 
 def test_isolated_local_environment_has_consistent_application_and_provider_ports():

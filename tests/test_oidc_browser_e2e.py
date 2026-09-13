@@ -14,6 +14,7 @@ import re
 import subprocess
 import time
 from urllib.error import URLError
+from urllib.parse import urlencode
 from urllib.request import urlopen
 from uuid import uuid4
 
@@ -21,6 +22,7 @@ import pytest
 
 from app.infrastructure.database.connection import get_db
 from app.infrastructure.database.schema_init import init_db
+from app.presentation.navigation import PAGE_ACCESS
 from scripts.configure_local_oidc import local_environment
 
 
@@ -170,6 +172,14 @@ def wait_for_audit(server: BrowserDeployment, action: str, count: int) -> None:
     raise AssertionError("The browser action did not persist its required audit: " + action)
 
 
+def open_access_management(page, server: BrowserDeployment) -> None:
+    """Reopen administration explicitly because a fresh session defaults to Dashboard."""
+    from playwright.sync_api import expect
+
+    page.goto(server.origin + "/?" + urlencode({"nav": PAGE_ACCESS}))
+    expect(page.get_by_role("heading", name="Application access", exact=True)).to_be_visible()
+
+
 def exercise_scoped_user(browser, admin_page, server: BrowserDeployment) -> None:
     """Activate and scope a viewer through the administration UI, then revoke across tabs."""
     from playwright.sync_api import Error, expect
@@ -179,44 +189,46 @@ def exercise_scoped_user(browser, admin_page, server: BrowserDeployment) -> None
         viewer = viewer_context.new_page()
         sign_in(viewer, server, "robin.viewer", "KEYCLOAK_ROBIN_PASSWORD")
         expect(viewer.get_by_text("Your account is awaiting activation.", exact=False)).to_be_visible()
-        admin_page.reload()
+        open_access_management(admin_page, server)
         select_option(admin_page, "Application account", re.compile("Robin Example"))
         select_option(admin_page, "Account status", "active")
         admin_page.get_by_role("button", name="Save account status", exact=True).click()
         wait_for_audit(server, "user.status", 1)
-        admin_page.reload()
+        open_access_management(admin_page, server)
         select_option(admin_page, "Application account", re.compile("Robin Example.*active"))
         select_option(admin_page, "Projects", re.compile("Visible browser project"))
         expect(admin_page.get_by_test_id("stMultiSelect").get_by_text(re.compile("Visible browser project")).first).to_be_visible()
         expect(admin_page.get_by_role("button", name="Grant access", exact=True)).to_be_visible()
         admin_page.get_by_role("button", name="Grant access", exact=True).click()
         wait_for_audit(server, "role.grant", 1)
-        admin_page.reload()
+        open_access_management(admin_page, server)
         select_option(admin_page, "Application account", re.compile("Robin Example.*active"))
         expect(admin_page.get_by_role("button", name="Revoke assignment", exact=True)).to_be_visible()
-        viewer.reload()
-        expect(viewer.get_by_role("button", name="Open project Visible browser project", exact=True)).to_be_visible()
-        expect(viewer.get_by_role("button", name="Open project Hidden browser project", exact=True)).to_have_count(0)
+        viewer.goto(server.origin + "/?nav=portfolio")
+        visible_row = viewer.locator('.st-key-portfolio_master_table tbody tr[data-project-id="1"]')
+        expect(visible_row).to_contain_text("Visible browser project")
+        expect(viewer.locator('.st-key-portfolio_master_table tbody tr[data-project-id="2"]')).to_have_count(0)
         expect(viewer.get_by_role("button", name="Create new project", exact=True)).to_have_count(0)
         export = viewer_context.request.get(server.origin + "/downloads/projects/1/template.csv")
         assert export.status == 200
         assert "Visible browser task" in export.text() and "Hidden browser task" not in export.text()
         assert viewer_context.request.get(server.origin + "/downloads/projects/2/template.csv").status == 403
-        viewer.get_by_role("button", name="Open project Visible browser project", exact=True).click()
-        viewer.get_by_role("button", name=re.compile("View project details")).click()
-        expect(viewer.get_by_role("dialog")).to_be_visible()
-        expect(viewer.get_by_role("button", name="Edit project", exact=True)).to_have_count(0)
+        visible_row.click()
+        expect(viewer.locator('.st-key-project_details_panel_1')).to_have_attribute('data-eppm-details-ready', 'true')
+        expect(viewer.get_by_role("button", name="Edit details", exact=True)).to_have_count(0)
         second_tab = viewer_context.new_page()
-        second_tab.goto(server.origin)
-        expect(second_tab.get_by_role("button", name="Open project Visible browser project", exact=True)).to_be_visible()
+        second_tab.goto(server.origin + "/?nav=portfolio")
+        expect(second_tab.locator('.st-key-portfolio_master_table tbody tr[data-project-id="1"]')).to_contain_text("Visible browser project")
         admin_page.get_by_role("button", name="Revoke assignment", exact=True).click()
         wait_for_audit(server, "role.revoke", 1)
-        admin_page.reload()
+        open_access_management(admin_page, server)
         select_option(admin_page, "Application account", re.compile("Robin Example.*active"))
         expect(admin_page.get_by_role("button", name="Revoke assignment", exact=True)).to_have_count(0)
         assert viewer_context.request.get(server.origin + "/downloads/projects/1/template.csv").status == 403
         second_tab.reload()
-        expect(second_tab.get_by_text("Your account has no assigned application access.", exact=False)).to_be_visible()
+        expect(second_tab.get_by_role("radio", name="Dashboard", exact=True)).to_be_checked()
+        expect(second_tab.get_by_role("radio", name=re.compile("Portfolio"))).to_have_count(0)
+        expect(second_tab.locator('.st-key-portfolio_master_table')).to_have_count(0)
         viewer.reload()
         viewer.get_by_role("button", name="Sign out", exact=True).click()
         expect(viewer.get_by_role("link", name="Sign in", exact=True)).to_be_visible()
@@ -246,7 +258,7 @@ def test_real_keycloak_login_pending_bootstrap_and_access_administration(deploym
 
     expect.set_options(timeout=30000)
     with sync_playwright() as playwright:
-        browser = playwright.chromium.launch(channel=os.environ.get("EPPM_BROWSER_CHANNEL", "chrome"))
+        browser = playwright.chromium.launch(channel=os.environ.get("EPPM_BROWSER_CHANNEL"))
         context = browser.new_context()
         try:
             page = context.new_page()
@@ -261,12 +273,11 @@ def test_real_keycloak_login_pending_bootstrap_and_access_administration(deploym
             user_id = re.search(r"\d+", reference).group()
             assert context.request.get(deployment.origin + "/downloads/projects/1/template.csv").status == 403
             deployment.command("exec", "-T", "app", "python", "-m", "scripts.access_admin", "bootstrap-admin", "--user-id", user_id)
-            page.reload()
-            expect(page.get_by_role("heading", name="Application access", exact=True)).to_be_visible()
+            open_access_management(page, deployment)
             expect(page.get_by_label("Search accounts", exact=True)).to_be_visible()
             # Bootstrap grants access administration, never implicit business access.
             assert context.request.get(deployment.origin + "/downloads/projects/1/template.csv").status == 403
-            expect(page.get_by_role("button", name="Open project Visible browser project", exact=True)).to_have_count(0)
+            expect(page.get_by_role("radio", name=re.compile("Portfolio"))).to_have_count(0)
             exercise_scoped_user(browser, page, deployment)
         finally:
             context.close()

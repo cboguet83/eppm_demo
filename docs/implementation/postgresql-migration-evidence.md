@@ -929,3 +929,49 @@ See [native seed operations](postgresql-seeding.md) and the committed
 runtime/authentication cutover, remaining legacy wrappers and benchmarks,
 exact money forms, SQLite archival, full application coverage and final
 authenticated 50-user browser and deployed recovery/restart gates remain open.
+
+## Interim main checkpoint requested on 2026-09-13
+
+The user requested a merge into `main` and a push. An isolated checkout of the
+committed migration checkpoint through `6ce9348` was validated for that merge.
+The uncommitted runtime/authentication cutover stays on the feature branch:
+its full-suite collection still fails because legacy tests need porting. None
+of those uncommitted changes, local credentials, archives or database files is
+part of this checkpoint. Main retains the existing SQLite runtime composition
+alongside the tested native PostgreSQL adapters and explicit operator commands.
+
+The merge preparation fixes three validation prerequisites. Local OIDC
+configuration now generates every credential required by the Compose overlay;
+a regression checks that contract. CI selects the PostgreSQL 18 test container
+for native archive clients. The authenticated browser regression now explicitly
+navigates from Dashboard, selects projects through the current portfolio table,
+and checks the current empty-access view after revocation. It retains real
+Keycloak login, pending-account bootstrap, scoped downloads, read-only project
+details, permission revocation and cross-tab logout. It uses the installed
+Playwright Chromium by default, with the existing optional channel override.
+
+Validation in the isolated checkout:
+
+- Full application and real PostgreSQL suite: **2,239 passed, 1 skipped,
+  14 subtests passed in 695.26 seconds**, exit code **0**. The single opt-in
+  authenticated browser test was run separately below.
+- Application coverage: **15,381/15,536 statements (99.00%)**, exceeding the
+  unchanged 95% gate. Command: `pytest -q --tb=short -p no:cacheprovider --cov=app
+  --cov-report=term --cov-report=json:... --cov-fail-under=95`, with explicit
+  PostgreSQL test credentials and `POSTGRES_TEST_CLIENT_CONTAINER` configured.
+- Updated local OIDC configuration tests: **16 passed in 0.64 seconds**.
+- Real isolated Keycloak/browser workflow: **1 passed in 54.96 seconds** with
+  `EPPM_RUN_OIDC_E2E=1`, using a Docker image built from the committed checkout
+  plus the configuration fix. Existing application containers and volumes were
+  preserved, and the original development image tag was restored.
+- JavaScript components: **71 passed**, no failures or skips.
+- Git whitespace checks passed; no credential or database files were staged.
+
+Local logs: `.local/merge-main-tests.log`, `.local/merge-main-coverage.json`,
+`.local/merge-main-oidc-config.log`, `.local/merge-main-browser-final.log`,
+`.local/merge-main-javascript.log`, and `.local/merge-main-image.log`.
+
+This combined legacy/native checkpoint coverage does not establish acceptance
+of the final PostgreSQL-only application. Runtime cutover, exact monetary form
+transport, legacy test/tool porting and archival, the 50-user browser benchmark,
+and representative deployed recovery/restart validation remain unfinished.
