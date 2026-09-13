@@ -72,16 +72,19 @@ separate security revision.
 ### Bounded task-delivery fingerprints
 
 Migration `0025_planning_task_sources.sql` adds an authorized source-key projection
-for batches of at most 25 projects. A task-delivery key hashes the existing
-project/dependency fingerprint together with the fingerprints of its assigned
-pools. Those pool fingerprints include visible competing consumers, so changes
-to shared capacity cannot bypass a refresh. Hidden dependencies and hidden demand
+for batches of at most 25 projects. Migration `0026_task_pool_sources.sql` refines
+the pool inputs to match the delivered fields. Task-level allocations include the
+full pool fingerprint and its visible competing consumers; project-level links
+include pool configuration revisions for their labels. Changes to shared task
+capacity cannot bypass a refresh, while another project's demand does not
+invalidate a plain project-level link. Hidden dependencies and hidden demand
 remain outside a restricted reader's fingerprints. Catalogs, security, effective
 membership and database/actor/session identity remain part of every key.
 
 `PostgresPlanningSources.capture` returns the chart revision and per-project task
 keys from one snapshot, before chart data is read. It implements the application
-`PlanningSourceReader` protocol and returns `PlanningDisplaySources`. The chart
+`PlanningSourceReader` protocol and returns `PlanningDisplaySources`. Task/pool
+ownership is read in that same repeatable-read snapshot. The chart
 sends its opaque keys only for requested projects; edit patches send only affected
 keys. `PostgresPlanningSources.read` uses the bounded native function and current
 READ authorization. Task delivery compares sources both before and after its

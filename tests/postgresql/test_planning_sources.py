@@ -124,3 +124,49 @@ def test_missing_revision_metadata_fails_closed_and_translates_storage_errors(pg
     assert post_batch(task_browser, source_tokens=sources).status_code == 503
     with pytest.raises(PlanningStorageError, match='Planning data could not be accessed'):
         workspace_for(task_browser).sources.capture([1])
+
+
+@pytest.mark.parametrize('during', [False, True])
+def test_project_level_pool_links_do_not_depend_on_other_projects_demand(pg_database, task_browser, monkeypatch, during):
+    _, service, admin, actor, _, _, _, _ = task_browser
+    service.grant(admin, actor.user_id, 'project_viewer', {'kind': 'projects', 'project_ids': [2]})
+    with psycopg.connect(pg_database.operator_url) as connection:
+        connection.execute('DELETE FROM eppm.task_dependencies')
+        connection.execute("INSERT INTO eppm.resource_pool(id,name,capacity_fte) VALUES(1,'Shared',1)")
+        connection.execute("INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,fte_assigned) VALUES(1,1,NULL,0.6),(1,2,20,0.6)")
+    sources = source_request(task_browser)
+    original = planning_transport.build_task_payload
+
+    def update():
+        with psycopg.connect(pg_database.operator_url) as connection:
+            connection.execute("UPDATE eppm.project SET name='Other consumer changed' WHERE id=2")
+            connection.execute('UPDATE eppm.resource_pool_assignment SET fte_assigned=0.2 WHERE project_id=2')
+
+    def build_then_edit(*args, **kwargs):
+        result = original(*args, **kwargs)
+        update()
+        return result
+
+    if during:
+        monkeypatch.setattr(planning_transport, 'build_task_payload', build_then_edit)
+    else:
+        update()
+    response = post_batch(task_browser, source_tokens=sources)
+    assert response.status_code == 200
+    assert response.json()['tasks'][0]['pools'] == []
+    assert response.json()['project_metadata'][0]['pools'][0]['pool_name'] == 'Shared'
+
+
+@pytest.mark.parametrize('statement', [
+    "UPDATE eppm.resource_pool SET name='Renamed' WHERE id=1",
+    'UPDATE eppm.resource_pool_assignment SET fte_assigned=0.2 WHERE project_id=1',
+    'UPDATE eppm.resource_pool_assignment SET task_id=10 WHERE project_id=1',
+])
+def test_project_pool_label_link_and_allocation_kind_changes_still_require_refresh(pg_database, task_browser, statement):
+    with psycopg.connect(pg_database.operator_url) as connection:
+        connection.execute("INSERT INTO eppm.resource_pool(id,name,capacity_fte) VALUES(1,'Shared',1)")
+        connection.execute("INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,fte_assigned) VALUES(1,1,0.6)")
+    sources = source_request(task_browser)
+    with psycopg.connect(pg_database.operator_url) as connection:
+        connection.execute(statement)
+    assert post_batch(task_browser, source_tokens=sources).status_code == 409

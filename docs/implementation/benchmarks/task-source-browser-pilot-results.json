@@ -1,0 +1,401 @@
+{
+  "scope": "Short pilot of task-source migration 0025 before project-link refinement; not load acceptance",
+  "source_directory": ".local/browser-load/bf4b1aa3e0b3",
+  "fixture": {
+    "backend": "postgresql",
+    "image": "eppm-demo:postgresql-task-sources-candidate",
+    "counts": {
+      "project": 10001,
+      "project_task": 73929,
+      "task_dependencies": 66173,
+      "resource_pool": 103,
+      "resource_pool_group": 31,
+      "resource_pool_assignment": 10201,
+      "app_user": 0
+    },
+    "fixture_seed": 42,
+    "min_tasks": 0,
+    "max_tasks": 15,
+    "sqlite_source_sha256": null,
+    "statistics_preparation": "Native operator seed refreshes application statistics",
+    "deployment": {
+      "host": {
+        "cpus": 8,
+        "memory_bytes": 16529354752,
+        "engine": "29.7.2"
+      },
+      "containers": {
+        "app": {
+          "image_id": "sha256:242ffd9b455c1156ca8ac488f8148306d7a91abcd691fe82b3233d6c007a3ed7",
+          "nano_cpus": 0,
+          "memory_bytes": 0,
+          "cpu_quota": 0,
+          "cpu_period": 0,
+          "cpuset": "",
+          "source_commit": "0303ecfb798df1ecaf49c55be1e815d48330b38a"
+        },
+        "postgres": {
+          "image_id": "sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280",
+          "nano_cpus": 0,
+          "memory_bytes": 0,
+          "cpu_quota": 0,
+          "cpu_period": 0,
+          "cpuset": "",
+          "source_commit": null
+        },
+        "keycloak": {
+          "image_id": "sha256:9d1f1b2b7261ff53c66cb1092dfcdc34a5fb77e81f9e6a6e75b8b6a795de8067",
+          "nano_cpus": 0,
+          "memory_bytes": 0,
+          "cpu_quota": 0,
+          "cpu_period": 0,
+          "cpuset": "",
+          "source_commit": "df15afa5a3a8a2b10021f879ffa93b30fb36c73a"
+        }
+      },
+      "application_versions": {
+        "python": "3.14.7",
+        "streamlit": "1.63.0"
+      }
+    },
+    "diagnostic_profiling": false
+  },
+  "options": {
+    "readers": 2,
+    "editors": 1,
+    "rounds": 1,
+    "warmup_seconds": 4.0,
+    "measurement_seconds": 12.0,
+    "cadence_seconds": 2
+  },
+  "browser": {
+    "version": "151.0.7922.34",
+    "arguments": [
+      "--disable-background-timer-throttling",
+      "--disable-renderer-backgrounding",
+      "--disable-backgrounding-occluded-windows"
+    ],
+    "load_generator": "Python/Playwright on the Windows Docker host",
+    "viewport": [
+      1500,
+      1100
+    ]
+  },
+  "independent_authenticated_sessions": 3,
+  "attempts_including_warmup": 21,
+  "workflow_failures": 0,
+  "periods": [
+    {
+      "round": 1,
+      "scenarios": {
+        "portfolio_paging": {
+          "attempts": 6,
+          "failures": 0,
+          "successes": 6,
+          "p95_ms": 711.2,
+          "max_ms": 711.2
+        },
+        "visible_task_loading": {
+          "attempts": 3,
+          "failures": 0,
+          "successes": 3,
+          "p95_ms": 9525.3,
+          "max_ms": 9525.3
+        },
+        "simple_save": {
+          "attempts": 6,
+          "failures": 0,
+          "successes": 6,
+          "p95_ms": 1298.4,
+          "max_ms": 1298.4
+        }
+      }
+    }
+  ],
+  "task_samples": [
+    {
+      "warmup": true,
+      "elapsed_ms": 321.2
+    },
+    {
+      "warmup": true,
+      "elapsed_ms": 2208.9
+    },
+    {
+      "warmup": false,
+      "elapsed_ms": 388.2
+    },
+    {
+      "warmup": false,
+      "elapsed_ms": 388.1
+    },
+    {
+      "warmup": false,
+      "elapsed_ms": 9525.3
+    }
+  ],
+  "diagnostic_phases": [
+    {
+      "round": 1,
+      "warmup": true,
+      "started_epoch": 1789306867.7885752,
+      "ended_epoch": 1789306873.4632711,
+      "scheduled_seconds": 4.0,
+      "runtime": {
+        "samples": 3,
+        "first_epoch": 1789306868.859795,
+        "last_epoch": 1789306872.9447603,
+        "observed_seconds": 4.084965229034424,
+        "status": "observed",
+        "metrics": {
+          "pool_acquire": {
+            "count": 194,
+            "seconds": 0.0028005035128444433
+          },
+          "db_client_execute": {
+            "count": 1859,
+            "seconds": 6.070800678280648
+          },
+          "db_client_fetchone": {
+            "count": 735,
+            "seconds": 0.10730182653060183
+          },
+          "db_client_fetchall": {
+            "count": 179,
+            "seconds": 0.20415958715602756
+          },
+          "server_script": {
+            "count": 5,
+            "seconds": 2.8273815229767933
+          },
+          "cache_read": {
+            "count": 16,
+            "seconds": 1.4301478799898177
+          },
+          "cache_publish": {
+            "count": 6,
+            "seconds": 0.41909447708167136
+          },
+          "cache_load": {
+            "count": 10,
+            "seconds": 2.855376110994257
+          },
+          "server_http_portfolio": {
+            "count": 4,
+            "seconds": 3.706044817052316
+          },
+          "db_client_executemany": {
+            "count": 2,
+            "seconds": 0.000240899040363729
+          },
+          "service_project_update": {
+            "count": 1,
+            "seconds": 0.0399837659788318
+          },
+          "server_http_planning": {
+            "count": 2,
+            "seconds": 0.26906361198052764
+          }
+        },
+        "pool_counters": {
+          "connections_num": 0,
+          "connections_ms": 0,
+          "requests_num": 194,
+          "usage_ms": 5837,
+          "requests_queued": 0,
+          "requests_wait_ms": 0
+        },
+        "maximum_waiting_requests": 0
+      },
+      "postgresql": {
+        "samples": 22,
+        "first_epoch": 1789306868.03482,
+        "last_epoch": 1789306873.3518953,
+        "observed_seconds": 5.317075252532959,
+        "status": "observed",
+        "counters": {
+          "calls": 1818.0,
+          "server_exec_ms": 4598.789493999999,
+          "shared_hits": 2724703.0,
+          "shared_reads": 37.0
+        },
+        "sampled_active_backend_seconds_by_wait_category": {
+          "CPU": 5.825093030929565
+        }
+      },
+      "containers": {
+        "samples": 3,
+        "first_epoch": 1789306868.5186653,
+        "last_epoch": 1789306872.539379,
+        "observed_seconds": 4.020713567733765,
+        "failed_samples": 0,
+        "containers": {
+          "app": {
+            "samples": 3,
+            "mean_cpu_percent": 38.22333333333333,
+            "max_cpu_percent": 42.58,
+            "max_memory_bytes_approx": 423939277,
+            "max_pids": 30
+          },
+          "postgres": {
+            "samples": 3,
+            "mean_cpu_percent": 66.72666666666666,
+            "max_cpu_percent": 85.96,
+            "max_memory_bytes_approx": 680106394,
+            "max_pids": 20
+          },
+          "keycloak": {
+            "samples": 3,
+            "mean_cpu_percent": 1.0766666666666667,
+            "max_cpu_percent": 2.74,
+            "max_memory_bytes_approx": 905550234,
+            "max_pids": 60
+          }
+        }
+      }
+    },
+    {
+      "round": 1,
+      "warmup": false,
+      "started_epoch": 1789306873.4632764,
+      "ended_epoch": 1789306888.4796975,
+      "scheduled_seconds": 12.0,
+      "runtime": {
+        "samples": 7,
+        "first_epoch": 1789306874.9460018,
+        "last_epoch": 1789306887.0061479,
+        "observed_seconds": 12.06014609336853,
+        "status": "observed",
+        "metrics": {
+          "pool_acquire": {
+            "count": 673,
+            "seconds": 0.009524774679448456
+          },
+          "db_client_execute": {
+            "count": 6439,
+            "seconds": 21.772191047784872
+          },
+          "db_client_fetchone": {
+            "count": 2599,
+            "seconds": 0.3892069090506993
+          },
+          "db_client_fetchall": {
+            "count": 638,
+            "seconds": 0.6652195283677429
+          },
+          "server_script": {
+            "count": 19,
+            "seconds": 16.6785684840288
+          },
+          "cache_read": {
+            "count": 37,
+            "seconds": 4.308799171878491
+          },
+          "cache_publish": {
+            "count": 15,
+            "seconds": 1.2758502988726832
+          },
+          "cache_load": {
+            "count": 22,
+            "seconds": 8.083297320932616
+          },
+          "server_http_portfolio": {
+            "count": 11,
+            "seconds": 8.247051889018621
+          },
+          "db_client_executemany": {
+            "count": 10,
+            "seconds": 0.0028445639181882143
+          },
+          "service_project_update": {
+            "count": 5,
+            "seconds": 0.5205257399356924
+          },
+          "server_http_planning": {
+            "count": 5,
+            "seconds": 0.8869018739787862
+          }
+        },
+        "pool_counters": {
+          "connections_num": 0,
+          "connections_ms": 0,
+          "requests_num": 673,
+          "usage_ms": 22249,
+          "requests_queued": 0,
+          "requests_wait_ms": 0
+        },
+        "maximum_waiting_requests": 0
+      },
+      "postgresql": {
+        "samples": 59,
+        "first_epoch": 1789306873.6052961,
+        "last_epoch": 1789306888.3329823,
+        "observed_seconds": 14.727686166763306,
+        "status": "observed",
+        "counters": {
+          "calls": 5617.0,
+          "server_exec_ms": 13150.503510999997,
+          "shared_hits": 6895600.0,
+          "shared_reads": 61.0
+        },
+        "sampled_active_backend_seconds_by_wait_category": {
+          "CPU": 11.905957221984863
+        }
+      },
+      "containers": {
+        "samples": 7,
+        "first_epoch": 1789306874.551564,
+        "last_epoch": 1789306886.6251273,
+        "observed_seconds": 12.07356333732605,
+        "failed_samples": 0,
+        "containers": {
+          "app": {
+            "samples": 7,
+            "mean_cpu_percent": 62.39428571428571,
+            "max_cpu_percent": 98.57,
+            "max_memory_bytes_approx": 484022682,
+            "max_pids": 25
+          },
+          "postgres": {
+            "samples": 7,
+            "mean_cpu_percent": 85.48857142857143,
+            "max_cpu_percent": 118.4,
+            "max_memory_bytes_approx": 713555968,
+            "max_pids": 20
+          },
+          "keycloak": {
+            "samples": 7,
+            "mean_cpu_percent": 0.27714285714285714,
+            "max_cpu_percent": 0.4,
+            "max_memory_bytes_approx": 905340518,
+            "max_pids": 60
+          }
+        }
+      }
+    }
+  ],
+  "database_failure_count": 0,
+  "http_responses": [
+    {
+      "path": "/api/planning/tasks",
+      "status": 200,
+      "count": 5
+    },
+    {
+      "path": "/api/planning/tasks",
+      "status": 409,
+      "count": 5
+    },
+    {
+      "path": "/api/portfolio/allocations",
+      "status": 200,
+      "count": 13
+    },
+    {
+      "path": "/api/portfolio/allocations",
+      "status": 409,
+      "count": 5
+    }
+  ],
+  "acceptance_complete": false
+}

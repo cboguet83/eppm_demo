@@ -71,23 +71,31 @@ class RevisionSnapshot:
         return {row[0]: _digest((access, row, tuple(projects[source] for source in sources[row[0]])))
                 for row in self.pools}
 
-    def task_tokens(self, project_ids: list[int]) -> dict[int, str]:
-        """Bind task display to its project, predecessors and assigned pool sources."""
+    def task_tokens(self, project_ids: list[int], task_pools: set[tuple[int, int]]) -> dict[int, str]:
+        """Include pool labels for project links and full capacity sources for tasks."""
         selected = set(project_ids)
         projects = self.project_tokens()
         pools = self.pool_tokens()
+        configurations = {row[0]: _digest(('planning.pool.v1', row)) for row in self.pools}
         assigned = {identity: [] for identity in selected if identity in projects}
         for pool_id, consumers in self.pool_sources:
             for identity in consumers:
                 if identity in assigned:
-                    assigned[identity].append((pool_id, pools[pool_id]))
-        return {identity: _digest(('planning.tasks.v1', projects[identity], tuple(sorted(sources))))
+                    token = pools[pool_id] if (identity, pool_id) in task_pools else configurations[pool_id]
+                    assigned[identity].append((pool_id, token))
+        return {identity: _digest(('planning.tasks.v2', projects[identity], tuple(sorted(sources))))
                 for identity, sources in assigned.items()}
 
 
 def _digest(value: tuple) -> str:
     """Match PostgreSQL JSONB array formatting for database-checked fingerprints."""
     return sha256(json.dumps(value, ensure_ascii=False).encode('utf-8')).hexdigest()
+
+
+def read_task_pool_pairs(connection: psycopg.Connection, project_ids: list[int]) -> set[tuple[int, int]]:
+    """Read task allocation ownership in the caller's authorized revision snapshot."""
+    return set(connection.execute('SELECT DISTINCT project_id,pool_id FROM eppm.resource_pool_assignment '
+                                  'WHERE project_id=ANY(%s::bigint[]) AND task_id IS NOT NULL', (project_ids,)).fetchall())
 
 
 def read_revisions(connection: psycopg.Connection, access: BusinessAccess) -> RevisionSnapshot:

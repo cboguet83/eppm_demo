@@ -4,7 +4,7 @@ import psycopg
 import pytest
 
 from app.infrastructure.postgresql.business import run_business
-from app.infrastructure.postgresql.revisions import read_revisions
+from app.infrastructure.postgresql.revisions import read_revisions, read_task_pool_pairs
 from tests.postgresql.test_cache_key_plans import warm_cache_workload as warm_cache_workload
 from tests.postgresql.test_revision_plans import revision_workload as revision_workload
 
@@ -15,7 +15,7 @@ def test_task_source_query_preserves_keys_without_scanning_unrelated_tasks(warm_
     query = 'SELECT * FROM eppm.planning_task_source_keys(ARRAY[2]::bigint[])'
 
     def inspect(connection):
-        expected = read_revisions(connection, access).task_tokens([2])
+        expected = read_revisions(connection, access).task_tokens([2], read_task_pool_pairs(connection, [2]))
         for _ in range(8):
             assert dict(connection.execute(query).fetchall()) == expected
         plan = connection.execute('EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ' + query).fetchone()[0][0]

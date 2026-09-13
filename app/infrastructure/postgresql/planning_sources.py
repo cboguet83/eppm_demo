@@ -11,7 +11,7 @@ from app.domain.access.models import Permission
 from app.infrastructure.postgresql.business import run_business
 from app.infrastructure.postgresql.errors import DatabaseUnavailableError, TransactionRetryError
 from app.infrastructure.postgresql.pool import Database
-from app.infrastructure.postgresql.revisions import read_revisions
+from app.infrastructure.postgresql.revisions import read_revisions, read_task_pool_pairs
 from app.shared.logging import get_logger
 
 
@@ -34,7 +34,8 @@ class PostgresPlanningSources:
         """Bind chart cache identity and task fingerprints to one authorized snapshot."""
         def operation(connection: psycopg.Connection) -> PlanningDisplaySources:
             current = read_revisions(connection, self.access)
-            return PlanningDisplaySources(current.key(), current.task_tokens(project_ids))
+            pairs = read_task_pool_pairs(connection, project_ids)
+            return PlanningDisplaySources(current.key(), current.task_tokens(project_ids, pairs))
         return self._run(operation, project_ids)
 
     def read(self, project_ids: list[int]) -> dict[int, str]:

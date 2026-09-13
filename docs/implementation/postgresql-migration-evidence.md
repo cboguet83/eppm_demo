@@ -55,7 +55,7 @@ preserves UI behavior and makes the existing regression suite reproducible.
 | Milestone | State | Evidence / remaining work |
 | --- | --- | --- |
 | 1. Baseline and decisions | Baseline captured | ADR, full baseline test results, workload and service timings recorded. Browser load comparison remains an acceptance gate. |
-| 2. PostgreSQL foundation | Implemented, focused checks pass | Configuration, restricted process pool/lifecycle, 25 explicit migrations, Compose, operator provisioning and isolated tests. Final deployment acceptance remains. |
+| 2. PostgreSQL foundation | Implemented, focused checks pass | Configuration, restricted process pool/lifecycle, 26 explicit migrations, Compose, operator provisioning and isolated tests. Final deployment acceptance remains. |
 | 3. Schema and enforcement | Implemented, full regression passes | Native integrity, RLS, actor binding, immutable Finance/audit, access administration and private derived caches are exercised in the completed full suite. |
 | 4. Core repositories | Implemented, focused checks pass | All business adapters use native callbacks; exact money inputs and database-backed browser fixtures are ported. |
 | 5. Planning and caches | Implemented, focused checks pass | Native scheduling, resources, staffing, cache invalidation, bounded portfolio/dashboard queries and HTTP task reads. Fifty-user performance acceptance remains. |
@@ -2403,3 +2403,39 @@ Actual browser responsiveness after this change is still to be measured. Final
 load, regression and deployment acceptance remain open. The ordinary database
 was not upgraded; the prior inspection recorded schema 0019, so the final local
 deployment now needs migrations 0020 through 0025.
+
+## Task-source pilot and project-level pool-link refinement
+
+The isolated `0303ecf` image completed **21 attempts including warmup with no
+workflow or database failures**. Two measured task loads took 388.2 and 388.1 ms,
+but another took 9,525.3 ms after repeated revision conflicts. Paging p95 was
+711.2 ms and saves 1,298.4 ms (six samples each). Five task responses and five
+badge responses returned 409. The result therefore does not meet the target.
+See [the pilot evidence](benchmarks/task-source-browser-pilot-results.json);
+log: `.local/postgresql-task-sources-browser-pilot.log`. The deployment was removed.
+
+The accepted bulk fixture attaches project-level links to the initial shared
+pools before adding its separate pool scenarios. Such links expose only compact
+pool labels/allocation fields in the task response, but migration 0025 also made
+them depend on other consumers' complete revisions. Two actual HTTP regressions
+reproduced the unnecessary 409, for unrelated demand changes before and during a
+task read. Task-level assignments really do expose capacity warnings and retain
+their full shared-source checks.
+
+New migration `0026_task_pool_sources.sql` distinguishes those input needs.
+Project-only links use the pool configuration revision; task allocations also
+include visible competing consumers. Initial capture reads task/pool ownership
+in its existing repeatable-read transaction. The task-key format advances to v2,
+so earlier scoped keys trigger a normal refresh. Persistent planning/capacity
+cache formats and applied migration checksums remain unchanged.
+
+The **151-check native source/cache/HTTP/UI/upgrade/revision run passed in 92.05
+seconds**. Pool renames, link edits, conversion into a task allocation, relevant
+capacity/dependency changes, scope changes and revoked access remain guarded.
+The source query still held steady at 1,669/1,663 buffer accesses around unrelated
+graph growth (18.193/20.441 ms). Logs:
+`.local/postgresql-project-pool-source-before.log` and
+`.local/postgresql-task-pool-sources-final.log`.
+
+Browser validation of this refinement and final acceptance remain pending. The
+ordinary database has not been migrated; final deployment includes migration 0026.
