@@ -125,3 +125,16 @@ PostgreSQL applies typed frozen plans inside the complete operator callback.
 The retired generic SQLite SQL-list executor and database-wide writer lock are
 not part of that native contract; actual serializable replay and a single
 pre-operation archive are verified directly.
+
+## Application shell test mapping
+
+`tests/test_layered_shell.py` retains the original SQLite module unchanged.
+The active root tests now exercise routing, deep links, language selection,
+fragment reruns and launcher validation without storage. Native tests in
+`tests/postgresql/test_layered_shell.py` verify actual page reruns preserve
+project data and Settings deep links retain their selected section. A fresh
+interpreter renders Dashboard, Portfolio, Planning, Settings and Finance using
+only restricted PostgreSQL credentials and rejects indirect legacy storage
+imports. The existing native operator-command test covers explicit CLI seeding,
+archive creation, unchanged data after archive failure and safe exit status;
+the UI never calls that operator path.

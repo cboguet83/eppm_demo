@@ -1594,3 +1594,17 @@ Full collection now succeeds: **2,272 tests collected in 1.91 seconds**, with no
 collection errors, in `.local/postgresql-test-port-inventory-current.log`. This
 does not establish full-suite execution, PostgreSQL-only runtime/test archival,
 complete application coverage or final performance/recovery acceptance.
+
+## Native application shell workflows
+
+Shell tests now separate storage-independent navigation and launcher validation
+from actual native page composition. PostgreSQL tests verify reruns preserve
+project edits, Settings consumes schema deep links, and a fresh process renders
+the five current business pages without importing retired storage modules.
+The child process receives only restricted runtime database credentials. The
+original SQLite module is retained unchanged with an explicit behavior mapping.
+
+Validation: **16 passed in 20.89 seconds**, recorded in
+`.local/postgresql-shell-port.log`, including the existing native CLI seeding and
+archive-failure test. The full suite is running separately against unchanged
+source; these checks do not establish the full regression or coverage gate.
