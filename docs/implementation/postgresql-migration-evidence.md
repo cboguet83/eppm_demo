@@ -1479,3 +1479,20 @@ Validation: **96 passed in 47.99 seconds**, recorded in
 29 planning read contracts, 8 repository workflows, 2 native schema service tests
 and 12 pure service tests. No skipped or excluded cases were used to obtain this
 result. Full PostgreSQL migration acceptance remains open.
+
+## Native lease cleanup and committed revisions
+
+Lifecycle tests now observe the actual pool lease immediately before return:
+reads, successful writes and failed dependency replacement all finish with an
+idle transaction, and subsequent service calls see the correct committed or
+rolled-back data. Revision tests verify equal-length name changes, invisibility
+of uncommitted writes, rollback stability, and a new revision when a later commit
+restores the original value. These replace physical SQLite connection closure
+and the two SQLite journal-mode/file-metadata cases.
+
+Validation: **4 passed in 2.67 seconds**, recorded in
+`.local/postgresql-database-lifecycle.log`. Full collection now reaches
+**2,169 tests with 9 remaining legacy collection errors**, recorded in
+`.local/postgresql-test-port-inventory-current.log`. Remaining legacy test/tool
+ports, runtime archival, complete application coverage, authenticated 50-user
+performance runs, and representative recovery/restart acceptance are unfinished.
