@@ -1526,3 +1526,18 @@ with an explicit mapping to native migration atomicity and reentry tests.
 
 Validation: **13 passed in 7.42 seconds**, recorded in
 `.local/postgresql-project-experience.log`. Full migration acceptance remains open.
+
+## Native project links and context menus
+
+Project link and menu workflows now use native services and real actors. They
+retain 120-link collections, owning-project updates/deletes, URL validation,
+read-only link inspection, pool allocation fields and CSV menu routing. A link
+to an unavailable project receives the native authorization denial. Migration
+reentry preserves links, direct PostgreSQL constraints reject blank aliases,
+and a real archived operator reset removes all link rows. The original SQLite
+upgrade tests remain unchanged in the archive with a native evidence mapping.
+
+Validation: **18 passed in 6.91 seconds**, recorded in
+`.local/postgresql-project-ui-workflows.log`: 16 project/menu cases plus the
+native migration reentry/privilege and pending-DDL rollback tests. Full migration
+acceptance remains incomplete.

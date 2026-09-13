@@ -92,3 +92,14 @@ reentry and atomic DDL rollback across all pending files are covered by
 `test_migrations_initialize_once_and_runtime_cannot_modify_the_ledger` and
 `test_failed_migrations_rollback_schema_and_all_prior_pending_files` in
 `tests/postgresql/test_foundation.py`.
+
+## Project links and menu test mapping
+
+`tests/test_project_ui_updates.py` preserves the unchanged original module.
+Its active native counterpart retains unrestricted link counts, scoped edits,
+URL validation, inspection-only links, pool popup fields, CSV context-menu
+actions and the shared menu style. Native migration reentry preserves links;
+real PostgreSQL constraints reject blank aliases and the backed-up operator
+reset removes links. The retired SQLite index-collision migration test maps to
+the actual pending-DDL rollback and ledger tests in `test_foundation.py`, which
+are run alongside the ported workflow suite.
