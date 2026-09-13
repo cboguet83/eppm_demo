@@ -1,0 +1,120 @@
+{
+  "scope": "Short fifty-user browser diagnostic after bounded project scopes",
+  "source_commit": "58029122bbbe3528308de6b6e11654f0dac5aaa8",
+  "image": "eppm-demo:postgresql-bounded-project-candidate",
+  "image_id": "sha256:c745f97936803b3f4c2f2b2666c3c92920666f52d3d2c25e398818573a7ddbde",
+  "migrations": 29,
+  "distinct_users": 50,
+  "readers": 40,
+  "editors": 10,
+  "warmup_seconds": 15,
+  "measurement_seconds": 45,
+  "rounds": 1,
+  "periods": [
+    {
+      "round": 1,
+      "scenarios": {
+        "portfolio_paging": {
+          "attempts": 72,
+          "failures": 0,
+          "successes": 72,
+          "p95_ms": 23589.8,
+          "max_ms": 24845.5
+        },
+        "visible_task_loading": {
+          "attempts": 100,
+          "failures": 0,
+          "successes": 100,
+          "p95_ms": 15467.5,
+          "max_ms": 16843
+        },
+        "simple_save": {
+          "attempts": 10,
+          "failures": 5,
+          "successes": 5,
+          "p95_ms": 23198.1,
+          "max_ms": 23198.1
+        }
+      }
+    }
+  ],
+  "total_attempts": 269,
+  "total_failures": 10,
+  "warmup_attempts": 87,
+  "warmup_failures": 5,
+  "failed_editor_indices": [
+    2,
+    5,
+    7,
+    8,
+    9
+  ],
+  "failed_editor_state": "Confirmation failed with an open dialog and alert in warmup; the same editors subsequently timed out opening the editor",
+  "measured_runtime_observed_seconds": 59.224514961242676,
+  "measured_pool_counters": {
+    "connections_num": 0,
+    "connections_ms": 0,
+    "requests_num": 2628,
+    "usage_ms": 795947,
+    "requests_queued": 2489,
+    "requests_wait_ms": 908599
+  },
+  "measured_maximum_waiting": 22,
+  "warmup_database_call_serialization_failures": 20,
+  "measured_database_call_serialization_failures": 1,
+  "measured_postgresql": {
+    "samples": 215,
+    "first_epoch": 1789322867.384383,
+    "last_epoch": 1789322929.0642412,
+    "observed_seconds": 61.67985820770264,
+    "status": "observed",
+    "counters": {
+      "calls": 27586.0,
+      "server_exec_ms": 55116.21553300001,
+      "shared_hits": 4850250.0,
+      "shared_reads": 847.0
+    },
+    "sampled_active_backend_seconds_by_wait_category": {
+      "CPU": 57.47626781463623
+    }
+  },
+  "measured_containers": {
+    "samples": 29,
+    "first_epoch": 1789322869.813412,
+    "last_epoch": 1789322927.7030313,
+    "observed_seconds": 57.88961935043335,
+    "failed_samples": 0,
+    "containers": {
+      "app": {
+        "samples": 29,
+        "mean_cpu_percent": 114.59034482758621,
+        "max_cpu_percent": 213.73,
+        "max_memory_bytes_approx": 2375116915,
+        "max_pids": 63
+      },
+      "postgres": {
+        "samples": 29,
+        "mean_cpu_percent": 90.70275862068965,
+        "max_cpu_percent": 477.01,
+        "max_memory_bytes_approx": 1578400481,
+        "max_pids": 30
+      },
+      "keycloak": {
+        "samples": 29,
+        "mean_cpu_percent": 0.42620689655172417,
+        "max_cpu_percent": 2.91,
+        "max_memory_bytes_approx": 1014077850,
+        "max_pids": 57
+      }
+    }
+  },
+  "raw_results": ".local/browser-load/7c57e771525a/browser-results.json",
+  "log": ".local/postgresql-bounded-project-fifty.log",
+  "acceptance_complete": false,
+  "limitations": [
+    "Diagnostic duration is shorter than the prescribed acceptance workload.",
+    "Save latency describes successful attempts; five editors were already stranded by warmup failures.",
+    "Database-call failure counts include retried attempts and do not count failed business operations.",
+    "The application, PostgreSQL, identity provider, and browser load generator share the Docker host."
+  ]
+}

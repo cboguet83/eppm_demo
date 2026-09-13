@@ -2863,3 +2863,51 @@ individual cases. See [the concurrency evidence](benchmarks/project-save-concurr
 A deployed load comparison is still required. Full regression/coverage and final
 deployment/recovery gates remain open; this native regression does not establish
 50-user browser acceptance.
+
+## Bounded-scope load result and warmed write plans
+
+The committed `5802912` image's next short fifty-user diagnostic failed five of
+182 measured workflows. Paging p95 was 23,589.8 ms (72 successes), task loading
+15,467.5 ms (100 successes), and successful saves 23,198.1 ms (five successes and
+five failures). The same five editors had failed confirmation with an open dialog
+and alert during warmup, then timed out opening it in measurement. Including
+warmup, ten of 269 workflows failed. See [the recorded diagnostic](benchmarks/bounded-project-fifty-results.json).
+The disposable deployment was removed. No ordinary deployment was upgraded.
+
+The runtime's 59.22-second measured window recorded 2,628 pool requests, 2,489
+queued acquisitions, 908.60 aggregate seconds waiting, and one database-call
+serialization failure. Warmup recorded twenty such failures. The recent-error
+buffer mostly identified property-write calls; these locations do not by
+themselves prove which query originally established the conflicting read.
+Five writers being stranded during warmup also limits conclusions from the lower
+measured retry count. The full-duration gate remains unmet.
+
+Extending the native ten-editor reproduction to open the actual project forms
+before saving exposed another conflict: seven scoped editors exhausted retries.
+The title-only property payloads were unchanged from storage. These extra reads
+warmed cached query plans, and the scoped writers again held whole-table project
+predicates despite their transaction-local sequential-scan preference.
+
+Explicitly scoped write callbacks now also use transaction-local
+`plan_cache_mode=force_custom_plan`, so cached queries are replanned under their
+write settings. Both fixed settings are sent together in one unprepared SQL
+batch. In the first comparison, global and scoped form workloads each completed
+all ten saves in one attempt. The subsequent gateway, concurrency and real-editor
+browser run passed 30 checks in 43.11 seconds, including both planner settings
+returning to their defaults before another actor borrows the same connection
+after commit or rollback. Logs: `.local/postgresql-project-save-browser-payload.log`
+(one failure and one pass before replanning),
+`.local/postgresql-project-save-browser-custom-plans.log`, and
+`.local/postgresql-project-save-replanning-final.log`.
+
+The large native form case also completed all ten saves on 10,001 seeded projects
+in a 28.14-second test. The final authorization, direct SQL security, gateway and
+concurrency run passed 111 checks in 71.89 seconds. Its large case used twenty
+attempts across the ten successful saves, with a maximum of three attempts;
+remaining retries must still be assessed under browser load. Evidence:
+`.local/postgresql-project-save-large-forms.xml` and
+`.local/postgresql-project-save-replanning-security.xml`.
+
+This follow-up still requires a deployed workload comparison. Final full-suite
+coverage, full-duration performance, and current-package recovery acceptance
+remain outstanding.

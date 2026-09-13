@@ -40,8 +40,10 @@ def run_business[Result](database: Database, key: bytes, access: BusinessAccess,
             if write and project_ids is not None:
                 # Prefer owner indexes on small tables too: a sequential scan
                 # records a whole-table serializable predicate for a point save.
-                # SET LOCAL expires with this attempt, including on rollback.
-                connection.execute("SET LOCAL enable_seqscan=off")
+                # Replan queries cached during earlier reads under this setting.
+                # Both preferences expire with this attempt, also on rollback.
+                connection.execute("SET LOCAL enable_seqscan=off; SET LOCAL plan_cache_mode=force_custom_plan",
+                                   prepare=False)
             security = PostgresAccessStore(connection, signer, access.policy, access.actor, writable=write)
             global_read = access.global_permission(security, Permission.READ)
             if (permission is not None and project_ids is not None and global_read

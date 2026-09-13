@@ -31,6 +31,26 @@
     "combined_regression_elapsed_seconds": 12.56,
     "evidence": ".local/postgresql-project-save-scope-regression.xml"
   },
+  "warmed_form_followup": {
+    "change": "Replan explicitly scoped writes under their transaction-local scan preference",
+    "before": {"scoped_editors": 10, "failed_saves": 7},
+    "after_small_fixture": {
+      "global_editors": {"successful_saves": 10, "attempts_per_editor": 1},
+      "project_scoped_editors": {"successful_saves": 10, "attempts_per_editor": 1}
+    },
+    "after_large_fixture": {
+      "projects": 10001,
+      "successful_saves": 10,
+      "failed_saves": 0,
+      "total_attempts": 20,
+      "maximum_attempts_per_editor": 3
+    },
+    "security_and_concurrency_tests_passed": 111,
+    "elapsed_seconds": 71.89,
+    "evidence": ".local/postgresql-project-save-replanning-security.xml",
+    "browser_and_gateway_tests_passed": 30,
+    "browser_and_gateway_evidence": ".local/postgresql-project-save-replanning-final.xml"
+  },
   "limitations": [
     "This ten-writer native regression does not establish 50-user browser responsiveness.",
     "The final full regression, coverage, deployment and recovery gates remain open."

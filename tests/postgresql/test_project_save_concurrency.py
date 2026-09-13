@@ -14,7 +14,9 @@ from app.domain.access.models import Actor
 from app.infrastructure.postgresql.bulk_seed import generate_projects
 from app.infrastructure.postgresql.pool import Database, OperatorDatabase
 from app.infrastructure.postgresql.projects import PostgresProjectStore
-from app.main import create_project_service
+from app.main import create_project_service, create_project_workspace
+from app.presentation.components.portfolio_project_dialog import ProjectDraft, _accept_values, _project_form, _property_values
+from app.presentation.components.project_dialogs import _dialog_references
 from app.runtime import RuntimeResources
 from app.shared.config.database import DatabaseConfig
 
@@ -47,15 +49,21 @@ def test_scope_resolution_during_query_planning_is_removed(authorized, record_pr
     assert locks == ([("relation",)] if legacy_scope else [])
 
 
-@pytest.mark.parametrize("scope_kind", ["all", "projects"])
-def test_ten_distinct_editors_can_save_independent_project_titles(authorized, monkeypatch, record_property, scope_kind):
+@pytest.mark.parametrize("project_count,payload_kind,scope_kind", [
+    (10, "stored", "all"), (10, "stored", "projects"),
+    (10, "browser-form", "all"), (10, "browser-form", "projects"),
+    (10001, "browser-form", "all"),
+])
+def test_ten_distinct_editors_can_save_independent_project_titles(
+    authorized, monkeypatch, record_property, scope_kind, payload_kind, project_count,
+):
     OperatorDatabase(authorized.setup.operator_url).run(
         lambda connection: generate_projects(connection, SeedRequest(
-            projects=10, min_tasks=0, max_tasks=15, clean_first=True, random_seed=42), year=2026),
+            projects=project_count, min_tasks=0, max_tasks=15, clean_first=True, random_seed=42), year=2026),
         write=True,
     )
     with psycopg.connect(authorized.setup.operator_url) as connection:
-        project_ids = [row[0] for row in connection.execute("SELECT id FROM eppm.project ORDER BY id")]
+        project_ids = [row[0] for row in connection.execute("SELECT id FROM eppm.project ORDER BY id LIMIT 10")]
         for index in range(10):
             user_id = 100 + index
             connection.execute("INSERT INTO eppm.app_user(id,status,created_at,updated_at) VALUES(%s,'active',900,900)", (user_id,))
@@ -73,11 +81,29 @@ def test_ten_distinct_editors_can_save_independent_project_titles(authorized, mo
     database.open()
     try:
         resources = RuntimeResources(database, authorized.key)
-        services = [create_project_service(resources, access=BusinessAccess(
+        accesses = [BusinessAccess(
             Actor(100 + index, f"editor-{100 + index}", f"title-{index}"),
             AuthorizationPolicy(lambda: 1000, SessionLimits()),
-        )) for index in range(10)]
+        ) for index in range(10)]
+        services = [create_project_service(resources, access=access) for access in accesses]
         projects = [service.get_project_by_id(project_id) for service, project_id in zip(services, project_ids)]
+        properties = [project.dynamic_attributes for project in projects]
+        if payload_kind == "browser-form":
+            properties = []
+            for index, project in enumerate(projects):
+                workspace = create_project_workspace(resources, access=accesses[index])
+                draft = ProjectDraft(project.id, project, _dialog_references(workspace))
+                draft.form = _project_form(workspace, draft, project.project_type_id)
+                values = dict(draft.form["values"])
+                for field in draft.form["fields"]:
+                    if field["kind"] not in {"multi", "tags"}:
+                        value = values[field["key"]]
+                        values[field["key"]] = "" if value is None else str(value)
+                values["name"] = f"Concurrent title {index}"
+                _accept_values(draft, {"values": values, "dirty": ["name"], "links": [], "wbs": []})
+                properties.append(_property_values(draft, values))
+            assert all(value == project.dynamic_attributes.get(key)
+                       for project, values in zip(projects, properties) for key, value in values.items())
         attempts = dict.fromkeys(project_ids, 0)
         backends = set()
         lock = Lock()
@@ -109,7 +135,7 @@ def test_ten_distinct_editors_can_save_independent_project_titles(authorized, mo
             return services[index].update_project(
                 project_id=project.id, name=f"Concurrent title {index}", status=project.status,
                 planned_budget=project.planned_budget, actual_budget=project.actual_budget,
-                dynamic_attributes=project.dynamic_attributes, function_id=project.function_id,
+                dynamic_attributes=properties[index], function_id=project.function_id,
                 project_type_id=project.project_type_id, custom_links=[], wbs_allocations=[],
             )
 
@@ -125,7 +151,8 @@ def test_ten_distinct_editors_can_save_independent_project_titles(authorized, mo
         record_property("predicate_locks", json.dumps(predicates))
         assert not errors, errors
         with psycopg.connect(authorized.setup.operator_url) as connection:
-            assert connection.execute("SELECT id,name FROM eppm.project ORDER BY id").fetchall() == [
+            assert connection.execute("SELECT id,name FROM eppm.project WHERE id=ANY(%s) ORDER BY id",
+                                      (project_ids,)).fetchall() == [
                 (project_id, f"Concurrent title {index}") for index, project_id in enumerate(project_ids)]
     finally:
         database.close()

@@ -90,6 +90,7 @@ def test_point_write_planner_preference_does_not_leak_after_commit_or_rollback(a
     database = Database(DatabaseConfig(authorized.setup.runtime_url, pool_min=1, pool_max=1))
     def operation(connection):
         assert connection.execute("SHOW enable_seqscan").fetchone() == ("off",)
+        assert connection.execute("SHOW plan_cache_mode").fetchone() == ("force_custom_plan",)
         if fails:
             raise ValueError("Rejected test input")
 
@@ -106,5 +107,7 @@ def test_point_write_planner_preference_does_not_leak_after_commit_or_rollback(a
             run()
         assert run_business(database, authorized.key, authorized.binding(1).access,
                             lambda connection: connection.execute("SHOW enable_seqscan").fetchone()) == ("on",)
+        assert run_business(database, authorized.key, authorized.binding(1).access,
+                            lambda connection: connection.execute("SHOW plan_cache_mode").fetchone()) == ("auto",)
     finally:
         database.close()

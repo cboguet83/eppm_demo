@@ -107,7 +107,9 @@ estimate an `unnest` result. Global read permission short-circuits scope resolut
 The Python business gateway likewise avoids materializing a global project list
 when it only needs permission and existence checks for explicitly supplied owners.
 Scoped write callbacks favor existing indexes with a transaction-local planner
-setting to avoid whole-table predicates on small analyzed tables; ordinary reads
+setting to avoid whole-table predicates on small analyzed tables. They also
+request custom plans so queries cached during earlier reads are replanned with
+those write settings. Both settings expire on commit or rollback; ordinary reads
 keep their default planner behavior.
 
 Derived cache publication checks current scope and source fingerprints. Cache
