@@ -34,6 +34,22 @@ in the caller's snapshot. Its dependency and pool-source sets are aggregated in
 batches. Missing lifecycle, catalog, security or required entity revision records
 fail closed instead of yielding a potentially reusable default key.
 
+Migration `0023_revision_query_plans.sql` keeps custom query planning inside this
+function. Effective scope arrays range from a few IDs to the whole portfolio;
+the generic plan chosen after repeated calls caused excessive index probes for
+large scopes. The setting is local to function execution and the caller's planner
+setting is restored on return. The function body, permissions, source membership
+and fingerprint encoding remain unchanged.
+
+On a separate synthetic graph of 10,001 projects and 70,007 tasks, the original
+warm generic plan used 526,582 buffer accesses. The revised function held steady
+at 42,977 accesses before and after repeated calls, with 82.960/79.571 ms execution
+times. A regression compares actual database work instead of asserting a planner
+setting or a host-dependent latency target. Upgrade validation preserves the
+existing ledger checksums, function body, owner and privileges. See
+[the recorded diagnosis](benchmarks/revision-query-plan-results.json); these
+database measurements do not establish browser-load acceptance.
+
 `RevisionSnapshot` provides complete display, project and pool fingerprints:
 
 - The access portion includes database epoch/OID, actor/session identity,

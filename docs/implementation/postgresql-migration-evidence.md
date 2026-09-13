@@ -38,7 +38,7 @@ preserves UI behavior and makes the existing regression suite reproducible.
 | Milestone | State | Evidence / remaining work |
 | --- | --- | --- |
 | 1. Baseline and decisions | Baseline captured | ADR, full baseline test results, workload and service timings recorded. Browser load comparison remains an acceptance gate. |
-| 2. PostgreSQL foundation | Implemented, focused checks pass | Configuration, restricted process pool/lifecycle, 22 explicit migrations, Compose, operator provisioning and isolated tests. Final deployment acceptance remains. |
+| 2. PostgreSQL foundation | Implemented, focused checks pass | Configuration, restricted process pool/lifecycle, 23 explicit migrations, Compose, operator provisioning and isolated tests. Final deployment acceptance remains. |
 | 3. Schema and enforcement | Implemented, full regression passes | Native integrity, RLS, actor binding, immutable Finance/audit, access administration and private derived caches are exercised in the completed full suite. |
 | 4. Core repositories | Implemented, focused checks pass | All business adapters use native callbacks; exact money inputs and database-backed browser fixtures are ported. |
 | 5. Planning and caches | Implemented, focused checks pass | Native scheduling, resources, staffing, cache invalidation, bounded portfolio/dashboard queries and HTTP task reads. Fifty-user performance acceptance remains. |
@@ -2229,3 +2229,32 @@ Image/host metadata, scenario counts and timings are retained in
 The run log is `.local/postgresql-load-property-pilot.log`; its owned deployment
 was removed. The complete workload and final regression/coverage acceptance remain
 open.
+
+## Stable revision-query work after repeated calls
+
+A separate synthetic graph reproduced the full-scope revision query slowing
+after its fifth call. PostgreSQL's automatic/generic plan used 526,582 buffer
+accesses and about 225 ms of database execution, compared with 42,977 accesses
+and about 86 ms under custom planning. Returned revision metadata was identical
+under all three planner modes. This diagnosis uses 10,001 projects, 70,007 tasks,
+70,006 dependencies and 100 pools; it is not the prescribed browser-load fixture.
+
+New ordered migration `0023_revision_query_plans.sql` sets custom planning only
+for `display_cache_revisions()`. It preserves the existing function body,
+signed-actor checks, cache sources and key format. No applied migration changed.
+The repeated-execution regression failed before the fix (166,310 initial buffer
+accesses versus 526,582 after repetition). Final measurements after initial warmup
+remain **42,977 accesses before and after repetition**, taking 82.960 and 79.571 ms.
+The caller's planner setting is restored after the function returns.
+
+The related native revision/cache/migration/HTTP run passed 140 checks; its new
+upgrade test initially failed because a Windows text-mode fixture copy changed
+historical migration bytes. The corrected byte-preserving fixture and query-work
+regression both passed: **two checks in 9.88 seconds**. The upgrade retains the
+old ledger entries, function body, owner and privileges; runtime credentials still
+cannot change its planner configuration. Logs are
+`.local/postgresql-revision-plan-before.log`,
+`.local/postgresql-revision-plan-validation.log` and
+`.local/postgresql-revision-plan-final.log`. The
+[recorded database results](benchmarks/revision-query-plan-results.json) remain
+separate from pending browser responsiveness and final regression acceptance.

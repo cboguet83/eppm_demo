@@ -1,0 +1,73 @@
+{
+  "scope": "Isolated synthetic PostgreSQL revision-query diagnosis; not browser-load acceptance",
+  "original_source_commit": "f7dcdea",
+  "fix": "0023_revision_query_plans.sql",
+  "counts": {
+    "projects": 10001,
+    "tasks": 70007,
+    "dependencies": 70006,
+    "pools": 100
+  },
+  "original_planner_comparison": {
+    "auto": {
+      "elapsed_ms": [
+        140.65260003553703,
+        90.0880999979563,
+        97.21939999144524,
+        95.66859999904409,
+        96.33089997805655,
+        244.51280001085252,
+        250.8745000232011,
+        237.4466000474058
+      ],
+      "database_ms": 223.329,
+      "hit_blocks": 526582,
+      "read_blocks": 0
+    },
+    "force_generic_plan": {
+      "elapsed_ms": [
+        237.71570000099018,
+        250.1439999905415,
+        236.83469998650253,
+        237.9561000270769,
+        237.02190001495183,
+        244.05859998660162,
+        240.00509997131303,
+        263.9521000091918
+      ],
+      "database_ms": 225.203,
+      "hit_blocks": 526582,
+      "read_blocks": 0
+    },
+    "force_custom_plan": {
+      "elapsed_ms": [
+        92.58870000485331,
+        103.34879998117685,
+        97.03529998660088,
+        97.3185999901034,
+        96.35619999608025,
+        95.25950002716854,
+        95.51309997914359,
+        95.86970001691952
+      ],
+      "database_ms": 85.538,
+      "hit_blocks": 42977,
+      "read_blocks": 0
+    }
+  },
+  "fixed_repeated_execution": {
+    "before_revision_ms": 82.96,
+    "before_revision_blocks": 42977.0,
+    "after_revision_ms": 79.571,
+    "after_revision_blocks": 42977.0
+  },
+  "validation": {
+    "related_checks_passed": 140,
+    "final_targeted_checks_passed": 2,
+    "final_seconds": 9.88,
+    "regression_failed_before_fix": true,
+    "caller_plan_mode_restored": true,
+    "upgrade_preserves_ledger_body_owner_privileges": true
+  },
+  "acceptance_complete": false
+}
