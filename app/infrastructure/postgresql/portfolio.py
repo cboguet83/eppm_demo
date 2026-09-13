@@ -23,7 +23,6 @@ from app.infrastructure.postgresql.errors import DatabaseUnavailableError, Trans
 from app.infrastructure.postgresql.pool import Database
 from app.infrastructure.postgresql.portfolio_query import DIRECTORY, facet_projection, order, source, where
 from app.infrastructure.postgresql.property_store import parameters
-from app.infrastructure.postgresql.revisions import read_revisions
 from app.shared.logging import get_logger
 
 
@@ -48,8 +47,9 @@ class PostgresPortfolioReader:
             raise ProjectStorageError('Project display data could not be accessed. Please try again.') from None
 
     def revision(self) -> tuple:
-        """Resolve actor, current membership and source revisions in one snapshot."""
-        return self._run(lambda connection: read_revisions(connection, self.access).key())
+        """Read compact, current access and source fingerprints in one snapshot."""
+        return self._run(lambda connection: tuple(
+            connection.execute('SELECT eppm.portfolio_cache_revision()').fetchone()[0]))
 
     def get_metrics(self) -> PortfolioMetrics:
         """Aggregate visible native euro amounts without hydrating project records."""

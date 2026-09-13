@@ -101,6 +101,13 @@ records are not financial or business truth: approved Finance and audit records
 remain immutable, while authoritative monetary values use decimal/numeric storage
 and exact form transport.
 
+`PostgresPortfolioReader.revision` reads two compact fingerprints from
+`eppm.portfolio_cache_revision()`: current actor/session/catalog/security/scope,
+and the complete visible project and pool generations. Whole-view invalidation
+uses the existing owner-revision triggers instead of expanding dependency and
+demand graphs. Per-project and per-pool calculation fingerprints still include
+their scoped dependencies. Every display-cache lookup reauthorizes its caller.
+
 ## C4 — Planning code example
 
 ```mermaid

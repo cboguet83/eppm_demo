@@ -13,11 +13,11 @@
 
 ## Current deployment status checked on 2026-09-13
 
-The ordinary local application's configured PostgreSQL database has 19 applied
+The last read-only check of the ordinary local application's configured PostgreSQL database recorded 19 applied
 migrations, ending at `0019_operator_seed_state.sql`. Its bind-mounted application
-package contains 26 migrations. A read-only `check_schema` call using the existing
+package now contains 27 migrations. A read-only `check_schema` call using the existing
 runtime credentials raises `SchemaCompatibilityError`: the local deployment is
-behind the feature branch and requires migrations 0020 through 0026 followed by
+behind the feature branch and requires migrations 0020 through 0027 followed by
 deployment validation. Container health alone does not establish schema
 compatibility. This inspection did not migrate, restart or modify the deployment.
 
@@ -55,7 +55,7 @@ preserves UI behavior and makes the existing regression suite reproducible.
 | Milestone | State | Evidence / remaining work |
 | --- | --- | --- |
 | 1. Baseline and decisions | Baseline captured | ADR, full baseline test results, workload and service timings recorded. Browser load comparison remains an acceptance gate. |
-| 2. PostgreSQL foundation | Implemented, focused checks pass | Configuration, restricted process pool/lifecycle, 26 explicit migrations, Compose, operator provisioning and isolated tests. Final deployment acceptance remains. |
+| 2. PostgreSQL foundation | Implemented, focused checks pass | Configuration, restricted process pool/lifecycle, 27 explicit migrations, Compose, operator provisioning and isolated tests. Final deployment acceptance remains. |
 | 3. Schema and enforcement | Implemented, full regression passes | Native integrity, RLS, actor binding, immutable Finance/audit, access administration and private derived caches are exercised in the completed full suite. |
 | 4. Core repositories | Implemented, focused checks pass | All business adapters use native callbacks; exact money inputs and database-backed browser fixtures are ported. |
 | 5. Planning and caches | Implemented, focused checks pass | Native scheduling, resources, staffing, cache invalidation, bounded portfolio/dashboard queries and HTTP task reads. Fifty-user performance acceptance remains. |
@@ -2626,3 +2626,48 @@ binding, cleanup of prior role/session settings and temporary data, rollback,
 definite-concurrency retries and real authorization races. Log:
 `.local/postgresql-transaction-roundtrips-checks.log`. The deployed performance
 comparison remains outstanding.
+
+## Round-trip candidate and compact whole-view revision
+
+The `cb444f7` image completed the same short, profiled, 50-distinct-user workload.
+It failed **22 of 124 measured attempts**: paging p95 29,817.4 ms (39 successes,
+15 failures), tasks 26,634.8 ms (60 successes), and saves 9,776.6 ms (three
+successes, seven failures). Including warmup, 29 of 213 attempts failed. These
+results establish no material responsiveness improvement from reducing round
+trips alone. See [the candidate diagnostic](benchmarks/roundtrip-fifty-profile-results.json).
+Log: `.local/postgresql-roundtrip-fifty-profile.log`; its disposable deployment
+was removed.
+
+The measured runtime window still recorded 1,821 queued acquisitions,
+1,028.29 aggregate seconds waiting and up to 34 waiting requests. It observed
+137 database-call serialization failures, including retries. Thus connection
+occupancy and concurrent activity remain unresolved.
+
+Migration `0027_portfolio_revision.sql` adds a compact fingerprint for whole-view
+display invalidation. It reads current actor/session, scope, security/catalog
+revisions, and complete visible project and pool generations. Existing triggers
+already advance those generations for dependency/assignment/configuration edits,
+so this lookup avoids rebuilding the full dependency and demand graphs. The
+existing per-entity calculation keys and all applied migration bytes are retained.
+Missing revision metadata and unauthenticated or revoked access still fail closed.
+
+The first focused native run passed **95 checks in 57.47 seconds**. On its
+10,001-project graph, the legacy full revision read used 166,310 shared/read
+buffer accesses and 123.356 ms; the compact read used 39,379 accesses and
+23.190 ms. This is database-level evidence, not a deployed 50-user result.
+Log: `.local/postgresql-compact-revision-checks.log`; machine-readable query
+measurements are in `.local/postgresql-compact-revision-checks.xml`.
+
+Five extended-graph and actual-browser checks subsequently passed in 44.83
+seconds, including changes to the final project/pool in the large fixture,
+repeated save acknowledgements, portfolio layout and navigation to planning.
+The final graph check returned only 136 bytes, with 39,379 buffer accesses and
+26.106 ms for the compact query versus 166,294 accesses and 126.365 ms for the
+full query. One additional property-scope/actor-isolation check passed in 0.66
+seconds. See [query and validation evidence](benchmarks/compact-portfolio-revision-results.json).
+Logs: `.local/postgresql-compact-revision-browser.log` and
+`.local/postgresql-compact-revision-scope.log`.
+
+The ordinary deployment was not upgraded. The candidate must be deployed with
+all 27 migrations for its next load comparison; final full-duration performance,
+regression/coverage and restart/restore acceptance remain open.

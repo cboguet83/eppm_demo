@@ -1,0 +1,23 @@
+{
+  "scope": "Native PostgreSQL query-work and correctness checks; not deployed load acceptance",
+  "test": "tests/postgresql/test_portfolio_revision.py::test_compact_revision_payload_and_query_work_remain_bounded_on_a_large_graph",
+  "fixture": {
+    "projects": 10001,
+    "tasks_per_project": 7,
+    "pools": 100,
+    "description": "Existing native revision_workload fixture, including dependencies and assignments"
+  },
+  "final_query_observations": {
+    "full_revision": {"execution_ms": 126.365, "shared_hit_plus_read_blocks": 166294},
+    "compact_revision": {"execution_ms": 26.106, "shared_hit_plus_read_blocks": 39379, "payload_bytes": 136}
+  },
+  "validation": [
+    {"checks_passed": 95, "elapsed_seconds": 57.47, "log": ".local/postgresql-compact-revision-checks.log"},
+    {"checks_passed": 5, "elapsed_seconds": 44.83, "log": ".local/postgresql-compact-revision-browser.log",
+     "scope": "Extended graph check and actual browser regressions"},
+    {"checks_passed": 1, "elapsed_seconds": 0.66, "log": ".local/postgresql-compact-revision-scope.log",
+     "scope": "Property-scope expansion/contraction and actor separation"}
+  ],
+  "xml": ".local/postgresql-compact-revision-browser.xml",
+  "acceptance_complete": false
+}
