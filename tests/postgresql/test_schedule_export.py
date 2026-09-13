@@ -2,21 +2,23 @@
 
 import csv
 import io
-from pathlib import Path
 
 from app.domain.planning.csv_export import export_schedule
 from app.domain.planning.csv_import import get_csv_template, parse_csv
-from app.infrastructure.database.schema_init import init_db
-from app.operator_services import create_planning_service, create_project_service
+from app.application.services.business_access import BusinessAccess
+from app.runtime import RuntimeResources
+from tests.postgresql.ui import runtime as runtime, access as access
+from app.main import create_planning_service, create_project_service
 
 
-def test_project_schedule_exports_actual_tasks_in_order_numbered_from_one(tmp_path: Path) -> None:
-    path = str(tmp_path / "schedule.db")
-    init_db(path)
-    projects = create_project_service(path)
+def test_project_schedule_exports_actual_tasks_in_order_numbered_from_one(
+    runtime: RuntimeResources, access: BusinessAccess,
+) -> None:
+    """Export native task records without including another project's schedule."""
+    projects = create_project_service(runtime, access=access)
     project = projects.create_project(name="Schedule")
     other = projects.create_project(name="Other")
-    service = create_planning_service(path)
+    service = create_planning_service(runtime, access=access)
     service.create_milestone(project, "Second", "Build", "2026-01-03", "2026-01-05", 50)
     service.create_milestone(other, "Excluded", "Build", "2026-01-01", "2026-01-02", 0)
     service.create_milestone(project, 'First, "quoted"', "Design", "2026-01-01", "2026-01-02", 100, description="Line one\nLine two")

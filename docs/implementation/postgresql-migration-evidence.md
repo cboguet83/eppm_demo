@@ -1392,3 +1392,20 @@ an actual project update changes the source revision and refreshes the page.
 Validation: **6 passed in 14.01 seconds**, recorded in
 `.local/postgresql-portfolio-contract-paging.log`. These bounded-query and
 AppTest checks do not replace the separate 50-user browser timing requirement.
+
+## Native dependency lifecycles and numbered schedule exports
+
+Dependency tests now use native project/planning services with actual actors.
+They preserve FS/FF/SS/SF rules, positive and negative lags, multiple and external
+predecessors, project-wide bounds, dependency replacement/cascades, descriptions,
+and identity allocation after explicit high IDs. Schedule exports retain sorted
+one-based numbering, exclusion of other projects, quoted multiline content,
+progress values and parser round trips. Fixture budgets use exact integers.
+
+Validation: **13 passed in 6.01 seconds**, recorded in
+`.local/postgresql-dependency-export-workflows.log`. Full collection now reaches
+**2,037 tests with 17 remaining legacy collection errors**, recorded in
+`.local/postgresql-test-port-inventory-current.log`. The migration remains on
+its dedicated feature branch; full native regression/coverage, remaining tools,
+actual authenticated browser benchmarks and representative recovery/restart
+acceptance are still pending.

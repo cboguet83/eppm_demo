@@ -4,34 +4,27 @@ from app.domain.planning.constraints import evaluate_constraints
 
 from app.presentation.components import planning_frames
 
-import os
-import shutil
-import tempfile
 import unittest
+import pytest
 
-from app.infrastructure.database.schema_init import init_db
-from app.operator_services import create_planning_service
-from app.operator_services import create_project_service
+from app.application.services.business_access import BusinessAccess
+from app.runtime import RuntimeResources
+from tests.postgresql.ui import runtime as runtime, access as access
+
+from app.main import create_planning_service
+from app.main import create_project_service
 
 
 class TestTaskDependencies(unittest.TestCase):
     """Test suite covering Task Dependency rules (FS, FF, SS, SF), day offsets, and persistence."""
 
-    def setUp(self) -> None:
-        """Arrange: Initialize temporary test database and repository instances."""
-        self.test_dir = tempfile.mkdtemp()
-        self.db_path = os.path.join(self.test_dir, "test_dependencies.db")
-        init_db(self.db_path)
-
-        self.project_repo = create_project_service(self.db_path)
-        self.milestone_repo = create_planning_service(self.db_path)
-
-        self.project_repo.create_project(1, "Alpha Core", "Active", 100000.0, 50000.0, {})
-        self.project_repo.create_project(2, "Beta Subsystem", "Active", 80000.0, 20000.0, {})
-
-    def tearDown(self) -> None:
-        """Clean up temporary database files."""
-        shutil.rmtree(self.test_dir, ignore_errors=True)
+    @pytest.fixture(autouse=True)
+    def native_setup(self, runtime: RuntimeResources, access: BusinessAccess) -> None:
+        """Use actual native planning and project services with a restricted actor."""
+        self.project_repo = create_project_service(runtime, access=access)
+        self.milestone_repo = create_planning_service(runtime, access=access)
+        self.project_repo.update_project(1, "Alpha Core", "Active", 100000, 50000, {})
+        self.project_repo.update_project(2, "Beta Subsystem", "Active", 80000, 20000, {})
 
     # --------------------------------------------------------------------------
     # 1. FINISH-TO-START (FS) TESTS
@@ -358,15 +351,15 @@ class TestTaskDependencies(unittest.TestCase):
 
     def test_generate_project_id_sequence(self) -> None:
         """Verify sequential project ID generation (1, 2, 3, etc.)."""
-        # Initially we have project 1 and 2
+        # Native authorization setup already owns project identities 1, 2 and 3.
         next_id_1 = self.project_repo.generate_project_id()
-        self.assertEqual(next_id_1, 3)
+        self.assertEqual(next_id_1, 4)
 
-        self.project_repo.create_project(3, "Project 3", "Active", 10000.0, 0.0, {})
+        self.project_repo.create_project(4, "Project 4", "Active", 10000, 0, {})
         next_id_2 = self.project_repo.generate_project_id()
-        self.assertEqual(next_id_2, 4)
+        self.assertEqual(next_id_2, 5)
 
-        self.project_repo.create_project(9, "Project 9", "Active", 10000.0, 0.0, {})
+        self.project_repo.create_project(9, "Project 9", "Active", 10000, 0, {})
         next_id_3 = self.project_repo.generate_project_id()
         self.assertEqual(next_id_3, 10)
 
