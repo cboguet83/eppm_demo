@@ -1622,3 +1622,27 @@ including collapsed project details, exact rounded budget shares and empty scope
 Validation: **22 passed in 31.35 seconds**, recorded in
 `.local/postgresql-dashboard-port.log`. Full application coverage, legacy runtime
 archival, browser/load acceptance and representative recovery remain open.
+
+## Isolated native Keycloak browser acceptance
+
+The real Keycloak browser fixture now provisions PostgreSQL 18.6 in its own
+unique Compose project and named volume. It generates fresh credentials, applies
+the native migrations explicitly, configures signing and inserts two fictional
+projects before starting the immutable application image. Operator commands run
+in separate disposable containers; the test verifies that the running application
+has neither the operator URL nor the runtime-provisioning password. Test ports
+are selected independently from the ordinary deployment.
+
+Validation: the image built successfully, then
+`EPPM_RUN_OIDC_E2E=1 EPPM_E2E_APP_IMAGE=eppm-demo:postgresql-browser-port pytest -q tests/test_oidc_browser_e2e.py`
+passed **1 test in 107.64 seconds**. Logs are
+`.local/postgresql-browser-port-build.log` and
+`.local/postgresql-oidc-browser-port.log`. The workflow covers actual provider
+login, pending accounts, exact operator bootstrap, UI activation and scoped grants,
+authorized downloads, hidden-project denial, read-only details, cross-tab
+revocation and sign-out, checking committed PostgreSQL audit actions throughout.
+The unique test deployment is removed after the test; ordinary database and
+Keycloak volumes are not targeted.
+
+This establishes the functional authentication workflow, not the separate
+50-user responsiveness or representative recovery/restart acceptance gates.

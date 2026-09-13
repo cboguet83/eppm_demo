@@ -1,16 +1,18 @@
 """Opt-in real Keycloak and Streamlit browser workflows, using an isolated database.
 
-Build eppm-demo:local first, install the browser-tests extra, and run with
-EPPM_RUN_OIDC_E2E=1. Credentials are generated in memory for this test deployment;
+Build eppm-demo:local first (or set EPPM_E2E_APP_IMAGE to an explicitly built image),
+install the browser-tests extra, and run with EPPM_RUN_OIDC_E2E=1.
+Credentials are generated in memory for this test deployment;
 no existing environment file, identity cookie, or development database is read.
 """
 
-from contextlib import closing
 from dataclasses import dataclass, field
 import json
 import os
 from pathlib import Path
 import re
+from secrets import token_hex, token_urlsafe
+import socket
 import subprocess
 import time
 from urllib.error import URLError
@@ -20,8 +22,6 @@ from uuid import uuid4
 
 import pytest
 
-from app.infrastructure.database.connection import get_db
-from app.infrastructure.database.schema_init import init_db
 from app.presentation.navigation import PAGE_ACCESS
 from scripts.configure_local_oidc import local_environment
 
@@ -35,34 +35,33 @@ class BrowserDeployment:
     """Keep generated credentials out of test representations and command output."""
 
     origin: str
-    database: Path
     compose: list[str]
     environment: dict[str, str] = field(repr=False)
 
-    def command(self, *arguments: str) -> None:
+    def command(self, *arguments: str) -> bytes:
         """Run bounded commands for this isolated Compose project without credential output."""
         result = subprocess.run(self.compose + list(arguments), cwd=ROOT, env=self.environment,
                                 capture_output=True, timeout=180, check=False)
         if result.returncode:
             raise RuntimeError("The isolated browser deployment command failed: " + arguments[0])
+        return result.stdout
+
+    def operator(self, *arguments: str) -> bytes:
+        """Pass separate credentials by name into an explicit disposable operator process."""
+        return self.command(
+            "run", "--rm", "-T", "--no-deps", "--entrypoint", "python",
+            "-e", "DATABASE_OPERATOR_URL", "-e", "EPPM_RUNTIME_PASSWORD", "app", *arguments,
+        )
 
     def audit_counts(self) -> dict[str, int]:
-        """Inspect committed audit inside Linux, sharing the application's SQLite locks."""
+        """Read committed native audit through a separate operator process."""
         script = (
-            "import json,sqlite3; "
-            "from app.shared.config import config; "
-            "connection=sqlite3.connect(config.db_path); "
-            "rows=connection.execute('SELECT action,count(*) FROM app_security_audit GROUP BY action').fetchall(); "
+            "import json,os,psycopg; "
+            "connection=psycopg.connect(os.environ['DATABASE_OPERATOR_URL']); "
+            "rows=connection.execute('SELECT action,count(*) FROM eppm.app_security_audit GROUP BY action').fetchall(); "
             "connection.close(); print(json.dumps(dict(rows)))"
         )
-        result = subprocess.run(
-            self.compose + ["exec", "-T", "app", "python", "-c", script],
-            cwd=ROOT, env=self.environment, capture_output=True, text=True,
-            timeout=30, check=False,
-        )
-        if result.returncode:
-            raise RuntimeError("Unable to inspect the isolated deployment's audit counts.")
-        return json.loads(result.stdout)
+        return json.loads(self.operator("-c", script))
 
 
 def wait_for_server(url: str) -> None:
@@ -81,9 +80,22 @@ def wait_for_server(url: str) -> None:
 
 @pytest.fixture(scope="module")
 def deployment():
-    """Start a disposable real provider with exact callbacks and a dedicated SQLite file."""
-    origin = "http://localhost:18501"
-    values = local_environment(origin, provider_port=18080)
+    """Start isolated provider/database volumes and explicitly provision the native app."""
+    # Reserve different candidate ports together so concurrent test deployments
+    # do not knowingly reuse each other's fixed application/provider ports.
+    with socket.socket() as app_port, socket.socket() as provider_port:
+        app_port.bind(("127.0.0.1", 0))
+        provider_port.bind(("127.0.0.1", 0))
+        origin = f"http://localhost:{app_port.getsockname()[1]}"
+        values = local_environment(origin, provider_port=provider_port.getsockname()[1])
+    operator_password, runtime_password = token_urlsafe(36), token_urlsafe(36)
+    values.update(
+        POSTGRES_PASSWORD=operator_password, EPPM_RUNTIME_PASSWORD=runtime_password,
+        DATABASE_CONTEXT_KEY=token_hex(32),
+        DATABASE_URL=f"postgresql://eppm_app:{runtime_password}@postgres:5432/eppm",
+        DATABASE_OPERATOR_URL=f"postgresql://eppm_operator:{operator_password}@postgres:5432/eppm",
+        EPPM_APP_IMAGE=os.environ.get("EPPM_E2E_APP_IMAGE", "eppm-demo:local"),
+    )
     identity = uuid4().hex[:12]
     directory = ROOT / ".local" / "oidc-e2e" / identity
     data = directory / "data"
@@ -99,25 +111,40 @@ def deployment():
         "        source: ${EPPM_DATA_DIRECTORY}\n        target: /app/data\n",
         encoding="utf-8",
     )
-    database = data / "ppm_mock.db"
-    init_db(str(database))
-    with closing(get_db(str(database))) as connection, connection:
-        connection.execute("INSERT INTO project(id,name) VALUES(1,'Visible browser project'),(2,'Hidden browser project')")
-        connection.execute("INSERT INTO project_task(project_id,task_name,start_date,end_date) VALUES(1,'Visible browser task','2026-01-01','2026-01-05'),(2,'Hidden browser task','2026-01-01','2026-01-05')")
-    server = BrowserDeployment(origin, database,
+    server = BrowserDeployment(origin,
         ["docker", "compose", "--project-name", "eppm-e2e-" + identity,
-         "--env-file", str(environment_path), "-f", "docker-compose.yml", "-f", "docker-compose.oidc.yml",
+         "--env-file", str(environment_path), "-f", "docker-compose.yml",
+         "-f", "docker-compose.postgresql.yml", "-f", "docker-compose.oidc.yml",
          "-f", str(image_override)],
         os.environ | values)
     try:
-        server.command("up", "-d", "--no-build")
+        server.command("up", "-d", "--no-build", "--wait", "postgres", "keycloak")
         wait_for_server(values["OIDC_ISSUER"] + "/.well-known/openid-configuration")
+        for action in ("provision", "migrate", "configure-security"):
+            server.operator("-m", "scripts.postgresql_admin", action)
+        server.operator("-c", NATIVE_FIXTURE)
+        server.command("up", "-d", "--no-build", "--no-deps", "app")
         wait_for_server(origin + "/_stcore/health")
+        server.command("exec", "-T", "app", "python", "-c",
+                       "import os; assert 'DATABASE_OPERATOR_URL' not in os.environ; "
+                       "assert 'EPPM_RUNTIME_PASSWORD' not in os.environ")
         yield server
     finally:
         # Only the unique Compose project's resources are removed; host fixtures remain ignored.
         if os.environ.get("EPPM_KEEP_E2E") != "1":
             server.command("down", "--volumes", "--remove-orphans")
+
+
+NATIVE_FIXTURE = """
+import os
+import psycopg
+from app.infrastructure.postgresql.seed_catalog import ensure_reference_catalog
+
+with psycopg.connect(os.environ['DATABASE_OPERATOR_URL']) as connection:
+    ensure_reference_catalog(connection)
+    connection.execute("INSERT INTO eppm.project(id,name) VALUES(1,'Visible browser project'),(2,'Hidden browser project')")
+    connection.execute("INSERT INTO eppm.project_task(project_id,task_name,start_date,end_date) VALUES(1,'Visible browser task','2026-01-01','2026-01-05'),(2,'Hidden browser task','2026-01-01','2026-01-05')")
+"""
 
 
 def sign_in(page, server: BrowserDeployment, username: str, password_key: str) -> None:
@@ -272,7 +299,7 @@ def test_real_keycloak_login_pending_bootstrap_and_access_administration(deploym
             reference = page.get_by_text(re.compile(r"Application user reference: \d+")).first.inner_text()
             user_id = re.search(r"\d+", reference).group()
             assert context.request.get(deployment.origin + "/downloads/projects/1/template.csv").status == 403
-            deployment.command("exec", "-T", "app", "python", "-m", "scripts.access_admin", "bootstrap-admin", "--user-id", user_id)
+            deployment.operator("-m", "scripts.access_admin", "bootstrap-admin", "--user-id", user_id)
             open_access_management(page, deployment)
             expect(page.get_by_label("Search accounts", exact=True)).to_be_visible()
             # Bootstrap grants access administration, never implicit business access.
