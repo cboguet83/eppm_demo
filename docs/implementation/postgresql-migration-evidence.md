@@ -1991,3 +1991,28 @@ Validation: **52 passed in 19.77 seconds**, recorded in
 directly import SQLite database/repository adapters. Remaining work includes
 benchmark tooling, retirement of the unused SQLite runtime modules and final
 full-suite coverage, authenticated load and deployed recovery acceptance.
+
+## Native planning benchmark tools
+
+The planning profiler, JSON-lines planning session and task-pool dialog profiler
+now restore consistent native archives into uniquely named disposable databases.
+Only those copies receive diagnostic identities, signing keys, grants and edits.
+Screens use the same restricted PostgreSQL pool and signed business access as the
+application; no operator connection enters a screen. The Gantt driver launches the
+local Python diagnostic instead of requiring operator credentials in the app
+container. The original SQLite baseline collector is archived unchanged.
+
+Real PostgreSQL and Chromium checks verify initial/warm renders, lazy task loading,
+progress writes, dialog FTE/period reruns, all three CLI output formats, cleanup
+after render/dump/restore failures, and unchanged hashes for every source table
+plus unchanged sequence state. The standalone component uses its existing callback
+task-loading path; it has no HTTP origin and is not full-app latency evidence.
+
+The initial browser run exposed an obsolete HTTP-origin assumption in the driver;
+the corrected callback path passed. A subsequent driver-shutdown warning was
+resolved by allowing its async initialization task to finish before shutdown.
+Final validation: **14 passed in 22.58 seconds**, with no pending-driver warnings,
+in `.local/postgresql-benchmark-tools-clean.log`. Usage and measurement boundaries
+are documented in [PostgreSQL planning diagnostics](postgresql-benchmarks.md).
+Remaining acceptance includes SQLite runtime archival, full regression/95% coverage,
+authenticated 50-user responsiveness, and representative deployed recovery.

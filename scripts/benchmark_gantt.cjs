@@ -1,5 +1,6 @@
 // Real Chromium rendering/scroll benchmark. Uses an isolated, headless profile.
 // node scripts/benchmark_gantt.cjs [path/to/chromium-or-msedge] [--database] [--external-links] [--expanded]
+// Native database mode also accepts --env-file=PATH and --client-container=NAME.
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -10,25 +11,50 @@ const readline = require('node:readline');
 async function main() {
   const useDatabase = process.argv.includes('--database');
   const executable = process.argv.slice(2).find(a => !a.startsWith('--')) || 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
-  const server = useDatabase ? spawn('docker', ['compose','exec','-T','app','python','-m','scripts.benchmark_planning_session',
-    '--projects',process.argv.includes('--all-projects')?'0':'100'], {windowsHide:true,stdio:['pipe','pipe','ignore']}) : null;
+  const root = path.resolve(__dirname, '..');
+  const localPython = path.join(root, '.venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
+  const python = process.env.EPPM_BENCHMARK_PYTHON || (fs.existsSync(localPython) ? localPython : 'python');
+  const databaseOptions = process.argv.filter(value => value.startsWith('--env-file=') || value.startsWith('--client-container='));
+  const server = useDatabase ? spawn(python, ['-m','scripts.benchmark_planning_session',
+    '--projects',process.argv.includes('--all-projects')?'0':'100', ...databaseOptions],
+    {cwd:root,windowsHide:true,stdio:['pipe','pipe','inherit']}) : null;
   const responses=[], readers=[];
-  if(server) readline.createInterface({input:server.stdout}).on('line',line=>{
-    const result=JSON.parse(line);if(readers.length) readers.shift()(result);else responses.push(result);
-  });
-  const nextResponse=()=>responses.length?Promise.resolve(responses.shift()):new Promise(resolve=>readers.push(resolve));
-  const initial=server?await nextResponse():null;
+  let serverError;
+  const failServer = () => {
+    serverError = new Error('The isolated PostgreSQL benchmark session could not complete.');
+    while(readers.length) readers.shift().reject(serverError);
+  };
+  if(server) {
+    server.once('error', failServer);
+    server.once('exit', failServer);
+    server.stdin.on('error', failServer);
+    readline.createInterface({input:server.stdout}).on('line',line=>{
+      try {
+        const result=JSON.parse(line);
+        if(readers.length) readers.shift().resolve(result);else responses.push(result);
+      } catch { failServer(); }
+    });
+  }
+  const nextResponse=()=>responses.length?Promise.resolve(responses.shift()):
+    serverError?Promise.reject(serverError):new Promise((resolve,reject)=>{
+      const timeout = setTimeout(failServer, 180000);
+      readers.push({resolve:value=>{clearTimeout(timeout);resolve(value);},
+        reject:error=>{clearTimeout(timeout);reject(error);}});
+    });
+  const initial=server?await nextResponse().catch(error=>{server.stdin.end();throw error;}):null;
   const payload=initial?.args || null;
   const serverTimings=initial?[{action:'initial',seconds:initial.server_seconds,bytes:JSON.stringify(payload).length}]:[];
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'eppm-gantt-browser-'));
   const browser = spawn(executable, ['--headless=new', '--disable-extensions', '--no-first-run',
     '--no-default-browser-check', '--remote-debugging-port=0', '--window-size=1500,1100',
     '--user-data-dir=' + profile, 'about:blank'], {windowsHide: true, stdio: 'ignore'});
-  let socket, closeBrowser;
+  let socket, closeBrowser, browserError;
+  browser.once('error', () => { browserError = new Error('The benchmark browser could not start.'); });
   try {
     const activePort = path.join(profile, 'DevToolsActivePort');
     const deadline = Date.now() + 20000;
     while (!fs.existsSync(activePort)) {
+      if (browserError) throw browserError;
       if (Date.now() > deadline) throw new Error('Headless browser did not start');
       await new Promise(resolve => setTimeout(resolve, 100));
     }
@@ -151,7 +177,7 @@ async function main() {
       if(rowAlignment>1) throw new Error('Resource panes are misaligned: '+rowAlignment+'px');
       if(document.querySelectorAll('.resource-left-row').length>40) throw new Error('Resource rows are not virtualized');
       frames.sort((a,b)=>a-b);renderTimes.sort((a,b)=>a-b);
-      return {source:window.benchmarkPayload?'development database':'representative fixture',
+      return {source:window.benchmarkPayload?'isolated PostgreSQL restore':'representative fixture',
         defaultExternalLinks,externalLinks:showExternalLinks,expanded:window.benchmarkOptions.expanded,maxLinkNodes,inspectedDependencies,
         projects:payload.project_summaries?.length || new Set(payload.tasks.map(t=>t.project_id)).size,tasks:tasksData.length,
         pools:payload.resource_pools.length,renderMs,

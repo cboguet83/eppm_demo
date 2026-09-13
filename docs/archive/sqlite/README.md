@@ -260,3 +260,12 @@ mixed disable/revoke races, mandatory recovery audit rollback and verified MFA.
 Native audit UPDATE/DELETE rejection uses real PostgreSQL constraints and savepoints.
 Reset checks use explicit backed-up native maintenance, with native foreign-key
 integrity covered by the existing integrity suites.
+
+## Historical benchmark collector
+
+`scripts/benchmark_migration_sqlite.py` is preserved unchanged for reproducing
+the original SQLite service baseline on the preserved SQLite revision/image.
+It is intentionally outside the active PostgreSQL tools and is not an import or
+fallback path. The original fixture and archives remain retained. Native planning
+diagnostics are described in
+[PostgreSQL planning diagnostics](../../implementation/postgresql-benchmarks.md).
