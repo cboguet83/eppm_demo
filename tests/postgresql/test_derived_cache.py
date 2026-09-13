@@ -68,6 +68,9 @@ def test_sql_cache_keys_match_python_revisions_and_filter_requested_visible_enti
     for user_id in (1, 2, 4):
         derived = cache(staffing, user_id)
         revisions = snapshot(staffing.database, staffing.key, staffing.binding(user_id).access)
+        selected = [1, 2, 3, 4, 999]
+        rows = staffing.query('SELECT * FROM eppm.planning_task_source_keys(%s::bigint[])', (selected,), user_id=user_id)
+        assert dict(rows) == revisions.task_tokens(selected)
         for kind, expected in (('capacity', revisions.pool_tokens()), ('planning', revisions.project_tokens())):
             rows = derived.read(kind, None, DAY, False, [])
             assert {row[0]: row[1] for row in rows} == expected

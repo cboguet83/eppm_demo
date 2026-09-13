@@ -69,6 +69,37 @@ Scope changes driven by project properties are detected even without an access
 grant mutation; permission changes with unchanged read membership change the
 separate security revision.
 
+### Bounded task-delivery fingerprints
+
+Migration `0025_planning_task_sources.sql` adds an authorized source-key projection
+for batches of at most 25 projects. A task-delivery key hashes the existing
+project/dependency fingerprint together with the fingerprints of its assigned
+pools. Those pool fingerprints include visible competing consumers, so changes
+to shared capacity cannot bypass a refresh. Hidden dependencies and hidden demand
+remain outside a restricted reader's fingerprints. Catalogs, security, effective
+membership and database/actor/session identity remain part of every key.
+
+`PostgresPlanningSources.capture` returns the chart revision and per-project task
+keys from one snapshot, before chart data is read. It implements the application
+`PlanningSourceReader` protocol and returns `PlanningDisplaySources`. The chart
+sends its opaque keys only for requested projects; edit patches send only affected
+keys. `PostgresPlanningSources.read` uses the bounded native function and current
+READ authorization. Task delivery compares sources both before and after its
+data reads. Unrelated edits can leave the requested keys valid; a relevant edit
+still returns HTTP 409 and revoked access returns 403. Requests without the new
+optional source map retain the original global-revision checks.
+
+These keys are display freshness checks. They add no planning-history table,
+edit-version column or stale-form behavior. No applied SQL migration changed.
+
+On the synthetic 10,001-project graph, repeated selected reads used 1,668 buffer
+accesses before and 1,662 after adding 5,000 unrelated tasks/dependencies, taking
+18.104 and 20.248 ms respectively. Native query work is separate from browser
+responsiveness acceptance. The broader source/HTTP/UI/upgrade/foundation run
+passed 185 checks in 119.11 seconds, with 66/66 source-reader and task-transport
+statements covered. Subsequent component patch validation is recorded in the
+[migration evidence](postgresql-migration-evidence.md).
+
 ## C3: components
 
 ```mermaid

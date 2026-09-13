@@ -27,13 +27,14 @@ def task_browser(pg_database, transport):
         connection.execute("INSERT INTO eppm.task_dependencies(task_id,predecessor_task_id,link_type,lag_days) VALUES(10,20,'FS',0)")
     assignment = service.grant(admin, actor.user_id, "project_viewer", {"kind": "projects", "project_ids": [1]})
 
-    def read_tasks(current_actor, ids, revision):
+    def read_tasks(current_actor, ids, revision, *, source_tokens=None):
         access = BusinessAccess(current_actor, service.policy)
         service.gateway.run(lambda store: access.require(store, Permission.READ, ids), actor=current_actor)
         workspace = create_planning_workspace(resources, access=access)
-        return planning_transport.read_planning_batch(workspace, ids, revision)
+        return planning_transport.read_planning_batch(workspace, ids, revision, source_tokens=source_tokens)
 
-    browser.app.router.routes.extend(PlanningReadRoutes(service, read_tasks).routes())
+    browser.app.router.routes.extend(PlanningReadRoutes(service, read_tasks,
+        read_task_sources=lambda actor, ids, sources: read_tasks(actor, ids, '', source_tokens=sources)).routes())
     browser.cookies.set(SESSION_COOKIE, cookie)
     workspace = create_planning_workspace(resources, access=BusinessAccess(actor, service.policy))
     body = {"project_ids": [1], "revision": planning_transport.planning_revision_token(workspace.revision()),

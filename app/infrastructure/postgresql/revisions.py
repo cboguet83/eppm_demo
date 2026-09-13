@@ -71,6 +71,19 @@ class RevisionSnapshot:
         return {row[0]: _digest((access, row, tuple(projects[source] for source in sources[row[0]])))
                 for row in self.pools}
 
+    def task_tokens(self, project_ids: list[int]) -> dict[int, str]:
+        """Bind task display to its project, predecessors and assigned pool sources."""
+        selected = set(project_ids)
+        projects = self.project_tokens()
+        pools = self.pool_tokens()
+        assigned = {identity: [] for identity in selected if identity in projects}
+        for pool_id, consumers in self.pool_sources:
+            for identity in consumers:
+                if identity in assigned:
+                    assigned[identity].append((pool_id, pools[pool_id]))
+        return {identity: _digest(('planning.tasks.v1', projects[identity], tuple(sorted(sources))))
+                for identity, sources in assigned.items()}
+
 
 def _digest(value: tuple) -> str:
     """Match PostgreSQL JSONB array formatting for database-checked fingerprints."""

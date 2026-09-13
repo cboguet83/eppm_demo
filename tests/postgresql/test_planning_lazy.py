@@ -53,6 +53,25 @@ class LazyPlanningTests(TestCase):
         rows = load_project_summaries(workspace, workspace.revision(), tuple(self.pids))
         self.assertFalse(next(p for p in rows if p['id']==self.pids[1])['hasViolations'])
 
+    def test_chart_tokens_are_captured_before_data_reads_so_a_later_edit_cannot_bless_old_headers(self):
+        workspace = create_planning_workspace(self.resources, access=self.access)
+        before = workspace.sources.capture(self.pids)
+        app = AppTest.from_function(lazy_app, args=(self.resources, self.access), default_timeout=30)
+        app.session_state['ms_multi_projects'] = self.pids
+
+        def summaries_then_edit(*args, **kwargs):
+            rows = load_project_summaries(*args, **kwargs)
+            self.tasks.update_dates(self.a, '2026-01-01', '2026-01-03')
+            return rows
+
+        with patch('app.presentation.pages.planning.load_project_summaries', side_effect=summaries_then_edit), \
+                patch('app.presentation.pages.planning._interactive_gantt', return_value=None) as component:
+            app.run()
+        self.assertEqual(list(app.exception), [])
+        self.assertEqual(component.call_args.kwargs['task_source_tokens'], before.tokens)
+        self.assertEqual(app.session_state['planning_chart_snapshot']['revision'], before.revision)
+        self.assertNotEqual(workspace.sources.read(self.pids), before.tokens)
+
     def test_summary_first_hydration_and_edit_patch_never_resend_unrelated_projects(self):
         app = AppTest.from_function(lazy_app, args=(self.resources, self.access), default_timeout=30)
         app.session_state['ms_multi_projects'] = self.pids
@@ -77,6 +96,8 @@ class LazyPlanningTests(TestCase):
             payload = component.call_args.kwargs
             self.assertNotIn('all_projects', payload)
             self.assertNotIn('resource_pools', payload)
+            self.assertNotIn('task_source_tokens', payload)
+            self.assertEqual(set(payload['task_source_token_patch']), set(self.pids[:2]))
             delta = payload['patch']
             self.assertEqual(set(delta['replace_projects']), set(self.pids[:2]))
             successor = next(t for t in delta['tasks'] if int(t['id'])==self.b)

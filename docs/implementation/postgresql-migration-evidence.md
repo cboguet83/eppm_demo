@@ -55,7 +55,7 @@ preserves UI behavior and makes the existing regression suite reproducible.
 | Milestone | State | Evidence / remaining work |
 | --- | --- | --- |
 | 1. Baseline and decisions | Baseline captured | ADR, full baseline test results, workload and service timings recorded. Browser load comparison remains an acceptance gate. |
-| 2. PostgreSQL foundation | Implemented, focused checks pass | Configuration, restricted process pool/lifecycle, 24 explicit migrations, Compose, operator provisioning and isolated tests. Final deployment acceptance remains. |
+| 2. PostgreSQL foundation | Implemented, focused checks pass | Configuration, restricted process pool/lifecycle, 25 explicit migrations, Compose, operator provisioning and isolated tests. Final deployment acceptance remains. |
 | 3. Schema and enforcement | Implemented, full regression passes | Native integrity, RLS, actor binding, immutable Finance/audit, access administration and private derived caches are exercised in the completed full suite. |
 | 4. Core repositories | Implemented, focused checks pass | All business adapters use native callbacks; exact money inputs and database-backed browser fixtures are ported. |
 | 5. Planning and caches | Implemented, focused checks pass | Native scheduling, resources, staffing, cache invalidation, bounded portfolio/dashboard queries and HTTP task reads. Fifty-user performance acceptance remains. |
@@ -2364,3 +2364,42 @@ Both pilot deployments were removed. Ordinary application data and volumes were
 unchanged. Browser-rendering breakdown, task/badge refresh performance, complete
 50-session comparison, refreshed full regression and final deployment acceptance
 remain open.
+
+## Task batches validate their selected display sources
+
+Migration `0025_planning_task_sources.sql` adds an actor-bound projection limited
+to 25 requested projects. A task key includes the project's existing dependency
+fingerprint and every assigned pool's visible source fingerprint. This preserves
+shared-capacity changes, hidden-source isolation, catalog/security changes,
+effective membership and database/session identity. Existing migrations, cache
+entries and business-write semantics are unchanged.
+
+`PlanningSourceReader` is injected into the planning workspace by composition.
+Its native implementation captures initial chart revision and task keys together
+before chart data reads, then validates bounded task sources before and after
+HTTP hydration. The request's optional `source_tokens` map must match its exact
+project set; each value is an opaque SHA-256 fingerprint. Older requests retain
+the global-revision check. Initial renders send keys for their selected scope;
+edit messages patch only affected keys. An unrelated visible edit can now leave
+the task batch valid without a full Streamlit chart refresh. Relevant source
+changes still return 409, and revoked or missing-project access returns 403.
+
+The broader source/HTTP/UI/upgrade/foundation/import run passed **185 checks in
+119.11 seconds**, with **66/66 statements covered** across the new native source
+reader and task transport. Regressions include changes before/during hydration,
+shared consumers independent of dependency links, membership changes without a
+grant edit, invalid tokens, missing revision metadata, and initial capture before
+a concurrent edit. The synthetic 10,001-project workload used 1,668/1,662 buffer
+accesses before/after 5,000 unrelated tasks, with 18.104/20.248 ms execution.
+Log/XML: `.local/postgresql-planning-sources-final.*`.
+
+The final bounded edit-key patch refinement passed **77 native/cache/UI checks
+in 72.41 seconds** and **32 JavaScript checks**. Complex native/Python parity
+includes cycles, whole-project dependencies and legacy predecessor references.
+Logs: `.local/postgresql-planning-source-patches.log` and
+`.local/postgresql-planning-source-patches-javascript.log`.
+
+Actual browser responsiveness after this change is still to be measured. Final
+load, regression and deployment acceptance remain open. The ordinary database
+was not upgraded; the prior inspection recorded schema 0019, so the final local
+deployment now needs migrations 0020 through 0025.

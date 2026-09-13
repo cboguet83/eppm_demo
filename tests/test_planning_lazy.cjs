@@ -39,6 +39,31 @@ test('HTTP task batches hydrate rows without Streamlit reruns and keep a bounded
   assert.equal(h.run('planningPendingRequest'),null);
 });
 
+test('HTTP task batches send only fingerprints for the requested project set', async()=>{
+  const h=harness(), requests=[];
+  h.context.AbortController=AbortController;
+  h.context.fetch=async(url,options)=>{
+    requests.push(JSON.parse(options.body));
+    return {ok:true,status:200,json:async()=>({scope_token:'current',nonce:'batch',replace_projects:[1],tasks:[]})};
+  };
+  h.run(`planningTaskEndpoint='/api/planning/tasks'; planningTaskRevision='revision'; planningScopeToken='current';
+    planningTaskSourceTokens={'1':'token-one','2':'token-two'}; planningPendingRequest='batch';`);
+  await h.run("requestPlanningTasks(['1'],'batch')");
+  assert.deepEqual(requests[0].source_tokens,{'1':'token-one'});
+  assert.equal(h.messages.length,0);
+});
+
+test('edit source patches preserve unrelated fingerprints and full chart changes replace the scope', ()=>{
+  const h=harness();
+  h.run("updatePlanningTaskSources({task_source_tokens:{1:'old',2:'retained'}})");
+  h.run("updatePlanningTaskSources({task_source_token_patch:{1:'new'}})");
+  assert.equal(h.run('planningTaskSourceTokens[1]'),'new');
+  assert.equal(h.run('planningTaskSourceTokens[2]'),'retained');
+  h.run("updatePlanningTaskSources({task_source_tokens:{3:'new-scope'}})");
+  assert.equal(h.run('planningTaskSourceTokens[2]'),undefined);
+  assert.equal(h.run('planningTaskSourceTokens[3]'),'new-scope');
+});
+
 test('slow HTTP reads stay single-flight and late responses cannot overwrite another scope', async()=>{
   const h=harness(); let resolve, calls=0;
   h.context.AbortController=AbortController;

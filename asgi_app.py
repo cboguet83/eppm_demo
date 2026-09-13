@@ -60,7 +60,8 @@ def application_security(resources: RuntimeResources) -> tuple[list[BaseRoute], 
         service = create_planning_service(resources, access=BusinessAccess(actor, access.policy))
         return service.export_project_template(project_id)
 
-    def read_tasks(actor: Actor, project_ids: list[int], revision: str) -> dict[str, object]:
+    def read_tasks(actor: Actor, project_ids: list[int], revision: str, *,
+                   source_tokens: dict[int, str] | None = None) -> dict[str, object]:
         from app.domain.access.models import Permission
         from app.main import create_planning_workspace
         from app.presentation.components.planning_transport import read_planning_batch
@@ -68,7 +69,10 @@ def application_security(resources: RuntimeResources) -> tuple[list[BaseRoute], 
         business_access = BusinessAccess(actor, access.policy)
         access.gateway.run(lambda store: business_access.require(store, Permission.READ, project_ids), actor=actor)
         workspace = create_planning_workspace(resources, access=business_access)
-        return read_planning_batch(workspace, project_ids, revision)
+        return read_planning_batch(workspace, project_ids, revision, source_tokens=source_tokens)
+
+    def read_task_sources(actor: Actor, project_ids: list[int], sources: dict[int, str]) -> dict[str, object]:
+        return read_tasks(actor, project_ids, '', source_tokens=sources)
 
     def read_allocations(actor: Actor, project_ids: list[int], revision: str) -> dict[str, object]:
         from app.domain.access.models import Permission
@@ -87,7 +91,8 @@ def application_security(resources: RuntimeResources) -> tuple[list[BaseRoute], 
 
     routes = (AuthenticationRoutes(client, access).routes() + DownloadRoutes(access, export_template).routes()
               + FinanceDownloadRoutes(access, export_budget).routes()
-              + PlanningReadRoutes(access, read_tasks, read_allocations=read_allocations).routes())
+              + PlanningReadRoutes(access, read_tasks, read_allocations=read_allocations,
+                                   read_task_sources=read_task_sources).routes())
     middleware = [Middleware(BrowserSecurityMiddleware, config=settings),
                   Middleware(ApplicationSessionMiddleware, access=access, config=settings),
                   Middleware(SessionMiddleware, secret_key=settings.cookie_secret,

@@ -2246,10 +2246,16 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     let planningPendingDiagnostics = null;
     let planningTaskEndpoint = null;
     let planningTaskRevision = null;
+    let planningTaskSourceTokens = {};
     let planningViewScope = null;
     let planningFetchController = null;
     let planningLoadError = false;
     const projectTaskWindows = new Map();
+
+    function updatePlanningTaskSources(args) {
+      if (args.task_source_tokens) planningTaskSourceTokens = args.task_source_tokens;
+      if (args.task_source_token_patch) Object.assign(planningTaskSourceTokens, args.task_source_token_patch);
+    }
 
     function showPlanningLoadError() {
       planningLoadError = true;
@@ -2273,10 +2279,14 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       const controller = new AbortController();
       planningFetchController = controller;
       try {
+        const body = {project_ids:projectIds.map(Number), scope_token:scope, revision, nonce};
+        if (projectIds.every(pid => typeof planningTaskSourceTokens[pid] === 'string')) {
+          body.source_tokens = Object.fromEntries(projectIds.map(pid => [String(pid), planningTaskSourceTokens[pid]]));
+        }
         const response = await fetch(planningTaskEndpoint, {
           method:'POST', credentials:'same-origin', signal:controller.signal,
           headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({project_ids:projectIds.map(Number), scope_token:scope, revision, nonce})
+          body:JSON.stringify(body)
         });
         if (planningPendingRequest !== nonce || planningScopeToken !== scope || planningTaskRevision !== revision) return;
         if (response.status === 403 || response.status === 409) {
@@ -6425,6 +6435,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     window.addEventListener("message", function (event) {
       if (event.data && event.data.type === "streamlit:render") {
         const args = event.data.args || {};
+        updatePlanningTaskSources(args);
         if (args.task_endpoint) planningTaskEndpoint = args.task_endpoint;
         if (args.task_revision && args.task_revision !== planningTaskRevision) {
           planningFetchController?.abort();

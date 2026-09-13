@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 import json
+import re
 from secrets import token_urlsafe
 
 from starlette.concurrency import run_in_threadpool
@@ -22,10 +23,12 @@ class PlanningReadRoutes:
     def __init__(
         self, access: AccessService, read_tasks: Callable[[Actor, list[int], str], dict[str, object]], *,
         read_allocations: Callable[[Actor, list[int], str], dict[str, object]] | None = None,
+        read_task_sources: Callable[[Actor, list[int], dict[int, str]], dict[str, object]] | None = None,
     ) -> None:
         """Share the bounded, authenticated read transport across tasks and badges."""
         self.access, self.read_tasks = access, read_tasks
         self.read_allocations = read_allocations
+        self.read_task_sources = read_task_sources
 
     def routes(self) -> list[Route]:
         """Register only the bounded read transport; edits keep their existing path."""
@@ -36,7 +39,7 @@ class PlanningReadRoutes:
 
     async def tasks(self, request: Request) -> JSONResponse:
         """Return current authorized tasks, or a safe no-store error response."""
-        return await self._read(request, self.read_tasks, "planning")
+        return await self._read(request, self.read_tasks, "planning", source_reader=self.read_task_sources)
 
     async def allocations(self, request: Request) -> JSONResponse:
         """Return current authorized capacity badges without blocking row rendering."""
@@ -45,6 +48,7 @@ class PlanningReadRoutes:
 
     async def _read(
         self, request: Request, reader: Callable[[Actor, list[int], str], dict[str, object]], kind: str,
+        *, source_reader: Callable[[Actor, list[int], dict[int, str]], dict[str, object]] | None = None,
     ) -> JSONResponse:
         headers = {"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"}
         reference = token_urlsafe(16)
@@ -65,7 +69,16 @@ class PlanningReadRoutes:
             for key in ("revision", "scope_token", "nonce"):
                 if not isinstance(data.get(key), str) or not 1 <= len(data[key]) <= 128:
                     raise ValueError()
-            payload = await run_in_threadpool(reader, actor, list(dict.fromkeys(ids)), data["revision"])
+            ids = list(dict.fromkeys(ids))
+            sources = data.get('source_tokens')
+            if sources is not None:
+                if (source_reader is None or not isinstance(sources, dict) or set(sources) != set(map(str, ids))
+                        or any(not isinstance(token, str) or re.fullmatch('[0-9a-f]{64}', token) is None
+                               for token in sources.values())):
+                    raise ValueError()
+                payload = await run_in_threadpool(source_reader, actor, ids, {int(pid): token for pid, token in sources.items()})
+            else:
+                payload = await run_in_threadpool(reader, actor, ids, data["revision"])
             payload.update(scope_token=data["scope_token"], nonce=data["nonce"])
             return JSONResponse(payload, headers=headers)
         except AccessDenied:

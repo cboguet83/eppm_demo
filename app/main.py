@@ -345,6 +345,7 @@ def create_finance_service(resources: RuntimeResources, *, access: BusinessAcces
 def create_planning_workspace(resources: RuntimeResources, *, access: BusinessAccess) -> PlanningWorkspace:
     """Compose planning screens from task, tag, capacity, and catalog use cases."""
     from app.presentation.components.planning_workspace import PlanningWorkspace
+    from app.infrastructure.postgresql.planning_sources import PostgresPlanningSources
 
     return PlanningWorkspace(
         create_planning_service(resources, access=access),
@@ -354,6 +355,7 @@ def create_planning_workspace(resources: RuntimeResources, *, access: BusinessAc
         create_organization_service(resources, access=access),
         create_schema_service(resources, access=access),
         create_project_workspace(resources, access=access),
+        PostgresPlanningSources(resources.database, resources.key, access=access),
     )
 
 

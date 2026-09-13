@@ -36,10 +36,12 @@ def planning_revision_token(revision: tuple) -> str:
     return sha256(repr(revision).encode("utf-8")).hexdigest()
 
 
-def read_planning_batch(workspace: PlanningWorkspace, project_ids: list[int], revision: str) -> dict[str, object]:
+def read_planning_batch(workspace: PlanningWorkspace, project_ids: list[int], revision: str, *,
+                        source_tokens: dict[int, str] | None = None) -> dict[str, object]:
     """Build one task batch and reject data changed or revoked during its reads."""
-    current = workspace.revision()
-    if planning_revision_token(current) != revision:
+    current = workspace.revision() if source_tokens is None else workspace.sources.read(project_ids)
+    expected = planning_revision_token(current) if source_tokens is None else current
+    if expected != (revision if source_tokens is None else source_tokens):
         raise PlanningRevisionChanged()
     ids = tuple(sorted(project_ids))
     bundle = workspace.planning.read_task_bundle(list(ids))
@@ -50,6 +52,7 @@ def read_planning_batch(workspace: PlanningWorkspace, project_ids: list[int], re
         "project_metadata": [{"id": str(pid), "tags": bundle.project_tags.get(pid, []),
                               "pools": bundle.project_pools.get(pid, [])} for pid in ids],
     }
-    if workspace.revision() != current:
+    after = workspace.revision() if source_tokens is None else workspace.sources.read(project_ids)
+    if after != current:
         raise PlanningRevisionChanged()
     return result

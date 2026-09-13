@@ -153,6 +153,33 @@ and transaction context; a store borrows that connection and never commits it.
 The store returns application records defined in `app/application/ports/planning.py`.
 The service does not import PostgreSQL or UI packages.
 
+The planning workspace also receives a `PlanningSourceReader` for bounded task
+delivery. It captures initial chart revision/fingerprint data before chart reads;
+HTTP delivery compares the selected sources before and after reading task data.
+The composition root injects `PostgresPlanningSources`. Its native source query
+expands only the selected projects and assigned pools while preserving current
+actor, scope and shared-source checks.
+
+```mermaid
+classDiagram
+    class PlanningWorkspace
+    class PlanningSourceReader {
+        <<Protocol>>
+        +capture(project_ids) PlanningDisplaySources
+        +read(project_ids) dict
+    }
+    class PostgresPlanningSources
+    class PlanningDisplaySources {
+        +tuple revision
+        +dict tokens
+    }
+    class Database
+    PlanningWorkspace o-- PlanningSourceReader : injected reader
+    PlanningSourceReader <|.. PostgresPlanningSources : structural implementation
+    PostgresPlanningSources o-- Database : injected pool
+    PostgresPlanningSources --> PlanningDisplaySources : returns snapshot
+```
+
 See the [runtime guide](postgresql-runtime.md), [backup guide](postgresql-backups.md)
 and [diagnostic tools](postgresql-benchmarks.md) for operational commands. Source
 and test import guards prevent the archived SQLite adapters from re-entering the

@@ -1288,8 +1288,9 @@ def _render_planning_chart(
         loaded = component_event.get("loaded_project_ids")
         if isinstance(loaded, list):
             snapshot["loaded"] = list(dict.fromkeys(pid for pid in loaded[-100:] if type(pid) is int and pid in ids))
-    revision = workspace.revision()
-    unchanged_scope = snapshot is not None and snapshot["scope"] == scope
+    sources = workspace.sources.capture(list(ids))
+    revision = sources.revision
+    unchanged_scope = snapshot is not None and snapshot["scope"] == scope and 'task_source_tokens' in snapshot
     known_edit = (
         event
         and event.get("before_revision")
@@ -1314,7 +1315,8 @@ def _render_planning_chart(
             "details": details,
             "bounds": bounds,
             "loaded": loaded,
-            "revision": workspace.revision(),
+            "revision": revision,
+            "task_source_tokens": sources.tokens,
         }
         st.session_state["planning_chart_snapshot"] = snapshot
         args = dict(
@@ -1334,6 +1336,7 @@ def _render_planning_chart(
             data_revision=snapshot["token"],
             task_endpoint="/api/planning/tasks",
             task_revision=planning_revision_token(snapshot["revision"]),
+            task_source_tokens=snapshot["task_source_tokens"],
             view_scope=planning_revision_token(scope),
         )
     else:
@@ -1399,7 +1402,10 @@ def _render_planning_chart(
                     tuple(sorted(pool_ids)),
                 )
                 patch["resource_pools"] = pack_pool_payloads(patch["resource_pools"])
-            snapshot["revision"] = workspace.revision()
+            snapshot["revision"] = revision
+            token_patch = {pid: sources.tokens[pid] for pid in changed.intersection(ids)}
+            snapshot["task_source_tokens"].update(token_patch)
+            args['task_source_token_patch'] = token_patch
         if patch is not None:
             metadata_ids = patch["replace_projects"]
             tags, pools = load_planning_project_metadata(
