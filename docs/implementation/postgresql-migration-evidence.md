@@ -2581,3 +2581,48 @@ Logs: `.local/postgresql-distinct-identities-checks.log`,
 `.local/postgresql-distinct-users-pilot.log`, `.local/sqlite-distinct-users-pilot.log`.
 Both disposable deployments were removed. The next diagnostic profiles 40
 distinct readers and 10 distinct editors before the full-duration comparison.
+
+## Profiled fifty-distinct-user diagnostic
+
+The `73e91ce` application image, with the distinct-user harness at `a1fde38`,
+verified 40 separate readers and 10 separate editors, each with its own cookie.
+Its short profiled run failed **23 of 131 measured attempts**: paging p95
+27,830 ms (40 successes, 14 failures), tasks 25,817.3 ms (67 successes), and
+saves 7,683.5 ms (one success, nine failures). Including warmup, 30 of 190
+attempts failed. Slow in-flight work extended the offered 45-second measurement;
+these results do not establish the prescribed cadence or duration. See the
+[profiled diagnostic](benchmarks/distinct-fifty-profile-results.json).
+
+The measured runtime window covered 83.44 seconds. It recorded 1,888 queued
+acquisitions, 1,173.25 aggregate seconds waiting and up to 35 waiting requests.
+There were 107 observed database-call serialization failures, including retries;
+that count is not the number of failed business operations. PostgreSQL recorded
+76.44 aggregate seconds executing statements in its 84.07-second window. The
+container window recorded mean app CPU 83.98% and PostgreSQL 72.34%, using
+Docker's per-core scale. These separately sampled windows are not additive.
+
+A manual profile checkpoint around workload start excludes most startup work.
+The difference contains 3,224 sampling cycles with no discarded samples, and
+includes warmup rather than exactly matching the measurement window. Pool
+acquisition waits dominate the application leaf locations (17,537 samples).
+Transaction entry, the three separate reset commands, signed actor/session
+lookups, and display revisions also retain substantial sampled wall time.
+These are blocked-thread-inclusive samples, not CPU attribution or proof that
+one query explains the delay. Log: `.local/postgresql-distinct-fifty-profile.log`.
+The disposable deployment was removed.
+
+The next focused change removes three database round trips per pooled callback:
+Psycopg places the required isolation and read-only mode in `BEGIN`, and the
+same role/settings/temporary-table cleanup runs as one fixed, unprepared SQL
+batch. Every borrow and retry still sets the transaction mode before actor
+binding. Pool limits, timeout policy, authorization and retry conditions remain
+unchanged. Native correctness checks and a subsequent deployed comparison must
+validate this change before attributing a performance improvement to it.
+
+The focused foundation, authorization, business-security, access-service and
+layer-boundary suite passed **322 checks in 168.45 seconds**. This includes
+alternating reader/writer modes on the same backend, verification before actor
+binding, cleanup of prior role/session settings and temporary data, rollback,
+definite-concurrency retries and real authorization races. Log:
+`.local/postgresql-transaction-roundtrips-checks.log`. The deployed performance
+comparison remains outstanding.

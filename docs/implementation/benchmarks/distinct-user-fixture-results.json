@@ -1,6 +1,6 @@
 {
   "scope": "Short distinct-user fixture checks; not performance acceptance",
-  "application_source_commit": "73e91ced033ea0d1ad6fa87d9601bed12f0b91e0",
+  "postgresql_application_source_commit": "73e91ced033ea0d1ad6fa87d9601bed12f0b91e0",
   "workload": {
     "readers": 2,
     "editors": 1,

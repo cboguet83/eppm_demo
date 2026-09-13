@@ -32,11 +32,12 @@ def run_transaction[Result](
     for attempt in range(3):
         try:
             with acquire() as connection:
+                # Put the required mode in BEGIN itself. Set both attributes on
+                # every borrow/retry; a preceding writer must not affect a reader.
+                connection.isolation_level = (psycopg.IsolationLevel.SERIALIZABLE if write
+                                              else psycopg.IsolationLevel.REPEATABLE_READ)
+                connection.read_only = not write
                 with connection.transaction():
-                    connection.execute(
-                        "SET TRANSACTION ISOLATION LEVEL SERIALIZABLE READ WRITE" if write
-                        else "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY"
-                    )
                     if bind is not None:
                         bind(connection)
                     return operation(connection)
@@ -102,9 +103,9 @@ class Database:
     def _reset(connection: psycopg.Connection) -> None:
         # Transaction-local context already expired; also discard accidental
         # session-level changes before another actor borrows this connection.
-        connection.execute("RESET ROLE")
-        connection.execute("RESET ALL")
-        connection.execute("DISCARD TEMP")
+        # This fixed, parameter-free batch uses the simple query protocol. Keep
+        # all three cleanup operations while paying one network round trip.
+        connection.execute("RESET ROLE; RESET ALL; DISCARD TEMP", prepare=False)
 
     def open(self) -> None:
         """Wait for minimum connections and reject privileged or incompatible runtime."""

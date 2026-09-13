@@ -197,6 +197,36 @@ def test_repeatable_read_sees_one_snapshot_and_is_read_only(probe, database):
         database.run(lambda connection: connection.execute("UPDATE eppm.transaction_probe SET value=2"))
 
 
+def test_reused_connection_reestablishes_required_isolation_before_binding(pg_database):
+    """Reader/writer switches and session settings cannot leak between callbacks."""
+    resource = Database(DatabaseConfig(pg_database.runtime_url, pool_min=1, pool_max=1))
+    resource.open()
+    try:
+        def inspect(connection):
+            return connection.execute("SELECT pg_backend_pid(),current_user,"
+                "current_setting('transaction_isolation'),current_setting('transaction_read_only'),"
+                "current_setting('application_name')").fetchone()
+
+        initial = resource.run(inspect)
+
+        def change_session(connection):
+            connection.execute("SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL READ COMMITTED, READ ONLY")
+            connection.execute("SET application_name = 'previous callback'")
+            connection.execute("SET ROLE eppm_runtime")
+
+        resource.run(change_session, write=True)
+        for write in (False, True) * 4:
+            expected = (initial[0], initial[1], 'serializable' if write else 'repeatable read',
+                        'off' if write else 'on', initial[4])
+
+            def bind(connection):
+                assert inspect(connection) == expected
+
+            assert resource.run(inspect, write=write, bind=bind) == expected
+    finally:
+        resource.close()
+
+
 def test_validation_failure_rolls_back_mutation_and_returns_connection(probe, database):
     def operation(connection):
         connection.execute("UPDATE eppm.transaction_probe SET value=100 WHERE id=1")
