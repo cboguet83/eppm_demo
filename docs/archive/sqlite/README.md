@@ -154,3 +154,22 @@ performed when starting a fresh PostgreSQL database. Native migration reentry
 instead verifies preservation of event contents, stable blocker codes and both
 active and revoked current sessions. SQLite data and upgrade source remain
 historical artifacts; no native import or compatibility path is introduced.
+
+## Layered maintenance test mapping
+
+`tests/test_layered_maintenance.py` retains the original SQLite module unchanged.
+Its native evidence is provided by these real PostgreSQL suites:
+
+| Historical behavior | Native evidence |
+| --- | --- |
+| Explicit startup, default counts, idempotence, forced generation | `test_maintenance_gateway.py` verifies fresh migration, catalog preservation and one archive per mutation |
+| Invalid counts/types and malformed scenario options before storage | Expanded gateway validation cases reject every original malformed input before any connection or archive |
+| Recoverable seed/reset archives and preserved budgets | `test_maintenance_defaults.py` and `test_maintenance_write.py` restore actual dumps into separate databases |
+| Project/full reset counts, constraints, references and accounts | `test_seed_projects_reset.py` checks cascades, retained finance/accounts and monotonic identities |
+| Reset failure rolls back earlier child deletions | Gateway trigger-rejection case retains the complete source fingerprint, counts and pre-operation dump |
+| Backup failure or unavailable storage | Native write/archive failure tests and an actual refused operator connection verify safe errors and unchanged sources |
+| Invalid schema is never interpreted as an empty database | Gateway tests reject unmigrated and malformed native schemas without changing sentinel data or creating archives |
+| Pool preview/apply/idempotence and CLI options | Native default-maintenance and operator-command tests exercise the real generators, argument parsers and archive policy |
+
+The old empty-file initialization case becomes explicit migration of a fresh
+native database. No SQLite file-opening behavior remains in the supported tools.

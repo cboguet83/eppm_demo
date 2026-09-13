@@ -1646,3 +1646,22 @@ Keycloak volumes are not targeted.
 
 This establishes the functional authentication workflow, not the separate
 50-user responsiveness or representative recovery/restart acceptance gates.
+
+## Native maintenance contract audit and archival
+
+The layered SQLite maintenance suite is archived unchanged after checking each
+contract against native maintenance, reset, archive and operator tests. Missing
+cases now cover all original malformed counts/scenario options before storage,
+actual connection refusal with safe errors, damaged or absent schemas rejected
+before seeding, and a real reset-rejection trigger after child deletions. The
+failed reset retains source fingerprints, counts and its actual archive.
+
+Validation: **49 passed in 71.46 seconds** across native maintenance gateway,
+default seeding, backed-up writes, operator commands and project resets, recorded
+in `.local/postgresql-maintenance-contract-complete.log`. Actual archive restores
+use separate random PostgreSQL databases. This strengthens functional recovery
+coverage; representative deployed recovery and the final load gate remain open.
+
+After these ports, full collection succeeds with **2,261 tests in 8.06 seconds**
+and no collection errors, recorded in `.local/postgresql-test-port-collection.log`.
+The earlier full execution continues against its original source checkout.
