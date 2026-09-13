@@ -1541,3 +1541,15 @@ Validation: **18 passed in 6.91 seconds**, recorded in
 `.local/postgresql-project-ui-workflows.log`: 16 project/menu cases plus the
 native migration reentry/privilege and pending-DDL rollback tests. Full migration
 acceptance remains incomplete.
+
+## Native application schema and demo workflows
+
+The former application unit suite now separates pure portfolio projection and
+budget calculations from persistence. Native cases verify explicit migration
+tables, backed-up default catalog/project seeding, persisted maintenance counts,
+schema display ordering, group edits/deletion and ungrouped parameters. Pure
+monetary fixtures use exact integer amounts and create no database.
+
+Validation: **8 passed in 8.13 seconds**, recorded in
+`.local/postgresql-application-workflows.log`. This does not change the runtime
+startup policy: schema migration and demo seeding remain explicit operator work.
