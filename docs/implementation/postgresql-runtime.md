@@ -121,6 +121,24 @@ and recovery acceptance runs.
 
 Runtime cutover is not final migration acceptance. Legacy code/tests still need
 archival or behavioral porting, remaining benchmark tools need conversion, and
-exact monetary form transport must be completed. Full application coverage,
+the complete browser workflows still need native fixture ports. Full application coverage,
 the authenticated 50-user browser benchmark and representative deployed
 recovery/restart gates remain required.
+
+## Exact project money forms
+
+Both project editors now carry planned and actual budgets as decimal strings.
+The custom component uses text inputs with a decimal keyboard hint and rejects
+JSON numbers at its money-field boundary. Native Streamlit fields also retain
+strings until the application service validates them on save. Incomplete drafts
+remain editable; blank or nonfinite amounts do not change the database. Ordinary
+numeric properties and integer WBS percentages retain their existing types.
+
+PostgreSQL regressions cover creation, editing, invalid input, read-only fields
+and revoked sessions. Browser checks cover exact field values across validation
+and save events. The deployed native app additionally saved and reopened
+`9007199254740993.1234567890123456789` and `0.000000000000000000123456789`
+without rounding, then restored the demo project's original budgets. This
+verifies form transport and persistence; it is not the final concurrent
+performance gate. Finance continues to use decimal-string cells with its
+existing cent-precision domain validation.

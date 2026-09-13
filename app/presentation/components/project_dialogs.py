@@ -5,6 +5,7 @@ from copy import deepcopy
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import date
+from decimal import Decimal
 from functools import wraps
 from typing import Any, TypeVar
 
@@ -113,7 +114,7 @@ def _field_permissions(workspace: ProjectWorkspace, project_id: int | None) -> P
 def _render_project_basics(
     workspace: ProjectWorkspace, project_id: int, project: Project,
     references: ProjectDialogReferences, *, creating: bool, disabled: bool = False,
-) -> tuple[str, str, float, float, int | None]:
+) -> tuple[str, str, str, str, int | None]:
     """Edit core fields without rebuilding templates, custom links or the dialog."""
     permissions = _field_permissions(workspace, None if creating else project_id)
     disabled = disabled or (not creating and not permissions.allows(Permission.EDIT, project_id))
@@ -128,10 +129,10 @@ def _render_project_basics(
         index=STATUS_LIST.index(project.status) if project.status in STATUS_LIST else 0,
         disabled=disabled, key=prefix + "_status")
     planned_col, actual_col, manager_col = st.columns(3)
-    planned = planned_col.number_input(t("master_data.field_planned"), min_value=0.0,
-        value=float(project.planned_budget), step=5000.0, disabled=disabled, key=prefix + "_planned")
-    actual = actual_col.number_input(t("master_data.field_actual"), min_value=0.0,
-        value=float(project.actual_budget), step=5000.0, disabled=disabled, key=prefix + "_actual")
+    planned = planned_col.text_input(t("master_data.field_planned"),
+        value=str(project.planned_budget), disabled=disabled, key=prefix + "_planned")
+    actual = actual_col.text_input(t("master_data.field_actual"),
+        value=str(project.actual_budget), disabled=disabled, key=prefix + "_actual")
     manager = manager_col.selectbox(t("master_data.field_project_manager", default="Project Manager"),
         options=manager_options, index=manager_options.index(current_manager) if current_manager in manager_options else 0,
         format_func=lambda value: manager_labels.get(value, str(value)),
@@ -249,7 +250,7 @@ def _create_project_editor(workspace: ProjectWorkspace, project_id: int, referen
     }
     with st.container():
         name, status, planned, actual, manager = _render_project_basics(
-            workspace, project_id, Project(planned_budget=150000.0), references, creating=True,
+            workspace, project_id, Project(planned_budget=Decimal(150000)), references, creating=True,
         )
         st.write(f"#### {t('project_types.template')}")
         sections, draft = _assignment_sections(workspace, None, [], f"portfolio_create_{project_id}")

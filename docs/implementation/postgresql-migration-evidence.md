@@ -1023,3 +1023,37 @@ This combined legacy/native checkpoint coverage does not establish acceptance
 of the final PostgreSQL-only application. Runtime cutover, exact monetary form
 transport, legacy test/tool porting and archival, the 50-user browser benchmark,
 and representative deployed recovery/restart validation remain unfinished.
+
+## Exact project-money form transport
+
+Project forms no longer convert stored budgets to Python floats or browser
+`Number` values. Both the custom modal and native Streamlit editor submit
+decimal strings to the existing application service. Custom money fields reject
+JSON numeric values, and invalid or incomplete strings are validated on save.
+Generic numeric properties and integer WBS allocations keep their current
+contracts. The same actor/session authorization still protects every save.
+
+The native project, budget, finance and new form regressions passed **51 tests
+in 22.97 seconds**, exit code **0**. The new form cases cover exact create/edit,
+read-only fields, incomplete drafts, invalid/nonfinite values and a revoked
+native session. The project component browser suite passed **6 tests in 15.59
+seconds**, including exact money event payloads and validation retries. Playwright
+emitted a driver shutdown diagnostic after a fixture teardown; all assertions
+and test processes completed successfully. Logs:
+`.local/postgresql-money-regressions.log` and
+`.local/postgresql-money-browser-component.log`.
+
+The first deployed-browser probe detected that the app process still held the
+previous component code; no budget was changed by that probe. After an explicit
+application reload and real OIDC login, the browser saved and reopened
+`9007199254740993.1234567890123456789` and
+`0.000000000000000000123456789` exactly. Direct PostgreSQL reads verified each
+save, and a second browser save restored both original demo budgets. Evidence:
+`.local/postgresql-money-edit.log`, `.local/postgresql-money-edit.json`, and
+`.local/postgresql-money-runtime-reload.log`.
+
+Runtime commit: `b5106c5`; main's CI/configuration fixes were incorporated by
+`cb96c52`, with **77 affected tests passing in 14.41 seconds**. The migration
+continues on its feature branch. Legacy test/tool conversion and archival,
+full PostgreSQL-only application coverage, the authenticated 50-user benchmark,
+and representative deployed recovery/restart acceptance remain required.

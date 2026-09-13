@@ -57,6 +57,49 @@ HTMLDialogElement.prototype.showModal=function() {
 };
 """
 
+_MONEY_APP = _APP.replace(
+    '("name","text",None,[]),',
+    '("planned_budget","money",None,[]),("actual_budget","money",None,[]),("name","text",None,[]),',
+).replace(
+    'values=dict(name="Draft",',
+    'values=dict(planned_budget="9007199254740993.1234567890123456789",actual_budget="-0.000000000000000000123456789",name="Draft",',
+)
+
+
+@pytest.mark.parametrize("popup_server", [_MONEY_APP], indirect=True, ids=["exact-project-money"])
+def test_project_money_remains_decimal_text_in_browser_events_and_validation_retries(popup_server):
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(viewport={"width": 1200, "height": 1000})
+            page.goto(popup_server)
+            page.get_by_role("button", name="Open project").click()
+            modal = page.get_by_role("dialog")
+            planned, actual = modal.get_by_label("planned_budget"), modal.get_by_label("actual_budget")
+            expect(planned).to_have_value("9007199254740993.1234567890123456789")
+            expect(actual).to_have_value("-0.000000000000000000123456789")
+            expect(planned).to_have_attribute("type", "text")
+            expect(planned).to_have_attribute("inputmode", "decimal")
+            values = {"planned_budget": "9007199254740999.987654321987654321", "actual_budget": "0.000000000000000001"}
+            planned.fill(values["planned_budget"])
+            actual.fill(values["actual_budget"])
+            modal.get_by_label("name", exact=True).fill("")
+            modal.get_by_role("button", name="Save", exact=True).click()
+            expect(modal.get_by_role("alert")).to_have_text("Name is required")
+            for key, value in values.items():
+                expect(modal.get_by_label(key)).to_have_value(value)
+            event = json.loads(page.locator("pre").inner_text())[0]
+            assert {key: event["values"][key] for key in values} == values
+            assert event["values"]["amount"] == 100  # Generic numeric properties keep their existing type.
+            modal.get_by_label("name", exact=True).fill("Precise save")
+            modal.get_by_role("button", name="Save", exact=True).click()
+            expect(modal).not_to_be_visible()
+            saved = json.loads(page.locator("pre").inner_text())[-1]
+            assert {key: saved["values"][key] for key in values} == values
+            expect(page.get_by_text("Shell runs: 1", exact=True)).to_be_visible()
+        finally:
+            browser.close()
+
 
 @pytest.mark.parametrize("popup_server", [_APP], indirect=True, ids=["project-form"])
 def test_project_fields_tabs_and_links_are_local_and_save_retries_without_page_refresh(popup_server):

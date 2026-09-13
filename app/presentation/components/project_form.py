@@ -84,6 +84,9 @@ export default function({data, parentElement, setTriggerValue}) {
                 if(input.multiple) option.selected=(data.values[field.key]||[]).includes(value);
                 input.append(option);
             }
+        } else if(field.kind==='money') {
+            // Keep authoritative euro values as decimal strings through every event.
+            input.type='text';input.inputMode='decimal';
         } else if(field.kind!=='tags') {input.type=field.kind; if(field.kind==='number') input.step='any';}
         if(field.kind!=='multi') input.value=field.kind==='tags'?(data.values[field.key]||[]).join('\n'):(data.values[field.key]??'');
         input.disabled=Boolean(field.disabled);
