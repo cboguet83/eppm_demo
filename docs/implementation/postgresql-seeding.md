@@ -88,6 +88,12 @@ flowchart LR
     bulk_seed --> seeder
     bulk_seed --> Templates[Effective template validation]
     bulk_seed --> Copy[Bounded native COPY batches]
+    PostgresMaintenanceGateway --> maintenance
+    maintenance --> allocation_seed
+    allocation_seed --> operator_capacity
+    operator_capacity --> PostgresOrganizationStore
+    operator_capacity --> PostgresResourcePoolStore
+    allocation_seed --> calculate_capacity
 ```
 
 Native PostgreSQL tests cover installed relationships, configurable references,
@@ -121,6 +127,7 @@ and network access to the selected URL. Archive storage follows the policy in
 .venv/Scripts/python.exe -m scripts.postgresql_admin --env-file .local/postgresql.env seed-defaults
 .venv/Scripts/python.exe -m scripts.postgresql_admin --env-file .local/postgresql.env seed-pools --year 2026
 .venv/Scripts/python.exe -m scripts.postgresql_admin --env-file .local/postgresql.env seed-pools --year 2026 --apply
+.venv/Scripts/python.exe -m scripts.postgresql_admin --env-file .local/postgresql.env generate-allocations
 .venv/Scripts/python.exe -m scripts.postgresql_admin --env-file .local/postgresql.env counts
 .venv/Scripts/python.exe -m scripts.postgresql_admin --env-file .local/postgresql.env clear-allocations
 .venv/Scripts/python.exe -m scripts.postgresql_admin --env-file .local/postgresql.env reset
@@ -181,3 +188,50 @@ values** and **10,201 allocations**. These match the accepted benchmark workload
 The [recorded counts and timing](postgresql-bulk-seed-scale.json) validate operator
 generation. The authenticated 50-user browser acceptance gate remains separate
 and must be run after runtime cutover.
+
+## Configurable allocation mixes
+
+`generate-allocations` previews the requested pool usage and staffing mix. It
+accepts `--allocated-pools`, `--average-allocation`, `--overallocated-pools`,
+`--max-overallocation`, `--underallocated-pools`, `--unstaffed-pools` and `--seed`.
+The meanings and validation remain those of Database Seeding: average usage
+applies to selected pools, and maximum overallocation is excess above 100%.
+
+The preview reads one repeatable-read snapshot with the separate operator
+connection. It simulates mapping repairs and demand in memory using the existing
+domain capacity calculations. It does not write rows, consume sequence values,
+or create an archive. Employee calendars remain inclusive, team/function/direct
+mapping precedence is preserved, adjacent equal-capacity days are merged, and
+zero-capacity periods receive no demand. FTE values retain the existing 0.001
+precision and category checks.
+
+Add `--apply` to archive the database once and apply the frozen mutations in a
+serializable transaction. An optional `--expected-fingerprint` supplies the source
+fingerprint from a reviewed preview. Source changes invalidate that review;
+changes during archiving or between transaction attempts also reject the write.
+Only retryable PostgreSQL failures replay the database callback, using the same
+plan and the original archive. Foreign keys and revision triggers stay enabled.
+A failed mutation rolls back demand deletion, staffing changes and new demand.
+
+Unstaffed pools have their mappings removed and receive a theoretical capacity
+when needed. Other pools keep usable employee/team staffing; repairs reuse a
+matching zero-percent employee mapping or add a positive employee. Applying a
+zero-allocation request still clears existing demand. Impossible capacity mixes
+fail before an archive or write.
+
+`PostgresMaintenanceGateway` implements the complete `MaintenanceGateway` port.
+The native CLI routes seeds, allocation generation, resets and counts through
+`MaintenanceService`. Its explicit operator initialization applies migrations
+and initial references; constructing the gateway performs no I/O. This is not
+application startup. The launcher and legacy wrappers await the coordinated
+runtime/authentication cutover.
+
+The allocation regressions restore a real pre-operation archive, check native
+actor-bound capacity and employee privacy, and compare complete report/mutation
+hashes against four independently generated synthetic legacy fixtures in
+`tests/postgresql/fixtures/allocation_seed_golden.json`. These golden tests use
+PostgreSQL only and import no existing business data.
+
+```powershell
+.venv/Scripts/python.exe -m dotenv -f .local/postgresql.env run -- .venv/Scripts/python.exe -m pytest -q --tb=short -p no:cacheprovider tests/postgresql/test_allocation_seed.py tests/postgresql/test_allocation_seed_golden.py tests/postgresql/test_maintenance_gateway.py
+```

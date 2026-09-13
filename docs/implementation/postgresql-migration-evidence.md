@@ -889,7 +889,43 @@ application databases and volumes were retained. See
 [native seed operations](postgresql-seeding.md). This measures operator
 generation; authenticated browser performance has not yet been accepted.
 
-Configurable allocation generation, complete maintenance-service/tool wiring,
-coordinated runtime/authentication cutover, exact money forms, SQLite archival,
-full application coverage and the final 50-user browser and recovery/restart
-gates remain incomplete.
+At the bulk-seeding milestone, configurable allocation generation and complete
+maintenance-service/tool wiring were still pending alongside runtime cutover
+and final acceptance.
+
+## Configurable allocation generation and the native maintenance port
+
+Allocation previews now read a consistent PostgreSQL snapshot and simulate
+staffing changes and demand in memory. They do not modify source rows, consume
+sequence values or create an archive. Applying a plan retains the existing
+percentage definitions, staffing repairs, calendar boundaries and 0.001-FTE
+rounding. Native constraints and revision triggers remain enabled.
+
+The complete `PostgresMaintenanceGateway` implements the application maintenance
+port, and the native CLI dispatches all generators, counts and resets through
+`MaintenanceService`. Explicit initialization migrates and installs initial
+references; gateway construction performs no I/O. Ordinary application startup
+does not call these operations.
+
+Four independently generated synthetic legacy scenarios match hashes of the
+complete preview report, resulting staffing/capacity values and demand records.
+Additional real PostgreSQL tests verify actor-bound capacity parity, employee
+privacy, reuse of existing mapping IDs, empty/unstaffed pools, unfulfillable
+requests, reviewed-source changes, rollback after a foreign-key failure, and
+replay of the same plan after a serialization failure with one real archive.
+Restoring the pre-operation archive recovers the original demand and staffing.
+
+The full native PostgreSQL suite plus affected allocation, maintenance and layer
+checks passed **781 tests in 332.64 seconds**, exit code **0**, with no skips.
+The three new modules cover **207/207 statements (100%)**. Native PostgreSQL
+modules cover **2,895/2,899 statements (99.86%)**; including the operator CLI,
+coverage is **2,987/3,002 statements (99.50%)**. Evidence:
+`.local/postgresql-allocation-all-native.log` and
+`.local/postgresql-allocation-all-native-coverage.json`. These figures describe
+the measured native modules and do not establish full application acceptance.
+
+See [native seed operations](postgresql-seeding.md) and the committed
+`tests/postgresql/fixtures/allocation_seed_golden.json`. The coordinated
+runtime/authentication cutover, remaining legacy wrappers and benchmarks,
+exact money forms, SQLite archival, full application coverage and final
+authenticated 50-user browser and deployed recovery/restart gates remain open.

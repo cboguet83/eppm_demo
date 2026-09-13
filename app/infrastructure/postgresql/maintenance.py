@@ -4,8 +4,10 @@ from datetime import date
 from dataclasses import replace
 from secrets import randbits
 
-from app.application.ports.maintenance import DatabaseCounts, PoolSeedReport, SeedRequest
+from app.application.ports.maintenance import AllocationSeedReport, DatabaseCounts, PoolSeedReport, SeedRequest
 from app.application.services.maintenance import validate_seed_request
+from app.domain.resources.allocation_generation import AllocationGenerationRequest, validate_generation_request
+from app.infrastructure.postgresql.allocation_seed import apply_allocation_plan, prepare_allocation_plan
 from app.infrastructure.postgresql.backup import PostgresBackup
 from app.infrastructure.postgresql.bulk_seed import generate_projects
 from app.infrastructure.postgresql.maintenance_write import backed_up_write
@@ -71,3 +73,16 @@ def seed_pool_scenarios(database: OperatorDatabase, backup: PostgresBackup, *, y
         return plan.report()
     return backed_up_write(database, backup, reason='seed-pools', fingerprint=plan.fingerprint,
         operation=lambda connection: apply_pool_scenarios(connection, plan))
+
+
+def generate_pool_allocations(database: OperatorDatabase, backup: PostgresBackup, request: AllocationGenerationRequest, *,
+                              apply: bool = False, expected_fingerprint: str | None = None) -> AllocationSeedReport:
+    """Preview in memory or apply the validated mix under one native archive."""
+    validate_generation_request(request)
+    today = date.today()
+    plan = database.run(lambda connection: prepare_allocation_plan(connection, request, today=today,
+        expected_fingerprint=expected_fingerprint))
+    if not apply:
+        return plan.report()
+    return backed_up_write(database, backup, reason='generate-allocations', fingerprint=plan.fingerprint,
+        operation=lambda connection: apply_allocation_plan(connection, plan))

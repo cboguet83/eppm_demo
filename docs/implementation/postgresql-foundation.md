@@ -255,11 +255,15 @@ Log: `.local/postgresql-runtime-resources.log`; coverage:
 
 [Native seed/reset helpers](postgresql-seeding.md) now preserve the accepted
 demo definitions, template validation, exact budgets, editable hierarchy
-catalogs and retained account/finance history. Operator maintenance orchestration
-and CLI integration remain in progress; ordinary startup does not use them.
+catalogs and retained account/finance history. The complete native maintenance
+port and CLI now include bulk projects, pool scenarios and configurable
+allocation previews. Reviewed allocation plans reuse pure capacity rules and
+apply atomically under one archive. Ordinary startup and legacy wrappers await
+the coordinated runtime/authentication cutover.
 
 [PostgreSQL archives and isolated restoration](postgresql-backups.md) now use
 native clients with private connection environments and safe errors. The
 operator CLI exposes explicit `backup` and `restore` commands; source privileges
 and exact approved finance data survive restoration into an empty test database.
-Seed/reset integration and deployed recovery/restart acceptance remain pending.
+Native seed/reset/allocation operations share this archive policy. Deployed
+recovery/restart acceptance remains pending.

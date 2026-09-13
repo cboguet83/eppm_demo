@@ -1,0 +1,68 @@
+{
+  "source": "app/infrastructure/database/allocation_seed.py",
+  "source_sha256": "3674e81f24da0af739bad6975d3f32c318d83246dae5d2fb0a1658290cd7bc62",
+  "provenance": "Fresh synthetic legacy databases; no application records or identities imported.",
+  "projection": "Report excluding source fingerprint; demand excluding sequence IDs; mappings; pool capacities.",
+  "cases": [
+    {
+      "name": "mixed",
+      "request": {
+        "allocated_pools_pct": 80,
+        "average_allocation_pct": 80,
+        "overallocated_pools_pct": 25,
+        "max_overallocation_pct": 50,
+        "underallocated_pools_pct": 50,
+        "unstaffed_pools_pct": 20,
+        "random_seed": 42
+      },
+      "sha256": "27d2ab353a962ef28db3f101927d41dae0bcf7284c4fa64136c9b99d5df9c52b",
+      "assignments": 14,
+      "mappings_created": 0
+    },
+    {
+      "name": "full",
+      "request": {
+        "allocated_pools_pct": 100,
+        "average_allocation_pct": 100,
+        "overallocated_pools_pct": 0,
+        "max_overallocation_pct": 0,
+        "underallocated_pools_pct": 0,
+        "unstaffed_pools_pct": 0,
+        "random_seed": 42
+      },
+      "sha256": "c7a29fdaa4e9562bf6c303c0534cb05d97af48e025fca87ea38832a68e6f0b15",
+      "assignments": 20,
+      "mappings_created": 0
+    },
+    {
+      "name": "zero_mappings",
+      "request": {
+        "allocated_pools_pct": 100,
+        "average_allocation_pct": 100,
+        "overallocated_pools_pct": 0,
+        "max_overallocation_pct": 0,
+        "underallocated_pools_pct": 0,
+        "unstaffed_pools_pct": 0,
+        "random_seed": 42
+      },
+      "sha256": "c7a29fdaa4e9562bf6c303c0534cb05d97af48e025fca87ea38832a68e6f0b15",
+      "assignments": 20,
+      "mappings_created": 0
+    },
+    {
+      "name": "empty_pools",
+      "request": {
+        "allocated_pools_pct": 80,
+        "average_allocation_pct": 80,
+        "overallocated_pools_pct": 25,
+        "max_overallocation_pct": 50,
+        "underallocated_pools_pct": 50,
+        "unstaffed_pools_pct": 20,
+        "random_seed": 42
+      },
+      "sha256": "679394143b92fc0031b61b9a717873725b6f011c7dd995579f52db9cfc701e61",
+      "assignments": 14,
+      "mappings_created": 8
+    }
+  ]
+}
