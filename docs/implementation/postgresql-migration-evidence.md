@@ -2102,3 +2102,40 @@ rollback journal and exact counts: 10,001 projects, 73,929 tasks, 66,173 links,
 are recorded in [comparison preparation](benchmarks/comparison-preparation.json).
 Actual isolated load deployments, their limits and the required three measurement
 periods still need to be exercised; these preparation checks are not load results.
+
+## Representative deployed restart and recovery gate
+
+The opt-in deployed recovery test passed **one test in 163.16 seconds**, exit
+code **0**, against `eppm-demo:postgresql-acceptance` (runtime source `1a38d05`).
+The test body took 136.695 seconds; the overall duration includes its separate
+PostgreSQL/Keycloak/application Compose deployment and cleanup. Its deterministic
+seed contains 10,001 projects, 73,929 tasks, 66,173 dependencies, 103 pools and
+10,201 assignments, with random seed 42 and zero-to-fifteen task bounds.
+
+Real OIDC login established two accounts and sessions. Explicit bootstrap and
+normal restricted application services created three grants and an approved
+Finance plan; six audit entries were present before the archive. All 22 schema
+migrations were applied. Exact project and Finance decimals, the complete
+application table snapshot and every sequence survived both PostgreSQL restart
+and native archive restoration into a separate empty database.
+
+Recreating the deployed app against the restored URL preserved the existing
+sessions, permitted downloads and the viewer's hidden-project rejection. The
+actual planning browser displayed the retained project and task. After clearing
+only replaceable cache tables, the app rebuilt planning and capacity caches;
+normal restricted service results matched their pre-restart values. Approved
+Finance and audit mutation attempts remained rejected. Business records,
+accounts, grants, audit history and sequences remained unchanged after browser
+use. The original database's stable records were preserved throughout.
+
+The first attempt stopped before recovery because the test used the access
+administration screen's `Projects` label on the planning screen. Selecting the
+actual `ms_multi_projects` widget corrected the harness; no application runtime
+change was needed. The successful rerun log is
+`.local/postgresql-deployed-recovery.log`, with a credential-free
+[tracked result](postgresql-deployed-recovery-results.json). Reproduction and
+comparison boundaries are documented in [backup validation](postgresql-backups.md#validation).
+
+This fulfills representative setup/restart/recovery acceptance. The full
+functional/coverage gate remains at 98.92% with unchanged application code. The
+authenticated 50-user comparison and final acceptance handoff remain open.

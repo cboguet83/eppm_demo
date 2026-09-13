@@ -125,8 +125,11 @@ PostgreSQL restores. Retired SQLite runtime sources and test history are archive
 outside active packages. The full regression gate passed at runtime commit
 `1a38d05`: 2,278 tests plus 5 subtests, no skips, and 98.92% application coverage.
 The 71 JavaScript checks also passed. See the
-[recorded results](postgresql-regression-results.json). The authenticated 50-user
-browser benchmark and representative deployed recovery/restart remain required.
+[recorded results](postgresql-regression-results.json). Representative deployed
+restart and recovery also passed with 10,001 projects, real OIDC sessions,
+preserved accounts/grants/audit and rebuilt caches; see the
+[recovery evidence](postgresql-deployed-recovery-results.json). The authenticated
+50-user browser benchmark remains required.
 
 ## Exact project money forms
 

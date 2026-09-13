@@ -91,6 +91,37 @@ $env:POSTGRES_TEST_CLIENT_CONTAINER = 'eppm_demo-postgres-1'
 .venv/Scripts/python.exe -m dotenv -f .local/postgresql.env run -- .venv/Scripts/python.exe -m pytest -q --tb=short -p no:cacheprovider tests/postgresql/test_backups.py tests/postgresql/test_operator_foundation.py tests/postgresql/test_runtime_resources.py tests/test_layer_boundaries.py --cov=app.infrastructure.postgresql.backup --cov=app.runtime --cov-report=term-missing --cov-report=json:.local/postgresql-backup-coverage.json --cov-fail-under=95
 ```
 
-Log: `.local/postgresql-backup-native.log`. This verifies the archive primitive
-and isolated recovery. Seed/reset integration, deployed PostgreSQL-only runtime,
-representative-data recovery, restart persistence and full acceptance remain.
+Log: `.local/postgresql-backup-native.log`. This staged run verifies the archive
+primitive and isolated recovery. Subsequent seed/reset and native deployment
+results are recorded in [migration evidence](postgresql-migration-evidence.md).
+
+The representative deployed recovery test now also passes: **one test in 163.16
+seconds**, including disposable Compose setup and cleanup. It seeds 10,001
+projects with 73,929 tasks, logs in through real Keycloak, grants scoped access,
+and saves an immutable approved Finance plan through the restricted runtime.
+With the app stopped, it records every application table's count/content hash and
+every sequence. A PostgreSQL restart and a native archive restored into a newly
+created database reproduce that complete snapshot exactly.
+
+The application is then recreated against the restored database with the same
+session and actor-binding configuration. Existing sessions retain their scoped
+download access; the planning browser renders the retained project and task.
+After both derived cache tables are cleared, the deployed application rebuilds
+them and normal service calculations reproduce the original values. Approved
+Finance and audit mutations are still rejected. The final business/account/grant/
+audit hashes and all sequences remain unchanged, as does the source database's
+stable data. Only session/OIDC activity and replaceable caches are excluded from
+comparisons after browser use.
+
+```powershell
+$env:EPPM_RUN_OIDC_E2E = '1'
+$env:EPPM_E2E_APP_IMAGE = 'eppm-demo:postgresql-acceptance'
+.venv/Scripts/python.exe -m pytest -q tests/postgresql/test_deployed_recovery.py --tb=short -p no:cacheprovider
+```
+
+The fixture creates and removes only its unique Compose project and volumes.
+It never changes the ordinary application's database or existing volumes. The
+[recorded recovery result](postgresql-deployed-recovery-results.json) includes
+counts and proof checks; credentials and archives remain in ignored local test
+storage. This completes representative restart/recovery acceptance. The separate
+authenticated 50-user performance comparison is still outstanding.

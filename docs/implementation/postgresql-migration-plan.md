@@ -307,7 +307,7 @@ changed since planning.
 - [x] Relevant intermediate commits made with passing checks and reviewed diffs.
 - [x] Full regression and coverage requirements satisfied.
 - [ ] Fifty-user responsiveness target met with recorded evidence.
-- [ ] Fresh setup, restart, backup/restore, and recovery procedures verified.
+- [x] Fresh setup, restart, backup/restore, and recovery procedures verified.
 - [ ] Final handoff lists commits, checks, benchmark results, and any remaining limitations.
 
 Migration acceptance covers the current application's PostgreSQL operation. The
