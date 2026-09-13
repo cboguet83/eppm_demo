@@ -1,8 +1,8 @@
 # PostgreSQL operator seeding and reset
 
-Status: native catalog, curated project and reset helpers implemented. The
-maintenance gateway, bulk generation, scenario previews and CLI integration
-remain in progress. These helpers run only on an explicit operator transaction;
+Status: native catalogs, curated projects, reset, scenario previews and backed-up
+write orchestration implemented. The maintenance gateway, bulk/allocation
+generation and CLI integration remain in progress. These helpers use explicit operator transactions;
 ordinary application startup must not call them.
 
 The accepted fixed demo definitions are Python literals in `seed_data.py`.
@@ -31,9 +31,28 @@ explicit operator IDs. Unlike SQLite's sequence reset, this prevents a newly
 seeded object from reusing a deleted object's identity. Deleted scope targets
 also retain the existing native grant invalidation behavior.
 
-The eventual maintenance gateway must own a pre-operation PostgreSQL archive
-outside the replayable write callback. These transaction helpers do not create
-backups themselves and are not exposed as standalone reset commands.
+`backed_up_write` creates one PostgreSQL archive outside the replayable write
+callback, then rechecks the prepared business-source fingerprint on every
+attempt. Failed archives prevent all writes. Changed sources abort the command;
+serialization failures may replay database work, but neither an external archive
+nor an uncertain commit is replayed. The maintenance gateway must call this
+boundary; low-level transaction helpers are not standalone reset commands.
+
+Pool scenario preparation reads a repeatable-read snapshot and produces frozen
+parameterized inserts. Preview never consumes identities or writes temporary
+rows into the live database. The accepted layout remains five units and four
+staffing scenarios per Service root: a fresh demo creates 25 units, 100 pools,
+300 employee mappings and up to 100 project plus 100 task assignments. Existing
+projects and schedules remain unchanged; repeated installation is a no-op.
+Legacy scenario markers, insufficient employees and generated name collisions
+are rejected during preview.
+
+Prepared identities are provisional until the transaction commits; source
+fingerprints include database incarnation, all project/pool generations, the
+shared catalog and installation markers. Native uniqueness constraints also
+remain active. Nontransactional sequence advances caused by a rolled-back
+attempt do not invalidate its own replay. Authentication activity, retained
+financial history and derived caches are not seed inputs.
 
 ## C3 — Components
 
@@ -46,6 +65,11 @@ flowchart LR
     seed_projects --> PostgresProjectStore
     seed_projects --> property_store
     reset --> seed_catalog
+    maintenance_write --> PostgresBackup
+    maintenance_write --> OperatorDatabase
+    maintenance_write --> seed_plan
+    pool_scenarios --> seed_plan
+    pool_scenarios --> seed_catalog
 ```
 
 Native PostgreSQL tests cover installed relationships, configurable references,
@@ -55,4 +79,14 @@ and runtime configuration:
 
 ```powershell
 .venv/Scripts/python.exe -m dotenv -f .local/postgresql.env run -- .venv/Scripts/python.exe -m pytest -q --tb=short -p no:cacheprovider tests/postgresql/test_seed_catalog.py tests/postgresql/test_seed_projects_reset.py tests/postgresql/test_integrity.py tests/test_layer_boundaries.py
+```
+
+Additional native scenario and archive tests prove read-only previews, additive
+application, rollback, fresh-source checks on retries and restoration of the
+actual pre-reset/pre-seed archive. PostgreSQL clients must be installed; tests
+can instead use the isolated server container as documented in
+[PostgreSQL backups](postgresql-backups.md).
+
+```powershell
+.venv/Scripts/python.exe -m dotenv -f .local/postgresql.env run -- .venv/Scripts/python.exe -m pytest -q --tb=short -p no:cacheprovider tests/postgresql/test_pool_seed_scenarios.py tests/postgresql/test_maintenance_write.py tests/postgresql/test_backups.py
 ```

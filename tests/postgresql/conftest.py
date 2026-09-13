@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, field
 import os
+import shutil
 from secrets import token_bytes
 from uuid import uuid4
 
@@ -12,6 +13,7 @@ from psycopg.types.json import Jsonb
 import pytest
 
 from app.infrastructure.postgresql.migration import migrate
+from app.infrastructure.postgresql.backup import PostgresTools
 from app.infrastructure.postgresql.pool import Database
 from app.infrastructure.postgresql.authorization import ActorBinding, configure_signing_key
 from app.application.services.access import AuthorizationPolicy, SessionLimits
@@ -65,6 +67,35 @@ def pg_database(empty_database: PostgreSQLFixture) -> PostgreSQLFixture:
     """Migrate using operator credentials; callers use the distinct runtime URL."""
     migrate(empty_database.operator_url)
     return empty_database
+
+
+@pytest.fixture
+def clients():
+    """Use installed native clients or the explicitly selected test container."""
+    container = os.environ.get('POSTGRES_TEST_CLIENT_CONTAINER')
+    if container:
+        class DockerClients(PostgresTools):
+            def _environment(self, url):
+                return super()._environment(url) | {'PGHOST': '127.0.0.1', 'PGPORT': '5432'}
+        variables = ('PGHOST', 'PGPORT', 'PGDATABASE', 'PGUSER', 'PGPASSWORD')
+        return DockerClients(('docker', 'exec', '-i', *(part for name in variables for part in ('--env', name)), container))
+    if not shutil.which('pg_dump') or not shutil.which('pg_restore'):
+        pytest.skip('Install PostgreSQL clients or set POSTGRES_TEST_CLIENT_CONTAINER to the isolated test server container.')
+    return PostgresTools()
+
+
+@pytest.fixture
+def restore_target(pg_database):
+    """Create and clean up only a distinct random restore target."""
+    name = 'eppm_test_restore_' + uuid4().hex
+    maintenance = database_url(pg_database.operator_url, 'postgres')
+    with psycopg.connect(maintenance, autocommit=True) as connection:
+        connection.execute(sql.SQL('CREATE DATABASE {}').format(sql.Identifier(name)))
+    try:
+        yield PostgreSQLFixture(name, database_url(pg_database.operator_url, name), database_url(pg_database.runtime_url, name))
+    finally:
+        with psycopg.connect(maintenance, autocommit=True) as connection:
+            connection.execute(sql.SQL('DROP DATABASE {} WITH (FORCE)').format(sql.Identifier(name)))
 
 
 @pytest.fixture

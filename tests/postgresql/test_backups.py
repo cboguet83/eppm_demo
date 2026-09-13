@@ -2,15 +2,11 @@
 
 from datetime import datetime, timezone
 from decimal import Decimal
-import os
 from pathlib import Path
-import shutil
 import subprocess
 from types import SimpleNamespace
-from uuid import uuid4
 
 import psycopg
-from psycopg import sql
 import pytest
 
 from app.application.exceptions import DatabaseMaintenanceError
@@ -21,34 +17,6 @@ from app.infrastructure.postgresql.dashboard import PostgresDashboardReader
 from app.infrastructure.postgresql.finance import PostgresFinanceGateway
 from app.infrastructure.postgresql.pool import Database
 from app.shared.config.database import DatabaseConfig
-from tests.postgresql.conftest import PostgreSQLFixture, database_url
-
-
-@pytest.fixture
-def clients():
-    container = os.environ.get('POSTGRES_TEST_CLIENT_CONTAINER')
-    if container:
-        class DockerClients(PostgresTools):
-            def _environment(self, url):
-                return super()._environment(url) | {'PGHOST': '127.0.0.1', 'PGPORT': '5432'}
-        variables = ('PGHOST', 'PGPORT', 'PGDATABASE', 'PGUSER', 'PGPASSWORD')
-        return DockerClients(('docker', 'exec', '-i', *(part for name in variables for part in ('--env', name)), container))
-    if not shutil.which('pg_dump') or not shutil.which('pg_restore'):
-        pytest.skip('Install PostgreSQL clients or set POSTGRES_TEST_CLIENT_CONTAINER to the isolated test server container.')
-    return PostgresTools()
-
-
-@pytest.fixture
-def restore_target(pg_database):
-    name = 'eppm_test_restore_' + uuid4().hex
-    maintenance = database_url(pg_database.operator_url, 'postgres')
-    with psycopg.connect(maintenance, autocommit=True) as connection:
-        connection.execute(sql.SQL('CREATE DATABASE {}').format(sql.Identifier(name)))
-    try:
-        yield PostgreSQLFixture(name, database_url(pg_database.operator_url, name), database_url(pg_database.runtime_url, name))
-    finally:
-        with psycopg.connect(maintenance, autocommit=True) as connection:
-            connection.execute(sql.SQL('DROP DATABASE {} WITH (FORCE)').format(sql.Identifier(name)))
 
 
 def test_archive_restore_preserves_exact_finance_actor_scope_and_revision_incarnation(authorized, restore_target, tmp_path, clients):

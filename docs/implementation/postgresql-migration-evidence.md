@@ -785,3 +785,29 @@ Log: `.local/postgresql-seed-reset.log`; coverage:
 These are transaction helpers. Backup-aware maintenance orchestration, pool
 scenario preview/application, bulk generation, runtime/CLI cutover and all final
 application, recovery and 50-user browser acceptance gates remain incomplete.
+
+## Additive pool previews and backed-up operator writes
+
+Native scenario previews now prepare immutable inserts without changing live
+rows or PostgreSQL sequences. Fresh demo scenarios retain the five-unit,
+four-pool layout, employee mappings and project/task demand. Source fingerprints
+are checked before application and on every retry. Invalid sources and changed
+catalogs fail without partial insertion; explicit identities remain protected by
+native constraints and nonrewinding sequences.
+
+The archive orchestration boundary creates one real PostgreSQL dump before
+entering the retryable callback. Restoring the pre-reset archive recovered the
+original five projects, 15 tasks, 50 employees and exact budget totals. A forced
+serialization rollback during pool installation replays the frozen command with
+one archive, which restores the original three pools. Edits committed during
+backup or between attempts survive and reject the old operation. Archive errors,
+constraint failures, exhausted retries and connection errors fail safely.
+
+The combined scenario, archive, seed/reset and layer regressions passed **62
+tests in 29.65 seconds**, exit code **0**, with **148/148 new orchestration/plan
+statements covered (100%)**. Log: `.local/postgresql-maintenance-write.log`;
+coverage: `.local/postgresql-maintenance-write-coverage.json`.
+
+The maintenance gateway, complete default/bulk/allocation generation, operator
+CLI and runtime cutover, legacy archival, full application coverage and final
+browser/recovery acceptance remain in progress.
