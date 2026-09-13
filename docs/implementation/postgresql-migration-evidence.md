@@ -1496,3 +1496,19 @@ Validation: **4 passed in 2.67 seconds**, recorded in
 `.local/postgresql-test-port-inventory-current.log`. Remaining legacy test/tool
 ports, runtime archival, complete application coverage, authenticated 50-user
 performance runs, and representative recovery/restart acceptance are unfinished.
+
+## Native project contact and activity-log workflows
+
+Contact/log regressions now use native business-admin sessions and actual
+PostgreSQL transactions. They preserve repeated roles, current occupants,
+translations, project ownership, event states and pagination, catalog deletion
+guards, and contact/log/Settings dialogs. Concurrent contact deletion retains
+the original read snapshot; failed catalog/translation writes leave no partial
+state, and database outages produce safe UI errors. Project-only and complete
+reference resets run through the native maintenance service and produce two
+actual pre-operation dump archives while leaving no orphan contacts or logs.
+
+Validation: **30 passed in 19.98 seconds**, recorded in
+`.local/postgresql-collaboration-workflows.log`. These retain the former
+`test_project_collaboration.py` workflows using pooled gateway callbacks and
+scoped contact queries. Full migration acceptance remains incomplete.
