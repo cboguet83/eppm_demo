@@ -122,9 +122,11 @@ and recovery acceptance runs.
 Runtime cutover is not final migration acceptance. Database-backed tests and
 browser fixtures now use native adapters; planning benchmark tools use isolated
 PostgreSQL restores. Retired SQLite runtime sources and test history are archived
-outside active packages. Full regression with at least 95% application coverage,
-the authenticated 50-user browser benchmark, representative deployed
-recovery/restart, and the final documentation audit remain required.
+outside active packages. The full regression gate passed at runtime commit
+`1a38d05`: 2,278 tests plus 5 subtests, no skips, and 98.92% application coverage.
+The 71 JavaScript checks also passed. See the
+[recorded results](postgresql-regression-results.json). The authenticated 50-user
+browser benchmark and representative deployed recovery/restart remain required.
 
 ## Exact project money forms
 

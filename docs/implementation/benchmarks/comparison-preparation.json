@@ -1,0 +1,48 @@
+{
+  "recorded_date": "2026-09-13",
+  "scope": "Comparison image and preserved fixture preparation only; no authenticated load measurements",
+  "host": {
+    "platform": "Windows with Docker Desktop Linux containers",
+    "docker_engine": "29.7.2",
+    "docker_cpus": 8,
+    "docker_memory_bytes": 16529354752,
+    "reference_app_and_postgres_container_limits": {"nano_cpus": 0, "memory_bytes": 0}
+  },
+  "sqlite": {
+    "source_commit": "f564a5b4b49c237902415754c61fe9e77f07f7bc",
+    "checkout": ".local/postgresql-sqlite-baseline",
+    "image": "eppm-demo:sqlite-migration-baseline",
+    "image_id": "sha256:6ccd482cf6e528e1359b17af5a3ed03f821fb8827a4baa67f03bfca47eb72b9a",
+    "python": "3.14.7",
+    "streamlit": "1.63.0",
+    "sqlite_library": "3.46.1",
+    "native_composition": false,
+    "sqlite_adapter_present": true,
+    "fixture": ".local/migration-baseline/baseline.db",
+    "fixture_inspection": "Read-only bind mount and mode=ro connection",
+    "quick_check": "ok",
+    "journal_mode": "delete",
+    "counts": {
+      "project": 10001,
+      "project_task": 73929,
+      "task_dependencies": 66173,
+      "resource_pool": 103,
+      "resource_pool_group": 31,
+      "resource_pool_assignment": 10201
+    }
+  },
+  "postgresql": {
+    "source_commit": "1a38d05808852883851b06c9e8992eb1c8166305",
+    "image": "eppm-demo:postgresql-acceptance",
+    "image_id": "sha256:e728f12a687bf4940ac743aeeef620d11e3b29c9f864ddd995bb621f1aa1a631",
+    "python": "3.14.7",
+    "streamlit": "1.63.0",
+    "native_composition": true,
+    "sqlite_adapter_present": false
+  },
+  "remaining": [
+    "Provision isolated authenticated load deployments and verify their actual limits and generated counts",
+    "Run the required 50-session comparison with warmups, three measurement periods and per-scenario latency/failure evidence",
+    "Record database, pool, lock, server and browser timings during the actual measurements"
+  ]
+}

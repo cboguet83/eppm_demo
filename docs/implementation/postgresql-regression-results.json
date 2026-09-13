@@ -1,0 +1,83 @@
+{
+  "scope": "Complete Python/PostgreSQL/Streamlit/Keycloak browser suite and separate JavaScript suite",
+  "runtime_source_commit": "1a38d05808852883851b06c9e8992eb1c8166305",
+  "python": "3.14.6",
+  "pytest_passed": 2278,
+  "subtests_passed": 5,
+  "junit_testcases_including_subtests": 2283,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "elapsed_seconds": 1349.37,
+  "coverage": {
+    "covered_lines": 11664,
+    "num_statements": 11791,
+    "percent_covered": 98.92290730217962,
+    "percent_covered_display": "99",
+    "missing_lines": 127,
+    "excluded_lines": 433,
+    "percent_statements_covered": 98.92290730217962,
+    "percent_statements_covered_display": "99"
+  },
+  "critical_coverage": {
+    "finance_domain_service_adapter": {
+      "statements": 246,
+      "covered": 246,
+      "percent": 100.0,
+      "files": [
+        "app/application/services/finance.py",
+        "app/domain/finance.py",
+        "app/infrastructure/postgresql/finance.py"
+      ]
+    },
+    "access_policy_and_native_enforcement": {
+      "statements": 515,
+      "covered": 513,
+      "percent": 99.6116504854369,
+      "files": [
+        "app/application/services/access.py",
+        "app/domain/access/__init__.py",
+        "app/domain/access/models.py",
+        "app/infrastructure/postgresql/access.py",
+        "app/infrastructure/postgresql/authorization.py",
+        "app/infrastructure/postgresql/business.py"
+      ]
+    },
+    "native_pool_and_runtime_lifecycle": {
+      "statements": 105,
+      "covered": 104,
+      "percent": 99.04761904761905,
+      "files": [
+        "app/infrastructure/postgresql/pool.py",
+        "app/runtime.py"
+      ]
+    }
+  },
+  "authenticated_browser": [
+    {
+      "name": "test_real_keycloak_login_pending_bootstrap_and_access_administration",
+      "elapsed_seconds": 55.931
+    }
+  ],
+  "javascript": {
+    "passed": 71,
+    "failed": 0,
+    "skipped": 0
+  },
+  "warnings": {
+    "count": 2,
+    "category": "PytestWarning",
+    "reason": "Two performance checks use record_property with the default xunit2 XML format; use -o junit_family=legacy for a compatible XML consumer."
+  },
+  "evidence": {
+    "log": ".local/postgresql-full-native-suite.log",
+    "junit": ".local/postgresql-full-native-results.xml",
+    "coverage": ".local/postgresql-full-native-coverage.json",
+    "javascript": ".local/postgresql-javascript-full-native.log",
+    "application_image": "eppm-demo:postgresql-acceptance"
+  },
+  "remaining_gates": [
+    "Authenticated 50-user browser comparison",
+    "Representative deployed backup/restore/restart and usable rebuilt caches"
+  ]
+}

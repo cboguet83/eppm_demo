@@ -302,10 +302,10 @@ changed since planning.
 - [x] PostgreSQL schema, migrations, connections, and deployment tooling complete.
 - [x] Preparatory version columns, planning revisions, and stale-edit handling remain outside this plan.
 - [x] All repositories, authentication storage, maintenance tools, and benchmarks ported.
-- [ ] Authorization, audit, transaction, cache, and monetary guarantees verified.
+- [x] Authorization, audit, transaction, cache, and monetary guarantees verified.
 - [x] Active runtime and tests use PostgreSQL; legacy SQLite migration history retained.
 - [x] Relevant intermediate commits made with passing checks and reviewed diffs.
-- [ ] Full regression and coverage requirements satisfied.
+- [x] Full regression and coverage requirements satisfied.
 - [ ] Fifty-user responsiveness target met with recorded evidence.
 - [ ] Fresh setup, restart, backup/restore, and recovery procedures verified.
 - [ ] Final handoff lists commits, checks, benchmark results, and any remaining limitations.

@@ -1,8 +1,8 @@
 # PostgreSQL architecture
 
-This describes the migration branch's implemented runtime. It does not establish
-the outstanding regression/coverage, load or deployed recovery acceptance gates;
-their evidence is tracked in [migration evidence](postgresql-migration-evidence.md).
+This describes the migration branch's implemented runtime. Regression/coverage,
+load and deployed recovery evidence is tracked separately in
+[migration evidence](postgresql-migration-evidence.md).
 [ADR 0024](../decisions/0024-postgresql-runtime.md) supersedes the SQLite storage
 decisions. Existing business rules, optional hierarchy types and Finance editing
 controls are retained. Planning revisions and stale-form protection are separate

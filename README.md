@@ -10,8 +10,9 @@ This branch runs on PostgreSQL 18.6 with a restricted connection pool and explic
 operator commands for migrations, seeding, backups and account bootstrap. See
 [ADR 0024](docs/decisions/0024-postgresql-runtime.md) and the
 [native runtime guide](docs/implementation/postgresql-runtime.md). The migration
-is still in progress: complete regression/coverage, authenticated
-load testing and recovery acceptance remain open. The
+has passed its full regression gate: 2,278 tests plus 5 subtests, 71 JavaScript
+checks, and 98.92% application coverage. Authenticated load testing and
+representative deployed recovery acceptance remain open. The
 [evidence log](docs/implementation/postgresql-migration-evidence.md) records the
 checks already performed. Existing SQLite files are retained without importing
 their business data or application accounts into PostgreSQL.
@@ -388,7 +389,8 @@ so sub-100-ms pool reads do not imply a sub-100-ms complete page render.
 Planning reuses cached capacity timelines when all assigned projects are selected,
 indexes organization/project lookups, and avoids sending selected tasks twice to
 the dependency editor. The Gantt reuses overscanned rows and batches scroll work
-once per animation frame. The benchmark adapters are still being ported; see the
+once per animation frame. The [native diagnostic tools](docs/implementation/postgresql-benchmarks.md)
+use disposable PostgreSQL restores; see the
 [authenticated browser performance requirements](docs/implementation/postgresql-migration-plan.md#52-reproducible-responsiveness-test)
 for the outstanding acceptance workload. Run the Gantt component checks with:
 
@@ -426,9 +428,10 @@ for its dropdown and loads cached capacity summaries only for pools assigned to
 the task (plus legacy pools without a defined capacity). Changing FTE, dates or
 selection no longer recalculates every pool. Assignment and calendar changes
 still invalidate the relevant summaries, including single-day overallocation.
-The modal and database-backed planning benchmark commands still require native
-PostgreSQL adapters. Their earlier SQLite results are retained in the migration
-evidence; they do not establish PostgreSQL browser responsiveness. Final acceptance
+The modal and database-backed planning benchmark commands use native adapters
+on disposable restored databases. Their earlier SQLite results are retained in
+the migration evidence; component diagnostics do not establish full-app browser
+responsiveness. Final acceptance
 requires the isolated, authenticated 50-user workload specified in the plan.
 
 Large deployment-side seeds and the first capacity calculation afterward take

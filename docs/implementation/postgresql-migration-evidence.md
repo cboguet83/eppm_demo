@@ -39,11 +39,11 @@ preserves UI behavior and makes the existing regression suite reproducible.
 | --- | --- | --- |
 | 1. Baseline and decisions | Baseline captured | ADR, full baseline test results, workload and service timings recorded. Browser load comparison remains an acceptance gate. |
 | 2. PostgreSQL foundation | Implemented, focused checks pass | Configuration, restricted process pool/lifecycle, 22 explicit migrations, Compose, operator provisioning and isolated tests. Final deployment acceptance remains. |
-| 3. Schema and enforcement | Implemented, focused checks pass | Native integrity, RLS, actor binding, immutable Finance/audit, access administration and private derived caches. Full combined regression remains. |
+| 3. Schema and enforcement | Implemented, full regression passes | Native integrity, RLS, actor binding, immutable Finance/audit, access administration and private derived caches are exercised in the completed full suite. |
 | 4. Core repositories | Implemented, focused checks pass | All business adapters use native callbacks; exact money inputs and database-backed browser fixtures are ported. |
 | 5. Planning and caches | Implemented, focused checks pass | Native scheduling, resources, staffing, cache invalidation, bounded portfolio/dashboard queries and HTTP task reads. Fifty-user performance acceptance remains. |
 | 6. Runtime cutover | Implemented, focused checks pass | Composition, authentication, operator/seed tools and planning diagnostics use PostgreSQL. Legacy runtime and test history is archived outside active packages. |
-| 7. Acceptance and documentation | Incomplete | Complete regression with at least 95% coverage, authenticated 50-user comparison, representative deployed recovery/restart, and final documentation/C4 audit. |
+| 7. Acceptance and documentation | Partially complete | Full regression passes with 98.92% coverage; C4 and native documentation are updated. Authenticated 50-user comparison and representative deployed recovery/restart remain. |
 
 ## Performance acceptance
 
@@ -2049,3 +2049,56 @@ successfully as the separate local image `eppm-demo:postgresql-acceptance`, reco
 in `.local/postgresql-acceptance-build.log`. The full Python/native/Streamlit and
 real Keycloak browser run is tracked separately; these build/component results do
 not establish full application coverage or load/recovery acceptance.
+
+## Complete native regression and coverage gate
+
+At runtime source commit `1a38d05`, the complete Python/Streamlit/real-PostgreSQL
+suite passed **2,278 tests plus five subtests in 1,349.37 seconds**, exit code
+**0**, with **no failures, errors or skips**. The real Keycloak login, pending
+account, exact bootstrap, scoped permissions, cross-tab revocation and logout
+browser test ran against the newly built isolated acceptance image; its recorded
+duration is **55.931 seconds**. Its disposable Compose resources were cleaned up.
+
+Coverage is **11,664/11,791 application statements (98.9229%)**, above the required
+95%. All active application modules remain in coverage; no exclusions were added
+for the migration or this run. The existing exclusion count is 433. Finance's
+domain, service and native adapter cover **246/246 statements (100%)**. Selected
+access-policy/native-enforcement modules cover 513/515 statements; native pool and
+runtime lifecycle cover 104/105. Exact file groups and source artifacts are listed
+in [the regression summary](postgresql-regression-results.json).
+
+Two `PytestWarning` messages report that `record_property` metadata is incompatible
+with the default `xunit2` report format. They concern the XML consumer format, not
+application behavior; `-o junit_family=legacy` selects the compatible report format
+for future runs that collect those performance properties. The separate complete
+JavaScript suite passed 71 checks without failures or skips.
+
+```powershell
+$env:POSTGRES_TEST_CLIENT_CONTAINER = 'eppm_demo-postgres-1'
+$env:EPPM_RUN_OIDC_E2E = '1'
+$env:EPPM_E2E_APP_IMAGE = 'eppm-demo:postgresql-acceptance'
+$env:COVERAGE_FILE = '.local/postgresql-full-native-coverage'
+.venv/Scripts/python.exe -m dotenv -f .local/postgresql.env run -- .venv/Scripts/python.exe -m pytest -q -p no:cacheprovider --cov=app --cov-report=term --cov-report=json:.local/postgresql-full-native-coverage.json --cov-fail-under=95 --junitxml=.local/postgresql-full-native-results.xml --tb=short
+```
+
+The full log is `.local/postgresql-full-native-suite.log`; the JSON coverage and
+JUnit XML paths are in the command above. The test inventory contains 2,278 tests;
+JUnit counts its five additional subtests separately, for 2,283 passing cases.
+This fulfills the functional/coverage gate, not the load/recovery gates.
+
+## Preserved comparison images and fixture verification
+
+Inspection showed `eppm-demo:local` already referred to a PostgreSQL runtime image.
+The recorded SQLite baseline revision `f564a5b` was therefore checked out detached
+at `.local/postgresql-sqlite-baseline` and built unchanged under the separate tag
+`eppm-demo:sqlite-migration-baseline`. Both comparison images use Python 3.14.7 and
+Streamlit 1.63.0; the baseline has the original SQLite composition and 3.46.1
+library, while the native acceptance image contains no SQLite adapter files.
+
+The Docker host remains at 8 CPUs, 16,529,354,752 bytes and Engine 29.7.2. A
+read-only mount/connection verified the preserved baseline's `quick_check=ok`,
+rollback journal and exact counts: 10,001 projects, 73,929 tasks, 66,173 links,
+103 pools, 31 pool groups and 10,201 assignments. Image IDs and verification scope
+are recorded in [comparison preparation](benchmarks/comparison-preparation.json).
+Actual isolated load deployments, their limits and the required three measurement
+periods still need to be exercised; these preparation checks are not load results.
