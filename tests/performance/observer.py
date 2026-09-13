@@ -11,7 +11,6 @@ from functools import wraps
 import json
 import os
 from pathlib import Path
-import resource
 import threading
 from time import perf_counter, time
 import traceback
@@ -48,6 +47,7 @@ def timed(name: str, operation: Callable[..., Any]) -> Callable[..., Any]:
                 with _lock:
                     _failures.append({"metric":name, "category":type(error).__name__, "locations":locations})
                     del _failures[:-20]
+                record("db_failures_" + type(error).__name__, 0.0)
             raise
         finally:
             record(name, perf_counter() - started)
@@ -55,6 +55,8 @@ def timed(name: str, operation: Callable[..., Any]) -> Callable[..., Any]:
 
 
 def _snapshot() -> dict[str, object]:
+    import resource
+
     with _lock:
         metrics = {name: dict(value) for name, value in _totals.items()}
         pools = list(_pools)

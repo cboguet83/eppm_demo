@@ -307,7 +307,7 @@ changed since planning.
 - [x] Relevant intermediate commits made with passing checks and reviewed diffs.
 - [ ] Full regression and coverage requirements refreshed after final performance fixes (original native checkpoint passed).
 - [ ] Fifty-user responsiveness target met with recorded evidence.
-- [x] Fresh setup, restart, backup/restore, and recovery procedures verified.
+- [ ] Fresh setup, restart, backup/restore, and recovery refreshed for the final release (representative schema 0022 checkpoint passed).
 - [ ] Final handoff lists commits, checks, benchmark results, and any remaining limitations.
 
 Migration acceptance covers the current application's PostgreSQL operation. The

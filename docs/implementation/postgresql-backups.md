@@ -123,5 +123,6 @@ The fixture creates and removes only its unique Compose project and volumes.
 It never changes the ordinary application's database or existing volumes. The
 [recorded recovery result](postgresql-deployed-recovery-results.json) includes
 counts and proof checks; credentials and archives remain in ignored local test
-storage. This completes representative restart/recovery acceptance. The separate
-authenticated 50-user performance comparison is still outstanding.
+storage. This verifies representative restart/recovery at schema 0022; repeat the
+check for the final release's later migrations. The authenticated 50-user
+performance comparison is also still outstanding.

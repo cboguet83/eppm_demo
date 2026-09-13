@@ -2495,3 +2495,65 @@ including three consecutive saves under the delayed refresh and one notification
 per successful create/edit. Logs: `.local/postgresql-slow-toast-before.log`,
 `.local/postgresql-slow-toast-after.log`, `.local/postgresql-toast-ordered-final.log`.
 The full workload must still establish whether this resolves the pilot failure.
+
+## Deployed save-confirmation and browser-processing pilot
+
+The `73e91ce` image completed a three-session pilot with **51 attempts including
+warmup, zero workflow/database failures and no task or badge HTTP 409 responses**.
+The 30-second measurement recorded 15 actions per scenario: paging p95 604.6 ms,
+task loading 384.1 ms, and saves 1,022.4 ms. All 15 measured saves completed their
+existing updated-details-plus-confirmation predicate. The save p95 still exceeds
+the one-second requirement, and this is not the required 50-session comparison.
+See [the deployed pilot](benchmarks/save-confirmation-browser-pilot-results.json);
+log: `.local/postgresql-save-confirmation-pilot.log`.
+
+All 51 workflows had valid browser counter observations. The measured save
+workflows averaged 8.79 ms layout, 8.09 ms style recalculation, 304.19 ms script
+processing and 416.20 ms renderer task processing. Those diagnostic workflow
+windows include opening/filling the editor and can overlap internally; they must
+not be summed or substituted for click-to-confirmation latency. Paging and task
+loading also have separate renderer counters. GPU/paint duration is not separately
+measured. The disposable deployment was removed.
+
+The counter/reporting implementation passed 42 focused checks including real
+Chromium layout/style processing. The next run raises the offered workload to
+40 readers and 10 editors before the prescribed full-length comparison.
+
+## Fifty-session diagnostic exposes concurrency failures
+
+The next isolated pilot prepared **50 independent authenticated sessions** (40
+readers and 10 editors) against the same `73e91ce` image. These sessions shared
+the two existing seeded identities; this diagnostic is not evidence of 50
+distinct active users. Its 15-second warmup and 45-second offered measurement
+also do not satisfy the prescribed duration. The final comparison must make the
+identity population explicit and cover the intended distinct-user workload.
+
+The measured period failed **12 of 147 attempts**: paging p95 was 27,581.9 ms
+(57 successes, two failures), tasks 19,210.8 ms (76 successes, two failures), and
+saves 9,647.2 ms (two successes, eight failures). Including warmup, 21 of 216
+attempts failed. Failed editor attempts often could not open/fill the modal;
+their title was not updated, so these are not successful saves with a missing
+toast. Workers remained active, but slow/failed actions substantially reduced
+achieved cadence. See [the failed diagnostic](benchmarks/fifty-session-pilot-results.json);
+log: `.local/postgresql-fifty-session-pilot.log`.
+
+The configured pool had minimum 2, maximum 20, five-second acquisition timeout
+and ten-second statement timeout. In the 59.95-second measured runtime window,
+1,848 acquisitions queued, with 1,060.65 aggregate request-seconds waiting and
+up to 33 waiting requests. The PostgreSQL window recorded 90.05 aggregate seconds
+executing statements and no sampled lock-wait category. The app averaged 103.88%
+CPU and PostgreSQL 165.88% (Docker's per-core scale); their maxima were 164.14%
+and 748.83%. These overlapping windows/counters do not establish a single cause.
+
+All 216 browser workflows had valid renderer observations; layout/style work is
+small relative to elapsed latency. One task HTTP response and four badge responses
+were 503; four badge responses were 409. The last 20 retained native error
+examples were serialization failures in session-activity updates. The old example
+buffer cannot establish their total count or which retries ultimately succeeded.
+The observer now also accumulates per-category error counts without retaining
+driver messages; 47 observer/reporting/browser/import checks passed in 2.43 seconds.
+Log: `.local/postgresql-load-observer-final.log`.
+
+Next work is to validate the distinct-user fixture and profile server/connection
+occupancy and session-activity contention. No pool limits, retry guarantees or
+acceptance thresholds were relaxed. The diagnostic deployment was removed.

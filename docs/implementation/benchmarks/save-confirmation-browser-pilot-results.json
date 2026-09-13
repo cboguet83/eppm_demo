@@ -1,0 +1,609 @@
+{
+  "scope": "Three-session deployed save-confirmation and browser-counter pilot; not full load acceptance",
+  "source_directory": ".local/browser-load/097e12cdf740",
+  "fixture": {
+    "backend": "postgresql",
+    "image": "eppm-demo:postgresql-save-confirmation-candidate",
+    "counts": {
+      "project": 10001,
+      "project_task": 73929,
+      "task_dependencies": 66173,
+      "resource_pool": 103,
+      "resource_pool_group": 31,
+      "resource_pool_assignment": 10201,
+      "app_user": 0
+    },
+    "fixture_seed": 42,
+    "min_tasks": 0,
+    "max_tasks": 15,
+    "sqlite_source_sha256": null,
+    "statistics_preparation": "Native operator seed refreshes application statistics",
+    "deployment": {
+      "host": {
+        "cpus": 8,
+        "memory_bytes": 16529354752,
+        "engine": "29.7.2"
+      },
+      "containers": {
+        "app": {
+          "image_id": "sha256:32e972dfe25a2a7f7bbe540a585606c305eecad8382a0fe8790da825be68c002",
+          "nano_cpus": 0,
+          "memory_bytes": 0,
+          "cpu_quota": 0,
+          "cpu_period": 0,
+          "cpuset": "",
+          "source_commit": "73e91ced033ea0d1ad6fa87d9601bed12f0b91e0"
+        },
+        "postgres": {
+          "image_id": "sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280",
+          "nano_cpus": 0,
+          "memory_bytes": 0,
+          "cpu_quota": 0,
+          "cpu_period": 0,
+          "cpuset": "",
+          "source_commit": null
+        },
+        "keycloak": {
+          "image_id": "sha256:9d1f1b2b7261ff53c66cb1092dfcdc34a5fb77e81f9e6a6e75b8b6a795de8067",
+          "nano_cpus": 0,
+          "memory_bytes": 0,
+          "cpu_quota": 0,
+          "cpu_period": 0,
+          "cpuset": "",
+          "source_commit": "df15afa5a3a8a2b10021f879ffa93b30fb36c73a"
+        }
+      },
+      "application_versions": {
+        "python": "3.14.7",
+        "streamlit": "1.63.0"
+      }
+    },
+    "diagnostic_profiling": false
+  },
+  "options": {
+    "readers": 2,
+    "editors": 1,
+    "rounds": 1,
+    "warmup_seconds": 4.0,
+    "measurement_seconds": 30.0,
+    "cadence_seconds": 2
+  },
+  "browser": {
+    "version": "151.0.7922.34",
+    "arguments": [
+      "--disable-background-timer-throttling",
+      "--disable-renderer-backgrounding",
+      "--disable-backgrounding-occluded-windows"
+    ],
+    "load_generator": "Python/Playwright on the Windows Docker host",
+    "viewport": [
+      1500,
+      1100
+    ]
+  },
+  "independent_authenticated_sessions": 3,
+  "periods": [
+    {
+      "round": 1,
+      "scenarios": {
+        "portfolio_paging": {
+          "attempts": 15,
+          "failures": 0,
+          "successes": 15,
+          "p95_ms": 604.6,
+          "max_ms": 604.6
+        },
+        "visible_task_loading": {
+          "attempts": 15,
+          "failures": 0,
+          "successes": 15,
+          "p95_ms": 384.1,
+          "max_ms": 384.1
+        },
+        "simple_save": {
+          "attempts": 15,
+          "failures": 0,
+          "successes": 15,
+          "p95_ms": 1022.4,
+          "max_ms": 1022.4
+        }
+      }
+    }
+  ],
+  "diagnostic_phases": [
+    {
+      "round": 1,
+      "warmup": true,
+      "started_epoch": 1789310129.8949993,
+      "ended_epoch": 1789310133.7168438,
+      "scheduled_seconds": 4.0,
+      "browser_processing": {
+        "portfolio_paging": {
+          "attempts": 2,
+          "observed_workflows": 2,
+          "unobserved_workflows": 0,
+          "failed_workflows": 0,
+          "counters": {
+            "layout_seconds": {
+              "sum": 0.010149000000000005,
+              "mean": 0.005074500000000003,
+              "max": 0.005519000000000003
+            },
+            "style_seconds": {
+              "sum": 0.0037100000000000015,
+              "mean": 0.0018550000000000007,
+              "max": 0.0024820000000000016
+            },
+            "script_seconds": {
+              "sum": 0.12467600000000001,
+              "mean": 0.062338000000000005,
+              "max": 0.07208700000000001
+            },
+            "task_seconds": {
+              "sum": 0.19704700000000008,
+              "mean": 0.09852350000000004,
+              "max": 0.11471200000000004
+            },
+            "layouts": {
+              "sum": 16,
+              "mean": 8,
+              "max": 8
+            },
+            "style_recalculations": {
+              "sum": 16,
+              "mean": 8,
+              "max": 8
+            }
+          }
+        },
+        "simple_save": {
+          "attempts": 2,
+          "observed_workflows": 2,
+          "unobserved_workflows": 0,
+          "failed_workflows": 0,
+          "counters": {
+            "layout_seconds": {
+              "sum": 0.02130599999999999,
+              "mean": 0.010652999999999996,
+              "max": 0.013042999999999999
+            },
+            "style_seconds": {
+              "sum": 0.028507000000000005,
+              "mean": 0.014253500000000002,
+              "max": 0.016639
+            },
+            "script_seconds": {
+              "sum": 0.6248540000000001,
+              "mean": 0.31242700000000007,
+              "max": 0.324426
+            },
+            "task_seconds": {
+              "sum": 0.8810000000000002,
+              "mean": 0.4405000000000001,
+              "max": 0.46557400000000015
+            },
+            "layouts": {
+              "sum": 53,
+              "mean": 26.5,
+              "max": 27
+            },
+            "style_recalculations": {
+              "sum": 136,
+              "mean": 68,
+              "max": 68
+            }
+          }
+        },
+        "visible_task_loading": {
+          "attempts": 2,
+          "observed_workflows": 2,
+          "unobserved_workflows": 0,
+          "failed_workflows": 0,
+          "counters": {
+            "layout_seconds": {
+              "sum": 0.033552,
+              "mean": 0.016776,
+              "max": 0.019785999999999998
+            },
+            "style_seconds": {
+              "sum": 0.014731000000000001,
+              "mean": 0.0073655000000000005,
+              "max": 0.007453999999999999
+            },
+            "script_seconds": {
+              "sum": 0.14315299999999997,
+              "mean": 0.07157649999999999,
+              "max": 0.080395
+            },
+            "task_seconds": {
+              "sum": 0.32027000000000017,
+              "mean": 0.16013500000000008,
+              "max": 0.17583800000000005
+            },
+            "layouts": {
+              "sum": 24,
+              "mean": 12,
+              "max": 12
+            },
+            "style_recalculations": {
+              "sum": 62,
+              "mean": 31,
+              "max": 32
+            }
+          }
+        }
+      },
+      "runtime": {
+        "samples": 2,
+        "first_epoch": 1789310130.7362509,
+        "last_epoch": 1789310132.7390618,
+        "observed_seconds": 2.0028109550476074,
+        "status": "observed",
+        "metrics": {
+          "pool_acquire": {
+            "count": 116,
+            "seconds": 0.001519691024441272
+          },
+          "db_client_execute": {
+            "count": 1108,
+            "seconds": 2.9826524282689206
+          },
+          "db_client_fetchone": {
+            "count": 442,
+            "seconds": 0.06393342115916312
+          },
+          "db_client_fetchall": {
+            "count": 106,
+            "seconds": 0.040084637119434774
+          },
+          "server_script": {
+            "count": 3,
+            "seconds": 1.4987801549723372
+          },
+          "cache_read": {
+            "count": 6,
+            "seconds": 0.4298394190846011
+          },
+          "cache_publish": {
+            "count": 2,
+            "seconds": 0.1331467239651829
+          },
+          "cache_load": {
+            "count": 4,
+            "seconds": 1.0098381879506633
+          },
+          "server_http_portfolio": {
+            "count": 2,
+            "seconds": 1.7589251599856652
+          },
+          "db_client_executemany": {
+            "count": 2,
+            "seconds": 0.0003204579697921872
+          },
+          "service_project_update": {
+            "count": 1,
+            "seconds": 0.039898892981000245
+          },
+          "server_http_planning": {
+            "count": 1,
+            "seconds": 0.1565135860000737
+          }
+        },
+        "pool_counters": {
+          "connections_num": 0,
+          "connections_ms": 0,
+          "requests_num": 116,
+          "usage_ms": 2992,
+          "requests_queued": 0,
+          "requests_wait_ms": 0
+        },
+        "maximum_waiting_requests": 0
+      },
+      "postgresql": {
+        "samples": 15,
+        "first_epoch": 1789310130.0226507,
+        "last_epoch": 1789310133.569925,
+        "observed_seconds": 3.547274351119995,
+        "status": "observed",
+        "counters": {
+          "calls": 1528.0,
+          "server_exec_ms": 3369.5849960000023,
+          "shared_hits": 2052968.0,
+          "shared_reads": 38.0
+        },
+        "sampled_active_backend_seconds_by_wait_category": {
+          "CPU": 3.5465872287750244
+        }
+      },
+      "containers": {
+        "samples": 2,
+        "first_epoch": 1789310130.493363,
+        "last_epoch": 1789310132.5022833,
+        "observed_seconds": 2.008920431137085,
+        "failed_samples": 0,
+        "containers": {
+          "app": {
+            "samples": 2,
+            "mean_cpu_percent": 36.07,
+            "max_cpu_percent": 44.41,
+            "max_memory_bytes_approx": 433481318,
+            "max_pids": 28
+          },
+          "postgres": {
+            "samples": 2,
+            "mean_cpu_percent": 46.52,
+            "max_cpu_percent": 68.4,
+            "max_memory_bytes_approx": 686922138,
+            "max_pids": 21
+          },
+          "keycloak": {
+            "samples": 2,
+            "mean_cpu_percent": 0.25,
+            "max_cpu_percent": 0.26,
+            "max_memory_bytes_approx": 920125440,
+            "max_pids": 56
+          }
+        }
+      }
+    },
+    {
+      "round": 1,
+      "warmup": false,
+      "started_epoch": 1789310133.7170556,
+      "ended_epoch": 1789310163.532293,
+      "scheduled_seconds": 30.0,
+      "browser_processing": {
+        "portfolio_paging": {
+          "attempts": 15,
+          "observed_workflows": 15,
+          "unobserved_workflows": 0,
+          "failed_workflows": 0,
+          "counters": {
+            "layout_seconds": {
+              "sum": 0.06365099999999994,
+              "mean": 0.004243399999999996,
+              "max": 0.005881999999999998
+            },
+            "style_seconds": {
+              "sum": 0.017627999999999994,
+              "mean": 0.0011751999999999997,
+              "max": 0.0014280000000000057
+            },
+            "script_seconds": {
+              "sum": 0.8532720000000001,
+              "mean": 0.056884800000000006,
+              "max": 0.06805299999999992
+            },
+            "task_seconds": {
+              "sum": 1.2734889999999999,
+              "mean": 0.08489926666666665,
+              "max": 0.10209599999999996
+            },
+            "layouts": {
+              "sum": 109,
+              "mean": 7.266666666666667,
+              "max": 8
+            },
+            "style_recalculations": {
+              "sum": 109,
+              "mean": 7.266666666666667,
+              "max": 8
+            }
+          }
+        },
+        "simple_save": {
+          "attempts": 15,
+          "observed_workflows": 15,
+          "unobserved_workflows": 0,
+          "failed_workflows": 0,
+          "counters": {
+            "layout_seconds": {
+              "sum": 0.13180699999999992,
+              "mean": 0.008787133333333329,
+              "max": 0.012531999999999988
+            },
+            "style_seconds": {
+              "sum": 0.12141100000000009,
+              "mean": 0.008094066666666672,
+              "max": 0.010377000000000011
+            },
+            "script_seconds": {
+              "sum": 4.562854,
+              "mean": 0.3041902666666666,
+              "max": 0.3437629999999996
+            },
+            "task_seconds": {
+              "sum": 6.2430400000000015,
+              "mean": 0.4162026666666668,
+              "max": 0.4766469999999998
+            },
+            "layouts": {
+              "sum": 401,
+              "mean": 26.733333333333334,
+              "max": 30
+            },
+            "style_recalculations": {
+              "sum": 950,
+              "mean": 63.333333333333336,
+              "max": 70
+            }
+          }
+        },
+        "visible_task_loading": {
+          "attempts": 15,
+          "observed_workflows": 15,
+          "unobserved_workflows": 0,
+          "failed_workflows": 0,
+          "counters": {
+            "layout_seconds": {
+              "sum": 0.18914799999999998,
+              "mean": 0.012609866666666667,
+              "max": 0.01624200000000002
+            },
+            "style_seconds": {
+              "sum": 0.10447299999999998,
+              "mean": 0.0069648666666666656,
+              "max": 0.008461999999999997
+            },
+            "script_seconds": {
+              "sum": 0.975731,
+              "mean": 0.06504873333333333,
+              "max": 0.07536399999999999
+            },
+            "task_seconds": {
+              "sum": 2.1893829999999994,
+              "mean": 0.1459588666666666,
+              "max": 0.18468399999999985
+            },
+            "layouts": {
+              "sum": 180,
+              "mean": 12,
+              "max": 12
+            },
+            "style_recalculations": {
+              "sum": 483,
+              "mean": 32.2,
+              "max": 35
+            }
+          }
+        }
+      },
+      "runtime": {
+        "samples": 15,
+        "first_epoch": 1789310134.7410998,
+        "last_epoch": 1789310162.9005103,
+        "observed_seconds": 28.15941047668457,
+        "status": "observed",
+        "metrics": {
+          "pool_acquire": {
+            "count": 1643,
+            "seconds": 0.021423172380309552
+          },
+          "db_client_execute": {
+            "count": 15620,
+            "seconds": 39.83441690390464
+          },
+          "db_client_fetchone": {
+            "count": 6226,
+            "seconds": 0.9244949041749351
+          },
+          "db_client_fetchall": {
+            "count": 1486,
+            "seconds": 0.05818971007829532
+          },
+          "server_script": {
+            "count": 44,
+            "seconds": 20.927309872000478
+          },
+          "cache_read": {
+            "count": 85,
+            "seconds": 5.4133114431169815
+          },
+          "cache_publish": {
+            "count": 28,
+            "seconds": 1.9758840751019306
+          },
+          "cache_load": {
+            "count": 56,
+            "seconds": 13.746904788073152
+          },
+          "server_http_portfolio": {
+            "count": 28,
+            "seconds": 22.863692851853557
+          },
+          "db_client_executemany": {
+            "count": 28,
+            "seconds": 0.004667433968279511
+          },
+          "service_project_update": {
+            "count": 14,
+            "seconds": 0.5060330448905006
+          },
+          "server_http_planning": {
+            "count": 14,
+            "seconds": 2.7588740108767524
+          }
+        },
+        "pool_counters": {
+          "connections_num": 0,
+          "connections_ms": 0,
+          "requests_num": 1643,
+          "usage_ms": 38622,
+          "requests_queued": 0,
+          "requests_wait_ms": 0
+        },
+        "maximum_waiting_requests": 0
+      },
+      "postgresql": {
+        "samples": 118,
+        "first_epoch": 1789310133.8225436,
+        "last_epoch": 1789310163.4497724,
+        "observed_seconds": 29.62722873687744,
+        "status": "observed",
+        "counters": {
+          "calls": 12965.0,
+          "server_exec_ms": 25326.65840900002,
+          "shared_hits": 11254324.0,
+          "shared_reads": 91.0
+        },
+        "sampled_active_backend_seconds_by_wait_category": {
+          "CPU": 26.081738233566284
+        }
+      },
+      "containers": {
+        "samples": 15,
+        "first_epoch": 1789310134.5118034,
+        "last_epoch": 1789310162.6711764,
+        "observed_seconds": 28.15937304496765,
+        "failed_samples": 0,
+        "containers": {
+          "app": {
+            "samples": 15,
+            "mean_cpu_percent": 38.72666666666667,
+            "max_cpu_percent": 44.24,
+            "max_memory_bytes_approx": 483288678,
+            "max_pids": 25
+          },
+          "postgres": {
+            "samples": 15,
+            "mean_cpu_percent": 67.07533333333333,
+            "max_cpu_percent": 88.78,
+            "max_memory_bytes_approx": 753192141,
+            "max_pids": 22
+          },
+          "keycloak": {
+            "samples": 15,
+            "mean_cpu_percent": 0.47800000000000004,
+            "max_cpu_percent": 3.18,
+            "max_memory_bytes_approx": 920649728,
+            "max_pids": 61
+          }
+        }
+      }
+    }
+  ],
+  "browser_processing_method": {
+    "source": "Chromium CDP Performance target counters",
+    "window": "Complete workflow, including preparation and confirmation; separate from action latency",
+    "limitations": "Layout/style/script/task times can overlap. GPU and paint duration are not separately measured."
+  },
+  "attempts_including_warmup": 51,
+  "workflow_failures": 0,
+  "browser_processing_status_counts": {
+    "observed": 51
+  },
+  "database_failure_count": 0,
+  "http_responses": [
+    {
+      "path": "/api/planning/tasks",
+      "status": 200,
+      "count": 17
+    },
+    {
+      "path": "/api/portfolio/allocations",
+      "status": 200,
+      "count": 35
+    }
+  ],
+  "acceptance_complete": false
+}

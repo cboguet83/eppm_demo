@@ -1,0 +1,1217 @@
+{
+  "scope": "Short fifty-session diagnostic sharing two seeded identities; not full acceptance",
+  "source_directory": ".local/browser-load/9496fafd0cff",
+  "fixture": {
+    "backend": "postgresql",
+    "image": "eppm-demo:postgresql-save-confirmation-candidate",
+    "counts": {
+      "project": 10001,
+      "project_task": 73929,
+      "task_dependencies": 66173,
+      "resource_pool": 103,
+      "resource_pool_group": 31,
+      "resource_pool_assignment": 10201,
+      "app_user": 0
+    },
+    "fixture_seed": 42,
+    "min_tasks": 0,
+    "max_tasks": 15,
+    "sqlite_source_sha256": null,
+    "statistics_preparation": "Native operator seed refreshes application statistics",
+    "deployment": {
+      "host": {
+        "cpus": 8,
+        "memory_bytes": 16529354752,
+        "engine": "29.7.2"
+      },
+      "containers": {
+        "app": {
+          "image_id": "sha256:32e972dfe25a2a7f7bbe540a585606c305eecad8382a0fe8790da825be68c002",
+          "nano_cpus": 0,
+          "memory_bytes": 0,
+          "cpu_quota": 0,
+          "cpu_period": 0,
+          "cpuset": "",
+          "source_commit": "73e91ced033ea0d1ad6fa87d9601bed12f0b91e0"
+        },
+        "postgres": {
+          "image_id": "sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280",
+          "nano_cpus": 0,
+          "memory_bytes": 0,
+          "cpu_quota": 0,
+          "cpu_period": 0,
+          "cpuset": "",
+          "source_commit": null
+        },
+        "keycloak": {
+          "image_id": "sha256:9d1f1b2b7261ff53c66cb1092dfcdc34a5fb77e81f9e6a6e75b8b6a795de8067",
+          "nano_cpus": 0,
+          "memory_bytes": 0,
+          "cpu_quota": 0,
+          "cpu_period": 0,
+          "cpuset": "",
+          "source_commit": "df15afa5a3a8a2b10021f879ffa93b30fb36c73a"
+        }
+      },
+      "application_versions": {
+        "python": "3.14.7",
+        "streamlit": "1.63.0",
+        "database_pool": {
+          "pool_min": 2,
+          "pool_max": 20,
+          "acquire_timeout": 5.0,
+          "statement_timeout": 10.0
+        }
+      }
+    },
+    "diagnostic_profiling": false
+  },
+  "options": {
+    "readers": 40,
+    "editors": 10,
+    "rounds": 1,
+    "warmup_seconds": 15.0,
+    "measurement_seconds": 45.0,
+    "cadence_seconds": 2
+  },
+  "browser": {
+    "version": "151.0.7922.34",
+    "arguments": [
+      "--disable-background-timer-throttling",
+      "--disable-renderer-backgrounding",
+      "--disable-backgrounding-occluded-windows"
+    ],
+    "load_generator": "Python/Playwright on the Windows Docker host",
+    "viewport": [
+      1500,
+      1100
+    ]
+  },
+  "independent_authenticated_sessions": 50,
+  "periods": [
+    {
+      "round": 1,
+      "scenarios": {
+        "portfolio_paging": {
+          "attempts": 59,
+          "failures": 2,
+          "successes": 57,
+          "p95_ms": 27581.9,
+          "max_ms": 28123.5
+        },
+        "visible_task_loading": {
+          "attempts": 78,
+          "failures": 2,
+          "successes": 76,
+          "p95_ms": 19210.8,
+          "max_ms": 20966.5
+        },
+        "simple_save": {
+          "attempts": 10,
+          "failures": 8,
+          "successes": 2,
+          "p95_ms": 9647.2,
+          "max_ms": 9647.2
+        }
+      }
+    }
+  ],
+  "diagnostic_phases": [
+    {
+      "round": 1,
+      "warmup": true,
+      "started_epoch": 1789310518.825,
+      "ended_epoch": 1789310581.6563036,
+      "scheduled_seconds": 15.0,
+      "browser_processing": {
+        "portfolio_paging": {
+          "attempts": 29,
+          "observed_workflows": 29,
+          "unobserved_workflows": 0,
+          "failed_workflows": 0,
+          "counters": {
+            "layout_seconds": {
+              "sum": 0.238264,
+              "mean": 0.008216,
+              "max": 0.028117999999999997
+            },
+            "style_seconds": {
+              "sum": 0.182705,
+              "mean": 0.006300172413793104,
+              "max": 0.015426999999999996
+            },
+            "script_seconds": {
+              "sum": 4.324864,
+              "mean": 0.14913324137931033,
+              "max": 0.21574700000000002
+            },
+            "task_seconds": {
+              "sum": 10.10979,
+              "mean": 0.3486134482758621,
+              "max": 0.501382
+            },
+            "layouts": {
+              "sum": 274,
+              "mean": 9.448275862068966,
+              "max": 12
+            },
+            "style_recalculations": {
+              "sum": 1431,
+              "mean": 49.3448275862069,
+              "max": 71
+            }
+          }
+        },
+        "visible_task_loading": {
+          "attempts": 30,
+          "observed_workflows": 30,
+          "unobserved_workflows": 0,
+          "failed_workflows": 1,
+          "counters": {
+            "layout_seconds": {
+              "sum": 1.293323,
+              "mean": 0.04311076666666667,
+              "max": 0.07467599999999999
+            },
+            "style_seconds": {
+              "sum": 0.4607,
+              "mean": 0.015356666666666666,
+              "max": 0.037923
+            },
+            "script_seconds": {
+              "sum": 6.907144,
+              "mean": 0.23023813333333332,
+              "max": 0.468735
+            },
+            "task_seconds": {
+              "sum": 21.695836,
+              "mean": 0.7231945333333334,
+              "max": 1.0599869999999998
+            },
+            "layouts": {
+              "sum": 359,
+              "mean": 11.966666666666667,
+              "max": 12
+            },
+            "style_recalculations": {
+              "sum": 946,
+              "mean": 31.533333333333335,
+              "max": 39
+            }
+          }
+        },
+        "simple_save": {
+          "attempts": 10,
+          "observed_workflows": 10,
+          "unobserved_workflows": 0,
+          "failed_workflows": 8,
+          "counters": {
+            "layout_seconds": {
+              "sum": 0.124399,
+              "mean": 0.0124399,
+              "max": 0.020229999999999998
+            },
+            "style_seconds": {
+              "sum": 0.162345,
+              "mean": 0.0162345,
+              "max": 0.032406
+            },
+            "script_seconds": {
+              "sum": 4.5737440000000005,
+              "mean": 0.4573744,
+              "max": 0.747467
+            },
+            "task_seconds": {
+              "sum": 9.593976999999999,
+              "mean": 0.9593977,
+              "max": 1.475433
+            },
+            "layouts": {
+              "sum": 205,
+              "mean": 20.5,
+              "max": 41
+            },
+            "style_recalculations": {
+              "sum": 858,
+              "mean": 85.8,
+              "max": 185
+            }
+          }
+        }
+      },
+      "runtime": {
+        "samples": 29,
+        "first_epoch": 1789310519.2163746,
+        "last_epoch": 1789310580.8071632,
+        "observed_seconds": 61.59078860282898,
+        "status": "observed",
+        "metrics": {
+          "pool_acquire": {
+            "count": 1544,
+            "seconds": 656.9505909142317
+          },
+          "db_client_execute": {
+            "count": 14011,
+            "seconds": 362.9341700503137
+          },
+          "db_client_fetchone": {
+            "count": 5169,
+            "seconds": 4.505209750088397
+          },
+          "db_client_fetchall": {
+            "count": 1159,
+            "seconds": 2.1408138563274406
+          },
+          "server_script": {
+            "count": 43,
+            "seconds": 363.4028862002888
+          },
+          "cache_read": {
+            "count": 39,
+            "seconds": 29.13763807702344
+          },
+          "cache_publish": {
+            "count": 2,
+            "seconds": 0.8269499440211803
+          },
+          "cache_load": {
+            "count": 37,
+            "seconds": 32.05300165998051
+          },
+          "server_http_portfolio": {
+            "count": 25,
+            "seconds": 272.9749493540148
+          },
+          "server_http_planning": {
+            "count": 30,
+            "seconds": 328.5847735509742
+          },
+          "db_client_executemany": {
+            "count": 13,
+            "seconds": 0.13602649699896574
+          },
+          "service_project_update": {
+            "count": 5,
+            "seconds": 6.891374083934352
+          }
+        },
+        "pool_counters": {
+          "connections_num": 6,
+          "connections_ms": 1552,
+          "requests_num": 1541,
+          "usage_ms": 375415,
+          "requests_queued": 1118,
+          "requests_wait_ms": 656336,
+          "requests_errors": 12
+        },
+        "maximum_waiting_requests": 35
+      },
+      "postgresql": {
+        "samples": 233,
+        "first_epoch": 1789310519.012933,
+        "last_epoch": 1789310581.464348,
+        "observed_seconds": 62.451415061950684,
+        "status": "observed",
+        "counters": {
+          "calls": 12753.0,
+          "server_exec_ms": 59442.19403500005,
+          "shared_hits": 1955830.0,
+          "shared_reads": 4032.0
+        },
+        "sampled_active_backend_seconds_by_wait_category": {
+          "CPU": 57.919841289520264,
+          "Client": 2.178532838821411,
+          "IO": 0.28113532066345215,
+          "Lock": 2.5342586040496826
+        }
+      },
+      "containers": {
+        "samples": 30,
+        "first_epoch": 1789310520.4721246,
+        "last_epoch": 1789310580.9709983,
+        "observed_seconds": 60.498873710632324,
+        "failed_samples": 0,
+        "containers": {
+          "app": {
+            "samples": 30,
+            "mean_cpu_percent": 62.57966666666667,
+            "max_cpu_percent": 182.78,
+            "max_memory_bytes_approx": 1843614712,
+            "max_pids": 68
+          },
+          "postgres": {
+            "samples": 30,
+            "mean_cpu_percent": 64.44433333333333,
+            "max_cpu_percent": 327.51,
+            "max_memory_bytes_approx": 1269162836,
+            "max_pids": 37
+          },
+          "keycloak": {
+            "samples": 30,
+            "mean_cpu_percent": 0.46166666666666667,
+            "max_cpu_percent": 5.48,
+            "max_memory_bytes_approx": 810339533,
+            "max_pids": 61
+          }
+        }
+      }
+    },
+    {
+      "round": 1,
+      "warmup": false,
+      "started_epoch": 1789310581.656767,
+      "ended_epoch": 1789310644.270171,
+      "scheduled_seconds": 45.0,
+      "browser_processing": {
+        "portfolio_paging": {
+          "attempts": 59,
+          "observed_workflows": 59,
+          "unobserved_workflows": 0,
+          "failed_workflows": 2,
+          "counters": {
+            "layout_seconds": {
+              "sum": 0.52341,
+              "mean": 0.00887135593220339,
+              "max": 0.023051
+            },
+            "style_seconds": {
+              "sum": 0.27420100000000003,
+              "mean": 0.0046474745762711865,
+              "max": 0.008222
+            },
+            "script_seconds": {
+              "sum": 9.778882,
+              "mean": 0.16574376271186442,
+              "max": 0.24717600000000006
+            },
+            "task_seconds": {
+              "sum": 22.956834,
+              "mean": 0.3890988813559322,
+              "max": 0.6530640000000003
+            },
+            "layouts": {
+              "sum": 613,
+              "mean": 10.389830508474576,
+              "max": 12
+            },
+            "style_recalculations": {
+              "sum": 2895,
+              "mean": 49.067796610169495,
+              "max": 73
+            }
+          }
+        },
+        "visible_task_loading": {
+          "attempts": 78,
+          "observed_workflows": 78,
+          "unobserved_workflows": 0,
+          "failed_workflows": 2,
+          "counters": {
+            "layout_seconds": {
+              "sum": 2.65749,
+              "mean": 0.034070384615384613,
+              "max": 0.132913
+            },
+            "style_seconds": {
+              "sum": 1.049447,
+              "mean": 0.013454448717948719,
+              "max": 0.05236500000000001
+            },
+            "script_seconds": {
+              "sum": 12.534296000000001,
+              "mean": 0.16069610256410258,
+              "max": 0.23076300000000005
+            },
+            "task_seconds": {
+              "sum": 39.603066999999996,
+              "mean": 0.5077316282051282,
+              "max": 0.908369
+            },
+            "layouts": {
+              "sum": 932,
+              "mean": 11.948717948717949,
+              "max": 12
+            },
+            "style_recalculations": {
+              "sum": 2649,
+              "mean": 33.96153846153846,
+              "max": 46
+            }
+          }
+        },
+        "simple_save": {
+          "attempts": 10,
+          "observed_workflows": 10,
+          "unobserved_workflows": 0,
+          "failed_workflows": 8,
+          "counters": {
+            "layout_seconds": {
+              "sum": 0.04442799999999998,
+              "mean": 0.0044427999999999985,
+              "max": 0.016098999999999995
+            },
+            "style_seconds": {
+              "sum": 0.06747399999999999,
+              "mean": 0.006747399999999999,
+              "max": 0.031822
+            },
+            "script_seconds": {
+              "sum": 3.74412,
+              "mean": 0.374412,
+              "max": 0.7882979999999999
+            },
+            "task_seconds": {
+              "sum": 8.954597,
+              "mean": 0.8954597,
+              "max": 1.321211
+            },
+            "layouts": {
+              "sum": 127,
+              "mean": 12.7,
+              "max": 40
+            },
+            "style_recalculations": {
+              "sum": 317,
+              "mean": 31.7,
+              "max": 103
+            }
+          }
+        }
+      },
+      "runtime": {
+        "samples": 29,
+        "first_epoch": 1789310582.8694773,
+        "last_epoch": 1789310642.8180122,
+        "observed_seconds": 59.94853496551514,
+        "status": "observed",
+        "metrics": {
+          "pool_acquire": {
+            "count": 2031,
+            "seconds": 1061.619745033735
+          },
+          "db_client_execute": {
+            "count": 19048,
+            "seconds": 581.7192752753617
+          },
+          "db_client_fetchone": {
+            "count": 7089,
+            "seconds": 5.933776744350325
+          },
+          "db_client_fetchall": {
+            "count": 1549,
+            "seconds": 1.1033477549208328
+          },
+          "server_script": {
+            "count": 66,
+            "seconds": 437.26444459089544
+          },
+          "cache_read": {
+            "count": 60,
+            "seconds": 58.044632980192546
+          },
+          "cache_publish": {
+            "count": 20,
+            "seconds": 25.54686441994272
+          },
+          "cache_load": {
+            "count": 40,
+            "seconds": 144.46712756180204
+          },
+          "server_http_portfolio": {
+            "count": 21,
+            "seconds": 403.2810284430743
+          },
+          "server_http_planning": {
+            "count": 76,
+            "seconds": 787.8109144181362
+          },
+          "db_client_executemany": {
+            "count": 4,
+            "seconds": 0.01250084798084572
+          },
+          "service_project_update": {
+            "count": 2,
+            "seconds": 3.1450159530504607
+          }
+        },
+        "pool_counters": {
+          "connections_num": 0,
+          "connections_ms": 0,
+          "requests_num": 2025,
+          "usage_ms": 597351,
+          "requests_queued": 1848,
+          "requests_wait_ms": 1060649,
+          "requests_errors": 0
+        },
+        "maximum_waiting_requests": 33
+      },
+      "postgresql": {
+        "samples": 225,
+        "first_epoch": 1789310581.7180467,
+        "last_epoch": 1789310644.1635838,
+        "observed_seconds": 62.445537090301514,
+        "status": "observed",
+        "counters": {
+          "calls": 17151.0,
+          "server_exec_ms": 90047.144788,
+          "shared_hits": 3543474.0,
+          "shared_reads": 1046.0
+        },
+        "sampled_active_backend_seconds_by_wait_category": {
+          "CPU": 88.87934923171997
+        }
+      },
+      "containers": {
+        "samples": 28,
+        "first_epoch": 1789310583.236581,
+        "last_epoch": 1789310642.338826,
+        "observed_seconds": 59.10224485397339,
+        "failed_samples": 0,
+        "containers": {
+          "app": {
+            "samples": 28,
+            "mean_cpu_percent": 103.88178571428571,
+            "max_cpu_percent": 164.14,
+            "max_memory_bytes_approx": 2151778615,
+            "max_pids": 65
+          },
+          "postgres": {
+            "samples": 28,
+            "mean_cpu_percent": 165.88107142857143,
+            "max_cpu_percent": 748.83,
+            "max_memory_bytes_approx": 1476395008,
+            "max_pids": 36
+          },
+          "keycloak": {
+            "samples": 28,
+            "mean_cpu_percent": 0.7071428571428572,
+            "max_cpu_percent": 2.56,
+            "max_memory_bytes_approx": 810234675,
+            "max_pids": 57
+          }
+        }
+      }
+    }
+  ],
+  "browser_processing_method": {
+    "source": "Chromium CDP Performance target counters",
+    "window": "Complete workflow, including preparation and confirmation; separate from action latency",
+    "limitations": "Layout/style/script/task times can overlap. GPU and paint duration are not separately measured."
+  },
+  "distinct_authenticated_identities": 2,
+  "attempts_including_warmup": 216,
+  "workflow_failures_including_warmup": 21,
+  "measured_workflow_failures": 12,
+  "browser_processing_status_counts": {
+    "observed": 216
+  },
+  "failures": [
+    {
+      "session": 20,
+      "scenario": "visible_task_loading",
+      "round": 1,
+      "warmup": true,
+      "ok": false,
+      "error_type": "TimeoutError",
+      "source_file": "browser_load.py",
+      "source_line": 83,
+      "workflow_seconds": 30.375
+    },
+    {
+      "session": 0,
+      "scenario": "simple_save",
+      "round": 1,
+      "warmup": true,
+      "ok": false,
+      "error_type": "TimeoutError",
+      "source_file": "browser_load.py",
+      "source_line": 183,
+      "operation_stage": "fill_editor",
+      "workflow_seconds": 60.04,
+      "save_diagnostic": {
+        "panels": [
+          {
+            "connected": true,
+            "visible": true,
+            "ready": "true",
+            "expectedName": false
+          }
+        ],
+        "dialogCount": 0,
+        "confirmationPresent": false,
+        "alertCount": 0,
+        "timing": null
+      }
+    },
+    {
+      "session": 2,
+      "scenario": "simple_save",
+      "round": 1,
+      "warmup": true,
+      "ok": false,
+      "error_type": "TimeoutError",
+      "source_file": "browser_load.py",
+      "source_line": 83,
+      "operation_stage": "confirmation",
+      "workflow_seconds": 58.745,
+      "save_diagnostic": {
+        "panels": [
+          {
+            "connected": true,
+            "visible": true,
+            "ready": "true",
+            "expectedName": false
+          }
+        ],
+        "dialogCount": 0,
+        "confirmationPresent": false,
+        "alertCount": 0,
+        "timing": {
+          "started": 50413.19999998808,
+          "finished": null
+        }
+      }
+    },
+    {
+      "session": 5,
+      "scenario": "simple_save",
+      "round": 1,
+      "warmup": true,
+      "ok": false,
+      "error_type": "TimeoutError",
+      "source_file": "browser_load.py",
+      "source_line": 83,
+      "operation_stage": "confirmation",
+      "workflow_seconds": 58.617,
+      "save_diagnostic": {
+        "panels": [
+          {
+            "connected": true,
+            "visible": true,
+            "ready": "true",
+            "expectedName": false
+          }
+        ],
+        "dialogCount": 0,
+        "confirmationPresent": false,
+        "alertCount": 0,
+        "timing": {
+          "started": 43449,
+          "finished": null
+        }
+      }
+    },
+    {
+      "session": 7,
+      "scenario": "simple_save",
+      "round": 1,
+      "warmup": true,
+      "ok": false,
+      "error_type": "TimeoutError",
+      "source_file": "browser_load.py",
+      "source_line": 83,
+      "operation_stage": "confirmation",
+      "workflow_seconds": 58.292,
+      "save_diagnostic": {
+        "panels": [
+          {
+            "connected": true,
+            "visible": true,
+            "ready": "true",
+            "expectedName": false
+          }
+        ],
+        "dialogCount": 0,
+        "confirmationPresent": false,
+        "alertCount": 0,
+        "timing": {
+          "started": 38723.5,
+          "finished": null
+        }
+      }
+    },
+    {
+      "session": 1,
+      "scenario": "simple_save",
+      "round": 1,
+      "warmup": true,
+      "ok": false,
+      "error_type": "TimeoutError",
+      "source_file": "browser_load.py",
+      "source_line": 183,
+      "operation_stage": "fill_editor",
+      "workflow_seconds": 60.658,
+      "save_diagnostic": {
+        "panels": [
+          {
+            "connected": true,
+            "visible": true,
+            "ready": "true",
+            "expectedName": false
+          }
+        ],
+        "dialogCount": 0,
+        "confirmationPresent": false,
+        "alertCount": 0,
+        "timing": null
+      }
+    },
+    {
+      "session": 6,
+      "scenario": "simple_save",
+      "round": 1,
+      "warmup": true,
+      "ok": false,
+      "error_type": "TimeoutError",
+      "source_file": "browser_load.py",
+      "source_line": 183,
+      "operation_stage": "fill_editor",
+      "workflow_seconds": 60.928,
+      "save_diagnostic": {
+        "panels": [
+          {
+            "connected": true,
+            "visible": true,
+            "ready": "true",
+            "expectedName": false
+          }
+        ],
+        "dialogCount": 0,
+        "confirmationPresent": false,
+        "alertCount": 0,
+        "timing": null
+      }
+    },
+    {
+      "session": 4,
+      "scenario": "simple_save",
+      "round": 1,
+      "warmup": true,
+      "ok": false,
+      "error_type": "TimeoutError",
+      "source_file": "browser_load.py",
+      "source_line": 183,
+      "operation_stage": "fill_editor",
+      "workflow_seconds": 60.974,
+      "save_diagnostic": {
+        "panels": [
+          {
+            "connected": true,
+            "visible": true,
+            "ready": "true",
+            "expectedName": false
+          }
+        ],
+        "dialogCount": 0,
+        "confirmationPresent": false,
+        "alertCount": 0,
+        "timing": null
+      }
+    },
+    {
+      "session": 9,
+      "scenario": "simple_save",
+      "round": 1,
+      "warmup": true,
+      "ok": false,
+      "error_type": "TimeoutError",
+      "source_file": "browser_load.py",
+      "source_line": 183,
+      "operation_stage": "fill_editor",
+      "workflow_seconds": 60.648,
+      "save_diagnostic": {
+        "panels": [
+          {
+            "connected": true,
+            "visible": true,
+            "ready": "true",
+            "expectedName": false
+          }
+        ],
+        "dialogCount": 0,
+        "confirmationPresent": false,
+        "alertCount": 0,
+        "timing": null
+      }
+    },
+    {
+      "session": 11,
+      "scenario": "portfolio_paging",
+      "round": 1,
+      "warmup": false,
+      "ok": false,
+      "error_type": "TimeoutError",
+      "source_file": "browser_load.py",
+      "source_line": 83,
+      "workflow_seconds": 30.038,
+      "viewport_diagnostic": {
+        "sameRoot": true,
+        "oldRootConnected": true,
+        "pending": true,
+        "pendingOffset": 5200,
+        "top": 209044,
+        "offsets": [
+          0,
+          4500
+        ],
+        "renderedRows": 0,
+        "timing": {
+          "started": 157525.10000002384,
+          "finished": null
+        }
+      }
+    },
+    {
+      "session": 20,
+      "scenario": "visible_task_loading",
+      "round": 1,
+      "warmup": false,
+      "ok": false,
+      "error_type": "TimeoutError",
+      "source_file": "browser_load.py",
+      "source_line": 83,
+      "workflow_seconds": 31.021
+    },
+    {
+      "session": 0,
+      "scenario": "simple_save",
+      "round": 1,
+      "warmup": false,
+      "ok": false,
+      "error_type": "TimeoutError",
+      "source_file": "browser_load.py",
+      "source_line": 183,
+      "operation_stage": "fill_editor",
+      "workflow_seconds": 60.041,
+      "save_diagnostic": {
+        "panels": [
+          {
+            "connected": true,
+            "visible": true,
+            "ready": "true",
+            "expectedName": false
+          }
+        ],
+        "dialogCount": 0,
+        "confirmationPresent": false,
+        "alertCount": 0,
+        "timing": null
+      }
+    },
+    {
+      "session": 11,
+      "scenario": "portfolio_paging",
+      "round": 1,
+      "warmup": false,
+      "ok": false,
+      "error_type": "TimeoutError",
+      "source_file": "browser_load.py",
+      "source_line": 83,
+      "workflow_seconds": 30.04,
+      "viewport_diagnostic": {
+        "sameRoot": true,
+        "oldRootConnected": true,
+        "pending": true,
+        "pendingOffset": 5200,
+        "top": 237044,
+        "offsets": [
+          0,
+          4500
+        ],
+        "renderedRows": 0,
+        "timing": {
+          "started": 187573.10000002384,
+          "finished": null
+        }
+      }
+    },
+    {
+      "session": 2,
+      "scenario": "simple_save",
+      "round": 1,
+      "warmup": false,
+      "ok": false,
+      "error_type": "TimeoutError",
+      "source_file": "browser_load.py",
+      "source_line": 179,
+      "operation_stage": "open_editor",
+      "workflow_seconds": 60.126,
+      "save_diagnostic": {
+        "panels": [
+          {
+            "connected": true,
+            "visible": true,
+            "ready": "true",
+            "expectedName": false
+          }
+        ],
+        "dialogCount": 0,
+        "confirmationPresent": false,
+        "alertCount": 0,
+        "timing": {
+          "started": 50413.19999998808,
+          "finished": null
+        }
+      }
+    },
+    {
+      "session": 5,
+      "scenario": "simple_save",
+      "round": 1,
+      "warmup": false,
+      "ok": false,
+      "error_type": "TimeoutError",
+      "source_file": "browser_load.py",
+      "source_line": 179,
+      "operation_stage": "open_editor",
+      "workflow_seconds": 60.027,
+      "save_diagnostic": {
+        "panels": [
+          {
+            "connected": true,
+            "visible": true,
+            "ready": "true",
+            "expectedName": false
+          }
+        ],
+        "dialogCount": 0,
+        "confirmationPresent": false,
+        "alertCount": 0,
+        "timing": {
+          "started": 43449,
+          "finished": null
+        }
+      }
+    },
+    {
+      "session": 7,
+      "scenario": "simple_save",
+      "round": 1,
+      "warmup": false,
+      "ok": false,
+      "error_type": "TimeoutError",
+      "source_file": "browser_load.py",
+      "source_line": 179,
+      "operation_stage": "open_editor",
+      "workflow_seconds": 60.238,
+      "save_diagnostic": {
+        "panels": [
+          {
+            "connected": true,
+            "visible": true,
+            "ready": "true",
+            "expectedName": false
+          }
+        ],
+        "dialogCount": 0,
+        "confirmationPresent": false,
+        "alertCount": 0,
+        "timing": {
+          "started": 38723.5,
+          "finished": null
+        }
+      }
+    },
+    {
+      "session": 1,
+      "scenario": "simple_save",
+      "round": 1,
+      "warmup": false,
+      "ok": false,
+      "error_type": "TimeoutError",
+      "source_file": "browser_load.py",
+      "source_line": 183,
+      "operation_stage": "fill_editor",
+      "workflow_seconds": 60.534,
+      "save_diagnostic": {
+        "panels": [
+          {
+            "connected": true,
+            "visible": true,
+            "ready": "true",
+            "expectedName": false
+          }
+        ],
+        "dialogCount": 0,
+        "confirmationPresent": false,
+        "alertCount": 0,
+        "timing": null
+      }
+    },
+    {
+      "session": 4,
+      "scenario": "simple_save",
+      "round": 1,
+      "warmup": false,
+      "ok": false,
+      "error_type": "TimeoutError",
+      "source_file": "browser_load.py",
+      "source_line": 183,
+      "operation_stage": "fill_editor",
+      "workflow_seconds": 60.429,
+      "save_diagnostic": {
+        "panels": [
+          {
+            "connected": true,
+            "visible": true,
+            "ready": "true",
+            "expectedName": false
+          }
+        ],
+        "dialogCount": 0,
+        "confirmationPresent": false,
+        "alertCount": 0,
+        "timing": null
+      }
+    },
+    {
+      "session": 6,
+      "scenario": "simple_save",
+      "round": 1,
+      "warmup": false,
+      "ok": false,
+      "error_type": "TimeoutError",
+      "source_file": "browser_load.py",
+      "source_line": 183,
+      "operation_stage": "fill_editor",
+      "workflow_seconds": 60.605,
+      "save_diagnostic": {
+        "panels": [
+          {
+            "connected": true,
+            "visible": true,
+            "ready": "true",
+            "expectedName": false
+          }
+        ],
+        "dialogCount": 0,
+        "confirmationPresent": false,
+        "alertCount": 0,
+        "timing": null
+      }
+    },
+    {
+      "session": 9,
+      "scenario": "simple_save",
+      "round": 1,
+      "warmup": false,
+      "ok": false,
+      "error_type": "TimeoutError",
+      "source_file": "browser_load.py",
+      "source_line": 183,
+      "operation_stage": "fill_editor",
+      "workflow_seconds": 60.42,
+      "save_diagnostic": {
+        "panels": [
+          {
+            "connected": true,
+            "visible": true,
+            "ready": "true",
+            "expectedName": false
+          }
+        ],
+        "dialogCount": 0,
+        "confirmationPresent": false,
+        "alertCount": 0,
+        "timing": null
+      }
+    },
+    {
+      "session": 20,
+      "scenario": "visible_task_loading",
+      "round": 1,
+      "warmup": false,
+      "ok": false,
+      "error_type": "TimeoutError",
+      "source_file": "browser_load.py",
+      "source_line": 83,
+      "workflow_seconds": 30.751
+    }
+  ],
+  "database_errors": {
+    "total_count_known": false,
+    "retained_examples_limit": 20,
+    "last_retained_categories": {
+      "SerializationFailure": 20
+    },
+    "example": {
+      "metric": "db_client_execute",
+      "category": "SerializationFailure",
+      "locations": [
+        {
+          "file": "app/application/services/access.py",
+          "line": 179,
+          "function": "activity"
+        },
+        {
+          "file": "app/infrastructure/postgresql/access.py",
+          "line": 200,
+          "function": "run"
+        },
+        {
+          "file": "app/infrastructure/postgresql/access.py",
+          "line": 32,
+          "function": "access_operation"
+        },
+        {
+          "file": "app/infrastructure/postgresql/access.py",
+          "line": 200,
+          "function": "<lambda>"
+        },
+        {
+          "file": "app/infrastructure/postgresql/pool.py",
+          "line": 153,
+          "function": "run"
+        },
+        {
+          "file": "app/infrastructure/postgresql/pool.py",
+          "line": 42,
+          "function": "run_transaction"
+        },
+        {
+          "file": "app/infrastructure/postgresql/access.py",
+          "line": 199,
+          "function": "callback"
+        },
+        {
+          "file": "app/application/services/access.py",
+          "line": 178,
+          "function": "operation"
+        },
+        {
+          "file": "app/infrastructure/postgresql/access.py",
+          "line": 184,
+          "function": "record_activity"
+        }
+      ]
+    }
+  },
+  "http_responses": [
+    {
+      "path": "/api/planning/tasks",
+      "status": 200,
+      "count": 105
+    },
+    {
+      "path": "/api/planning/tasks",
+      "status": 503,
+      "count": 1
+    },
+    {
+      "path": "/api/portfolio/allocations",
+      "status": 200,
+      "count": 46
+    },
+    {
+      "path": "/api/portfolio/allocations",
+      "status": 409,
+      "count": 4
+    },
+    {
+      "path": "/api/portfolio/allocations",
+      "status": 503,
+      "count": 4
+    }
+  ],
+  "acceptance_complete": false
+}

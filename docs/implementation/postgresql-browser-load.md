@@ -206,3 +206,26 @@ The observer and reporting checks passed **42 tests in 2.32 seconds**, including
 real Chromium layout/style work and safe handling of invalid/missing counters.
 Log: `.local/postgresql-browser-metrics-final.log`. An actual application pilot
 and the full prescribed comparison still need to verify these streams under load.
+
+The [deployed counter pilot](benchmarks/save-confirmation-browser-pilot-results.json)
+then observed all 51 workflows successfully, including 15 measured saves after
+the acknowledgement fix. No workflow/database failure or task/badge 409 occurred.
+Measured p95 values were 604.6 ms paging, 384.1 ms task loading and 1,022.4 ms saves;
+acceptance remains incomplete. Subsequent reports also record the configured
+native pool minimum/maximum and acquisition/statement timeouts with application
+versions. SQLite explicitly records no native pool.
+
+The [first fifty-session diagnostic](benchmarks/fifty-session-pilot-results.json)
+failed the target, with 12 measured workflow failures and p95 values of 27.58 s
+paging, 19.21 s task loading and 9.65 s successful saves. It used 50 independent
+sessions sharing two identities, not 50 distinct users, and shorter periods than
+acceptance requires. The intended distinct-user fixture and complete durations
+remain to be validated before the final comparison.
+
+Native pool observations show substantial queuing, and the bounded error examples
+show session-activity serialization failures. Future runs also retain cumulative
+`db_failures_<category>` counters because the last-20 example buffer is not a
+failure total. These are failed database-boundary calls, including retried calls;
+they must not be equated with failed business operations or browser workflows.
+The wrapper preserves the original result/exception, excludes driver messages,
+and passed the 47-check observer/reporting/browser/import run.

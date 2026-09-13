@@ -49,8 +49,15 @@ def deployment_metadata(server: BrowserDeployment, backend: str) -> dict[str, ob
             '"cpu_period":{{.HostConfig.CpuPeriod}},"cpuset":{{json .HostConfig.CpusetCpus}},'
             '"source_commit":{{json (index .Config.Labels "org.opencontainers.image.revision")}}}', identity)
     versions = operator_json(server, """
-import platform, streamlit
-print(json.dumps({'python':platform.python_version(),'streamlit':streamlit.__version__}))
+import os, platform, streamlit
+settings = None
+if os.environ.get('LOAD_BACKEND') == 'postgresql':
+    from app.shared.config.database import DatabaseConfig
+    config = DatabaseConfig.from_environment(os.environ)
+    settings = {name:getattr(config,name) for name in (
+        'pool_min','pool_max','acquire_timeout','statement_timeout')}
+print(json.dumps({'python':platform.python_version(),'streamlit':streamlit.__version__,
+                  'database_pool':settings}))
 """, stage="comparison versions")
     return {"host": host, "containers": containers, "application_versions": versions}
 SEED = """
