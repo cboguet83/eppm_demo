@@ -1462,3 +1462,20 @@ Validation: **29 passed in 14.55 seconds**, recorded in
 `.local/postgresql-planning-read-contracts.log`. PostgreSQL snapshot and revision
 checks replace SQLite-specific physical-connection and database-wide lock
 assertions. Full migration acceptance remains incomplete.
+
+## Native schedule import and project edit workflows
+
+Schedule template workflows now validate CSV replacements against native project,
+task, dependency, allocation and link records. Invalid CSV and an injected second
+task insertion failure preserve the complete original schedule. Exports retain
+multiline content, local/external references, all link types, lags and explicitly
+selected date formats. AppTest workflows cover normalized import previews, safe
+rejection messages, read-only project fields and explicit editing, descendant
+pool allocations, and clearing planning filters. Budget field assertions use
+the actual Decimal text inputs.
+
+Validation: **96 passed in 47.99 seconds**, recorded in
+`.local/postgresql-workflow-port-validation.log`: 45 schedule/project workflows,
+29 planning read contracts, 8 repository workflows, 2 native schema service tests
+and 12 pure service tests. No skipped or excluded cases were used to obtain this
+result. Full PostgreSQL migration acceptance remains open.
