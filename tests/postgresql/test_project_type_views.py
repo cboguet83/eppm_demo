@@ -3,47 +3,53 @@
 from app.domain.projects.property_values import SUPPORTED_PROPERTY_TYPES
 from app.presentation.components import project_type_frames
 
-import tempfile
 import unittest
-from pathlib import Path
+import psycopg
+import pytest
+
+from app.application.services.business_access import BusinessAccess
+from app.infrastructure.postgresql.seeder import install_default_data
+from app.runtime import RuntimeResources
+from tests.postgresql.conftest import AuthorizedFixture
+from tests.postgresql.ui import native_screen, runtime as runtime, access as access
 
 from streamlit.testing.v1 import AppTest
 
-from app.infrastructure.database.schema_init import init_db
 from app.presentation.i18n import t, set_current_locale
-from app.infrastructure.database.seeder import seed_default_data_if_empty
-from app.operator_services import create_project_service
-from app.operator_services import create_project_type_service
-from app.operator_services import create_schema_service
+from app.main import create_project_service
+from app.main import create_project_type_service
+from app.main import create_schema_service
 
 
 class ProjectTypeViewTests(unittest.TestCase):
-    def setUp(self):
+    @pytest.fixture(autouse=True)
+    def native_setup(self, authorized: AuthorizedFixture, runtime: RuntimeResources, access: BusinessAccess) -> None:
+        """Start these UI workflows with an empty project catalog and known IDs."""
         set_current_locale("en")
-        self.directory = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
-        self.addCleanup(self.directory.cleanup)
-        self.path = str(Path(self.directory.name) / "views.db")
-        init_db(self.path)
-        self.types = create_project_type_service(self.path)
-        self.schema = create_schema_service(self.path)
-        self.repo = create_project_service(self.path)
+        self.setup, self.resources, self.access = authorized.setup, runtime, access
+        with psycopg.connect(self.setup.operator_url) as connection:
+            connection.execute('DELETE FROM eppm.project')
+            connection.execute("SELECT setval(pg_get_serial_sequence('eppm.project','id'),1,false)")
+        self.types = create_project_type_service(runtime, access=access)
+        self.schema = create_schema_service(runtime, access=access)
+        self.repo = create_project_service(runtime, access=access)
 
-    def app(self, body):
-        return AppTest.from_string(f'''
+    def app(self, body: str) -> AppTest:
+        return native_screen(f'''
 import streamlit as st
 from app.presentation.i18n import set_current_locale
-from app.operator_services import create_project_service
-from app.operator_services import create_schema_service
-from app.operator_services import create_project_workspace
+from app.main import create_project_service
+from app.main import create_schema_service
+from app.main import create_project_workspace
 from app.presentation.components.project_dialogs import open_create_project_dialog, open_edit_project_dialog
 set_current_locale("en")
-workspace = create_project_workspace({self.path!r})
+workspace = create_project_workspace(runtime, access=access)
 repo = workspace.projects
-schema = create_schema_service({self.path!r})
+schema = create_schema_service(runtime, access=access)
 {body}
-''', default_timeout=15).run()
+''', self.resources, self.access).run()
 
-    def assert_clean(self, app):
+    def assert_clean(self, app: AppTest) -> None:
         self.assertFalse(app.exception, [e.message for e in app.exception])
 
     def test_creation_defaults_and_user_input_survive_type_switches(self):
@@ -92,7 +98,8 @@ schema = create_schema_service({self.path!r})
         self.assertEqual(self.repo.get_project_by_id(1).project_type_id, a)
 
     def test_configuration_and_portfolio_render_seed_catalog(self):
-        seed_default_data_if_empty(self.path)
+        with psycopg.connect(self.setup.operator_url) as connection:
+            install_default_data(connection, force=False, include_projects=True, year=2026)
         config_app = self.app('from app.presentation.pages.schema import render_schema_definition\nrender_schema_definition(schema, workspace.types)')
         self.assert_clean(config_app)
         self.assertIn("Project templates", [tab.label for tab in config_app.tabs])

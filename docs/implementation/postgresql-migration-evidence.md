@@ -1354,3 +1354,28 @@ applicability edit is explicitly aborted.
 Validation: **24 passed in 10.52 seconds**, recorded in
 `.local/postgresql-schema-template-contracts.log`. Remaining template UI,
 workflow/tool ports and full migration acceptance remain outstanding.
+
+## Native template drafts, typed values and operator reentry
+
+The remaining project-template views now use native AppTest composition and
+explicit parent-side fixture seeding. All supported property widgets, hidden-tab
+drafts, type-switch preservation, required validation, create/edit behavior and
+portfolio detail labels retain their existing checks. Business workflows retain
+defaults, inactive values, scalar/list/empty distinctions and deletion guards.
+Real backed-up operator commands verify user template changes survive reentry
+and zero-project generation cannot unexpectedly recreate the demo.
+
+The unchanged original SQLite template module is preserved under
+`docs/archive/sqlite/tests/test_project_types.py`. Its seed/reset and retired
+SQLite-upgrade checks are mapped to native regression evidence in the archive
+README. Native identity high-water marks remain monotonic; deterministic
+generation uses independent baseline-record comparisons.
+
+Validation: **190 passed and 5 subtests passed in 108.95 seconds**, including
+native templates/schema, UI, seed catalogs, generators, resets, backups and
+migration foundation tests. Measured template/schema/domain/property storage
+coverage is **479/484 statements (98.97%)**. Output:
+`.local/postgresql-template-native-complete.log` and
+`.local/postgresql-template-native-coverage.json`. Current full collection:
+**2,018 tests, 21 legacy collection errors**. Full application coverage and the
+remaining runtime/tool/browser performance/recovery work are still incomplete.

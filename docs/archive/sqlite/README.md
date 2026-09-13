@@ -47,6 +47,31 @@ The existing hierarchy Settings/dialog and browser workflows moved to
 real native services and sessions. The seven editable reference values are
 installed explicitly by parent test setup, never by a rendering application.
 
+## Project-template test mapping
+
+`tests/test_project_types.py` preserves the unchanged original module. Active
+`tests/postgresql/test_project_type_workflows.py` retains its six template/value
+workflows and verifies explicit operator reentry preserves user defaults,
+applicability and a deliberately empty generated workload. The UI draft and
+all-property-widget workflows are retained in `test_project_type_views.py`.
+
+| Historical behavior | Active PostgreSQL evidence |
+| --- | --- |
+| All/selected/future types, required inheritance, defaults, inactive values, typed empty values and deletion guards | `test_project_type_workflows.py`, `test_project_types.py`, `test_project_type_contracts.py` |
+| Seed counts, schedule bounds, custom catalog append and deleted high identities | `test_bulk_seed.py`: native bounds, custom-template/sequence-gap and append tests |
+| Deterministic generated records | `test_bulk_seed_golden.py`: independent baseline hashes for projects, properties, selections, tasks and dependencies |
+| Project-only and full resets, retained references and valid regenerated projects | `test_seed_projects_reset.py`, `test_maintenance_defaults.py`, `test_seed_catalog.py` |
+| Restorable pre-operation backup and operator reentry | `test_bulk_seed.py`: archive/restore/append test; `test_maintenance_defaults.py`: complete demo and catalog tests |
+| Migration atomicity, reentry and checksums | `test_foundation.py`: native migration, failed-DDL rollback and competing-runner tests |
+
+The old SQLite JSON-column conversion, `.before-project-types.bak` file and
+pre-existing orphan-reporting tests describe retired SQLite upgrades. The fresh
+PostgreSQL database does not import those records. Its migration rollback and
+native foreign-key enforcement are tested directly. Native resets deliberately
+retain identity high-water marks so old grants cannot attach to reused project
+IDs; deterministic seed comparisons therefore use independently initialized
+fixtures, not reset-and-reuse of historical identifiers.
+
 This is an incremental archive. Other legacy test and tool ports, archival of
 the old runtime itself, full application coverage and final performance/recovery
 acceptance remain pending.
