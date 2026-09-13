@@ -1512,3 +1512,17 @@ Validation: **30 passed in 19.98 seconds**, recorded in
 `.local/postgresql-collaboration-workflows.log`. These retain the former
 `test_project_collaboration.py` workflows using pooled gateway callbacks and
 scoped contact queries. Full migration acceptance remains incomplete.
+
+## Native employee phones and localized project dialogs
+
+Project experience tests now use native organization, schema, collaboration and
+resource services. They retain phone normalization and reassignment, localized
+alias fallback and direct PostgreSQL constraint failures, property tabs, project
+deletion and allocation confirmation/cancellation, and action-table validation.
+Explicit operator seeding creates a real dump and provides unique populated
+landlines. Repeated checksummed migration runs preserve existing employee phones
+and translated aliases. The unchanged original SQLite upgrade module is archived
+with an explicit mapping to native migration atomicity and reentry tests.
+
+Validation: **13 passed in 7.42 seconds**, recorded in
+`.local/postgresql-project-experience.log`. Full migration acceptance remains open.

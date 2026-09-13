@@ -75,3 +75,20 @@ fixtures, not reset-and-reuse of historical identifiers.
 This is an incremental archive. Other legacy test and tool ports, archival of
 the old runtime itself, full application coverage and final performance/recovery
 acceptance remain pending.
+
+## Project experience test mapping
+
+`tests/test_project_experience.py` preserves the original SQLite module unchanged.
+Its active PostgreSQL counterpart retains employee phone fields, contact
+reassignment, alias translations and constraints, property tabs, confirmation
+dialogs, component event validation and component registration. The native seed
+check runs explicit operator seeding with an actual pre-operation archive.
+
+The retired SQLite landline-column upgrade and translation-table DDL failure
+describe an old database conversion that the fresh PostgreSQL deployment does
+not perform. Native migration reentry preserves existing employee phones and
+aliases in `tests/postgresql/test_project_experience.py`; checksummed migration
+reentry and atomic DDL rollback across all pending files are covered by
+`test_migrations_initialize_once_and_runtime_cannot_modify_the_ledger` and
+`test_failed_migrations_rollback_schema_and_all_prior_pending_files` in
+`tests/postgresql/test_foundation.py`.
