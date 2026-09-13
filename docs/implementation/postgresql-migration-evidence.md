@@ -1679,3 +1679,21 @@ administrator back to sign-in.
 Validation: **9 passed in 11.50 seconds**, recorded in
 `.local/postgresql-access-presentation-port.log`. No application authorization
 rule or bootstrap capability was moved into the browser.
+
+## Native custom project modals and fragment authorization
+
+The custom project-modal and fragment-rerun tests now use native runtime resources
+and real scoped Department properties. They preserve typed draft fields, template
+defaults, malformed-payload rejection, retained-account checks, forbidden scope
+edits, local cancellation/deletion and targeted save refreshes. New records use
+their actual generated IDs. Blank money strings exercise budget validation, while
+non-string money payloads are rejected at the existing exact-value boundary.
+
+Shared fragment/modal helpers now contain no SQLite fixtures or imports. The
+native fragment tests check account/role controls, audit-read bounds, revoked
+navigation, lazy Settings and project sections, cached-page access and deleted
+projects without rerunning retained navigation or sibling sections.
+
+Validation: **42 passed in 91.70 seconds**, recorded in
+`.local/postgresql-project-modal-port.log`. This preserves existing UI draft
+tokens; it introduces no planning revision or stale-form overwrite protection.
