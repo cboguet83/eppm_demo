@@ -1777,3 +1777,17 @@ foundation and business RLS). Complementary pure WBS, WBS UI, project, integrity
 and dashboard suites passed in `.local/postgresql-wbs-port.log`; that initial
 run's two WBS fixture defects were corrected and pass in the final run. The
 broader migration acceptance gates remain open.
+## Native administration-dialog integrity
+
+The administration integrity suite now uses restricted native services, an
+explicit business-administrator grant and operator-only fixture inspection.
+Actual PostgreSQL trigger failures exercise both constraint errors and missing
+storage while verifying rollback of directory and identity rows. The port
+retains required-name checks, duplicate employee identity rejection, native
+calendar dates and foreign-key integrity, vacant-function deletion, lazy
+Settings catalogs, fixed application roles, pool mapping changes and stale
+unassignment confirmation.
+
+Validation: **43 passed in 33.28 seconds**, recorded in
+`.local/postgresql-administration-ui-port.log`. No application permission or
+integrity rule was weakened to port these screens.
