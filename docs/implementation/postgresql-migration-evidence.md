@@ -1335,3 +1335,22 @@ the capacity domain/rules/service and native reader/cache adapters are covered.
 Logs: `.local/postgresql-capacity-native-complete.log` and
 `.local/postgresql-capacity-native-coverage.json`. Full application coverage and
 browser performance/recovery acceptance remain open.
+
+## Native schema and project-template transaction contracts
+
+The layered schema and template suites retain their input validation, scalar
+and list references, explicit-null defaults, required overrides, applicability,
+deletion guards, display projections and missing-record behavior. Real native
+trigger failures verify atomic option/property/group edits. Concurrent schema
+creation allocates distinct identifiers and free orders; its conflict assertion
+now uses the actual second group's name instead of assuming thread finish order.
+
+Gateway checks exercise rollback, safe closed-pool errors and subsequent lease
+reuse. A concurrent template update causes a real serialization conflict: the
+complete callback repeats its guard and uses the newly committed description.
+The schema and template stores also share the enclosing transaction when an
+applicability edit is explicitly aborted.
+
+Validation: **24 passed in 10.52 seconds**, recorded in
+`.local/postgresql-schema-template-contracts.log`. Remaining template UI,
+workflow/tool ports and full migration acceptance remain outstanding.
