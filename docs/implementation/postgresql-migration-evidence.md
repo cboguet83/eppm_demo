@@ -2882,9 +2882,9 @@ themselves prove which query originally established the conflicting read.
 Five writers being stranded during warmup also limits conclusions from the lower
 measured retry count. The full-duration gate remains unmet.
 
-Extending the native ten-editor reproduction to open the actual project forms
+Extending the native ten-editor reproduction to prepare project form data
 before saving exposed another conflict: seven scoped editors exhausted retries.
-The title-only property payloads were unchanged from storage. These extra reads
+The simulated title-only property payloads were unchanged from storage. These extra reads
 warmed cached query plans, and the scoped writers again held whole-table project
 predicates despite their transaction-local sequential-scan preference.
 
@@ -2911,3 +2911,41 @@ remaining retries must still be assessed under browser load. Evidence:
 This follow-up still requires a deployed workload comparison. Final full-suite
 coverage, full-duration performance, and current-package recovery acceptance
 remain outstanding.
+
+## Browser multiselect preservation
+
+The `277fb6e` image's short fifty-user follow-up still failed five of 152 measured
+workflows. Paging p95 was 26,233.9 ms (62 successes), task loading 19,283.5 ms
+(80 successes), and successful saves 14,955.2 ms (five successes and five failures).
+The same five editors failed confirmation during warmup and timed out opening the
+editor during measurement. Including warmup, ten of 239 workflows failed. The
+measured runtime window recorded 2,194 pool requests, 1,856 queued acquisitions,
+873.36 aggregate seconds waiting, and two database-call serialization failures;
+warmup recorded twenty. See [the recorded diagnostic](benchmarks/replanned-project-fifty-results.json).
+Its disposable containers were confirmed absent after completion.
+
+An actual-browser regression then established that native HTML multiselects
+serialize selected values in option order, even if stored values have a different
+order and the user only changes the project title. A seeded project changed
+`PRM_032` from `["Operations", "Digital"]` to `["Digital", "Operations"]` on a
+title-only save. The earlier native concurrency payload simulation did not execute
+the component JavaScript and therefore missed this difference.
+
+The component now preserves the supplied order when a multiselect is untouched
+and its selected membership still matches. Explicit edits retain normal browser
+serialization; changed membership is still submitted even without a dirty flag.
+Server validation and authorization are unchanged. Both the component regression
+and the seeded PostgreSQL browser check failed before the fix, while the deliberate
+selection-change control passed (two failures, one pass in 29.51 seconds;
+`.local/postgresql-selection-order-before.xml`). After the fix, all nine project
+form and seeded browser checks passed in 72.25 seconds, including validation retry,
+deliberate selection edits, exact money transport, and unchanged persisted
+properties across ten seeded projects (`.local/postgresql-selection-order-after.xml`).
+The final native editor, protected-property and numeric browser run passed 37
+checks in 147.31 seconds. The seeded browser case also verifies that all property
+parent and selection rows retain their physical tuple identities and transaction
+versions after ten title saves (`.local/postgresql-selection-order-final.xml`).
+
+This removes a proven source of unnecessary property writes; it does not yet
+establish how much of the concurrent save failure it explains. A deployed
+comparison and the full migration acceptance gates remain outstanding.

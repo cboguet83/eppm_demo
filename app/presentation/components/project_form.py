@@ -60,7 +60,14 @@ export default function({data, parentElement, setTriggerValue}) {
     const read = () => Object.fromEntries([...controls].map(([key,{field,input}])=>{
         let value=input.value;
         if(field.kind==='number') value=value===''?null:Number(value);
-        if(field.kind==='multi') value=[...input.selectedOptions].map(option=>option.value);
+        if(field.kind==='multi') {
+            const selected=[...input.selectedOptions].map(option=>option.value);
+            const original=data.values[key]||[];
+            // selectedOptions follows option order, which may differ from storage.
+            const unchanged=!draft.dirty.has(key) && original.length===selected.length
+                && original.every(item=>selected.includes(item));
+            value=unchanged?[...original]:selected;
+        }
         if(field.kind==='tags') value=value.split('\n').map(item=>item.trim()).filter(Boolean);
         return [key,value];
     }));

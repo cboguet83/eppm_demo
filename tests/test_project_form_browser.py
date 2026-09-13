@@ -57,6 +57,36 @@ HTMLDialogElement.prototype.showModal=function() {
 };
 """
 
+
+@pytest.mark.parametrize("popup_server", [_APP.replace('choices=["one"]', 'choices=["two","one"]')],
+                         indirect=True, ids=["stored-selection-order"])
+@pytest.mark.parametrize("change_selection", [False, True])
+def test_untouched_selection_order_survives_save_and_validation_retry(popup_server, change_selection):
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            page = browser.new_page(viewport={"width": 1200, "height": 900})
+            page.goto(popup_server)
+            page.get_by_role("button", name="Open project").click()
+            modal = page.get_by_role("dialog")
+            if change_selection:
+                modal.get_by_role("tab", name="More").click()
+                modal.get_by_label("choices").select_option(["one"])
+            expected = ["one"] if change_selection else ["two", "one"]
+            modal.get_by_label("name", exact=True).fill("")
+            modal.get_by_role("button", name="Save", exact=True).click()
+            expect(modal.get_by_role("alert")).to_have_text("Name is required")
+            first = json.loads(page.locator("pre").inner_text())[0]
+            assert first["values"]["choices"] == expected
+            assert ("choices" in first["dirty"]) is change_selection
+            modal.get_by_label("name", exact=True).fill("Saved title")
+            modal.get_by_role("button", name="Save", exact=True).click()
+            expect(modal).not_to_be_visible()
+            assert json.loads(page.locator("pre").inner_text())[-1]["values"]["choices"] == expected
+        finally:
+            browser.close()
+
+
 _MONEY_APP = _APP.replace(
     '("name","text",None,[]),',
     '("planned_budget","money",None,[]),("actual_budget","money",None,[]),("name","text",None,[]),',
