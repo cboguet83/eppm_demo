@@ -1,0 +1,218 @@
+{
+  "scope": "Short three-session browser pilot after bounded cache-key migration; not load acceptance",
+  "source_directory": ".local/browser-load/a287aef0b568",
+  "fixture": {
+    "backend": "postgresql",
+    "image": "eppm-demo:postgresql-bounded-cache-candidate",
+    "counts": {
+      "project": 10001,
+      "project_task": 73929,
+      "task_dependencies": 66173,
+      "resource_pool": 103,
+      "resource_pool_group": 31,
+      "resource_pool_assignment": 10201,
+      "app_user": 0
+    },
+    "fixture_seed": 42,
+    "min_tasks": 0,
+    "max_tasks": 15,
+    "sqlite_source_sha256": null,
+    "statistics_preparation": "Native operator seed refreshes application statistics",
+    "deployment": {
+      "host": {
+        "cpus": 8,
+        "memory_bytes": 16529354752,
+        "engine": "29.7.2"
+      },
+      "containers": {
+        "app": {
+          "image_id": "sha256:e9d361a0bc148eea16144097e62094e30a9ef5a57fb3c6fa954ee69d0be6b40a",
+          "nano_cpus": 0,
+          "memory_bytes": 0,
+          "cpu_quota": 0,
+          "cpu_period": 0,
+          "cpuset": "",
+          "source_commit": "ad7a456b9243d0541bf217fc2ee70c75c700023b"
+        },
+        "postgres": {
+          "image_id": "sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280",
+          "nano_cpus": 0,
+          "memory_bytes": 0,
+          "cpu_quota": 0,
+          "cpu_period": 0,
+          "cpuset": "",
+          "source_commit": null
+        },
+        "keycloak": {
+          "image_id": "sha256:9d1f1b2b7261ff53c66cb1092dfcdc34a5fb77e81f9e6a6e75b8b6a795de8067",
+          "nano_cpus": 0,
+          "memory_bytes": 0,
+          "cpu_quota": 0,
+          "cpu_period": 0,
+          "cpuset": "",
+          "source_commit": "df15afa5a3a8a2b10021f879ffa93b30fb36c73a"
+        }
+      },
+      "application_versions": {
+        "python": "3.14.7",
+        "streamlit": "1.63.0"
+      }
+    },
+    "diagnostic_profiling": false
+  },
+  "options": {
+    "readers": 2,
+    "editors": 1,
+    "rounds": 1,
+    "warmup_seconds": 4.0,
+    "measurement_seconds": 12.0,
+    "cadence_seconds": 2
+  },
+  "browser": {
+    "version": "151.0.7922.34",
+    "arguments": [
+      "--disable-background-timer-throttling",
+      "--disable-renderer-backgrounding",
+      "--disable-backgrounding-occluded-windows"
+    ],
+    "load_generator": "Python/Playwright on the Windows Docker host",
+    "viewport": [
+      1500,
+      1100
+    ]
+  },
+  "independent_authenticated_sessions": 3,
+  "attempts_including_warmup": 20,
+  "workflow_failures": 0,
+  "periods": [
+    {
+      "round": 1,
+      "scenarios": {
+        "portfolio_paging": {
+          "attempts": 6,
+          "failures": 0,
+          "successes": 6,
+          "p95_ms": 736.5,
+          "max_ms": 736.5
+        },
+        "visible_task_loading": {
+          "attempts": 3,
+          "failures": 0,
+          "successes": 3,
+          "p95_ms": 6284.3,
+          "max_ms": 6284.3
+        },
+        "simple_save": {
+          "attempts": 6,
+          "failures": 0,
+          "successes": 6,
+          "p95_ms": 1291.7,
+          "max_ms": 1291.7
+        }
+      }
+    }
+  ],
+  "cold_loads": [
+    {
+      "session": 0,
+      "scenario": "portfolio_paging",
+      "elapsed_seconds": 2.974
+    },
+    {
+      "session": 0,
+      "scenario": "simple_save",
+      "elapsed_seconds": 4.734
+    },
+    {
+      "session": 1,
+      "scenario": "visible_task_loading",
+      "elapsed_seconds": 5.121
+    }
+  ],
+  "runtime_boundary_timings": {
+    "pool_acquire": {
+      "count": 1393,
+      "seconds": 0.06524123105918989,
+      "max_seconds": 0.009611838031560183
+    },
+    "db_client_execute": {
+      "count": 12747,
+      "seconds": 51.002384434395935,
+      "max_seconds": 0.817139430961106
+    },
+    "db_client_fetchone": {
+      "count": 5050,
+      "seconds": 0.778351174260024,
+      "max_seconds": 0.011495777987875044
+    },
+    "db_client_fetchall": {
+      "count": 1154,
+      "seconds": 0.9434437660383992,
+      "max_seconds": 0.060596043011173606
+    },
+    "server_script": {
+      "count": 36,
+      "seconds": 37.333648249157704,
+      "max_seconds": 4.064884422987234
+    },
+    "cache_read": {
+      "count": 69,
+      "seconds": 7.471712385711726,
+      "max_seconds": 0.2652883109985851
+    },
+    "cache_publish": {
+      "count": 29,
+      "seconds": 2.9671025548595935,
+      "max_seconds": 0.42866924696136266
+    },
+    "cache_load": {
+      "count": 40,
+      "seconds": 18.105133324104827,
+      "max_seconds": 1.716039335995447
+    },
+    "server_http_portfolio": {
+      "count": 18,
+      "seconds": 16.011840231949463,
+      "max_seconds": 1.6358216869994067
+    },
+    "db_client_executemany": {
+      "count": 18,
+      "seconds": 0.05938615504419431,
+      "max_seconds": 0.050345152034424245
+    },
+    "service_project_update": {
+      "count": 8,
+      "seconds": 0.5270059820613824,
+      "max_seconds": 0.1353011800092645
+    },
+    "server_http_planning": {
+      "count": 9,
+      "seconds": 2.8141233069472946,
+      "max_seconds": 0.5089869250077754
+    }
+  },
+  "database_failure_count": 0,
+  "http_responses": [
+    {
+      "path": "/api/planning/tasks",
+      "status": 200,
+      "count": 4
+    },
+    {
+      "path": "/api/planning/tasks",
+      "status": 409,
+      "count": 5
+    },
+    {
+      "path": "/api/portfolio/allocations",
+      "status": 200,
+      "count": 12
+    },
+    {
+      "path": "/api/portfolio/allocations",
+      "status": 409,
+      "count": 6
+    }
+  ],
+  "acceptance_complete": false
+}

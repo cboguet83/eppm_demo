@@ -40,8 +40,8 @@ The SQLite image is `eppm-demo:sqlite-migration-baseline`, built from the preser
 revision documented in [comparison preparation](benchmarks/comparison-preparation.json).
 An explicit `--image` can select another built candidate. The runner defaults to
 40 readers, 10 editors, three measurements of 600 seconds, and 120-second warmups.
-Those defaults do not establish acceptance: the prescribed workload and complete
-diagnostic aggregation still need to be run and reviewed.
+Those defaults do not establish acceptance: the prescribed workload, browser
+rendering breakdown and complete results still need to be run and reviewed.
 
 ## Actions and observation
 
@@ -55,8 +55,12 @@ seconds; recorded workflow durations expose when processing prevents that cadenc
 Browser timestamps start at scrollbar movement or the actual pointer event and
 finish after the usable-result condition and a rendering frame. Results keep each
 scenario and measurement period separate. Failed actions remain failures and
-cannot acquire a fabricated low latency. A failed worker currently stops that
-period; its missing offered load is another reason such a run cannot be accepted.
+cannot acquire a fabricated low latency. A failed worker continues offering its
+next actions and every configured round still runs. The runner does not reset the
+page or erase failures to recover a successful result. Slow actions can reduce
+the achieved cadence; actual attempts and workflow durations remain visible.
+Failure while collecting a viewport diagnostic cannot erase the original failed
+action. Historical pilots stopped failed workers and are identified separately.
 Cold preparation, warmup actions and badge HTTP responses are separate evidence.
 
 Benchmark-only mounted observers retain actual method arguments, results and
@@ -74,6 +78,24 @@ block counts, plus active wait categories sampled approximately every 250 ms.
 Sampling estimates waits; it cannot prove that shorter waits never occurred.
 SQLite client SQL durations include its native locking waits, for which the
 driver provides no separate counter. There is no SQLite connection pool.
+
+`container-timings.jsonl` samples only the deployment's explicit full container
+IDs with `docker stats`, approximately every two seconds. CPU percentages use
+Docker's per-core scale and can exceed 100%; memory bytes are approximate because
+Docker formats quantities with limited precision. The observer retains only
+numeric utilization fields and safe failure categories. It does not retain
+container environments or command/error text, and does not alter the containers.
+
+`diagnostic_phases` records warmup and measurement windows independently. Runtime
+and database counter differences use only complete samples inside each phase,
+with first/last timestamps and the actual observed duration. Missing observations
+are insufficient evidence rather than zero work; decreasing/disappearing counters
+are flagged as resets. Runtime maxima are not subtracted as though cumulative
+maxima were additive counters. Database wait occupancy is a sampled estimate,
+not a count of every wait. Container summaries retain failed-sample counts.
+`scheduled_seconds` describes the offered phase; its final timestamp includes
+completion of an action started before that phase's deadline. Nested server,
+cache and database timings overlap and must not be summed into total latency.
 
 For diagnostic pilots only, `--profile` samples application thread stacks every
 20 ms into `data/thread-profiles.json`. It retains code locations and counts,
@@ -114,9 +136,9 @@ needed; they are not a statistical backend comparison or the 50-user acceptance
 run. The historical SQLite pilot had three failures across ten attempts including
 warmup, so its reduced workload must not be compared as equivalent throughput.
 
-Next work is to investigate task-loading/save latency during edits, add container
-utilization and browser-rendering breakdowns, aggregate diagnostics for each
-period, and run the complete prescribed workload. The runner deliberately leaves
+Next work is to investigate task-loading/save latency during edits, add the
+browser-rendering breakdown, and run the complete prescribed workload with its
+per-period diagnostics. The runner deliberately leaves
 `acceptance_complete` false. The final application regression/coverage gate also
 needs refreshing after performance fixes. Pilot-report and active-import guards
 passed **11 tests in 2.29 seconds**; native recovery remains recorded separately.
@@ -135,3 +157,21 @@ It completed 19 attempts including warmup with zero workflow failures. Measured
 p95 values were 651.8 ms paging, 1,104.1 ms saves and 7,605.9 ms task loading, from
 six, six and two samples respectively. Task and badge revision conflicts remain
 visible in the report. These results keep the complete load gate open.
+
+The [bounded-cache pilot](benchmarks/bounded-cache-browser-pilot-results.json)
+used migration 0024 at `ad7a456` and completed 20 attempts including warmup, with
+zero workflow/database failures. Its measured p95 values were 736.5 ms paging,
+1,291.7 ms saves and 6,284.3 ms task loading (six, six and three samples). Five
+task responses and six badge responses still reported changed revisions.
+
+A second pilot validated the new resource and phase observers against the same
+application image. All 18 container samples succeeded. Its measured window had
+seven resource samples, averaging 64.43% app CPU and 120.36% PostgreSQL CPU, with
+no recorded native pool waits. The separate runtime/database windows report
+their precise coverage rather than claiming complete observation. These tiny
+diagnostic samples do not satisfy acceptance or establish statistical improvement.
+See [the instrumentation evidence](benchmarks/resource-observer-pilot-results.json).
+The final reporting/sampling/import run passed 33 checks in 1.68 seconds, including
+continued attempts after a failed workflow and a failed viewport diagnostic.
+That failure-continuation refinement was made after the second pilot started and
+is covered by the focused regression, not claimed as part of that pilot's run.

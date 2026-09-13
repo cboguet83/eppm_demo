@@ -20,7 +20,9 @@ from urllib.parse import urlencode, urlsplit
 from app.infrastructure.authentication.http import SESSION_COOKIE
 from app.presentation.navigation import PAGE_PLANNING
 from tests.performance.deployment import grant_accounts, load_deployment
+from tests.performance.diagnostics import summarize_phases
 from tests.performance.planning_explain import SOURCE as PLANNING_EXPLAIN
+from tests.performance.resource_monitor import sample_containers
 from tests.postgresql.recovery_support import operator_json
 from tests.test_oidc_browser_e2e import BrowserDeployment
 
@@ -202,8 +204,9 @@ def summarize(samples: list[dict[str, object]]) -> dict[str, object]:
 
 
 async def _period(sessions: list[Session], options: Options, seconds: float,
-                  round_index: int, warmup: bool, samples: list[dict[str, object]]) -> None:
+                  round_index: int, warmup: bool, samples: list[dict[str, object]]) -> dict[str, object]:
     start = monotonic()
+    started_epoch = time()
     deadline = start + seconds
 
     async def worker(session: Session) -> None:
@@ -223,24 +226,30 @@ async def _period(sessions: list[Session], options: Options, seconds: float,
                 entry.update(ok=False, error_type=type(error).__name__,
                              source_file=Path(location.filename).name, source_line=location.lineno)
                 if session.scenario == "portfolio_paging":
-                    entry["viewport_diagnostic"] = await session.page.locator("#portfolio-project-table").evaluate("""root => ({
-                        sameRoot:root===window.__loadPortfolioRoot,
-                        oldRootConnected:window.__loadPortfolioRoot?.isConnected,
-                        pending:root._portfolio?.pending !== null,
-                        pendingOffset:root._portfolio?.pending?.offset,
-                        top:root._portfolio?.top,
-                        offsets:[...(root._portfolio?.pages.keys() || [])],
-                        renderedRows:root.querySelectorAll('tbody tr[data-project-id]').length,
-                        timing:window.__loadTiming
-                    })""")
+                    try:
+                        entry["viewport_diagnostic"] = await session.page.locator("#portfolio-project-table").evaluate("""root => ({
+                            sameRoot:root===window.__loadPortfolioRoot,
+                            oldRootConnected:window.__loadPortfolioRoot?.isConnected,
+                            pending:root._portfolio?.pending !== null,
+                            pendingOffset:root._portfolio?.pending?.offset,
+                            top:root._portfolio?.top,
+                            offsets:[...(root._portfolio?.pages.keys() || [])],
+                            renderedRows:root.querySelectorAll('tbody tr[data-project-id]').length,
+                            timing:window.__loadTiming
+                        })""")
+                    except Exception as diagnostic_error:
+                        # A broken viewport must not erase the original failed action.
+                        entry['diagnostic_error_type'] = type(diagnostic_error).__name__
             entry["workflow_seconds"] = round(monotonic() - began, 3)
             samples.append(entry)
             session.sequence += 1
-            if not entry["ok"]:
-                return  # Do not silently repair away a failed session or lost load.
+            # Keep this session in the offered workload after failures. Do not
+            # reset its page, discard failures, or silently remove the worker.
             due = max(due + options.cadence_seconds, monotonic())
 
     await asyncio.gather(*(worker(session) for session in sessions))
+    return {'round': round_index, 'warmup': warmup, 'started_epoch': started_epoch,
+            'ended_epoch': time(), 'scheduled_seconds': seconds}
 
 
 async def run_browser(server: BrowserDeployment, backend: str, options: Options,
@@ -249,7 +258,7 @@ async def run_browser(server: BrowserDeployment, backend: str, options: Options,
     from playwright.async_api import async_playwright
 
     samples, cold, http = [], [], []
-    report.update(samples=samples, cold_loads=cold, http_responses=http, periods=[])
+    report.update(samples=samples, cold_loads=cold, http_responses=http, periods=[], phases=[])
     async with async_playwright() as playwright:
         arguments = ["--disable-background-timer-throttling", "--disable-renderer-backgrounding",
                      "--disable-backgrounding-occluded-windows"]
@@ -321,13 +330,11 @@ async def run_browser(server: BrowserDeployment, backend: str, options: Options,
             report["independent_authenticated_sessions"] = len(sessions)
             print(json.dumps({"stage": "sessions_ready", "backend": backend, "count": len(sessions)}), flush=True)
             for number in range(1, options.rounds + 1):
-                await _period(sessions, options, options.warmup_seconds, number, True, samples)
-                await _period(sessions, options, options.measurement_seconds, number, False, samples)
+                report['phases'].append(await _period(sessions, options, options.warmup_seconds, number, True, samples))
+                report['phases'].append(await _period(sessions, options, options.measurement_seconds, number, False, samples))
                 summary = summarize([sample for sample in samples if sample["round"] == number and not sample["warmup"]])
                 report["periods"].append({"round": number, "scenarios": summary})
                 print(json.dumps({"stage": "measurement", "round": number, "scenarios": summary}), flush=True)
-                if any(not sample["ok"] for sample in samples):
-                    break
         finally:
             await browser.close()
 
@@ -352,12 +359,15 @@ def main() -> int:
         parser.error("Require at least two readers, one to ten editors, and positive periods.")
     with load_deployment(arguments.backend, arguments.image, profile=arguments.profile) as (server, directory, fixture):
         report = {"fixture": fixture, "options": asdict(options), "acceptance_complete": False,
-                  "diagnostics": {"runtime": "data/runtime-timings.jsonl", "postgresql": "data/postgresql-timings.jsonl"},
-                  "remaining_instrumentation": ["container CPU/memory sampling", "browser rendering breakdown",
-                                                "per-period diagnostic aggregation", "full prescribed workload"]}
+                  "diagnostics": {"runtime": "data/runtime-timings.jsonl", "postgresql": "data/postgresql-timings.jsonl",
+                                  "containers": "container-timings.jsonl"},
+                  "remaining_instrumentation": ["browser rendering breakdown", "full prescribed workload"]}
         result = 0
         try:
-            asyncio.run(run_browser(server, arguments.backend, options, report, directory))
+            services = ('app', 'postgres', 'keycloak') if arguments.backend == 'postgresql' else ('app', 'keycloak')
+            identities = {service: server.command('ps', '--quiet', service).decode().strip() for service in services}
+            with sample_containers(identities, directory / 'container-timings.jsonl'):
+                asyncio.run(run_browser(server, arguments.backend, options, report, directory))
             if any(not sample["ok"] for sample in report["samples"]):
                 result = 1
         except Exception as error:
@@ -370,6 +380,7 @@ def main() -> int:
                 r"application.operation_failed reference=[\w-]+ exception=(\w+) source=([\w.]+) line=(\d+)", logs)
             result = 1
         finally:
+            report['diagnostic_phases'] = summarize_phases(directory, report.get('phases', []))
             path = directory / "browser-results.json"
             path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
             print(json.dumps({"stage": "report", "path": str(path), "workflow_exit_code": result,

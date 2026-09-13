@@ -2331,3 +2331,36 @@ Logs: `.local/postgresql-bounded-cache-functional.log`,
 `.local/postgresql-old-cache-growth.log` and
 `.local/postgresql-bounded-cache-final.log`. Browser validation of this migration
 and final acceptance remain pending.
+
+## Browser validation of bounded cache keys and phase diagnostics
+
+The isolated `ad7a456` image (`eppm-demo:postgresql-bounded-cache-candidate`)
+completed a three-session pilot with 20 attempts including warmup and no
+workflow/database failures. Paging p95 was 736.5 ms (six samples), saves 1,291.7 ms
+(six) and task loading 6,284.3 ms (three). Five task HTTP responses and six badge
+responses still reported revision changes. The latest cache-key optimization is
+therefore browser-validated but does not satisfy responsiveness acceptance.
+See [the result](benchmarks/bounded-cache-browser-pilot-results.json); log:
+`.local/postgresql-load-bounded-cache-pilot.log`.
+
+The runner now records Docker CPU/memory observations and separate cumulative
+diagnostic windows for every warmup/measurement phase. A second actual pilot
+verified all three container streams and runtime/database aggregation; its 18
+container observations had no failures. The measured resource window averaged
+64.43% app CPU and 120.36% PostgreSQL CPU. Native pool counters recorded no waiting
+requests in the observed window. This supports investigating query/refresh work;
+it does not prove the absence of every short wait or identify all browser cost.
+See [the observer result](benchmarks/resource-observer-pilot-results.json); log:
+`.local/postgresql-load-resource-pilot.log`.
+
+Failed browser workers now remain in the offered workload and subsequent rounds
+continue; failures are preserved. A secondary diagnostic failure cannot erase
+the original failed action. The final focused diagnostics/reporting/profiling/
+import run passed 33 checks in 1.68 seconds. The failure-continuation refinement
+postdates the second pilot's launch and is verified by its separate regression.
+Log: `.local/postgresql-load-diagnostics-final.log`.
+
+Both pilot deployments were removed. Ordinary application data and volumes were
+unchanged. Browser-rendering breakdown, task/badge refresh performance, complete
+50-session comparison, refreshed full regression and final deployment acceptance
+remain open.
