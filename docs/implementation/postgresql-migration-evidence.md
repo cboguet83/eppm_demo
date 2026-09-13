@@ -2758,3 +2758,49 @@ Logs: `.local/postgresql-numeric-form-before.log` (two expected pre-fix failures
 and `.local/postgresql-numeric-form-final.log`; XML:
 `.local/postgresql-numeric-form-final.xml`. A deployed fifty-user run with this
 fix remains necessary before drawing a load-workflow conclusion.
+
+## Numeric-form load result and untouched protected enums
+
+The `7a24d70` image ran the short 50-distinct-user diagnostic without stack
+profiling. It failed **seven of 161 measured workflows**: paging p95 was
+26,781 ms (71 successes), task loading 20,656.1 ms (80 successes), and saves
+20,481.7 ms (three successes, seven failures). Including warmup, 13 of 252
+attempts failed. All ten warmup editors reached the confirmation step, but six
+timed out there; those same six later timed out opening another edit. The seventh
+measured failure occurred at confirmation. See [the recorded result](benchmarks/numeric-form-fifty-results.json).
+Log: `.local/postgresql-numeric-form-fifty.log`; the disposable deployment was
+removed. Disabling stack profiling did not establish acceptable responsiveness.
+
+The measured runtime window recorded 2,077 queued acquisitions, 897.43 aggregate
+seconds waiting and nine database-call serialization failures, including retries.
+A manual host observation belongs to warmup, not the measured period. A separate
+process sampler's total-CPU aggregation failed; its partial process deltas do not
+establish host-wide attribution. The ordinary deployment remains unchanged.
+
+The old failure diagnostics did not traverse the custom component's shadow DOM
+and did not select native open dialogs. Their zero dialog/alert counts therefore
+cannot establish that no form or validation error was present. The corrected
+diagnostic traverses open shadow roots, counts native dialogs and custom alerts,
+and records exception and edit-button state without retaining input values.
+
+Separate native regressions then reproduced another title-save failure without
+load: absent and null protected enums became empty text through the browser's
+blank option, so the database correctly denied an unauthorized property change.
+The form now omits untouched enums whose browser value still matches their
+original display, preserving the service's existing storage value. Changed values
+are still submitted and authorized even if a client omits its dirty flag;
+administrators can still explicitly clear an enum. This adds no revision or
+stale-form feature and does not relax database permissions.
+
+The final affected native, actual-browser and reporting run passed **79 tests in
+92.18 seconds**. It includes repeated title saves as a scoped editor with absent
+and null enums, unauthorized changes with a missing dirty flag, explicit admin
+clearing, exact numeric values, and detection of an actual shadow-DOM validation
+error. The failed-worker reporting test now advances a deliberate test clock;
+host scheduling previously exhausted its 0.1-second wall-clock window. The
+production workload cadence and acceptance thresholds are unchanged.
+Logs: `.local/postgresql-empty-scope-before.log` (two expected failures, one pass)
+and `.local/postgresql-editor-saves-final.log`; XML:
+`.local/postgresql-editor-saves-final.xml`. The next deployed workload must include
+both form fixes. Full-duration performance, refreshed full coverage/regression,
+and final setup/restart/restore acceptance remain outstanding.

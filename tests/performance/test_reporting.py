@@ -41,6 +41,13 @@ def test_failed_worker_keeps_offering_actions_and_failed_diagnostics_do_not_eras
     monkeypatch: pytest.MonkeyPatch, scenario: str,
 ) -> None:
     calls = []
+    clock = SimpleNamespace(now=0.0)
+
+    async def advance(seconds: float) -> None:
+        clock.now += seconds
+
+    monkeypatch.setattr(browser_load, "monotonic", lambda: clock.now)
+    monkeypatch.setattr(browser_load.asyncio, "sleep", advance)
 
     async def action(session) -> float:
         calls.append(session.sequence)

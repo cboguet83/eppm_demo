@@ -1,0 +1,80 @@
+{
+  "scope": "Short fifty-user numeric-form candidate without stack profiling; not full acceptance",
+  "source_directory": ".local/browser-load/d868bfbc6070",
+  "application_source_commit": "7a24d70881ee4f164893b5d88ce160463fc6731c",
+  "application_image": "eppm-demo:postgresql-numeric-form-candidate",
+  "application_image_id": "sha256:49d1efc413b4df776ef376170d4a87d2403f86a0bd999f77634769031d55a2dd",
+  "migration_count": 28,
+  "independent_authenticated_sessions": 50,
+  "distinct_authenticated_users": 50,
+  "options": {
+    "readers": 40,
+    "editors": 10,
+    "rounds": 1,
+    "warmup_seconds": 15,
+    "measurement_seconds": 45,
+    "cadence_seconds": 2,
+    "profile": false
+  },
+  "measured_scenarios": {
+    "portfolio_paging": {
+      "attempts": 71,
+      "failures": 0,
+      "successes": 71,
+      "p95_ms": 26781,
+      "max_ms": 26950.1
+    },
+    "visible_task_loading": {
+      "attempts": 80,
+      "failures": 0,
+      "successes": 80,
+      "p95_ms": 20656.1,
+      "max_ms": 20958.9
+    },
+    "simple_save": {
+      "attempts": 10,
+      "failures": 7,
+      "successes": 3,
+      "p95_ms": 20481.7,
+      "max_ms": 20481.7
+    }
+  },
+  "warmup_failed_save_stages": {
+    "confirmation": 6
+  },
+  "measured_failed_save_stages": {
+    "open_editor": 6,
+    "confirmation": 1
+  },
+  "all_phases_workflows": {
+    "attempts": 252,
+    "failures": 13
+  },
+  "measured_runtime": {
+    "observed_seconds": 65.0769248008728,
+    "database_call_serialization_failures_including_retries": 9,
+    "pool_requests": 2340,
+    "pool_requests_queued": 2077,
+    "pool_requests_wait_ms": 897429,
+    "maximum_waiting_requests": 29
+  },
+  "manual_host_observation": {
+    "source": ".local/browser-load/d868bfbc6070/host-workload.json",
+    "phase": "warmup",
+    "started_epoch": 1789318261.267,
+    "ended_epoch": 1789318263.777,
+    "host_cpu_percent": 17,
+    "available_memory_mb": 1828
+  },
+  "acceptance_complete": false,
+  "limitations": [
+    "The offered duration is shorter than acceptance; slow actions extended the actual windows and reduced achieved cadence.",
+    "Latency percentiles describe successful workflows; all ten warmup editors reached confirmation, but six did not observe a usable updated result before timeout.",
+    "The six editors failing to open in measurement had already failed during warmup; their pages were not reset or removed from the workload.",
+    "Historical dialogCount and alertCount values missed the custom form's shadow DOM and cannot establish whether a form or validation message was present.",
+    "Database-call failure counts include retries; aggregate pool waits overlap across concurrent requests.",
+    "The host observation is a warmup snapshot, not a measurement-window average or CPU attribution.",
+    "The separate process sampler retained top-process deltas but its total-CPU aggregation failed; no complete host attribution is available.",
+    "The ordinary local deployment was not upgraded."
+  ]
+}

@@ -6,6 +6,7 @@ import psycopg
 import pytest
 
 from tests.postgresql.shell_browser import _APP, popup_server
+from tests.performance.browser_load import SAVE_DIAGNOSTIC
 from tests.test_dialog_browser import expect, sync_playwright
 
 
@@ -48,6 +49,10 @@ def test_numeric_property_dialog_opens_saves_and_retries_without_rounding(popup_
             dialog.get_by_role("button", name="Update Project", exact=False).click()
             expect(dialog.get_by_role("alert")).to_have_text("Enter a finite numeric property value.")
             expect(quantity).to_have_value("not a number")
+            diagnostic = page.evaluate(SAVE_DIAGNOSTIC, {"project": 1, "name": "Title-only numeric save"})
+            assert diagnostic["dialogCount"] == 1 and diagnostic["alertCount"] >= 1
+            assert diagnostic["exceptionCount"] == 0
+            assert diagnostic["editButtons"] == [{"disabled": False, "visible": True}]
             quantity.fill(changed)
             dialog.get_by_role("button", name="Update Project", exact=False).click()
             expect(dialog).not_to_be_visible()

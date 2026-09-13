@@ -22,6 +22,42 @@ def business(dashboard_business, authorized):
         connection.execute("INSERT INTO eppm.project_property_value(project_id,param_id,kind,text_value) VALUES(1,'DEPT','text','Finance')")
     return dashboard_business
 
+
+@pytest.mark.parametrize("representation", ["absent", "null", "empty"])
+def test_editor_title_save_preserves_untouched_empty_protected_properties(business, authorized, representation):
+    path, _, _, editor, _ = business
+    with psycopg.connect(authorized.setup.operator_url) as connection:
+        connection.execute("DELETE FROM eppm.project_property_value WHERE project_id=1 AND param_id='DEPT'")
+        if representation != "absent":
+            connection.execute("INSERT INTO eppm.project_property_value(project_id,param_id,kind) "
+                               "VALUES(1,'DEPT',%s)", (representation,))
+    projects = create_project_service(path, access=editor)
+    previous = projects.get_project_by_id(1).dynamic_attributes
+    app = open_form(path, editor.actor)
+    submit(app, changes={"name": "Editor title with untouched scope"})
+    assert "portfolio_project_modal_state" not in app.session_state
+    saved = projects.get_project_by_id(1)
+    assert saved.name == "Editor title with untouched scope"
+    assert saved.dynamic_attributes == previous
+
+
+def test_changed_protected_value_cannot_bypass_permission_by_omitting_its_dirty_flag(business):
+    path, _, _, editor, _ = business
+    app = open_form(path, editor.actor)
+    submit(app, changes={"p:DEPT": "Delivery"}, mutate=lambda event: event.update(dirty=[]))
+    assert "not permitted" in app.session_state["portfolio_project_modal_state"].form["error"]
+    assert create_project_service(path, access=editor).get_project_by_id(1).dynamic_attributes["DEPT"] == "Finance"
+
+
+def test_administrator_can_explicitly_change_an_absent_enum_to_empty_text(business, authorized):
+    path, _, _, _, manager = business
+    with psycopg.connect(authorized.setup.operator_url) as connection:
+        connection.execute("DELETE FROM eppm.project_property_value WHERE project_id=1 AND param_id='DEPT'")
+    app = open_form(path, manager.actor)
+    submit(app, changes={"p:DEPT": ""})
+    assert "portfolio_project_modal_state" not in app.session_state
+    assert create_project_service(path, access=manager).get_project_by_id(1).dynamic_attributes["DEPT"] == ""
+
 @pytest.mark.parametrize("operation", ["create", "edit"])
 def test_project_save_closes_modal_and_refreshes_grid_and_selection_once(business, operation):
     from app.presentation.pages.portfolio import _portfolio_grid, _portfolio_selection

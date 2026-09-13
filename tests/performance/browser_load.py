@@ -76,6 +76,33 @@ ARM = """({predicate, values, click}) => {
 }"""
 
 
+SAVE_DIAGNOSTIC = """values => {
+    const roots=[document];
+    for(let index=0;index<roots.length;index++) {
+        for(const element of roots[index].querySelectorAll('*')) {
+            if(element.shadowRoot) roots.push(element.shadowRoot);
+        }
+    }
+    const queryAll=selector=>roots.flatMap(root=>[...root.querySelectorAll(selector)]);
+    return {
+        panels:[...document.querySelectorAll('.st-key-project_details_panel_'+values.project)].map(panel => ({
+            connected:panel.isConnected,
+            visible:panel.getBoundingClientRect().height>0 && getComputedStyle(panel).visibility!=='hidden',
+            ready:panel.dataset.eppmDetailsReady,
+            expectedName:panel.textContent.includes(values.name)
+        })),
+        dialogCount:queryAll('dialog[open],[role="dialog"]').length,
+        confirmationPresent:document.body.textContent.includes('Project details updated.'),
+        alertCount:queryAll('[role="alert"],[data-testid="stAlert"]').length,
+        exceptionCount:queryAll('[data-testid="stException"]').length,
+        editButtons:queryAll('button')
+            .filter(button=>button.textContent.trim()==='Edit details')
+            .map(button=>({disabled:button.disabled,visible:button.getBoundingClientRect().height>0})),
+        timing:window.__loadTiming
+    };
+}"""
+
+
 async def _arm(area: "Page | Frame", predicate: str, values: dict[str, object], *, click: bool) -> None:
     script = ARM.replace("new Function('values', 'return (' + predicate + ')')", f"values => ({predicate})")
     await area.evaluate(script, {"values": values, "click": click})
@@ -258,18 +285,7 @@ async def _period(sessions: list[Session], options: Options, seconds: float,
                 elif session.scenario == 'simple_save':
                     entry['operation_stage'] = session.operation_stage
                     try:
-                        entry['save_diagnostic'] = await session.page.evaluate("""values => ({
-                            panels:[...document.querySelectorAll('.st-key-project_details_panel_'+values.project)].map(panel => ({
-                                connected:panel.isConnected,
-                                visible:panel.getBoundingClientRect().height>0 && getComputedStyle(panel).visibility!=='hidden',
-                                ready:panel.dataset.eppmDetailsReady,
-                                expectedName:panel.textContent.includes(values.name)
-                            })),
-                            dialogCount:document.querySelectorAll('[role="dialog"]').length,
-                            confirmationPresent:document.body.textContent.includes('Project details updated.'),
-                            alertCount:document.querySelectorAll('[data-testid="stAlert"]').length,
-                            timing:window.__loadTiming
-                        })""", {'project': session.project_id,
+                        entry['save_diagnostic'] = await session.page.evaluate(SAVE_DIAGNOSTIC, {'project': session.project_id,
                                 'name': f'Load editor {session.index:02d} save {session.sequence:05d}'})
                     except Exception as diagnostic_error:
                         entry['diagnostic_error_type'] = type(diagnostic_error).__name__

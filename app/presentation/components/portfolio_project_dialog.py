@@ -191,19 +191,35 @@ def _numeric_property(value: str) -> Decimal | None:
     return number
 
 
+def _property_values(draft: ProjectDraft, values: dict[str, Any]) -> dict[str, Any]:
+    """Preserve untouched enum storage when its empty browser option is ambiguous."""
+    properties = {}
+    for field in draft.form["fields"]:
+        key = field["key"]
+        if not key.startswith("p:"):
+            continue
+        param_id, value = key[2:], values[key]
+        if (draft.project_id is not None and field["kind"] == "select"
+                and key not in draft.edited
+                and value == (draft.project.dynamic_attributes.get(param_id) or "")):
+            # An absent value, NULL and empty text share the same browser option.
+            # Leave the current value to the service unless the user changes it.
+            continue
+        properties[param_id] = _numeric_property(value) if field["kind"] == "decimal" else value
+    return properties
+
+
 def _save(workspace: ProjectWorkspace, draft: ProjectDraft, values: dict[str, Any]) -> int:
     name = values["name"].strip()
     if not name:
         raise ValueError(t("master_data.err_required_fields"))
     if any(not isinstance(values[key], str) or not values[key].strip() for key in ("planned_budget", "actual_budget")):
         raise ValueError("Enter planned and actual budget amounts.")
-    kinds = {field["key"]: field["kind"] for field in draft.form["fields"]}
     arguments = dict(
         name=name, status=values["status"], planned_budget=values["planned_budget"], actual_budget=values["actual_budget"],
         function_id=int(values["function_id"]) if values["function_id"] else None,
         project_type_id=int(values["project_type_id"]),
-        dynamic_attributes={key[2:]: _numeric_property(value) if kinds[key] == "decimal" else value
-                            for key, value in values.items() if key.startswith("p:")},
+        dynamic_attributes=_property_values(draft, values),
         custom_links=[link for link in draft.form["links"] if link["alias"] or link["url"]],
         wbs_allocations=draft.form["wbs"],
     )
