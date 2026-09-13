@@ -15,11 +15,12 @@ from app.infrastructure.postgresql.backup import PostgresBackup, PostgresTools, 
 from app.infrastructure.postgresql import maintenance
 from app.infrastructure.postgresql.pool import OperatorDatabase
 from app.application.exceptions import DatabaseMaintenanceError
+from app.application.ports.maintenance import SeedRequest
 from app.shared.config.database import validate_database_url
 from app.shared.logging import get_logger, setup_logging
 
 logger = get_logger(__name__)
-MAINTENANCE_COMMANDS = ('seed-defaults', 'seed-pools', 'reset', 'clear-allocations', 'counts')
+MAINTENANCE_COMMANDS = ('seed-defaults', 'seed-projects', 'seed-pools', 'reset', 'clear-allocations', 'counts')
 
 
 def provision_runtime(url: str, password: str) -> None:
@@ -60,7 +61,11 @@ def main(*, archive_tools: PostgresTools | None = None) -> None:
     parser.add_argument('--without-projects', action='store_true', help='Install the default catalog without example projects')
     parser.add_argument('--all-references', action='store_true', help='Include demo reference cleanup in an explicit reset')
     parser.add_argument('--year', type=int, help='Scenario year; defaults to the current year')
-    parser.add_argument('--seed', type=int, default=20260908, help='Pool scenario random seed')
+    parser.add_argument('--seed', type=int, help='Random seed; defaults to 42 for projects and 20260908 for pools')
+    parser.add_argument('--projects', type=int, default=1000, help='Number of projects to generate')
+    parser.add_argument('--min-tasks', type=int, default=0)
+    parser.add_argument('--max-tasks', type=int, default=15)
+    parser.add_argument('--append', action='store_true', help='Preserve existing projects and catalogs during bulk generation')
     parser.add_argument('--apply', action='store_true', help='Apply the pool scenario preview after creating an archive')
     parser.add_argument("command", choices=("provision", "migrate", "check", "configure-security", "backup", "restore", *MAINTENANCE_COMMANDS))
     arguments = parser.parse_args()
@@ -102,7 +107,12 @@ def _maintenance(arguments: argparse.Namespace, url: str, archive_tools: Postgre
         result = maintenance.seed_defaults(database, backup, force=arguments.force,
             include_projects=not arguments.without_projects, year=arguments.year)
     elif arguments.command == 'seed-pools':
-        result = maintenance.seed_pool_scenarios(database, backup, year=arguments.year, seed=arguments.seed, apply=arguments.apply)
+        result = maintenance.seed_pool_scenarios(database, backup, year=arguments.year,
+            seed=20260908 if arguments.seed is None else arguments.seed, apply=arguments.apply)
+    elif arguments.command == 'seed-projects':
+        result = maintenance.seed_projects(database, backup, SeedRequest(projects=arguments.projects,
+            min_tasks=arguments.min_tasks, max_tasks=arguments.max_tasks, clean_first=not arguments.append,
+            random_seed=42 if arguments.seed is None else arguments.seed))
     elif arguments.command == 'reset':
         result = maintenance.reset_database(database, backup, flush_all=arguments.all_references)
     elif arguments.command == 'clear-allocations':

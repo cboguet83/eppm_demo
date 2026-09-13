@@ -13,6 +13,7 @@ def flush_projects(connection: psycopg.Connection, *, flush_all: bool = False) -
     cascades and validation stay enabled. Project/task identities are never
     rewound, so an old explicit project grant cannot bind to a newly seeded row.
     """
+    connection.execute("SELECT pg_advisory_xact_lock(hashtextextended('eppm:project-identity',0))")
     projects, tasks, dependencies = connection.execute('''SELECT
         (SELECT count(*) FROM eppm.project), (SELECT count(*) FROM eppm.project_task),
         (SELECT count(*) FROM eppm.task_dependencies)''').fetchone()

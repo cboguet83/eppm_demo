@@ -1,7 +1,7 @@
 # PostgreSQL operator seeding and reset
 
-Status: native default/demo seeding, reset, scenario previews and backed-up
-operator CLI commands implemented. Bulk/allocation generation and the remaining
+Status: native default/demo and bulk project seeding, reset, scenario previews
+and backed-up operator CLI commands implemented. Allocation generation and the remaining
 maintenance-service integration are in progress. These helpers use explicit operator transactions;
 ordinary application startup must not call them.
 
@@ -83,6 +83,11 @@ flowchart LR
     seeder --> seed_catalog
     seeder --> seed_projects
     seeder --> pool_scenarios
+    maintenance --> bulk_seed
+    bulk_seed --> seed_schedules
+    bulk_seed --> seeder
+    bulk_seed --> Templates[Effective template validation]
+    bulk_seed --> Copy[Bounded native COPY batches]
 ```
 
 Native PostgreSQL tests cover installed relationships, configurable references,
@@ -133,3 +138,46 @@ commands create one archive even when they invoke nested catalog/scenario
 helpers. `clear-allocations` removes demand while preserving resource mappings.
 The existing application launcher and legacy maintenance wrappers have not yet
 cut over to these native entry points.
+
+## Bulk projects and schedules
+
+```powershell
+.venv/Scripts/python.exe -m scripts.postgresql_admin --env-file .local/postgresql.env seed-projects --projects 10001 --min-tasks 0 --max-tasks 15 --seed 42
+```
+
+Bulk generation resets projects and demo references by default, with one
+pre-operation archive. `--append` preserves existing records and uses the current
+templates, property options and organization. It does not inject a demo
+organization into a custom catalog. Only newly generated rows receive cyclic
+tags and pool assignments. Counts are validated before backup; zero projects
+and task limits from zero through 50 retain their existing meanings.
+
+The native generator reads template definitions, membership, required rules,
+defaults and choices in batches. It applies the same domain validation as
+interactive project creation. Seeded euro amounts use Decimal arithmetic and
+the existing two-decimal, ties-to-even convention. Phases, milestones, extra
+work packages, progress distributions and earlier-project dependencies retain
+the original random draw order. An unspecified random seed is selected once
+before entering a callback and reused on every retry.
+
+Psycopg sends at most 500 rows per COPY statement, with all native constraints,
+authorization guards and revision triggers enabled. Actual task IDs are reserved
+from PostgreSQL and substituted into dependency edges; another task inserted
+between reservation and COPY receives a distinct ID. Healthy sequences are not
+reset. Repair of an explicit operator ID beyond a sequence takes a table lock
+before advancing it, preventing normal inserts from racing with setval. Reset
+uses the same project-creation identity lock as operator/runtime creation.
+
+The committed `tests/postgresql/fixtures/bulk_seed_golden.json` contains hashes
+from independently generated synthetic baseline databases. Four workloads cover
+mixed schedules, single phases, 50-task projects and an empty seed. The native
+regressions compare project budgets/metadata, typed properties, selection order,
+task dates/progress and dependency records. No SQLite data is imported and no
+SQLite runtime dependency is required by these golden tests.
+
+A fresh isolated 10,001-project workload completed in **24.68 seconds**, including
+its one archive, with **73,929 tasks**, **66,173 dependencies**, **258,022 property
+values** and **10,201 allocations**. These match the accepted benchmark workload.
+The [recorded counts and timing](postgresql-bulk-seed-scale.json) validate operator
+generation. The authenticated 50-user browser acceptance gate remains separate
+and must be run after runtime cutover.

@@ -2,6 +2,9 @@
 
 from decimal import Decimal
 import random
+from concurrent.futures import ThreadPoolExecutor
+from threading import Event
+from time import monotonic, sleep
 
 import psycopg
 import pytest
@@ -10,7 +13,7 @@ from app.domain.projects.project import prepare_project_values
 from app.infrastructure.postgresql.pool import OperatorDatabase
 from app.infrastructure.postgresql.projects import PostgresProjectStore
 from app.infrastructure.postgresql.seed_catalog import (
-    DEMO_TYPES, HIERARCHY_TYPES, can_install_demo, ensure_reference_catalog,
+    DEMO_TYPES, HIERARCHY_TYPES, advance_seed_sequences, can_install_demo, ensure_reference_catalog,
     install_organization_catalog, install_schema_catalog, install_tag_catalog, sample_values,
 )
 
@@ -132,3 +135,41 @@ def test_populated_organization_and_tag_choices_are_kept_on_catalog_installation
         assert connection.execute('SELECT count(*) FROM eppm.tag_group').fetchone() == (2,)
         assert connection.execute('SELECT team_name FROM eppm.team WHERE team_id=1').fetchone() == ('Configured team',)
         assert connection.execute('SELECT firstname FROM eppm.employee WHERE employee_id=1').fetchone() == ('Configured person',)
+
+
+def test_repairing_an_explicit_task_identity_holds_concurrent_inserts_until_the_sequence_is_safe(pg_database):
+    operator = OperatorDatabase(pg_database.operator_url)
+    operator.run(ensure_reference_catalog, write=True)
+    with psycopg.connect(pg_database.operator_url) as connection:
+        connection.execute("INSERT INTO eppm.project(name) VALUES ('Existing')")
+        connection.execute("INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date) "
+                           "VALUES (100,1,'Explicit','2026-01-01','2026-01-02')")
+    ready = Event()
+    pids = []
+
+    def insert():
+        with psycopg.connect(pg_database.operator_url) as connection:
+            pids.append(connection.execute('SELECT pg_backend_pid()').fetchone()[0])
+            ready.set()
+            return connection.execute("INSERT INTO eppm.project_task(project_id,task_name,start_date,end_date) "
+                "VALUES (1,'Concurrent','2026-01-01','2026-01-02') RETURNING id").fetchone()[0]
+
+    with psycopg.connect(pg_database.operator_url) as repair, ThreadPoolExecutor(max_workers=1) as executor:
+        repair.execute('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE')
+        advance_seed_sequences(repair, (('project_task', 'id'),))
+        pending = executor.submit(insert)
+        try:
+            assert ready.wait(5)
+            deadline = monotonic() + 5
+            with psycopg.connect(pg_database.operator_url, autocommit=True) as inspector:
+                while monotonic() < deadline:
+                    row = inspector.execute('SELECT wait_event_type FROM pg_stat_activity WHERE pid=%s', (pids[0],)).fetchone()
+                    if row == ('Lock',):
+                        break
+                    sleep(0.01)
+                else:
+                    pytest.fail('The concurrent insert did not wait for sequence repair.')
+            assert not pending.done()
+        finally:
+            repair.commit()
+        assert pending.result(timeout=5) == 101

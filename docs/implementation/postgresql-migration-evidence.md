@@ -846,3 +846,50 @@ Bulk project/schedule generation, configurable allocation generation, the
 maintenance service and legacy tool wrappers, coordinated runtime/authentication
 cutover, exact money forms, SQLite archival, full application coverage and all
 final authenticated 50-user browser/recovery gates remain incomplete.
+
+## Native bulk projects, schedules and workload parity
+
+`seed-projects` now performs the existing bounded project/schedule generation
+with explicit PostgreSQL operator credentials and one pre-operation archive.
+Clean mode retains the native reset guarantees; append mode preserves current
+catalogs and existing records. Templates, choices, required rules and defaults
+are read in batches and validated through the existing domain functions.
+Budget arithmetic uses Decimal from the random unit interval through final
+two-decimal values. Unspecified entropy is frozen before callback replay.
+
+Native COPY statements contain at most 500 rows and keep validation, foreign
+keys and revision triggers enabled. Reserved task identities replace logical
+dependency IDs, so concurrent insertion between reservation and COPY cannot
+collide. Healthy sequences are never reset. A real waiting-writer test verifies
+that repair of an explicit ID beyond a sequence holds table inserts until the
+sequence is safe. Reset shares the existing project-identity creation lock.
+
+Four independently generated synthetic baseline workloads match complete
+project, property, selection, task and dependency hashes. The fixtures include
+mixed schedules, single-phase projects, 50-task projects and an empty seed;
+their regression tests require no SQLite runtime. No existing database records
+were imported. Native append tests additionally preserve custom required choices,
+old records and sequence gaps.
+
+Affected native seed/reset, archive, CLI, application-service and layer
+regressions passed **109 tests in 60.21 seconds**, exit code **0**. Final bulk and
+golden checks passed **26 tests in 20.77 seconds**, exit code **0**, covering
+**198/198 generator statements (100%)**. Logs and coverage:
+`.local/postgresql-bulk-seed-regressions.log`,
+`.local/postgresql-bulk-seed-regressions-coverage.json`,
+`.local/postgresql-bulk-seed-final.log`, and
+`.local/postgresql-bulk-seed-final-coverage.json`.
+
+The final full workload generated **10,001 projects**, **73,929 tasks**,
+**66,173 dependencies**, **258,022 property values** and **10,201 allocations**
+in **24.68 seconds**, including one native pre-operation archive. The fresh
+isolated database was removed after verifying counts and task bounds; existing
+application databases and volumes were retained. See
+[recorded operator workload evidence](postgresql-bulk-seed-scale.json) and
+[native seed operations](postgresql-seeding.md). This measures operator
+generation; authenticated browser performance has not yet been accepted.
+
+Configurable allocation generation, complete maintenance-service/tool wiring,
+coordinated runtime/authentication cutover, exact money forms, SQLite archival,
+full application coverage and the final 50-user browser and recovery/restart
+gates remain incomplete.

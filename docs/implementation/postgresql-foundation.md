@@ -38,7 +38,7 @@ including privileges reachable through non-inherited `SET ROLE` membership.
 verification and a transaction advisory lock. `check` reads compatibility only.
 
 [Native maintenance commands](postgresql-seeding.md) now install the complete
-demo or catalog, preview/apply pool scenarios, report counts, clear allocations
+demo or catalog, generate bulk projects/schedules, preview/apply pool scenarios, report counts, clear allocations
 and reset projects/references. They check compatibility and use one native
 pre-operation archive per mutation. PostgreSQL clients must be installed in the
 operator process environment; these commands do not change ordinary app startup.

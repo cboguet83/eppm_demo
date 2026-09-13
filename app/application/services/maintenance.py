@@ -10,6 +10,20 @@ from app.application.ports.maintenance import (
 from app.domain.resources.allocation_generation import AllocationGenerationRequest, validate_generation_request
 
 
+def validate_seed_request(request: SeedRequest) -> None:
+    """Validate generator options before database access or pre-operation backup."""
+    counts = (request.projects, request.min_tasks, request.max_tasks)
+    if any(type(value) is not int for value in counts) or (
+        request.projects < 0 or request.min_tasks < 0
+        or request.max_tasks < request.min_tasks or request.max_tasks > 50
+    ):
+        raise ValueError('Invalid project or task count.')
+    if request.random_seed is not None and type(request.random_seed) is not int:
+        raise ValueError('Invalid project random seed.')
+    if type(request.clean_first) is not bool:
+        raise ValueError('Invalid reset option.')
+
+
 class MaintenanceService:
     """Coordinate startup policy with injected infrastructure operations."""
 
@@ -33,14 +47,7 @@ class MaintenanceService:
 
     def seed_projects(self, request: SeedRequest) -> dict[str, int]:
         """Validate generation limits before requesting a backed-up seed operation."""
-        counts = (request.projects, request.min_tasks, request.max_tasks)
-        if any(type(value) is not int for value in counts) or (
-            request.projects < 0
-            or request.min_tasks < 0
-            or request.max_tasks < request.min_tasks
-            or request.max_tasks > 50
-        ):
-            raise ValueError("Invalid project or task count.")
+        validate_seed_request(request)
         return self._gateway.seed_projects(request)
 
     def flush(self, *, flush_all: bool = False) -> dict[str, int]:

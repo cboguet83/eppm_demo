@@ -141,6 +141,14 @@ def advance_seed_sequences(connection: psycopg.Connection, columns: tuple[tuple[
         if maximum is not None:
             sequence = connection.execute('SELECT pg_get_serial_sequence(%s,%s)', (f'eppm.{table}', column)).fetchone()[0]
             schema, name = sequence.split('.', 1)
+            last, called = connection.execute(sql.SQL('SELECT last_value,is_called FROM {}.{}').format(
+                sql.Identifier(schema), sql.Identifier(name))).fetchone()
+            if last > maximum or last == maximum and called:
+                continue
+            # Repair only an explicit operator ID beyond the sequence. Blocking
+            # table inserts during this repair prevents setval from overwriting
+            # a normal insert's concurrent nextval. Healthy sequences need no lock.
+            connection.execute(sql.SQL('LOCK TABLE eppm.{} IN SHARE ROW EXCLUSIVE MODE').format(sql.Identifier(table)))
             connection.execute(sql.SQL('SELECT setval(%s::regclass,greatest(last_value,%s),true) FROM {}.{}').format(
                 sql.Identifier(schema), sql.Identifier(name)), (sequence, maximum))
 

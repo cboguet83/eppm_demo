@@ -1,0 +1,10 @@
+{
+  "scope": "One complete backed-up operator seed in a fresh isolated PostgreSQL database; migration setup and browser actions excluded",
+  "request": {"projects": 10001, "min_tasks": 0, "max_tasks": 15, "clean_first": true, "random_seed": 42},
+  "summary": {"projects_created": 10001, "tasks_created": 73929, "dependencies_created": 66173, "project_types": 5, "property_values_created": 258022, "pools_created": 100, "pool_groups_created": 25},
+  "counts": {"projects": 10001, "tasks": 73929, "dependencies": 66173, "project_types": 5, "property_values": 258022, "pools": 103},
+  "elapsed_seconds": 24.677680899971165,
+  "archives": 1,
+  "assignments": 10201,
+  "tasks_out_of_range": 0
+}

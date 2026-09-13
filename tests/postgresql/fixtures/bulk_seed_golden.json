@@ -1,0 +1,162 @@
+{
+  "provenance": "Synthetic empty databases generated independently with the unchanged legacy generator; no stored business data.",
+  "legacy_source_sha256": "85a31d4b99b3f09cad4d64a5ec2913431189e9a93e1e7f3f8d083142b7fdffa5",
+  "cases": [
+    {
+      "request": {
+        "projects": 20,
+        "min_tasks": 0,
+        "max_tasks": 15,
+        "random_seed": 42
+      },
+      "summary": {
+        "projects_created": 20,
+        "project_types": 5,
+        "property_values_created": 516,
+        "tasks_created": 155,
+        "dependencies_created": 137,
+        "pools_created": 100,
+        "pool_groups_created": 25
+      },
+      "expected": {
+        "projects": {
+          "count": 20,
+          "sha256": "d56e57fcf298e3037a2c5a235e0e367d316cf6fc261743b9dfa5ce6dc7885706"
+        },
+        "properties": {
+          "count": 516,
+          "sha256": "e6eb3217e0ba378127dcb6758881c757fd1da3fe7225a7a2a36b07698ecb8013"
+        },
+        "selections": {
+          "count": 80,
+          "sha256": "2dfc0cfc0adf3f041f4c17125443e67ba753e75ede91f71e305cb3621b822415"
+        },
+        "tasks": {
+          "count": 155,
+          "sha256": "fd8c7629ab83977f36caccd3086e4704d52c8207613534309dad363a12d35108"
+        },
+        "dependencies": {
+          "count": 137,
+          "sha256": "4105f3cfcb594830e109b1844b46d7d61f6922c62c526cce89d01fd96dc025fb"
+        }
+      }
+    },
+    {
+      "request": {
+        "projects": 4,
+        "min_tasks": 1,
+        "max_tasks": 1,
+        "random_seed": 42
+      },
+      "summary": {
+        "projects_created": 4,
+        "project_types": 5,
+        "property_values_created": 98,
+        "tasks_created": 4,
+        "dependencies_created": 1,
+        "pools_created": 100,
+        "pool_groups_created": 25
+      },
+      "expected": {
+        "projects": {
+          "count": 4,
+          "sha256": "87c8669a8c1cf31af68b93a5adf4a39f29afacc01f6ec7bbc1b5c840f214a9f9"
+        },
+        "properties": {
+          "count": 98,
+          "sha256": "d92c1eefca1cb1dfadbf0185f14de9b7a03f0d6d71477245483d4ea06c0d3980"
+        },
+        "selections": {
+          "count": 16,
+          "sha256": "918259382f7759c0dfd67a39c68f881c585c7a533261ae4f2c72ffb92fcd442e"
+        },
+        "tasks": {
+          "count": 4,
+          "sha256": "2ce802f343c3b30650a505b39d24ee3ce17f1f1d2b0041200beb764a028231f9"
+        },
+        "dependencies": {
+          "count": 1,
+          "sha256": "2b526eedd1156ccdf71becd93c57cbda3bbeebeecada2afb7a86d31b849afac1"
+        }
+      }
+    },
+    {
+      "request": {
+        "projects": 3,
+        "min_tasks": 50,
+        "max_tasks": 50,
+        "random_seed": 7
+      },
+      "summary": {
+        "projects_created": 3,
+        "project_types": 5,
+        "property_values_created": 76,
+        "tasks_created": 150,
+        "dependencies_created": 31,
+        "pools_created": 100,
+        "pool_groups_created": 25
+      },
+      "expected": {
+        "projects": {
+          "count": 3,
+          "sha256": "51b081c8fe9395cb10d735f1b1435722af23686e34db204727743f4a08cc01a8"
+        },
+        "properties": {
+          "count": 76,
+          "sha256": "a242e1bf6b2603d6242639b5401f6530b9c4e4a02ed8dce383fd44aa276fdb79"
+        },
+        "selections": {
+          "count": 12,
+          "sha256": "bf73affca5c5596f659ecbec9497f3c778b8f81be68298c7a5b50d43dcee6584"
+        },
+        "tasks": {
+          "count": 150,
+          "sha256": "2960168c5a23708b90c4266eaad0927a46587363e8e2a9463e850f1c46f66b19"
+        },
+        "dependencies": {
+          "count": 31,
+          "sha256": "4a33695b05759cf00d08444b10dedf4622712538abd74237f374a7514da9bec0"
+        }
+      }
+    },
+    {
+      "request": {
+        "projects": 0,
+        "min_tasks": 0,
+        "max_tasks": 0,
+        "random_seed": 42
+      },
+      "summary": {
+        "projects_created": 0,
+        "project_types": 5,
+        "property_values_created": 0,
+        "tasks_created": 0,
+        "dependencies_created": 0,
+        "pools_created": 100,
+        "pool_groups_created": 25
+      },
+      "expected": {
+        "projects": {
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        "properties": {
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        "selections": {
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        "tasks": {
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        },
+        "dependencies": {
+          "count": 0,
+          "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+        }
+      }
+    }
+  ]
+}
