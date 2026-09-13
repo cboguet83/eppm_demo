@@ -1,40 +1,19 @@
 """Real finance grid editing, version dialogs, CSV and clipboard workflows."""
 
+import csv
+from decimal import Decimal
+import io
 import json
 import re
 from pathlib import Path
 
+import psycopg
 import pytest
 
-from tests.test_dialog_browser import popup_server as popup_server, expect, sync_playwright
+from tests.postgresql.finance_browser import popup_server as popup_server
 
-
-_APP = '''
-from pathlib import Path
-from datetime import date
-from contextlib import closing
-import streamlit as st
-from app.infrastructure.database.schema_init import init_db
-from app.infrastructure.database.connection import get_db
-from app.infrastructure.database.operator_context import deployment_access
-from app.main import create_finance_service
-from app.presentation.pages.finance import render_finance
-from app.presentation.i18n import set_current_locale
-
-database = str(Path(__file__).with_suffix('.db'))
-st.set_page_config(layout='wide')
-fresh = not Path(database).exists()
-if fresh:
-    init_db(database)
-    with closing(get_db(database)) as conn, conn:
-        conn.execute("INSERT INTO wbs(code,description) VALUES('A.1','Known description')")
-service = create_finance_service(database, access=deployment_access())
-service.today = lambda: date(2026,6,1)
-set_current_locale('en')
-st.session_state['shell_runs'] = st.session_state.get('shell_runs',0)+1
-st.caption('Shell runs: '+str(st.session_state['shell_runs']))
-render_finance(service)
-'''
+_playwright = pytest.importorskip("playwright.sync_api")
+expect, sync_playwright = _playwright.expect, _playwright.sync_playwright
 
 
 def paste(locator, text):
@@ -43,25 +22,70 @@ def paste(locator, text):
         node.dispatchEvent(new ClipboardEvent('paste',{clipboardData:clipboard,bubbles:true,cancelable:true}));}""", text)
 
 
-_NAV_APP = _APP.replace('render_finance(service)\n', '''
-page = st.sidebar.radio('Page', ['Finance', 'Dashboard'], key='test_page')
-if page == 'Finance':
-    render_finance(service)
-else:
-    st.header('Dashboard destination')
-''')
+@pytest.mark.parametrize('popup_server', ['workflow'], indirect=True, ids=['exact-authenticated-csv'])
+def test_browser_saves_and_reopens_exact_amounts_and_download_rechecks_native_session(popup_server, authorized):
+    """Verify browser text, SQL numeric and real cookie-protected CSV agree exactly."""
+    amount_text = '92233720368547758.07'
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        anonymous = playwright.request.new_context()
+        try:
+            page = popup_server.new_page(browser, viewport={'width': 1500, 'height': 1000})
+            page.goto(popup_server.origin)
+            grid = page.locator('.finance')
+            grid.get_by_role('button', name='Edit', exact=True).click(timeout=30000)
+            code = grid.get_by_role('textbox', name='1 WBS code', exact=True)
+            code.fill('A.1')
+            code.press('Tab')
+            grid.get_by_role('textbox', name='1 2026', exact=True).fill(amount_text)
+            grid.get_by_role('textbox', name='1 2027', exact=True).fill('0.00')
+            grid.get_by_role('button', name='Save new version', exact=True).click()
+            dialog = grid.get_by_role('dialog')
+            dialog.get_by_role('textbox', name='Name', exact=True).fill('Exact money')
+            dialog.get_by_role('combobox', name='Status', exact=True).select_option('Draft')
+            dialog.get_by_role('button', name='Confirm', exact=True).click()
+            expect(grid.locator('.plan-name')).to_have_text('Exact money')
+            with psycopg.connect(authorized.setup.operator_url) as connection:
+                assert connection.execute(
+                    'SELECT year,amount FROM eppm.finance_amount ORDER BY year',
+                ).fetchall() == [(2026, Decimal(amount_text)), (2027, Decimal('0.00'))]
+            page.reload()
+            expect(grid.locator('.plan-name')).to_have_text('Exact money', timeout=30000)
+            expect(grid.get_by_role('button', name='Save new version', exact=True)).to_be_disabled()
+            grid.get_by_role('button', name='Edit', exact=True).click()
+            expect(grid.get_by_role('textbox', name='1 2026', exact=True)).to_have_value(amount_text)
+            expect(grid.get_by_role('textbox', name='1 2027', exact=True)).to_have_value('0.00')
+            with page.expect_download() as download:
+                grid.get_by_role('button', name='Export CSV', exact=True).click()
+            assert download.value.failure() is None
+            content = Path(download.value.path()).read_text(encoding='utf-8-sig')
+            records = list(csv.DictReader(io.StringIO(content), delimiter=';'))
+            assert records[0]['2026'] == amount_text
+            assert records[0]['2027'] == '0.00' and records[0]['2028'] == ''
+            url = download.value.url
+            assert anonymous.get(url).status == 403
+            assert page.request.get(url).status == 200
+            with psycopg.connect(authorized.setup.operator_url) as connection:
+                connection.execute('UPDATE eppm.app_session SET revoked=true WHERE user_id=4')
+            response = page.request.get(url)
+            assert response.status == 403
+            assert response.headers['cache-control'] == 'no-store'
+            assert response.json()['error']['code'] == 'download_denied'
+        finally:
+            anonymous.dispose()
+            browser.close()
 
 
-@pytest.mark.parametrize('popup_server', [_NAV_APP], indirect=True, ids=['finance-navigation'])
+@pytest.mark.parametrize('popup_server', ['navigation'], indirect=True, ids=['finance-navigation'])
 def test_saving_finance_releases_sidebar_navigation(popup_server):
     """Saving a dirty plan must release its old browser navigation guard."""
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
-            page = browser.new_page(viewport={'width':1500, 'height':1000})
+            page = popup_server.new_page(browser, viewport={'width':1500, 'height':1000})
             errors = []
             page.on('pageerror', lambda error: errors.append(str(error)))
-            page.goto(popup_server)
+            page.goto(popup_server.origin)
             grid = page.locator('.finance')
             grid.get_by_role('button', name='Edit', exact=True).click(timeout=30000)
             code = grid.get_by_role('textbox', name='1 WBS code', exact=True)
@@ -95,13 +119,13 @@ def test_saving_finance_releases_sidebar_navigation(popup_server):
             browser.close()
 
 
-@pytest.mark.parametrize('popup_server', [_APP], indirect=True, ids=['finance-workflow'])
+@pytest.mark.parametrize('popup_server', ['workflow'], indirect=True, ids=['finance-workflow'])
 def test_finance_grid_saves_versions_imports_and_cancellations_without_shell_reruns(popup_server,tmp_path):
     with sync_playwright() as playwright:
         browser=playwright.chromium.launch(headless=True)
         try:
-            page=browser.new_page(viewport={'width':1500,'height':1000})
-            page.goto(popup_server)
+            page=popup_server.new_page(browser, viewport={'width':1500,'height':1000})
+            page.goto(popup_server.origin)
             grid=page.locator('.finance')
             expect(grid.get_by_role('button',name='Edit',exact=True)).to_be_visible(timeout=30000)
             expect(grid.get_by_role('button',name='Save new version',exact=True)).to_be_disabled()
@@ -147,10 +171,13 @@ def test_finance_grid_saves_versions_imports_and_cancellations_without_shell_rer
             grid.get_by_role('dialog').get_by_role('button',name='Confirm',exact=True).click()
             expect(grid.get_by_role('combobox',name='Budget version',exact=True)).to_have_text('21')
             expect(grid.locator('.muted').first).to_contain_text('Approved')
-            # Export retrieval is covered against the real authenticated endpoint separately.
             with page.expect_download() as download:
                 grid.get_by_role('button',name='Export CSV',exact=True).click()
-            assert re.fullmatch(re.escape(popup_server)+r'/downloads/finance/\d+/budget.csv',download.value.url)
+            assert re.fullmatch(re.escape(popup_server.origin)+r'/downloads/finance/\d+/budget.csv',download.value.url)
+            assert download.value.failure() is None
+            content = Path(download.value.path()).read_text(encoding='utf-8-sig')
+            assert content.startswith('wbs_code;description;2026;2027;')
+            assert 'A.1;Known description;10.25;20.50;' in content
             grid.get_by_role('button',name='Edit',exact=True).click()
             header=';'.join(['wbs_code','description',*map(str,range(2026,2041))])+'\n'
             invalid=header+'B;ignored;-1'+';'*14+'\n'
@@ -201,25 +228,16 @@ def test_finance_grid_saves_versions_imports_and_cancellations_without_shell_rer
             browser.close()
 
 
-_EXIT_APP = _APP.replace("set_current_locale('en')", """
-if fresh:
-    for amount in ['42', '99']:
-        service.save([{'code':'A.1','amounts':{'2026':amount}}],base_id=None,
-                     status='Draft',name='Plan '+amount,year=2026)
-set_current_locale('en')
-""")
-
-
-@pytest.mark.parametrize('popup_server', [_EXIT_APP], indirect=True, ids=['finance-exit-edit'])
+@pytest.mark.parametrize('popup_server', ['exit-edit'], indirect=True, ids=['finance-exit-edit'])
 def test_exit_edit_mode_restores_selected_plan_and_confirms_unsaved_changes(popup_server):
     """Read-only controls and explicit exit preserve the chosen saved version."""
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
-            page = browser.new_page(viewport={'width':1500, 'height':1000})
+            page = popup_server.new_page(browser, viewport={'width':1500, 'height':1000})
             errors = []
             page.on('pageerror', lambda error: errors.append(str(error)))
-            page.goto(popup_server)
+            page.goto(popup_server.origin)
             grid = page.locator('.finance')
             edit = grid.get_by_role('button', name='Edit', exact=True)
             delete = grid.get_by_role('button', name='Delete this plan', exact=True)
@@ -269,33 +287,13 @@ def test_exit_edit_mode_restores_selected_plan_and_confirms_unsaved_changes(popu
             browser.close()
 
 
-_READER_APP=_APP.replace("set_current_locale('en')", """
-from app.application.services.access import AccessService, AuthorizationPolicy, SessionLimits
-from app.application.services.business_access import BusinessAccess
-from app.infrastructure.repositories.access import SqliteAccessGateway
-from app.domain.access.models import VerifiedIdentity
-import secrets
-access=AccessService(SqliteAccessGateway(database),AuthorizationPolicy(lambda:1000,SessionLimits()),
-                     'https://provider.example.test',lambda:secrets.token_urlsafe(32))
-cookie=access.sign_in(VerifiedIdentity(access.issuer,'reader','','Reader',1000,100000,True))
-actor=access.actor(cookie)
-with access.gateway.transaction(write=True) as store:
-    store.set_status(actor.user_id,'active',1000)
-if fresh:
-    service.save([{'code':'A.1','amounts':{'2026':'42'}}],base_id=None,status='Draft',name='Shared',year=2026)
-service=create_finance_service(database,access=BusinessAccess(actor,access.policy))
-service.today=lambda:date(2026,6,1)
-set_current_locale('fr')
-""")
-
-
-@pytest.mark.parametrize('popup_server', [_READER_APP], indirect=True, ids=['finance-reader-fr'])
+@pytest.mark.parametrize('popup_server', ['reader'], indirect=True, ids=['finance-reader-fr'])
 def test_active_reader_sees_the_shared_plan_with_editing_disabled(popup_server):
     with sync_playwright() as playwright:
         browser=playwright.chromium.launch(headless=True)
         try:
-            page=browser.new_page(viewport={'width':1500,'height':1000})
-            page.goto(popup_server)
+            page=popup_server.new_page(browser, viewport={'width':1500,'height':1000})
+            page.goto(popup_server.origin)
             grid=page.locator('.finance')
             expect(grid.get_by_role('button',name='Enregistrer une nouvelle version',exact=True)).to_be_visible(timeout=30000)
             for name in ['Enregistrer une nouvelle version','Importer CSV','Modifier']:
@@ -309,23 +307,13 @@ def test_active_reader_sees_the_shared_plan_with_editing_disabled(popup_server):
             browser.close()
 
 
-_LARGE_APP=_APP.replace("set_current_locale('en')", """
-if fresh:
-    service.today=lambda:date(2021,6,1)
-    service.save([{'code':f'WBS_{i}', 'amounts':{'2021':'1.00','2026':'2.00'}} for i in range(1000)],
-                 base_id=None,status='Draft',name='Large plan',year=2021)
-    service.today=lambda:date(2026,6,1)
-set_current_locale('en')
-""")
-
-
-@pytest.mark.parametrize('popup_server', [_LARGE_APP], indirect=True, ids=['1000-wbs'])
+@pytest.mark.parametrize('popup_server', ['large'], indirect=True, ids=['1000-wbs'])
 def test_large_finance_grid_virtualizes_rows_and_preserves_history_on_paste(popup_server, tmp_path):
     with sync_playwright() as playwright:
         browser=playwright.chromium.launch(headless=True)
         try:
-            page=browser.new_page(viewport={'width':1500,'height':1000})
-            page.goto(popup_server)
+            page=popup_server.new_page(browser, viewport={'width':1500,'height':1000})
+            page.goto(popup_server.origin)
             grid=page.locator('.finance')
             grid.get_by_role('button',name='Edit',exact=True).click(timeout=30000)
             expect(grid.get_by_role('textbox',name='1 WBS code',exact=True)).to_be_visible(timeout=30000)
@@ -356,13 +344,13 @@ def test_large_finance_grid_virtualizes_rows_and_preserves_history_on_paste(popu
             browser.close()
 
 
-@pytest.mark.parametrize('popup_server', [_APP], indirect=True, ids=['spreadsheet-entry'])
+@pytest.mark.parametrize('popup_server', ['workflow'], indirect=True, ids=['spreadsheet-entry'])
 def test_blank_rows_grow_keyboard_navigation_and_missing_code_validation(popup_server):
     with sync_playwright() as playwright:
         browser=playwright.chromium.launch(headless=True)
         try:
-            page=browser.new_page(viewport={'width':1500,'height':1000})
-            page.goto(popup_server)
+            page=popup_server.new_page(browser, viewport={'width':1500,'height':1000})
+            page.goto(popup_server.origin)
             grid=page.locator('.finance')
             grid.get_by_role('button',name='Edit',exact=True).click(timeout=30000)
             first=grid.get_by_role('textbox',name='1 WBS code',exact=True)

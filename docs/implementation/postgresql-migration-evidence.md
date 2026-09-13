@@ -1098,3 +1098,26 @@ the native portfolio adapter and the budget page. Log:
 `.local/postgresql-budget-precision-final.log`. The remaining legacy UI/tool
 ports, full PostgreSQL-only coverage and final browser/recovery gates are still
 required before migration acceptance.
+
+## Native Finance browser workflows
+
+The six existing Finance browser workflows now run against separate migrated
+PostgreSQL databases, restricted runtime pools and real native cookie sessions.
+The test process owns its pool through the same ASGI lifespan used by the app;
+database setup uses a separate operator connection outside that process.
+The original SQLite server scripts and deployment-actor bypass were removed
+from these browser tests. Saves, version selection, CSV import, cancellation,
+edit/exit controls, French reader permissions, sidebar navigation, clipboard
+entry and the 1,000-row virtualized grid retain their existing assertions.
+
+Exports now exercise the real Finance download route and verify the downloaded
+CSV content. An additional browser regression saves `92233720368547758.07` and
+an explicit zero, checks native SQL numeric values, reloads the page, reopens
+editing and verifies exact text and CSV cells. The same endpoint returns 403
+for an anonymous request and immediately after native session revocation.
+
+Validation: **37 passed in 40.57 seconds**, comprising seven real browser
+workflows plus native Finance persistence, HTTP and UI callback tests. Output:
+`.local/postgresql-finance-browser-final.log`. These component-server sessions
+use the fixture's deliberate clock; this evidence does not replace the separate
+real OIDC application tests or the pending authenticated 50-user acceptance run.
