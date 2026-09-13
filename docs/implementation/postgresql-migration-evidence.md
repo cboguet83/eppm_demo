@@ -1169,3 +1169,23 @@ sharing their server lifecycle. Logs: `.local/postgresql-hierarchy-native-final.
 `.local/postgresql-hierarchy-coverage.json`, `.local/postgresql-hierarchy-browser-port.log`.
 Legacy organization/pool UI ports, other remaining runtime/tool/test archival
 and the full application, performance and recovery gates remain pending.
+
+## Native organization and resource-pool dialog ports
+
+The two layered UI suites now use explicit native runtime resources and signed
+business-admin access. Test resources are passed through AppTest state rather
+than embedded in generated source. Existing assertions remain for team membership,
+employee/calendar creation and editing, functions/types, pool tags, recursive
+groups, team/employee mappings, unassignment, deleted records, Settings row
+payloads and lazy sections.
+
+Late employee-calendar and pool-tag failures use real PostgreSQL trigger
+exceptions and prove that no partial parent record remains. The pool read-failure
+case temporarily removes a table privilege only in its isolated database,
+verifies the production dialog's safe error, and restores the privilege. No
+database adapter is mocked for those failure paths.
+
+Validation: **13 passed in 12.79 seconds**; output in
+`.local/postgresql-organization-pool-ui-port.log`. Native gateway regressions
+were already included in the preceding hierarchy validation. Other legacy
+UI/domain/tool ports and final migration acceptance are still pending.
