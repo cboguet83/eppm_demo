@@ -6,8 +6,10 @@ No queries, parameters, identities, cookies, URLs or exception messages are stor
 """
 
 from collections.abc import Callable
+import atexit
 from functools import wraps
 import json
+import os
 from pathlib import Path
 import resource
 import threading
@@ -77,6 +79,12 @@ def install(backend: str) -> None:
     from streamlit.runtime.scriptrunner.script_runner import ScriptRunner
     from app.infrastructure.authentication.planning import PlanningReadRoutes
 
+    if os.environ.get('LOAD_PROFILE') == '1':
+        from profiling import StackProfiler
+
+        profiler = StackProfiler(Path('/app/data/thread-profiles.json'))
+        profiler.start()
+        atexit.register(profiler.stop)
     ScriptRunner._run_script = timed("server_script", ScriptRunner._run_script)
     original_read = PlanningReadRoutes._read
     @wraps(original_read)
@@ -93,6 +101,12 @@ def install(backend: str) -> None:
     if backend == "postgresql":
         import psycopg
         from psycopg_pool import ConnectionPool
+        from app.application.services.projects import ProjectService
+        from app.infrastructure.postgresql.derived_cache import PostgresDerivedCache
+
+        ProjectService.update_project = timed('service_project_update', ProjectService.update_project)
+        for method in ('read', 'publish', 'load'):
+            setattr(PostgresDerivedCache, method, timed('cache_' + method, getattr(PostgresDerivedCache, method)))
 
         for method in ("execute", "executemany", "fetchone", "fetchmany", "fetchall"):
             setattr(psycopg.Cursor, method, timed("db_client_" + method, getattr(psycopg.Cursor, method)))

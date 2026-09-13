@@ -104,12 +104,13 @@ def grant_accounts(server: BrowserDeployment, backend: str, admin_cookie: str, v
 
 
 @contextmanager
-def load_deployment(backend: str, image: str | None = None) -> Iterator[tuple[BrowserDeployment, Path, dict[str, object]]]:
+def load_deployment(backend: str, image: str | None = None, *, profile: bool = False) -> Iterator[tuple[BrowserDeployment, Path, dict[str, object]]]:
     """Provision and remove only a newly named deployment and its own volumes.
 
     Args:
         backend: Explicit comparison image family; no runtime database fallback.
         image: Optional explicitly built image tag for a new native candidate.
+        profile: Collect diagnostic thread profiles; these are not acceptance timings.
     """
     if backend not in IMAGES:
         raise ValueError("Choose the PostgreSQL candidate or preserved SQLite baseline.")
@@ -124,7 +125,7 @@ def load_deployment(backend: str, image: str | None = None) -> Iterator[tuple[Br
         DATABASE_CONTEXT_KEY=token_hex(32),
         DATABASE_URL=f"postgresql://eppm_app:{runtime_password}@postgres:5432/eppm",
         DATABASE_OPERATOR_URL=f"postgresql://eppm_operator:{operator_password}@postgres:5432/eppm",
-        EPPM_APP_IMAGE=image or IMAGES[backend], APP_RUN_MODE="demo",
+        EPPM_APP_IMAGE=image or IMAGES[backend], APP_RUN_MODE="demo", LOAD_PROFILE='1' if profile else '0',
     )
     identity = uuid4().hex[:12]
     directory = ROOT / ".local/browser-load" / identity
@@ -155,6 +156,7 @@ def load_deployment(backend: str, image: str | None = None) -> Iterator[tuple[Br
     override.write_text(
         "services:\n  app:\n    environment:\n      DB_NAME: /app/data/benchmark.db\n"
         f"      APP_RUN_MODE: demo\n      LOAD_BACKEND: {backend}\n      PYTHONPATH: /app:/benchmark\n"
+        "      LOAD_PROFILE: ${LOAD_PROFILE}\n"
         "    entrypoint: [python, /benchmark/launch.py]\n    volumes: !override\n      - type: bind\n"
         "        source: ${EPPM_DATA_DIRECTORY}\n        target: /app/data\n" + observer_mounts + postgres_observation,
         encoding="utf-8",
@@ -196,6 +198,7 @@ print(json.dumps({'installed':True}))
             "statistics_preparation": ("Native operator seed refreshes application statistics" if backend == "postgresql"
                                        else "Explicit ANALYZE of the disposable SQLite copy"),
             "deployment": deployment_metadata(server, backend),
+            "diagnostic_profiling": profile,
         }
     finally:
         (data / "monitor.stop").touch()

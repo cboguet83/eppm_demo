@@ -75,6 +75,28 @@ Sampling estimates waits; it cannot prove that shorter waits never occurred.
 SQLite client SQL durations include its native locking waits, for which the
 driver provides no separate counter. There is no SQLite connection pool.
 
+For diagnostic pilots only, `--profile` samples application thread stacks every
+20 ms into `data/thread-profiles.json`. It retains code locations and counts,
+never frame locals, arguments or source lines. Storage is bounded to 10,000
+distinct stacks, with dropped observations reported explicitly. These samples
+locate waiting/processing paths; they are not exact function durations or
+acceptance timings. The usual service/cache boundary timers remain available.
+Concurrent worker preservation, value exclusion, the storage bound and sampler
+shutdown passed three targeted tests (14 checks including reporting/import guards).
+
+The discarded initial diagnostic wrapper attempted concurrent `cProfile`
+instances; Python 3.14 rejects a second active profiler. This was reproduced with
+two local threads. The stack sampler uses no profiling hook and the replacement
+three-session pilot completed all preparations and actions successfully.
+
+That diagnostic run is retained at `.local/browser-load/52f3d5e8c50a/`, using the
+unchanged `89b5b0e` application image. Seven project updates spent 3.61 seconds
+inside the service; property parent writes were the deepest application frame in
+132 samples. Revision reads and derived-cache reads/publication accounted for
+most other observed database waits. The run had zero workflow failures; measured
+p95 values were 941.1 ms paging, 5,424 ms task loading and 1,938.3 ms saves.
+Its tiny, instrumented sample is diagnostic evidence only.
+
 ## Recorded results and remaining work
 
 The [pilot summary](benchmarks/browser-pilot-results.json) records three sessions

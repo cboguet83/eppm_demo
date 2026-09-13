@@ -337,6 +337,7 @@ def main() -> int:
     parser = ArgumentParser(description=__doc__)
     parser.add_argument("--backend", choices=("postgresql", "sqlite"), required=True)
     parser.add_argument("--image")
+    parser.add_argument("--profile", action="store_true", help="Collect diagnostic thread-stack samples; not acceptance timings.")
     parser.add_argument("--readers", type=int, default=40)
     parser.add_argument("--editors", type=int, default=10)
     parser.add_argument("--rounds", type=int, default=3)
@@ -349,7 +350,7 @@ def main() -> int:
             or not all(math.isfinite(value) and value > 0 for value in
                        (options.warmup_seconds, options.measurement_seconds)):
         parser.error("Require at least two readers, one to ten editors, and positive periods.")
-    with load_deployment(arguments.backend, arguments.image) as (server, directory, fixture):
+    with load_deployment(arguments.backend, arguments.image, profile=arguments.profile) as (server, directory, fixture):
         report = {"fixture": fixture, "options": asdict(options), "acceptance_complete": False,
                   "diagnostics": {"runtime": "data/runtime-timings.jsonl", "postgresql": "data/postgresql-timings.jsonl"},
                   "remaining_instrumentation": ["container CPU/memory sampling", "browser rendering breakdown",
