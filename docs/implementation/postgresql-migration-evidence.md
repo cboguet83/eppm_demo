@@ -1121,3 +1121,24 @@ workflows plus native Finance persistence, HTTP and UI callback tests. Output:
 `.local/postgresql-finance-browser-final.log`. These component-server sessions
 use the fixture's deliberate clock; this evidence does not replace the separate
 real OIDC application tests or the pending authenticated 50-user acceptance run.
+
+## Finance legacy test retirement
+
+The active Finance domain suite now has no SQLite dependency. Its six existing
+pure test functions and all parameter cases remain active. The original module
+is preserved unchanged under `docs/archive/sqlite/tests/test_finance.py`, with
+an explicit behavior-to-native-test mapping in the archive README. Native tests
+already cover historical plans, scoped access, immutable cancellation, concurrent
+writes, rollover and retained finance after reset. Additional native regressions
+verify migration re-entry retains plans/grants/triggers, invalid statuses write
+nothing, finance leaves business cache revisions unchanged, and an unavailable
+pool yields a safe uncached HTTP failure. The PostgreSQL revision tests now hold
+their explicit source-table contract without importing a SQLite module.
+
+Validation: **166 passed in 46.19 seconds**, including Finance domain/service/UI/
+HTTP, native migrations, integrity, cache revisions and retained-history reset.
+The measured Finance modules have **342/342 statements covered (100%)**:
+domain, application service, PostgreSQL gateway, download route and page.
+Logs and coverage: `.local/postgresql-finance-native-complete.log` and
+`.local/postgresql-finance-native-coverage.json`. This is component coverage;
+the full PostgreSQL-only application coverage and final acceptance remain open.

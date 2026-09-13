@@ -12,7 +12,6 @@ import pytest
 from app.application.exceptions import ProjectStorageError
 from app.application.services.business_access import BusinessAccess
 from app.domain.access.models import AccessDenied, Actor
-from app.infrastructure.database.display_revision import DISPLAY_SOURCE_TABLES
 from app.infrastructure.postgresql.authorization import configure_signing_key
 from app.infrastructure.postgresql.business import run_business
 from app.infrastructure.postgresql.migration import migrate
@@ -20,6 +19,23 @@ from app.infrastructure.postgresql.pool import Database
 from app.infrastructure.postgresql.revisions import read_revisions, snapshot
 from app.shared.config.database import DatabaseConfig
 from tests.postgresql.conftest import database_url
+
+
+# Explicit business-source contract, independent of migration implementation.
+# Authentication housekeeping and Finance history do not invalidate these views.
+DISPLAY_SOURCE_TABLES = frozenset({
+    'hierarchy_type', 'hierarchy_type_translation', 'wbs', 'project_wbs',
+    'employee', 'employee_calendar_exception', 'function', 'function_type',
+    'project', 'project_contact', 'project_event_type', 'project_event_type_translation',
+    'project_link', 'project_log_event', 'project_property_value', 'project_property_value_item',
+    'project_role', 'project_role_translation', 'project_tag', 'project_task', 'project_type',
+    'project_type_property', 'project_type_property_default', 'project_type_property_default_item',
+    'project_type_property_rule', 'resource_pool', 'resource_pool_assignment',
+    'resource_pool_group', 'resource_pool_group_member', 'resource_pool_mapping',
+    'resource_pool_tag', 'schema_groups', 'schema_param_options', 'schema_parameter_translation',
+    'schema_parameters', 'tag_dictionnary', 'tag_group', 'task_dependencies', 'task_tag',
+    'team', 'team_function',
+})
 
 
 def revisions(authorized, user_id=1):

@@ -38,3 +38,26 @@ def test_native_finance_download_rechecks_active_session_on_every_get_and_head(p
         assert client.get('/downloads/finance/999/budget.csv').status_code == 403
         access.set_status(admin, reader.user_id, 'disabled')
         assert client.get(url).status_code == client.head(url).status_code == 403
+
+
+def test_finance_download_returns_safe_uncached_failure_when_native_storage_is_unavailable(pg_access, caplog):
+    """An actual unavailable pool must not expose connection details in HTTP or logs."""
+    access = pg_access.service
+    admin = administrator(pg_access)
+    cookie = access.sign_in(identity('download-unavailable'))
+    access.set_status(admin, access.actor(cookie).user_id, 'active')
+
+    def export(actor, snapshot_id):
+        gateway = PostgresFinanceGateway(pg_access.gateway.database, pg_access.gateway.signer.key,
+                                        access=BusinessAccess(actor, access.policy))
+        return FinanceService(gateway, lambda: date(2026, 6, 1)).export(snapshot_id)
+
+    with TestClient(Starlette(routes=FinanceDownloadRoutes(access, export).routes())) as client:
+        client.cookies.set('eppm_session', cookie)
+        pg_access.gateway.database.close()
+        response = client.get('/downloads/finance/1/budget.csv')
+        assert response.status_code == 503
+        assert response.json()['error']['code'] == 'download_failed'
+        assert response.headers['cache-control'] == 'no-store'
+        assert 'postgresql' not in response.text.lower()
+        assert pg_access.setup.runtime_url not in caplog.text

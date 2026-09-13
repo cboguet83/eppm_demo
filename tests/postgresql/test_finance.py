@@ -14,6 +14,8 @@ from app.domain.access.models import AccessDenied
 from app.domain.dashboard import WbsShare, allocated_budget
 from app.domain.finance import BudgetRow, FinanceError, MAX_AMOUNT, euro_text, export_csv
 from app.infrastructure.postgresql.finance import PostgresFinanceGateway
+from app.infrastructure.postgresql.migration import migrate
+from app.infrastructure.postgresql.revisions import snapshot
 
 
 def gateway(authorized, user_id=4):
@@ -138,6 +140,43 @@ def test_invalid_saves_and_read_only_store_calls_never_append_partial_history(fi
     with pytest.raises(FinanceStorageError, match='writer'):
         gateway(authorized).run(lambda store: store.insert((), number=2, name='No writer', status='Draft', base_id=first))
     assert len(finance.view().versions) == 1
+
+
+def test_finance_changes_do_not_invalidate_project_pool_catalog_or_permission_caches(finance, authorized):
+    """Independent financial history must not evict unchanged business displays."""
+    access = authorized.binding(4).access
+    before = snapshot(authorized.database, authorized.key, access)
+    first = save(finance)
+    finance.cancel(first)
+    assert snapshot(authorized.database, authorized.key, access) == before
+
+
+def test_reapplying_native_migrations_preserves_finance_history_grants_and_triggers(finance, authorized):
+    """Migration re-entry preserves existing historical truth and access enforcement."""
+    first = save(finance, status='Approved')
+    finance.cancel(first)
+    before = finance.view(first)
+    with psycopg.connect(authorized.setup.operator_url) as connection:
+        grants = connection.execute('SELECT * FROM eppm.app_role_assignment ORDER BY id').fetchall()
+        triggers = connection.execute(
+            "SELECT tgrelid,tgname FROM pg_trigger WHERE tgrelid IN "
+            "(SELECT oid FROM pg_class WHERE relnamespace='eppm'::regnamespace) ORDER BY tgrelid,tgname",
+        ).fetchall()
+    assert migrate(authorized.setup.operator_url) == ()
+    assert finance.view(first) == before
+    with psycopg.connect(authorized.setup.operator_url) as connection:
+        assert connection.execute('SELECT * FROM eppm.app_role_assignment ORDER BY id').fetchall() == grants
+        assert connection.execute(
+            "SELECT tgrelid,tgname FROM pg_trigger WHERE tgrelid IN "
+            "(SELECT oid FROM pg_class WHERE relnamespace='eppm'::regnamespace) ORDER BY tgrelid,tgname",
+        ).fetchall() == triggers
+
+
+@pytest.mark.parametrize('status', ['', None, {}, 'invalid'])
+def test_invalid_finance_status_does_not_create_a_snapshot(finance, status):
+    with pytest.raises(FinanceError, match='Choose'):
+        save(finance, [], status=status)
+    assert finance.view().versions == ()
 
 
 @pytest.mark.parametrize('amount', ['-0.01', '0.001', 'NaN', 'Infinity', '92233720368547758.08'])
