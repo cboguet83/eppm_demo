@@ -13,6 +13,15 @@ creation defaults. Property definitions and choices are loaded in batches;
 parent values and ordered list items are written together. Planning catalogs
 batch requested active values and applicability without per-project hydration.
 
+After the master update enforces owner permissions, a project save validates all
+submitted properties and compares their native representations in the same
+transaction. Identical parent values and ordered selections are left untouched;
+changed properties are replaced atomically. This avoids repeated writes and cache
+revision triggers on title-only edits. Nulls, absent values, empty selections,
+selection positions and stored kinds remain distinct. Forms still submit all
+their values; this does not introduce dirty-field saves or stale-form protection.
+Direct property writes retain their default per-row database guards.
+
 ## Monetary boundary
 
 Project records normalize budgets to finite Decimal euros. PostgreSQL NUMERIC

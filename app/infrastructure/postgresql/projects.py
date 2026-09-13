@@ -75,7 +75,10 @@ class PostgresProjectStore(PostgresWbsStore):
         self.connection.execute('UPDATE eppm.project SET name=%s,status=%s,planned_budget=%s,actual_budget=%s,function_id=%s,project_type_id=%s WHERE id=%s',
                                 (project.name, project.status, project.planned_budget, project.actual_budget,
                                  project.function_id, project.project_type_id, project.id))
-        write_values(self.connection, project.id, project.dynamic_attributes)
+        # The master UPDATE has already enforced owner permissions, even for an
+        # unchanged form. Preserve full-form validation while avoiding repeated
+        # value/item writes and their revision triggers for identical properties.
+        write_values(self.connection, project.id, project.dynamic_attributes, skip_unchanged=True)
 
     def get_links(self, project_id: int) -> list[LinkValues]:
         """Read the visible project's editor link values in creation order."""

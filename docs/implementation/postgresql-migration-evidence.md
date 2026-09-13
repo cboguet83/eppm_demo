@@ -2182,3 +2182,33 @@ workload measurements. Report/import guards passed 11 checks in 2.29 seconds.
 Performance acceptance remains incomplete, and the full regression/coverage gate
 must be refreshed after the final code fixes; its earlier native checkpoint is
 retained as historical evidence.
+
+## Measured project-property write reduction
+
+The diagnostic runner now uses bounded thread-stack sampling, which avoids the
+concurrent `cProfile` registration failure reproduced on Python 3.14. Its
+three-session pilot completed without workflow failures. It recorded seven
+project updates taking 3.61 seconds inside the service, with property parent
+writes prominent in sampled stacks. Revision and derived-cache reads/publication
+remain the dominant task-refresh investigation. See the
+[diagnostic details](postgresql-browser-load.md).
+
+Project updates now validate every submitted property and compare stored kinds,
+native values and ordered selection positions in their existing transaction.
+After the master update has enforced owner permissions, identical properties
+are omitted from persistence. Changed rows retain the normal database guards and
+audit triggers. Direct property callers keep their original per-row writes and
+guards. Title-only saves preserve property row versions and advance only the
+master project's display revision. This keeps existing full-form overwrite
+semantics, including a form saved after another editor's property change.
+
+The final native property/project/template run passed **48 checks in 21.58
+seconds**, with **73/73 property-adapter statements covered (100%)**. New
+regressions cover unchanged rows/revisions, mixed edits, exact numbers, empty
+values, selection order/positions, stored-kind changes, alternate date formatting,
+option revalidation, denied owners/protected changes and full-form overwrites.
+The broader security/revision/project-dialog/import run passed **105 checks in
+61.89 seconds** before the final alternate-date-format refinement. Logs are
+`.local/postgresql-property-write-final.log` and
+`.local/postgresql-property-write-security-ui.log`. The rebuilt application still
+requires another browser pilot and final load/regression acceptance.
