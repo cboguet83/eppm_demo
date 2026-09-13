@@ -119,3 +119,17 @@ def test_maintenance_and_benchmark_commands_have_no_legacy_imports() -> None:
         assert not any(module == "src" or module.startswith("src.") for module in imports(path)), (
             path
         )
+
+
+def test_runtime_tools_and_tests_cannot_import_retired_sqlite_storage() -> None:
+    """Keep archived adapters outside active runtime, diagnostics and regressions."""
+    retired = ('sqlite3', 'app.infrastructure.database', 'app.infrastructure.repositories',
+               'app.infrastructure.authentication.state')
+    for layer in ('app', 'scripts', 'tests'):
+        for path in (ROOT / layer).rglob('*.py'):
+            for module in imports(path):
+                assert not any(module == prefix or module.startswith(prefix + '.') for prefix in retired), (path, module)
+    for directory in ('app/infrastructure/database', 'app/infrastructure/repositories'):
+        assert not list((ROOT / directory).glob('*.py'))
+    from app.shared.config import AppConfig
+    assert 'db_path' not in AppConfig.__dataclass_fields__

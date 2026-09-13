@@ -38,12 +38,12 @@ preserves UI behavior and makes the existing regression suite reproducible.
 | Milestone | State | Evidence / remaining work |
 | --- | --- | --- |
 | 1. Baseline and decisions | Baseline captured | ADR, full baseline test results, workload and service timings recorded. Browser load comparison remains an acceptance gate. |
-| 2. PostgreSQL foundation | Additive foundation tested | Configuration, pool, migration runner, Compose, operator role provisioning and isolated tests implemented. Application lifecycle integration follows repository cutover. |
-| 3. Schema and enforcement | Native enforcement tested | Native integrity, RLS, actor binding, audit, access administration, per-entity revisions and private derived-cache storage implemented. Final cutover and clean deployment validation remain. |
-| 4. Core repositories | Native adapters tested | Organization, schema, tags, collaboration, templates, projects, WBS and Decimal budget adapters use complete callbacks. Browser money inputs and runtime composition remain staged. |
-| 5. Planning and caches | In progress | Native scheduling, resources, private staffing, revisions, guarded caches, bounded portfolio queries and aggregate-only dashboard reads implemented. Final runtime integration remains. |
-| 6. Runtime cutover | In progress | Native authentication/access adapters and callback service integration implemented; composition, operator tools, seeds, benchmarks and legacy archive remain. |
-| 7. Acceptance and documentation | Pending | Full regression/coverage, browser/load runs, backup/restore, deployment and C4 documentation. |
+| 2. PostgreSQL foundation | Implemented, focused checks pass | Configuration, restricted process pool/lifecycle, 22 explicit migrations, Compose, operator provisioning and isolated tests. Final deployment acceptance remains. |
+| 3. Schema and enforcement | Implemented, focused checks pass | Native integrity, RLS, actor binding, immutable Finance/audit, access administration and private derived caches. Full combined regression remains. |
+| 4. Core repositories | Implemented, focused checks pass | All business adapters use native callbacks; exact money inputs and database-backed browser fixtures are ported. |
+| 5. Planning and caches | Implemented, focused checks pass | Native scheduling, resources, staffing, cache invalidation, bounded portfolio/dashboard queries and HTTP task reads. Fifty-user performance acceptance remains. |
+| 6. Runtime cutover | Implemented, focused checks pass | Composition, authentication, operator/seed tools and planning diagnostics use PostgreSQL. Legacy runtime and test history is archived outside active packages. |
+| 7. Acceptance and documentation | Incomplete | Complete regression with at least 95% coverage, authenticated 50-user comparison, representative deployed recovery/restart, and final documentation/C4 audit. |
 
 ## Performance acceptance
 
@@ -2016,3 +2016,19 @@ in `.local/postgresql-benchmark-tools-clean.log`. Usage and measurement boundari
 are documented in [PostgreSQL planning diagnostics](postgresql-benchmarks.md).
 Remaining acceptance includes SQLite runtime archival, full regression/95% coverage,
 authenticated 50-user responsiveness, and representative deployed recovery.
+
+## SQLite runtime retirement
+
+All 46 former database/repository modules are archived unchanged under
+`docs/archive/sqlite/app/infrastructure/`, including the applied SQLite migration
+history. Every destination's Git hash matches its original source. No database
+files, archives, accounts or business records were moved or imported. The unused
+SQLite database-path configuration is removed; PostgreSQL URLs remain explicit.
+
+A static import guard now covers application code, operator/benchmark tools and
+all active tests, preventing SQLite and retired adapter imports. Validation after
+archival passed **65 checks in 47.08 seconds** across import boundaries, native
+startup, the layered application screens, operator commands and all diagnostics:
+`.local/postgresql-runtime-archive-validation.log`. Full regression/95% coverage,
+authenticated load comparison, representative deployed recovery/restart and final
+documentation review remain open acceptance gates.

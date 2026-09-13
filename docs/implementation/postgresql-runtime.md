@@ -119,11 +119,12 @@ all five demo projects, the account, grants and business source fingerprint
 were unchanged. These are demo smoke checks, not the final representative load
 and recovery acceptance runs.
 
-Runtime cutover is not final migration acceptance. Legacy code/tests still need
-archival or behavioral porting, remaining benchmark tools need conversion, and
-the complete browser workflows still need native fixture ports. Full application coverage,
-the authenticated 50-user browser benchmark and representative deployed
-recovery/restart gates remain required.
+Runtime cutover is not final migration acceptance. Database-backed tests and
+browser fixtures now use native adapters; planning benchmark tools use isolated
+PostgreSQL restores. Retired SQLite runtime sources and test history are archived
+outside active packages. Full regression with at least 95% application coverage,
+the authenticated 50-user browser benchmark, representative deployed
+recovery/restart, and the final documentation audit remain required.
 
 ## Exact project money forms
 

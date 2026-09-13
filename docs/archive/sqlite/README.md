@@ -7,6 +7,13 @@ The migration plan explicitly retires SQLite upgrade tests after their business
 invariants have real PostgreSQL coverage. Existing database files and backups
 remain separate and are not changed by this source archive.
 
+The 46 former `app/infrastructure/database` and
+`app/infrastructure/repositories` source files are retained unchanged under
+`app/infrastructure/` here, including all applied SQLite migration sources.
+Each archived file's Git hash was checked against its original. Active runtime,
+diagnostic and test imports are guarded against returning to these adapters.
+The obsolete `DB_NAME`/`AppConfig.db_path` runtime setting has been removed.
+
 ## Finance test mapping
 
 `tests/test_finance.py` here is the unchanged original test module. The active

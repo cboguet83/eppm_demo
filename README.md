@@ -10,7 +10,7 @@ This branch runs on PostgreSQL 18.6 with a restricted connection pool and explic
 operator commands for migrations, seeding, backups and account bootstrap. See
 [ADR 0024](docs/decisions/0024-postgresql-runtime.md) and the
 [native runtime guide](docs/implementation/postgresql-runtime.md). The migration
-is still in progress: legacy archival, complete regression/coverage, authenticated
+is still in progress: complete regression/coverage, authenticated
 load testing and recovery acceptance remain open. The
 [evidence log](docs/implementation/postgresql-migration-evidence.md) records the
 checks already performed. Existing SQLite files are retained without importing
