@@ -1665,3 +1665,17 @@ coverage; representative deployed recovery and the final load gate remain open.
 After these ports, full collection succeeds with **2,261 tests in 8.06 seconds**
 and no collection errors, recorded in `.local/postgresql-test-port-collection.log`.
 The earlier full execution continues against its original source checkout.
+
+## Native account-administration presentation
+
+Account-gate tests now use restricted native resources and separately composed
+operator bootstrap. They retain anonymous/pending/disabled gates, French
+localization, fixed roles, administrator continuity, exact-subject registration,
+named project selection, property-scope explanations and deleted-reference repair.
+Native database inspection verifies registration never fabricates provider
+verification. Expired reauthentication still prevents grants and directs the
+administrator back to sign-in.
+
+Validation: **9 passed in 11.50 seconds**, recorded in
+`.local/postgresql-access-presentation-port.log`. No application authorization
+rule or bootstrap capability was moved into the browser.

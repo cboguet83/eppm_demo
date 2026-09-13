@@ -1,21 +1,22 @@
-"""Real Streamlit account and access-administration boundaries with real SQLite."""
+"""Real Streamlit account and access-administration boundaries with PostgreSQL."""
 
-from pathlib import Path
+import psycopg
 import secrets
 import time
 
 import pytest
 from streamlit.testing.v1 import AppTest
 
-from app.application.services.access import DeploymentAccessService
 from app.domain.access.models import VerifiedIdentity
-from app.infrastructure.database.schema_init import init_db
-from app.infrastructure.repositories.access import SqliteAccessGateway
+from app.infrastructure.postgresql.authorization import configure_signing_key
+from app.infrastructure.postgresql.seed_catalog import ensure_reference_catalog
+from app.operator_services import create_deployment_access_service
+from app.runtime import RuntimeResources
 from app.security import create_access_service
 from app.shared.config.authentication import AuthenticationConfig
 
 
-def access_screen(path: str, settings: AuthenticationConfig, cookie: str, require_admin_mfa: bool = False) -> None:
+def access_screen(path: RuntimeResources, settings: AuthenticationConfig, cookie: str, require_admin_mfa: bool = False) -> None:
     """Render the production gate and administration screen with injected test transport."""
     from app.presentation.components.authentication import account_gate
     from app.presentation.pages.access_management import render_access_management
@@ -31,9 +32,12 @@ def access_screen(path: str, settings: AuthenticationConfig, cookie: str, requir
 
 
 @pytest.fixture
-def access_ui(tmp_path: Path):
-    path = str(tmp_path / "access-ui.db")
-    init_db(path)
+def access_ui(pg_database, database):
+    key = secrets.token_bytes(32)
+    configure_signing_key(pg_database.operator_url, key.hex())
+    with psycopg.connect(pg_database.operator_url) as connection:
+        ensure_reference_catalog(connection)
+    path = RuntimeResources(database, key)
     settings = AuthenticationConfig("development", "http://keycloak.localhost:8080/realms/eppm", "eppm-test",
                                      secrets.token_urlsafe(32), "http://localhost:8501", secrets.token_urlsafe(48), local_http=True)
     service = create_access_service(path, settings)
@@ -43,7 +47,7 @@ def access_ui(tmp_path: Path):
     return path, settings, service, cookie
 
 
-def test_anonymous_pending_and_disabled_screens_do_not_render_administration(access_ui):
+def test_anonymous_pending_and_disabled_screens_do_not_render_administration(access_ui, pg_database):
     path, settings, service, cookie = access_ui
     anonymous = AppTest.from_function(access_screen, args=(path, settings, "")).run()
     assert not anonymous.exception
@@ -52,14 +56,14 @@ def test_anonymous_pending_and_disabled_screens_do_not_render_administration(acc
     pending = AppTest.from_function(access_screen, args=(path, settings, cookie)).run()
     assert not pending.exception and "awaiting activation" in pending.info[0].value
     assert [item.key for item in pending.selectbox] == ["app_language_selector"]
-    with service.gateway.transaction(write=True) as store:
-        store.set_status(service.actor(cookie).user_id, "disabled", int(time.time()))
+    with psycopg.connect(pg_database.operator_url) as connection:
+        connection.execute("UPDATE eppm.app_user SET status='disabled' WHERE id=%s", (service.actor(cookie).user_id,))
     pending.run()
     assert "disabled" in pending.info[0].value
     assert [item.key for item in pending.selectbox] == ["app_language_selector"]
 
 
-def test_public_and_pending_accounts_can_choose_french_without_business_access(access_ui):
+def test_public_and_pending_accounts_can_choose_french_without_business_access(access_ui, pg_database):
     path, settings, service, cookie = access_ui
     anonymous = AppTest.from_function(access_screen, args=(path, settings, "")).run()
     anonymous.selectbox(key="app_language_selector").set_value("fr").run()
@@ -70,10 +74,10 @@ def test_public_and_pending_accounts_can_choose_french_without_business_access(a
     assert not pending.header and not pending.button
 
 
-def test_administration_ui_exposes_fixed_roles_and_keeps_bootstrap_out_of_browser(access_ui):
+def test_administration_ui_exposes_fixed_roles_and_keeps_bootstrap_out_of_browser(access_ui, pg_database):
     path, settings, service, cookie = access_ui
     user_id = service.actor(cookie).user_id
-    operator = DeploymentAccessService(SqliteAccessGateway(path), lambda: int(time.time()), "ui-test", lambda: secrets.token_urlsafe(16))
+    operator = create_deployment_access_service(pg_database.operator_url)
     operator.bootstrap(user_id)
     app = AppTest.from_function(access_screen, args=(path, settings, cookie)).run()
     assert not app.exception
@@ -93,28 +97,25 @@ def test_administration_ui_exposes_fixed_roles_and_keeps_bootstrap_out_of_browse
     assert "At least one active access administrator" in app.error[0].value
 
 
-def test_active_user_cannot_render_access_administration_without_access_role(access_ui):
+def test_active_user_cannot_render_access_administration_without_access_role(access_ui, pg_database):
     path, settings, service, cookie = access_ui
     actor = service.actor(cookie)
-    with service.gateway.transaction(write=True) as store:
-        store.set_status(actor.user_id, "active", int(time.time()))
+    with psycopg.connect(pg_database.operator_url) as connection:
+        connection.execute("UPDATE eppm.app_user SET status='active' WHERE id=%s", (actor.user_id,))
     app = AppTest.from_function(access_screen, args=(path, settings, cookie)).run()
     assert not app.exception
     assert "not permitted" in app.error[0].value
     assert not app.selectbox
 
 
-def test_administrator_can_retain_a_named_project_selection_and_grant_its_scope(access_ui):
-    from contextlib import closing
+def test_administrator_can_retain_a_named_project_selection_and_grant_its_scope(access_ui, pg_database):
     import json
-    from app.infrastructure.database.connection import get_db
 
     path, settings, service, cookie = access_ui
     actor = service.actor(cookie)
-    DeploymentAccessService(service.gateway, lambda: int(time.time()), "ui-test",
-                            lambda: secrets.token_urlsafe(16)).bootstrap(actor.user_id)
-    with closing(get_db(path)) as connection, connection:
-        connection.execute("INSERT INTO project(id,name) VALUES(1,'Visible project'),(2,'Other project')")
+    create_deployment_access_service(pg_database.operator_url).bootstrap(actor.user_id)
+    with psycopg.connect(pg_database.operator_url) as connection:
+        connection.execute("INSERT INTO eppm.project(id,name) VALUES(1,'Visible project'),(2,'Other project')")
     target = service.register(actor, settings.issuer, "named-scope", "Scope User")
     service.set_status(actor, target, "active")
     app = AppTest.from_function(access_screen, args=(path, settings, cookie)).run()
@@ -143,11 +144,10 @@ def french_locale():
         set_current_locale(previous)
 
 
-def test_french_administration_explains_last_admin_and_empty_scope_errors(access_ui, french_locale):
+def test_french_administration_explains_last_admin_and_empty_scope_errors(access_ui, pg_database, french_locale):
     path, settings, service, cookie = access_ui
     actor = service.actor(cookie)
-    DeploymentAccessService(service.gateway, lambda: int(time.time()), "ui-test",
-                            lambda: secrets.token_urlsafe(16)).bootstrap(actor.user_id)
+    create_deployment_access_service(pg_database.operator_url).bootstrap(actor.user_id)
     app = AppTest.from_function(access_screen, args=(path, settings, cookie))
     app.session_state["locale"] = "fr"
     app.run()
@@ -163,11 +163,10 @@ def test_french_administration_explains_last_admin_and_empty_scope_errors(access
     assert app.error[0].value == "Sélectionnez au moins une valeur de référence."
 
 
-def test_administration_preregisters_exact_subject_and_activates_only_selected_account(access_ui):
+def test_administration_preregisters_exact_subject_and_activates_only_selected_account(access_ui, pg_database):
     path, settings, service, cookie = access_ui
     actor = service.actor(cookie)
-    DeploymentAccessService(service.gateway, lambda: int(time.time()), "ui-test",
-                            lambda: secrets.token_urlsafe(16)).bootstrap(actor.user_id)
+    create_deployment_access_service(pg_database.operator_url).bootstrap(actor.user_id)
     app = AppTest.from_function(access_screen, args=(path, settings, cookie)).run()
     next(item for item in app.text_input if item.label == "Exact provider subject").set_value("external-subject-17")
     next(item for item in app.text_input if item.label == "Display name").set_value("Registered Account")
@@ -175,10 +174,9 @@ def test_administration_preregisters_exact_subject_and_activates_only_selected_a
     assert not app.exception and not app.error
     target = service.list_users(actor, "Registered Account")[0]
     assert target["status"] == "pending" and not service.assignments(actor, target["id"])
-    with service.gateway.transaction() as store:
-        assert not store.verified_user(target["id"])
-        mapping = store.connection.execute("SELECT issuer,subject FROM app_identity WHERE user_id=?", (target["id"],)).fetchone()
-        assert tuple(mapping) == (settings.issuer, "external-subject-17")
+    with psycopg.connect(pg_database.operator_url) as connection:
+        mapping = connection.execute("SELECT issuer,subject,verified_at FROM eppm.app_identity WHERE user_id=%s", (target["id"],)).fetchone()
+        assert mapping == (settings.issuer, "external-subject-17", None)
     app.selectbox(key="access_selected_user").set_value(target["id"]).run()
     next(item for item in app.selectbox if item.label == "Account status").set_value("active")
     next(item for item in app.button if item.label == "Save account status").click().run()
@@ -188,20 +186,17 @@ def test_administration_preregisters_exact_subject_and_activates_only_selected_a
     assert not service.assignments(actor, target["id"])
 
 
-def test_property_scope_form_explains_and_matches_then_exposes_deleted_reference_for_repair(access_ui):
-    from contextlib import closing
+def test_property_scope_form_explains_and_matches_then_exposes_deleted_reference_for_repair(access_ui, pg_database):
     from app.domain.access.models import Permission
-    from app.infrastructure.database.connection import get_db
 
     path, settings, service, cookie = access_ui
     actor = service.actor(cookie)
-    DeploymentAccessService(service.gateway, lambda: int(time.time()), "ui-test",
-                            lambda: secrets.token_urlsafe(16)).bootstrap(actor.user_id)
-    with closing(get_db(path)) as connection, connection:
-        connection.execute("INSERT INTO project(id,name) VALUES(1,'Matching project'),(2,'Without department')")
-        connection.execute("INSERT INTO schema_parameters(param_id,param_name,param_type) VALUES('DEPT','Department','ENUM')")
-        connection.execute("INSERT INTO schema_param_options(id,param_id,option_value) VALUES(100,'DEPT','Finance')")
-        connection.execute("INSERT INTO project_property_value(project_id,param_id,kind,text_value) VALUES(1,'DEPT','text','Finance')")
+    create_deployment_access_service(pg_database.operator_url).bootstrap(actor.user_id)
+    with psycopg.connect(pg_database.operator_url) as connection:
+        connection.execute("INSERT INTO eppm.project(id,name) VALUES(1,'Matching project'),(2,'Without department')")
+        connection.execute("INSERT INTO eppm.schema_parameters(param_id,param_name,param_type) VALUES('DEPT','Department','ENUM')")
+        connection.execute("INSERT INTO eppm.schema_param_options(id,param_id,option_value) VALUES(100,'DEPT','Finance')")
+        connection.execute("INSERT INTO eppm.project_property_value(project_id,param_id,kind,text_value) VALUES(1,'DEPT','text','Finance')")
     target = service.register(actor, settings.issuer, "property-scope-user", "Property Scope User")
     service.set_status(actor, target, "active")
     department = next(item["property_id"] for item in service.scope_catalog(actor) if item.get("param_id") == "DEPT")
@@ -225,8 +220,8 @@ def test_property_scope_form_explains_and_matches_then_exposes_deleted_reference
     app.number_input(key="access_explain_project").set_value(2).run()
     next(item for item in app.button if item.label == "Check effective access").click().run()
     assert any("No assignment grants access" in item.value for item in app.info)
-    with closing(get_db(path)) as connection, connection:
-        connection.execute("DELETE FROM schema_param_options WHERE id=100")
+    with psycopg.connect(pg_database.operator_url) as connection:
+        connection.execute("DELETE FROM eppm.schema_param_options WHERE id=100")
     app.run()
     assert not app.exception and app.warning
     assert service.effective_access(actor, target, 1) == []
@@ -236,8 +231,8 @@ def test_property_scope_form_explains_and_matches_then_exposes_deleted_reference
     app.selectbox(key="access_scope_kind").set_value("all").run()
     app.button(key="access_grant").click().run()
     assert not app.exception and service.assignments(actor, target)[0]["matching_projects"] == 2
-    with closing(get_db(path)) as connection, connection:
-        connection.execute("UPDATE app_role_assignment SET scope_json=? WHERE user_id=?",
+    with psycopg.connect(pg_database.operator_url) as connection:
+        connection.execute("UPDATE eppm.app_role_assignment SET scope_json=%s::jsonb WHERE user_id=%s",
                            ('{"kind":"unsupported"}', target))
     app.run()
     assert not app.exception and app.warning
@@ -248,11 +243,10 @@ def test_property_scope_form_explains_and_matches_then_exposes_deleted_reference
     assert any("provider-verified MFA session" in item.value for item in app.caption)
 
 
-def test_access_write_requires_reauthentication_without_changing_existing_grants(access_ui):
+def test_access_write_requires_reauthentication_without_changing_existing_grants(access_ui, pg_database):
     path, settings, service, cookie = access_ui
     actor = service.actor(cookie)
-    DeploymentAccessService(service.gateway, lambda: int(time.time()), "ui-test",
-                            lambda: secrets.token_urlsafe(16)).bootstrap(actor.user_id)
+    create_deployment_access_service(pg_database.operator_url).bootstrap(actor.user_id)
     now = int(time.time())
     older_cookie = service.sign_in(VerifiedIdentity(settings.issuer, "verified-user", "user@example.test",
                                                      "Example User", now - 301, now + 3600, True), cookie)
