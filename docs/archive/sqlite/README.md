@@ -32,6 +32,21 @@ are historical upgrade mechanics, not PostgreSQL runtime contracts. Native tests
 exercise corresponding identity, migration atomicity, access and immutable
 history behavior directly. No SQLite data, grants or finance history are imported.
 
+## Hierarchy test mapping
+
+`tests/test_hierarchy_types.py` here preserves the original SQLite suite. The
+active `tests/postgresql/test_hierarchy_types.py` retains all catalog validation,
+labels, optional team/pool/group assignments and Settings authorization checks.
+The old SQLite column-add upgrade is replaced by native reference-install
+rollback/retry and migration re-entry checks against existing entities. Native
+foreign-key and stable-code constraints are exercised directly. PostgreSQL
+migration DDL atomicity remains covered in `test_foundation.py`.
+
+The existing hierarchy Settings/dialog and browser workflows moved to
+`tests/postgresql/test_hierarchy_ui.py` and `test_hierarchy_browser.py`, using
+real native services and sessions. The seven editable reference values are
+installed explicitly by parent test setup, never by a rendering application.
+
 This is an incremental archive. Other legacy test and tool ports, archival of
 the old runtime itself, full application coverage and final performance/recovery
 acceptance remain pending.

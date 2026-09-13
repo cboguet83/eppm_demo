@@ -1142,3 +1142,30 @@ domain, application service, PostgreSQL gateway, download route and page.
 Logs and coverage: `.local/postgresql-finance-native-complete.log` and
 `.local/postgresql-finance-native-coverage.json`. This is component coverage;
 the full PostgreSQL-only application coverage and final acceptance remain open.
+
+## Native hierarchy Settings, dialogs and browser
+
+Hierarchy catalog validation, translated labels, optional team/pool/group
+assignments and Settings authority now run in the native test suite. Direct
+PostgreSQL writes verify foreign-key and stable-code enforcement. Reference
+installation rolls back completely on failure; retry and migration re-entry
+preserve existing entities, including their generated timestamps, while sequence
+gaps are retained. The original SQLite upgrade test module is archived with its
+native behavior mapping.
+
+All six entity create/edit dialogs retain selection, reassignment and clearing
+checks. The Settings screen still creates/edits/deletes localized choices and
+rejects deleting an assigned type. The real browser edits the catalog, assigns
+a renamed type to a pool, then clears it. Browser tests share an isolated
+native server helper with Finance: real cookie resolution, restricted child
+credentials, process-owned pool lifespan and test-owned cleanup. This helper
+does not stand in for OIDC application login or concurrent-user acceptance.
+
+Validation: **55 native hierarchy/organization/resource-pool checks passed in
+22.17 seconds**, with hierarchy domain, selector and Settings page coverage
+**60/60 statements (100%)**. Separately, **15 Settings/dialog/browser checks
+passed in 38.57 seconds**, including all seven Finance browser workflows after
+sharing their server lifecycle. Logs: `.local/postgresql-hierarchy-native-final.log`,
+`.local/postgresql-hierarchy-coverage.json`, `.local/postgresql-hierarchy-browser-port.log`.
+Legacy organization/pool UI ports, other remaining runtime/tool/test archival
+and the full application, performance and recovery gates remain pending.

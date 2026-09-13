@@ -1,46 +1,66 @@
 """Browser checks for hierarchy catalog editing and optional pool classification."""
 
+import psycopg
 import pytest
 
-from tests.test_dialog_browser import popup_server as popup_server, expect, sync_playwright
+from app.domain.resources.models import ResourcePool
+from app.infrastructure.postgresql.seed_catalog import ensure_reference_catalog
+from app.main import create_resource_pool_service
+from app.runtime import RuntimeResources
+from tests.postgresql.browser import native_server
+
+_playwright = pytest.importorskip('playwright.sync_api')
+expect, sync_playwright = _playwright.expect, _playwright.sync_playwright
 
 
 _APP = '''
-from pathlib import Path
 import streamlit as st
-from app.infrastructure.database.schema_init import init_db
-from app.operator_services import create_organization_service, create_resource_pool_service
-from app.domain.resources.models import ResourcePool
+from app.application.services.business_access import BusinessAccess
+from app.main import create_organization_service, create_resource_pool_service
 from app.presentation.pages.hierarchy import render_hierarchy_types
 from app.presentation.components.resource_pool_dialogs import _open_edit_pool_dialog
 from app.presentation.i18n import set_current_locale
+from app.runtime import process_runtime
+from tests.postgresql.browser import browser_access
 
 st.set_page_config(layout='wide')
-database = str(Path(__file__).with_suffix('.db'))
-if not Path(database).exists():
-    init_db(database)
-    create_resource_pool_service(database).create_pool(ResourcePool('Browser pool'))
+runtime = process_runtime()
+authentication = browser_access(runtime)
+actor = authentication.actor(st.context.cookies.get('eppm_session', ''))
+access = BusinessAccess(actor, authentication.policy)
 set_current_locale('en')
-organization = create_organization_service(database)
-resources = create_resource_pool_service(database)
+organization = create_organization_service(runtime, access=access)
+resources = create_resource_pool_service(runtime, access=access)
 render_hierarchy_types(organization)
+pool_id = resources.get_all_pools()[0].id
 if st.button('Edit browser pool'):
-    _open_edit_pool_dialog(resources, 1)
-pool = resources.get_pool_by_id(1)
+    _open_edit_pool_dialog(resources, pool_id)
+pool = resources.get_pool_by_id(pool_id)
 st.text('Stored hierarchy: ' + str(pool.hierarchy_type_id))
 st.text('Saved label: ' + organization.get_all_hierarchy_types()[-1].label('en'))
 '''
 
 
-@pytest.mark.parametrize("popup_server", [_APP], indirect=True)
+@pytest.fixture
+def popup_server(authorized, tmp_path):
+    """Seed reference choices separately, then use a native business-admin session."""
+    with psycopg.connect(authorized.setup.operator_url) as connection:
+        ensure_reference_catalog(connection)
+    service = create_resource_pool_service(RuntimeResources(authorized.database, authorized.key),
+                                           access=authorized.binding(4).access)
+    service.create_pool(ResourcePool('Browser pool'))
+    with native_server(authorized, tmp_path, _APP) as server:
+        yield server
+
+
 def test_browser_edits_catalog_and_assigns_then_clears_pool_type(popup_server, tmp_path):
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
-            page = browser.new_page(viewport={"width": 1450, "height": 1100})
+            page = popup_server.new_page(browser, viewport={"width": 1450, "height": 1100})
             errors = []
             page.on("pageerror", lambda error: errors.append(str(error)))
-            page.goto(popup_server)
+            page.goto(popup_server.origin)
             page.get_by_role("textbox", name="Code", exact=True).fill("custom", timeout=30000)
             page.get_by_role("textbox", name="English").fill("Custom hierarchy")
             page.get_by_role("button", name="Save hierarchy type", exact=True).click()

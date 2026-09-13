@@ -1,14 +1,14 @@
 """Hierarchy catalog Settings and optional selections in all six entity dialogs."""
 
 from streamlit.testing.v1 import AppTest
+import psycopg
 import pytest
 from unittest.mock import patch
 
 from app.domain.organization.models import Team
-from app.infrastructure.database.schema_init import init_db
-from app.operator_services import create_organization_service, create_resource_pool_service
-from tests.test_layered_organization_ui import dialog as team_dialog
-from tests.test_layered_resource_pool_ui import dialog as pool_dialog
+from app.infrastructure.postgresql.seed_catalog import ensure_reference_catalog
+from app.main import create_organization_service, create_resource_pool_service
+from app.runtime import RuntimeResources
 
 
 def test_unassigned_hierarchy_label_uses_the_originating_session_locale():
@@ -36,25 +36,52 @@ if st.button("Save"):
 
 
 @pytest.fixture
-def database(tmp_path):
-    path = str(tmp_path / "hierarchy-ui.db")
-    init_db(path)
-    return path
+def database(authorized):
+    with psycopg.connect(authorized.setup.operator_url) as connection:
+        ensure_reference_catalog(connection)
+    return RuntimeResources(authorized.database, authorized.key)
+
+
+@pytest.fixture
+def access(authorized):
+    return authorized.binding(4).access
+
+
+def entity_screen(service, kind, identity):
+    """Render the actual modal with a native service across AppTest reruns."""
+    from app.presentation.components import organization_dialogs, resource_pool_dialogs
+    from app.presentation.components.organization_frames import functions_frame
+    from app.presentation.i18n import set_current_locale
+
+    set_current_locale('en')
+    if kind == 'team':
+        functions = functions_frame(service.get_all_functions())
+        if identity is None:
+            organization_dialogs._open_add_team_dialog(service, functions)
+        else:
+            organization_dialogs._open_edit_team_dialog(service, identity, functions)
+    elif kind == 'pool':
+        if identity is None:
+            resource_pool_dialogs._open_add_pool_dialog(service)
+        else:
+            resource_pool_dialogs._open_edit_pool_dialog(service, identity)
+    elif identity is None:
+        resource_pool_dialogs._open_add_pool_group_dialog(service)
+    else:
+        resource_pool_dialogs._open_edit_pool_group_dialog(service, identity)
 
 
 @pytest.mark.parametrize("kind", ["team", "pool", "group"])
-def test_create_edit_and_clear_optional_hierarchy_in_entity_dialogs(database, kind):
-    organization = create_organization_service(database)
-    resources = create_resource_pool_service(database)
-    launcher, add, edit, read, identity = {
-        "team": (team_dialog, "_open_add_team_dialog(service, functions)",
-                 "_open_edit_team_dialog(service, {id}, functions)", organization.get_all_teams, "team_id"),
-        "pool": (pool_dialog, "_open_add_pool_dialog(service)",
-                 "_open_edit_pool_dialog(service, {id})", resources.get_all_pools, "id"),
-        "group": (pool_dialog, "_open_add_pool_group_dialog(service)",
-                  "_open_edit_pool_group_dialog(service, {id})", resources.get_all_pool_groups, "id"),
+def test_create_edit_and_clear_optional_hierarchy_in_entity_dialogs(database, access, kind):
+    organization = create_organization_service(database, access=access)
+    resources = create_resource_pool_service(database, access=access)
+    service, read, identity = {
+        "team": (organization, organization.get_all_teams, "team_id"),
+        "pool": (resources, resources.get_all_pools, "id"),
+        "group": (resources, resources.get_all_pool_groups, "id"),
     }[kind]
-    app = launcher(database, add)
+    app = AppTest.from_function(entity_screen, args=(service, kind, None), default_timeout=15).run()
+    assert not app.exception
     selector = app.selectbox(key="hierarchy_type_selection")
     assert selector.value == 0
     assert selector.options == ["None", "ressort", "service", "division", "equipe", "region", "brigade", "district"]
@@ -64,7 +91,7 @@ def test_create_edit_and_clear_optional_hierarchy_in_entity_dialogs(database, ki
     assert not app.exception
     entity = read()[0]
     assert entity.hierarchy_type_id == 4
-    app = launcher(database, edit.format(id=getattr(entity, identity)))
+    app = AppTest.from_function(entity_screen, args=(service, kind, getattr(entity, identity)), default_timeout=15).run()
     assert app.selectbox(key="hierarchy_type_selection").value == 4
     app.selectbox(key="hierarchy_type_selection").set_value(2)
     app.button[0].click().run()
@@ -74,16 +101,16 @@ def test_create_edit_and_clear_optional_hierarchy_in_entity_dialogs(database, ki
     assert not app.exception and read()[0].hierarchy_type_id is None
 
 
-def settings_screen(path):
-    from app.operator_services import create_settings_workspace
+def settings_screen(resources, access):
+    from app.main import create_settings_workspace
     from app.presentation.pages.settings import render_settings_view
     from app.presentation.i18n import set_current_locale
     set_current_locale("en")
-    render_settings_view(create_settings_workspace(path))
+    render_settings_view(create_settings_workspace(resources, access=access))
 
 
-def test_settings_catalog_creates_localized_labels_edits_and_deletes(database):
-    app = AppTest.from_function(settings_screen, args=(database,), default_timeout=15)
+def test_settings_catalog_creates_localized_labels_edits_and_deletes(database, access):
+    app = AppTest.from_function(settings_screen, args=(database, access), default_timeout=15)
     app.session_state["settings_tab_selection"] = "Hierarchy types"
     app.run()
     assert not app.exception
@@ -94,7 +121,7 @@ def test_settings_catalog_creates_localized_labels_edits_and_deletes(database):
     app.text_input[2].input("Libellé personnalisé")
     app.button[0].click().run()
     assert not app.exception
-    service = create_organization_service(database)
+    service = create_organization_service(database, access=access)
     saved = service.get_all_hierarchy_types()[-1]
     assert saved.code == "custom" and saved.label("fr") == "Libellé personnalisé"
     app.selectbox(key="hierarchy_catalog_selection").set_value(saved.id).run()
@@ -109,10 +136,10 @@ def test_settings_catalog_creates_localized_labels_edits_and_deletes(database):
     assert len(service.get_all_hierarchy_types()) == 7
 
 
-def test_settings_cannot_delete_a_type_assigned_to_a_team(database):
-    service = create_organization_service(database)
+def test_settings_cannot_delete_a_type_assigned_to_a_team(database, access):
+    service = create_organization_service(database, access=access)
     service.create_team(Team("Existing", hierarchy_type_id=1))
-    app = AppTest.from_function(settings_screen, args=(database,), default_timeout=15)
+    app = AppTest.from_function(settings_screen, args=(database, access), default_timeout=15)
     app.session_state["settings_tab_selection"] = "Hierarchy types"
     app.run()
     app.selectbox(key="hierarchy_catalog_selection").set_value(1).run()
@@ -122,19 +149,19 @@ def test_settings_cannot_delete_a_type_assigned_to_a_team(database):
     assert service.get_all_teams()[0].hierarchy_type_id == 1
 
 
-def team_screen(path):
-    from app.operator_services import create_organization_service
+def team_screen(resources, access):
+    from app.main import create_organization_service
     from app.presentation.pages.organization import render_teams
     from app.presentation.i18n import set_current_locale
     set_current_locale("en")
-    render_teams(create_organization_service(path))
+    render_teams(create_organization_service(resources, access=access))
 
 
-def test_team_table_includes_shared_hierarchy_labels_and_empty_assignments(database):
-    service = create_organization_service(database)
+def test_team_table_includes_shared_hierarchy_labels_and_empty_assignments(database, access):
+    service = create_organization_service(database, access=access)
     service.create_team(Team("Assigned", hierarchy_type_id=4))
     service.create_team(Team("Unassigned"))
     with patch("app.presentation.pages.organization._table", return_value=None) as table:
-        app = AppTest.from_function(team_screen, args=(database,)).run()
+        app = AppTest.from_function(team_screen, args=(database, access)).run()
     assert not app.exception
     assert [row["hierarchy_type"] for row in table.call_args.kwargs["teams"]] == ["equipe", ""]
