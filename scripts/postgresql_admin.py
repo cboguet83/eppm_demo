@@ -2,6 +2,7 @@
 
 import argparse
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
 import psycopg
@@ -10,6 +11,8 @@ from psycopg import sql
 from app.infrastructure.postgresql.errors import MigrationError, SchemaCompatibilityError
 from app.infrastructure.postgresql.migration import check_schema, migrate
 from app.infrastructure.postgresql.authorization import configure_signing_key
+from app.infrastructure.postgresql.backup import PostgresBackup, PostgresTools, restore_database
+from app.application.exceptions import DatabaseMaintenanceError
 from app.shared.config.database import validate_database_url
 from app.shared.logging import get_logger, setup_logging
 
@@ -43,12 +46,14 @@ def provision_runtime(url: str, password: str) -> None:
             connection.execute("GRANT eppm_runtime TO eppm_app")
 
 
-def main() -> None:
-    """Load operator settings only from explicit environment or an explicit file."""
+def main(*, archive_tools: PostgresTools | None = None) -> None:
+    """Load explicit operator settings, with injectable installed archive clients."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--env-file", help="Ignored operator environment file; never loaded implicitly")
     parser.add_argument("--url-variable", default="DATABASE_OPERATOR_URL")
-    parser.add_argument("command", choices=("provision", "migrate", "check", "configure-security"))
+    parser.add_argument("--backup-directory", type=Path, default=Path('.local/backups'))
+    parser.add_argument("--archive", type=Path, help="Existing PostgreSQL archive for an empty restore target")
+    parser.add_argument("command", choices=("provision", "migrate", "check", "configure-security", "backup", "restore"))
     arguments = parser.parse_args()
     if arguments.env_file:
         load_dotenv(arguments.env_file, override=True)
@@ -63,11 +68,17 @@ def main() -> None:
             logger.info("PostgreSQL migrations applied: %s", ", ".join(names) or "already current")
         elif arguments.command == "configure-security":
             configure_signing_key(url, os.environ.get("DATABASE_CONTEXT_KEY", ""))
+        elif arguments.command == "backup":
+            PostgresBackup(url, arguments.backup_directory, tools=archive_tools).create('operator')
+        elif arguments.command == "restore":
+            if arguments.archive is None:
+                raise ValueError('Specify a PostgreSQL archive for restoration.')
+            restore_database(arguments.archive, url, tools=archive_tools)
         else:
             with psycopg.connect(url, autocommit=True, connect_timeout=5) as connection:
                 check_schema(connection)
-    except (ValueError, psycopg.Error, MigrationError, SchemaCompatibilityError):
-        parser.exit(1, "PostgreSQL operator command failed. Check configuration, role privileges and schema compatibility.\n")
+    except (ValueError, psycopg.Error, MigrationError, SchemaCompatibilityError, DatabaseMaintenanceError):
+        parser.exit(1, "PostgreSQL operator command failed. Check configuration, role privileges, schema compatibility and any archive or restore target.\n")
 
 
 if __name__ == "__main__":

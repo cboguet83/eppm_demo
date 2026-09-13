@@ -124,6 +124,8 @@ available for that comparison before its runtime is archived.
   54 combined checks and 3 browser checks passed, with 100% native adapter coverage.
 - `c344f53` — scoped dashboard reports and private competing-demand aggregates;
   638 native/dashboard/layer checks passed, with 99.26% native dashboard adapter coverage.
+- `c3d2ba1` — process resource lifetime for native runtime integration;
+  58 lifecycle/foundation/layer checks passed, with 100% resource-module coverage.
 
 ## Native schema and integrity
 
@@ -738,3 +740,29 @@ Native lifecycle, pool/foundation and layer checks passed **58 tests in
 10.66 seconds**, exit code **0**, with **31/31 resource-module statements covered
 (100%)**. Log: `.local/postgresql-runtime-resources.log`; coverage:
 `.local/postgresql-runtime-resources-coverage.json`.
+
+## Native archives and isolated restoration
+
+The operator archive primitive now uses PostgreSQL custom-format dumps,
+exclusive publication, private libpq connection environments and bounded client
+execution. The CLI exposes explicit backup and empty-target restore commands.
+Restoration uses one transaction, retains owners/grants/row policies and checks
+schema compatibility. Existing targets are preserved and failures never trigger
+automatic retries.
+
+Real dump/restore tests preserved exact project and approved-plan values of
+**9007199254740993.01 euros**, current actor scope and immutable plan enforcement.
+Restoring source revision metadata into a different database still changes
+display fingerprints. A truncated archive leaves no application schema after
+rollback. CLI dispatch, client/timeout/filesystem failures and secret-safe errors
+are covered.
+
+The combined backup/operator/lifecycle/layer run passed **26 tests in
+6.97 seconds**, exit code **0**, covering **91/91 backup statements** and
+**31/31 lifecycle statements (100%)**. Log: `.local/postgresql-backup-native.log`;
+coverage: `.local/postgresql-backup-coverage.json`. See
+[PostgreSQL backups](postgresql-backups.md) for commands and C3 components.
+
+This is isolated recovery evidence for the archive primitive. Seed/reset/runtime
+integration, representative-data recovery, deployed restart persistence, final
+application coverage and the three authenticated 50-user browser runs remain.

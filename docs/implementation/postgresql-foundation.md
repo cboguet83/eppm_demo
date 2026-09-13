@@ -246,3 +246,9 @@ Native lifecycle, pool/foundation and layer checks passed **58 tests in
 10.66 seconds**, with **31/31 resource-module statements covered (100%)**.
 Log: `.local/postgresql-runtime-resources.log`; coverage:
 `.local/postgresql-runtime-resources-coverage.json`.
+
+[PostgreSQL archives and isolated restoration](postgresql-backups.md) now use
+native clients with private connection environments and safe errors. The
+operator CLI exposes explicit `backup` and `restore` commands; source privileges
+and exact approved finance data survive restoration into an empty test database.
+Seed/reset integration and deployed recovery/restart acceptance remain pending.
