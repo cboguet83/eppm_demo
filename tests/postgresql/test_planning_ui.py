@@ -1,30 +1,33 @@
 """Real planning component mutations, safe failures, and injected data isolation."""
 
-from contextlib import closing
-from pathlib import Path
-import sqlite3
+from secrets import token_hex
 from unittest.mock import patch
 
+import psycopg
 import pytest
 from streamlit.testing.v1 import AppTest
 
-from app.infrastructure.database.connection import get_db
-from app.operator_services import create_planning_service, create_planning_workspace
+from app.application.services.business_access import BusinessAccess
+from app.infrastructure.postgresql.authorization import configure_signing_key
+from app.infrastructure.postgresql.migration import migrate
+from app.infrastructure.postgresql.planning import PostgresPlanningStore
+from app.main import create_planning_service, create_planning_workspace
 from app.presentation.components.planning_data import load_planning_catalog
 from app.presentation.components.planning_events import validate_event
-from app.infrastructure.database.schema_init import init_db
+from app.runtime import RuntimeResources
+from tests.postgresql.ui import runtime as runtime, access as access
 
 
-def planning_app(path: str) -> None:
+def planning_app(resources: RuntimeResources, access: BusinessAccess) -> None:
     """Run the real planner with optional pre-rerun component callbacks."""
     import streamlit as st
-    from app.operator_services import create_planning_workspace
+    from app.main import create_planning_workspace
     from app.presentation.pages.planning import (
         render_planning_milestones,
         _handle_gantt_component_change,
     )
 
-    workspace = create_planning_workspace(path)
+    workspace = create_planning_workspace(resources, access=access)
     event = st.session_state.pop("before_event", None)
     if event:
         st.session_state["planning_lazy_gantt"] = event
@@ -33,22 +36,20 @@ def planning_app(path: str) -> None:
 
 
 @pytest.fixture
-def database(tmp_path: Path) -> str:
-    path = str(tmp_path / "screen.db")
-    init_db(path)
-    with closing(sqlite3.connect(path)) as connection, connection:
-        connection.execute("INSERT INTO project(id,name) VALUES(1,'Project')")
-    create_planning_service(path).create_milestone(
+def database(authorized, runtime: RuntimeResources, access: BusinessAccess) -> RuntimeResources:
+    with psycopg.connect(authorized.setup.operator_url) as connection:
+        connection.execute("UPDATE eppm.project SET name='Project' WHERE id=1")
+    create_planning_service(runtime, access=access).create_milestone(
         1, "First", "General", "2026-01-01", "2026-01-02", 0
     )
-    return path
+    return runtime
 
 
-def test_dashboard_drill_through_replaces_stale_planning_filters(database: str) -> None:
+def test_dashboard_drill_through_replaces_stale_planning_filters(database: RuntimeResources, access: BusinessAccess, authorized) -> None:
     """A resource-chart jump must show all its consumers despite old filters."""
-    with closing(sqlite3.connect(database)) as connection, connection:
-        connection.execute("INSERT INTO project(id,name) VALUES(2,'Second project')")
-    app = AppTest.from_function(planning_app, args=(database,), default_timeout=30)
+    with psycopg.connect(authorized.setup.operator_url) as connection:
+        connection.execute("UPDATE eppm.project SET name='Second project' WHERE id=2")
+    app = AppTest.from_function(planning_app, args=(database, access), default_timeout=30)
     app.session_state["ms_multi_projects"] = [1]
     app.session_state["ms_planning_tag_filter"] = ["Old tag"]
     app.session_state["active_resource_pool_filter"] = {"pool_ids": [999]}
@@ -66,11 +67,11 @@ def test_dashboard_drill_through_replaces_stale_planning_filters(database: str) 
 
 
 def test_gantt_create_edit_progress_and_delete_use_real_application_transactions(
-    database: str,
+    database: RuntimeResources, access: BusinessAccess,
 ) -> None:
-    app = AppTest.from_function(planning_app, args=(database,), default_timeout=30)
+    app = AppTest.from_function(planning_app, args=(database, access), default_timeout=30)
     app.session_state["ms_multi_projects"] = [1]
-    service = create_planning_service(database)
+    service = create_planning_service(database, access=access)
     with patch(
         "app.presentation.pages.planning._interactive_gantt", return_value=None
     ) as component:
@@ -127,10 +128,10 @@ def test_gantt_create_edit_progress_and_delete_use_real_application_transactions
         assert len(service.get_milestones_by_project(1)) == 1
 
 
-def test_adding_task_keeps_multi_project_scope_and_focuses_the_created_project(database: str) -> None:
-    with closing(sqlite3.connect(database)) as connection, connection:
-        connection.execute("INSERT INTO project(id,name) VALUES(2,'Second project')")
-    app = AppTest.from_function(planning_app, args=(database,), default_timeout=30)
+def test_adding_task_keeps_multi_project_scope_and_focuses_the_created_project(database: RuntimeResources, access: BusinessAccess, authorized) -> None:
+    with psycopg.connect(authorized.setup.operator_url) as connection:
+        connection.execute("UPDATE eppm.project SET name='Second project' WHERE id=2")
+    app = AppTest.from_function(planning_app, args=(database, access), default_timeout=30)
     app.session_state["ms_multi_projects"] = [1, 2]
     with patch("app.presentation.pages.planning._interactive_gantt", return_value=None) as component:
         app.run()
@@ -165,11 +166,11 @@ def test_adding_task_keeps_multi_project_scope_and_focuses_the_created_project(d
     ],
 )
 def test_malformed_or_conflicting_gantt_create_does_not_leave_a_task(
-    database: str,
+    database: RuntimeResources, access: BusinessAccess,
     change: dict,
     message: str,
 ) -> None:
-    app = AppTest.from_function(planning_app, args=(database,), default_timeout=30)
+    app = AppTest.from_function(planning_app, args=(database, access), default_timeout=30)
     event = {
         "action": "create_step_full",
         "project_id": 1,
@@ -186,16 +187,16 @@ def test_malformed_or_conflicting_gantt_create_does_not_leave_a_task(
         app.run()
     assert not app.exception
     assert any(message in error.value.lower() for error in app.error)
-    assert len(create_planning_service(database).get_all_milestones()) == 1
+    assert len(create_planning_service(database, access=access).get_all_milestones()) == 1
     assert app.session_state["last_gantt_nonce"] == "invalid"
     assert not any("FOREIGN KEY" in error.value for error in app.error)
 
 
 @pytest.mark.parametrize("action", ["update_task_full", "delete_step"])
 def test_stale_gantt_mutations_report_missing_record_without_success(
-    database: str, action: str
+    database: RuntimeResources, access: BusinessAccess, action: str
 ) -> None:
-    app = AppTest.from_function(planning_app, args=(database,), default_timeout=30)
+    app = AppTest.from_function(planning_app, args=(database, access), default_timeout=30)
     event = {
         "action": action,
         "id": 999,
@@ -210,11 +211,11 @@ def test_stale_gantt_mutations_report_missing_record_without_success(
         app.run()
     assert not app.exception
     assert any("no longer exists" in error.value for error in app.error)
-    assert len(create_planning_service(database).get_all_milestones()) == 1
+    assert len(create_planning_service(database, access=access).get_all_milestones()) == 1
 
 
-def test_bad_callback_is_consumed_once_and_cannot_change_progress(database: str) -> None:
-    app = AppTest.from_function(planning_app, args=(database,), default_timeout=30)
+def test_bad_callback_is_consumed_once_and_cannot_change_progress(database: RuntimeResources, access: BusinessAccess) -> None:
+    app = AppTest.from_function(planning_app, args=(database, access), default_timeout=30)
     app.session_state["before_event"] = {
         "action": "update_progress",
         "id": 1,
@@ -225,35 +226,33 @@ def test_bad_callback_is_consumed_once_and_cannot_change_progress(database: str)
         app.run()
     assert not app.exception and app.error
     assert app.session_state["last_gantt_nonce"] == "bad-progress"
-    assert create_planning_service(database).get_milestone_by_id(1)["progress_pct"] == 0
+    assert create_planning_service(database, access=access).get_milestone_by_id(1)["progress_pct"] == 0
     with pytest.raises(ValueError, match="project_ids"):
         validate_event({"project_ids": 1})
     assert validate_event({"description": None, "id": "1"}) == {"description": "", "id": 1}
 
 
-def test_task_bundle_reads_tags_and_assignments_from_the_same_snapshot(database: str) -> None:
-    with closing(sqlite3.connect(database)) as connection, connection:
-        connection.execute("PRAGMA journal_mode=WAL")
-        connection.execute("INSERT INTO task_tag(task_id,free_tag) VALUES(1,'Before')")
-        connection.execute("INSERT INTO resource_pool(id,name,capacity_fte) VALUES(1,'Pool',1)")
+def test_task_bundle_reads_tags_and_assignments_from_the_same_snapshot(database: RuntimeResources, access: BusinessAccess, authorized) -> None:
+    with psycopg.connect(authorized.setup.operator_url) as connection:
+        connection.execute("INSERT INTO eppm.task_tag(task_id,free_tag) VALUES(1,'Before')")
+        connection.execute("INSERT INTO eppm.resource_pool(id,name,capacity_fte) VALUES(1,'Pool',1)")
         connection.execute(
-            "INSERT INTO resource_pool_assignment(pool_id,project_id,task_id,fte_assigned) VALUES(1,1,1,0.5)"
+            "INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,fte_assigned) VALUES(1,1,1,0.5)"
         )
-    held = get_db(database)
     changed = []
+    dependencies = PostgresPlanningStore.get_dependencies_for_projects
 
-    def commit_during_hydration(statement: str) -> None:
-        if "CROSS JOIN task_dependencies" not in statement or changed:
-            return
-        with closing(sqlite3.connect(database)) as writer, writer:
-            writer.execute("UPDATE project_task SET task_name='After' WHERE id=1")
-            writer.execute("UPDATE task_tag SET free_tag='After' WHERE task_id=1")
-            writer.execute("UPDATE resource_pool_assignment SET fte_assigned=0.75 WHERE task_id=1")
+    def commit_during_hydration(store, project_ids):
+        with psycopg.connect(authorized.setup.operator_url) as writer:
+            writer.execute("UPDATE eppm.project_task SET task_name='After' WHERE id=1")
+            writer.execute("UPDATE eppm.task_tag SET free_tag='After' WHERE task_id=1")
+            writer.execute("UPDATE eppm.resource_pool_assignment SET fte_assigned=0.75 WHERE task_id=1")
         changed.append(True)
+        return dependencies(store, project_ids)
 
-    held.set_trace_callback(commit_during_hydration)
-    service = create_planning_service(database)
-    with patch("app.infrastructure.repositories.planning.get_db", return_value=held):
+    service = create_planning_service(database, access=access)
+    # Gate only the timing: both the reader and concurrent writer use real SQL.
+    with patch.object(PostgresPlanningStore, 'get_dependencies_for_projects', commit_during_hydration):
         bundle = service.read_task_bundle([1])
     assert changed == [True]
     assert bundle.tasks[0]["task_name"] == "First"
@@ -264,22 +263,37 @@ def test_task_bundle_reads_tags_and_assignments_from_the_same_snapshot(database:
     assert fresh.pools[1][0]["fte"] == 0.75
 
 
-def test_injected_display_caches_keep_databases_separate(database: str, tmp_path: Path) -> None:
-    other = str(tmp_path / "other.db")
-    init_db(other)
-    with closing(sqlite3.connect(other)) as connection, connection:
-        connection.execute("INSERT INTO project(id,name) VALUES(1,'Other database')")
-    first, second = create_planning_workspace(database), create_planning_workspace(other)
-    one = load_planning_catalog(first, first.revision())[0]
-    two = load_planning_catalog(second, second.revision())[0]
-    assert one.iloc[0]["name"] == "Project"
-    assert two.iloc[0]["name"] == "Other database"
+def test_injected_display_caches_keep_databases_separate(database: RuntimeResources, access: BusinessAccess, restore_target) -> None:
+    migrate(restore_target.operator_url)
+    other = RuntimeResources.from_environment({
+        'DATABASE_URL': restore_target.runtime_url, 'DATABASE_CONTEXT_KEY': token_hex(32),
+        'DATABASE_POOL_MIN': '1', 'DATABASE_POOL_MAX': '2',
+    })
+    configure_signing_key(restore_target.operator_url, other.key.hex())
+    with psycopg.connect(restore_target.operator_url) as connection:
+        connection.execute("INSERT INTO eppm.project_type(name,is_general) VALUES ('General',true)")
+        connection.execute("INSERT INTO eppm.project(name) VALUES ('Other database')")
+        connection.execute("INSERT INTO eppm.app_user(id,status,created_at,updated_at) VALUES (4,'active',900,900)")
+        connection.execute("INSERT INTO eppm.app_session VALUES ('session-4',4,950,2000,980,false,false)")
+        connection.execute("""INSERT INTO eppm.app_role_assignment(user_id,role,scope_json,created_at,created_by)
+            VALUES (4,'business_admin','{"kind":"all"}',900,'test setup')""")
+    other.database.open()
+    try:
+        first = create_planning_workspace(database, access=access)
+        second = create_planning_workspace(other, access=access)
+        assert first.revision() != second.revision()
+        one = load_planning_catalog(first, first.revision())[0]
+        two = load_planning_catalog(second, second.revision())[0]
+        assert one.iloc[0]['name'] == 'Project'
+        assert two.iloc[0]['name'] == 'Other database'
+    finally:
+        other.database.close()
 
 
 def test_non_list_dependencies_are_rejected_by_application_even_without_the_ui(
-    database: str,
+    database: RuntimeResources, access: BusinessAccess,
 ) -> None:
-    service = create_planning_service(database)
+    service = create_planning_service(database, access=access)
     with pytest.raises(ValueError, match="dependency"):
         service.create_milestone(1, "Invalid", "", "2026-01-01", "2026-01-02", 0, dependencies=42)
     assert len(service.get_all_milestones()) == 1
@@ -297,22 +311,22 @@ def catalog_failure_app(error_name: str) -> None:
     render()
 
 
-def project_tag_dialog_app(path: str) -> None:
+def project_tag_dialog_app(resources: RuntimeResources, access: BusinessAccess) -> None:
     """Render the real Gantt project-tag editor."""
-    from app.operator_services import create_planning_workspace
+    from app.main import create_planning_workspace
     from app.presentation.pages.planning import _manage_project_tags_dialog
 
-    _manage_project_tags_dialog(1, "Project", create_planning_workspace(path))
+    _manage_project_tags_dialog(1, "Project", create_planning_workspace(resources, access=access))
 
 
-def test_project_tag_dialog_escapes_free_tag_labels(database: str) -> None:
+def test_project_tag_dialog_escapes_free_tag_labels(database: RuntimeResources, access: BusinessAccess) -> None:
     from app.domain.tags.models import ProjectTag
-    from app.operator_services import create_tag_service
+    from app.main import create_tag_service
 
-    create_tag_service(database).create_project_tag(
+    create_tag_service(database, access=access).create_project_tag(
         ProjectTag(project_id=1, free_tag="<b>literal & tag</b>")
     )
-    app = AppTest.from_function(project_tag_dialog_app, args=(database,)).run()
+    app = AppTest.from_function(project_tag_dialog_app, args=(database, access)).run()
     assert not app.exception and not app.error
     assert any("&lt;b&gt;literal &amp; tag&lt;/b&gt;" in item.value for item in app.markdown)
 

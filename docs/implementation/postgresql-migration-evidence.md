@@ -1211,3 +1211,22 @@ template/startup/authentication-entry tests passed in 6.78 seconds**. Logs:
 `.local/postgresql-tags-schema-ui-port.log` and
 `.local/postgresql-project-type-ui-port.log`. Other legacy ports and full
 application/performance/recovery acceptance remain open.
+
+## Native planning callback and read-isolation port
+
+The planning UI suite now composes the native workspace with a real business
+actor. Existing Gantt create/edit/progress/delete callbacks, malformed input,
+missing-record handling, one-time event consumption, dashboard drill-through,
+multi-project focus and escaped tag labels retain their assertions.
+
+The task-bundle snapshot test commits a real concurrent PostgreSQL update after
+the task read and before dependency/tag/allocation hydration. The original read
+retains all old values, and a fresh read sees all new values. A separate cache
+test migrates a second isolated database, configures its own signing key and
+session, and verifies distinct revisions and project catalogs despite matching
+actor/project identifiers.
+
+Validation: **20 passed in 14.30 seconds**, recorded in
+`.local/postgresql-planning-ui-port.log`. Browser responsiveness and the remaining
+legacy planning/cache/tool ports are still pending; this callback suite is not
+the 50-user browser acceptance measurement.
