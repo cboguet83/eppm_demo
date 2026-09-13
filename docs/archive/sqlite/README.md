@@ -213,3 +213,13 @@ previews, and dispatch Cancel for nine creation dialogs. A repeatable-read
 fingerprint of every native table and sequence verifies that cancellation
 changes no persisted state. Project-detail preparation and reference-cache
 tests also moved to native fixtures and retain their read/order bounds.
+## Authentication state and HTTP test mapping
+
+`app/infrastructure/authentication/state.py` preserves the retired SQLite Authlib
+state adapter. Active runtime code uses `PostgresOidcState`; its signatures,
+bounded expiry, atomic consumption and worker-thread database operations are
+tested in `tests/postgresql/test_oidc_state.py`. The original
+`tests/test_oidc_authentication.py` is archived unchanged; its complete HTTP/JOSE
+contracts now run in `tests/postgresql/test_oidc_authentication.py`, with additional
+native persistence and audit checks in `test_oidc_http.py`. Pure login-destination
+validation remains in the root tests. No old SQLite authentication data is imported.

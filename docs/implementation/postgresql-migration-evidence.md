@@ -1928,3 +1928,20 @@ initialization task from that redundant precheck. After removing it, all native
 ports, the pure decimal browser check and shared dialog checks passed cleanly:
 **13 passed in 53.75 seconds**, `.local/postgresql-browser-ports-confirmed.log`.
 This completes these DOM/CSS fixture ports; it is not the 50-user latency gate.
+## Complete native OIDC HTTP regression port
+
+The original OIDC regression suite now uses native account/session storage and
+signed PostgreSQL state operations. Only the remote provider HTTP transport is
+mocked; Authlib exchange, JOSE signature validation, nonce handling, database
+transactions and single-use concurrent consumption remain real. Coverage retains
+ID-token precedence over unverified userinfo, invalid claims, JWKS rotation,
+provider-discovery validation, cookie/security headers, issuer mixups, replay,
+origin checks, logout, internal navigation destinations and safe outage responses.
+
+Validation: **85 passed in 26.60 seconds** across the full port, existing native
+OIDC HTTP/state suites and pure destination validation, recorded in
+`.local/postgresql-oidc-authentication-port.log`. The unchanged original test module
+is archived, while pure destination checks remain storage-independent. With no
+active importers, the legacy `SqliteOidcState` implementation moves outside `app`
+into the SQLite archive. Native runtime authentication remains backed by the
+shared restricted PostgreSQL pool.
