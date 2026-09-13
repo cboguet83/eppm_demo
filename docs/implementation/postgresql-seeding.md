@@ -1,14 +1,21 @@
 # PostgreSQL operator seeding and reset
 
-Status: native catalogs, curated projects, reset, scenario previews and backed-up
-write orchestration implemented. The maintenance gateway, bulk/allocation
-generation and CLI integration remain in progress. These helpers use explicit operator transactions;
+Status: native default/demo seeding, reset, scenario previews and backed-up
+operator CLI commands implemented. Bulk/allocation generation and the remaining
+maintenance-service integration are in progress. These helpers use explicit operator transactions;
 ordinary application startup must not call them.
 
 The accepted fixed demo definitions are Python literals in `seed_data.py`.
 They preserve 31 project properties, five groups, five project types, 60
 functions, 50 employees, three teams and three initial resource pools. This
 copies repository definitions, not existing SQLite business or account data.
+
+Complete default installation includes dictionary tags, four sample allocations
+and the hierarchy scenarios: five projects, 15 tasks, 14 dependencies, 103 pools,
+31 pool groups, 307 resource mappings and 204 allocations. Catalog-only seeding
+omits projects and scenarios while retaining the three base pools. A populated
+catalog remains unchanged unless forced; missing initial reference choices are
+installed separately without injecting a demo organization into a custom catalog.
 
 Migration 0019 adds private installation markers for reference and demo seeds.
 Initial hierarchy choices remain optional and editable, with stable codes and
@@ -70,6 +77,12 @@ flowchart LR
     maintenance_write --> seed_plan
     pool_scenarios --> seed_plan
     pool_scenarios --> seed_catalog
+    CLI[postgresql_admin CLI] --> maintenance
+    maintenance --> maintenance_write
+    maintenance --> seeder
+    seeder --> seed_catalog
+    seeder --> seed_projects
+    seeder --> pool_scenarios
 ```
 
 Native PostgreSQL tests cover installed relationships, configurable references,
@@ -90,3 +103,33 @@ can instead use the isolated server container as documented in
 ```powershell
 .venv/Scripts/python.exe -m dotenv -f .local/postgresql.env run -- .venv/Scripts/python.exe -m pytest -q --tb=short -p no:cacheprovider tests/postgresql/test_pool_seed_scenarios.py tests/postgresql/test_maintenance_write.py tests/postgresql/test_backups.py
 ```
+
+## Explicit operator commands
+
+Apply migrations first. These commands check schema compatibility and use the
+separately supplied `DATABASE_OPERATOR_URL`; `--url-variable` can name another
+explicit operator connection. The client process needs native PostgreSQL clients
+and network access to the selected URL. Archive storage follows the policy in
+[PostgreSQL backups](postgresql-backups.md).
+
+```powershell
+.venv/Scripts/python.exe -m scripts.postgresql_admin --env-file .local/postgresql.env seed-defaults
+.venv/Scripts/python.exe -m scripts.postgresql_admin --env-file .local/postgresql.env seed-pools --year 2026
+.venv/Scripts/python.exe -m scripts.postgresql_admin --env-file .local/postgresql.env seed-pools --year 2026 --apply
+.venv/Scripts/python.exe -m scripts.postgresql_admin --env-file .local/postgresql.env counts
+.venv/Scripts/python.exe -m scripts.postgresql_admin --env-file .local/postgresql.env clear-allocations
+.venv/Scripts/python.exe -m scripts.postgresql_admin --env-file .local/postgresql.env reset
+```
+
+`seed-defaults --without-projects` installs only the default catalog.
+`seed-defaults --force` performs the full reference reset and demo installation
+under one pre-operation archive. `reset --all-references` clears the demo
+references as well as projects; it still retains accounts, finance history and
+hierarchy choices. `seed-pools` previews by default; `--apply` requests the
+backed-up mutation and `--seed` selects its reproducible random seed.
+
+No-op default/scenario installation and previews create no archive. Mutating
+commands create one archive even when they invoke nested catalog/scenario
+helpers. `clear-allocations` removes demand while preserving resource mappings.
+The existing application launcher and legacy maintenance wrappers have not yet
+cut over to these native entry points.

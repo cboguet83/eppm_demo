@@ -15,7 +15,7 @@ docker compose --env-file .local/postgresql.env -f docker-compose.postgresql.yml
 .venv/Scripts/python.exe -m scripts.postgresql_admin --env-file .local/postgresql.env --url-variable POSTGRES_TEST_ADMIN_URL provision
 .venv/Scripts/python.exe -m scripts.postgresql_admin --env-file .local/postgresql.env --url-variable POSTGRES_TEST_ADMIN_URL migrate
 .venv/Scripts/python.exe -m scripts.postgresql_admin --env-file .local/postgresql.env --url-variable POSTGRES_TEST_ADMIN_URL configure-security
-.venv/Scripts/python.exe -m dotenv -f .local/postgresql.env run -- .venv/Scripts/python.exe -m pytest -q -p no:cacheprovider tests/postgresql
+.venv/Scripts/python.exe -m dotenv -f .local/postgresql.env run -- .venv/Scripts/python.exe -m pytest -q --tb=short -p no:cacheprovider tests/postgresql
 ```
 
 The generator exclusively creates `.local/postgresql.env` and refuses overwrite.
@@ -36,6 +36,12 @@ pool startup rejects database owners, elevated roles and schema creators,
 including privileges reachable through non-inherited `SET ROLE` membership.
 `migrate` applies an entire pending ordered SQL package atomically with checksum
 verification and a transaction advisory lock. `check` reads compatibility only.
+
+[Native maintenance commands](postgresql-seeding.md) now install the complete
+demo or catalog, preview/apply pool scenarios, report counts, clear allocations
+and reset projects/references. They check compatibility and use one native
+pre-operation archive per mutation. PostgreSQL clients must be installed in the
+operator process environment; these commands do not change ordinary app startup.
 
 Tests create databases named `eppm_test_<random UUID>` using explicit setup
 credentials. Their pooled queries run as the separate nonowner runtime login.

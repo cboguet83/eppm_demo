@@ -811,3 +811,38 @@ coverage: `.local/postgresql-maintenance-write-coverage.json`.
 The maintenance gateway, complete default/bulk/allocation generation, operator
 CLI and runtime cutover, legacy archival, full application coverage and final
 browser/recovery acceptance remain in progress.
+
+## Complete default seeding and native maintenance CLI
+
+The native default workflow now installs the full accepted demo under one
+archive: five projects, 15 tasks, 14 dependencies, 103 pools, 31 groups, 307
+resource mappings and 204 allocations, including dictionary tags and the four
+curated assignment examples. Catalog-only installation, explicit force/reset,
+custom catalogs, repeat no-ops and retained configuration are covered.
+
+`postgresql_admin` exposes `seed-defaults`, `seed-pools`, `counts`,
+`clear-allocations` and `reset`. These commands check schema compatibility and
+use explicit operator credentials. Pool scenarios preview by default; mutation
+requires `--apply`. Nested helpers share one pre-operation archive. Native
+dump/restore tests also exercise the actual CLI dispatch and archive counts.
+
+Focused default/CLI checks passed **8 tests in 11.08 seconds**, with **73/73
+new seed/maintenance statements covered (100%)**. The complete native
+PostgreSQL and layer suite then passed **685 tests in 292.77 seconds**, exit
+code **0**, with no skipped cases. Coverage is **2467/2471 PostgreSQL package
+statements (99.84%)**, or **2541/2556 statements (99.41%)** including the
+operator CLI. This is native infrastructure coverage, not final application
+coverage or browser performance evidence.
+
+Log: `.local/postgresql-seed-all-native.log`; coverage:
+`.local/postgresql-seed-all-native-coverage.json`. The full command was:
+
+```powershell
+$env:POSTGRES_TEST_CLIENT_CONTAINER = 'eppm_demo-postgres-1'
+.venv/Scripts/python.exe -m dotenv -f .local/postgresql.env run -- .venv/Scripts/python.exe -m pytest -q --tb=short -p no:cacheprovider tests/postgresql tests/test_layer_boundaries.py --cov=app.infrastructure.postgresql --cov=scripts.postgresql_admin --cov-report=term-missing --cov-report=json:.local/postgresql-seed-all-native-coverage.json
+```
+
+Bulk project/schedule generation, configurable allocation generation, the
+maintenance service and legacy tool wrappers, coordinated runtime/authentication
+cutover, exact money forms, SQLite archival, full application coverage and all
+final authenticated 50-user browser/recovery gates remain incomplete.

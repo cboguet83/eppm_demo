@@ -1,7 +1,7 @@
 # PostgreSQL backup and restore
 
 `PostgresBackup` creates custom-format PostgreSQL archives for explicit operator
-commands and the upcoming seed/reset integration. It runs installed `pg_dump`
+commands and [native seed/reset maintenance](postgresql-seeding.md). It runs installed `pg_dump`
 and `pg_restore` clients with an explicit operator connection. Use PostgreSQL 18
 clients compatible with the pinned 18.6 server.
 

@@ -1,4 +1,4 @@
-"""Explicit PostgreSQL role provisioning, migration and schema verification."""
+"""Explicit PostgreSQL setup, archives and backed-up demo maintenance."""
 
 import argparse
 import os
@@ -8,15 +8,18 @@ from dotenv import load_dotenv
 import psycopg
 from psycopg import sql
 
-from app.infrastructure.postgresql.errors import MigrationError, SchemaCompatibilityError
+from app.infrastructure.postgresql.errors import DatabaseUnavailableError, MigrationError, SchemaCompatibilityError, TransactionRetryError
 from app.infrastructure.postgresql.migration import check_schema, migrate
 from app.infrastructure.postgresql.authorization import configure_signing_key
 from app.infrastructure.postgresql.backup import PostgresBackup, PostgresTools, restore_database
+from app.infrastructure.postgresql import maintenance
+from app.infrastructure.postgresql.pool import OperatorDatabase
 from app.application.exceptions import DatabaseMaintenanceError
 from app.shared.config.database import validate_database_url
 from app.shared.logging import get_logger, setup_logging
 
 logger = get_logger(__name__)
+MAINTENANCE_COMMANDS = ('seed-defaults', 'seed-pools', 'reset', 'clear-allocations', 'counts')
 
 
 def provision_runtime(url: str, password: str) -> None:
@@ -53,7 +56,13 @@ def main(*, archive_tools: PostgresTools | None = None) -> None:
     parser.add_argument("--url-variable", default="DATABASE_OPERATOR_URL")
     parser.add_argument("--backup-directory", type=Path, default=Path('.local/backups'))
     parser.add_argument("--archive", type=Path, help="Existing PostgreSQL archive for an empty restore target")
-    parser.add_argument("command", choices=("provision", "migrate", "check", "configure-security", "backup", "restore"))
+    parser.add_argument('--force', action='store_true', help='Replace the demo and references when seeding defaults')
+    parser.add_argument('--without-projects', action='store_true', help='Install the default catalog without example projects')
+    parser.add_argument('--all-references', action='store_true', help='Include demo reference cleanup in an explicit reset')
+    parser.add_argument('--year', type=int, help='Scenario year; defaults to the current year')
+    parser.add_argument('--seed', type=int, default=20260908, help='Pool scenario random seed')
+    parser.add_argument('--apply', action='store_true', help='Apply the pool scenario preview after creating an archive')
+    parser.add_argument("command", choices=("provision", "migrate", "check", "configure-security", "backup", "restore", *MAINTENANCE_COMMANDS))
     arguments = parser.parse_args()
     if arguments.env_file:
         load_dotenv(arguments.env_file, override=True)
@@ -74,11 +83,33 @@ def main(*, archive_tools: PostgresTools | None = None) -> None:
             if arguments.archive is None:
                 raise ValueError('Specify a PostgreSQL archive for restoration.')
             restore_database(arguments.archive, url, tools=archive_tools)
+        elif arguments.command in MAINTENANCE_COMMANDS:
+            _maintenance(arguments, url, archive_tools)
         else:
             with psycopg.connect(url, autocommit=True, connect_timeout=5) as connection:
                 check_schema(connection)
-    except (ValueError, psycopg.Error, MigrationError, SchemaCompatibilityError, DatabaseMaintenanceError):
+    except (ValueError, psycopg.Error, MigrationError, SchemaCompatibilityError, DatabaseMaintenanceError,
+            DatabaseUnavailableError, TransactionRetryError):
         parser.exit(1, "PostgreSQL operator command failed. Check configuration, role privileges, schema compatibility and any archive or restore target.\n")
+
+
+def _maintenance(arguments: argparse.Namespace, url: str, archive_tools: PostgresTools | None) -> None:
+    """Dispatch explicit maintenance only after checking the installed schema."""
+    database = OperatorDatabase(url)
+    database.run(check_schema)
+    backup = PostgresBackup(url, arguments.backup_directory, tools=archive_tools)
+    if arguments.command == 'seed-defaults':
+        result = maintenance.seed_defaults(database, backup, force=arguments.force,
+            include_projects=not arguments.without_projects, year=arguments.year)
+    elif arguments.command == 'seed-pools':
+        result = maintenance.seed_pool_scenarios(database, backup, year=arguments.year, seed=arguments.seed, apply=arguments.apply)
+    elif arguments.command == 'reset':
+        result = maintenance.reset_database(database, backup, flush_all=arguments.all_references)
+    elif arguments.command == 'clear-allocations':
+        result = maintenance.clear_pool_allocations(database, backup)
+    else:
+        result = maintenance.counts(database)
+    logger.info('PostgreSQL %s result: %s', arguments.command, result)
 
 
 if __name__ == "__main__":
