@@ -188,3 +188,19 @@ of responses whose data or permissions changed during calculation. The former
 SQLite progress-handler assertion now measures the actual native query with
 `EXPLAIN (ANALYZE, BUFFERS)`, including row scan bounds after 5,000 unrelated
 tasks and dependencies are inserted.
+## WBS test mapping
+
+`tests/test_wbs.py` retains the unchanged SQLite module. Its root replacement
+keeps pure code/percentage validation and a storage-independent save helper.
+The native `tests/postgresql/test_wbs.py` and `test_wbs_ui.py` cover catalog
+authorization, hidden-project capacity, atomic project/link/share saves,
+competing claims, both backed-up reset modes, migration reentry, Settings CRUD,
+custom project forms, integer row editing and retained drafts. Direct native
+SQL verifies caps, references and old/new owners; hidden UPDATE/DELETE targets
+affect zero rows under PostgreSQL RLS instead of exposing an inaccessible row.
+
+The fractional-SQL regression discovered PostgreSQL's implicit integer rounding.
+Migration 0021 retains exact numeric input until whole-percentage/range checks
+pass. Application and dashboard reads explicitly retain integer DTO values.
+Additional native tests cover fractional/nonfinite INSERT and UPDATE, upgrade
+from the previous applied schema and exact preservation of 0/35/100% shares.

@@ -4,10 +4,11 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 from app.main import create_project_service
-from tests.test_business_transaction_security import business as business
+from tests.postgresql.test_portfolio_project_modal import business, dashboard_business, runtime
 from tests.test_portfolio_project_modal import open_form, submit
 from tests.test_project_dialog_performance import project_screen
-from tests.test_wbs import catalog, save_allocation
+from tests.postgresql.test_wbs import catalog
+from tests.test_wbs import save_allocation
 from tests.test_fragment_reruns import FragmentRun
 
 

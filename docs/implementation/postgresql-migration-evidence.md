@@ -1755,3 +1755,25 @@ Validation: **245 passed in 89.48 seconds** in
 business RLS, actor authorization, migration/transaction foundation and
 planning read contracts. This is a focused regression result; the full suite,
 95% coverage gate and authenticated 50-user benchmark remain outstanding.
+## Native WBS screens and exact whole-share enforcement
+
+WBS Settings and project-editor regressions now use native runtime resources,
+real access grants and the Settings composition. They retain both locales,
+read-only controls, hidden-project availability, atomic draft saves, retained
+data-editor deltas and catalog reference protection. Pure domain validation
+remains in the root test module; the original SQLite module is archived intact.
+
+Direct SQL exposed a migration gap: PostgreSQL converted 2.5 to an integer
+before checking the WBS column. Migration `0021_whole_wbs_percentages.sql`
+changes storage to exact NUMERIC with a whole-percentage check, retaining the
+existing 0..100 constraint. Native adapters explicitly return integer project
+and dashboard shares. Tests reject fractional/nonfinite INSERT and UPDATE,
+preserve stored values across an actual schema-20 upgrade, and verify reentry,
+concurrent claims and both reset modes with one native archive per mutation.
+
+Validation: **103 passed in 33.97 seconds** in
+`.local/postgresql-wbs-native-confirmed.log` (WBS workflows and upgrade, migration
+foundation and business RLS). Complementary pure WBS, WBS UI, project, integrity
+and dashboard suites passed in `.local/postgresql-wbs-port.log`; that initial
+run's two WBS fixture defects were corrected and pass in the final run. The
+broader migration acceptance gates remain open.

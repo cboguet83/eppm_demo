@@ -76,7 +76,7 @@ class PostgresDashboardReader:
         if status not in {'Approved', 'Proposed', 'Draft'}:
             raise ValueError('Select Approved, Proposed, or Draft.')
         def operation(connection: psycopg.Connection, ids: list[int], security: PostgresAccessStore) -> DashboardData:
-            shares = [WbsShare(*row) for row in connection.execute('''SELECT pw.project_id,w.code,pw.percentage
+            shares = [WbsShare(*row) for row in connection.execute('''SELECT pw.project_id,w.code,pw.percentage::integer
                 FROM eppm.project_wbs pw JOIN eppm.wbs w ON w.id=pw.wbs_id
                 WHERE pw.project_id=ANY(%s::bigint[]) ORDER BY pw.project_id,w.code COLLATE "C"''', (ids,))]
             latest = connection.execute(_LATEST, (status,)).fetchone() if ids else None

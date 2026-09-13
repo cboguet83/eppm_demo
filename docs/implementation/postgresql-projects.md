@@ -92,3 +92,13 @@ Output: `.local/postgresql-projects-native.log`; coverage:
 `.local/postgresql-projects-coverage.json`. Runtime composition remains staged.
 Planning, pools/capacity, portfolio/finance, cache revisions, tools, browser money
 inputs and the full regression, performance and recovery gates remain pending.
+## Whole-share storage after runtime cutover
+
+Migration 0021 prevents PostgreSQL's implicit integer rounding from accepting
+fractional WBS SQL input. The percentage column now preserves exact NUMERIC
+input until its whole-number and 0..100 checks run. This changes no valid share
+or allocation rule. `PostgresWbsStore` and `PostgresDashboardReader` return the
+same integer percentages required by their existing application contracts.
+The native WBS workflow tests verify upgrade preservation, fractional and
+nonfinite rejection, scope/ownership checks, concurrent capacity claims,
+backed-up resets and the actual Settings/project editors.

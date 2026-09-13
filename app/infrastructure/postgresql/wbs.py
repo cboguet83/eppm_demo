@@ -20,7 +20,7 @@ class PostgresWbsStore:
     def wbs_allocations(self, project_id: int) -> list[WbsAllocation]:
         """Return only visible project allocations in stable WBS order."""
         return [WbsAllocation(wbs_id=row[0], percentage=row[1]) for row in self.connection.execute(
-            'SELECT wbs_id,percentage FROM eppm.project_wbs WHERE project_id=%s ORDER BY wbs_id', (project_id,))]
+            'SELECT wbs_id,percentage::integer FROM eppm.project_wbs WHERE project_id=%s ORDER BY wbs_id', (project_id,))]
 
     def replace_wbs(self, project_id: int, allocations: list[WbsAllocation]) -> None:
         """Revalidate the global cap in the write snapshot before replacing shares."""
