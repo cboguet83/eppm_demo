@@ -766,3 +766,22 @@ coverage: `.local/postgresql-backup-coverage.json`. See
 This is isolated recovery evidence for the archive primitive. Seed/reset/runtime
 integration, representative-data recovery, deployed restart persistence, final
 application coverage and the three authenticated 50-user browser runs remain.
+
+## Native seed catalogs, curated projects and reset
+
+Migration 0019 adds private installation markers. Native helpers preserve the
+accepted fixed catalogs and configurable hierarchy translations, validate
+curated projects against effective templates, and use exact euro values.
+Reset follows PostgreSQL dependency ordering and preserves accounts, finance
+history and hierarchy choices. Project/task identity high-water marks survive
+reset, including explicit operator IDs, preventing reuse of deleted identities.
+
+The native seed/reset, integrity and layer run passed **56 tests in 17.94
+seconds**, exit code **0**, with **181/181 helper statements covered (100%)**.
+Log: `.local/postgresql-seed-reset.log`; coverage:
+`.local/postgresql-seed-reset-coverage.json`. See
+[PostgreSQL seeding](postgresql-seeding.md) for behavior and C3 components.
+
+These are transaction helpers. Backup-aware maintenance orchestration, pool
+scenario preview/application, bulk generation, runtime/CLI cutover and all final
+application, recovery and 50-user browser acceptance gates remain incomplete.

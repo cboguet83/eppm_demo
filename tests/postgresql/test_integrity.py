@@ -75,7 +75,7 @@ def test_native_baseline_contains_every_current_business_table(pg_database):
     assert actual == expected | {
         "schema_migration", "database_identity", "request_binding_key", "role_permission",
         "project_cache_revision", "pool_cache_revision", "catalog_cache_revision",
-        "pool_capacity_cache", "planning_summary_cache",
+        "pool_capacity_cache", "planning_summary_cache", "operator_seed_state",
     }
 
 

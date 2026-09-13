@@ -247,6 +247,11 @@ Native lifecycle, pool/foundation and layer checks passed **58 tests in
 Log: `.local/postgresql-runtime-resources.log`; coverage:
 `.local/postgresql-runtime-resources-coverage.json`.
 
+[Native seed/reset helpers](postgresql-seeding.md) now preserve the accepted
+demo definitions, template validation, exact budgets, editable hierarchy
+catalogs and retained account/finance history. Operator maintenance orchestration
+and CLI integration remain in progress; ordinary startup does not use them.
+
 [PostgreSQL archives and isolated restoration](postgresql-backups.md) now use
 native clients with private connection environments and safe errors. The
 operator CLI exposes explicit `backup` and `restore` commands; source privileges
