@@ -2473,3 +2473,25 @@ All business adapters are ported; no SQLite business/user/grant import is planne
 Remaining acceptance is the save confirmation investigation, browser-rendering
 breakdown, complete 50-session comparison, refreshed full Python/JavaScript and
 coverage checks, and deployment/restart/restore validation through migration 0026.
+
+## Save acknowledgements follow the refreshed details
+
+A real PostgreSQL/browser regression delayed the details refresh by 4.5 seconds,
+longer than Streamlit's default toast lifetime. The original save callback closed
+the editor and emitted its notification before that refresh, and the regression
+failed because the confirmation had disappeared when the new title became usable.
+Merely moving notification emission into the modal fragment was insufficient
+while that fragment still ran before the details refresh.
+
+The save callback now retains its committed success message and refreshes the
+grid and selection before the modal fragment. The modal then closes and consumes
+that message into the existing toast. Opening a new draft clears a pending
+message. Create/delete acknowledgements use the same lifecycle; authorization,
+validation and native transaction behavior are unchanged. The browser acceptance
+predicate still requires the updated title and success confirmation together.
+
+All **34 native modal and actual-browser checks passed in 69.98 seconds**,
+including three consecutive saves under the delayed refresh and one notification
+per successful create/edit. Logs: `.local/postgresql-slow-toast-before.log`,
+`.local/postgresql-slow-toast-after.log`, `.local/postgresql-toast-ordered-final.log`.
+The full workload must still establish whether this resolves the pilot failure.

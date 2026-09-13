@@ -30,9 +30,13 @@ def test_project_save_closes_modal_and_refreshes_grid_and_selection_once(busines
     app = open_form(path, manager.actor, operation)
     with patch("app.presentation.pages.portfolio._portfolio_grid", wraps=_portfolio_grid) as grid, \
          patch("app.presentation.pages.portfolio._portfolio_selection", wraps=_portfolio_selection) as selection:
-        submit(app, changes={"name": "Saved locally"}, links=[{"alias": "Custom link", "url": "https://example.com"}])
+        run = submit(app, changes={"name": "Saved locally"}, links=[{"alias": "Custom link", "url": "https://example.com"}])
     assert grid.call_count == selection.call_count == 2  # initial full run + one targeted refresh
     assert "portfolio_project_modal_state" not in app.session_state
+    assert "portfolio_project_modal_notice" not in app.session_state
+    notices = [message.delta.new_element.toast.body for message in run.messages
+               if message.WhichOneof("type") == "delta" and message.delta.new_element.HasField("toast")]
+    assert notices == ["Project created." if operation == "create" else "Project details updated."]
     service = create_project_service(path, access=manager)
     identity = app.session_state["selected_portfolio_project_id"] if operation == "create" else 1
     assert service.get_project_by_id(identity).name == "Saved locally"

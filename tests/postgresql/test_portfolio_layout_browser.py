@@ -6,6 +6,53 @@ from tests.test_dialog_browser import expect, sync_playwright
 from tests.postgresql.shell_browser import _APP, popup_server
 
 
+_SLOW_SAVE_APP = _APP.replace("render_application(workspace)", '''
+import time
+from app.presentation.pages import portfolio
+
+if not getattr(portfolio._portfolio_selection, "confirmation_test_delay", False):
+    original_selection = portfolio._portfolio_selection
+    def delayed_selection(*args, _original=original_selection, **kwargs):
+        if "portfolio_selection_override" in st.session_state:
+            time.sleep(4.5)  # A refresh can outlast the default four-second toast.
+        return _original(*args, **kwargs)
+    delayed_selection.confirmation_test_delay = True
+    portfolio._portfolio_selection = delayed_selection
+render_application(workspace)
+''')
+
+
+@pytest.mark.parametrize("popup_server", [_APP, _SLOW_SAVE_APP], indirect=True,
+                         ids=["repeated-save-confirmation", "slow-save-refresh"])
+def test_each_project_save_shows_a_new_confirmation_after_the_previous_one_is_dismissed(popup_server):
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            page = popup_server.new_page(browser, viewport={"width": 1500, "height": 1100})
+            page.goto(popup_server.origin + "/?nav=portfolio")
+            row = page.locator(".st-key-portfolio_master_table tbody tr[data-project-id]").first
+            expect(row).to_be_visible(timeout=30000)
+            project_id = row.get_attribute("data-project-id")
+            row.click()
+            details = page.locator(".st-key-project_details_panel_" + project_id)
+            expect(details).to_have_attribute("data-eppm-details-ready", "true")
+            for index in range(3):
+                page.get_by_role("button", name="Edit details", exact=True).click()
+                dialog = page.get_by_role("dialog")
+                title = f"Confirmed project save {index}"
+                dialog.get_by_label("Project Title *", exact=True).fill(title)
+                dialog.get_by_role("button", name="Update Project", exact=False).click()
+                expect(dialog).not_to_be_visible(timeout=10000)
+                expect(details).to_contain_text(title, timeout=10000)
+                toast = page.get_by_test_id("stToast").filter(has_text="Project details updated.")
+                expect(toast).to_be_visible(timeout=5000)
+                toast.get_by_role("button", name="Close", exact=True).click()
+                expect(toast).not_to_be_visible()
+            expect(page.get_by_test_id("stException")).to_have_count(0)
+        finally:
+            browser.close()
+
+
 @pytest.mark.parametrize("popup_server", [_APP], indirect=True, ids=["portfolio"])
 def test_master_layout_has_no_top_gap_or_template_caption_and_colors_only_applied_filters(popup_server):
     with sync_playwright() as playwright:

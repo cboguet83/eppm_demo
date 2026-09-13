@@ -23,6 +23,7 @@ from app.presentation.i18n import t
 
 _STATE = "portfolio_project_modal_state"
 _ERROR = "portfolio_project_modal_error"
+_NOTICE = "portfolio_project_modal_notice"
 
 
 @dataclass
@@ -126,6 +127,7 @@ def begin_project_dialog(workspace: ProjectWorkspace, project_id: int | None = N
     """Prepare one complete form in the opening button's callback."""
     st.session_state.pop(_STATE, None)
     st.session_state.pop(_ERROR, None)
+    st.session_state.pop(_NOTICE, None)
     try:
         required = Permission.CREATE if project_id is None else Permission.EDIT
         if not workspace.projects.permissions().allows(required, project_id):
@@ -220,15 +222,15 @@ def _project_action(workspace: ProjectWorkspace) -> None:
             if not workspace.projects.delete_project(draft.project_id):
                 raise ValueError("The selected project no longer exists.")
             selected = None
-            st.toast("Project deleted.")
+            st.session_state[_NOTICE] = "Project deleted."
         else:
             selected = _save(workspace, draft, values)
-            st.toast("Project created." if draft.project_id is None else "Project details updated.")
+            st.session_state[_NOTICE] = "Project created." if draft.project_id is None else "Project details updated."
         st.session_state.pop(_STATE, None)
         st.session_state["selected_portfolio_project_id"] = selected
         st.session_state["portfolio_selection_override"] = selected
         st.session_state["portfolio_preserve_grid_position"] = True
-        st.rerun(["portfolio_project_modal", "portfolio_grid", "portfolio_selection"])
+        st.rerun(["portfolio_grid", "portfolio_selection", "portfolio_project_modal"])
     except (ValueError, ProjectStorageError, ProjectTypeStorageError, SchemaStorageError) as exc:
         draft.form["error"] = str(exc)
 
@@ -240,3 +242,6 @@ def render_project_modal(workspace: ProjectWorkspace) -> None:
         st.error(error)
     draft = st.session_state.get(_STATE)
     project_form(draft.form if draft else None, on_action=lambda: _project_action(workspace))
+    if notice := st.session_state.pop(_NOTICE, None):
+        # Deliver acknowledgement with the refreshed UI, after the save callback.
+        st.toast(notice)
