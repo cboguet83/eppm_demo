@@ -49,6 +49,9 @@ and capacity is a dashed red line (#f10d0d). Pools retain consistent palette col
 Right-click a pool segment to open Planning filtered to accessible projects
 consuming that particular pool in the selected quarter. This can include accessible
 consumers outside the dashboard selection; hidden projects remain undisclosed.
+The same context menu on both resource charts includes **Pool details**, which
+opens Settings → Resource Pools with that pool selected. Access is rechecked
+before navigation and the destination retains its normal permissions.
 Both resource charts mark today and display the current year, two previous years,
 and nine future years. Per-pool colors are consistent across both charts.
 The Finance legend is below its x-axis. Resource charts have no legend.

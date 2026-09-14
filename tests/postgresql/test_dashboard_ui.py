@@ -215,3 +215,40 @@ def test_project_budget_displays_latest_approved_proposed_and_draft_with_request
     finance.cancel(latest)
     app.run()
     assert app.dataframe[1].value.iloc[0]['2026'] == '100.00'
+
+
+def pool_jump_screen(path, actor, pool_id):
+    from datetime import date
+    import streamlit as st
+    from unittest.mock import patch
+    from app.application.services.access import AuthorizationPolicy, SessionLimits
+    from app.application.services.business_access import BusinessAccess
+    from app.domain.access.models import AccessDenied
+    from app.main import create_dashboard_service
+    from app.presentation.pages.dashboard import _pool_details_jump
+    service = create_dashboard_service(path, access=BusinessAccess(actor, AuthorizationPolicy(lambda:1000, SessionLimits())))
+    service.today = lambda: date(2026, 6, 1)
+    with patch('app.presentation.pages.dashboard.st.rerun'):
+        try:
+            _pool_details_jump(service, (1,), '2026-Q1', pool_id, 'allocation')
+        except AccessDenied:
+            st.info('Denied')
+    st.json({key: st.session_state.get(key) for key in (
+        'target_resource_pool_id', 'nav_redirect', 'settings_active_section',
+        'settings_active_tab', 'rb_settings_section')})
+
+
+@pytest.mark.parametrize('pool_id', [1, 999])
+def test_pool_details_shortcut_selects_pool_and_rejects_unrelated_pool(business, pool_id):
+    from app.presentation.navigation import PAGE_SETTINGS
+    path, _, _, editor, _ = business
+    app = AppTest.from_function(pool_jump_screen, args=(path, editor.actor, pool_id)).run()
+    assert not app.exception
+    state = json.loads(app.json[0].value)
+    if pool_id == 1:
+        assert state == {'target_resource_pool_id': 1, 'nav_redirect': PAGE_SETTINGS,
+                         'settings_active_section': 'organization', 'settings_active_tab': 'resource_pools',
+                         'rb_settings_section': 'org_structure'}
+    else:
+        assert all(value is None for value in state.values())
+        assert app.info[0].value == 'Denied'

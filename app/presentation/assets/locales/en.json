@@ -849,6 +849,7 @@
     "overallocation": "Overallocation",
     "total_capacity": "Total pools capacity",
     "go_to_consumers": "Planning & milestones: consuming projects",
+    "pool_details": "Pool details",
     "loading": "Loading…",
     "today": "Current date",
     "no_status_budget": "No {status} budget version available in Finance.",

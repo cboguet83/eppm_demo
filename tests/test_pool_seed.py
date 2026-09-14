@@ -1,11 +1,30 @@
 """Exact aggregate demand, inclusive boundaries and representability checks."""
 
 from collections import Counter, defaultdict
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 
-from app.domain.resources.pool_seed import POOLS, ProjectPeriod, TaskPeriod, SeedDemand, _CapacityLedger, plan_demand
+from app.domain.resources.pool_seed import POOLS, ProjectPeriod, TaskPeriod, SeedDemand, _CapacityLedger, plan_demand, plan_capacity_exceptions
+
+
+@pytest.mark.parametrize('year', [2024, 2026, 9999])
+def test_capacity_reductions_have_exact_calendar_durations_and_capacity_threshold(year):
+    """Each pool receives bounded six-month and additional full-year periods."""
+    rows = plan_capacity_exceptions(year, 42)
+    assert rows == plan_capacity_exceptions(year, 42)
+    assert rows != plan_capacity_exceptions(year, 43)
+    counts = Counter()
+    for name, start, end in rows:
+        months = (end.year-start.year)*12 + end.month-start.month + 1
+        assert start.day == 1
+        assert end == date.max or (end + timedelta(days=1)).day == 1
+        assert min(year, 9995) <= start.year <= end.year <= min(year, 9995)+4
+        assert months in (6, 12)
+        counts[name, months] += 1
+    for pool in POOLS:
+        assert 1 <= counts[pool.name, 6] <= 3
+        assert counts[pool.name, 12] == (2 if pool.capacity > 6 else 0)
 
 
 def period(identity, start=1, end=30):

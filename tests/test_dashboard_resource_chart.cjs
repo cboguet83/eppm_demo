@@ -13,6 +13,7 @@ class Element {
   replaceChildren(...children){this.children=[];children.forEach(child=>this.appendChild(child));}
   remove(){this.parent.children=this.parent.children.filter(child=>child!==this);}
   getScreenCTM(){return {inverse(){return {};}};}
+  focus(){}
 }
 function setup(){
   const listeners=new Map();
@@ -25,16 +26,16 @@ function setup(){
     CustomEvent:class {constructor(type,options){this.type=type;this.detail=options.detail;}}});
   vm.runInContext(js,context);
   const build=(metric,capacity=7)=>{
-    const root=new Element('root');
-    const cleanup=context.render({parentElement:{querySelector:()=>root},setTriggerValue(){},data:{
+    const root=new Element('root'),events=[];
+    const cleanup=context.render({parentElement:{querySelector:()=>root},setTriggerValue(name,value){events.push({name,...value});},data:{
       palette:['#000000','#399df4','#09703e','#b1343b','#de00c3','#ffd700','#848486','#0000f0','#fa8775','#8800d2','#ffb14e','#ea5f94','#f10d0d','#0ccd66','#27e0e0'],
       budgetSeries:metric==='finance'?[{name:'Approved',points:[{date:'2026-01-01',value:100},{date:'2026-04-01',value:null},{date:'2026-07-01',value:80}]},{name:'Proposed',points:[{date:'2026-01-01',value:120}]}]:[],
       metric,locale:'en',rows:metric==='finance'?[]:[{quarter:'2026-Q1',value:metric==='allocation'?10:3,capacity}],
       pools:[{pool_id:1,name:'Pool X',allocation:{'2026-Q1':10},overallocation:{'2026-Q1':3},available:{'2026-Q1':-3}}],
-      totalLabel:'Total',allocatedLabel:'Allocation',availableLabel:'Available',
+      totalLabel:'Total',allocatedLabel:'Allocation',availableLabel:'Available',goTo:'Planning',poolDetails:'Pool details',
       totalValueLabel:metric==='allocation'?'Total allocation':'Total overallocation',totalCapacityLabel:'Total capacity',
       valueLabel:metric==='overallocation'?'Overallocation':'Allocation',capacityLabel:'Total pools capacity',today:'2026-01-01',start:'2026-01-01',end:'2027-01-01'}});
-    return {root,svg:root.children.find(e=>e.tag==='svg'),cleanup};
+    return {root,svg:root.children.find(e=>e.tag==='svg'),cleanup,events};
   };
   return {build,listeners};
 }
@@ -126,4 +127,20 @@ test('overallocation omits capacity and allocation uses a shared axis including 
     chart.cleanup();
   }
   over.cleanup();
+});
+
+test('both resource menus navigate to the selected pool or its consuming projects',()=>{
+  const {build}=setup();
+  for(const metric of ['allocation','overallocation']){
+    const chart=build(metric),bar=chart.svg.children.find(e=>e.tag==='rect');
+    for(const [index,action] of [[1,'planning'],[2,'pool_details']]){
+      bar.oncontextmenu({preventDefault(){},clientX:400,clientY:100});
+      const menu=chart.root.children.find(e=>e.className==='context-menu');
+      assert.deepEqual(menu.children.slice(1).map(e=>e.textContent),['Planning','Pool details']);
+      menu.children[index].onclick();
+      assert.deepEqual(chart.events.at(-1),{name:'selection',quarter:'2026-Q1',pool_id:1,metric,action});
+      assert.equal(chart.root.children.some(e=>e.className==='context-menu'),false);
+    }
+    chart.cleanup();
+  }
 });

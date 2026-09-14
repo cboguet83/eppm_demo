@@ -1,6 +1,6 @@
 """Exact demo WBS budgets and bounded project allocation shares."""
 
-from decimal import Decimal, ROUND_FLOOR, localcontext
+from decimal import Decimal, ROUND_CEILING, ROUND_FLOOR, ROUND_HALF_UP, localcontext
 import random
 
 from app.domain.finance import BudgetRow
@@ -30,6 +30,26 @@ def budget_rows(seed: int) -> tuple[BudgetRow, ...]:
                 parts[i] += 1
             rows.append(BudgetRow(f'p.{number}.10',
                                  {start+i: Decimal(value)/100 for i, value in enumerate(parts)}))
+    return tuple(rows)
+
+
+def proposed_budget_rows(approved: tuple[BudgetRow, ...], seed: int) -> tuple[BudgetRow, ...]:
+    """Apply a reproducible ±10% variation per WBS, keeping annual cent limits.
+
+    Each WBS uses one multiplier across its years to retain the approved curve.
+    Clamp cent rounding inward so annual and total amounts respect the limits.
+    """
+    rng = random.Random(seed)
+    cent = Decimal('.01')
+    rows = []
+    for row in approved:
+        factor = Decimal(10_000 + rng.randint(-1000, 1000)) / 10_000
+        amounts = {}
+        for year, amount in row.amounts.items():
+            lower = (amount * Decimal('.9')).quantize(cent, rounding=ROUND_CEILING)
+            upper = (amount * Decimal('1.1')).quantize(cent, rounding=ROUND_FLOOR)
+            amounts[year] = min(upper, max(lower, (amount * factor).quantize(cent, rounding=ROUND_HALF_UP)))
+        rows.append(BudgetRow(row.code, amounts))
     return tuple(rows)
 
 

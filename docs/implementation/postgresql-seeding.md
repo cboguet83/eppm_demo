@@ -53,9 +53,18 @@ without demand. Custom populated catalogs remain unchanged unless explicitly res
 | Service E/G/M | pool E1?E5 / G1?G5 / M1?M5 | division | 5, 6, 7, 8, 10 per service |
 
 There are exactly seven groups and 33 pools. No employee, function or team
-mappings are generated, so effective capacity equals configured capacity.
+mappings are generated, so nominal capacity equals configured capacity.
 Missing required hierarchy codes and translations are created through the
 existing reference tables; existing labels are preserved.
+
+After calculating and inserting assignments, every pool receives one to three
+six-month capacity exceptions, each reducing capacity by 1 FTE. Pools whose
+nominal capacity is strictly above 6 FTE also receive two additional twelve-month
+exceptions, each reducing capacity by 1 FTE. Periods cover complete calendar
+months spread reproducibly over five years from the seed year. Overlapping
+reductions add together using the existing capacity rules. Assignments are not
+recalculated, so the original nominal-capacity allocation limits remain intact.
+Existing pool installations are preserved unless replacement is requested.
 
 ### Demo WBS budgets
 
@@ -66,6 +75,13 @@ between €5 million and €10 million over ten consecutive years. Start years a
 Annual amounts follow a discrete Gaussian curve centered between years five and
 six, with standard deviation two years. Decimal arithmetic and largest-remainder
 cent allocation preserve exact totals.
+
+The seeder also creates a sealed Proposed version linked to that Approved
+version. A reproducible variation between -10% and +10% is selected per WBS
+and applied across its ten years. Decimal cent rounding stays within the limits
+for every annual amount and therefore for each WBS total. Existing Approved
+amounts are reused when adding a missing Proposed version; repeated seeding
+preserves both snapshots instead of overwriting Finance history.
 
 For a full generation, eligible projects have status `In Progress` and are ordered
 by ID. The first gets 100% of p.1.10; the second gets 100% of p.2.10 and 50% of

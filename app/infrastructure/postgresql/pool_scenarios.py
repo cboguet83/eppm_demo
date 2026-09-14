@@ -9,7 +9,7 @@ import psycopg
 from psycopg import sql
 
 from app.application.ports.maintenance import PoolSeedReport
-from app.domain.resources.pool_seed import GROUPS, POOLS, ProjectPeriod, TaskPeriod, plan_demand
+from app.domain.resources.pool_seed import GROUPS, POOLS, ProjectPeriod, TaskPeriod, plan_demand, plan_capacity_exceptions
 from app.infrastructure.postgresql.seed_catalog import advance_seed_sequences
 from app.infrastructure.postgresql.seed_plan import SeedInsert, SeedValue, next_seed_identity, source_fingerprint
 
@@ -114,6 +114,12 @@ def prepare_pool_scenarios(connection: psycopg.Connection, *, year: int, seed: i
     for row in demand:
         builder.insert('resource_pool_assignment', ('pool_id', 'project_id', 'task_id', 'fte_assigned', 'notes'),
                        (pool_ids[row.pool_name], row.project_id, row.task_id, row.milli_fte / 1000, MARKER))
+    # Demand uses the established nominal-capacity limits. Apply reductions only
+    # afterwards, without reallocating assignments to fit the reduced capacity.
+    for pool_name, start, end in plan_capacity_exceptions(year, seed):
+        builder.insert('resource_pool_capacity_exception',
+                       ('pool_id', 'start_date', 'end_date', 'reduction_fte', 'reason'),
+                       (pool_ids[pool_name], start, end, 1, 'Demo capacity reduction'))
     report = dict(new_groups=7, new_pools=33, replacement=replace,
                   removed=counts if replace else {table: 0 for table in REPLACED_TABLES},
                   hierarchy=hierarchy, fingerprint=fingerprint, seed=seed, year=year,

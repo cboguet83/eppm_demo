@@ -1,6 +1,7 @@
 """Deterministic Ressort A layout and whole-period allocation slots in milli-FTE."""
 
 from dataclasses import dataclass
+from calendar import monthrange
 from datetime import date
 import random
 
@@ -29,6 +30,27 @@ POOLS = (
     *(SeedPool(f'pool {code}{i}', f'Service {code}', 'division', capacity)
       for code in 'EGM' for i, capacity in enumerate((5, 6, 7, 8, 10), 1)),
 )
+
+
+def plan_capacity_exceptions(year: int, seed: int) -> tuple[tuple[str, date, date], ...]:
+    """Schedule 1 FTE reductions over five years, independently of demand.
+
+    Every pool gets one to three six-month periods. Pools above 6 FTE also
+    receive two twelve-month periods. Dates cover complete calendar months;
+    independently selected periods may overlap and their reductions add.
+    """
+    rng = random.Random(seed)
+    first_year = min(year, 9995)
+    rows = []
+    for pool in POOLS:
+        for duration, count in ((6, rng.randint(1, 3)), (12, 2 if pool.capacity > 6 else 0)):
+            for offset in sorted(rng.sample(range(61-duration), count)):
+                start_year, start_month = first_year + offset // 12, offset % 12 + 1
+                last_offset = offset + duration - 1
+                end_year, end_month = first_year + last_offset // 12, last_offset % 12 + 1
+                rows.append((pool.name, date(start_year, start_month, 1),
+                             date(end_year, end_month, monthrange(end_year, end_month)[1])))
+    return tuple(rows)
 
 
 @dataclass(frozen=True)

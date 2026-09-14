@@ -850,6 +850,7 @@
     "overallocation": "Überbelegung",
     "total_capacity": "Gesamtkapazität der Pools",
     "go_to_consumers": "Planung und Meilensteine: nutzende Projekte",
+    "pool_details": "Pooldetails",
     "loading": "Wird geladen…",
     "today": "Aktuelles Datum",
     "no_status_budget": "Keine Budgetversion mit Status {status} in Finanzen verfügbar.",

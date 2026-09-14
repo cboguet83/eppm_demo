@@ -65,7 +65,10 @@ export default function({data,parentElement,setTriggerValue}) {
         closeMenu();closeTip();menu=document.createElement('div');menu.className='context-menu';menu.setAttribute('role','menu');
         const heading=document.createElement('div');heading.className='context-menu-header';heading.textContent=pool.name+' - '+row.quarter;menu.appendChild(heading);
         const item=document.createElement('button');item.className='context-menu-item';item.type='button';item.setAttribute('role','menuitem');item.textContent=data.goTo;
-        item.onclick=()=>{closeMenu();setTriggerValue('selection',{quarter:row.quarter,pool_id:pool.pool_id,metric:data.metric});};menu.appendChild(item);root.appendChild(menu);position(menu,x,y);item.focus({preventScroll:true});
+        item.onclick=()=>{closeMenu();setTriggerValue('selection',{quarter:row.quarter,pool_id:pool.pool_id,metric:data.metric,action:'planning'});};menu.appendChild(item);
+        const details=document.createElement('button');details.className='context-menu-item';details.type='button';details.setAttribute('role','menuitem');details.textContent=data.poolDetails;
+        details.onclick=()=>{closeMenu();setTriggerValue('selection',{quarter:row.quarter,pool_id:pool.pool_id,metric:data.metric,action:'pool_details'});};menu.appendChild(details);
+        root.appendChild(menu);position(menu,x,y);item.focus({preventScroll:true});
     };
     const path=[];
     const first=Date.parse(data.start),last=Date.parse(data.end),today=Date.parse(data.today);

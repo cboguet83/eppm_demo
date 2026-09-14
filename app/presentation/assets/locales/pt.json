@@ -873,6 +873,7 @@
     "overallocation": "Sobrealocação",
     "total_capacity": "Capacidade total dos grupos",
     "go_to_consumers": "Planeamento e marcos: projetos consumidores",
+    "pool_details": "Detalhes do pool",
     "loading": "A carregar…",
     "today": "Data atual",
     "no_status_budget": "Nenhuma versão orçamental {status} disponível em Finanças.",

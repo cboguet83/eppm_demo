@@ -53,6 +53,42 @@ def test_preview_is_non_mutating_frozen_and_repeat_install_preserves_allocations
     assert operator.run(snapshot) == before
 
 
+def test_capacity_exceptions_are_applied_after_unchanged_assignment_plan(pg_database):
+    """Post-assignment reductions change capacity, never the seeded demand."""
+    operator = OperatorDatabase(pg_database.operator_url)
+    operator.run(install, write=True)
+    plan = operator.run(lambda c: prepare_pool_scenarios(c, year=2026, seed=42))
+    exceptions = [i for i, command in enumerate(plan.inserts) if command.table == 'resource_pool_capacity_exception']
+    assignments = [i for i, command in enumerate(plan.inserts) if command.table == 'resource_pool_assignment']
+    assert min(exceptions) > max(assignments)
+    before_reductions = replace(plan, inserts=plan.inserts[:min(exceptions)])
+    operator.run(lambda c: apply_pool_scenarios(c, before_reductions), write=True)
+    before = operator.run(lambda c: c.execute('SELECT * FROM eppm.resource_pool_assignment ORDER BY id').fetchall())
+    def add_reductions(c):
+        for command in plan.inserts[min(exceptions):]:
+            command.apply(c)
+    operator.run(add_reductions, write=True)
+    assert operator.run(lambda c: c.execute('SELECT * FROM eppm.resource_pool_assignment ORDER BY id').fetchall()) == before
+    def check(c):
+        rows = c.execute('''SELECT p.name,p.capacity_fte,x.start_date,x.end_date,x.reduction_fte
+            FROM eppm.resource_pool p JOIN eppm.resource_pool_capacity_exception x ON x.pool_id=p.id''').fetchall()
+        counts = Counter()
+        for name, capacity, start, end, reduction in rows:
+            months = (end.year-start.year)*12+end.month-start.month+1
+            counts[name, months] += 1
+            assert reduction == 1
+            assert capacity > 6 or months == 6
+        for pool in POOLS:
+            assert 1 <= counts[pool.name, 6] <= 3
+            assert counts[pool.name, 12] == (2 if pool.capacity > 6 else 0)
+        identities = [row[0] for row in c.execute('SELECT id FROM eppm.resource_pool')]
+        for inputs in read_operator_capacity_inputs(c, identities).values():
+            detail = calculate_capacity(inputs, today=date(2026, 1, 1))
+            assert detail.capacity_calendar
+            assert all(value < inputs.pool.capacity_fte for value in detail.capacity_calendar.values())
+    operator.run(check)
+
+
 def test_current_size_replacement_preserves_projects_and_has_exact_capacity_mix(pg_database):
     operator = OperatorDatabase(pg_database.operator_url)
     operator.run(lambda c: generate_projects(c, SeedRequest(projects=1000, min_tasks=0, max_tasks=3), year=2026), write=True)

@@ -873,6 +873,7 @@
     "overallocation": "Suraffectation",
     "total_capacity": "Capacité totale des pools",
     "go_to_consumers": "Planning et jalons : projets consommateurs",
+    "pool_details": "Détails du pool",
     "loading": "Chargement…",
     "today": "Date actuelle",
     "no_status_budget": "Aucune version budgétaire {status} disponible dans Finance.",

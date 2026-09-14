@@ -16,7 +16,7 @@ from app.presentation.components.action_table import action_table
 from app.presentation.components.dialog import dialog
 from app.presentation.components.dashboard_table import dashboard_table
 from app.presentation.components.dashboard_resource_chart import finance_chart, resource_chart
-from app.presentation.navigation import PAGE_PLANNING
+from app.presentation.navigation import PAGE_PLANNING, PAGE_SETTINGS
 from app.presentation.components.authorized_cache import authorized_cache
 from app.presentation.i18n import get_current_locale, t
 
@@ -240,6 +240,18 @@ def _planning_jump(service: DashboardService, ids: tuple[int, ...], quarter: str
     st.rerun()
 
 
+def _pool_details_jump(service: DashboardService, ids: tuple[int, ...], quarter: str,
+                       pool_id: int, metric: str) -> None:
+    """Reauthorize the selected chart pool before opening its existing details."""
+    service.consuming_projects(list(ids), quarter, pool_id, metric)
+    st.session_state['settings_active_section'] = 'organization'
+    st.session_state['rb_settings_section'] = 'org_structure'
+    st.session_state['settings_active_tab'] = 'resource_pools'
+    st.session_state['target_resource_pool_id'] = pool_id
+    st.session_state['nav_redirect'] = PAGE_SETTINGS
+    st.rerun()
+
+
 @st.fragment(key='dashboard')
 def render_dashboard(service: DashboardService) -> None:
     """Update filters, five-row pages and charts independently of the application shell."""
@@ -298,10 +310,17 @@ def render_dashboard(service: DashboardService) -> None:
                         'totalCapacityLabel': _label('total_capacity_short'),
                         'totalLabel': _label('total'), 'allocatedLabel': _label('allocation'),
                         'availableLabel': t('planning.resource_grid.available_value', default='Available'),
-                        'capacityLabel': _label('total_capacity'), 'goTo': _label('go_to_consumers')})
+                        'capacityLabel': _label('total_capacity'), 'goTo': _label('go_to_consumers'),
+                        'poolDetails': _label('pool_details')})
                 if isinstance(selection, dict) and selection.get('metric') == metric:
                     if type(selection.get('pool_id')) is not int or not isinstance(selection.get('quarter'), str):
                         raise ValueError('Invalid resource selection.')
-                    _planning_jump(service, ids, selection['quarter'], selection['pool_id'], metric)
+                    action = selection.get('action', 'planning')
+                    if action == 'pool_details':
+                        _pool_details_jump(service, ids, selection['quarter'], selection['pool_id'], metric)
+                    elif action == 'planning':
+                        _planning_jump(service, ids, selection['quarter'], selection['pool_id'], metric)
+                    else:
+                        raise ValueError('Invalid resource action.')
     except (AccessDenied, ProjectStorageError, ValueError):
         st.error(_label('unavailable'))
