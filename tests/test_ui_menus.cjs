@@ -72,7 +72,7 @@ test('opening project and task menus keeps nested submenus outside their scroll 
   const menu = {style:{},offsetWidth:210,offsetHeight:220};
   const context = vm.createContext({
     document:{getElementById:id=>id === 'project-context-menu' ? menu : null},
-    window:{innerWidth:1000,innerHeight:700}, tasksData:[],
+    window:{innerWidth:1000,innerHeight:700}, tasksData:[], projectDependencyIssues:()=>[],
     hideContextMenu(){},hideDepContextMenu(){},hideTooltip(){},
   });
   loadPermissions(context, [42]);
@@ -146,6 +146,57 @@ test('resource hover card contains only the escaped concise assignment summary',
   context.showHoverOverlay = false;
   context.showResourceCellTooltip({},'Hidden');
   assert.equal(tooltips.length,1);
+});
+
+test('pool hover inserts colored availability below its escaped title', () => {
+  const tooltips = [];
+  const context = vm.createContext({showHoverOverlay:true,
+    getT:(_,fallback)=>fallback,
+    escapeHtml:value=>value.replaceAll('<','&lt;').replaceAll('>','&gt;'),
+    showTooltip:(_,value)=>tooltips.push(value)});
+  loadFunction(context,'formatResourceValue');
+  loadFunction(context,'showResourceCellTooltip');
+  context.showResourceCellTooltip({},'Pool <A>\nDefined capacity: 5 FTE',
+    {isOverallocated:false,minAvailable:2.5,maxExcess:0});
+  assert.match(tooltips[0], /<strong>Pool &lt;A&gt;<\/strong><div style="color:#4ade80/);
+  assert.match(tooltips[0], /Available: 2.5 FTE<\/div>Defined capacity: 5 FTE/);
+  context.showResourceCellTooltip({},'Pool B',{isOverallocated:true,minAvailable:0,maxExcess:1.2});
+  assert.match(tooltips[1], /color:#f87171/);
+  assert.match(tooltips[1], /Overallocated: 1.2 FTE/);
+});
+
+test('pool cell hover respects selected-project scope and capacity exceptions', () => {
+  const total = {}, selected = {}, calendar = {'2026-01-01':0};
+  const pool = {name:'Pool',daily_usage:total,selected_projects_daily_usage:selected,
+    daily_assigned_capacity:calendar,displayed_assigned_capacity:5,has_assigned_resources:false};
+  const calls = [];
+  const context = vm.createContext({getResourcePoolById:()=>pool,
+    poolAssignmentDetails:()=>pool.name,showResourceCellTooltip(){},
+    getDemandCapacityStatusForPeriod:(...args)=>{calls.push(args);return {};}});
+  loadFunction(context,'handleCellMouseEnter');
+  for(const scope of ['selected','total'])context.handleCellMouseEnter({},
+    {dataset:{poolId:'1',scope,startDate:'2026-01-01',endDate:'2026-01-02'}});
+  assert.equal(calls[0][0],selected);
+  assert.equal(calls[1][0],total);
+  assert.equal(calls[0][2],calendar);
+});
+
+test('allocation popup and filter actions retain the clicked quarter and row scope', () => {
+  const events=[];
+  const context=vm.createContext({hideResourceCellContextMenu(){},canManageSharedData:false,
+    selectedResourceCellCtx:{pool_id:1,pool_name:'Pool A',start_date:'2025-07-01',end_date:'2025-09-30',allocation_scope:'selected'},
+    Streamlit:{setComponentValue:value=>events.push(value)}});
+  loadFunction(context,'triggerGoToResourcePoolDetails');
+  loadFunction(context,'triggerFilterResourcePool');
+  context.triggerGoToResourcePoolDetails('show_pool_allocations');
+  context.triggerFilterResourcePool(true);
+  for(const event of events){
+    assert.equal(event.start_date,'2025-07-01');assert.equal(event.end_date,'2025-09-30');
+    assert.equal(event.allocation_scope,'selected');
+  }
+  context.selectedResourceCellCtx.allocation_scope='total';
+  context.triggerGoToResourcePoolDetails('show_pool_allocations');
+  assert.equal(events[2].allocation_scope,'total');
 });
 
 test('CSV export fetches the access-controlled endpoint once per nonce without a modal or cached blob', () => {

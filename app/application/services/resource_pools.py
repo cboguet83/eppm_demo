@@ -5,13 +5,16 @@ from app.domain.hierarchy import HierarchyType
 from app.application.ports.references import PoolReference, PoolGroupReference
 
 
-from dataclasses import asdict
+from dataclasses import asdict, replace
+from datetime import date
+from math import isfinite
 
 from app.application.ports.resource_pools import ResourcePoolGateway, ResourcePoolStore
 from app.domain.resources.models import (
     AssignmentLink,
     AssignmentRow,
     PoolAssignment,
+    PoolCapacityException,
     PoolGroupMemberRow,
     PoolGroupSummary,
     PoolMapping,
@@ -43,6 +46,24 @@ class ResourcePoolService:
     def pool_choices(self) -> list[PoolReference]:
         """Read allocation-selector labels without pool configuration details."""
         return self._gateway.run(lambda store: [PoolReference(row.id, row.name, row.capacity_fte) for row in store.get_all_pools()])
+
+    def capacity_exceptions(self, pool_id: int) -> list[PoolCapacityException]:
+        """Read the selected pool's absolute-capacity reduction periods."""
+        return self._gateway.run(lambda store: store.capacity_exceptions([pool_id]))
+
+    def save_capacity_exception(self, item: PoolCapacityException) -> int:
+        """Validate an inclusive reduction and authorize shared configuration edits."""
+        first, last = date.fromisoformat(item.start_date), date.fromisoformat(item.end_date)
+        if not 0 <= (last - first).days < 9125:
+            raise ValueError('The exception must end on or after its start and span at most 9125 days.')
+        if not isfinite(item.reduction_fte) or not 0.001 <= item.reduction_fte < 1_000_000_000:
+            raise ValueError('Enter a positive finite capacity reduction in FTE.')
+        item = replace(item, reduction_fte=round(item.reduction_fte, 3), reason=item.reason.strip())
+        return self._gateway.run(lambda store: store.save_capacity_exception(item), write=True, permission=Permission.SHARED)
+
+    def delete_capacity_exception(self, identity: int) -> bool:
+        """Remove an exception after current shared-management authorization."""
+        return self._gateway.run(lambda store: store.delete_capacity_exception(identity), write=True, permission=Permission.SHARED)
 
     def group_choices(self) -> list[PoolGroupReference]:
         """Read group labels for planning filters and allocation selectors."""

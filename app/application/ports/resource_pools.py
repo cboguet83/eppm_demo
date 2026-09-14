@@ -11,6 +11,7 @@ from app.domain.resources.models import (
     AssignmentLink,
     AssignmentRow,
     PoolAssignment,
+    PoolCapacityException,
     PoolGroupMemberRow,
     PoolMapping,
     PoolTag,
@@ -23,6 +24,10 @@ from app.domain.resources.models import (
 
 class ResourcePoolStore(Protocol):
     """Queries and writes that share one transaction."""
+
+    def capacity_exceptions(self, pool_ids: list[int]) -> list[PoolCapacityException]: ...
+    def save_capacity_exception(self, item: PoolCapacityException) -> int: ...
+    def delete_capacity_exception(self, identity: int) -> bool: ...
 
     def get_all_pools(self) -> list[ResourcePool]: ...
     def get_all_hierarchy_types(self) -> list[HierarchyType]: ...

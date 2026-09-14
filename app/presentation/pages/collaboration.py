@@ -298,6 +298,23 @@ def _render_modal(project_id: int, surface: str, service: CollaborationService) 
 
 
 @st.fragment
+def _render_project_event_dialog(project_id: int, service: CollaborationService) -> None:
+    """Handle standalone event submission without rerendering the planning chart."""
+    _render_modal(project_id, "log", service)
+
+
+def open_project_event_dialog(project_id: int, service: CollaborationService) -> None:
+    """Open the shared authorized event form without loading the project log list.
+
+    Args:
+        project_id: Project receiving the new event.
+        service: Actor-scoped collaboration service, which reauthorizes saves.
+    """
+    _event_dialog(project_id, service)
+    _render_project_event_dialog(project_id, service)
+
+
+@st.fragment
 @collaboration_errors
 def render_project_log(project_id: int, service: CollaborationService) -> None:
     """Show a bounded multiline log table with modal creation and row editing."""

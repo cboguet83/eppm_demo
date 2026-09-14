@@ -1,6 +1,5 @@
 """Complete native demo commands preserve backup, catalog and additive policies."""
 
-from datetime import date
 from decimal import Decimal
 
 import psycopg
@@ -19,16 +18,16 @@ def test_complete_native_default_seed_contains_annotations_scenarios_and_one_res
     assert maintenance.seed_defaults(operator, backup, year=2026)
     result = maintenance.counts(operator)
     assert {key: result[key] for key in ('projects', 'tasks', 'dependencies', 'project_types', 'pools')} == {
-        'projects': 5, 'tasks': 15, 'dependencies': 14, 'project_types': 5, 'pools': 103,
+        'projects': 5, 'tasks': 15, 'dependencies': 14, 'project_types': 5, 'pools': 33,
     }
     assert result['property_values'] > 100
     with psycopg.connect(pg_database.operator_url) as connection:
         assert connection.execute('SELECT count(*) FROM eppm.project_tag').fetchone() == (5,)
         assert connection.execute('SELECT count(*) FROM eppm.task_tag').fetchone() == (15,)
-        assert connection.execute('SELECT count(*) FROM eppm.resource_pool_assignment').fetchone() == (204,)
-        assert connection.execute('SELECT count(*) FROM eppm.resource_pool_mapping').fetchone() == (307,)
-        assert connection.execute("SELECT task_id,fte_assigned,start_date,end_date FROM eppm.resource_pool_assignment "
-            "WHERE notes='Core system scoping & discovery'").fetchone() == (1, 3.0, date(2026, 1, 10), date(2026, 2, 15))
+        assert connection.execute('SELECT count(*) FROM eppm.resource_pool_assignment').fetchone()[0] > 33
+        assert connection.execute('SELECT status,count(*) FROM eppm.project GROUP BY status').fetchall() == [('In Progress', 5)]
+        assert connection.execute('SELECT count(*) FROM eppm.resource_pool_mapping').fetchone() == (0,)
+        assert connection.execute('SELECT count(DISTINCT project_id) FROM eppm.resource_pool_assignment').fetchone() == (4,)
         assert connection.execute('SELECT sum(planned_budget),sum(actual_budget) FROM eppm.project').fetchone() == (
             Decimal('1250000'), Decimal('842000'),
         )
@@ -47,22 +46,24 @@ def test_catalog_only_install_pool_preview_apply_clear_and_reset_follow_archive_
     backup = PostgresBackup(pg_database.operator_url, tmp_path, tools=clients)
     assert maintenance.seed_defaults(operator, backup, include_projects=False)
     assert maintenance.counts(operator)['projects'] == 0
-    assert maintenance.counts(operator)['pools'] == 3
+    assert maintenance.counts(operator)['pools'] == 33
     assert len(list(tmp_path.glob('*.dump'))) == 1
     before = operator.run(source_fingerprint)
-    preview = maintenance.seed_pool_scenarios(operator, backup, apply=False, year=2026)
-    assert preview['new_pools'] == 100 and not preview['applied']
+    preview = maintenance.seed_pool_scenarios(operator, backup, apply=False, year=2026, replace=True)
+    assert preview['new_pools'] == 33 and not preview['applied']
     assert operator.run(source_fingerprint) == before
     assert len(list(tmp_path.glob('*.dump'))) == 1
-    assert maintenance.seed_pool_scenarios(operator, backup, apply=True, year=2026)['applied']
+    assert maintenance.seed_pool_scenarios(operator, backup, apply=True, year=2026, replace=True)['applied']
     assert len(list(tmp_path.glob('*.dump'))) == 2
     assert maintenance.seed_defaults(operator, backup, force=True, year=2026)
     assert len(list(tmp_path.glob('*.dump'))) == 3
-    assert maintenance.clear_pool_allocations(operator, backup) == 204
+    assignment_count = operator.run(lambda c: c.execute('SELECT count(*) FROM eppm.resource_pool_assignment').fetchone()[0])
+    assert assignment_count > 33
+    assert maintenance.clear_pool_allocations(operator, backup) == assignment_count
     with psycopg.connect(pg_database.operator_url) as connection:
-        assert connection.execute('SELECT count(*) FROM eppm.resource_pool_mapping').fetchone() == (307,)
+        assert connection.execute('SELECT count(*) FROM eppm.resource_pool_mapping').fetchone() == (0,)
     assert maintenance.reset_database(operator, backup)['projects_deleted'] == 5
-    assert maintenance.counts(operator)['pools'] == 103
+    assert maintenance.counts(operator)['pools'] == 33
     assert len(list(tmp_path.glob('*.dump'))) == 5
 
 
@@ -87,7 +88,7 @@ def test_default_seed_preserves_preexisting_pools_and_noncanonical_tag_group_cho
         connection.execute("INSERT INTO eppm.resource_pool(name) VALUES ('Custom pool')")
         connection.execute("INSERT INTO eppm.tag_group(tag_group_name) VALUES ('projecttags'),('tasktags')")
     assert maintenance.seed_defaults(operator, backup)
-    assert maintenance.counts(operator)['pools'] == 101
+    assert maintenance.counts(operator)['pools'] == 1
     with psycopg.connect(pg_database.operator_url) as connection:
         assert connection.execute('SELECT count(*) FROM eppm.project_tag').fetchone() == (0,)
         assert connection.execute('SELECT count(*) FROM eppm.resource_pool_assignment WHERE pool_id=1').fetchone() == (0,)
@@ -107,8 +108,8 @@ def test_native_operator_cli_seed_preview_apply_counts_clear_and_reset(pg_databa
     monkeypatch.setenv('EPPM_TEST_OPERATOR_COMMAND_URL', pg_database.operator_url)
     prefix = ['postgresql_admin', '--url-variable', 'EPPM_TEST_OPERATOR_COMMAND_URL', '--backup-directory', str(tmp_path)]
     for options in (
-        ['seed-defaults', '--without-projects'], ['seed-pools', '--year', '2026'],
-        ['seed-pools', '--year', '2026', '--apply'], ['counts'], ['clear-allocations'], ['reset', '--all-references'],
+        ['seed-defaults', '--without-projects'], ['seed-pools', '--year', '2026', '--replace'],
+        ['seed-pools', '--year', '2026', '--replace', '--apply'], ['counts'], ['clear-allocations'], ['reset', '--all-references'],
     ):
         monkeypatch.setattr('sys.argv', prefix + options)
         main(archive_tools=clients)

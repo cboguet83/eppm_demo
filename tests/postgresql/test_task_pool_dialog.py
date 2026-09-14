@@ -180,6 +180,25 @@ class TaskPoolDialogTests(unittest.TestCase):
         self.assert_healthy(app)
         self.assertEqual(len(resource_pool_frames.assignments_frame(self.repo.get_assignments(task_id=1))), 2)
 
+    def test_relative_project_and_task_assignments_store_only_scheduling_parameters(self) -> None:
+        """Both dialogs preview and save offsets without materializing dates."""
+        for owner in ('task', 'proj'):
+            app = self.app() if owner == 'task' else AppTest.from_function(project_pool_app, args=(self.resources, self.access))
+            app.run()
+            app.radio(key=f'rb_assign_{owner}_period_mode').set_value('relative').run()
+            app.selectbox(key=f'assign_{owner}_anchor').set_value('end').run()
+            app.number_input(key=f'assign_{owner}_offset').set_value(10).run()
+            app.number_input(key=f'assign_{owner}_duration').set_value(5).run()
+            self.assertTrue(any('2027-01-10' in item.value and '2027-01-14' in item.value for item in app.caption))
+            app.button(key=f'btn_confirm_assign_{owner}_pool').click().run()
+            self.assert_healthy(app)
+            rows = self.repo.get_assignments(project_id=1)
+            relative = [row for row in rows if row.get('schedule_anchor') == 'end' and (row['task_id'] is not None) == (owner == 'task')]
+            self.assertEqual(len(relative), 1)
+            self.assertIsNone(relative[0]['custom_start_date'])
+            self.assertIsNone(relative[0]['custom_end_date'])
+            self.assertEqual((relative[0]['offset_days'], relative[0]['duration_days']), (10, 5))
+
     def test_custom_dates_are_validated_and_saved(self) -> None:
         """Invalid ranges do not silently become full-duration assignments."""
         app = self.app().run()

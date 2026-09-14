@@ -46,6 +46,41 @@ def render_application(workspace: ApplicationWorkspace) -> None:
         #MainMenu { visibility: hidden; }
         footer { visibility: hidden; }
 
+        /* Streamlit can retain outgoing fragment children while the next page loads. */
+        .st-key-dashboard_issue_card:not(.st-key-application_page_Dashboard .st-key-dashboard_issue_card) {
+            display: none !important;
+        }
+
+        [data-testid="stSidebarContent"] {
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+        [data-testid="stSidebarHeader"] {
+            flex-shrink: 0;
+        }
+        [data-testid="stSidebarUserContent"] {
+            flex: 1 0 auto;
+            display: flex;
+            padding-bottom: 1rem;
+        }
+        [data-testid="stSidebarUserContent"] > div {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        [data-testid="stSidebarUserContent"] [data-testid="stVerticalBlock"]:has(> [data-testid="stLayoutWrapper"] > .st-key-account_footer) {
+            flex: 1;
+        }
+        [data-testid="stLayoutWrapper"]:has(> .st-key-account_footer) {
+            order: 999;
+            margin-top: auto;
+        }
+        .st-key-account_footer {
+            padding-top: .75rem;
+            border-top: 1px solid #e2e8f0;
+        }
+
         /* Reduce top whitespace across all views */
         .block-container {
             padding-top: 1.5rem !important;
@@ -102,18 +137,18 @@ def render_application(workspace: ApplicationWorkspace) -> None:
     install_dialog_presentation()
     render_language_selector()
 
-    st.sidebar.title(f"📌 {t('app.title', default='PPM Demo Portal')}")
+    st.sidebar.title('EPPM POC')
 
     nav_map = {
-        PAGE_PORTFOLIO: f"1. 📊 {t('nav.portfolio')}",
-        PAGE_PLANNING: f"2. 📅 {t('nav.planning')}",
-        PAGE_SETTINGS: f"3. ⚙️ {t('nav.settings', default='Settings')}",
+        PAGE_PORTFOLIO: t('nav.portfolio'),
+        PAGE_PLANNING: t('nav.planning'),
+        PAGE_SETTINGS: t('nav.settings', default='Settings'),
     }
 
     nav_map[PAGE_ACCESS] = t("access.title", default="Application access")
     nav_map[PAGE_DASHBOARD] = t("dashboard.title", default="Dashboard")
     nav_map[PAGE_FINANCE] = t("finance.title", default="Finance")
-    page_keys = [page for page in (PAGE_DASHBOARD, PAGE_PORTFOLIO, PAGE_PLANNING, PAGE_SETTINGS, PAGE_FINANCE, PAGE_ACCESS) if page in workspace.pages]
+    page_keys = [page for page in (PAGE_DASHBOARD, PAGE_PORTFOLIO, PAGE_PLANNING, PAGE_FINANCE, PAGE_SETTINGS, PAGE_ACCESS) if page in workspace.pages]
     if not page_keys:
         st.info(t("auth.no_access", default="Your account has no assigned application access. Contact an access administrator."))
         return
@@ -182,11 +217,13 @@ def render_application(workspace: ApplicationWorkspace) -> None:
 @st.fragment(key="application_page")
 def _render_application_page(workspace: ApplicationWorkspace) -> None:
     """Switch the main page while retaining navigation, account controls and totals."""
-    render_page = workspace.pages.get(st.session_state.get("app_sidebar_nav"))
+    page = st.session_state.get("app_sidebar_nav")
+    render_page = workspace.pages.get(page)
     if render_page is None:
         st.info(t("auth.no_access", default="Your account has no assigned application access. Contact an access administrator."))
         return
-    render_page()
+    with st.container(key=f"application_page_{page}"):
+        render_page()
 
 
 def render_language_selector() -> None:

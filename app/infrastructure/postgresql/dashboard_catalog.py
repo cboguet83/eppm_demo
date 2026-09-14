@@ -13,7 +13,7 @@ from app.infrastructure.postgresql.property_store import parameters
 
 
 def read_catalog(connection: psycopg.Connection, project_ids: list[int]) -> DashboardCatalog:
-    """Read active project fields without disclosing unrelated reference labels."""
+    """Read permitted projects of every status without unrelated reference labels."""
     if not project_ids:
         return DashboardCatalog([], {}, [])
     with connection.cursor(row_factory=dict_row) as cursor:
@@ -27,8 +27,8 @@ def read_catalog(connection: psycopg.Connection, project_ids: list[int]) -> Dash
         for team, function in connection.execute('SELECT team_id,function_id FROM eppm.team_function ORDER BY team_id,function_id'):
             teams.setdefault(function, []).append(str(team))
         for row in cursor.execute("""SELECT p.id,p.name,p.status,p.function_id,t.name AS template
-            FROM eppm.project p JOIN eppm.project_type t ON t.id=p.project_type_id WHERE p.id=ANY(%s::bigint[])
-            AND lower(btrim(coalesce(p.status,''))) NOT IN ('completed','cancelled','canceled') ORDER BY p.id""", (project_ids,)):
+            FROM eppm.project p JOIN eppm.project_type t ON t.id=p.project_type_id
+            WHERE p.id=ANY(%s::bigint[]) ORDER BY p.id""", (project_ids,)):
             identity = row['function_id']
             third, fourth = levels[3].get(identity), levels[4].get(identity)
             fields = {'name': [row['name']], 'project_template': [row['template'] or ''], 'status': [row['status'] or ''],

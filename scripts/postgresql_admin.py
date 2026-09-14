@@ -67,6 +67,7 @@ def main(*, archive_tools: PostgresTools | None = None) -> None:
     parser.add_argument('--min-tasks', type=int, default=0)
     parser.add_argument('--max-tasks', type=int, default=15)
     parser.add_argument('--append', action='store_true', help='Preserve existing projects and catalogs during bulk generation')
+    parser.add_argument('--replace', action='store_true', help='Explicitly replace the existing pool layout (seed-pools only)')
     parser.add_argument('--apply', action='store_true', help='Apply a pool scenario or allocation preview after creating an archive')
     parser.add_argument('--allocated-pools', type=float, default=80)
     parser.add_argument('--average-allocation', type=float, default=80)
@@ -77,6 +78,8 @@ def main(*, archive_tools: PostgresTools | None = None) -> None:
     parser.add_argument('--expected-fingerprint', help='Source fingerprint from the reviewed allocation preview')
     parser.add_argument("command", choices=("provision", "migrate", "check", "configure-security", "backup", "restore", *MAINTENANCE_COMMANDS))
     arguments = parser.parse_args()
+    if arguments.replace and arguments.command != 'seed-pools':
+        parser.error('--replace is only valid for seed-pools')
     if arguments.env_file:
         load_dotenv(arguments.env_file, override=True)
     if arguments.backup_directory is None:
@@ -118,7 +121,7 @@ def _maintenance(arguments: argparse.Namespace, url: str, archive_tools: Postgre
         result = service.counts()
     elif arguments.command == 'seed-pools':
         result = service.seed_pool_scenarios(year=arguments.year,
-            seed=20260908 if arguments.seed is None else arguments.seed, apply=arguments.apply)
+            seed=20260908 if arguments.seed is None else arguments.seed, apply=arguments.apply, replace=arguments.replace)
     elif arguments.command == 'seed-projects':
         result = service.seed_projects(SeedRequest(projects=arguments.projects,
             min_tasks=arguments.min_tasks, max_tasks=arguments.max_tasks, clean_first=not arguments.append,

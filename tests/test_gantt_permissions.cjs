@@ -18,13 +18,13 @@ function harness() {
     hideContextMenu() {}, hideProjectContextMenu() {}, hideDepContextMenu() {}, hideTooltip() {},
     hideResourceCellContextMenu() {}, confirm: () => true,
     Streamlit: {setComponentValue: message => messages.push(message)},
-    tasksData: [], currentProjectId: 1, selectedContextMenuTask: null, selectedContextMenuProjectId: null,
+    tasksData: [], projectSummariesData: [], currentProjectId: 1, selectedContextMenuTask: null, selectedContextMenuProjectId: null,
   });
   const run = code => vm.runInContext(code, context);
   const load = (start, end) => run(script.slice(script.indexOf(start), script.indexOf(end)));
   load('    let editAllProjects =', '    let allProjectsData =');
   load('    function showContextMenu(', '    function showContextMenuById(');
-  load('    function showProjectContextMenu(', '    function hideResourceCellContextMenu(');
+  load('    function projectDependencyIssues(', '    function hideResourceCellContextMenu(');
   load('    function triggerManageTaskTags(', '    // TIMELINE RENDERER');
   load('    function triggerGoToResourcePoolDetails(', '    function triggerFilterResourcePool(');
   return {context, run, load, node, messages};
@@ -40,13 +40,33 @@ test('task and project menus default to read only and use the independent edit s
       const expected = permission && projectId === 1 ? '' : 'none';
       for (const id of ['ctx-label-add-step', 'ctx-label-edit-step', 'ctx-label-task-tags',
         'ctx-label-task-pools', 'ctx-label-complete-step', 'ctx-label-delete-step',
-        'ctx-project-add-step', 'ctx-import-csv', 'ctx-label-project-tags', 'ctx-label-project-pools']) {
+        'ctx-project-add-step', 'ctx-import-csv', 'ctx-label-project-tags', 'ctx-label-project-pools', 'ctx-project-dependencies',
+        'ctx-project-log-event', 'ctx-task-log-event']) {
         assert.equal(h.node(id).style.display, expected, id);
       }
       assert.equal(h.node('ctx-export-csv').style.display, undefined);
       assert.equal(h.node('ctx-label-edit-project').style.display, undefined);
     }
   }
+});
+
+test('log event targets the owning project and rechecks edit permission at click time', () => {
+  const h = harness();
+  h.context.selectedContextMenuTask = {id: 10, project_id: 1};
+  h.context.selectedContextMenuProjectId = 2;
+  h.context.updatePermissionControls({editable_projects: [1]});
+  h.context.triggerLogProjectEvent('task');
+  h.context.triggerLogProjectEvent('project');
+  assert.deepEqual(h.messages.map(m => [m.action, m.project_id]), [['log_project_event', 1]]);
+  h.context.updatePermissionControls({});
+  h.context.triggerLogProjectEvent('task');
+  assert.equal(h.messages.length, 1);
+  h.context.updatePermissionControls({edit_all: true, manage_shared: true});
+  h.context.triggerLogProjectEvent('project');
+  assert.equal(h.messages[1].project_id, 2);
+  h.context.selectedContextMenuTask = {id: 11};
+  h.context.triggerLogProjectEvent('task');
+  assert.equal(h.messages.length, 2);
 });
 
 test('stale task actions stop emitting writes after edit permission changes', () => {

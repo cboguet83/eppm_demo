@@ -7,6 +7,13 @@ The common runner binds the actor and rechecks authorization for every attempt.
 Reads share a repeatable-read snapshot; writes run at serializable isolation and
 replay only after a definite serialization or deadlock rollback.
 
+The Gantt project and task context menus offer **Log event** to project editors
+within their edit scope and to business administrators. A task opens the form
+for its owning project. The action reuses the project-details event popup,
+including its fields, validation, and transactional save authorization. Viewers
+cannot open the form, and revoked edit rights prevent a retained form from saving.
+Submitting or cancelling updates only the standalone modal fragment.
+
 ## Contact privacy
 
 `0011_project_contacts.sql` adds `eppm.project_contacts(bigint)`, a stable,

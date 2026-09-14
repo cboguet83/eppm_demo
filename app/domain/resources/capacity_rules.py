@@ -185,7 +185,7 @@ def project_pool_status(project_id: int, detail: PoolCapacityDetail) -> ProjectP
     """Evaluate one project's deduplicated demand against dated pool capacity."""
     assignments = [row for row in detail.assignments if row["project_id"] == project_id]
     usage = demand_timeline(assignments)
-    capacity = detail.daily_assigned_capacity if detail.has_assigned_resources else None
+    capacity = detail.capacity_calendar
     over = calculate_daily_overassignments(usage, detail.effective_capacity_fte, capacity)
     return ProjectPoolStatus(
         pool_id=detail.pool_id,

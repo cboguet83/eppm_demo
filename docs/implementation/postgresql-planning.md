@@ -1,5 +1,40 @@
 # PostgreSQL task scheduling and dependencies
 
+## Project dependency management
+
+Right-click a project label or summary bar and choose **Manage dependencies**.
+The panel edits incoming links for the whole project, without step fields. Choose
+another project, optionally one of its steps, FS/FF/SS/SF, and calendar-day lag
+(negative values are supported). Save commits the explicit changes atomically;
+Cancel discards the draft. A failed or stale save keeps the panel open. Reload
+dependencies explicitly discards edits and reads current data.
+
+Project bounds use the earliest/latest task dates. Missing dates mean a link
+cannot yet be evaluated; links never adjust dates automatically. External arrows
+use the existing **External Dependencies** toggle. Project warning badges,
+diagnostics and dependency filters include project-owned links, including cyclic
+graphs. Whole-project links survive schedule replacement, while links referencing
+deleted steps are removed with those steps.
+
+Migration `0030_project_dependencies.sql` adds a separate protected table and
+extends source fingerprints. Existing task dependencies require no conversion.
+Back up before migration. The current database was backed up to
+`data/backups/postgresql/eppm-before-project-dependencies-migration-20260914-071055-832999-f61fc4abb9107b33.dump`
+before applying it. See [ADR 0025](../decisions/0025-project-owned-dependencies.md).
+
+Tests: `tests/test_project_dependency_rules.py`,
+`tests/postgresql/test_project_dependencies.py`,
+`tests/postgresql/test_project_dependency_browser.py`, and the Gantt JavaScript
+regressions cover evaluation, access, explicit deltas, rollback, stale/concurrent
+saves, cache refresh, cleanup and the reused panel.
+
+The final feature run passed 48 PostgreSQL/UI/browser tests, 54 rule/layer/locale
+checks and 20 JavaScript tests. The new Python dependency modules measured
+98.63% statement coverage (the pure rules module: 100%). Live verification checked
+schema version 30 and unchanged record hashes across 48 existing tables, including
+1,000 projects, 7,336 tasks and 6,583 existing task dependencies. The live panel was
+visually checked and its draft cancelled; no demonstration links were saved.
+
 `PlanningService` now executes complete database callbacks through
 `PostgresPlanningGateway`. The native adapter covers task reads and edits, CSV
 imports/exports, schedule templates, dependencies, recursive project filters,
@@ -104,3 +139,25 @@ transaction, and reauthorizes all memory and database hits. Capacity inputs and
 caches are also ported. Portfolio queries, native runtime/operator tooling,
 project money forms, full regression coverage, the 50-user browser acceptance
 runs and backup/restore/restart gates remain.
+
+Pool allocation-grid tooltips show the minimum daily available FTE for the hovered period in green, or peak daily overallocation in red, directly below the pool title. They compare demand with capacity on matching days, including capacity exceptions, and respect total versus selected-project rows. Capacity cells use total demand. Group tooltips remain unchanged.
+
+Planning filters begin at the top without a style-element spacer. Gantt rows are
+41.4 px (10% smaller), including dependency geometry and centered task/milestone
+bars. The Gantt viewport is capped at 495 px, with 5 px toolbar padding above
+and below the controls. Resource-grid row heights are unchanged.
+
+Planning has a persistent project-status multiselect defaulting to In Progress.
+Clear all filters restores that default; clearing the status selection itself
+includes all statuses. Status filtering is applied before the other project
+filters, so Total allocation covers every accessible project in those statuses,
+while Selected allocation additionally uses the selected project set. Capacity
+is unchanged by project-status filtering. Cached pool payloads include the
+status-qualified project set in their keys.
+
+Resource-cell actions carry the inclusive period and Selected/Total row scope.
+The allocation popup keeps only positive assignments overlapping that period;
+Selected uses the server-side current project selection and Total uses the
+status-qualified population. Date resolution still follows the assignment's
+current fixed, inherited or offset/duration schedule. Row-level actions without
+a period retain an unrestricted date range.

@@ -21,6 +21,10 @@ from app.infrastructure.postgresql.planning_summaries import read_project_summar
 from app.infrastructure.postgresql.pool import Database
 from app.infrastructure.postgresql.resource_pools import PostgresResourcePoolStore
 from app.infrastructure.postgresql.tags import PostgresTagStore
+from app.domain.planning.project_dependencies import ProjectDependency, ProjectDependencyInput
+from app.infrastructure.postgresql.project_dependencies import (
+    read_project_dependencies, project_dependency_revision, write_project_dependencies,
+)
 from app.shared.logging import get_logger
 
 logger = get_logger(__name__)
@@ -51,6 +55,18 @@ class PostgresPlanningStore:
         """Retain the connection without owning its transaction or lifetime."""
         self.connection = connection
 
+    def read_project_dependencies(self, project_ids: list[int]) -> list[ProjectDependency]:
+        """Read project-owned incoming links under the current scope."""
+        return read_project_dependencies(self.connection, project_ids)
+
+    def project_dependency_revision(self, project_id: int) -> str:
+        """Read a scoped revision for conflict-safe link editing."""
+        return project_dependency_revision(self.connection, project_id)
+
+    def write_project_dependencies(self, project_id: int, upserts: list[ProjectDependencyInput], deleted_ids: list[int]) -> None:
+        """Apply explicit link changes in the existing transaction."""
+        write_project_dependencies(self.connection, project_id, upserts, deleted_ids)
+
     def _rows[Record](self, model: Callable[..., Record], source: str,
                       parameters: Sequence[object] = ()) -> list[Record]:
         """Adapt explicit SQL columns at the dynamic driver-to-record boundary."""
@@ -60,7 +76,8 @@ class PostgresPlanningStore:
     def get_totals(self) -> PlanningTotals:
         """Count visible owners and endpoints before computing planning totals."""
         row = self.connection.execute('''SELECT (SELECT count(*) FROM eppm.project),(SELECT count(*) FROM eppm.project_task),
-            (SELECT count(*) FROM eppm.task_dependencies),(SELECT count(DISTINCT pool_id) FROM eppm.resource_pool_assignment)''').fetchone()
+            (SELECT count(*) FROM eppm.task_dependencies)+(SELECT count(*) FROM eppm.project_dependency),
+            (SELECT count(DISTINCT pool_id) FROM eppm.resource_pool_assignment)''').fetchone()
         return PlanningTotals(projects=row[0], tasks=row[1], dependencies=row[2], pools=row[3])
 
     def _tasks(self, where: str = '', params: Sequence[object] = ()) -> list[TaskRow]:
@@ -220,7 +237,8 @@ class PostgresPlanningStore:
         seeds = project_id if isinstance(project_id, list) else [project_id]
         if scope == 'this':
             return [row[0] for row in self.connection.execute('SELECT id FROM eppm.project WHERE id=ANY(%s::bigint[]) ORDER BY id', (seeds,))]
-        successors = '''UNION SELECT legacy.successor FROM legacy WHERE legacy.predecessor=selected.id
+        successors = '''UNION SELECT project_links.successor FROM project_links WHERE project_links.predecessor=selected.id
+            UNION SELECT legacy.successor FROM legacy WHERE legacy.predecessor=selected.id
             UNION SELECT task.project_id FROM eppm.task_dependencies d JOIN eppm.project_task task ON task.id=d.task_id
                 WHERE d.predecessor_project_id=selected.id AND d.predecessor_task_id IS NULL
             UNION SELECT task.project_id FROM eppm.project_task pred JOIN eppm.task_dependencies d ON d.predecessor_task_id=pred.id
@@ -228,10 +246,14 @@ class PostgresPlanningStore:
         return [row[0] for row in self.connection.execute(f'''WITH RECURSIVE legacy AS MATERIALIZED (
             SELECT task.project_id AS successor,pred.project_id AS predecessor FROM eppm.visible_project_task task
             JOIN eppm.project_task pred ON pred.id=task.predecessor_id
+        ), project_links AS MATERIALIZED (
+            SELECT d.project_id AS successor,coalesce(d.predecessor_project_id,pred.project_id) AS predecessor
+            FROM eppm.project_dependency d LEFT JOIN eppm.project_task pred ON pred.id=d.predecessor_task_id
         ), selected(id) AS (
             SELECT id FROM eppm.project WHERE id=ANY(%s::bigint[])
             UNION SELECT neighbor.id FROM selected CROSS JOIN LATERAL (
                 SELECT legacy.predecessor AS id FROM legacy WHERE legacy.successor=selected.id
+                UNION SELECT project_links.predecessor FROM project_links WHERE project_links.successor=selected.id
                 UNION SELECT coalesce(pred.project_id,d.predecessor_project_id) FROM eppm.project_task task
                     JOIN eppm.task_dependencies d ON d.task_id=task.id LEFT JOIN eppm.project_task pred ON pred.id=d.predecessor_task_id
                     WHERE task.project_id=selected.id
@@ -250,7 +272,9 @@ class PostgresPlanningStore:
             return set(), set()
         project_id = row[0]
         projects = {project_id} | {row[0] for row in self.connection.execute('''SELECT DISTINCT task.project_id FROM eppm.task_dependencies d
-            JOIN eppm.project_task task ON task.id=d.task_id WHERE d.predecessor_task_id=%s OR d.predecessor_project_id=%s''', (task_id, project_id))}
+            JOIN eppm.project_task task ON task.id=d.task_id WHERE d.predecessor_task_id=%s OR d.predecessor_project_id=%s
+            UNION SELECT project_id FROM eppm.project_dependency WHERE predecessor_task_id=%s OR predecessor_project_id=%s''',
+            (task_id, project_id, task_id, project_id))}
         pools = {row[0] for row in self.connection.execute('SELECT DISTINCT pool_id FROM eppm.resource_pool_assignment WHERE project_id=%s', (project_id,))}
         return projects, pools
 

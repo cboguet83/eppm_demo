@@ -1,6 +1,7 @@
 """Pure capacity calculation with explicit source records and effective date."""
 
 from datetime import date
+from decimal import Decimal
 
 from app.domain.resources.inputs import CapacityInputs, CapacityStaffing
 from app.domain.resources.models import (
@@ -8,6 +9,7 @@ from app.domain.resources.models import (
     PoolCapacityDetail,
     PoolResourceContribution,
 )
+from app.domain.resources.scheduling import relative_period
 from app.domain.resources.timeline import demand_timeline
 from app.domain.resources.capacity_rules import (
     accumulate_daily_usage,
@@ -161,6 +163,10 @@ def resolve_assignments(inputs: CapacityInputs, today: date) -> list[CapacityAss
                 start, end = start or bounds[0], end or bounds[1]
             else:
                 start, end = start or today.isoformat(), end or today.isoformat()
+        if row.get("schedule_anchor"):
+            start, end = relative_period(
+                start, end, row["schedule_anchor"], row["offset_days"], row["duration_days"],
+            )
         result.append(
             CapacityAssignment(
                 id=int(row["id"]),
@@ -177,6 +183,9 @@ def resolve_assignments(inputs: CapacityInputs, today: date) -> list[CapacityAss
                 notes=str(row.get("notes", "")),
             )
         )
+        if row.get("schedule_anchor"):
+            result[-1].update(schedule_anchor=row["schedule_anchor"],
+                              offset_days=row["offset_days"], duration_days=row["duration_days"])
     return result
 
 
@@ -205,6 +214,15 @@ def calculate_capacity(inputs: CapacityInputs, today: date) -> PoolCapacityDetai
     defined = inputs.pool.capacity_fte if inputs.pool else None
     theoretical = round(float(defined), 3) if defined is not None else assigned
     effective = assigned if staffing.has_assigned_resources else theoretical
+    effective_calendar = dict(daily_capacity) if staffing.has_assigned_resources else {}
+    reductions: dict[str, Decimal] = {}
+    for exception in inputs.capacity_exceptions:
+        first, last = date.fromisoformat(exception.start_date), date.fromisoformat(exception.end_date)
+        for ordinal in range(first.toordinal(), last.toordinal() + 1):
+            day = date.fromordinal(ordinal).isoformat()
+            reductions[day] = reductions.get(day, Decimal(0)) + Decimal(str(exception.reduction_fte))
+    for day, reduction in reductions.items():
+        effective_calendar[day] = round(max(0.0, float(Decimal(str(effective_calendar.get(day, effective))) - reduction)), 3)
     assignments = resolve_assignments(inputs, today)
     daily_usage = demand_timeline(assignments)
     scalar: dict[int, list[float]] = {}
@@ -214,7 +232,7 @@ def calculate_capacity(inputs: CapacityInputs, today: date) -> PoolCapacityDetai
     overassignments = calculate_daily_overassignments(
         daily_usage,
         effective,
-        daily_capacity if staffing.has_assigned_resources else None,
+        effective_calendar,
     )
     return PoolCapacityDetail(
         pool_id=inputs.pool_id,
@@ -226,6 +244,7 @@ def calculate_capacity(inputs: CapacityInputs, today: date) -> PoolCapacityDetai
         has_assigned_resources=staffing.has_assigned_resources,
         contributing_resources=staffing.contributing_resources,
         daily_assigned_capacity=daily_capacity,
+        daily_effective_capacity=effective_calendar,
         assignments=assignments,
         daily_usage=daily_usage,
         peak_assigned_fte=round(max(daily_usage.values(), default=0.0), 3),

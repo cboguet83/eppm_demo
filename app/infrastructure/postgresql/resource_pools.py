@@ -12,7 +12,7 @@ from app.application.services.business_access import BusinessAccess
 from app.domain.access.models import Permission
 from app.domain.hierarchy import HierarchyType
 from app.domain.resources.models import (
-    AssignmentLink, AssignmentRow, PoolAssignment, PoolGroupMemberRow, PoolMapping,
+    AssignmentLink, AssignmentRow, PoolAssignment, PoolCapacityException, PoolGroupMemberRow, PoolMapping,
     PoolTag, PoolTagChoice, ResourcePool, ResourcePoolGroup, ResourcePoolGroupMember,
 )
 from app.infrastructure.postgresql.business import run_business
@@ -31,7 +31,8 @@ def _assignment_values(assignment: PoolAssignment) -> tuple[object, ...]:
     """Bind nonmonetary FTE and native dates while retaining absent date endpoints."""
     return (assignment.pool_id, assignment.project_id, assignment.task_id, assignment.fte_assigned,
             date.fromisoformat(assignment.start_date) if assignment.start_date is not None else None,
-            date.fromisoformat(assignment.end_date) if assignment.end_date is not None else None, assignment.notes)
+            date.fromisoformat(assignment.end_date) if assignment.end_date is not None else None, assignment.notes,
+            assignment.schedule_anchor, assignment.offset_days, assignment.duration_days)
 
 
 class PostgresResourcePoolStore:
@@ -50,6 +51,28 @@ class PostgresResourcePoolStore:
     def get_all_hierarchy_types(self) -> list[HierarchyType]:
         """Read stable hierarchy codes and translated labels in one query."""
         return hierarchy_types(self.connection)
+
+    def capacity_exceptions(self, pool_ids: list[int]) -> list[PoolCapacityException]:
+        """Read requested pool reductions in a single authorized query."""
+        return self._rows(PoolCapacityException, '''SELECT id,pool_id,to_char(start_date,'YYYY-MM-DD') AS start_date,
+            to_char(end_date,'YYYY-MM-DD') AS end_date,reduction_fte::double precision AS reduction_fte,reason
+            FROM eppm.resource_pool_capacity_exception WHERE pool_id=ANY(%s::bigint[]) ORDER BY start_date,id''', (pool_ids,))
+
+    def save_capacity_exception(self, item: PoolCapacityException) -> int:
+        """Create or edit an absolute reduction under the shared-management guard."""
+        values = (item.pool_id, date.fromisoformat(item.start_date), date.fromisoformat(item.end_date), item.reduction_fte, item.reason)
+        if item.id is None:
+            return self.connection.execute('''INSERT INTO eppm.resource_pool_capacity_exception
+                (pool_id,start_date,end_date,reduction_fte,reason) VALUES (%s,%s,%s,%s,%s) RETURNING id''', values).fetchone()[0]
+        row = self.connection.execute('''UPDATE eppm.resource_pool_capacity_exception SET pool_id=%s,start_date=%s,
+            end_date=%s,reduction_fte=%s,reason=%s WHERE id=%s RETURNING id''', (*values, item.id)).fetchone()
+        if row is None:
+            raise ValueError('The capacity exception no longer exists.')
+        return row[0]
+
+    def delete_capacity_exception(self, identity: int) -> bool:
+        """Delete one pool reduction without changing nominal capacity."""
+        return self.connection.execute('DELETE FROM eppm.resource_pool_capacity_exception WHERE id=%s', (identity,)).rowcount > 0
 
     def get_all_pools(self) -> list[ResourcePool]:
         """Read the shared pool catalog in stable name order."""
@@ -145,13 +168,19 @@ class PostgresResourcePoolStore:
     def get_assignments(self, pool_id: int | None = None, project_id: int | None = None, task_id: int | None = None,
                         only_project_level: bool = False, *, pool_ids: Collection[int] | None = None) -> list[AssignmentRow]:
         """Filter actor-visible demand before resolving optional task/date labels."""
-        return self._rows(AssignmentRow, '''SELECT a.id,a.pool_id,pool.name AS pool_name,a.project_id,p.name AS project_name,
+        return self._rows(AssignmentRow, '''WITH bounds AS (
+            SELECT project_id,min(start_date) AS first,max(end_date) AS last FROM eppm.project_task
+            WHERE project_id IN (SELECT project_id FROM eppm.resource_pool_assignment WHERE schedule_anchor IS NOT NULL)
+            GROUP BY project_id) SELECT a.id,a.pool_id,pool.name AS pool_name,a.project_id,p.name AS project_name,
             a.task_id,t.task_name,to_char(t.start_date,'YYYY-MM-DD') AS task_start_date,to_char(t.end_date,'YYYY-MM-DD') AS task_end_date,
-            a.fte_assigned,to_char(a.start_date,'YYYY-MM-DD') AS custom_start_date,to_char(a.end_date,'YYYY-MM-DD') AS custom_end_date,
-            to_char(COALESCE(a.start_date,t.start_date),'YYYY-MM-DD') AS effective_start_date,
-            to_char(COALESCE(a.end_date,t.end_date),'YYYY-MM-DD') AS effective_end_date,a.notes
+            a.schedule_anchor,a.offset_days,a.duration_days,a.fte_assigned,to_char(a.start_date,'YYYY-MM-DD') AS custom_start_date,to_char(a.end_date,'YYYY-MM-DD') AS custom_end_date,
+            to_char(COALESCE(relative.first,a.start_date,t.start_date),'YYYY-MM-DD') AS effective_start_date,
+            to_char(COALESCE(relative.last,a.end_date,t.end_date),'YYYY-MM-DD') AS effective_end_date,a.notes
             FROM eppm.resource_pool_assignment a JOIN eppm.resource_pool pool ON pool.id=a.pool_id
             JOIN eppm.project p ON p.id=a.project_id LEFT JOIN eppm.project_task t ON t.id=a.task_id
+            LEFT JOIN bounds b ON b.project_id=a.project_id
+            LEFT JOIN LATERAL eppm.assignment_period(coalesce(t.start_date,b.first,current_date),
+                coalesce(t.end_date,b.last,current_date),a.schedule_anchor,a.offset_days,a.duration_days) relative ON true
             WHERE (%s::bigint IS NULL OR a.pool_id=%s) AND (%s::bigint IS NULL OR a.project_id=%s)
             AND (CASE WHEN %s THEN a.task_id IS NULL ELSE %s::bigint IS NULL OR a.task_id=%s END)
             AND (%s::bigint[] IS NULL OR a.pool_id=ANY(%s::bigint[])) ORDER BY a.pool_id,a.project_id,a.task_id NULLS FIRST,a.id''',
@@ -161,18 +190,18 @@ class PostgresResourcePoolStore:
     def get_assignment_by_id(self, assignment_id: int) -> PoolAssignment | None:
         """Read one visible assignment with ISO date and empty-note boundaries."""
         rows = self._rows(PoolAssignment, '''SELECT id,pool_id,project_id,task_id,fte_assigned,
-            to_char(start_date,'YYYY-MM-DD') AS start_date,to_char(end_date,'YYYY-MM-DD') AS end_date,COALESCE(notes,'') AS notes
+            to_char(start_date,'YYYY-MM-DD') AS start_date,to_char(end_date,'YYYY-MM-DD') AS end_date,COALESCE(notes,'') AS notes,schedule_anchor,offset_days,duration_days
             FROM eppm.resource_pool_assignment WHERE id=%s''', (assignment_id,))
         return rows[0] if rows else None
 
     def create_assignment(self, assignment: PoolAssignment) -> int:
         """Create native demand under project-edit and task-owner guards."""
-        return self.connection.execute('INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,fte_assigned,start_date,end_date,notes) '
-                                       'VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id', _assignment_values(assignment)).fetchone()[0]
+        return self.connection.execute('INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,fte_assigned,start_date,end_date,notes,schedule_anchor,offset_days,duration_days) '
+                                       'VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id', _assignment_values(assignment)).fetchone()[0]
 
     def update_assignment(self, assignment: PoolAssignment) -> bool:
         """Require both original and new project ownership for assignment moves."""
-        return self.connection.execute('UPDATE eppm.resource_pool_assignment SET pool_id=%s,project_id=%s,task_id=%s,fte_assigned=%s,start_date=%s,end_date=%s,notes=%s '
+        return self.connection.execute('UPDATE eppm.resource_pool_assignment SET pool_id=%s,project_id=%s,task_id=%s,fte_assigned=%s,start_date=%s,end_date=%s,notes=%s,schedule_anchor=%s,offset_days=%s,duration_days=%s '
                                        'WHERE id=%s', (*_assignment_values(assignment), assignment.id)).rowcount > 0
 
     def delete_assignment(self, assignment_id: int) -> bool:
@@ -186,9 +215,17 @@ class PostgresResourcePoolStore:
         owner, extra = ('task_id', '') if tasks else ('project_id', 'AND a.task_id IS NULL')
         result: dict[int, list[AssignmentLink]] = {}
         for identity, pool_id, pool_name, owner_id, fte, start, end in self.connection.execute(
-            f'''SELECT a.id,a.pool_id,p.name,a.{owner},a.fte_assigned,to_char(a.start_date,'YYYY-MM-DD'),to_char(a.end_date,'YYYY-MM-DD')
+            f'''WITH bounds AS (SELECT project_id,min(start_date) AS first,max(end_date) AS last
+                FROM eppm.project_task WHERE project_id IN (SELECT project_id FROM eppm.resource_pool_assignment
+                WHERE {owner}=ANY(%s::bigint[])) GROUP BY project_id)
+                SELECT a.id,a.pool_id,p.name,a.{owner},a.fte_assigned,
+                to_char(coalesce(relative.first,a.start_date),'YYYY-MM-DD'),
+                to_char(coalesce(relative.last,a.end_date),'YYYY-MM-DD')
                 FROM eppm.resource_pool_assignment a JOIN eppm.resource_pool p ON p.id=a.pool_id
-                WHERE a.{owner}=ANY(%s::bigint[]) {extra} ORDER BY p.name COLLATE "C",a.id''', (ids,)):
+                LEFT JOIN eppm.project_task t ON t.id=a.task_id LEFT JOIN bounds b ON b.project_id=a.project_id
+                LEFT JOIN LATERAL eppm.assignment_period(coalesce(t.start_date,b.first,current_date),
+                    coalesce(t.end_date,b.last,current_date),a.schedule_anchor,a.offset_days,a.duration_days) relative ON true
+                WHERE a.{owner}=ANY(%s::bigint[]) {extra} ORDER BY p.name COLLATE "C",a.id''', (ids, ids)):
             result.setdefault(owner_id, []).append(AssignmentLink(id=identity, pool_id=pool_id, pool_name=pool_name,
                                                                  fte=fte, start_date=start, end_date=end))
         return result

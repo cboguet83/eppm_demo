@@ -21,14 +21,14 @@ def test_bulk_generator_preserves_requested_schedule_bounds_native_links_tags_an
     request = SeedRequest(projects=15, min_tasks=minimum, max_tasks=maximum, random_seed=123)
     result = operator.run(lambda c: generate_projects(c, request, year=2026), write=True)
     assert result['projects_created'] == 15
-    assert result['pools_created'] == 100 and result['pool_groups_created'] == 25
+    assert result['pools_created'] == 33 and result['pool_groups_created'] == 7
     assert 15 * minimum <= result['tasks_created'] <= 15 * maximum
     with psycopg.connect(pg_database.operator_url) as connection:
         counts = connection.execute('SELECT p.id,count(t.id) FROM eppm.project p LEFT JOIN eppm.project_task t ON t.project_id=p.id GROUP BY p.id').fetchall()
         assert all(minimum <= count <= maximum for _, count in counts)
         assert connection.execute('SELECT count(*) FROM eppm.project_tag').fetchone() == (15,)
         assert connection.execute('SELECT count(*) FROM eppm.task_tag').fetchone() == (result['tasks_created'],)
-        assert connection.execute('SELECT count(*) FROM eppm.resource_pool_assignment').fetchone() == (115 + (100 if maximum else 0),)
+        assert connection.execute('SELECT count(DISTINCT project_id),count(DISTINCT pool_id) FROM eppm.resource_pool_assignment').fetchone() == (13, 30 if maximum == 0 else 33)
         assert connection.execute('SELECT count(*) FROM eppm.project_property_value').fetchone() == (result['property_values_created'],)
         for planned, actual in connection.execute('SELECT planned_budget,actual_budget FROM eppm.project'):
             assert isinstance(planned, Decimal) and isinstance(actual, Decimal)
@@ -156,9 +156,9 @@ def test_none_random_seed_is_frozen_once_across_a_real_database_retry(pg_databas
     entropy = []
     monkeypatch.setattr(maintenance, 'randbits', lambda bits: entropy.append(bits) or 123)
 
-    def run(connection, seed_request, *, year):
-        attempts.append(seed_request.random_seed)
-        result = generate_projects(connection, seed_request, year=year)
+    def run(connection, seed_request, *, year, today):
+        attempts.append((seed_request.random_seed, today))
+        result = generate_projects(connection, seed_request, year=year, today=today)
         if len(attempts) == 1:
             connection.execute("DO $$ BEGIN RAISE EXCEPTION 'retry' USING ERRCODE='40001'; END $$")
         return result
@@ -166,9 +166,21 @@ def test_none_random_seed_is_frozen_once_across_a_real_database_retry(pg_databas
     monkeypatch.setattr(maintenance, 'generate_projects', run)
     result = maintenance.seed_projects(operator, backup, SeedRequest(projects=3, random_seed=None))
     assert result['projects_created'] == 3
-    assert attempts == [123, 123] and entropy == [128]
+    assert attempts[0] == attempts[1] and attempts[0][0] == 123 and entropy == [128]
     assert len(list(tmp_path.glob('*.dump'))) == 1
     assert maintenance.counts(operator)['projects'] == 3
+
+
+def test_thousand_project_status_mix_and_completed_dates(pg_database):
+    """Native rows meet exact large-portfolio quotas and the injected date cutoff."""
+    cutoff = date(2026, 9, 14)
+    operator = OperatorDatabase(pg_database.operator_url)
+    operator.run(lambda connection: generate_projects(connection,
+        SeedRequest(projects=1000, min_tasks=1, max_tasks=3), year=2026, today=cutoff), write=True)
+    with psycopg.connect(pg_database.operator_url) as connection:
+        assert dict(connection.execute('SELECT status,count(*) FROM eppm.project GROUP BY status')) == {
+            'In Progress': 780, 'Completed': 100, 'Cancelled': 50, 'Draft': 40, 'On Hold': 30}
+        assert connection.execute("SELECT count(*) FROM eppm.project p JOIN eppm.project_task t ON t.project_id=p.id WHERE p.status='Completed' AND (t.end_date >= %s OR t.progress_pct<>100)", (cutoff,)).fetchone() == (0,)
 
 
 def test_concurrent_task_insert_between_reservation_and_copy_keeps_distinct_native_ids(pg_database, monkeypatch):

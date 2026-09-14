@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 from functools import wraps
+from datetime import date
 
 import pandas as pd
 import streamlit as st
@@ -13,6 +14,7 @@ from app.application.exceptions import OrganizationStorageError, ResourcePoolSto
 from app.application.services.resource_pools import ResourcePoolService
 from app.domain.resources.models import (
     CapacityAssignment,
+    PoolCapacityException,
     PoolMapping,
     ResourcePool,
     ResourcePoolGroup,
@@ -118,6 +120,8 @@ def _open_edit_pool_dialog(service: ResourcePoolService, pool_id: int) -> None:
     if not pool:
         st.error("Resource pool not found.")
         return
+    with st.expander(t('pool_exceptions.title', default='Capacity exceptions')):
+        _capacity_exceptions_editor(service, pool_id)
     edit_name = st.text_input(
         t("settings.field_pool_name", default="Resource Pool Name *"), value=pool.name
     )
@@ -178,6 +182,31 @@ def _open_edit_pool_dialog(service: ResourcePoolService, pool_id: int) -> None:
         st.toast("Resource Pool updated successfully!", icon="✏️")
         st.rerun()
     if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
+        st.rerun()
+
+
+def _capacity_exceptions_editor(service: ResourcePoolService, pool_id: int) -> None:
+    """Create, edit, or delete inclusive absolute reductions for one pool."""
+    items = {item.id: item for item in service.capacity_exceptions(pool_id)}
+    selected = st.selectbox(t('pool_exceptions.select', default='Exception'), [None, *items],
+        format_func=lambda value: t('pool_exceptions.new', default='New exception') if value is None else
+        f'{items[value].start_date} - {items[value].end_date}: -{items[value].reduction_fte:g} FTE', key=f'pool_exception_select_{pool_id}')
+    item = items.get(selected)
+    prefix = f'pool_exception_{pool_id}_{selected}'
+    st.caption(t('pool_exceptions.help', default='Reductions are in FTE, not percentages. Overlapping reductions add together; effective capacity cannot fall below zero. Both dates are included.'))
+    with st.form(prefix):
+        first = st.date_input(t('pool_exceptions.start', default='Start date'), value=date.fromisoformat(item.start_date) if item else date.today(), key=prefix+'_start')
+        last = st.date_input(t('pool_exceptions.end', default='End date'), value=date.fromisoformat(item.end_date) if item else date.today(), key=prefix+'_end')
+        reduction = st.number_input(t('pool_exceptions.reduction', default='Capacity reduction (FTE)'), min_value=0.001,
+            value=float(item.reduction_fte) if item else 0.5, step=0.25, format='%.3f', key=prefix+'_reduction')
+        reason = st.text_input(t('pool_exceptions.reason', default='Reason'), value=item.reason if item else '', key=prefix+'_reason')
+        save = st.form_submit_button(t('pool_exceptions.save', default='Save exception'), key=prefix+'_save')
+        remove = st.form_submit_button(t('pool_exceptions.delete', default='Delete exception'), disabled=item is None, key=prefix+'_delete')
+    if save:
+        service.save_capacity_exception(PoolCapacityException(pool_id, first.isoformat(), last.isoformat(), reduction, reason, selected))
+        st.rerun()
+    if remove and selected is not None:
+        require_change(service.delete_capacity_exception(selected))
         st.rerun()
 
 

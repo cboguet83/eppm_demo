@@ -13,27 +13,27 @@
     "delete": "Hierarchietyp löschen",
     "deleted": "Hierarchietyp gelöscht."
   },
-    "wbs": {
-        "title": "WBS",
-        "code": "WBS-Code",
-        "description": "Beschreibung",
-        "fictive": "Fiktiver WBS (#-Präfix)",
-        "allocation": "Zuordnung (%)",
-        "available": "Für dieses Projekt verfügbar: {percentage}%",
-        "remaining": "Nicht zugeordnet (%)",
-        "add": "WBS hinzufügen",
-        "remove": "WBS entfernen",
-        "select": "WBS auswählen",
-        "empty": "Keine WBS definiert. Ein Fachadministrator kann Einträge in den Einstellungen hinzufügen.",
-        "none": "Diesem Projekt ist kein WBS zugeordnet.",
-        "entry": "Katalogeintrag",
-        "new": "Neuer WBS",
-        "save": "WBS speichern",
-        "delete": "WBS löschen",
-        "confirm_delete": "Löschen des WBS bestätigen",
-        "code_help": "Buchstaben, Zahlen, Punkte, Binde- und Unterstriche. Fiktive Codes beginnen mit #.",
-        "denied": "Nur ein Fachadministrator darf den WBS-Katalog verwalten."
-    },
+  "wbs": {
+    "title": "WBS",
+    "code": "WBS-Code",
+    "description": "Beschreibung",
+    "fictive": "Fiktiver WBS (#-Präfix)",
+    "allocation": "Zuordnung (%)",
+    "available": "Für dieses Projekt verfügbar: {percentage}%",
+    "remaining": "Nicht zugeordnet (%)",
+    "add": "WBS hinzufügen",
+    "remove": "WBS entfernen",
+    "select": "WBS auswählen",
+    "empty": "Keine WBS definiert. Ein Fachadministrator kann Einträge in den Einstellungen hinzufügen.",
+    "none": "Diesem Projekt ist kein WBS zugeordnet.",
+    "entry": "Katalogeintrag",
+    "new": "Neuer WBS",
+    "save": "WBS speichern",
+    "delete": "WBS löschen",
+    "confirm_delete": "Löschen des WBS bestätigen",
+    "code_help": "Buchstaben, Zahlen, Punkte, Binde- und Unterstriche. Fiktive Codes beginnen mit #.",
+    "denied": "Nur ein Fachadministrator darf den WBS-Katalog verwalten."
+  },
   "auth": {
     "operation_failed": "Der Vorgang konnte nicht abgeschlossen werden. Referenz: {reference}",
     "title": "Bei EPPM anmelden",
@@ -271,7 +271,15 @@
     "custom_start_date": "Startdatum",
     "custom_end_date": "Enddatum",
     "field_assignment_notes": "Notizen / Zweck der Zuweisung",
-    "date_range_error": "Das Enddatum darf nicht vor dem Startdatum liegen."
+    "date_range_error": "Das Enddatum darf nicht vor dem Startdatum liegen.",
+    "period_relative": "Versatz + Dauer",
+    "schedule_anchor": "Planen ab",
+    "schedule_start": "Beginn",
+    "schedule_end": "Ende",
+    "offset_days": "Versatz (Kalendertage)",
+    "duration_days": "Dauer (Kalendertage)",
+    "relative_schedule_help": "Positive Werte verschieben nach vorn, negative zurück. Die Dauer schließt den ersten Tag ein. Die Termine folgen dem aktuellen Aufgaben- oder Projektzeitplan.",
+    "calendar_days": "Kalendertage"
   },
   "schema": {
     "title": "Dynamisches Schema & Parameterdefinition",
@@ -412,6 +420,7 @@
       "collapse_all": "▶ Alle zuklappen"
     },
     "context_menu": {
+      "log_event": "Ereignis erfassen",
       "edit_step": "Schrittdetails bearbeiten",
       "add_step_after": "Schritt hinzufügen",
       "add_step": "Schritt hinzufügen",
@@ -435,7 +444,8 @@
       "filter_predecessors": "Dieses Projekt und Vorgänger",
       "bulk_actions": "Massenaktionen",
       "view_project": "Projektdetails anzeigen",
-      "assign_resource": "Ressource zuweisen"
+      "assign_resource": "Ressource zuweisen",
+      "manage_dependencies": "Abhängigkeiten verwalten"
     },
     "resource_grid": {
       "only_overallocated": "Nur überlastete Ressourcenpools",
@@ -461,7 +471,9 @@
       "defined_capacity": "Definierte Kapazität",
       "consuming": "Verbrauchende Projekte",
       "consuming_all": "Verbrauchende Projekte und alle Abhängigkeiten",
-      "consuming_predecessors": "Verbrauchende Projekte und Vorgänger"
+      "consuming_predecessors": "Verbrauchende Projekte und Vorgänger",
+      "available_value": "Verfügbar",
+      "overallocated_value": "Überbelegt"
     },
     "modal": {
       "add_title": "➕ Neuen Schritt hinzufügen ({project_id})",
@@ -484,7 +496,16 @@
       "lag_placeholder": "Verzögerung (Tage)",
       "btn_save": "💾 Änderungen speichern",
       "btn_cancel": "Abbrechen",
-      "optional": "Optional"
+      "optional": "Optional",
+      "project_dependencies_title": "Abhängigkeiten verwalten — {name}",
+      "project_dependencies_header": "Eingehende Projektabhängigkeiten",
+      "dependencies_loading": "Abhängigkeiten werden geladen…",
+      "dependencies_saving": "Abhängigkeiten werden gespeichert…",
+      "reload_dependencies": "Abhängigkeiten neu laden (Änderungen verwerfen)",
+      "dependencies_warning_only": "Verknüpfungen zeigen Terminwarnungen an; sie ändern keine Termine automatisch.",
+      "dependencies_undated": "Einige Abhängigkeiten können wegen fehlender Projekt- oder Schritttermine noch nicht bewertet werden. Termine werden nie automatisch geändert.",
+      "dependencies_retry": "Speichern Sie erneut oder laden Sie die Abhängigkeiten neu, um Änderungen zu verwerfen und die aktuellen Daten zu prüfen.",
+      "dependencies_invalid": "Wählen Sie einen geladenen Vorgänger und geben Sie für jede Verknüpfung eine ganze Anzahl Kalendertage ein."
     },
     "diagnostics": {
       "title": "⚠️ Diagnose von Bedingungsverletzungen",
@@ -782,6 +803,7 @@
     "missing_code": "Zeile {row}: Geben Sie einen PSP-Code für diese Beträge ein."
   },
   "dashboard": {
+    "project_status": "Projektstatus",
     "title": "Dashboard",
     "project": "Projekt",
     "mail_code": "Postcode",
@@ -816,13 +838,14 @@
     "no_approved": "Keine genehmigte Budgetversion in Finance verfügbar.",
     "source": "Genehmigtes Budget {number} · {name}",
     "unmatched": "Kein genehmigtes Budget für PSP: {codes}",
-    "allocation": "Zuordnung",
+    "allocation": "Zuweisung",
     "total": "Gesamt",
     "no_wbs": "Diesem Projekt sind keine PSP zugeordnet.",
     "unavailable": "Daten nicht verfügbar oder Zugriff geändert. Bitte neu laden.",
     "pool": "Ressourcenpools",
     "finance_overview": "Finanzübersicht",
     "approved_budget": "Genehmigtes Budget",
+    "resources_allocation": "Ressourcenzuweisung",
     "capacity_overallocation": "Kapazität und Überbelegung",
     "overallocation": "Überbelegung",
     "total_capacity": "Gesamtkapazität der Pools",
@@ -834,6 +857,23 @@
     "unmatched_status": "Kein Budget {status} für PSP-Codes: {codes}",
     "wbs_assignment": "PSP-Zuordnung",
     "no_consumers": "Keine zugänglichen Projekte nutzen die betroffenen Pools in diesem Quartal.",
-    "active_issues": "Aktive Probleme"
+    "active_issues": "Aktive Probleme",
+    "capacity_allocation": "Kapazität und Zuweisung",
+    "peak_day": "Spitzentag",
+    "total_overallocation": "Gesamtüberbelegung",
+    "total_allocation": "Gesamtzuweisung",
+    "total_capacity_short": "Gesamtkapazität"
+  },
+  "pool_exceptions": {
+    "title": "Kapazitätsausnahmen",
+    "select": "Ausnahme",
+    "new": "Neue Ausnahme",
+    "start": "Startdatum",
+    "end": "Enddatum",
+    "reduction": "Kapazitätsreduzierung (VZÄ)",
+    "reason": "Grund",
+    "save": "Ausnahme speichern",
+    "delete": "Ausnahme löschen",
+    "help": "Reduzierungen gelten in VZÄ, nicht in Prozent. Überlappende Reduzierungen werden addiert; die Kapazität fällt nicht unter null. Beide Daten sind eingeschlossen."
   }
 }

@@ -35,7 +35,7 @@ def test_default_bulk_pool_scenario_and_reset_wrappers_keep_native_archive_polic
     monkeypatch.setattr('sys.argv', ['operator'] + operator_arguments + ['--yes'])
     flush_database.main()
     assert service.counts()['projects'] == 0
-    assert service.counts()['pools'] == 103
+    assert service.counts()['pools'] == 33
     assert len(list(tmp_path.glob('*.dump'))) == 3
 
 

@@ -30,8 +30,10 @@ class PlanningWorkspace:
         """Include the source database identity in every display-cache key."""
         return self.projects.portfolio.revision()
 
-    def pool_details(self, pool_ids: list[int] | None = None) -> list[PoolCapacityDetail]:
+    def pool_details(self, pool_ids: list[int] | None = None, *, project_ids: set[int] | None = None) -> list[PoolCapacityDetail]:
         """Read cached details for explicit pools or the initial full capacity grid."""
         if pool_ids is None:
             pool_ids = [pool.pool_id for pool in self.capacity.get_summaries()]
-        return self.capacity.get_details(list(pool_ids))
+        if project_ids is None:
+            return self.capacity.get_details(list(pool_ids))
+        return self.capacity.get_details(list(pool_ids), project_ids=project_ids)

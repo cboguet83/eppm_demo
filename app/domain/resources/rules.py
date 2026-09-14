@@ -91,6 +91,16 @@ def normalize_mapping(mapping: PoolMapping) -> PoolMapping:
 def normalize_assignment(assignment: PoolAssignment) -> PoolAssignment:
     """Validate demand and trim notes; retain legacy date resolution rules."""
     validate_fte(assignment.fte_assigned)
+    relative = (assignment.schedule_anchor, assignment.offset_days, assignment.duration_days)
+    if any(value is not None for value in relative):
+        if assignment.schedule_anchor not in {"start", "end"}:
+            raise ValueError("Select the start or end as the schedule anchor.")
+        if type(assignment.offset_days) is not int or not -9124 <= assignment.offset_days <= 9124:
+            raise ValueError("Offset must be an integer between -9124 and 9124 calendar days.")
+        if type(assignment.duration_days) is not int or not 1 <= assignment.duration_days <= 9125:
+            raise ValueError("Duration must be an integer between 1 and 9125 calendar days.")
+        if assignment.start_date is not None or assignment.end_date is not None:
+            raise ValueError("Relative assignments cannot also store fixed dates.")
     return replace(assignment, notes=assignment.notes.strip())
 
 

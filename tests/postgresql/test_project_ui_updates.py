@@ -123,6 +123,8 @@ def test_csv_menu_opens_only_the_requested_project_dialog(database: RuntimeResou
         app = native_screen(f'''
 from app.main import create_planning_workspace
 from app.presentation.pages.planning import render_planning_milestones
+import streamlit as st
+st.session_state['planning_statuses'] = ['Draft']
 render_planning_milestones(create_planning_workspace(runtime, access=access))
 ''', database, access).run()
     assert not app.exception and not app.error

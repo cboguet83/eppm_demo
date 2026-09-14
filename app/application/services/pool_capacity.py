@@ -6,6 +6,7 @@ from typing import cast
 
 from app.application.ports.pool_capacity import CapacityCache, CapacityReader
 from app.domain.resources.capacity import calculate_capacity
+from app.domain.resources.allocation_scope import scope_pool_detail
 from app.domain.resources.models import PoolCapacityDetail, PoolCapacitySummary
 
 
@@ -46,9 +47,9 @@ class PoolCapacityService:
             ),
         )
 
-    def get_details(self, pool_ids: list[int]) -> list[PoolCapacityDetail]:
+    def get_details(self, pool_ids: list[int], *, project_ids: set[int] | None = None) -> list[PoolCapacityDetail]:
         """Return full details only for explicitly requested pools."""
-        return cast(
+        details = cast(
             list[PoolCapacityDetail],
             self._cache.load(
                 self.calculate_many,
@@ -56,3 +57,4 @@ class PoolCapacityService:
                 pool_ids=pool_ids,
             ),
         )
+        return details if project_ids is None else [scope_pool_detail(detail, project_ids) for detail in details]

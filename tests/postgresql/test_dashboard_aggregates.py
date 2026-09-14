@@ -19,6 +19,35 @@ def assert_resources_match_domain(authorized, selected, day=DAY):
     return actual
 
 
+def test_pool_reductions_combine_with_staffed_calendars_and_match_dashboard(staffing):
+    """Absolute overlapping reductions preserve SQL/Python staffing parity."""
+    with psycopg.connect(staffing.setup.operator_url) as connection:
+        connection.execute("""INSERT INTO eppm.resource_pool_capacity_exception
+            (pool_id,start_date,end_date,reduction_fte) VALUES
+            (1,'2026-01-01','2026-06-30',.5),
+            (1,'2026-02-01','2026-03-03',.25),
+            (2,'2026-01-01','2026-12-31',20)""")
+    assert_resources_match_domain(staffing, [1, 2])
+
+
+def test_relative_demand_matches_domain_after_owner_dates_cross_quarters(staffing):
+    """Dashboard and capacity resolve start/end origins on every current snapshot."""
+    with psycopg.connect(staffing.setup.operator_url) as connection:
+        connection.execute('DELETE FROM eppm.resource_pool_assignment')
+        connection.execute("UPDATE eppm.project_task SET start_date='2026-03-25',end_date='2026-03-31' WHERE project_id=1")
+        connection.execute("""INSERT INTO eppm.resource_pool_assignment
+            (pool_id,project_id,task_id,fte_assigned,schedule_anchor,offset_days,duration_days)
+            VALUES (1,1,1,20,'start',10,5),(2,1,NULL,20,'end',10,5)""")
+    report = assert_resources_match_domain(staffing, [1])
+    assert report['overallocation']['2026-Q1'] == 0
+    assert report['overallocation']['2026-Q2'] > 0
+    with psycopg.connect(staffing.setup.operator_url) as connection:
+        connection.execute("UPDATE eppm.project_task SET start_date=start_date+100,end_date=end_date+100 WHERE project_id=1")
+    report = assert_resources_match_domain(staffing, [1])
+    assert report['overallocation']['2026-Q2'] == 0
+    assert report['overallocation']['2026-Q3'] > 0
+
+
 def test_randomized_overlapping_project_and_task_demand_keeps_float_rounding_order(staffing):
     rng = random.Random(42)
     choices = [0, 0.0005, 0.0035, 0.0105, 0.3333, 1.0005, 1.125, 2.2222, 20.1235]

@@ -53,6 +53,8 @@ def read_capacity_inputs(store: PostgresResourcePoolStore, pool_ids: list[int]) 
             assigned, has_resources, days, [PoolResourceContribution(**row) for row in people],
         )
     assignments = store.get_assignments(pool_ids=pool_ids)
+    for exception in store.capacity_exceptions(pool_ids):
+        inputs[exception.pool_id].capacity_exceptions.append(exception)
     project_ids = sorted({assignment['project_id'] for assignment in assignments})
     bounds = {
         project_id: (start, end) for project_id, start, end in store.connection.execute(

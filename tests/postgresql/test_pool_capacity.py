@@ -80,7 +80,8 @@ def reference_inputs(authorized, pool_ids):
         mappings, assignments = pools.get_all_mappings(), pools.get_assignments(pool_ids=pool_ids)
         return {pool_id: CapacityInputs(pool_id, pools.get_pool_by_id(pool_id), functions, teams, employees, exceptions,
                 [mapping for mapping in mappings if mapping.pool_id == pool_id], members,
-                [assignment for assignment in assignments if assignment['pool_id'] == pool_id], bounds)
+                [assignment for assignment in assignments if assignment['pool_id'] == pool_id], bounds,
+                capacity_exceptions=pools.capacity_exceptions([pool_id]))
                 for pool_id in pool_ids}
 
 

@@ -274,7 +274,7 @@ def test_read_error_at_maintenance_boundary_does_not_expose_database_diagnostics
 def test_periods_merge_equal_adjacent_capacity_without_bridging_absence():
     detail = PoolCapacityDetail(pool_id=1, pool_name='Pool', total_capacity_fte=1,
         peak_assigned_fte=0, total_assigned_fte_scalar=0, is_overassigned=False, peak_excess_fte=0,
-        effective_capacity_fte=1, daily_assigned_capacity={'2026-06-02': 1, '2026-06-03': 0, '2026-06-04': 1})
+        effective_capacity_fte=1, daily_effective_capacity={'2026-06-02': 1, '2026-06-03': 0, '2026-06-04': 1})
     assert capacity_periods(detail, '2026-06-01', '2026-06-05') == [
         ('2026-06-01', '2026-06-02', 1), ('2026-06-04', '2026-06-05', 1)]
     for start, end in [('2026-06-05', '2026-06-01'), ('9999-12-31', '9999-12-31')]:

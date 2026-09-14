@@ -1,6 +1,10 @@
 """Task and dependency use cases with atomic writes and pure scheduling rules."""
 
 from copy import deepcopy
+from app.application.exceptions import PlanningConflictError
+from app.domain.planning.project_dependencies import (
+    ProjectDependencyInput, ProjectDependencyPanel, normalize_project_dependency, positive_identity,
+)
 
 from app.domain.access.models import Permission
 
@@ -194,6 +198,39 @@ class PlanningService:
                 raise ValueError("The task no longer exists.")
             _replace_dependencies(store, task_id, dependencies, None)
         self._gateway.run(operation, write=True)
+
+    def get_project_dependency_panel(self, project_id: int) -> ProjectDependencyPanel:
+        """Read visible incoming project links and their consistent source token."""
+        project_id = positive_identity(project_id)
+        def operation(store: PlanningStore) -> ProjectDependencyPanel:
+            if not store.project_exists(project_id):
+                raise ValueError('The project is unavailable.')
+            return ProjectDependencyPanel(project_id=project_id, revision=store.project_dependency_revision(project_id),
+                                          dependencies=store.read_project_dependencies([project_id]))
+        return self._gateway.run(operation, permission=Permission.EDIT, project_ids=[project_id])
+
+    def save_project_dependencies(self, project_id: int, upserts: list[ProjectDependencyInput],
+                                  deleted_ids: list[int], expected_revision: str) -> ProjectDependencyPanel:
+        """Atomically save explicit link changes without touching project steps."""
+        project_id = positive_identity(project_id)
+        if not isinstance(upserts, list) or not all(isinstance(row, dict) for row in upserts) or not isinstance(deleted_ids, list):
+            raise ValueError('Invalid dependency changes.')
+        rows = [normalize_project_dependency(project_id, row) for row in deepcopy(upserts)]
+        deleted = [positive_identity(identity) for identity in deleted_ids]
+        changed = [row['id'] for row in rows if 'id' in row] + deleted
+        if len(set(changed)) != len(changed):
+            raise ValueError('A dependency can only be changed once per save.')
+        def operation(store: PlanningStore) -> ProjectDependencyPanel:
+            if not expected_revision or store.project_dependency_revision(project_id) != expected_revision:
+                raise PlanningConflictError('Dependencies or schedules changed. Reload the panel before saving.')
+            tasks = {row['predecessor_task_id'] for row in rows if row['predecessor_task_id'] is not None}
+            projects = {row['predecessor_project_id'] for row in rows if row['predecessor_project_id'] is not None}
+            if store.valid_template_references(project_id, tasks, projects) != (tasks, projects):
+                raise ValueError('A predecessor is unavailable or belongs to this project. Reload the panel.')
+            store.write_project_dependencies(project_id, rows, deleted)
+            return ProjectDependencyPanel(project_id=project_id, revision=store.project_dependency_revision(project_id),
+                                          dependencies=store.read_project_dependencies([project_id]))
+        return self._gateway.run(operation, write=True, permission=Permission.EDIT, project_ids=[project_id])
 
     def add_dependency(
         self,

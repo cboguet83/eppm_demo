@@ -5,7 +5,10 @@ Use the flexible filter, the four manager/team filters, or the resource-pool fil
 filter are alternatives, while different filters are combined. Clear all resets
 the dashboard without changing Planning's filters.
 
-Completed and cancelled projects are excluded. The project table starts in project-ID order
+The Project status multiselect defaults to In Progress. Select other statuses to include
+completed or cancelled projects, or clear the selection to include all accessible
+statuses. Multiple statuses are alternatives regardless of flexible Any/All matching.
+Clear all filters also clears the status selection. The project table starts in project-ID order
 and shows five rows at a time with continuous scrolling. Rows are loaded in batches
 of 50; the browser retains at most six batches and renders only the visible rows
 plus a small buffer. Collapse the table to keep its matching-project count visible.
@@ -15,26 +18,40 @@ project. Click it again to restore the previous scope. Changing another filter o
 using Clear all removes the row selection. Selection refreshes only Dashboard;
 scrolling still updates only the table.
 
-Finance overview uses the most recent approved Finance version and each project's
-current WBS allocation percentages. Hover to see annual euro values. The source
-version is shown, and codes without approved amounts are identified. Canceled
+Finance overview plots the most recent Approved and Proposed Finance versions using each project's
+current WBS allocation percentages. Hover to see annual euro values. Both source
+versions are shown, and codes without amounts are identified. Canceled
 Finance versions are excluded. Project details provide the same calculation in
 the Budget tab, beneath WBS assignment. Approved, Proposed, and Draft sections
 each use the latest uncanceled Finance version with that status and include annual
 totals. Allocation percentages appear only in Draft; WBS codes and percentages use
 the same gray text.
 
-The quarterly resource chart shows peak simultaneous excess FTE across relevant
-pools, including competing demand from other projects. For shortages of 1 FTE and
-2 FTE on the same day, it shows 3 FTE even if another pool has spare capacity.
-Capacity and Overallocation also shows the maximum daily total effective pool
-capacity per quarter on a separate right-hand axis. This includes staffing and
-calendar overrides. Both graphs mark the current date with a dashed green line.
-Right-click a quarter to open Planning filtered to accessible projects consuming
-the pools responsible for that quarter’s overallocation. This includes accessible
-consumers outside the original dashboard selection, but never reveals hidden projects.
-Both charts display the current year, two previous years, and nine future years.
-The Approved budget legend is at the top right; resource legends are to the right.
+Two quarterly resource charts show allocation with capacity, and overallocation.
+Bars stack the contributions of individual pools, including competing
+demand from other projects. Each quarter uses its peak total day; all segments
+come from that same day and therefore add exactly to the displayed total.
+Overallocation adds positive excess only, without offsetting spare capacity in
+other pools. Overallocation tooltips show four lines: period, Overallocation,
+Total with its value, and the selected pool contribution. Allocation tooltips show
+five lines: period, total capacity, total allocation, pool allocation, and pool available
+capacity. Pool rows have a square matching their bar color. Available capacity is signed
+effective capacity minus demand on the allocation peak day, including calendar reductions;
+negative values indicate a shortfall. Peak dates are omitted. Finance tooltips show the
+year and both Approved and Proposed values, using a dash for a missing value.
+A dashed hover line tracks the same time position across Finance and both resource charts and
+clears from all three when the pointer leaves a chart. All three share the same full-width
+plot geometry and calendar-date positions, including year ticks and the current-date guide.
+Capacity uses maximum daily total effective capacity in the quarter, on the same
+axis as allocation, including employee calendars and pool reduction exceptions.
+The dashboard uses the supplied 15-color palette: Approved is black, Proposed is blue,
+and capacity is a dashed red line (#f10d0d). Pools retain consistent palette colors across resource charts.
+Right-click a pool segment to open Planning filtered to accessible projects
+consuming that particular pool in the selected quarter. This can include accessible
+consumers outside the dashboard selection; hidden projects remain undisclosed.
+Both resource charts mark today and display the current year, two previous years,
+and nine future years. Per-pool colors are consistent across both charts.
+The Finance legend is below its x-axis. Resource charts have no legend.
 Resource axes show whole numbers, and resource tooltips show one decimal place.
 The large warning icon in the framed Active Issues card beside Finance overview
 opens the read-only active-issues table.
@@ -127,3 +144,7 @@ including chart-value updates, centered icon geometry, colors, disabled zero-iss
 popup, and vertical axis titles.
 
 The matching-project details frame starts collapsed; expand it to inspect or select projects.
+
+Migration 0034 computes selected-project coverage as disjoint date windows before comparing daily demand. This preserves the existing scope and totals while avoiding repeated scans of monthly assignment segments in large seeded portfolios.
+
+The Resources allocation section contains two charts separated by 4px. The upper chart shows only stacked overallocation. The lower chart shares one vertical scale between stacked allocation and the capacity line, including both series when calculating the axis maximum. Neither chart has a separate visible heading; their accessible labels and synchronized dark-grey, 3px dashed hover guides remain available.

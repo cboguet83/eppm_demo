@@ -44,6 +44,18 @@ class PoolScenario(TypedDict):
     pool_id: int
     theoretical_fte: float
     normal_assigned_fte: float
+    pool_name: NotRequired[str]
+    exceptional_utilization_pct: NotRequired[int]
+
+
+class PoolHierarchyRow(TypedDict):
+    """Named group or pool in the proposed organizational tree."""
+
+    name: str
+    parent: str | None
+    hierarchy_type: str
+    kind: str
+    capacity_fte: NotRequired[int]
 
 
 class ParentSummary(TypedDict):
@@ -55,7 +67,7 @@ class ParentSummary(TypedDict):
 
 
 class PoolSeedReport(TypedDict):
-    """Preview/application outcome of an additive pool scenario installation."""
+    """Preview/application outcome of a Ressort A pool installation."""
 
     new_groups: int
     new_pools: int
@@ -67,6 +79,20 @@ class PoolSeedReport(TypedDict):
     new_task_assignments: NotRequired[int]
     scenarios: NotRequired[list[PoolScenario]]
     existing_foreign_key_violations: NotRequired[int]
+    replacement: NotRequired[bool]
+    removed: NotRequired[dict[str, int]]
+    hierarchy: NotRequired[list[PoolHierarchyRow]]
+    fingerprint: NotRequired[str]
+    seed: NotRequired[int]
+    year: NotRequired[int]
+    total_projects: NotRequired[int]
+    allocated_projects: NotRequired[int]
+    unallocated_projects: NotRequired[int]
+    pools_used: NotRequired[int]
+    overallocated_pools: NotRequired[int]
+    underallocated_pools: NotRequired[int]
+    fully_allocated_pools: NotRequired[int]
+    peak_utilization_pct: NotRequired[int]
 
 
 class DatabaseCounts(TypedDict):
@@ -104,5 +130,5 @@ class MaintenanceGateway(Protocol):
         self, request: AllocationGenerationRequest, *, apply: bool, expected_fingerprint: str | None,
     ) -> AllocationSeedReport: ...
     def seed_pool_scenarios(
-        self, *, year: int | None, seed: int, apply: bool
+        self, *, year: int | None, seed: int, apply: bool, replace: bool = False
     ) -> PoolSeedReport: ...

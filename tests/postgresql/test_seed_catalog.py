@@ -14,7 +14,7 @@ from app.infrastructure.postgresql.pool import OperatorDatabase
 from app.infrastructure.postgresql.projects import PostgresProjectStore
 from app.infrastructure.postgresql.seed_catalog import (
     DEMO_TYPES, HIERARCHY_TYPES, advance_seed_sequences, can_install_demo, ensure_reference_catalog,
-    install_organization_catalog, install_schema_catalog, install_tag_catalog, sample_values,
+    install_organization_catalog, install_schema_catalog, install_tag_catalog, install_wbs_catalog, sample_values,
 )
 
 
@@ -26,6 +26,28 @@ def install(connection):
     install_tag_catalog(connection)
 
 
+def test_wbs_seed_adds_ten_codes_and_preserves_existing_entries(pg_database):
+    """Repeated WBS installation retains identities, descriptions, and other codes."""
+    with psycopg.connect(pg_database.operator_url) as connection:
+        connection.execute("INSERT INTO eppm.wbs(code,description) VALUES ('p.1.10','Retain'),('other','Unrelated')")
+        install_wbs_catalog(connection)
+        before = connection.execute('SELECT id,code,description FROM eppm.wbs ORDER BY id').fetchall()
+        install_wbs_catalog(connection)
+        assert connection.execute('SELECT id,code,description FROM eppm.wbs ORDER BY id').fetchall() == before
+        assert {row[1] for row in before} == {'other', '#xx.xx.xx', *(f'p.{number}.10' for number in range(1, 11))}
+        assert before[0][2] == 'Retain'
+
+
+def test_default_seeder_creates_wbs_without_projects(pg_database):
+    """The catalog-only seed includes the WBS entries used by full project seeds."""
+    from app.infrastructure.postgresql.seeder import install_default_data
+    with psycopg.connect(pg_database.operator_url) as connection:
+        assert install_default_data(connection, force=False, include_projects=False, year=2026)
+        assert {row[0] for row in connection.execute('SELECT code FROM eppm.wbs')} == {'#xx.xx.xx', *(f'p.{number}.10' for number in range(1, 11))}
+        assert dict(connection.execute('SELECT code,description FROM eppm.wbs')) == {**{f'p.{n}.10': f'descripttion projet {n}' for n in range(1, 11)}, '#xx.xx.xx': 'otp fictif pour plannification'}
+        assert {'maintenance', 'bim', 'amo', 'etudes', 'secutite'} <= {r[0] for r in connection.execute('SELECT name FROM eppm.project_role')}
+
+
 def test_native_demo_catalog_has_current_definitions_relationships_and_editable_hierarchy_types(pg_database):
     operator = OperatorDatabase(pg_database.operator_url)
     operator.run(install, write=True)
@@ -34,7 +56,7 @@ def test_native_demo_catalog_has_current_definitions_relationships_and_editable_
         assert connection.execute('SELECT count(*) FROM eppm.function').fetchone() == (60,)
         assert connection.execute('SELECT count(*) FROM eppm.employee').fetchone() == (50,)
         assert connection.execute('SELECT count(*) FROM eppm.team_function').fetchone() == (31,)
-        assert connection.execute('SELECT count(*) FROM eppm.resource_pool').fetchone() == (3,)
+        assert connection.execute('SELECT count(*) FROM eppm.resource_pool').fetchone() == (0,)
         assert tuple(row[0] for row in connection.execute('SELECT code FROM eppm.hierarchy_type ORDER BY id')) == HIERARCHY_TYPES
         assert connection.execute('SELECT count(*) FROM eppm.hierarchy_type_translation').fetchone() == (35,)
         assert connection.execute('SELECT count(*) FROM eppm.team WHERE hierarchy_type_id IS NOT NULL').fetchone() == (0,)
@@ -102,7 +124,7 @@ def test_seeded_explicit_ids_advance_sequences_and_normal_creates_do_not_collide
     with psycopg.connect(pg_database.operator_url) as connection:
         assert connection.execute("INSERT INTO eppm.function(name,hierarchy_level) VALUES ('New role',1) RETURNING function_id").fetchone()[0] > 60
         assert connection.execute("INSERT INTO eppm.employee(firstname,lastname,email,employee_code) VALUES ('New','Person','new@example.test','NEW') RETURNING employee_id").fetchone()[0] > 50
-        assert connection.execute("INSERT INTO eppm.resource_pool(name) VALUES ('New pool') RETURNING id").fetchone()[0] > 3
+        assert connection.execute("INSERT INTO eppm.resource_pool(name) VALUES ('New pool') RETURNING id").fetchone()[0] > 0
         assert connection.execute("INSERT INTO eppm.schema_groups(group_name,display_order) VALUES ('New group',6) RETURNING id").fetchone()[0] > 5
 
 

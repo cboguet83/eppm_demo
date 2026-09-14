@@ -50,13 +50,13 @@ def test_scenario_database_retry_creates_one_real_pre_operation_archive(pg_datab
 
     result = backed_up_write(operator, PostgresBackup(pg_database.operator_url, tmp_path, tools=clients),
         reason='seed', fingerprint=plan.fingerprint, operation=operation)
-    assert result['new_pools'] == 100 and result['applied']
+    assert result['new_pools'] == 33 and result['applied']
     assert len(attempts) == 2
     archives = list(tmp_path.glob('*.dump'))
     assert len(archives) == 1
     restore_database(archives[0], restore_target.operator_url, tools=clients)
     with psycopg.connect(restore_target.operator_url) as connection:
-        assert connection.execute('SELECT count(*) FROM eppm.resource_pool').fetchone() == (3,)
+        assert connection.execute('SELECT count(*) FROM eppm.resource_pool').fetchone() == (0,)
 
 
 def test_source_change_during_backup_prevents_reset_and_preserves_concurrent_edit(authorized, monkeypatch, tmp_path):

@@ -63,7 +63,7 @@ def seed_sample_projects(connection: psycopg.Connection) -> None:
     for index, (type_name, name, planned, actual) in enumerate(samples, 1):
         type_id = types[type_name]
         project = create_seed_project(connection, name=name,
-            status='Completed' if type_name == 'Compliance' else 'In Progress',
+            status='In Progress',
             planned_budget=Decimal(planned), actual_budget=Decimal(actual), project_type_id=type_id,
             function_id=managers[(index + 15) % len(managers)] if managers else None,
             dynamic_attributes=sample_values(store.template(type_id), options, index, rng))

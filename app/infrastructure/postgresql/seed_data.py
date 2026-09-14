@@ -409,15 +409,3 @@ TEAM_FUNCTIONS: list[tuple[int, int]] = [(1, 10),
  (3, 13),
  (3, 49),
  (3, 50)]
-
-POOLS: list[tuple[int, str, str]] = [(1, 'Core Engineering Pool', 'Central pool combining Project Team A and BIM specialists.'),
- (2, 'BIM Specialist Pool', 'Dedicated BIM modeling and coordination unit.'),
- (3, 'Technical Architecture Pool', 'Senior engineering & cloud native systems architecture.')]
-
-POOL_MAPPINGS: list[tuple[int, str, int, float]] = [(1, 'team', 1, 100.0),
- (1, 'function', 17, 100.0),
- (1, 'function', 49, 50.0),
- (2, 'team', 3, 100.0),
- (3, 'function', 44, 100.0),
- (3, 'function', 45, 75.0),
- (3, 'function', 46, 50.0)]

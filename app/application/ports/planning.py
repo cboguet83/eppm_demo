@@ -16,6 +16,7 @@ from app.domain.planning.records import (
 )
 from app.application.ports.tag_records import TagLink
 from app.domain.resources.models import AssignmentLink
+from app.domain.planning.project_dependencies import ProjectDependency, ProjectDependencyInput
 
 
 class TaskRow(TaskInput):
@@ -54,6 +55,7 @@ class ProjectSummary(TypedDict):
     taskCount: int
     progress: float
     hasViolations: bool
+    projectDependencies: NotRequired[list[ProjectDependency]]
 
 
 @dataclass
@@ -81,6 +83,10 @@ class PlanningTotals(TypedDict):
 
 class PlanningStore(Protocol):
     """Task operations sharing the gateway's connection and snapshot."""
+
+    def read_project_dependencies(self, project_ids: list[int]) -> list[ProjectDependency]: ...
+    def project_dependency_revision(self, project_id: int) -> str: ...
+    def write_project_dependencies(self, project_id: int, upserts: list[ProjectDependencyInput], deleted_ids: list[int]) -> None: ...
 
     def get_milestones_by_project(self, project_id: int) -> list[TaskRow]: ...
     def search_task_choices(self, search: str = "", *, limit: int = 50) -> list[TaskChoice]: ...

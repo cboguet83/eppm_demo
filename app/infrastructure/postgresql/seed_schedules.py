@@ -79,7 +79,7 @@ def _progress(status: str, index: int, active: int, milestone: bool, rng: random
 
 
 def generate_schedules(projects: list[tuple[int, str]], minimum: int, maximum: int,
-                       rng: random.Random) -> tuple[list[TaskRow], list[DependencyRow]]:
+                       rng: random.Random, *, today: date | None = None) -> tuple[list[TaskRow], list[DependencyRow]]:
     """Generate task rows with one-based logical IDs for later native allocation.
 
     The caller supplies the same random stream used for project generation.
@@ -106,6 +106,15 @@ def generate_schedules(projects: list[tuple[int, str]], minimum: int, maximum: i
             tasks.append((project, item.name, item.phase, item.start, item.end, progress, f'Livrable {item.name} ({item.phase})'))
             by_project[project].append(len(tasks))
             codes[project][item.code] = len(tasks)
+    cutoff = (today or date.today()) - timedelta(days=1)
+    for project, status in projects:
+        if status != 'Completed' or not by_project[project]:
+            continue
+        last = max(tasks[identity - 1][4] for identity in by_project[project])
+        shift = max(timedelta(), last - cutoff)
+        for identity in by_project[project]:
+            owner, name, phase, first, end, progress, description = tasks[identity - 1]
+            tasks[identity - 1] = (owner, name, phase, first - shift, end - shift, progress, description)
     return tasks, _dependencies([identity for identity, _ in projects], by_project, codes, rng)
 
 

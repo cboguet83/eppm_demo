@@ -51,14 +51,14 @@ def capacity_periods(
         raise ValueError('An allocation target has an invalid schedule period.')
     stop = last + timedelta(days=1)
     points = {first, stop}
-    for value in detail.daily_assigned_capacity:
+    for value in detail.capacity_calendar:
         day = date.fromisoformat(value)
         if first <= day <= last:
             points.update((day, day + timedelta(days=1)))
     result: list[tuple[str, str, float]] = []
     boundaries = sorted(points)
     for lower, upper in zip(boundaries, boundaries[1:]):
-        capacity = detail.daily_assigned_capacity.get(
+        capacity = detail.capacity_calendar.get(
             lower.isoformat(), detail.effective_capacity_fte,
         )
         if capacity <= 0:
@@ -146,7 +146,7 @@ def _preview_rows(
     for identity, values in inputs.items():
         detail = calculate_capacity(values, today)
         percentages = [
-            100 * demand / detail.daily_assigned_capacity.get(day, detail.effective_capacity_fte)
+            100 * demand / detail.capacity_calendar.get(day, detail.effective_capacity_fte)
             for day, demand in detail.daily_usage.items() if demand > 0
         ]
         rows.append(AllocationPreviewRow(

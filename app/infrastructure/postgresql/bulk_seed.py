@@ -11,7 +11,8 @@ from psycopg import sql
 
 from app.application.ports.maintenance import SeedRequest
 from app.application.services.maintenance import validate_seed_request
-from app.domain.projects.project import PROJECT_STATUSES, Project, normalize_project_name, prepare_project_values
+from app.domain.projects.project import Project, normalize_project_name, prepare_project_values
+from app.domain.projects.seed_statuses import project_statuses
 from app.domain.projects.project_types import TemplateProperty, resolve_template
 from app.domain.projects.property_values import encode_property_value
 from app.infrastructure.postgresql.pool_scenarios import apply_pool_scenarios, prepare_pool_scenarios
@@ -73,10 +74,11 @@ def _projects(connection: psycopg.Connection, identities: list[int], rng: random
     choices = {parameter: set(values) for parameter, values in options.items()}
     managers = [row[0] for row in connection.execute('SELECT function_id FROM eppm.function ORDER BY function_id')]
     projects, parents, selections = [], [], []
+    statuses = project_statuses(len(identities), rng)
     for index, identity in enumerate(identities):
         type_id = types[index % len(types)]
         name = normalize_project_name(f'{labels[type_id]} — {rng.choice(PROJECT_SUFFIXES)} #{identity}')
-        status = rng.choice(PROJECT_STATUSES)
+        status = statuses[index]
         with localcontext(prec=38, rounding=ROUND_HALF_EVEN):
             planned = (Decimal(50_000) + Decimal(2_950_000) * Decimal(str(rng.random()))).quantize(Decimal('0.01'))
             actual = (planned * Decimal(str(rng.random()))).quantize(Decimal('0.01'))
@@ -96,11 +98,7 @@ def _projects(connection: psycopg.Connection, identities: list[int], rng: random
 
 
 def _annotations(connection: psycopg.Connection, projects: list[int], tasks: list[int]) -> None:
-    """Assign only newly generated projects/tasks their cyclic pools and tags."""
-    pools = [row[0] for row in connection.execute('SELECT id FROM eppm.resource_pool ORDER BY id')]
-    if pools:
-        _copy(connection, 'resource_pool_assignment', ('pool_id', 'project_id', 'fte_assigned', 'notes'),
-              ((pools[index % len(pools)], identity, 1.0, 'Demo allocation') for index, identity in enumerate(projects)))
+    """Assign only newly generated projects/tasks their cyclic tags."""
     for table, owner, group, identities in (
         ('project_tag', 'project_id', 'project_tag', projects), ('task_tag', 'task_id', 'Task_Tag', tasks),
     ):
@@ -110,18 +108,20 @@ def _annotations(connection: psycopg.Connection, projects: list[int], tasks: lis
             _copy(connection, table, (owner, 'tag_id'), ((identity, tags[index % len(tags)]) for index, identity in enumerate(identities)))
 
 
-def generate_projects(connection: psycopg.Connection, request: SeedRequest, *, year: int) -> dict[str, int]:
+def generate_projects(connection: psycopg.Connection, request: SeedRequest, *, year: int,
+                      today: date | None = None) -> dict[str, int]:
     """Run the validated frozen generator inside one backed-up operator callback."""
     validate_seed_request(request)
     if request.random_seed is None:
         raise ValueError('Freeze the project random seed before entering a replayable transaction.')
-    install_default_data(connection, force=request.clean_first, include_projects=False, year=year)
+    installed = install_default_data(connection, force=request.clean_first, include_projects=False, year=year,
+                                     build_pools=not request.clean_first)
     connection.execute("SELECT pg_advisory_xact_lock(hashtextextended('eppm:project-identity',0))")
     identities = _identities(connection, 'project', request.projects)
     rng = random.Random(request.random_seed)
     projects, parents, selections = _projects(connection, identities, rng)
     tasks, dependencies = generate_schedules([(identity, project.status) for identity, project in zip(identities, projects)],
-                                            request.min_tasks, request.max_tasks, rng)
+                                            request.min_tasks, request.max_tasks, rng, today=today)
     task_ids = _identities(connection, 'project_task', len(tasks))
     _copy(connection, 'project', ('id', 'name', 'status', 'planned_budget', 'actual_budget', 'function_id', 'project_type_id'),
           ((row.id, row.name, row.status, row.planned_budget, row.actual_budget, row.function_id, row.project_type_id) for row in projects))
@@ -133,8 +133,8 @@ def generate_projects(connection: psycopg.Connection, request: SeedRequest, *, y
           ((task_ids[task - 1], task_ids[predecessor - 1] if predecessor is not None else None, project, kind, lag)
            for task, predecessor, project, kind, lag in dependencies))
     _annotations(connection, identities, task_ids)
-    if connection.execute("SELECT 1 FROM eppm.operator_seed_state WHERE catalog='demo'").fetchone():
-        pools = apply_pool_scenarios(connection, prepare_pool_scenarios(connection, year=year, seed=20260908))
+    if installed and request.clean_first:
+        pools = apply_pool_scenarios(connection, prepare_pool_scenarios(connection, year=year, seed=request.random_seed))
     else:
         pools = {'new_pools': 0, 'new_groups': 0}
     return {'projects_created': len(projects), 'tasks_created': len(tasks), 'dependencies_created': len(dependencies),

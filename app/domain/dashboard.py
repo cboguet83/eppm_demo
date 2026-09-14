@@ -94,7 +94,7 @@ def matches(project: DashboardProject, filters: dict[str, list[str]], match_all:
             continue
         actual = {value.casefold() for value in project['fields'].get(key, [])}
         wanted = {value.casefold() for value in selected}
-        if match_all and key not in {'manager', 'level3', 'level4', 'team', 'pool'}:
+        if match_all and key not in {'status', 'manager', 'level3', 'level4', 'team', 'pool'}:
             if not wanted <= actual:
                 return False
         elif not wanted & actual:
@@ -152,9 +152,8 @@ def quarterly_capacity(pools: list[PoolCapacityDetail], year: int) -> dict[str, 
     base = sum(Decimal(str(pool.effective_capacity_fte)) for pool in unique)
     deltas: dict[str, Decimal] = defaultdict(Decimal)
     for pool in unique:
-        if pool.has_assigned_resources:
-            for day, capacity in pool.daily_assigned_capacity.items():
-                deltas[day] += Decimal(str(capacity)) - Decimal(str(pool.effective_capacity_fte))
+        for day, capacity in pool.capacity_calendar.items():
+            deltas[day] += Decimal(str(capacity)) - Decimal(str(pool.effective_capacity_fte))
     result = {}
     for y in range(year - 5, year + 15):
         for q in range(1, 5):

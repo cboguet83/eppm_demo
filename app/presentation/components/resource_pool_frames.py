@@ -82,6 +82,9 @@ def assignments_frame(records: list[AssignmentRow]) -> pd.DataFrame:
             "custom_end_date",
             "effective_start_date",
             "effective_end_date",
+            "schedule_anchor",
+            "offset_days",
+            "duration_days",
             "notes",
         ],
     )

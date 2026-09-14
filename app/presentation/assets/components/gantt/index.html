@@ -16,7 +16,7 @@
       --row-hover: rgba(37, 99, 235, 0.07);
       --text: #0f172a;
       --text-muted: #64748b;
-      --row-height: 46px;
+      --row-height: 41.4px;
       --header-height: 56px;
       --left-col-width: 425px;
       --link-normal: #94a3b8;
@@ -56,7 +56,7 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 10px 14px;
+      padding: 5px 14px;
       background: #ffffff;
       border-bottom: 1px solid var(--border);
       flex-wrap: wrap;
@@ -138,7 +138,7 @@
       position: relative;
       background: #ffffff;
       height: 100%;
-      min-height: 300px;
+      min-height: 270px;
     }
 
     /* Fixed Header Row */
@@ -560,7 +560,7 @@
 
     .project-summary-bar {
       position: absolute;
-      top: 15px;
+      top: calc((var(--row-height) - 14px) / 2);
       height: 14px;
       background: linear-gradient(135deg, #475569, #334155);
       border-radius: 3px;
@@ -604,7 +604,7 @@
     /* Task Bar Rendering */
     .gantt-bar-wrapper {
       position: absolute;
-      top: 9px;
+      top: calc((var(--row-height) - 28px) / 2);
       height: 28px;
       border-radius: 5px;
       cursor: grab;
@@ -730,7 +730,7 @@
     /* Diamond Milestone Shape */
     .milestone-diamond-wrapper {
       position: absolute;
-      top: 13px;
+      top: calc((var(--row-height) - 20px) / 2);
       width: 20px;
       height: 20px;
       cursor: grab;
@@ -1194,7 +1194,7 @@
       position: relative;
       background: #ffffff;
       overflow-y: auto;
-      max-height: 380px;
+      max-height: 324px;
       min-height: 0;
       scrollbar-gutter: auto;
       transition: max-height 0.2s ease;
@@ -1202,6 +1202,35 @@
 
     .resource-grid-main.is-scrollable {
       overflow-y: scroll;
+    }
+
+    .resource-grid-header {
+      display: flex;
+      height: 56px;
+      flex-shrink: 0;
+      background: #f1f5f9;
+      overflow: hidden;
+    }
+
+    .resource-header-left-pane {
+      width: var(--left-col-width);
+      min-width: 200px;
+      max-width: 80vw;
+      flex-shrink: 0;
+      overflow: hidden;
+      border-right: 1px solid var(--border);
+      box-sizing: border-box;
+    }
+
+    .resource-header-right-wrapper {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .resource-header-scrollbar-spacer {
+      width: 0;
+      flex-shrink: 0;
     }
 
     .resource-grid-main > .resource-left-pane,
@@ -1212,7 +1241,8 @@
       align-self: flex-start;
     }
 
-    .resource-grid-main.collapsed {
+    .resource-grid-main.collapsed,
+    .resource-grid-header.collapsed {
       display: none;
     }
 
@@ -1353,7 +1383,7 @@
       align-items: center;
       background: transparent;
       border: 0;
-      color: #475569;
+      color: #000;
       cursor: pointer;
       display: inline-flex;
       flex: 0 0 18px;
@@ -1365,7 +1395,7 @@
     }
 
     .resource-tree-toggle:hover {
-      color: #2563eb;
+      color: #000;
     }
 
     .resource-tree-icon,
@@ -1727,16 +1757,9 @@
       position: relative;
     }
 
-    .resource-scrollbar-spacer-header {
-      height: 56px;
-      background: #f1f5f9;
-      border-bottom: 1px solid var(--border);
-      box-sizing: border-box;
-    }
-
     /* Shared EPPM context-menu standard (context_menu.py). */
 
-button:not(.context-menu-item) {background-color:#C41039 !important;color:#fff !important;border-color:#C41039 !important;}
+button:not(.context-menu-item):not(.resource-tree-toggle):not(.view-modes .btn-mode) {background-color:#C41039 !important;color:#fff !important;border-color:#C41039 !important;}
 button:not(.context-menu-item):disabled {opacity:.5;}
 .context-menu {
     position: fixed; background: var(--st-background-color, #fff);
@@ -1802,6 +1825,9 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       <span>👤</span>
       <span id="ctx-label-task-pools">Assign Resource</span>
     </div>
+    <div class="context-menu-item" onclick="triggerLogProjectEvent('task')">
+      <span>＋</span><span id="ctx-task-log-event">Log event</span>
+    </div>
     <div class="context-menu-item" onclick="markComplete()">
       <span>✅</span>
       <span id="ctx-label-complete-step">Mark 100% Complete</span>
@@ -1831,6 +1857,9 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     <div class="context-menu-item" onclick="openAddStepModal(selectedContextMenuProjectId)">
       <span>＋</span><span id="ctx-project-add-step">Add step</span>
     </div>
+    <div class="context-menu-item" onclick="openProjectDependencies(selectedContextMenuProjectId)">
+      <span>🔗</span><span id="ctx-project-dependencies">Manage dependencies</span>
+    </div>
     <div class="context-menu-item context-submenu-parent" tabindex="0" onmouseenter="positionSubmenu(this)" onfocus="positionSubmenu(this)">
       <span>☷</span><span id="ctx-bulk-actions">Bulk actions</span><span class="submenu-arrow">▸</span>
       <div class="context-menu context-submenu">
@@ -1849,6 +1878,9 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     <div class="context-menu-item" onclick="triggerManageProjectPoolsFromMenu()">
       <span>👤</span>
       <span id="ctx-label-project-pools">Assign Resource</span>
+    </div>
+    <div class="context-menu-item" onclick="triggerLogProjectEvent('project')">
+      <span>＋</span><span id="ctx-project-log-event">Log event</span>
     </div>
     <div class="context-menu-item" onclick="triggerEditProjectFromMenu()">
       <span>📁</span>
@@ -1937,7 +1969,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       </div>
       <div class="modal-body" style="padding: 14px 18px; gap: 10px;">
         <!-- Row 1: Step Name (flex:1.5), Phase/Category (flex:1), Description (flex:1.5) -->
-        <div class="form-row" style="gap: 10px;">
+        <div class="form-row step-edit-fields" style="gap: 10px;">
           <div class="form-group" style="flex: 1.5;">
             <label class="form-label" id="modal-label-task-name" style="font-size: 12px;">Step / Task Name *</label>
             <input type="text" class="form-input" id="modal-task-name" placeholder="e.g. UAT Validation"
@@ -1957,7 +1989,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         </div>
 
         <!-- Row 2: Start Date, End Date, Progress Slider -->
-        <div class="form-row" style="gap: 10px; align-items: flex-end;">
+        <div class="form-row step-edit-fields" style="gap: 10px; align-items: flex-end;">
           <div class="form-group" style="flex: 1;">
             <label class="form-label" id="modal-label-start" style="font-size: 12px;">Start Date *</label>
             <input type="date" class="form-input" id="modal-start-date" onchange="syncModalEndDate()"
@@ -1979,6 +2011,8 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         </div>
 
         <!-- Predecessors / Dependencies Builder -->
+        <div id="project-dependency-status" role="status" style="display:none; font-size:13px;"></div>
+        <button id="project-dependency-reload" class="btn-cancel" style="display:none;" onclick="openProjectDependencies(projectDependencyDraft.projectId)">Reload dependencies (discard edits)</button>
         <div class="form-group" style="display: flex; flex-direction: column; margin-top: 2px;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
             <label class="form-label" id="modal-label-deps"
@@ -2122,7 +2156,6 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       <div class="resource-panel-header" id="resource-panel-header">
         <div class="resource-panel-title">
           <span class="resource-panel-toggle" id="btn-toggle-resource-grid" onclick="toggleResourceGrid()">▼</span>
-          <span>🏊</span>
           <span class="resource-panel-heading" id="lbl-resource-panel-title">Resource Pools & Capacity Usage</span>
           <span class="resource-count-badge" id="resource-count-badge">0 Pools</span>
           <span class="resource-active-filter-pill" id="resource-active-filter-pill" style="display:none;" onclick="triggerClearResourcePoolFilter(event)" title="Click to clear active filter"></span>
@@ -2151,13 +2184,27 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         </div>
       </div>
 
+      <!-- Fixed header row, separate from the vertically scrolling body. -->
+      <div class="resource-grid-header" id="resource-grid-header">
+        <div class="resource-header-left-pane" id="resource-header-left-pane">
+          <div class="resource-left-header" id="resource-left-header">
+            <div class="r-hdr-name">Resource Pool</div>
+          </div>
+        </div>
+        <div class="resource-splitter-spacer"></div>
+        <div class="resource-header-right-wrapper" id="resource-header-right-wrapper">
+          <div class="resource-right-header" id="resource-right-header">
+            <div class="resource-header-tier-top" id="resource-header-tier-top"></div>
+            <div class="resource-header-tier-bottom" id="resource-header-tier-bottom"></div>
+          </div>
+        </div>
+        <div class="resource-header-scrollbar-spacer" id="resource-header-scrollbar-spacer"></div>
+      </div>
+
       <!-- Resource Grid Content (Left & Right synchronized panes) -->
       <div class="resource-grid-main" id="resource-grid-main">
         <!-- Left Pane: Resource Pool group hierarchy and names -->
         <div class="resource-left-pane" id="resource-left-pane">
-          <div class="resource-left-header" id="resource-left-header">
-            <div class="r-hdr-name">Resource Pool</div>
-          </div>
           <div class="resource-left-body" id="resource-left-body"></div>
         </div>
 
@@ -2167,10 +2214,6 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         <!-- Right Pane: Timeline period demand cells -->
         <div class="resource-right-pane-scroller" id="resource-right-pane-scroller">
           <div class="resource-right-pane-inner" id="resource-right-pane-inner">
-            <div class="resource-right-header" id="resource-right-header">
-              <div class="resource-header-tier-top" id="resource-header-tier-top"></div>
-              <div class="resource-header-tier-bottom" id="resource-header-tier-bottom"></div>
-            </div>
             <div class="resource-today-line" id="resource-today-line" style="display:none;"></div>
             <div class="column-hover-overlay" id="column-hover-overlay-resource"></div>
             <div class="resource-right-body" id="resource-right-body"></div>
@@ -2178,9 +2221,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         </div>
 
         <!-- Vertical Scrollbar Reserved Space for Resource Grid (when Gantt has scrollbar and Resource Grid does not) -->
-        <div class="resource-scrollbar-spacer" id="resource-scrollbar-spacer">
-          <div class="resource-scrollbar-spacer-header"></div>
-        </div>
+        <div class="resource-scrollbar-spacer" id="resource-scrollbar-spacer"></div>
       </div>
     </div>
   </div>
@@ -2222,6 +2263,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     }
 
     function canEditDependency(dependency) {
+      if (dependency?.projectDependency) return canEditProject(dependency.succProjectId);
       return Boolean(dependency && canEditProject(dependency.predProjectId)
         && canEditProject(dependency.succProjectId));
     }
@@ -2341,7 +2383,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
             const startX = dateToX(parseDate(task.start));
             const milestone = task.start === task.end;
             allTaskPositions[String(task.id)] = {startX,endX:milestone?startX:Math.max(startX+24,endDateToX(parseDate(task.end))),
-              centerY:index*46+23,rowIdx:index,isMilestone:milestone,isProject:false,name:task.name,project_id:pid};
+              centerY:index*41.4+ 20.7,rowIdx:index,isMilestone:milestone,isProject:false,name:task.name,project_id:pid};
           }
         }
       }
@@ -2592,6 +2634,9 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         ['ctx-filter-predecessors', 'context_menu.filter_predecessors', 'This project and predecessors'],
         ['ctx-bulk-actions', 'context_menu.bulk_actions', 'Bulk actions'],
         ['ctx-project-add-step', 'context_menu.add_step', 'Add step'],
+        ['ctx-project-log-event', 'context_menu.log_event', 'Log event'],
+        ['ctx-task-log-event', 'context_menu.log_event', 'Log event'],
+        ['ctx-project-dependencies', 'context_menu.manage_dependencies', 'Manage dependencies'],
         ['ctx-export-csv', 'context_menu.export_csv_template', 'Export CSV template'],
         ['ctx-import-csv', 'context_menu.import_csv_template', 'Import CSV template'],
         ['ctx-pool-allocations', 'resource_grid.show_allocations', 'Show active allocations'],
@@ -2958,10 +3003,10 @@ button:not(.context-menu-item):disabled {opacity:.5;}
             if (!pPools || pPools.length === 0) return '';
             return `
               <div style="margin-top:6px; border-top:1px solid #334155; padding-top:5px;">
-                <div style="font-size:10px; font-weight:700; color:#38bdf8; text-transform:uppercase; margin-bottom:3px; letter-spacing:0.03em;">🏊 Project Resource Pools</div>
+                <div style="font-size:10px; font-weight:700; color:#38bdf8; text-transform:uppercase; margin-bottom:3px; letter-spacing:0.03em;">Project Resource Pools</div>
                 <div style="display:flex; flex-wrap:wrap; gap:4px;">
                   ${pPools.map(pl => {
-                    return `<span style="background:rgba(2,132,199,0.2); border:1px solid #0284c7; color:#7dd3fc; font-size:10.5px; font-weight:600; padding:1px 6px; border-radius:10px; display:inline-flex; align-items:center;">🏊 ${escapeHtml(pl.pool_name || 'Pool')} (${Number(pl.fte).toFixed(2)} FTE)</span>`;
+                    return `<span style="background:rgba(2,132,199,0.2); border:1px solid #0284c7; color:#7dd3fc; font-size:10.5px; font-weight:600; padding:1px 6px; border-radius:10px; display:inline-flex; align-items:center;">${escapeHtml(pl.pool_name || 'Pool')} (${Number(pl.fte).toFixed(2)} FTE)</span>`;
                   }).join('')}
                 </div>
               </div>
@@ -3188,6 +3233,10 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     function openEditModalForDep() {
       hideDepContextMenu();
       if (!canEditDependency(selectedDependencyInfo)) return;
+      if (selectedDependencyInfo.projectDependency) {
+        openProjectDependencies(selectedDependencyInfo.succProjectId);
+        return;
+      }
       const succTask = tasksData.find(x => String(x.id) === String(selectedDependencyInfo.succId));
       if (succTask) {
         selectedContextMenuTask = succTask;
@@ -3305,6 +3354,28 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         }
       }
 
+      const projectIssues = projectDependencyIssues(targetPId);
+      if (projectIssues.length) {
+        const block = document.createElement('div');
+        const heading = document.createElement('strong');
+        heading.textContent = getT('modal.project_dependencies_header', 'Incoming project dependencies');
+        block.appendChild(heading);
+        for (const issue of projectIssues) {
+          const card = document.createElement('p');
+          card.className = 'violation-card';
+          card.textContent = issue.violation_text || getT('modal.dependencies_undated', 'Some dependencies cannot yet be evaluated because project or step dates are missing. Links never change dates automatically.');
+          block.appendChild(card);
+        }
+        if (!violsList.length) diagBody.replaceChildren();
+        diagBody.prepend(block);
+        if (canEditProject(targetPId)) {
+          const button = document.createElement('button');
+          button.className = 'btn-save';
+          button.textContent = getT('context_menu.manage_dependencies', 'Manage dependencies');
+          button.onclick = () => {closeDiagModal(); openProjectDependencies(targetPId);};
+          block.appendChild(button);
+        }
+      }
       document.getElementById('diag-backdrop').style.display = 'flex';
     }
 
@@ -3391,7 +3462,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       selectedContextMenuTask = task;
 
       setMenuActionsVisible(['ctx-label-add-step', 'ctx-label-edit-step', 'ctx-label-task-tags',
-        'ctx-label-task-pools', 'ctx-label-complete-step', 'ctx-label-delete-step'], canEditTask(task));
+        'ctx-label-task-pools', 'ctx-label-complete-step', 'ctx-label-delete-step', 'ctx-task-log-event'], canEditTask(task));
 
       const menu = document.getElementById('context-menu');
       const violBtn = document.getElementById('ctx-violation-btn');
@@ -3466,6 +3537,11 @@ button:not(.context-menu-item):disabled {opacity:.5;}
 
     let selectedContextMenuProjectId = null;
 
+    function projectDependencyIssues(projectId) {
+      const summary = projectSummariesData.find(p => String(p.id) === String(projectId));
+      return (summary?.projectDependencies || []).filter(d => d.is_violated || !d.is_evaluable);
+    }
+
     function showProjectContextMenu(e, projectId) {
       if (e) {
         e.preventDefault();
@@ -3478,7 +3554,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       selectedContextMenuProjectId = projectId;
       selectedContextMenuTask = null;
       setMenuActionsVisible(['ctx-project-add-step', 'ctx-import-csv', 'ctx-label-project-tags',
-        'ctx-label-project-pools'], canEditProject(projectId));
+        'ctx-label-project-pools', 'ctx-project-dependencies', 'ctx-project-log-event'], canEditProject(projectId));
       const menu = document.getElementById('project-context-menu');
       if (!menu) return;
 
@@ -3486,7 +3562,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       const violBtn = document.getElementById('ctx-proj-violation-btn');
       const violLabel = document.getElementById('ctx-proj-violation-label');
       const projTasks = tasksData.filter(t => String(t.project_id || currentProjectId) === String(projectId));
-      let totalViols = 0;
+      let totalViols = projectDependencyIssues(projectId).length;
       projTasks.forEach(t => {
         if (t.violations && t.violations.length > 0) totalViols += t.violations.length;
       });
@@ -3562,10 +3638,100 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     // --------------------------------------------------------------------------
     // IN-PLACE EDIT & ADD MODAL & MULTI-DEPENDENCIES BUILDER
     // --------------------------------------------------------------------------
+    let projectDependencyDraft = null;
+
+    function resetProjectDependencyMode() {
+      projectDependencyDraft = null;
+      document.querySelectorAll('.step-edit-fields').forEach(row => row.style.display = '');
+      document.getElementById('project-dependency-status').style.display = 'none';
+      document.getElementById('project-dependency-reload').style.display = 'none';
+      document.getElementById('modal-btn-save').disabled = false;
+      document.getElementById('modal-btn-add-dep').disabled = false;
+      document.getElementById('dep-rows-list').inert = false;
+      document.getElementById('modal-label-deps').textContent = getT('modal.dependencies_header', 'Step Dependencies & Predecessors');
+    }
+
+    function projectDependencyStatus(message, busy = false, failed = false) {
+      const status = document.getElementById('project-dependency-status');
+      status.textContent = message;
+      status.style.display = message ? 'block' : 'none';
+      status.style.color = failed ? '#b91c1c' : '#475569';
+      document.getElementById('modal-btn-save').disabled = busy || !projectDependencyDraft?.revision;
+      document.getElementById('modal-btn-add-dep').disabled = busy || !projectDependencyDraft?.revision;
+      document.getElementById('dep-rows-list').inert = busy;
+      document.getElementById('project-dependency-reload').style.display = failed ? '' : 'none';
+      document.getElementById('project-dependency-reload').textContent = getT('modal.reload_dependencies', 'Reload dependencies (discard edits)');
+    }
+
+    function openProjectDependencies(projectId) {
+      if (!canEditProject(projectId)) return;
+      hideContextMenu(); hideProjectContextMenu(); hideDepContextMenu(); hideTooltip();
+      resetProjectDependencyMode();
+      modalMode = 'project';
+      selectedContextMenuTask = null;
+      const nonce = Date.now() + '_project_dependencies_' + Math.random();
+      projectDependencyDraft = {projectId: String(projectId), nonce, revision: null, baseline: []};
+      const project = allProjectsData.find(p => String(p.id) === String(projectId));
+      document.getElementById('modal-title-header').textContent = getT('modal.project_dependencies_title', 'Manage dependencies — {name}').replace('{name}', project?.name || projectId);
+      document.querySelectorAll('.step-edit-fields').forEach(row => row.style.display = 'none');
+      document.getElementById('modal-label-deps').textContent = getT('modal.project_dependencies_header', 'Incoming project dependencies');
+      document.getElementById('dep-rows-list').replaceChildren();
+      document.getElementById('modal-backdrop').style.display = 'flex';
+      projectDependencyStatus(getT('modal.dependencies_loading', 'Loading dependencies…'), true);
+      Streamlit.setComponentValue({action: 'load_project_dependencies', project_id: projectId, nonce});
+    }
+
+    function receiveProjectDependencies(response) {
+      const draft = projectDependencyDraft;
+      if (!draft || response.nonce !== draft.nonce || String(response.project_id) !== draft.projectId) return;
+      if (response.error) {
+        projectDependencyStatus(response.error + ' ' + getT('modal.dependencies_retry', 'Retry saving, or reload dependencies to discard your edits and review the latest source.'), false, true);
+        return;
+      }
+      if (response.action === 'save_project_dependencies') {closeEditModal(); return;}
+      draft.revision = response.panel.revision;
+      draft.baseline = response.panel.dependencies;
+      document.getElementById('dep-rows-list').replaceChildren();
+      draft.baseline.forEach(addDependencyRow);
+      const unavailable = draft.baseline.some(d => !d.is_evaluable);
+      projectDependencyStatus(getT(unavailable ? 'modal.dependencies_undated' : 'modal.dependencies_warning_only', unavailable
+        ? 'Some dependencies cannot yet be evaluated because project or step dates are missing. Links never change dates automatically.'
+        : 'Links produce scheduling warnings; they never change dates automatically.'));
+    }
+
+    function saveProjectDependencies() {
+      const draft = projectDependencyDraft;
+      if (!draft?.revision || !canEditProject(draft.projectId) || document.getElementById('modal-btn-save').disabled) return;
+      const upserts = [], retained = new Set();
+      for (const row of document.querySelectorAll('#dep-rows-list .dep-row')) {
+        const target = row.querySelector('.dep-target');
+        const lagText = row.querySelector('.dep-lag').value;
+        const lag = Number(lagText);
+        const [kind, identity] = target.value.split(':');
+        if (target.disabled || !['PROJ', 'TASK'].includes(kind) || !Number(identity) || !lagText.trim() || !Number.isInteger(lag) || lag < -2147483648 || lag > 2147483647) {
+          projectDependencyStatus(getT('modal.dependencies_invalid', 'Choose a loaded predecessor and enter a whole number of calendar days for each link.'), false, true);
+          return;
+        }
+        const values = {predecessor_project_id: kind === 'PROJ' ? Number(identity) : null,
+          predecessor_task_id: kind === 'TASK' ? Number(identity) : null,
+          link_type: row.querySelector('.dep-type').value, lag_days: lag};
+        const id = Number(row.dataset.dependencyId);
+        const original = draft.baseline.find(d => d.id === id);
+        if (original) retained.add(id);
+        if (!original || Object.keys(values).some(key => values[key] !== original[key])) upserts.push(original ? {...values, id} : values);
+      }
+      const deleted_ids = draft.baseline.filter(d => !retained.has(d.id)).map(d => d.id);
+      draft.nonce = Date.now() + '_save_project_dependencies_' + Math.random();
+      projectDependencyStatus(getT('modal.dependencies_saving', 'Saving dependencies…'), true);
+      Streamlit.setComponentValue({action: 'save_project_dependencies', project_id: draft.projectId,
+        revision: draft.revision, upserts, deleted_ids, nonce: draft.nonce});
+    }
+
     function openAddStepModal(targetProjectId = null) {
       hideContextMenu();
       hideProjectContextMenu();
       modalMode = 'add';
+      resetProjectDependencyMode();
       addStepTargetProjectId = targetProjectId || (selectedContextMenuTask ? selectedContextMenuTask.project_id : currentProjectId);
       if (!canEditProject(addStepTargetProjectId)) return;
 
@@ -3615,6 +3781,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         return;
       }
       modalMode = 'edit';
+      resetProjectDependencyMode();
       if (!canEditTask(selectedContextMenuTask)) return;
       addStepTargetProjectId = selectedContextMenuTask.project_id || currentProjectId;
 
@@ -3651,9 +3818,11 @@ button:not(.context-menu-item):disabled {opacity:.5;}
 
     function closeEditModal() {
       document.getElementById('modal-backdrop').style.display = 'none';
+      projectDependencyDraft = null;
     }
 
     function getActiveModalProjectId() {
+      if (modalMode === 'project') return String(projectDependencyDraft.projectId);
       if (modalMode === 'add') {
         return String(addStepTargetProjectId || (selectedContextMenuTask && selectedContextMenuTask.project_id) || currentProjectId || '');
       }
@@ -3664,11 +3833,12 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       const depList = document.getElementById('dep-rows-list');
       const rowDiv = document.createElement('div');
       rowDiv.className = 'dep-row';
+      if (modalMode === 'project' && initialData.id) rowDiv.dataset.dependencyId = initialData.id;
 
       const activeProjId = getActiveModalProjectId();
-      const isExt = Boolean(initialData.predecessor_project_id && String(initialData.predecessor_project_id) !== String(activeProjId));
+      const isExt = modalMode === 'project' || Boolean(initialData.predecessor_project_id && String(initialData.predecessor_project_id) !== String(activeProjId));
       const otherProjects = (allProjectsData || []).filter(p => String(p.id) !== String(activeProjId));
-      const selectedExtProj = initialData.predecessor_project_id || (otherProjects[0] ? String(otherProjects[0].id) : '');
+      const selectedExtProj = initialData.predecessor_owner_id || initialData.predecessor_project_id || (otherProjects[0] ? String(otherProjects[0].id) : '');
 
       rowDiv.style.background = isExt ? '#faf5ff' : '#f0f9ff';
       rowDiv.style.border = isExt ? '1px solid #e9d5ff' : '1px solid #bae6fd';
@@ -3704,6 +3874,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       `;
 
       depList.appendChild(rowDiv);
+      if (modalMode === 'project') rowDiv.querySelector('.dep-is-ext').parentElement.style.display = 'none';
       populateDepTargets(rowDiv, initialData);
     }
 
@@ -3764,12 +3935,16 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     function receiveDependencyChoices(response) {
       if (!response || response.nonce !== activeDependencyRequest?.nonce) return;
       const projectId = String(response.project_id);
-      externalTasksData[projectId] = response.tasks || [];
+      if (!response.error) externalTasksData[projectId] = response.tasks || [];
       const entry = dependencyRequests.get(projectId);
       dependencyRequests.delete(projectId); activeDependencyRequest = null;
       for (const item of entry?.rows || []) {
         if (item.row.isConnected && item.row._dependencyProject === projectId) {
-          populateDepTargets(item.row, item.initialData);
+          if (response.error) {
+            item.row.querySelector('.dep-target').title = response.error;
+            if (modalMode === 'project') projectDependencyStatus(response.error + ' ' + getT('modal.dependencies_retry',
+              'Retry saving, or reload dependencies to discard your edits and review the latest source.'), false, true);
+          } else populateDepTargets(item.row, item.initialData);
         }
       }
       sendNextDependencyRequest();
@@ -3868,6 +4043,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     }
 
     function saveEditModal() {
+      if (modalMode === 'project') {saveProjectDependencies(); return;}
       if (modalMode === 'add' ? !canEditProject(addStepTargetProjectId) : !canEditTask(selectedContextMenuTask)) return;
       if (document.querySelector('.dep-target:disabled')) {
         alert('Please wait for predecessor tasks to finish loading.');
@@ -3999,6 +4175,17 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         action: "manage_project_pools",
         project_id: selectedContextMenuProjectId,
         nonce: Date.now() + "_" + Math.random()
+      });
+    }
+
+    function triggerLogProjectEvent(source) {
+      const projectId = source === 'task' ? selectedContextMenuTask?.project_id : selectedContextMenuProjectId;
+      hideContextMenu();
+      hideProjectContextMenu();
+      if (!canEditProject(projectId)) return;
+      Streamlit.setComponentValue({
+        action: 'log_project_event', project_id: projectId,
+        nonce: Date.now() + '_' + Math.random()
       });
     }
 
@@ -4315,6 +4502,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     function toggleResourceGrid() {
       isResourceGridCollapsed = !isResourceGridCollapsed;
       const mainEl = document.getElementById('resource-grid-main');
+      document.getElementById('resource-grid-header')?.classList.toggle('collapsed', isResourceGridCollapsed);
       const btnToggle = document.getElementById('btn-toggle-resource-grid');
       if (mainEl) {
         if (isResourceGridCollapsed) {
@@ -4434,13 +4622,25 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       const key = base + ':' + startStr + ':' + endStr;
       if (cache.has(key)) return cache.get(key);
       const series = getDailySeries(usage);
-      let maxDemand = 0, maxExcess = 0;
+      let maxDemand = 0, maxExcess = 0, minAvailable = Infinity;
+      const covered = new Set();
       for (let i = lowerDateBound(series.dates, startStr); i < series.dates.length && series.dates[i] <= endStr; i++) {
         const date = series.dates[i], demand = series.values[i];
         const capacity = Object.prototype.hasOwnProperty.call(overrides, date) ? Number(overrides[date]) : base;
         maxDemand = Math.max(maxDemand, demand); maxExcess = Math.max(maxExcess, demand - capacity);
+        minAvailable = Math.min(minAvailable, capacity - demand);
+        covered.add(date);
       }
-      const result = {maxDemand, isOverallocated: maxExcess > 0.0001, maxExcess: Math.max(0, maxExcess)};
+      const capacitySeries = getDailySeries(overrides);
+      for (let i = lowerDateBound(capacitySeries.dates, startStr); i < capacitySeries.dates.length && capacitySeries.dates[i] <= endStr; i++) {
+        const date = capacitySeries.dates[i];
+        if (!covered.has(date)) minAvailable = Math.min(minAvailable, capacitySeries.values[i]);
+        covered.add(date);
+      }
+      const days = Math.round((Date.parse(endStr + 'T00:00:00Z') - Date.parse(startStr + 'T00:00:00Z')) / 86400000) + 1;
+      if (covered.size < days || !covered.size) minAvailable = Math.min(minAvailable, base);
+      const result = {maxDemand, isOverallocated: maxExcess > 0.0001, maxExcess: Math.max(0, maxExcess),
+        minAvailable: Math.max(0, minAvailable)};
       cache.set(key, result);
       return result;
     }
@@ -4449,7 +4649,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       const theoreticalCapacity = Number(pool.theoretical_capacity ?? pool.capacity ?? 0);
       const hasAssignedResources = Boolean(pool.has_assigned_resources);
       const assignedCapacity = Number(pool.displayed_assigned_capacity ?? theoreticalCapacity);
-      const dailyAssignedCapacity = hasAssignedResources ? (pool.daily_assigned_capacity || {}) : {};
+      const dailyAssignedCapacity = pool.daily_assigned_capacity || EMPTY_DAILY_SERIES;
       const totalIsOver = showTotalRows && getDemandCapacityStatusForPeriod(
         pool.daily_usage, assignedCapacity, dailyAssignedCapacity, startStr, endStr
       ).isOverallocated;
@@ -4463,9 +4663,17 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       return totalIsOver || selectedIsOver;
     }
 
-    function showResourceCellTooltip(e, details) {
+    function showResourceCellTooltip(e, details, status = null) {
       if (!showHoverOverlay) return;
-      showTooltip(e, `<div style="font-size:12px;line-height:1.45;white-space:pre-wrap">${escapeHtml(details)}</div>`);
+      let content = escapeHtml(details);
+      if (status) {
+        const [title, ...lines] = details.split('\n');
+        const over = status.isOverallocated;
+        const label = over ? getT('resource_grid.overallocated_value', 'Overallocated') : getT('resource_grid.available_value', 'Available');
+        const value = formatResourceValue(over ? status.maxExcess : status.minAvailable);
+        content = `<strong>${escapeHtml(title)}</strong><div style="color:${over ? '#f87171' : '#4ade80'};font-weight:600">${escapeHtml(label)}: ${value} FTE</div>${escapeHtml(lines.join('\n'))}`;
+      }
+      showTooltip(e, `<div style="font-size:12px;line-height:1.45;white-space:pre-wrap">${content}</div>`);
     }
 
     function handleCellContextMenu(e, el) {
@@ -4478,7 +4686,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       const endStr = el.dataset.endDate || '';
       const periodLabel = el.dataset.periodLabel || '';
 
-      openResourceCellContextMenu(e, poolId, poolName, startStr, endStr, periodLabel);
+      openResourceCellContextMenu(e, poolId, poolName, startStr, endStr, periodLabel, null, el.dataset.scope || 'total');
     }
 
     function handlePoolRowContextMenu(e, el) {
@@ -4492,10 +4700,14 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       const startStr = el.dataset.startDate || '';
       const endStr = el.dataset.endDate || '';
       const pool = getResourcePoolById(el.dataset.poolId);
-      showResourceCellTooltip(e, pool ? poolAssignmentDetails(pool, startStr, endStr) : poolName);
+      const usage = el.dataset.scope === 'selected' ? pool?.selected_projects_daily_usage : pool?.daily_usage;
+      const status = pool ? getDemandCapacityStatusForPeriod(usage,
+        Number(pool.displayed_assigned_capacity ?? pool.theoretical_capacity ?? pool.capacity ?? 0),
+        pool.daily_assigned_capacity || EMPTY_DAILY_SERIES, startStr, endStr) : null;
+      showResourceCellTooltip(e, pool ? poolAssignmentDetails(pool, startStr, endStr) : poolName, status);
     }
 
-    function openResourceCellContextMenu(e, poolId, poolName, startStr, endStr, periodLabel, groupId = null) {
+    function openResourceCellContextMenu(e, poolId, poolName, startStr, endStr, periodLabel, groupId = null, allocationScope = 'total') {
       e.preventDefault();
       e.stopPropagation();
 
@@ -4510,7 +4722,8 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         pool_name: poolName,
         start_date: startStr,
         end_date: endStr,
-        period_label: periodLabel
+        period_label: periodLabel,
+        allocation_scope: allocationScope
       };
 
       const menu = document.getElementById('resource-cell-context-menu');
@@ -4567,6 +4780,9 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       Streamlit.setComponentValue({
         action,
         pool_id: selectedResourceCellCtx.pool_id,
+        start_date: selectedResourceCellCtx.start_date,
+        end_date: selectedResourceCellCtx.end_date,
+        allocation_scope: selectedResourceCellCtx.allocation_scope || 'total',
         group_id: selectedResourceCellCtx.group_id,
         pool_name: selectedResourceCellCtx.pool_name,
         nonce: Date.now() + "_" + Math.random()
@@ -4580,6 +4796,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         action: "filter_by_resource_pool",
         filter_scope: scope,
         pool_id: selectedResourceCellCtx.pool_id,
+        allocation_scope: selectedResourceCellCtx.allocation_scope || 'total',
         group_id: selectedResourceCellCtx.group_id,
         pool_name: selectedResourceCellCtx.pool_name,
         start_date: selectedResourceCellCtx.start_date,
@@ -4716,6 +4933,10 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       return rows;
     }
 
+    function formatResourceValue(value) {
+      return value >= 100 ? String(Math.trunc(value)) : value.toFixed(1);
+    }
+
     function renderResourceGrid(topCells, bottomCells) {
       resourcePoolIndex = new Map((resourcePoolsData || []).map(pool => [Number(pool.id), pool]));
       if (topCells) {
@@ -4748,11 +4969,11 @@ button:not(.context-menu-item):disabled {opacity:.5;}
 
       const pools = (resourcePoolsData || []).filter(isResourcePoolVisible);
       const displayRows = getResourceDisplayRows();
-      const resourceContentHeight = 56 + Math.max(1, displayRows.length) * 34;
+      const resourceContentHeight = Math.max(1, displayRows.length) * 34 + 16;
       if (resourceMain) {
         resourceMain.style.setProperty('--resource-content-height', `${resourceContentHeight}px`);
-        resourceMain.style.height = `${Math.min(380, resourceContentHeight)}px`;
-        resourceMain.classList.toggle('is-scrollable', resourceContentHeight > 380);
+        resourceMain.style.height = `${Math.min(324, resourceContentHeight)}px`;
+        resourceMain.classList.toggle('is-scrollable', resourceContentHeight > 324);
       }
       if (badgeCount) {
         badgeCount.innerText = `${pools.length} ${pools.length === 1 ? 'Pool' : 'Pools'}`;
@@ -4771,6 +4992,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       }
 
       rightInner.style.width = `${totalTimelineWidth}px`;
+      document.getElementById('resource-right-header').style.width = `${totalTimelineWidth}px`;
 
       // 1. Render 2-tier header matching the Gantt timeline structure
       const resTopHeader = document.getElementById('resource-header-tier-top');
@@ -4862,7 +5084,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       const leftBody = document.getElementById('resource-left-body');
       const rightBody = document.getElementById('resource-right-body');
       if (!main || !right || !leftBody || !rightBody) return;
-      const first = Math.max(0, Math.min(displayRows.length - 1, Math.floor((main.scrollTop - 56) / 34)));
+      const first = Math.max(0, Math.min(displayRows.length - 1, Math.floor(main.scrollTop / 34)));
       const last = Math.min(displayRows.length - 1, first + Math.ceil((main.clientHeight || 380) / 34));
       const left = right.scrollLeft, width = right.clientWidth || 900;
       const colFirst = Math.max(0, bottomCells.findIndex(c => c.startX + c.width > left));
@@ -4888,7 +5110,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         const poolCap = Number(pool.theoretical_capacity ?? pool.capacity ?? 0);
         const hasAssignedResources = Boolean(pool.has_assigned_resources);
         const assignedCapacity = Number(pool.displayed_assigned_capacity ?? poolCap);
-        const dailyAssignedCapacity = hasAssignedResources ? (pool.daily_assigned_capacity || {}) : {};
+        const dailyAssignedCapacity = pool.daily_assigned_capacity || EMPTY_DAILY_SERIES;
         const isFilterActiveOnPool = activeResourceFilter &&
           Number(activeResourceFilter.pool_id) === Number(pool.id);
         return visibleCells.map(c => {
@@ -4910,7 +5132,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
             cellClass = isOver
               ? 'cell-overallocated'
               : `cell-normal${scopeType === 'selected' ? ' cell-scope' : ''}`;
-            displayText = demand.toFixed(1);
+            displayText = formatResourceValue(demand);
           }
           if (isCellFiltered) cellClass += ' cell-active-filter';
           return `
@@ -4979,7 +5201,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
                          data-start="${startStr}" data-end="${endStr}" oncontextmenu="handleGroupContextMenu(event)"
                          style="width:${c.width}px;"
                          title="${escapeHtml(groupAssignmentDetails(group, group.descendant_pool_ids || [], startStr, endStr))}">
-                      ${demand > 0 ? demand.toFixed(1) : '—'}
+                      ${demand > 0 ? formatResourceValue(demand) : '—'}
                     </div>`;
           }).join('');
           rightHtml += `<div class="resource-right-row resource-group-row"
@@ -4991,7 +5213,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         const poolCap = Number(pool.theoretical_capacity ?? pool.capacity ?? 0);
         const hasAssignedResources = Boolean(pool.has_assigned_resources);
         const assignedCapacity = Number(pool.displayed_assigned_capacity ?? poolCap);
-        const dailyAssignedCapacity = hasAssignedResources ? (pool.daily_assigned_capacity || {}) : {};
+        const dailyAssignedCapacity = pool.daily_assigned_capacity || EMPTY_DAILY_SERIES;
         const visibleCapacity = getAssignedCapacityForPeriod(
           assignedCapacity, dailyAssignedCapacity, formatDate(timelineStart), formatDate(timelineEnd)
         );
@@ -5028,10 +5250,11 @@ button:not(.context-menu-item):disabled {opacity:.5;}
             return `<div class="resource-demand-cell assigned-capacity-cell ${capacityState}"
                          data-pool-id="${pool.id}" data-pool-name="${escapeHtml(pool.name)}"
                          data-start-date="${startStr}" data-end-date="${endStr}" data-period-label="${escapeHtml(c.label)}"
+                         onmouseenter="handleCellMouseEnter(event, this)"
+                         onmousemove="moveTooltip(event)" onmouseleave="hideTooltip()"
                          oncontextmenu="handleCellContextMenu(event, this)"
-                         style="width:${c.width}px;"
-                         title="${escapeHtml(poolAssignmentDetails(pool, startStr, endStr))}">
-                      ${periodCapacity.min.toFixed(1)}
+                         style="width:${c.width}px;">
+                      ${formatResourceValue(periodCapacity.min)}
                     </div>`;
           }).join('');
           rightHtml += `<div class="resource-right-row assigned-capacity-row ${isFilterActive ? 'active-filter-row' : ''}"
@@ -5076,8 +5299,8 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       const layoutContainer = document.getElementById('gantt-layout');
       const pools = resourcePoolsData || [];
 
-      const totalTaskHeight = Math.max(46, masterRenderItems.length * 46);
-      const maxGanttH = Math.min(550, Math.max(260, totalTaskHeight + 56));
+      const totalTaskHeight = Math.max(41.4, masterRenderItems.length * 41.4);
+      const maxGanttH = Math.min(495, Math.max(234, totalTaskHeight + 56));
       if (layoutContainer) {
         layoutContainer.style.height = `${maxGanttH}px`;
       }
@@ -5085,11 +5308,12 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       let resH = 34; // Header bar
       if (!isResourceGridCollapsed) {
         const activeRowCount = getResourceDisplayRows().length;
-        const poolRowsH = Math.max(1, activeRowCount) * 34 + 56; // 56px for 2-tier header
-        resH += Math.min(380, poolRowsH);
+        const poolRowsH = Math.max(1, activeRowCount) * 34 + 16;
+        resH += 56 + Math.min(324, poolRowsH);
       }
 
-      const totalFrameH = maxGanttH + resH + 85;
+      const toolbarHeight = document.querySelector('.toolbar')?.offsetHeight || 45;
+      const totalFrameH = maxGanttH + resH + toolbarHeight + 2;
       Streamlit.setFrameHeight(totalFrameH);
     }
 
@@ -5292,6 +5516,29 @@ button:not(.context-menu-item):disabled {opacity:.5;}
           }
         }
       }
+      indexProjectDependencies();
+    }
+
+    function indexProjectDependencies() {
+      const append = (map, key, entry) => {
+        if (!key) return;
+        const id = String(key);
+        if (!map.has(id)) map.set(id, []);
+        map.get(id).push(entry);
+      };
+      for (const project of projectSummariesData) {
+        for (const dependency of project.projectDependencies || []) {
+          const dep = {...dependency, pred_task_project_id: dependency.predecessor_owner_id,
+            pred_task_name: dependency.predecessor_task_name || dependency.predecessor_project_name,
+            pred_project_name: dependency.predecessor_project_name, violation_reason: dependency.violation_text};
+          const entry = {projectDependency: true, dep, key: 'project-dependency:' + dep.id,
+            succTask: {id: 'PROJECT:' + project.id, project_id: project.id, project_name: project.name,
+              name: project.name, start: project.start, end: project.end}};
+          append(projIncomingDeps, project.id, entry);
+          append(projOutgoingDeps, dep.predecessor_owner_id, entry);
+          append(taskOutgoingDeps, dep.predecessor_task_id, entry);
+        }
+      }
     }
 
     function renderTimeline(options = {}) {
@@ -5477,7 +5724,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
             allProjectPositions[item.project_id] = {
               startX: pStartX,
               endX: pEndX,
-              centerY: rowIndex * 46 + 23,
+              centerY: rowIndex * 41.4 + 20.7,
               rowIdx: rowIndex,
               isMilestone: false,
               isProject: true,
@@ -5495,7 +5742,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
           allTaskPositions[String(t.id)] = {
             startX: startX,
             endX: endX,
-            centerY: rowIndex * 46 + 23,
+            centerY: rowIndex * 41.4 + 20.7,
             rowIdx: rowIndex,
             isMilestone: isMilestone,
             isProject: false,
@@ -5508,7 +5755,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       // Build dependency fast-lookup indexes
       buildDependencyIndex();
 
-      const totalHeight = Math.max(46, masterRenderItems.length * 46);
+      const totalHeight = Math.max(41.4, masterRenderItems.length * 41.4);
 
       // Set Virtual Canvases Total Heights for native scrolling
       const frozenCanvas = document.getElementById('frozen-virtual-canvas');
@@ -5632,6 +5879,8 @@ button:not(.context-menu-item):disabled {opacity:.5;}
 
       // 3. Target vertical scrollbar reservation is the maximum between both
       const maxVScrollW = Math.max(ganttVScrollW, resVScrollW);
+      const resourceHeaderSpacer = document.getElementById('resource-header-scrollbar-spacer');
+      if (resourceHeaderSpacer) resourceHeaderSpacer.style.width = `${maxVScrollW}px`;
 
       // 4. Gantt Header Spacer: Reserves full maxVScrollW so header timeline width matches
       const targetHdrW = maxVScrollW > 0 ? `${maxVScrollW}px` : '0px';
@@ -5661,7 +5910,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       const timelineCanvas = document.getElementById('timeline-canvas');
       if (!scroller || !frozenBody || !frozenCanvas || !timelineCanvas) return;
 
-      const totalHeight = Math.max(46, masterRenderItems.length * 46);
+      const totalHeight = Math.max(41.4, masterRenderItems.length * 41.4);
       const rightScrollbarH = Math.max(0, scroller.offsetHeight - scroller.clientHeight);
       const leftScrollbarH = Math.max(0, frozenBody.offsetHeight - frozenBody.clientHeight);
 
@@ -5686,7 +5935,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
           (dependencyClipWindow.left === 0 || left >= dependencyClipWindow.left + 100) &&
           (dependencyClipWindow.right === totalTimelineWidth || left + width <= dependencyClipWindow.right - 100)) return;
       const x = Math.max(0, left - 600), right = Math.min(totalTimelineWidth, left + width + 600);
-      const y = startIndex * 46, height = (endIndex - startIndex + 1) * 46;
+      const y = startIndex * 41.4, height = (endIndex - startIndex + 1) * 41.4;
       viewport.setAttribute('x', x);
       viewport.setAttribute('y', y);
       viewport.setAttribute('width', Math.max(1, right - x));
@@ -5727,8 +5976,8 @@ button:not(.context-menu-item):disabled {opacity:.5;}
 
       // Reuse overscanned rows until the viewport approaches their edge. Scrolling
       // horizontally (or by a few pixels vertically) must not rebuild rows/links.
-      const firstVisible = Math.max(0, Math.min(totalItems - 1, Math.floor(scrollTop / 46)));
-      const lastVisible = Math.min(totalItems - 1, Math.ceil((scrollTop + viewportHeight) / 46));
+      const firstVisible = Math.max(0, Math.min(totalItems - 1, Math.floor(scrollTop / 41.4)));
+      const lastVisible = Math.min(totalItems - 1, Math.ceil((scrollTop + viewportHeight) / 41.4));
       const safetyStart = Math.max(0, firstVisible - 5);
       const safetyEnd = Math.min(totalItems - 1, lastVisible + 5);
       if (!force && renderedRowWindow &&
@@ -5752,7 +6001,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       for (let i = startIndex; i <= endIndex; i++) {
         const item = masterRenderItems[i];
         if (!item) continue;
-        const topPos = i * 46;
+        const topPos = i * 41.4;
 
         if (item.type === 'project_header') {
           const nameColW = Math.max(60, colWidths.name - 24);
@@ -5815,7 +6064,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         for (let i = startIndex; i <= endIndex; i++) {
           const item = masterRenderItems[i];
           if (!item) continue;
-          const topPos = i * 46;
+          const topPos = i * 41.4;
 
           const rowEl = document.createElement('div');
           rowEl.className = 'timeline-row';
@@ -5946,7 +6195,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
           } else if (item.type === 'project_header') {
             const pid = String(item.project_id);
             // Dependencies finishing on this displayed project
-            const inDeps = item.isCollapsed ? projIncomingDeps.get(pid) : null;
+            const inDeps = (projIncomingDeps.get(pid) || []).filter(entry => item.isCollapsed || entry.projectDependency);
             if (inDeps) {
               for (let k = 0; k < inDeps.length; k++) {
                 candidateEntries.set(inDeps[k].key, inDeps[k]);
@@ -5968,7 +6217,8 @@ button:not(.context-menu-item):disabled {opacity:.5;}
           const dep = entry.dep;
           const tProjId = t.project_id || currentProjectId;
           const isSuccCollapsed = collapsedProjects.has(tProjId);
-          const succ = allTaskPositions[String(t.id)] || (isSuccCollapsed ? allProjectPositions[tProjId] : null);
+          const succ = entry.projectDependency ? allProjectPositions[tProjId]
+            : allTaskPositions[String(t.id)] || (isSuccCollapsed ? allProjectPositions[tProjId] : null);
           if (!succ) return;
 
           const pTaskId = dep.predecessor_task_id ? String(dep.predecessor_task_id) : null;
@@ -6060,6 +6310,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
             const predProject = dep.pred_task_project_name || dep.pred_project_name || pProjId || (pTaskObj ? pTaskObj.project_name || pTaskObj.project_id : (pred && pred.project_id ? pred.project_id : tProjId));
 
             return {
+              projectDependency: Boolean(entry.projectDependency),
               predName: predName,
               predId: pTaskId || (pred && !pred.isProject ? pred.id : null),
               predProject: predProject,
@@ -6118,7 +6369,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
             if (linkType === 'SS') {
               // Start-to-Start: pred exits left, succ enters left
               if (sRow === pRow) {
-                const gutterY = (pRow + 1) * 46;
+                const gutterY = (pRow + 1) * 41.4;
                 pathD = `M ${pX} ${pY} H ${exitX} V ${gutterY} H ${approachX} V ${sY} H ${sX}`;
               } else {
                 const leftX = Math.min(exitX, approachX);
@@ -6127,7 +6378,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
             } else if (linkType === 'FF') {
               // Finish-to-Finish: pred exits right, succ enters right
               if (sRow === pRow) {
-                const gutterY = (pRow + 1) * 46;
+                const gutterY = (pRow + 1) * 41.4;
                 pathD = `M ${pX} ${pY} H ${exitX} V ${gutterY} H ${approachX} V ${sY} H ${sX}`;
               } else {
                 const rightX = Math.max(exitX, approachX);
@@ -6135,7 +6386,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
               }
             } else if (linkType === 'SF') {
               // Start-to-Finish: pred exits left, succ enters right
-              const gutterY = (sRow > pRow) ? (pRow + 1) * 46 : (sRow < pRow ? pRow * 46 : (pRow + 1) * 46);
+              const gutterY = (sRow > pRow) ? (pRow + 1) * 41.4 : (sRow < pRow ? pRow * 41.4 : (pRow + 1) * 41.4);
               pathD = `M ${pX} ${pY} H ${exitX} V ${gutterY} H ${approachX} V ${sY} H ${sX}`;
             } else {
               // Default: FS (Finish-to-Start): pred exits right, succ enters left
@@ -6145,7 +6396,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
                   pathD = `M ${pX} ${pY} H ${sX}`;
                 } else {
                   // Overlapping or backward in same row: loop below in the inter-row gutter
-                  const gutterY = (pRow + 1) * 46;
+                  const gutterY = (pRow + 1) * 41.4;
                   pathD = `M ${pX} ${pY} H ${exitX} V ${gutterY} H ${approachX} V ${sY} H ${sX}`;
                 }
               } else if (sRow === pRow + 1) {
@@ -6156,16 +6407,16 @@ button:not(.context-menu-item):disabled {opacity:.5;}
                   pathD = `M ${pX} ${pY} H ${midX} V ${sY} H ${sX}`;
                 } else {
                   // Backward/overlapping: route along the inter-row border between the two rows
-                  const gutterY = (pRow + 1) * 46;
+                  const gutterY = (pRow + 1) * 41.4;
                   pathD = `M ${pX} ${pY} H ${exitX} V ${gutterY} H ${approachX} V ${sY} H ${sX}`;
                 }
               } else if (sRow > pRow + 1) {
                 // Multi-row downwards: horizontal segment travels strictly along the inter-row gutter below pred
-                const gutterY = (pRow + 1) * 46;
+                const gutterY = (pRow + 1) * 41.4;
                 pathD = `M ${pX} ${pY} H ${exitX} V ${gutterY} H ${approachX} V ${sY} H ${sX}`;
               } else {
                 // Upwards (sRow < pRow): horizontal segment travels strictly along the inter-row gutter above pred
-                const gutterY = pRow * 46;
+                const gutterY = pRow * 41.4;
                 pathD = `M ${pX} ${pY} H ${exitX} V ${gutterY} H ${approachX} V ${sY} H ${sX}`;
               }
             }
@@ -6457,7 +6708,12 @@ button:not(.context-menu-item):disabled {opacity:.5;}
           Streamlit.setComponentValue({action:'initialize_planning',nonce:Date.now()+'_initialize'});
           return;
         }
-        if (args.patch) {applyPlanningPatch(args.patch); if (args.dependency_response) receiveDependencyChoices(args.dependency_response); return;}
+        if (args.patch) {
+          applyPlanningPatch(args.patch);
+          if (args.dependency_response) receiveDependencyChoices(args.dependency_response);
+          if (args.project_dependency_response) receiveProjectDependencies(args.project_dependency_response);
+          return;
+        }
         if (args.tasks && (!args.data_revision || args.data_revision !== lastDataRevision)) {
           const viewport = document.getElementById('timeline-body-scroller');
           const position = viewport && planningViewScope && planningViewScope === args.view_scope
@@ -6503,6 +6759,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
           }
         }
         if (args.dependency_response) receiveDependencyChoices(args.dependency_response);
+        if (args.project_dependency_response) receiveProjectDependencies(args.project_dependency_response);
       }
     });
 
@@ -6543,10 +6800,11 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         frozenBody.style.width = `${newWidth}px`;
         frozenBody.style.minWidth = `${newWidth}px`;
         frozenBody.style.maxWidth = `${newWidth}px`;
-        if (resourceLeftPane) {
-          resourceLeftPane.style.width = `${newWidth}px`;
-          resourceLeftPane.style.minWidth = `${newWidth}px`;
-          resourceLeftPane.style.maxWidth = `${newWidth}px`;
+        for (const pane of [resourceLeftPane, document.getElementById('resource-header-left-pane')]) {
+          if (!pane) continue;
+          pane.style.width = `${newWidth}px`;
+          pane.style.minWidth = `${newWidth}px`;
+          pane.style.maxWidth = `${newWidth}px`;
         }
         document.documentElement.style.setProperty('--left-col-width', `${newWidth}px`);
         adjustCanvasBottomGaps();
@@ -6573,6 +6831,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       const frozenHeaderWrapper = document.getElementById('frozen-header-wrapper');
       const timelineHeaderWrapper = document.getElementById('timeline-header-wrapper');
       const resourceRightScroller = document.getElementById('resource-right-pane-scroller');
+      const resourceHeaderWrapper = document.getElementById('resource-header-right-wrapper');
       const resourceLeftPane = document.getElementById('resource-left-pane');
 
       initSplitter();
@@ -6588,12 +6847,14 @@ button:not(.context-menu-item):disabled {opacity:.5;}
           if (resourceRightScroller && resourceRightScroller.scrollLeft !== scroller.scrollLeft) {
             resourceRightScroller.scrollLeft = scroller.scrollLeft;
           }
+          if (resourceHeaderWrapper) resourceHeaderWrapper.scrollLeft = scroller.scrollLeft;
           scheduleVirtualWindow();
         };
       }
 
       if (resourceRightScroller) {
         resourceRightScroller.onscroll = function () {
+          if (resourceHeaderWrapper) resourceHeaderWrapper.scrollLeft = resourceRightScroller.scrollLeft;
           scheduleResourceWindow();
           if (scroller && scroller.scrollLeft !== resourceRightScroller.scrollLeft) {
             scroller.scrollLeft = resourceRightScroller.scrollLeft;
@@ -6612,6 +6873,8 @@ button:not(.context-menu-item):disabled {opacity:.5;}
           if (resourceLeftPane) {
             resourceLeftPane.scrollLeft = frozenBody.scrollLeft;
           }
+          const resourceHeaderLeft = document.getElementById('resource-header-left-pane');
+          if (resourceHeaderLeft) resourceHeaderLeft.scrollLeft = frozenBody.scrollLeft;
         };
 
         frozenBody.onwheel = function (e) {

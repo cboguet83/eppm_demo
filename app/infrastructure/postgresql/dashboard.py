@@ -8,7 +8,7 @@ import psycopg
 from psycopg.rows import dict_row
 
 from app.application.exceptions import ProjectStorageError
-from app.application.ports.dashboard import DashboardCatalog, DashboardData
+from app.application.ports.dashboard import DashboardCatalog, DashboardData, ResourceBreakdown
 from app.application.services.business_access import BusinessAccess
 from app.domain.access.models import AccessDenied, Actor
 from app.domain.dashboard import WbsShare, quarter_bounds
@@ -96,11 +96,25 @@ class PostgresDashboardReader:
             return {key: {quarter: float(value) for quarter, value in row[key].items()} for key in ('overallocation', 'capacity')}
         return self._run(operation, project_ids)
 
-    def consuming_projects(self, project_ids: list[int], quarter: str, today: date) -> list[int]:
+    def resource_breakdown(self, project_ids: list[int], today: date) -> ResourceBreakdown:
+        """Read safe pool contributions while retaining competing-demand privacy."""
+        def operation(connection: psycopg.Connection, ids: list[int], _security: PostgresAccessStore) -> ResourceBreakdown:
+            result = connection.execute('SELECT eppm.dashboard_resource_breakdown(%s::bigint[],%s)', (ids, today)).fetchone()[0]
+            return ResourceBreakdown(allocation=result['allocation'], overallocation=result['overallocation'],
+                capacity=result['capacity'], pools=result['pools'], peak_days=result.get('peak_days', {}))
+        return self._run(operation, project_ids)
+
+    def consuming_projects(self, project_ids: list[int], quarter: str, today: date,
+                           pool_id: int | None = None, metric: str = 'overallocation') -> list[int]:
         """Return only currently visible consumers of the quarter's responsible pools."""
         quarter_bounds(quarter, today.year)
+        if pool_id is not None and (type(pool_id) is not int or pool_id <= 0):
+            raise ValueError('Select a valid resource pool.')
+        if metric not in {'overallocation', 'allocation'}:
+            raise ValueError('Select a valid resource metric.')
         return self._run(lambda connection, ids, _security: connection.execute(
-            'SELECT eppm.dashboard_resources(%s::bigint[],%s,%s)', (ids, today, quarter)).fetchone()[0]['consumers'], project_ids)
+            'SELECT eppm.dashboard_resource_breakdown(%s::bigint[],%s,%s,%s,%s)',
+            (ids, today, quarter, pool_id, metric)).fetchone()[0]['consumers'], project_ids)
 
     def issues(self, project_ids: list[int], locale: str) -> list[dict]:
         """Read localized active blockers with the established ISO date boundaries."""

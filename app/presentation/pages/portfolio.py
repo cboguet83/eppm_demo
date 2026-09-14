@@ -17,7 +17,7 @@ from app.application.services.project_types import ProjectTypeService
 from app.application.services.schema import SchemaService
 from app.domain.projects.budgets import BudgetAmounts, analyze_budget, euro_amount
 from app.domain.projects.links import normalize_link
-from app.domain.projects.project import Project
+from app.domain.projects.project import Project, PROJECT_STATUSES
 from app.presentation.i18n import get_current_locale, t
 from app.presentation.navigation import PAGE_PLANNING
 from app.presentation.components.property_labels import localize_parameters, parameter_groups, property_label
@@ -34,6 +34,14 @@ ALLOWED_DYNAMIC_PARAMS: set[str] = {
     "category_tags",
     "complexity",
 }
+
+
+def _clear_portfolio_filters() -> None:
+    """Reset search, column filters and status before rendering the table again."""
+    st.session_state["portfolio_search"] = ""
+    st.session_state["portfolio_statuses"] = ["In Progress"]
+    st.session_state.pop(_PORTFOLIO_TABLE_KEY, None)
+    st.session_state["portfolio_filter_reset"] = st.session_state.get("portfolio_filter_reset", 0) + 1
 
 _PORTFOLIO_TABLE_KEY = "portfolio_master_table"
 _SELECTED_PROJECT_KEY = "selected_portfolio_project_id"
@@ -357,7 +365,15 @@ def _render_portfolio_browser(workspace: ProjectWorkspace) -> None:
     </style>""")
     params = pd.DataFrame(workspace.portfolio.get_catalog(include_managers=False).parameters)
     columns = _portfolio_columns(localize_parameters(params, workspace.schema.alias_references(get_current_locale())))
-    search = st.text_input(t("portfolio.filter_search"), placeholder=t("portfolio.filter_search_placeholder"))
+    search_col, status_col, clear_col = st.columns([3, 2, 1], vertical_alignment="bottom")
+    with search_col:
+        search = st.text_input(t("portfolio.filter_search"), placeholder=t("portfolio.filter_search_placeholder"), key="portfolio_search")
+    with status_col:
+        st.multiselect(t("dashboard.project_status", default="Project status"), PROJECT_STATUSES,
+                       default=["In Progress"], key="portfolio_statuses")
+    with clear_col:
+        st.button(t("planning.clear_all_filters", default="Clear all filters"), on_click=_clear_portfolio_filters,
+                  key="portfolio_clear_filters", width="stretch")
     with st.container(horizontal=True, horizontal_alignment="distribute", vertical_alignment="center"):
         st.subheader(t("portfolio.table_header"))
         _render_project_create_action(workspace)
@@ -380,9 +396,11 @@ def _render_portfolio_grid(workspace: ProjectWorkspace, columns: list[dict], sea
 def _portfolio_grid(workspace: ProjectWorkspace, columns: list[dict], search: str) -> None:
     """Serve a bounded row page under the current display and permission revision."""
     revision = workspace.portfolio.revision()
-    context = hashlib.sha256(json.dumps([revision, columns, search],
+    statuses = st.session_state.get("portfolio_statuses", ["In Progress"])
+    reset = st.session_state.get("portfolio_filter_reset", 0)
+    context = hashlib.sha256(json.dumps([revision, columns, search, statuses, reset],
                                        sort_keys=True).encode()).hexdigest()
-    view_context = hashlib.sha256(json.dumps([columns, search], sort_keys=True).encode()).hexdigest()
+    view_context = hashlib.sha256(json.dumps([columns, search, statuses, reset], sort_keys=True).encode()).hexdigest()
     component_state = st.session_state.get(_PORTFOLIO_TABLE_KEY, {})
     request = (component_state.get("request") if isinstance(component_state, dict)
                else getattr(component_state, "request", None)) or {}
@@ -390,6 +408,10 @@ def _portfolio_grid(workspace: ProjectWorkspace, columns: list[dict], search: st
     raw_query = request.get("query")
     query = dict(raw_query) if isinstance(raw_query, dict) else {}
     query.update(search=search, templates=[])
+    query["filters"] = dict(query.get("filters") or {})
+    query["filters"].pop("status", None)
+    if statuses:
+        query["filters"]["status"] = {"mode": "include", "values": list(statuses)}
     current_request = request.get("context") == context
     # A committed edit invalidates cached rows, but the user's next scroll still
     # requests the same page. Query configuration changes retain the reset rule;

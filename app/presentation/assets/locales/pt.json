@@ -13,27 +13,27 @@
     "delete": "Eliminar tipo de hierarquia",
     "deleted": "Tipo de hierarquia eliminado."
   },
-    "wbs": {
-        "title": "WBS",
-        "code": "Código WBS",
-        "description": "Descrição",
-        "fictive": "WBS fictícia (prefixo #)",
-        "allocation": "Alocação (%)",
-        "available": "Disponível para este projeto: {percentage}%",
-        "remaining": "Não alocado (%)",
-        "add": "Adicionar WBS",
-        "remove": "Remover WBS",
-        "select": "Selecionar uma WBS",
-        "empty": "Nenhuma WBS definida. Um administrador de negócio pode adicionar entradas nas definições.",
-        "none": "Nenhuma WBS atribuída a este projeto.",
-        "entry": "Entrada do catálogo",
-        "new": "Nova WBS",
-        "save": "Guardar WBS",
-        "delete": "Eliminar WBS",
-        "confirm_delete": "Confirmar a eliminação da WBS",
-        "code_help": "Letras, números, pontos, hífenes e sublinhados. Os códigos fictícios começam por #.",
-        "denied": "Apenas um administrador de negócio pode gerir o catálogo WBS."
-    },
+  "wbs": {
+    "title": "WBS",
+    "code": "Código WBS",
+    "description": "Descrição",
+    "fictive": "WBS fictícia (prefixo #)",
+    "allocation": "Alocação (%)",
+    "available": "Disponível para este projeto: {percentage}%",
+    "remaining": "Não alocado (%)",
+    "add": "Adicionar WBS",
+    "remove": "Remover WBS",
+    "select": "Selecionar uma WBS",
+    "empty": "Nenhuma WBS definida. Um administrador de negócio pode adicionar entradas nas definições.",
+    "none": "Nenhuma WBS atribuída a este projeto.",
+    "entry": "Entrada do catálogo",
+    "new": "Nova WBS",
+    "save": "Guardar WBS",
+    "delete": "Eliminar WBS",
+    "confirm_delete": "Confirmar a eliminação da WBS",
+    "code_help": "Letras, números, pontos, hífenes e sublinhados. Os códigos fictícios começam por #.",
+    "denied": "Apenas um administrador de negócio pode gerir o catálogo WBS."
+  },
   "auth": {
     "operation_failed": "Não foi possível concluir a operação. Referência: {reference}",
     "title": "Iniciar sessão no EPPM",
@@ -271,7 +271,15 @@
     "custom_start_date": "Data de Início",
     "custom_end_date": "Data de Fim",
     "field_assignment_notes": "Notas / Propósito da Alocação",
-    "date_range_error": "A data de término não pode ser anterior à data de início."
+    "date_range_error": "A data de término não pode ser anterior à data de início.",
+    "period_relative": "Desfasamento + duração",
+    "schedule_anchor": "Agendar a partir de",
+    "schedule_start": "Início",
+    "schedule_end": "Fim",
+    "offset_days": "Desfasamento (dias de calendário)",
+    "duration_days": "Duração (dias de calendário)",
+    "relative_schedule_help": "Valores positivos avançam a data; valores negativos recuam. A duração inclui o primeiro dia. As datas seguem o calendário atual da tarefa ou do projeto.",
+    "calendar_days": "dias de calendário"
   },
   "schema": {
     "title": "Esquema Dinâmico & Definição de Parâmetros",
@@ -412,6 +420,7 @@
       "collapse_all": "▶ Recolher Tudo"
     },
     "context_menu": {
+      "log_event": "Registar evento",
       "edit_step": "Editar Detalhes da Etapa",
       "add_step_after": "Adicionar Etapa",
       "add_step": "Adicionar etapa",
@@ -435,7 +444,8 @@
       "filter_predecessors": "Este projeto e predecessores",
       "bulk_actions": "Ações em massa",
       "view_project": "Ver detalhes do projeto",
-      "assign_resource": "Atribuir recurso"
+      "assign_resource": "Atribuir recurso",
+      "manage_dependencies": "Gerir dependências"
     },
     "resource_grid": {
       "only_overallocated": "Apenas pools sobrealocados",
@@ -461,7 +471,9 @@
       "defined_capacity": "Capacidade definida",
       "consuming": "Projetos consumidores",
       "consuming_all": "Projetos consumidores e todas as dependências",
-      "consuming_predecessors": "Projetos consumidores e predecessores"
+      "consuming_predecessors": "Projetos consumidores e predecessores",
+      "available_value": "Disponível",
+      "overallocated_value": "Sobrealocado"
     },
     "modal": {
       "add_title": "➕ Adicionar Nova Etapa ({project_id})",
@@ -484,7 +496,16 @@
       "lag_placeholder": "Deslocamento (dias)",
       "btn_save": "💾 Salvar Alterações",
       "btn_cancel": "Cancelar",
-      "optional": "Opcional"
+      "optional": "Opcional",
+      "project_dependencies_title": "Gerir dependências — {name}",
+      "project_dependencies_header": "Dependências de entrada do projeto",
+      "dependencies_loading": "A carregar dependências…",
+      "dependencies_saving": "A guardar dependências…",
+      "reload_dependencies": "Recarregar dependências (descartar alterações)",
+      "dependencies_warning_only": "As ligações geram avisos de planeamento; nunca alteram datas automaticamente.",
+      "dependencies_undated": "Algumas dependências ainda não podem ser avaliadas porque faltam datas do projeto ou da etapa. As datas nunca são alteradas automaticamente.",
+      "dependencies_retry": "Tente guardar novamente ou recarregue as dependências para descartar as alterações e consultar os dados atuais.",
+      "dependencies_invalid": "Escolha um predecessor carregado e introduza um número inteiro de dias de calendário para cada ligação."
     },
     "diagnostics": {
       "title": "⚠️ Diagnóstico de Violação de Restrições",
@@ -805,6 +826,7 @@
     "missing_code": "Linha {row}: introduza um código WBS para estes valores."
   },
   "dashboard": {
+    "project_status": "Estado do projeto",
     "title": "Painel",
     "project": "Projeto",
     "mail_code": "Código de correio",
@@ -839,13 +861,14 @@
     "no_approved": "Não existe uma versão aprovada do orçamento em Finance.",
     "source": "Orçamento aprovado {number} · {name}",
     "unmatched": "Sem orçamento aprovado para WBS: {codes}",
-    "allocation": "Atribuição",
+    "allocation": "Alocação",
     "total": "Total",
     "no_wbs": "Este projeto não tem WBS atribuídos.",
     "unavailable": "Dados indisponíveis ou acesso alterado. Recarregue a página.",
     "pool": "Grupos de recursos",
     "finance_overview": "Visão financeira",
     "approved_budget": "Orçamento aprovado",
+    "resources_allocation": "Alocação de recursos",
     "capacity_overallocation": "Capacidade e sobrealocação",
     "overallocation": "Sobrealocação",
     "total_capacity": "Capacidade total dos grupos",
@@ -857,6 +880,23 @@
     "unmatched_status": "Nenhum orçamento {status} para códigos WBS: {codes}",
     "wbs_assignment": "Atribuição WBS",
     "no_consumers": "Nenhum projeto acessível utiliza os grupos responsáveis neste trimestre.",
-    "active_issues": "Problemas ativos"
+    "active_issues": "Problemas ativos",
+    "capacity_allocation": "Capacidade e alocação",
+    "peak_day": "Dia do pico",
+    "total_overallocation": "Sobrealocação total",
+    "total_allocation": "Alocação total",
+    "total_capacity_short": "Capacidade total"
+  },
+  "pool_exceptions": {
+    "title": "Exceções de capacidade",
+    "select": "Exceção",
+    "new": "Nova exceção",
+    "start": "Data de início",
+    "end": "Data de fim",
+    "reduction": "Redução de capacidade (ETI)",
+    "reason": "Motivo",
+    "save": "Guardar exceção",
+    "delete": "Eliminar exceção",
+    "help": "As reduções são em ETI, não em percentagem. Reduções sobrepostas somam-se; a capacidade não fica abaixo de zero. Ambas as datas estão incluídas."
   }
 }

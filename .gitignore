@@ -232,4 +232,5 @@ __marimo__/
 *.db-wal
 *.db-shm
 *.dump
+data/backups/
 *.before-project-types.bak

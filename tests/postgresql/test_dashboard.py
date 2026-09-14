@@ -174,7 +174,8 @@ def test_catalog_keeps_current_applicability_labels_lists_tags_and_active_projec
     assert next(row for row in catalog.parameters if row['param_id'] == 'text')['translations'] == {'fr': 'Texte'}
     assert all('Hidden tag' not in str(values) for values in catalog.labels.values())
     staffing.query("UPDATE eppm.project SET status=' Completed ' WHERE id=2", user_id=4, write=True)
-    assert [row['id'] for row in dashboard.catalog().projects] == [1]
+    assert [row['id'] for row in dashboard.catalog().projects] == [1, 2]
+    assert dashboard.catalog().projects[1]['fields']['status'] == [' Completed ']
     with psycopg.connect(staffing.setup.operator_url) as connection:
         grants = connection.execute('SELECT id FROM eppm.app_role_assignment WHERE user_id=1').fetchall()
     for grant, in grants:

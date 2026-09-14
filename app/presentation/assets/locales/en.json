@@ -13,27 +13,27 @@
     "delete": "Delete hierarchy type",
     "deleted": "Hierarchy type deleted."
   },
-    "wbs": {
-        "title": "WBS",
-        "code": "WBS code",
-        "description": "Description",
-        "fictive": "Fictive WBS (# prefix)",
-        "allocation": "Allocation (%)",
-        "available": "Available for this project: {percentage}%",
-        "remaining": "Unallocated (%)",
-        "add": "Add WBS",
-        "remove": "Remove WBS",
-        "select": "Select a WBS",
-        "empty": "No WBS defined. A business administrator can add entries in Settings.",
-        "none": "No WBS assigned to this project.",
-        "entry": "Catalog entry",
-        "new": "New WBS",
-        "save": "Save WBS",
-        "delete": "Delete WBS",
-        "confirm_delete": "Confirm WBS deletion",
-        "code_help": "Letters, numbers, dots, dashes and underscores. Fictive codes start with #.",
-        "denied": "Only a business administrator can maintain the WBS catalog."
-    },
+  "wbs": {
+    "title": "WBS",
+    "code": "WBS code",
+    "description": "Description",
+    "fictive": "Fictive WBS (# prefix)",
+    "allocation": "Allocation (%)",
+    "available": "Available for this project: {percentage}%",
+    "remaining": "Unallocated (%)",
+    "add": "Add WBS",
+    "remove": "Remove WBS",
+    "select": "Select a WBS",
+    "empty": "No WBS defined. A business administrator can add entries in Settings.",
+    "none": "No WBS assigned to this project.",
+    "entry": "Catalog entry",
+    "new": "New WBS",
+    "save": "Save WBS",
+    "delete": "Delete WBS",
+    "confirm_delete": "Confirm WBS deletion",
+    "code_help": "Letters, numbers, dots, dashes and underscores. Fictive codes start with #.",
+    "denied": "Only a business administrator can maintain the WBS catalog."
+  },
   "auth": {
     "operation_failed": "The operation could not complete. Reference: {reference}",
     "title": "Sign in to EPPM",
@@ -270,7 +270,15 @@
     "custom_start_date": "Start Date",
     "custom_end_date": "End Date",
     "field_assignment_notes": "Notes / Allocation Purpose",
-    "date_range_error": "End Date cannot be before Start Date."
+    "date_range_error": "End Date cannot be before Start Date.",
+    "period_relative": "Offset + duration",
+    "schedule_anchor": "Schedule from",
+    "schedule_start": "Start",
+    "schedule_end": "End",
+    "offset_days": "Offset (calendar days)",
+    "duration_days": "Duration (calendar days)",
+    "relative_schedule_help": "Positive offsets move forward; negative offsets move backward. Duration includes the first day. Dates follow the current task or project schedule.",
+    "calendar_days": "calendar days"
   },
   "schema": {
     "title": "Dynamic Schema & Custom Parameter Definition",
@@ -411,6 +419,7 @@
       "collapse_all": "▶ Collapse All"
     },
     "context_menu": {
+      "log_event": "Log event",
       "edit_step": "Edit Step Details",
       "add_step_after": "Add Step",
       "add_step": "Add step",
@@ -434,7 +443,8 @@
       "filter_predecessors": "This project and predecessors",
       "bulk_actions": "Bulk actions",
       "view_project": "View project details",
-      "assign_resource": "Assign Resource"
+      "assign_resource": "Assign Resource",
+      "manage_dependencies": "Manage dependencies"
     },
     "resource_grid": {
       "only_overallocated": "Only overallocated pools",
@@ -460,7 +470,9 @@
       "defined_capacity": "Defined capacity",
       "consuming": "Consuming projects",
       "consuming_all": "Consuming projects and all dependencies",
-      "consuming_predecessors": "Consuming projects and predecessors"
+      "consuming_predecessors": "Consuming projects and predecessors",
+      "available_value": "Available",
+      "overallocated_value": "Overallocated"
     },
     "modal": {
       "add_title": "➕ Add New Step ({project_id})",
@@ -483,7 +495,16 @@
       "lag_placeholder": "Lag (days)",
       "btn_save": "💾 Save Changes",
       "btn_cancel": "Cancel",
-      "optional": "Optional"
+      "optional": "Optional",
+      "project_dependencies_title": "Manage dependencies — {name}",
+      "project_dependencies_header": "Incoming project dependencies",
+      "dependencies_loading": "Loading dependencies…",
+      "dependencies_saving": "Saving dependencies…",
+      "reload_dependencies": "Reload dependencies (discard edits)",
+      "dependencies_warning_only": "Links produce scheduling warnings; they never change dates automatically.",
+      "dependencies_undated": "Some dependencies cannot yet be evaluated because project or step dates are missing. Links never change dates automatically.",
+      "dependencies_retry": "Retry saving, or reload dependencies to discard your edits and review the latest source.",
+      "dependencies_invalid": "Choose a loaded predecessor and enter a whole number of calendar days for each link."
     },
     "diagnostics": {
       "title": "⚠️ Constraint Violation Diagnostics",
@@ -781,6 +802,7 @@
     "missing_code": "Row {row}: enter a WBS code for these amounts."
   },
   "dashboard": {
+    "project_status": "Project status",
     "title": "Dashboard",
     "project": "Project",
     "mail_code": "Mail code",
@@ -822,6 +844,7 @@
     "pool": "Resource pools",
     "finance_overview": "Finance overview",
     "approved_budget": "Approved budget",
+    "resources_allocation": "Resources allocation",
     "capacity_overallocation": "Capacity and Overallocation",
     "overallocation": "Overallocation",
     "total_capacity": "Total pools capacity",
@@ -833,6 +856,23 @@
     "unmatched_status": "No {status} budget for WBS codes: {codes}",
     "wbs_assignment": "WBS assignment",
     "no_consumers": "No accessible projects consume the responsible pools in this quarter.",
-    "active_issues": "Active Issues"
+    "active_issues": "Active Issues",
+    "capacity_allocation": "Capacity and Allocation",
+    "peak_day": "Peak day",
+    "total_overallocation": "Total overallocation",
+    "total_allocation": "Total allocation",
+    "total_capacity_short": "Total capacity"
+  },
+  "pool_exceptions": {
+    "title": "Capacity exceptions",
+    "select": "Exception",
+    "new": "New exception",
+    "start": "Start date",
+    "end": "End date",
+    "reduction": "Capacity reduction (FTE)",
+    "reason": "Reason",
+    "save": "Save exception",
+    "delete": "Delete exception",
+    "help": "Reductions are in FTE, not percentages. Overlapping reductions add together; effective capacity cannot fall below zero. Both dates are included."
   }
 }

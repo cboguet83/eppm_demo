@@ -29,6 +29,18 @@ COUNTS = {
 }
 
 
+def validate_seed_counts(counts: dict[str, int]) -> None:
+    """Accept the current seed or an explicitly identified legacy image fixture."""
+    expected = dict(COUNTS)
+    if 'allocated_projects' in counts:
+        expected.update(resource_pool=33, resource_pool_group=7)
+        del expected['resource_pool_assignment']
+        assert counts['allocated_projects'] == 9001
+        assert counts['allocated_pools'] == 33
+        assert counts['resource_pool_assignment'] >= 9001
+    assert {name: counts[name] for name in expected} == expected
+
+
 def docker_json(*arguments: str) -> dict[str, object]:
     """Read explicitly selected numeric/image metadata without container environments."""
     result = subprocess.run(["docker", *arguments], capture_output=True, timeout=30, check=False)
@@ -72,6 +84,9 @@ tables = ('project','project_task','task_dependencies','resource_pool',
           'resource_pool_group','resource_pool_assignment','app_user')
 with psycopg.connect(os.environ['DATABASE_OPERATOR_URL']) as connection:
     counts = {name: connection.execute('SELECT count(*) FROM eppm.' + name).fetchone()[0] for name in tables}
+    if connection.execute("SELECT 1 FROM eppm.resource_pool_group WHERE description='Ressort A pool seed v3'").fetchone():
+        counts['allocated_projects'], counts['allocated_pools'] = connection.execute(
+            'SELECT count(DISTINCT project_id),count(DISTINCT pool_id) FROM eppm.resource_pool_assignment').fetchone()
     assert connection.execute("SELECT reltuples FROM pg_class WHERE oid='eppm.project'::regclass").fetchone()[0] == counts['project']
 print(json.dumps(counts))
 """
@@ -216,7 +231,7 @@ print(json.dumps({'installed':True}))
         else:
             server.operator("-m", "scripts.access_admin", "migrate")
             counts = operator_json(server, baseline_source("inspect"), stage="baseline fixture verification")
-        assert {name: counts[name] for name in COUNTS} == COUNTS
+        validate_seed_counts(counts)
         assert counts["app_user"] == 0, "Load fixtures must start without imported accounts."
         server.command("up", "-d", "--no-build", "--no-deps", "app")
         wait_for_server(origin + "/_stcore/health")

@@ -65,6 +65,68 @@ def test_shell_routes_navigation_redirects_and_language_changes():
     assert PAGE_PORTFOLIO in [item.value for item in app.markdown]
 
 
+def test_sidebar_starts_with_language_title_and_plain_navigation():
+    """Keep global language choice above the undecorated application menu."""
+    app = AppTest.from_function(shell_app).run()
+    assert not app.exception
+    assert app.sidebar.title[0].value == "EPPM POC"
+    assert app.radio(key="app_sidebar_nav").options == [
+        "Portfolio Overview", "Planning & Milestones", "Settings",
+    ]
+    elements = [element.type for element in app.sidebar]
+    assert elements.index("selectbox") < elements.index("title") < elements.index("radio")
+
+
+def test_sidebar_places_settings_after_finance():
+    """Keep Settings immediately after Finance when both pages are available."""
+    def app_with_finance():
+        import streamlit as st
+        from app.presentation.components.application_workspace import ApplicationWorkspace
+        from app.presentation.navigation import PAGE_FINANCE, PAGE_SETTINGS
+        from app.presentation.shell import render_application
+
+        render_application(ApplicationWorkspace(
+            'sidebar-finance-order',
+            {PAGE_SETTINGS: lambda: st.write('Settings'),
+             PAGE_FINANCE: lambda: st.write('Finance')},
+            totals=None,
+        ))
+
+    app = AppTest.from_function(app_with_finance).run()
+    assert not app.exception
+    assert app.radio(key="app_sidebar_nav").options == ["Finance", "Settings"]
+
+
+def test_navigation_replaces_the_outgoing_page_container_and_its_controls():
+    """Keep stale dashboard controls out of the next page during fragment routing."""
+    from tests.test_fragment_reruns import FragmentRun
+
+    def app_with_issue_button():
+        import streamlit as st
+        from app.presentation.components.application_workspace import ApplicationWorkspace
+        from app.presentation.navigation import PAGE_DASHBOARD, PAGE_SETTINGS
+        from app.presentation.shell import render_application
+
+        @st.fragment
+        def dashboard():
+            st.button("Active Issues", key="dashboard_issue_count")
+
+        render_application(ApplicationWorkspace("navigation-test", {
+            PAGE_DASHBOARD: dashboard,
+            PAGE_SETTINGS: lambda: st.write("Settings content"),
+        }, None))
+
+    app = AppTest.from_function(app_with_issue_button)
+    rerun = FragmentRun("app_sidebar_nav", widget_index=1, full_app_request=True)
+    rerun.run(app)
+    assert not app.exception
+    assert not app.button
+    assert "Settings content" in [element.value for element in app.markdown]
+    blocks = [message.delta.add_block for message in rerun.messages
+              if message.WhichOneof("type") == "delta" and message.delta.HasField("add_block")]
+    assert any(block.id.endswith(f"-application_page_{PAGE_SETTINGS}") for block in blocks)
+
+
 
 def test_retained_page_rejects_a_route_outside_the_authorized_workspace():
     def unavailable_page_app():

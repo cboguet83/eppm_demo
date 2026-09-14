@@ -1,4 +1,4 @@
-"""Golden synthetic workloads produced independently by the accepted baseline."""
+"""Deterministic synthetic snapshots for the accepted status and date rules."""
 
 from datetime import date
 from decimal import Decimal
@@ -33,9 +33,9 @@ def canonical(value):
 
 
 @pytest.mark.parametrize('case', GOLDEN['cases'], ids=('mixed', 'single', 'maximum', 'empty'))
-def test_native_workloads_match_independent_baseline_records(case, pg_database):
+def test_native_workloads_match_status_mix_snapshots(case, pg_database):
     result = OperatorDatabase(pg_database.operator_url).run(
-        lambda c: generate_projects(c, SeedRequest(**case['request']), year=2026), write=True)
+        lambda c: generate_projects(c, SeedRequest(**case['request']), year=2026, today=date(2026, 9, 14)), write=True)
     assert result == case['summary']
     with psycopg.connect(pg_database.operator_url) as connection:
         for name, query in QUERIES.items():

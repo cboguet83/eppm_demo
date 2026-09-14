@@ -4,7 +4,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
 
-from app.application.ports.dashboard import DashboardCatalog, DashboardReader
+from app.application.ports.dashboard import DashboardCatalog, DashboardReader, ResourceBreakdown
 from app.domain.dashboard import AllocatedBudget, DashboardProject, allocated_budget, matches
 from app.domain.finance import BudgetVersion
 
@@ -63,6 +63,11 @@ class DashboardService:
         """Read both quarterly resource series in one authorized snapshot."""
         return self.reader.resources(project_ids, self.today())
 
-    def consuming_projects(self, project_ids: list[int], quarter: str) -> list[int]:
+    def resource_breakdown(self, project_ids: list[int]) -> ResourceBreakdown:
+        """Read per-pool chart stacks on the same authorized snapshot as totals."""
+        return self.reader.resource_breakdown(project_ids, self.today())
+
+    def consuming_projects(self, project_ids: list[int], quarter: str,
+                           pool_id: int | None = None, metric: str = 'overallocation') -> list[int]:
         """Reauthorize a chart drill-through before returning planning project IDs."""
-        return self.reader.consuming_projects(project_ids, quarter, self.today())
+        return self.reader.consuming_projects(project_ids, quarter, self.today(), pool_id, metric)

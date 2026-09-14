@@ -9,6 +9,54 @@ const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 
 test('entire Gantt script parses', () => new vm.Script(script));
 
+test('compact Gantt CSS matches row geometry and halves toolbar padding', () => {
+  assert.match(html, /--row-height:\s*41\.4px/);
+  assert.match(html, /\.toolbar\s*\{[^}]*padding:\s*5px 14px/);
+  assert.match(script, /Math\.min\(495, Math\.max\(234,/);
+  assert.doesNotMatch(script, /\*\s*46\b|\/\s*46\b/);
+});
+
+test('resource headers synchronize horizontally without scroll-driven vertical positioning', () => {
+  const nodes = new Map(['resource-grid-main', 'resource-right-pane-scroller',
+    'resource-header-right-wrapper', 'timeline-body-scroller', 'timeline-header-wrapper']
+    .map(id => [id, {scrollLeft: 0, scrollTop: 0}]));
+  let resourceRenders = 0;
+  const context = vm.createContext({document: {getElementById: id => nodes.get(id)},
+    initSplitter() {}, scheduleResourceWindow: () => resourceRenders++, scheduleVirtualWindow() {}});
+  vm.runInContext(script.slice(script.indexOf('    function setupScrollAndWheelListeners('),
+    script.indexOf("    document.addEventListener('DOMContentLoaded'")), context);
+  context.setupScrollAndWheelListeners();
+  const main = nodes.get('resource-grid-main'), header = nodes.get('resource-header-right-wrapper');
+  main.scrollTop = 750;
+  main.onscroll();
+  assert.equal(resourceRenders, 1);
+  assert.equal(header.scrollTop, 0);
+  const body = nodes.get('resource-right-pane-scroller');
+  body.scrollLeft = 420;
+  body.onscroll();
+  assert.equal(header.scrollLeft, 420);
+  assert.equal(nodes.get('timeline-body-scroller').scrollLeft, 420);
+  const gantt = nodes.get('timeline-body-scroller');
+  gantt.scrollLeft = 180;
+  gantt.onscroll();
+  assert.equal(header.scrollLeft, 180);
+  assert.equal(body.scrollLeft, 180);
+  assert.doesNotMatch(script, /syncResourceHeaders|resource-header-offset/);
+});
+
+test('resource grid rounds small values and truncates values from 100', () => {
+  const context = vm.createContext({});
+  vm.runInContext(script.slice(script.indexOf('    function formatResourceValue('),
+    script.indexOf('    function renderResourceGrid(')), context);
+  for (const [value, expected] of [[0, '0.0'], [1.26, '1.3'], [99.94, '99.9'],
+    [100, '100'], [100.99, '100'], [999.99, '999']]) {
+    assert.equal(context.formatResourceValue(value), expected);
+  }
+  assert.match(script, /Math\.max\(1, displayRows\.length\) \* 34 \+ 16/);
+  assert.match(html, /button:not\(\.context-menu-item\):not\(\.resource-tree-toggle\)/);
+  assert.doesNotMatch(html, /<span>🏊<\/span>/);
+});
+
 test('scale buttons keep exactly one red selection and gray alternatives', () => {
   const buttons = ['day','week','month','quarter','year'].map(id => {
     const classes = new Set(id === 'quarter' ? ['active'] : []);
@@ -26,6 +74,7 @@ test('scale buttons keep exactly one red selection and gray alternatives', () =>
   context.setViewMode('Quarter');
   assert.deepEqual(buttons.filter(b=>b.classes.has('active')).map(b=>b.id),['quarter']);
   assert.equal(renders,6);
+  assert.ok(html.includes('button:not(.context-menu-item):not(.resource-tree-toggle):not(.view-modes .btn-mode)'));
   assert.match(html,/\.view-modes \.btn-mode\s*\{[^}]*background-color: #e2e8f0 !important/);
   assert.match(html,/\.view-modes \.btn-mode\.active\s*\{[^}]*background-color: #C41039 !important/);
 });
@@ -99,7 +148,7 @@ function dependencyWindow() {
     document: {createElementNS: node, getElementById: id => ({'grid-links-group': group,
       'dependency-viewport': viewport, 'timeline-body-scroller': scroller})[id]},
     tasksByIdMap: new Map(), taskIncomingDeps: new Map(), taskOutgoingDeps: new Map(),
-    projIncomingDeps: new Map(), projOutgoingDeps: new Map(),
+    projIncomingDeps: new Map(), projOutgoingDeps: new Map(), projectSummariesData: [],
     currentProjectId: null, totalTimelineWidth: 20000, showExternalLinks: true, showInternalLinks: true,
     collapsedProjects: new Set(['A', 'B']), allTaskPositions: {},
     allProjectPositions: {
@@ -164,18 +213,42 @@ test('expanded headers skip hidden task links and dependency geometry refreshes 
   assert.equal(h.group.children.length, 1, 'visible task links remain available when projects expand');
 });
 
+test('whole-project successors keep arrows on expanded headers and preserve editable link identity', () => {
+  const h = dependencyWindow();
+  h.run(`
+    tasksData = [];
+    collapsedProjects.clear();
+    masterRenderItems[0].isCollapsed = false;
+    masterRenderItems[8].isCollapsed = false;
+    projectSummariesData = [{id:'B',name:'Successor project',start:'2026-01-03',end:'2026-01-04',
+      projectDependencies:[{id:99,predecessor_project_id:'A',predecessor_owner_id:'A',
+        predecessor_project_name:'Predecessor project',link_type:'FS',lag_days:-2,is_violated:true}]}];
+    buildDependencyIndex(); renderDependencyLinks(0, 10);
+  `);
+  assert.equal(h.group.children.length, 1);
+  h.group.children[0].children[1].events.click({preventDefault() {}, stopPropagation() {}});
+  const info = h.context.clickedBundle.members[0].getInfo();
+  assert.equal(info.projectDependency, true);
+  assert.equal(info.succProjectId, 'B');
+  assert.equal(info.predName, 'Predecessor project');
+  assert.equal(info.lagStr, '-2 day(s)');
+  assert.equal(info.isViolated, true);
+  h.run('projectSummariesData[0].projectDependencies=[]; buildDependencyIndex(); renderDependencyLinks(0,10)');
+  assert.equal(h.group.children.length, 0);
+});
+
 test('dependency painting is clipped to the viewport and horizontal overscan is reused', () => {
   const h = dependencyWindow();
   h.scroller.scrollLeft = 3000;
   h.run('updateDependencyClip(5, 30)');
-  assert.equal(h.viewport.attributes.viewBox, '2400 230 2100 1196');
+  assert.deepEqual(h.viewport.attributes.viewBox.split(' ').map(v=>Number(Number(v).toFixed(1))), [2400, 207, 2100, 1076.4]);
   const writes = h.viewport.writes;
   h.scroller.scrollLeft = 3100;
   h.run('updateDependencyClip(5, 30)');
   assert.equal(h.viewport.writes, writes);
   h.scroller.scrollLeft = 8000;
   h.run('updateDependencyClip(5, 30)');
-  assert.equal(h.viewport.attributes.viewBox, '7400 230 2100 1196');
+  assert.deepEqual(h.viewport.attributes.viewBox.split(' ').map(v=>Number(Number(v).toFixed(1))), [7400, 207, 2100, 1076.4]);
 });
 
 test('off-screen predecessor markers retain every dependency and disappear outside the window', () => {
@@ -290,6 +363,11 @@ test('period indexes retain minimum capacity and detect a single overallocated d
   assert.equal(vm.runInContext("getAssignedCapacityForPeriod(5, null, '2026-01-01', '2026-12-31').min", context), 5);
   assert.equal(vm.runInContext("getAssignedCapacityForPeriod(4, {'2026-01-01':8}, '2026-01-01', '2026-01-01').min", context), 8);
   assert.equal(vm.runInContext("getDemandCapacityStatusForPeriod(usage, 4, capacity, '2026-01-03', '2026-03-31').isOverallocated", context), false);
+  // Compare demand and capacity on matching days, not independent period peaks.
+  assert.equal(vm.runInContext("getDemandCapacityStatusForPeriod({'2026-01-01':8,'2026-01-02':2}, 10, {'2026-01-02':3}, '2026-01-01', '2026-01-02').minAvailable", context), 1);
+  assert.equal(vm.runInContext("getDemandCapacityStatusForPeriod({}, 5, {'2026-01-02':0}, '2026-01-01', '2026-01-03').minAvailable", context), 0);
+  assert.equal(vm.runInContext("getDemandCapacityStatusForPeriod({}, 5, {}, '2026-01-01', '2026-01-03').minAvailable", context), 5);
+  assert.equal(vm.runInContext("getDemandCapacityStatusForPeriod({'2026-01-01':8}, 10, {'2026-01-01':12}, '2026-01-01', '2026-01-01').minAvailable", context), 4);
 });
 
 test('external choice requests are queued, stale responses ignored, and selected predecessors preserved', () => {
@@ -321,4 +399,23 @@ test('external choice requests are queued, stale responses ignored, and selected
   context.response = {project_id: '3', nonce: messages[1].nonce, tasks: []};
   vm.runInContext('receiveDependencyChoices(response)', context);
   assert.deepEqual(refreshed, [21]);
+});
+
+test('failed predecessor choices preserve selected rows and report an actionable project-panel error', () => {
+  const messages = [], statuses = [], select = {disabled:false,appendChild() {}};
+  const row = {isConnected:true,querySelector:()=>select};
+  const context = vm.createContext({row,modalMode:'project',externalTasksData:{},
+    document:{createElement:()=>({})},getT:(_,fallback)=>fallback,
+    projectDependencyStatus: (...args)=>statuses.push(args),
+    Streamlit:{setComponentValue:value=>messages.push(value)}});
+  vm.runInContext(script.slice(script.indexOf('    const dependencyRequests ='),
+    script.indexOf('    function populateDepTargets(')), context);
+  vm.runInContext("requestDependencyChoices('2',row,{predecessor_task_id:21})",context);
+  context.response = {project_id:'2',nonce:messages[0].nonce,error:'Predecessor unavailable.'};
+  vm.runInContext('receiveDependencyChoices(response)',context);
+  assert.equal(select.disabled,true);
+  assert.equal(select.title,'Predecessor unavailable.');
+  assert.match(statuses[0][0],/reload dependencies/);
+  assert.equal(statuses[0][2],true);
+  assert.equal(context.externalTasksData['2'],undefined);
 });

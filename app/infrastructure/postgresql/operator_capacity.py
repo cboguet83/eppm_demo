@@ -50,6 +50,8 @@ def read_operator_capacity_inputs(
         )
         for identity in pool_ids
     }
+    for exception in store.capacity_exceptions(pool_ids):
+        result[exception.pool_id].capacity_exceptions.append(exception)
     for mapping in store.get_all_mappings():
         if mapping.pool_id in result:
             result[mapping.pool_id].mappings.append(mapping)

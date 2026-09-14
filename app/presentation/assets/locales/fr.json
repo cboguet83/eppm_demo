@@ -13,27 +13,27 @@
     "delete": "Supprimer le type de hiérarchie",
     "deleted": "Type de hiérarchie supprimé."
   },
-    "wbs": {
-        "title": "OTP",
-        "code": "Code OTP",
-        "description": "Description",
-        "fictive": "OTP fictif (préfixe #)",
-        "allocation": "Affectation (%)",
-        "available": "Disponible pour ce projet : {percentage} %",
-        "remaining": "Non affecté (%)",
-        "add": "Ajouter un OTP",
-        "remove": "Retirer l’OTP",
-        "select": "Sélectionner un OTP",
-        "empty": "Aucun OTP défini. Un administrateur métier peut en ajouter dans les paramètres.",
-        "none": "Aucun OTP affecté à ce projet.",
-        "entry": "Entrée du catalogue",
-        "new": "Nouvel OTP",
-        "save": "Enregistrer l’OTP",
-        "delete": "Supprimer l’OTP",
-        "confirm_delete": "Confirmer la suppression de l’OTP",
-        "code_help": "Lettres, chiffres, points, tirets et tirets bas. Les codes fictifs commencent par #.",
-        "denied": "Seul un administrateur métier peut gérer le catalogue des OTP."
-    },
+  "wbs": {
+    "title": "OTP",
+    "code": "Code OTP",
+    "description": "Description",
+    "fictive": "OTP fictif (préfixe #)",
+    "allocation": "Affectation (%)",
+    "available": "Disponible pour ce projet : {percentage} %",
+    "remaining": "Non affecté (%)",
+    "add": "Ajouter un OTP",
+    "remove": "Retirer l’OTP",
+    "select": "Sélectionner un OTP",
+    "empty": "Aucun OTP défini. Un administrateur métier peut en ajouter dans les paramètres.",
+    "none": "Aucun OTP affecté à ce projet.",
+    "entry": "Entrée du catalogue",
+    "new": "Nouvel OTP",
+    "save": "Enregistrer l’OTP",
+    "delete": "Supprimer l’OTP",
+    "confirm_delete": "Confirmer la suppression de l’OTP",
+    "code_help": "Lettres, chiffres, points, tirets et tirets bas. Les codes fictifs commencent par #.",
+    "denied": "Seul un administrateur métier peut gérer le catalogue des OTP."
+  },
   "auth": {
     "operation_failed": "L'opération n'a pas pu aboutir. Référence : {reference}",
     "title": "Connexion à EPPM",
@@ -271,7 +271,15 @@
     "custom_start_date": "Date de Début",
     "custom_end_date": "Date de Fin",
     "field_assignment_notes": "Notes / Objet de l'allocation",
-    "date_range_error": "La date de fin ne peut pas être antérieure à la date de début."
+    "date_range_error": "La date de fin ne peut pas être antérieure à la date de début.",
+    "period_relative": "Décalage + durée",
+    "schedule_anchor": "Planifier à partir du",
+    "schedule_start": "Début",
+    "schedule_end": "Fin",
+    "offset_days": "Décalage (jours calendaires)",
+    "duration_days": "Durée (jours calendaires)",
+    "relative_schedule_help": "Un décalage positif avance la date ; un décalage négatif la recule. La durée inclut le premier jour. Les dates suivent le calendrier actuel de la tâche ou du projet.",
+    "calendar_days": "jours calendaires"
   },
   "schema": {
     "title": "Schéma Dynamique & Définition des Paramètres",
@@ -412,6 +420,7 @@
       "collapse_all": "▶ Tout Replier"
     },
     "context_menu": {
+      "log_event": "Consigner un événement",
       "edit_step": "Modifier l'Étape",
       "add_step_after": "Ajouter une Étape",
       "add_step": "Ajouter une étape",
@@ -435,7 +444,8 @@
       "filter_predecessors": "Ce projet et ses prédécesseurs",
       "bulk_actions": "Actions en masse",
       "view_project": "Voir les détails du projet",
-      "assign_resource": "Affecter une ressource"
+      "assign_resource": "Affecter une ressource",
+      "manage_dependencies": "Gérer les dépendances"
     },
     "resource_grid": {
       "only_overallocated": "Uniquement les pools suralloués",
@@ -461,7 +471,9 @@
       "defined_capacity": "Capacité définie",
       "consuming": "Projets consommateurs",
       "consuming_all": "Projets consommateurs et toutes leurs dépendances",
-      "consuming_predecessors": "Projets consommateurs et leurs prédécesseurs"
+      "consuming_predecessors": "Projets consommateurs et leurs prédécesseurs",
+      "available_value": "Disponible",
+      "overallocated_value": "Surallocation"
     },
     "modal": {
       "add_title": "➕ Ajouter une Nouvelle Étape ({project_id})",
@@ -484,7 +496,16 @@
       "lag_placeholder": "Décalage (jours)",
       "btn_save": "💾 Enregistrer",
       "btn_cancel": "Annuler",
-      "optional": "Optionnel"
+      "optional": "Optionnel",
+      "project_dependencies_title": "Gérer les dépendances — {name}",
+      "project_dependencies_header": "Dépendances entrantes du projet",
+      "dependencies_loading": "Chargement des dépendances…",
+      "dependencies_saving": "Enregistrement des dépendances…",
+      "reload_dependencies": "Recharger les dépendances (abandonner les modifications)",
+      "dependencies_warning_only": "Les liens signalent les conflits de planification sans modifier automatiquement les dates.",
+      "dependencies_undated": "Certaines dépendances ne peuvent pas encore être évaluées : des dates de projet ou d’étape manquent. Les dates ne sont jamais modifiées automatiquement.",
+      "dependencies_retry": "Réessayez d’enregistrer ou rechargez les dépendances pour abandonner vos modifications et consulter les données actuelles.",
+      "dependencies_invalid": "Choisissez un prédécesseur chargé et saisissez un nombre entier de jours calendaires pour chaque lien."
     },
     "diagnostics": {
       "title": "⚠️ Diagnostic des Violations de Contraintes",
@@ -805,6 +826,7 @@
     "missing_code": "Ligne {row} : saisissez un code OTP pour ces montants."
   },
   "dashboard": {
+    "project_status": "Statut du projet",
     "title": "Tableau de bord",
     "project": "Projet",
     "mail_code": "Code Courrier",
@@ -839,13 +861,14 @@
     "no_approved": "Aucune version budgétaire approuvée dans Finance.",
     "source": "Budget approuvé {number} · {name}",
     "unmatched": "Aucun budget approuvé pour les OTP : {codes}",
-    "allocation": "Affectation",
+    "allocation": "Allocation",
     "total": "Total",
     "no_wbs": "Aucun OTP affecté à ce projet.",
     "unavailable": "Données indisponibles ou droits modifiés. Rechargez la page.",
     "pool": "Pools de ressources",
     "finance_overview": "Vue financière",
     "approved_budget": "Budget approuvé",
+    "resources_allocation": "Allocation des ressources",
     "capacity_overallocation": "Capacité et suraffectation",
     "overallocation": "Suraffectation",
     "total_capacity": "Capacité totale des pools",
@@ -857,6 +880,23 @@
     "unmatched_status": "Aucun budget {status} pour les OTP : {codes}",
     "wbs_assignment": "Affectation des OTP",
     "no_consumers": "Aucun projet accessible ne consomme les pools concernés ce trimestre.",
-    "active_issues": "Problèmes actifs"
+    "active_issues": "Problèmes actifs",
+    "capacity_allocation": "Capacité et allocation",
+    "peak_day": "Jour du pic",
+    "total_overallocation": "Surallocation totale",
+    "total_allocation": "Allocation totale",
+    "total_capacity_short": "Capacité totale"
+  },
+  "pool_exceptions": {
+    "title": "Exceptions de capacité",
+    "select": "Exception",
+    "new": "Nouvelle exception",
+    "start": "Date de début",
+    "end": "Date de fin",
+    "reduction": "Réduction de capacité (ETP)",
+    "reason": "Motif",
+    "save": "Enregistrer l’exception",
+    "delete": "Supprimer l’exception",
+    "help": "Les réductions sont en ETP, pas en pourcentage. Elles se cumulent en cas de chevauchement ; la capacité ne descend pas sous zéro. Les deux dates sont incluses."
   }
 }

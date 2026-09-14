@@ -1,7 +1,7 @@
 """Domain models for resource pools, recursive groups, mappings, and assignments."""
 
 from dataclasses import dataclass, field
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 
 
 class CapacityAssignment(TypedDict):
@@ -17,6 +17,9 @@ class CapacityAssignment(TypedDict):
     end_date: str
     is_custom_period: bool
     notes: str
+    schedule_anchor: NotRequired[str]
+    offset_days: NotRequired[int]
+    duration_days: NotRequired[int]
 
 
 class AssignmentLink(TypedDict):
@@ -48,6 +51,9 @@ class AssignmentRow(TypedDict):
     effective_start_date: str | None
     effective_end_date: str | None
     notes: str | None
+    schedule_anchor: NotRequired[str | None]
+    offset_days: NotRequired[int | None]
+    duration_days: NotRequired[int | None]
 
 
 class ProjectPoolStatus(TypedDict):
@@ -84,6 +90,18 @@ class ResourcePool:
     capacity_fte: float | None = None
     created_at: str | None = None
     hierarchy_type_id: int | None = None
+
+
+@dataclass(frozen=True)
+class PoolCapacityException:
+    """Inclusive absolute FTE reduction; overlapping reductions accumulate."""
+
+    pool_id: int
+    start_date: str
+    end_date: str
+    reduction_fte: float
+    reason: str = ''
+    id: int | None = None
 
 
 @dataclass
@@ -142,6 +160,9 @@ class PoolAssignment:
         end_date: Optional end date (YYYY-MM-DD). If None, spans full task/project period.
         id: Unique primary key identifier.
         notes: Contextual notes or role description.
+        schedule_anchor: Relative schedule origin, either start or end.
+        offset_days: Calendar days forward from the origin; negative means before.
+        duration_days: Positive inclusive allocation duration in calendar days.
     """
 
     pool_id: int
@@ -152,6 +173,9 @@ class PoolAssignment:
     end_date: str | None = None
     id: int | None = None
     notes: str = ""
+    schedule_anchor: str | None = None
+    offset_days: int | None = None
+    duration_days: int | None = None
 
 
 @dataclass
@@ -256,6 +280,12 @@ class PoolCapacityDetail:
     daily_assigned_capacity: dict[str, float] = field(default_factory=dict)
     has_assigned_resources: bool = False
     effective_capacity_fte: float = 0.0
+    daily_effective_capacity: dict[str, float] = field(default_factory=dict)
+
+    @property
+    def capacity_calendar(self) -> dict[str, float]:
+        """Return effective date overrides, retaining existing staffing snapshots."""
+        return self.daily_effective_capacity or (self.daily_assigned_capacity if self.has_assigned_resources else {})
 
 
 @dataclass

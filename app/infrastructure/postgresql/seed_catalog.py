@@ -10,7 +10,7 @@ from app.domain.projects.project_types import PropertyValue, TemplateProperty
 from app.infrastructure.postgresql.property_store import write_value
 from app.infrastructure.postgresql.seed_data import (
     DEFAULT_PARAM_OPTIONS, DEFAULT_SCHEMA_GROUPS, DEFAULT_SCHEMA_PARAMETERS,
-    EMPLOYEES, FUNCTIONS, FUNCTION_TYPES, POOLS, POOL_MAPPINGS, TEAMS, TEAM_FUNCTIONS,
+    EMPLOYEES, FUNCTIONS, FUNCTION_TYPES, TEAMS, TEAM_FUNCTIONS,
 )
 
 
@@ -22,6 +22,25 @@ SCOPE_DEFAULTS = {
 }
 HIERARCHY_TYPES = ('ressort', 'service', 'division', 'equipe', 'region', 'brigade', 'district')
 EVENT_TYPES = ('General information', 'Blocking Point', 'Project update')
+WBS_CODES = tuple(f'p.{number}.10' for number in range(1, 11))
+PROJECT_ROLES = ('maintenance', 'bim', 'amo', 'etudes', 'secutite')
+
+
+def install_wbs_catalog(connection: psycopg.Connection) -> None:
+    """Add the ten demo WBS codes without replacing existing catalog entries."""
+    with connection.cursor() as cursor:
+        cursor.executemany('INSERT INTO eppm.wbs(code,description) VALUES (%s,%s) ON CONFLICT(code) DO NOTHING',
+                           [(code, f'descripttion projet {number}') for number, code in enumerate(WBS_CODES, 1)]
+                           + [('#xx.xx.xx', 'otp fictif pour plannification')])
+
+
+def install_project_roles(connection: psycopg.Connection) -> None:
+    """Install the requested project-contact roles without replacing edited rows."""
+    for name in PROJECT_ROLES:
+        identity = connection.execute('INSERT INTO eppm.project_role(name) VALUES (%s) '
+            'ON CONFLICT(lower(name)) DO UPDATE SET name=eppm.project_role.name RETURNING id', (name,)).fetchone()[0]
+        connection.execute("INSERT INTO eppm.project_role_translation(catalog_id,locale,label) VALUES (%s,'en',%s) "
+                           'ON CONFLICT(catalog_id,locale) DO NOTHING', (identity, name))
 
 
 def ensure_reference_catalog(connection: psycopg.Connection) -> None:
@@ -91,8 +110,8 @@ def install_schema_catalog(connection: psycopg.Connection) -> None:
 
 
 def install_organization_catalog(connection: psycopg.Connection) -> None:
-    """Install the fixed organization, people, membership and pool definitions."""
-    tables = ('function_type', 'function', 'team', 'employee', 'team_function', 'resource_pool')
+    """Install fixed organization, people and team membership definitions."""
+    tables = ('function_type', 'function', 'team', 'employee', 'team_function')
     query = sql.SQL('SELECT ') + sql.SQL(',').join(sql.SQL('EXISTS(SELECT 1 FROM eppm.{})').format(sql.Identifier(table)) for table in tables)
     present = dict(zip(tables, connection.execute(query).fetchone()))
     with connection.cursor() as cursor:
@@ -112,12 +131,8 @@ def install_organization_catalog(connection: psycopg.Connection) -> None:
         if not present['team_function']:
             cursor.executemany('INSERT INTO eppm.team_function(team_id,function_id) VALUES (%s,%s)',
                                [(team, function) for team, function in TEAM_FUNCTIONS if team in teams and function in functions])
-        if not present['resource_pool']:
-            cursor.executemany('INSERT INTO eppm.resource_pool(id,name,description) VALUES (%s,%s,%s)', POOLS)
-            cursor.executemany('INSERT INTO eppm.resource_pool_mapping(pool_id,target_type,target_id,allocation_pct) VALUES (%s,%s,%s,%s)',
-                               [row for row in POOL_MAPPINGS if row[2] in (teams if row[1] == 'team' else functions)])
     advance_seed_sequences(connection, (('function_type', 'function_type_id'), ('function', 'function_id'),
-        ('employee', 'employee_id'), ('team', 'team_id'), ('resource_pool', 'id')))
+        ('employee', 'employee_id'), ('team', 'team_id')))
 
 
 def install_tag_catalog(connection: psycopg.Connection) -> None:

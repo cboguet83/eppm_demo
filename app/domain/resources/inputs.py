@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 
 from app.domain.organization.models import Employee, EmployeeCalendarException, OrgFunction, Team
-from app.domain.resources.models import AssignmentRow, PoolMapping, PoolResourceContribution, ResourcePool
+from app.domain.resources.models import AssignmentRow, PoolMapping, PoolResourceContribution, ResourcePool, PoolCapacityException
 
 
 @dataclass
@@ -31,3 +31,4 @@ class CapacityInputs:
     assignments: list[AssignmentRow] = field(default_factory=list)
     project_bounds: dict[int, tuple[str | None, str | None]] = field(default_factory=dict)
     staffing: CapacityStaffing | None = None
+    capacity_exceptions: list[PoolCapacityException] = field(default_factory=list)

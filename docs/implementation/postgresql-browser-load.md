@@ -10,6 +10,13 @@ The ordinary application database, old SQLite files and existing volumes are not
 modified.
 
 The native operator seeds 10,001 projects with seed 42 and zero-to-fifteen tasks.
+Current images use the Ressort A layout (33 pools, seven groups, 9,001 allocated
+projects). Assignment row counts depend on overlapping membership intervals.
+The runner checks project coverage for that layout and retains the old count
+checks for preserved images. Resource-allocation measurements from the two
+layouts are different workloads and must not be treated as equivalent. The
+historical counts below describe the original comparison; this seed change does
+not rerun or renew multi-user acceptance.
 The SQLite run copies the preserved deterministic baseline fixture, verifies its
 counts, and compares the source file's SHA-256 before and after the run. Both
 fixtures have 73,929 tasks, 66,173 dependencies, 103 pools, 31 pool groups and

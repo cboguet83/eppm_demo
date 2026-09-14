@@ -29,6 +29,8 @@ from app.application.exceptions import (
     TagStorageError,
 )
 from app.domain.resources.models import PoolAssignment, PoolCapacityDetail
+from app.domain.projects.project import PROJECT_STATUSES
+from app.domain.resources.allocation_scope import scoped_assignments
 from app.domain.tags.models import ProjectTag, TaskTag
 from app.domain.resources.capacity_rules import (
     calculate_pool_scope_daily_usage,
@@ -152,6 +154,13 @@ def _apply_immediate_gantt_update(
     return False
 
 
+def _planning_edit_revision(workspace: PlanningWorkspace) -> tuple:
+    """Compare edits against the chart's source format, not portfolio tokens."""
+    snapshot = st.session_state.get('planning_chart_snapshot')
+    ids = list(snapshot.get('task_source_tokens', {})) if snapshot else []
+    return workspace.sources.capture(ids).revision if ids else workspace.revision()
+
+
 def _apply_step_form(
     event: dict[str, Any], workspace: PlanningWorkspace, fallback_project: int | None = None,
 ) -> dict[str, Any] | None:
@@ -167,7 +176,7 @@ def _apply_step_form(
         dependencies=event.get("dependencies", [] if event["action"] == "create_step_full" else None),
         description=str(event.get("description", "")).strip(),
     )
-    before = workspace.revision()
+    before = _planning_edit_revision(workspace)
     if event["action"] == "create_step_full":
         project_id = int(event.get("project_id") or fallback_project or 0)
         step_id = workspace.planning.create_milestone(project_id=project_id, **values)
@@ -196,6 +205,8 @@ def _handle_gantt_component_change(widget_key: str, workspace: PlanningWorkspace
         "create_step_full",
         "update_task_full",
         "load_dependency_tasks",
+        "load_project_dependencies",
+        "save_project_dependencies",
         "load_project_tasks",
         "initialize_planning",
     }:
@@ -204,6 +215,9 @@ def _handle_gantt_component_change(widget_key: str, workspace: PlanningWorkspace
     if nonce == st.session_state.get("last_gantt_nonce"):
         return
     st.session_state["last_gantt_nonce"] = nonce
+    if gantt_event['action'] in {'load_project_dependencies', 'save_project_dependencies'}:
+        _handle_project_dependency_event(gantt_event, workspace, nonce)
+        return
     gantt_event = validate_event(gantt_event)
     if gantt_event.get("action") == "initialize_planning":
         st.session_state.pop("planning_chart_snapshot", None)
@@ -214,11 +228,12 @@ def _handle_gantt_component_change(widget_key: str, workspace: PlanningWorkspace
             project_id = int(gantt_event.get("project_id"))
         except (TypeError, ValueError):
             return
-        st.session_state["planning_dependency_response"] = {
-            "project_id": str(project_id),
-            "nonce": nonce,
-            "tasks": load_dependency_choices(workspace, workspace.revision(), project_id),
-        }
+        response = {"project_id": str(project_id), "nonce": nonce}
+        try:
+            response['tasks'] = load_dependency_choices(workspace, workspace.revision(), project_id)
+        except (ValueError, PlanningStorageError, ProjectStorageError) as exc:
+            response['error'] = str(exc)
+        st.session_state["planning_dependency_response"] = response
     elif gantt_event.get("action") == "filter_project":
         st.session_state["pending_project_context_filter"] = gantt_event
         st.rerun("planning_workspace")
@@ -231,12 +246,27 @@ def _handle_gantt_component_change(widget_key: str, workspace: PlanningWorkspace
         if change:
             st.session_state["planning_pending_change"] = change
     else:
-        before = workspace.revision()
+        before = _planning_edit_revision(workspace)
         if _apply_immediate_gantt_update(gantt_event, workspace):
             st.session_state["planning_pending_change"] = {
                 **gantt_event,
                 "before_revision": before,
             }
+
+
+def _handle_project_dependency_event(event: dict[str, Any], workspace: PlanningWorkspace, nonce: str) -> None:
+    """Return a correlated result so failed saves retain the component draft."""
+    response = {'project_id': event.get('project_id'), 'nonce': nonce, 'action': event['action']}
+    try:
+        event = validate_event(event)
+        if event['action'] == 'load_project_dependencies':
+            response['panel'] = workspace.planning.get_project_dependency_panel(event['project_id'])
+        else:
+            response['panel'] = workspace.planning.save_project_dependencies(
+                event['project_id'], event.get('upserts', []), event.get('deleted_ids', []), event.get('revision', ''))
+    except (ValueError, PlanningStorageError) as exc:
+        response['error'] = str(exc)
+    st.session_state['planning_project_dependency_response'] = response
 
 
 def _normalise_planning_filter_values(value: Any) -> list[str]:
@@ -302,6 +332,7 @@ def _clear_all_planning_filters() -> None:
                 "target_planning_project_id", "target_planning_task_id"):
         st.session_state.pop(key, None)
     st.session_state["ms_multi_projects"] = []
+    st.session_state["planning_statuses"] = ["In Progress"]
     st.session_state["ms_planning_tag_filter"] = []
     st.session_state["last_planning_tag_filter"] = []
     st.session_state["planning_filter_reset"] = st.session_state.get("planning_filter_reset", 0) + 1
@@ -647,6 +678,31 @@ def _project_pool_dialog_data(_workspace: PlanningWorkspace, revision: tuple, pr
     return bounds, assignments, statuses, choices
 
 
+def _relative_assignment_controls(key: str, start: str | None, end: str | None) -> tuple[str, int, int]:
+    """Collect a relative schedule and preview its current inclusive dates."""
+    from app.domain.resources.scheduling import relative_period
+
+    anchor = st.selectbox(
+        t("master_data.schedule_anchor", default="Schedule from"), ["start", "end"],
+        format_func=lambda value: t(f"master_data.schedule_{value}"), key=f"{key}_anchor",
+    )
+    offset_col, duration_col = st.columns(2)
+    with offset_col:
+        offset = st.number_input(t("master_data.offset_days", default="Offset (calendar days)"),
+                                 min_value=-9124, max_value=9124, value=0, step=1, key=f"{key}_offset")
+    with duration_col:
+        duration = st.number_input(t("master_data.duration_days", default="Duration (calendar days)"),
+                                   min_value=1, max_value=9125, value=5, step=1, key=f"{key}_duration")
+    st.caption(t("master_data.relative_schedule_help"))
+    if (start if anchor == "start" else end):
+        try:
+            first, last = relative_period(start or end, end or start, anchor, offset, duration)
+            st.caption(f"{first} → {last}")
+        except (ValueError, OverflowError):
+            st.error(t("master_data.relative_date_error", default="The relative period is outside the supported date range."))
+    return anchor, offset, duration
+
+
 @dialog(t("planning.dialog_project_pools_title", default="🏊 Manage Project Resource Pools"))
 @planning_errors
 def _manage_project_resource_pools_dialog(
@@ -682,7 +738,13 @@ def _manage_project_resource_pools_dialog(
                 status_html = f"""<span style="background-color:#FDE8EC; color:#C41039; border:1px solid #C41039; padding:2px 7px; border-radius:10px; font-weight:700; font-size:11px;">⚠️ Overassigned (Peak: {p_status['project_peak_assigned_fte']:.2f} / Min. effective cap: {minimum_capacity:.2f} FTE)</span>"""
             else:
                 status_html = f"""<span style="background-color:#ECFDF5; color:#047857; border:1px solid #10B981; padding:2px 7px; border-radius:10px; font-weight:700; font-size:11px;">✅ OK (Peak: {p_status['project_peak_assigned_fte']:.2f} / Min. effective cap: {minimum_capacity:.2f} FTE)</span>"""
-            if (
+            if row.get("schedule_anchor") in {"start", "end"}:
+                period_str = (f"{t('master_data.period_relative')}: "
+                              f"{t('master_data.schedule_' + row['schedule_anchor'])} "
+                              f"{int(row['offset_days']):+d} / {int(row['duration_days'])} "
+                              f"{t('master_data.calendar_days')}: "
+                              f"{row['effective_start_date']} → {row['effective_end_date']}")
+            elif (
                 pd.notna(c_start)
                 and pd.notna(c_end)
                 and str(c_start).strip()
@@ -721,15 +783,19 @@ def _manage_project_resource_pools_dialog(
         return
     period_mode = st.radio(
         t("master_data.assignment_period_mode", default="Assignment Period Mode"),
-        options=["full", "custom"],
+        options=["full", "custom", "relative"],
         format_func=lambda m: (
             t("master_data.period_full_project", default="Full Project Duration (Default)")
             if m == "full"
             else t("master_data.period_custom_range", default="Custom Specific Period")
+            if m == "custom" else t("master_data.period_relative", default="Offset + duration")
         ),
         key="rb_assign_proj_period_mode",
         horizontal=True,
     )
+    anchor, offset, duration = (None, None, None)
+    if period_mode == "relative":
+        anchor, offset, duration = _relative_assignment_controls("assign_proj", p_start_str, p_end_str)
     with st.form("assign_proj_pool_form", border=False):
         sel_pool_tuple = st.selectbox(
             t("planning.select_resource_pool", default="Select Resource Pool *"),
@@ -817,6 +883,7 @@ def _manage_project_resource_pools_dialog(
                         start_date=custom_start_str,
                         end_date=custom_end_str,
                         notes=notes_input.strip(),
+                        schedule_anchor=anchor, offset_days=offset, duration_days=duration,
                     )
                     workspace.resources.create_assignment(new_assignment)
                     st.toast(
@@ -886,7 +953,13 @@ def _manage_task_resource_pools_dialog(
                 status_html = f'<span style="background-color:#FDE8EC; color:#C41039; border:1px solid #C41039; padding:2px 7px; border-radius:10px; font-weight:700; font-size:11px;">⚠️ Overassigned (Peak: {cap_detail.peak_assigned_fte:.2f} / Cap: {cap_detail.total_capacity_fte:.2f} FTE)</span>'
             else:
                 status_html = f'<span style="background-color:#ECFDF5; color:#047857; border:1px solid #10B981; padding:2px 7px; border-radius:10px; font-weight:700; font-size:11px;">✅ OK (Peak: {cap_detail.peak_assigned_fte:.2f} / Cap: {cap_detail.total_capacity_fte:.2f} FTE)</span>'
-            if (
+            if row.get("schedule_anchor") in {"start", "end"}:
+                period_str = (f"{t('master_data.period_relative')}: "
+                              f"{t('master_data.schedule_' + row['schedule_anchor'])} "
+                              f"{int(row['offset_days']):+d} / {int(row['duration_days'])} "
+                              f"{t('master_data.calendar_days')}: "
+                              f"{row['effective_start_date']} → {row['effective_end_date']}")
+            elif (
                 pd.notna(c_start)
                 and pd.notna(c_end)
                 and str(c_start).strip()
@@ -934,15 +1007,19 @@ def _manage_task_resource_pools_dialog(
         pool_choices.append((pid, f"🏊 {pr['name']} (Cap: {capacity:.2f} FTE)"))
     period_mode = st.radio(
         t("master_data.assignment_period_mode", default="Assignment Period Mode"),
-        options=["full", "custom"],
+        options=["full", "custom", "relative"],
         format_func=lambda m: (
             t("master_data.period_full_task", default="Full Task Duration (Default)")
             if m == "full"
             else t("master_data.period_custom_range", default="Custom Specific Period")
+            if m == "custom" else t("master_data.period_relative", default="Offset + duration")
         ),
         key="rb_assign_task_period_mode",
         horizontal=True,
     )
+    anchor, offset, duration = (None, None, None)
+    if period_mode == "relative":
+        anchor, offset, duration = _relative_assignment_controls("assign_task", task_start_str, task_end_str)
     with st.form("assign_task_pool_form", border=False):
         sel_pool_tuple = st.selectbox(
             t("planning.select_resource_pool", default="Select Resource Pool *"),
@@ -1031,6 +1108,7 @@ def _manage_task_resource_pools_dialog(
                         start_date=custom_start_str,
                         end_date=custom_end_str,
                         notes=notes_input.strip(),
+                        schedule_anchor=anchor, offset_days=offset, duration_days=duration,
                     )
                     workspace.resources.create_assignment(new_assignment)
                     st.toast(
@@ -1066,7 +1144,10 @@ def _handle_filter_by_resource_pool(
     clear_other = bool(gantt_event.get("clear_other_filters", True))
     pool_name = str(gantt_event.get("pool_name", ""))
     pool_ids = workspace.resources.group_pool_ids(int(group_id)) if group_id else [pool_id]
-    details = workspace.pool_details(pool_ids) if pool_ids else []
+    eligible = set(st.session_state.get("planning_status_project_ids", master_proj_ids or all_proj_ids))
+    if gantt_event.get("allocation_scope") == "selected":
+        eligible.intersection_update(int(value) for value in selected_projects)
+    details = workspace.pool_details(pool_ids, project_ids=eligible) if pool_ids else []
     matching_pids = sorted({pid for detail in details for pid in
         get_projects_consuming_pool_in_period(detail.assignments, start_date, end_date)})
     scope = str(gantt_event.get("filter_scope", "this"))
@@ -1079,7 +1160,7 @@ def _handle_filter_by_resource_pool(
         current_pids = [int(p) for p in selected_projects if str(p).isdigit()]
         intersected = [p for p in current_pids if p in matching_pids]
         target_pids = intersected if intersected else matching_pids
-    valid_target_pids = [p for p in target_pids if p in ref_proj_ids]
+    valid_target_pids = [p for p in target_pids if p in ref_proj_ids and p in eligible]
     st.session_state["active_resource_pool_filter"] = {
         "pool_id": pool_id,
         "group_id": group_id,
@@ -1122,7 +1203,7 @@ def _render_filtered_active_allocations(
     f_start = str(active_rf.get("start_date", ""))[:10]
     f_end = str(active_rf.get("end_date", ""))[:10]
     pool_ids = active_rf.get("pool_ids", [f_pool_id])
-    details = workspace.pool_details(pool_ids) if pool_ids else []
+    details = workspace.pool_details(pool_ids, project_ids=set(active_rf.get("project_ids", []))) if pool_ids else []
     pool_active_assignments: list[dict[str, Any]] = []
     for a in [dict(assignment, pool_name=detail.pool_name) for detail in details for assignment in detail.assignments]:
         a_start = str(a.get("start_date", ""))[:10]
@@ -1153,6 +1234,8 @@ def _render_filtered_active_allocations(
         s_date = a.get("start_date", "")
         e_date = a.get("end_date", "")
         is_custom = bool(a.get("is_custom_period", False))
+        period_label = (t("master_data.period_relative") if a.get("schedule_anchor")
+                        else "Custom" if is_custom else "Full Task" if t_id else "Full Project")
         notes = html.escape(str(a.get("notes", "")))
         pool_badge_name = html.escape(str(a.get("pool_name", f_pool_name)))
         proj_badge = f'<span style="color:#0369A1; font-weight:700;">📁 {p_name} [#{p_id}]</span>'
@@ -1162,7 +1245,7 @@ def _render_filtered_active_allocations(
             )
         else:
             task_badge = f'<span style="color:#64748B; font-style:italic; background:#F1F5F9; padding:2px 7px; border-radius:3px; border:1px dashed #CBD5E1;">— Project Level</span>'
-        period_badge = f"""<span style="font-size:12px; color:#334155;">{s_date} → {e_date}</span> <span style="font-size:10px; background:#E2E8F0; color:#475569; padding:1px 5px; border-radius:3px;">{('Custom' if is_custom else 'Full Project')}</span>"""
+        period_badge = f"""<span style="font-size:12px; color:#334155;">{s_date} → {e_date}</span> <span style="font-size:10px; background:#E2E8F0; color:#475569; padding:1px 5px; border-radius:3px;">{html.escape(period_label)}</span>"""
         pool_badge = f'<span style="background:#EFF6FF; color:#1D4ED8; font-weight:600; padding:2px 8px; border-radius:4px; border:1px solid #BFDBFE;">🏊 {pool_badge_name}</span>'
         table_rows.append(
             f"""<tr style="border-bottom:1px solid #E2E8F0;"><td style="padding:8px 10px; font-weight:600; color:#475569;">#{a['id']}</td><td style="padding:8px 10px;">{pool_badge}</td><td style="padding:8px 10px;">{proj_badge}</td><td style="padding:8px 10px;">{task_badge}</td><td style="padding:8px 10px;"><span style="font-weight:700; color:#0F172A; background:#F1F5F9; padding:2px 7px; border-radius:4px;">{fte:.2f} FTE</span></td><td style="padding:8px 10px;">{period_badge}</td><td style="padding:8px 10px; color:#64748B; font-size:12px;">{notes or '—'}</td></tr>"""
@@ -1180,6 +1263,7 @@ def _load_planning_pool_payload(
     project_ids: tuple[int, ...],
     _pool_details_cache: dict[int, PoolCapacityDetail],
     pool_ids: tuple[int, ...] | None = None,
+    status_project_ids: tuple[int, ...] | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Reuse exact selected-scope daily demand until source data or scope changes."""
     workspace = _workspace
@@ -1194,7 +1278,8 @@ def _load_planning_pool_payload(
     # the actor-bound capacity cache before using any allocation records.
     pool_details_cache.clear()
     pool_details_cache.update({detail.pool_id: detail for detail in workspace.pool_details(
-        [int(value) for value in df_all_pools.id]
+        [int(value) for value in df_all_pools.id],
+        project_ids=set(status_project_ids) if status_project_ids is not None else None
     )})
     resource_pools_payload: list[dict[str, Any]] = []
     if not df_all_pools.empty:
@@ -1203,7 +1288,7 @@ def _load_planning_pool_payload(
             p_name = str(p_row["name"])
             p_cap = pool_details_cache[p_id]
             effective_daily_capacity = (
-                p_cap.daily_assigned_capacity if p_cap.has_assigned_resources else {}
+                p_cap.capacity_calendar
             )
             if all((int(a["project_id"]) in scope_pid_set for a in p_cap.assignments)):
                 scope_usage = p_cap.daily_usage
@@ -1277,7 +1362,8 @@ def _render_planning_chart(
     selected_id = selected_projects[0]
     all_proj_ids = df_projects.id.tolist()
     ids = tuple(sorted(map(int, selected_projects)))
-    scope = (ids, get_current_locale(), repr(scope_signature))
+    status_project_ids = tuple(st.session_state.get("planning_status_project_ids", master_proj_ids))
+    scope = (ids, status_project_ids, get_current_locale(), repr(scope_signature))
     widget_key = "planning_lazy_gantt"
     snapshot = st.session_state.get("planning_chart_snapshot")
     event = st.session_state.pop("planning_pending_change", None)
@@ -1301,11 +1387,11 @@ def _render_planning_chart(
     if rebuild:
         details: dict[int, PoolCapacityDetail] = {}
         summaries = load_project_summaries(workspace, revision, ids)
-        pools, hierarchy = _load_planning_pool_payload(workspace, revision, ids, details)
+        pools, hierarchy = _load_planning_pool_payload(workspace, revision, ids, details, status_project_ids=status_project_ids)
         # A cache miss fills current details while building the pool payload.
         # A cache hit skips that function body, so read current details once here.
         if pools and not details:
-            details = {d.pool_id: d for d in workspace.pool_details()}
+            details = {d.pool_id: d for d in workspace.pool_details(project_ids=set(status_project_ids))}
         bounds = {str(p["id"]): (p["start"], p["end"]) for p in summaries}
         loaded = list(ids) if len(ids) == 1 else []
         tasks = build_task_payload(workspace, loaded, bounds, details) if loaded else []
@@ -1374,7 +1460,7 @@ def _render_planning_chart(
                 pool_ids = set()
             if pool_ids:
                 snapshot["details"].update(
-                    {d.pool_id: d for d in workspace.pool_details(list(pool_ids))}
+                    {d.pool_id: d for d in workspace.pool_details(list(pool_ids), project_ids=set(status_project_ids))}
                 )
             refresh = changed.intersection(snapshot["loaded"])
             if event["action"] == "create_step_full":
@@ -1400,6 +1486,7 @@ def _render_planning_chart(
                     ids,
                     snapshot["details"],
                     tuple(sorted(pool_ids)),
+                    status_project_ids=status_project_ids,
                 )
                 patch["resource_pools"] = pack_pool_payloads(patch["resource_pools"])
             snapshot["revision"] = revision
@@ -1424,6 +1511,9 @@ def _render_planning_chart(
     response = st.session_state.pop("planning_dependency_response", None)
     if response:
         args["dependency_response"] = response
+    project_response = st.session_state.pop('planning_project_dependency_response', None)
+    if project_response:
+        args['project_dependency_response'] = project_response
     pool_details_cache = snapshot["details"]
     permissions = workspace.projects.projects.permissions()
     args["task_revision"] = planning_revision_token(snapshot["revision"])
@@ -1457,7 +1547,10 @@ def _render_planning_chart(
                 _handle_clear_resource_pool_filter(master_proj_ids)
             elif action == "show_pool_allocations":
                 _pool_allocations_dialog(int(gantt_event.get("pool_id") or 0), workspace,
-                                         group_id=gantt_event.get("group_id"))
+                                         group_id=gantt_event.get("group_id"),
+                                         start=gantt_event.get("start_date"), end=gantt_event.get("end_date"),
+                                         project_ids=tuple(selected_projects) if gantt_event.get("allocation_scope") == "selected"
+                                         else status_project_ids)
             elif action == "export_csv_template":
                 from app.presentation.components.csv_download import download_project_csv
 
@@ -1484,6 +1577,9 @@ def _render_planning_chart(
                 if p_id:
                     st.session_state["modal_manage_project_pool"] = int(p_id)
                     st.rerun()
+            elif action == "log_project_event":
+                if workspace.projects.open_event_dialog is not None:
+                    workspace.projects.open_event_dialog(gantt_event["project_id"])
             elif action == "edit_project_details":
                 p_id = gantt_event.get("project_id")
                 if p_id:
@@ -1533,11 +1629,11 @@ def _render_planning_chart(
 @planning_errors
 def render_planning_milestones(workspace: PlanningWorkspace) -> None:
     """Render planning filters and their interactive Gantt and capacity grids."""
-    st.markdown(
+    st.html(
         """
         <style>
         .block-container {
-            padding-top: 0.6rem !important;
+            padding-top: 0 !important;
             padding-bottom: 0.8rem !important;
             padding-left: 1rem !important;
             padding-right: 1rem !important;
@@ -1585,7 +1681,6 @@ def render_planning_milestones(workspace: PlanningWorkspace) -> None:
         }
         </style>
         """,
-        unsafe_allow_html=True,
     )
     if (dashboard_projects := st.session_state.pop('dashboard_planning_projects', None)) is not None:
         _clear_all_planning_filters()
@@ -1668,7 +1763,6 @@ def render_planning_milestones(workspace: PlanningWorkspace) -> None:
     )
     flex_filter_fields: dict[str, str] = {
         "name": t("portfolio.col_name", default="Project name"),
-        "status": t("portfolio.col_status", default="Status"),
         "project_manager": t("master_data.field_project_manager", default="Project Manager"),
         "level_3_manager_name": t(
             "portfolio.filter_level_3_manager", default="Managing Function (Level 3)"
@@ -1687,7 +1781,17 @@ def render_planning_milestones(workspace: PlanningWorkspace) -> None:
                 if field_label in flex_filter_fields.values():
                     field_label = f"{param_name} ({param_id})"
                 flex_filter_fields[target_column] = field_label
-    top_flex_col, top_sel_col, top_clear_col = st.columns([1.2, 3, 1.2], vertical_alignment="bottom")
+    top_flex_col, top_status_col, top_sel_col, top_clear_col = st.columns([1.2, 1.6, 3, 1.2], vertical_alignment="bottom")
+    with top_status_col:
+        statuses = st.multiselect(t("dashboard.project_status", default="Project status"), PROJECT_STATUSES,
+                                  default=["In Progress"], key="planning_statuses")
+    status_project_ids = tuple(int(row.id) for row in df_projects.itertuples()
+                               if not statuses or row.status in statuses)
+    st.session_state["planning_status_project_ids"] = status_project_ids
+    df_projects = df_projects[df_projects.id.isin(status_project_ids)]
+    project_filter_frame = project_filter_frame[project_filter_frame.id.isin(status_project_ids)]
+    st.session_state["planning_flex_fields"] = [field for field in st.session_state.get("planning_flex_fields", [])
+                                                if field in flex_filter_fields]
     with top_clear_col:
         st.button(t("planning.clear_all_filters", default="Clear all filters"),
                   on_click=_clear_all_planning_filters, key="clear_all_planning_filters",
@@ -1739,6 +1843,7 @@ def render_planning_milestones(workspace: PlanningWorkspace) -> None:
                 key="btn_clear_planning_flex",
             )
     flex_signature = (
+        tuple(statuses),
         flex_match_mode,
         tuple(sorted(((column, tuple(values)) for column, values in active_flex_filters.items()))),
     )
@@ -1848,7 +1953,9 @@ def render_planning_milestones(workspace: PlanningWorkspace) -> None:
 
 @dialog("Active Allocations on Projects & Tasks", width="large")
 @planning_errors
-def _pool_allocations_dialog(pool_id: int, workspace: PlanningWorkspace, group_id: int | None = None) -> None:
+def _pool_allocations_dialog(pool_id: int, workspace: PlanningWorkspace, group_id: int | None = None,
+                             *, start: str | None = None, end: str | None = None,
+                             project_ids: tuple[int, ...] | None = None) -> None:
     """Reuse the Settings allocation projection for the chosen pool."""
     from app.presentation.components.resource_pool_dialogs import _render_pool_assignments_table
     from app.presentation.navigation import PAGE_PLANNING
@@ -1858,10 +1965,13 @@ def _pool_allocations_dialog(pool_id: int, workspace: PlanningWorkspace, group_i
     if not details:
         st.info("No resource pools found in this selection.")
         return
+    if start and end:
+        st.caption(f"{start} - {end}")
     for detail in details:
         st.subheader(detail.pool_name)
         _render_pool_assignments_table(
-            detail.assignments, detail.pool_id, workspace.resources, PAGE_PLANNING, allow_unassign=False,
+            scoped_assignments(detail.assignments, set(project_ids) if project_ids is not None else None, start, end),
+            detail.pool_id, workspace.resources, PAGE_PLANNING, allow_unassign=False,
         )
 
 

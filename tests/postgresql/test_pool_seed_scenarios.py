@@ -1,16 +1,21 @@
-"""Real PostgreSQL additive plans, non-mutating previews and source protection."""
+"""Real PostgreSQL replacement safety, exact hierarchy and calculated demand."""
 
 from collections import Counter
-from dataclasses import FrozenInstanceError
+from dataclasses import FrozenInstanceError, replace
 from datetime import date
 
 import psycopg
 import pytest
 
+from app.application.ports.maintenance import SeedRequest
+from app.domain.resources.capacity import calculate_capacity
+from app.domain.resources.pool_seed import GROUPS, POOLS
+from app.infrastructure.postgresql.bulk_seed import generate_projects
+from app.infrastructure.postgresql.operator_capacity import read_operator_capacity_inputs
 from app.infrastructure.postgresql.pool import OperatorDatabase
-from app.infrastructure.postgresql.pool_scenarios import MARKER, apply_pool_scenarios, prepare_pool_scenarios
+from app.infrastructure.postgresql.pool_scenarios import apply_pool_scenarios, prepare_pool_scenarios
 from app.infrastructure.postgresql.seed_catalog import ensure_reference_catalog, install_organization_catalog, install_schema_catalog
-from app.infrastructure.postgresql.seed_plan import source_fingerprint
+from app.infrastructure.postgresql.seed_plan import SeedInsert, source_fingerprint
 from app.infrastructure.postgresql.seed_projects import seed_sample_projects
 
 
@@ -22,165 +27,176 @@ def install(connection, *, projects=True):
         seed_sample_projects(connection)
 
 
-def sequences(connection):
-    return connection.execute("SELECT sequencename,last_value FROM pg_sequences WHERE schemaname='eppm' ORDER BY sequencename").fetchall()
+def snapshot(connection):
+    return (source_fingerprint(connection), connection.execute(
+        "SELECT sequencename,last_value FROM pg_sequences WHERE schemaname='eppm' ORDER BY sequencename").fetchall())
 
 
-def test_native_scenario_preview_does_not_mutate_rows_sequences_or_frozen_inputs_and_apply_is_additive(pg_database):
+def test_preview_is_non_mutating_frozen_and_repeat_install_preserves_allocations(pg_database):
     operator = OperatorDatabase(pg_database.operator_url)
     operator.run(install, write=True)
-    before = operator.run(lambda c: (source_fingerprint(c), sequences(c), c.execute('SELECT * FROM eppm.project_task ORDER BY id').fetchall()))
-    plan = operator.run(lambda c: prepare_pool_scenarios(c, year=2026, seed=20260908))
-    assert operator.run(lambda c: (source_fingerprint(c), sequences(c), c.execute('SELECT * FROM eppm.project_task ORDER BY id').fetchall())) == before
-    assert plan.report() == operator.run(lambda c: prepare_pool_scenarios(c, year=2026, seed=20260908)).report()
-    preview = plan.report()
-    assert (preview['new_groups'], preview['new_pools'], preview['new_employee_mappings']) == (25, 100, 300)
-    assert (preview['new_project_assignments'], preview['new_task_assignments']) == (100, 100)
-    assert len(preview['parents']) == 5
-    assert [row['normal_assigned_fte'] for row in preview['scenarios'][:4]] == [0, 4, 4, 4]
-    assert [row['theoretical_fte'] for row in preview['scenarios'][:4]] == [3, 2, 6, 4]
-    preview['scenarios'][0]['pool_id'] = -1
-    assert plan.report()['scenarios'][0]['pool_id'] > 0
+    before = operator.run(snapshot)
+    plan = operator.run(lambda c: prepare_pool_scenarios(c, year=2026, seed=42))
+    assert operator.run(snapshot) == before
+    assert plan == operator.run(lambda c: prepare_pool_scenarios(c, year=2026, seed=42))
+    report = plan.report()
+    assert (report['new_groups'], report['new_pools'], report['new_employee_mappings']) == (7, 33, 0)
+    report['hierarchy'][0]['name'] = 'Mutated'
+    assert plan.report()['hierarchy'][0]['name'] == 'Ressort A'
     with pytest.raises(FrozenInstanceError):
-        plan.inserts[0].values = ()
-    report = operator.run(lambda c: apply_pool_scenarios(c, plan), write=True)
-    assert report['applied']
-    with psycopg.connect(pg_database.operator_url) as connection:
-        assert connection.execute('SELECT count(*) FROM eppm.resource_pool_group').fetchone() == (31,)
-        assert connection.execute('SELECT count(*) FROM eppm.resource_pool').fetchone() == (103,)
-        assert connection.execute('SELECT count(*) FROM eppm.resource_pool_mapping').fetchone() == (307,)
-        assert connection.execute('SELECT count(*) FROM eppm.resource_pool_assignment').fetchone() == (200,)
-        assert connection.execute('SELECT count(*) FROM eppm.resource_pool_group_member').fetchone() == (130,)
-        assert connection.execute('SELECT * FROM eppm.project_task ORDER BY id').fetchall() == before[2]
-        for row in report['scenarios']:
-            assert connection.execute('SELECT capacity_fte FROM eppm.resource_pool WHERE id=%s', (row['pool_id'],)).fetchone() == (row['theoretical_fte'],)
-        assert connection.execute("INSERT INTO eppm.resource_pool(name) VALUES ('Later') RETURNING id").fetchone()[0] > 103
-    repeat = operator.run(lambda c: prepare_pool_scenarios(c, year=2026, seed=20260908))
-    assert repeat.inserts == ()
-    assert operator.run(lambda c: apply_pool_scenarios(c, repeat), write=True) == {
-        'applied': False, 'already_seeded': True, 'new_groups': 0, 'new_pools': 0,
-    }
-
-
-@pytest.mark.parametrize('projects', [False, True])
-def test_scenarios_support_empty_projects_and_project_only_native_year_dates(pg_database, projects):
-    operator = OperatorDatabase(pg_database.operator_url)
-    operator.run(lambda c: install(c, projects=projects), write=True)
-    with psycopg.connect(pg_database.operator_url) as connection:
-        connection.execute('DELETE FROM eppm.task_dependencies')
-        connection.execute('DELETE FROM eppm.project_task')
-        connection.execute("INSERT INTO eppm.resource_pool_group(id,name) VALUES (999,' Service custom '),(1000,'Service ignored / nested')")
-    plan = operator.run(lambda c: prepare_pool_scenarios(c, year=2028, seed=7))
-    assert plan.report()['new_pools'] == 20
-    assert plan.report()['new_project_assignments'] == (20 if projects else 0)
-    assert plan.report()['new_task_assignments'] == 0
+        plan.inserts = ()
     operator.run(lambda c: apply_pool_scenarios(c, plan), write=True)
-    with psycopg.connect(pg_database.operator_url) as connection:
-        periods = connection.execute('SELECT DISTINCT start_date,end_date FROM eppm.resource_pool_assignment').fetchall()
-        assert periods == ([(date(2028, 1, 1), date(2028, 12, 31))] if projects else [])
-        assert connection.execute('SELECT min(id) FROM eppm.resource_pool_group WHERE description=%s', (MARKER,)).fetchone()[0] > 1000
+    before = operator.run(snapshot)
+    repeat = operator.run(lambda c: prepare_pool_scenarios(c, year=2027, seed=999))
+    assert not repeat.inserts
+    assert not operator.run(lambda c: apply_pool_scenarios(c, repeat), write=True)['applied']
+    assert operator.run(snapshot) == before
 
 
-@pytest.mark.parametrize('change', [
-    "UPDATE eppm.employee SET occupation_percentage=50 WHERE employee_id=1",
-    "UPDATE eppm.project SET name='Changed' WHERE id=1",
-    "UPDATE eppm.resource_pool SET name='Changed' WHERE id=1",
-    "INSERT INTO eppm.operator_seed_state(catalog) VALUES ('demo')",
-])
-def test_scenario_apply_rejects_changed_business_sources_without_partial_inserts(pg_database, change):
+def test_current_size_replacement_preserves_projects_and_has_exact_capacity_mix(pg_database):
+    operator = OperatorDatabase(pg_database.operator_url)
+    operator.run(lambda c: generate_projects(c, SeedRequest(projects=1000, min_tasks=0, max_tasks=3), year=2026), write=True)
+    tables = ('project', 'project_task', 'task_dependencies', 'employee', 'team', 'project_property_value', 'project_property_value_item')
+    def preserved(c):
+        return {table: c.execute(f'SELECT * FROM eppm.{table} ORDER BY 1,2').fetchall() for table in tables}
+    before = operator.run(preserved)
+    old_max = operator.run(lambda c: c.execute('SELECT max(id) FROM eppm.resource_pool').fetchone()[0])
+    plan = operator.run(lambda c: prepare_pool_scenarios(c, year=2026, seed=42, replace=True))
+    assert (plan.report()['allocated_projects'], plan.report()['unallocated_projects']) == (900, 100)
+    operator.run(lambda c: apply_pool_scenarios(c, plan), write=True)
+    assert operator.run(preserved) == before
+    with psycopg.connect(pg_database.operator_url) as c:
+        assert c.execute('SELECT count(DISTINCT project_id),count(DISTINCT pool_id) FROM eppm.resource_pool_assignment').fetchone() == (900, 33)
+        assert c.execute('SELECT count(*) FROM eppm.resource_pool_mapping').fetchone() == (0,)
+        assert c.execute('SELECT count(*) FROM eppm.resource_pool_assignment WHERE task_id IS NOT NULL').fetchone()[0] > 0
+        assert c.execute("SELECT count(*) FROM eppm.resource_pool_assignment a JOIN eppm.resource_pool p ON p.id=a.pool_id WHERE (p.name IN ('team C','team D','team E') AND a.task_id IS NULL) OR (p.name='team B' AND a.task_id IS NOT NULL)").fetchone() == (0,)
+        rows = c.execute('SELECT p.name,g.name,h.code,p.capacity_fte FROM eppm.resource_pool p '
+                         'JOIN eppm.resource_pool_group_member m ON m.pool_id=p.id '
+                         'JOIN eppm.resource_pool_group g ON g.id=m.group_id '
+                         'JOIN eppm.hierarchy_type h ON h.id=p.hierarchy_type_id').fetchall()
+        assert set(rows) == {(p.name, p.parent, p.hierarchy_type, p.capacity) for p in POOLS}
+        groups = c.execute('SELECT g.name,parent.name,h.code FROM eppm.resource_pool_group g '
+                           'LEFT JOIN eppm.resource_pool_group_member m ON m.child_group_id=g.id '
+                           'LEFT JOIN eppm.resource_pool_group parent ON parent.id=m.group_id '
+                           'JOIN eppm.hierarchy_type h ON h.id=g.hierarchy_type_id').fetchall()
+        assert set(groups) == set(GROUPS)
+        ids = [r[0] for r in c.execute('SELECT id FROM eppm.resource_pool')]
+        assert min(ids) > old_max
+        categories = Counter()
+        for values in read_operator_capacity_inputs(c, ids).values():
+            detail = calculate_capacity(values, today=date(2026, 1, 1))
+            assert detail.effective_capacity_fte == values.pool.capacity_fte
+            usage = [value / detail.effective_capacity_fte for value in detail.daily_usage.values() if value > 0]
+            assert max(usage) <= 1.8
+            if values.pool.name in ('pool E1', 'pool E2'):
+                assert max(usage) <= .8
+            if max(usage) > 1.001:
+                assert max(usage) <= 1.8
+                categories['over'] += 1
+            elif min(usage) < .999:
+                assert min(usage) < 1
+                categories['under'] += 1
+            else:
+                categories['full'] += 1
+        assert categories['over'] == plan.report()['overallocated_pools']
+        assert categories['under'] >= 4
+    assignments = operator.run(lambda c: c.execute('SELECT * FROM eppm.resource_pool_assignment ORDER BY id').fetchall())
+    operator.run(lambda c: generate_projects(c, SeedRequest(projects=5, clean_first=False), year=2026), write=True)
+    assert operator.run(lambda c: c.execute('SELECT * FROM eppm.resource_pool_assignment ORDER BY id').fetchall()) == assignments
+
+
+def test_replace_opt_in_and_missing_reference_codes_preserve_existing_labels(pg_database):
     operator = OperatorDatabase(pg_database.operator_url)
     operator.run(install, write=True)
-    plan = operator.run(lambda c: prepare_pool_scenarios(c, year=2026, seed=1))
-    with psycopg.connect(pg_database.operator_url) as connection:
-        connection.execute(change)
+    with psycopg.connect(pg_database.operator_url) as c:
+        c.execute("INSERT INTO eppm.resource_pool(name) VALUES ('Old')")
+        c.execute("DELETE FROM eppm.hierarchy_type WHERE code='division'")
+        c.execute("UPDATE eppm.hierarchy_type_translation SET label='My Ressort' WHERE hierarchy_type_id=(SELECT id FROM eppm.hierarchy_type WHERE code='ressort') AND locale='en'")
+    with pytest.raises(ValueError, match='--replace'):
+        operator.run(lambda c: prepare_pool_scenarios(c, year=2026, seed=1))
+    before = operator.run(snapshot)
+    plan = operator.run(lambda c: prepare_pool_scenarios(c, year=2026, seed=1, replace=True))
+    assert operator.run(snapshot) == before
+    operator.run(lambda c: apply_pool_scenarios(c, plan), write=True)
+    assert operator.run(lambda c: c.execute("SELECT label FROM eppm.hierarchy_type_translation t JOIN eppm.hierarchy_type h ON h.id=t.hierarchy_type_id WHERE h.code='ressort' AND locale='en'").fetchone()) == ('My Ressort',)
+
+
+@pytest.mark.parametrize('change', ["UPDATE eppm.project SET name='Changed' WHERE id=1", "UPDATE eppm.employee SET occupation_percentage=50 WHERE employee_id=1", "INSERT INTO eppm.resource_pool(name) VALUES ('Changed')"])
+def test_stale_sources_rejected_without_replacement(pg_database, change):
+    operator = OperatorDatabase(pg_database.operator_url)
+    operator.run(install, write=True)
+    plan = operator.run(lambda c: prepare_pool_scenarios(c, year=2026, seed=1, replace=True))
+    operator.run(lambda c: c.execute(change), write=True)
+    before = operator.run(snapshot)
     with pytest.raises(ValueError, match='changed during preparation'):
         operator.run(lambda c: apply_pool_scenarios(c, plan), write=True)
-    assert operator.run(lambda c: c.execute('SELECT count(*) FROM eppm.resource_pool_group').fetchone()) == (0,)
+    assert operator.run(snapshot) == before
+
+
+def test_failure_after_delete_rolls_back_and_serialization_retry_replays(pg_database):
+    operator = OperatorDatabase(pg_database.operator_url)
+    operator.run(install, write=True)
+    operator.run(lambda c: c.execute("INSERT INTO eppm.resource_pool(name) VALUES ('Retain on failure')"), write=True)
+    plan = operator.run(lambda c: prepare_pool_scenarios(c, year=2026, seed=1, replace=True))
+    broken = replace(plan, inserts=(*plan.inserts, SeedInsert('resource_pool', ('name', 'capacity_fte'), ('Invalid', -1))))
+    with pytest.raises(psycopg.errors.CheckViolation):
+        operator.run(lambda c: apply_pool_scenarios(c, broken), write=True)
+    assert operator.run(lambda c: c.execute('SELECT name FROM eppm.resource_pool').fetchall()) == [('Retain on failure',)]
+    attempts = []
+    def apply(c):
+        attempts.append(1)
+        result = apply_pool_scenarios(c, plan)
+        if len(attempts) == 1:
+            c.execute("DO $$ BEGIN RAISE EXCEPTION 'retry' USING ERRCODE='40001'; END $$")
+        return result
+    assert operator.run(apply, write=True)['applied']
+    assert len(attempts) == 2
 
 
 @pytest.mark.parametrize('year,seed', [(0, 1), (10000, 1), (True, 1), (2026, False)])
-def test_invalid_scenario_options_are_rejected_without_writes(pg_database, year, seed):
+def test_invalid_options_rejected(pg_database, year, seed):
     with pytest.raises(ValueError, match='integer'):
         OperatorDatabase(pg_database.operator_url).run(lambda c: prepare_pool_scenarios(c, year=year, seed=seed))
 
 
-@pytest.mark.parametrize('setup,message', [
-    ("UPDATE eppm.employee SET occupation_percentage=0", 'three employed'),
-    ("INSERT INTO eppm.resource_pool_group(name,description) VALUES ('Legacy','Pool hierarchy capacity scenarios v1')", 'Legacy'),
-    ("INSERT INTO eppm.resource_pool_group(name) VALUES ('Service A'),('Service A / Unit 01')", 'name already exists'),
-])
-def test_invalid_scenario_sources_fail_during_read_only_preview(pg_database, setup, message):
+def test_replacement_backup_failure_leaves_existing_pools_intact(pg_database, tmp_path, monkeypatch):
+    from app.application.exceptions import DatabaseMaintenanceError
+    from app.infrastructure.postgresql import maintenance
+    from app.infrastructure.postgresql.backup import PostgresBackup
     operator = OperatorDatabase(pg_database.operator_url)
     operator.run(install, write=True)
-    with psycopg.connect(pg_database.operator_url) as connection:
-        connection.execute(setup)
-    before = operator.run(lambda c: (source_fingerprint(c), sequences(c)))
-    with pytest.raises(ValueError, match=message):
-        operator.run(lambda c: prepare_pool_scenarios(c, year=2026, seed=1))
-    assert operator.run(lambda c: (source_fingerprint(c), sequences(c))) == before
+    operator.run(lambda c: c.execute("INSERT INTO eppm.resource_pool(name) VALUES ('Keep')"), write=True)
+    backup = PostgresBackup(pg_database.operator_url, tmp_path)
+    def fail(reason):
+        raise OSError('Simulated archive failure')
+    monkeypatch.setattr(backup, 'create', fail)
+    before = operator.run(snapshot)
+    with pytest.raises(DatabaseMaintenanceError):
+        maintenance.seed_pool_scenarios(operator, backup, year=2026, replace=True, apply=True)
+    assert operator.run(snapshot) == before
 
 
-def test_rolled_back_sequence_advances_do_not_invalidate_a_frozen_replayable_plan(pg_database):
+def test_project_without_tasks_uses_seed_year_and_short_task_dates_remain_inclusive(pg_database):
     operator = OperatorDatabase(pg_database.operator_url)
-    operator.run(install, write=True)
-    plan = operator.run(lambda c: prepare_pool_scenarios(c, year=2026, seed=1))
-    attempts = []
-
-    def apply(connection):
-        attempts.append(1)
-        report = apply_pool_scenarios(connection, plan)
-        if len(attempts) == 1:
-            connection.execute("DO $$ BEGIN RAISE EXCEPTION 'retry' USING ERRCODE='40001'; END $$")
-        return report
-
-    assert operator.run(apply, write=True)['applied']
-    assert len(attempts) == 2
-    assert operator.run(lambda c: c.execute('SELECT count(*) FROM eppm.resource_pool_group').fetchone()) == (31,)
+    def setup(c):
+        install(c, projects=False)
+        c.execute("INSERT INTO eppm.project(id,name) VALUES (1,'Undated'),(2,'One day'),(3,'Two days')")
+        c.execute("INSERT INTO eppm.project_task(project_id,task_name,start_date,end_date) VALUES (2,'One','2027-02-03','2027-02-03'),(3,'Two','2027-02-03','2027-02-04')")
+    operator.run(setup, write=True)
+    plan = operator.run(lambda c: prepare_pool_scenarios(c, year=2028, seed=1))
+    operator.run(lambda c: apply_pool_scenarios(c, plan), write=True)
+    assert operator.run(lambda c: c.execute('SELECT project_id,min(start_date),max(end_date) FROM eppm.resource_pool_assignment GROUP BY project_id ORDER BY project_id').fetchall()) == [
+        (1, date(2028, 1, 1), date(2028, 12, 31)),
+        (2, date(2027, 2, 3), date(2027, 2, 3)),
+        (3, date(2027, 2, 3), date(2027, 2, 4)),
+    ]
 
 
-@pytest.mark.parametrize('table', ['catalog_cache_revision', 'project_cache_revision', 'pool_cache_revision'])
-def test_missing_source_metadata_fails_closed(pg_database, table):
+def test_catalog_then_append_leaves_all_projects_unallocated(pg_database):
+    from app.infrastructure.postgresql.seeder import install_default_data
     operator = OperatorDatabase(pg_database.operator_url)
-    operator.run(install, write=True)
-    with psycopg.connect(pg_database.operator_url) as connection:
-        connection.execute(f'DELETE FROM eppm.{table}')
-    with pytest.raises(ValueError, match='metadata is unavailable'):
-        operator.run(source_fingerprint)
-
-
-def test_native_scenario_categories_match_actual_staffing_and_preserve_project_records(pg_database):
-    """Check every generated category against persisted employee and allocation data."""
-    operator = OperatorDatabase(pg_database.operator_url)
-    operator.run(install, write=True)
-    tables = ('project', 'project_task', 'task_dependencies', 'project_property_value', 'project_property_value_item')
-    with psycopg.connect(pg_database.operator_url) as connection:
-        before = {table: connection.execute(f'SELECT * FROM eppm.{table} ORDER BY 1,2').fetchall() for table in tables}
-    plan = operator.run(lambda c: prepare_pool_scenarios(c, year=2026, seed=20260908))
-    assert operator.run(lambda c: apply_pool_scenarios(c, plan), write=True)['applied']
-    with psycopg.connect(pg_database.operator_url) as connection:
-        assert {table: connection.execute(f'SELECT * FROM eppm.{table} ORDER BY 1,2').fetchall() for table in tables} == before
-        rows = connection.execute('''SELECT g.id,p.id,p.name,p.capacity_fte,
-            coalesce(sum(e.occupation_percentage*m.allocation_pct/10000),0),count(e.employee_id)
-            FROM eppm.resource_pool_group g JOIN eppm.resource_pool_group_member gm ON gm.group_id=g.id
-            JOIN eppm.resource_pool p ON p.id=gm.pool_id
-            LEFT JOIN eppm.resource_pool_mapping m ON m.pool_id=p.id AND m.target_type='employee'
-            LEFT JOIN eppm.employee e ON e.employee_id=m.target_id
-            WHERE g.description=%s GROUP BY g.id,p.id ORDER BY g.id,p.id''', (MARKER,)).fetchall()
-        groups = Counter(row[0] for row in rows)
-        assert len(groups) == 25 and set(groups.values()) == {4}
-        for _, _, name, theoretical, nominal, employees in rows:
-            if name.endswith('/ Unallocated'):
-                assert employees == 0 and theoretical > 0
-            elif name.endswith('/ Overassigned'):
-                assert nominal > theoretical
-            elif name.endswith('/ Underassigned'):
-                assert 0 < nominal < theoretical
-            else:
-                assert name.endswith('/ Fully assigned') and nominal == theoretical
-        assignments = connection.execute('''SELECT pool_id,count(*) FROM eppm.resource_pool_assignment
-            WHERE pool_id=ANY(%s::bigint[]) GROUP BY pool_id ORDER BY pool_id''', ([row[1] for row in rows],)).fetchall()
-        assert assignments == [(pool_id, 2) for pool_id in sorted(row[1] for row in rows)]
-        services = connection.execute('''SELECT g.id,count(m.child_group_id) FROM eppm.resource_pool_group g
-            JOIN eppm.resource_pool_group_member m ON m.group_id=g.id
-            WHERE g.name LIKE 'Service %%' AND g.description<>%s GROUP BY g.id''', (MARKER,)).fetchall()
-        assert len(services) == 5 and {count for _, count in services} == {5}
+    operator.run(lambda c: install_default_data(c, force=False, include_projects=False, year=2026), write=True)
+    before = operator.run(lambda c: c.execute('SELECT * FROM eppm.resource_pool ORDER BY id').fetchall())
+    operator.run(lambda c: generate_projects(c, SeedRequest(projects=10, clean_first=False), year=2026), write=True)
+    assert operator.run(lambda c: c.execute('SELECT * FROM eppm.resource_pool ORDER BY id').fetchall()) == before
+    assert operator.run(lambda c: c.execute('SELECT count(*) FROM eppm.resource_pool_assignment').fetchone()) == (0,)

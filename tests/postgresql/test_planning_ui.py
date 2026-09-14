@@ -38,6 +38,7 @@ def planning_app(resources: RuntimeResources, access: BusinessAccess) -> None:
 @pytest.fixture
 def database(authorized, runtime: RuntimeResources, access: BusinessAccess) -> RuntimeResources:
     with psycopg.connect(authorized.setup.operator_url) as connection:
+        connection.execute("UPDATE eppm.project SET status='In Progress'")
         connection.execute("UPDATE eppm.project SET name='Project' WHERE id=1")
     create_planning_service(runtime, access=access).create_milestone(
         1, "First", "General", "2026-01-01", "2026-01-02", 0

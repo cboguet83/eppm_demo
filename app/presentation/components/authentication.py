@@ -137,13 +137,12 @@ def account_gate(service: AccessService, cookie: str) -> Actor | None:
             + html.escape(t("auth.sign_in", default="Sign in")) + '</a>'
         )
         return None
-    with st.sidebar:
-        st.caption(t("auth.signed_in", default="Signed in as"))
-        st.text(account["display_name"])
+    with st.sidebar.container(key="account_footer", gap="xsmall"):
+        st.caption(t("auth.signed_in", default="Signed in as") + " " + account["display_name"])
         st.caption(t("auth.reference", default="Application user reference: {user_id}", user_id=account["id"]))
         component = st.components.v2.component(
             "eppm_session_controls", html='<div class="session-controls"></div>', js=_SESSION_JS,
-            css="button {background:#C41039;color:white;border:0;border-radius:6px;padding:8px 14px;font:inherit;cursor:pointer}",
+            css="button {background:#C41039;color:white;border:0;border-radius:6px;padding:4px 10px;font:inherit;font-size:12px;cursor:pointer}",
         )
         component(data={"logout": t("auth.sign_out", default="Sign out"), "status": account["status"]},
                   key="eppm_session_controls", height="content")

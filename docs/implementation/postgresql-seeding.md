@@ -1,21 +1,91 @@
 # PostgreSQL operator seeding and reset
 
-Status: native default/demo and bulk project seeding, reset, scenario previews
-and backed-up operator CLI commands implemented. Allocation generation and the remaining
-maintenance-service integration are in progress. These helpers use explicit operator transactions;
-ordinary application startup must not call them.
+Generated portfolios use 10% Completed, at most 5% Cancelled, 4% Draft, and 3%
+On Hold; all remaining projects are In Progress. Each percentage is rounded down
+to whole projects, so a five-project sample is entirely In Progress. The mix is
+shuffled deterministically by the requested seed. Completed task schedules shift
+as a whole to finish no later than yesterday, retaining task durations and links.
+The operator freezes the current date before a replayable seed transaction.
 
-The accepted fixed demo definitions are Python literals in `seed_data.py`.
-They preserve 31 project properties, five groups, five project types, 60
-functions, 50 employees, three teams and three initial resource pools. This
-copies repository definitions, not existing SQLite business or account data.
+Default and full project seeds include `p.1.10` through `p.10.10`, with descriptions
+`descripttion projet 1` through `descripttion projet 10`. The additional fictive WBS
+`xx.xx.xx` is stored as `#xx.xx.xx` using the existing fictive-code convention,
+with description `otp fictif pour plannification`. Missing entries are inserted;
+existing identities, edited descriptions and unrelated entries are retained.
+The seed also installs project roles `maintenance`, `bim`, `amo`, `etudes`, and
+`secutite`. WBS percentages are not automatically assigned to projects.
 
-Complete default installation includes dictionary tags, four sample allocations
-and the hierarchy scenarios: five projects, 15 tasks, 14 dependencies, 103 pools,
-31 pool groups, 307 resource mappings and 204 allocations. Catalog-only seeding
-omits projects and scenarios while retaining the three base pools. A populated
-catalog remains unchanged unless forced; missing initial reference choices are
-installed separately without injecting a demo organization into a custom catalog.
+Native default/demo and bulk seeding, pool replacement and allocation generation
+use explicit backed-up operator transactions. Ordinary startup does not seed.
+No schema migration is needed for the Ressort A seed change.
+
+Historical initial fixture, before the monthly variability change: applied on 2026-09-14 after a verified custom-format backup
+in `data/backups/postgresql/`. Verification found 1,000 projects, 7,336 tasks and
+6,583 dependencies preserved; 900 projects allocated, 100 unallocated, 33 pools,
+seven groups and 24,038 dated assignment segments. The capacity calculator
+confirmed 7 overallocated, 4 underallocated and 22 fully allocated pools, with a
+150% peak. Hashes of unrelated business/account/financial tables matched; normal
+activity in the open login session was excluded from exact session-row matching.
+The Settings hierarchy and allocation displays were inspected in Chrome.
+
+Validation passed 93 focused seed/form tests, 33 operator/archive tests, and 13
+fixture/architecture checks. Both the Python seed planner and PostgreSQL pool
+plan module reached 100% statement coverage. Append-after-catalog installation
+also has a real PostgreSQL regression check. Historical multi-user performance
+acceptance was not rerun.
+
+Existing project definitions retain 31 properties, five property groups, five
+project types, 60 functions, 50 employees and three teams. Default installation
+retains five projects, 15 tasks and 14 dependencies, and creates the same pool
+hierarchy as fresh bulk seeds. Catalog-only installation creates the hierarchy
+without demand. Custom populated catalogs remain unchanged unless explicitly reset.
+
+### Ressort A layout
+
+| Parent | Children | Hierarchy type | Configured/effective FTE |
+|---|---|---|---|
+| Root | Ressort A | ressort | group |
+| Ressort A | Service E, G, I, M, P | service | groups |
+| Service P | pool BIM, pool Tech | division | 10 each |
+| Service P | Projets | division | group |
+| Projets | team A?H, team J, team K | equipe | 4 each |
+| Service I | pool I1?I6 | division | 3, 5, 8, 12, 16, 20 |
+| Service E/G/M | pool E1?E5 / G1?G5 / M1?M5 | division | 5, 6, 7, 8, 10 per service |
+
+There are exactly seven groups and 33 pools. No employee, function or team
+mappings are generated, so effective capacity equals configured capacity.
+Missing required hierarchy codes and translations are created through the
+existing reference tables; existing labels are preserved.
+
+### Project demand
+
+`app/domain/resources/pool_seed.py` owns layout and demand planning in Python.
+Ten percent of projects are left unallocated (nearest whole, halves rounded up).
+With 1,000 projects, exactly 900 are allocated and 100 are unallocated. Projects
+are shuffled deterministically with the selected seed, then distributed across
+all 33 pools. With fewer than 33 allocated projects, projects serve multiple pools.
+Empty catalogs have no demand and no utilization classification.
+
+Assignment dates use each project's earliest task start and latest task end;
+projects without dated tasks use January 1?December 31 of the selected seed year.
+Team B remains project-level; teams C, D, and E use dated tasks. Projects without
+dated tasks assigned to those teams move to Team B; empty task pools use a dated
+task from the selected projects where available. Other pools remain project-level.
+Assignments are explicitly dated and use positive integer
+thousandths of FTE. A sweep of inclusive boundaries calculates constant active
+project membership. Each interval's combined demand is split among its projects,
+with remainder thousandths assigned in stable project-ID order. Preparation
+fails without writes if positive shares cannot be represented.
+
+Demand changes at calendar-month boundaries, with staggered seasonal patterns
+by pool. High-demand pools vary from 85% to 180%, while other pools include
+periods below capacity. E1 and E2 always stay at or below 80% of their configured
+capacity. Daily shares remain exact to thousandths across overlapping assignments.
+Idle gaps do not count as underallocation.
+
+Append operations do not change or rebalance existing allocations, and newly
+appended projects remain unallocated. Ordinary repeated seeding is a no-op for
+an installed layout. An explicit refresh is required to change allocations.
 
 Migration 0019 adds private installation markers for reference and demo seeds.
 Initial hierarchy choices remain optional and editable, with stable codes and
@@ -45,14 +115,19 @@ serialization failures may replay database work, but neither an external archive
 nor an uncertain commit is replayed. The maintenance gateway must call this
 boundary; low-level transaction helpers are not standalone reset commands.
 
-Pool scenario preparation reads a repeatable-read snapshot and produces frozen
-parameterized inserts. Preview never consumes identities or writes temporary
-rows into the live database. The accepted layout remains five units and four
-staffing scenarios per Service root: a fresh demo creates 25 units, 100 pools,
-300 employee mappings and up to 100 project plus 100 task assignments. Existing
-projects and schedules remain unchanged; repeated installation is a no-op.
-Legacy scenario markers, insufficient employees and generated name collisions
-are rejected during preview.
+Pool preparation reads a repeatable-read snapshot and freezes parameterized
+commands. Preview never consumes identities or writes rows. `seed-pools --replace`
+previews removal counts, hierarchy/types/capacities, project coverage, utilization
+categories and peak utilization. Add `--apply` to create a complete archive and
+execute the plan. Existing layouts require explicit replacement; ordinary seeding
+never silently replaces them.
+
+Replacement deletes pool assignments, mappings, memberships, pool tags and pool
+owners in one transaction; derived pool capacity calendars/caches cascade with
+their owners. Employee calendars are unrelated and remain intact. Projects, tasks,
+people, accounts and financial records are preserved. Identity sequences are
+never reset. Failed backups, stale sources and transaction failures leave the
+existing data intact (sequences may advance after a rolled-back write).
 
 Prepared identities are provisional until the transaction commits; source
 fingerprints include database incarnation, all project/pool generations, the
@@ -75,6 +150,7 @@ flowchart LR
     maintenance_write --> PostgresBackup
     maintenance_write --> OperatorDatabase
     maintenance_write --> seed_plan
+    pool_scenarios --> pool_seed[Python domain pool_seed]
     pool_scenarios --> seed_plan
     pool_scenarios --> seed_catalog
     CLI[postgresql_admin CLI] --> maintenance
@@ -105,8 +181,8 @@ and runtime configuration:
 .venv/Scripts/python.exe -m dotenv -f .local/postgresql.env run -- .venv/Scripts/python.exe -m pytest -q --tb=short -p no:cacheprovider tests/postgresql/test_seed_catalog.py tests/postgresql/test_seed_projects_reset.py tests/postgresql/test_integrity.py tests/test_layer_boundaries.py
 ```
 
-Additional native scenario and archive tests prove read-only previews, additive
-application, rollback, fresh-source checks on retries and restoration of the
+Additional native scenario and archive tests prove read-only previews, explicit atomic
+replacement, rollback, fresh-source checks on retries and restoration of the
 actual pre-reset/pre-seed archive. PostgreSQL clients must be installed; tests
 can instead use the isolated server container as documented in
 [PostgreSQL backups](postgresql-backups.md).
@@ -125,8 +201,8 @@ and network access to the selected URL. Archive storage follows the policy in
 
 ```powershell
 .venv/Scripts/python.exe -m scripts.postgresql_admin --env-file .local/postgresql.env seed-defaults
-.venv/Scripts/python.exe -m scripts.postgresql_admin --env-file .local/postgresql.env seed-pools --year 2026
-.venv/Scripts/python.exe -m scripts.postgresql_admin --env-file .local/postgresql.env seed-pools --year 2026 --apply
+.venv/Scripts/python.exe -m scripts.postgresql_admin --env-file .local/postgresql.env seed-pools --year 2026 --replace
+.venv/Scripts/python.exe -m scripts.postgresql_admin --env-file .local/postgresql.env seed-pools --year 2026 --replace --apply
 .venv/Scripts/python.exe -m scripts.postgresql_admin --env-file .local/postgresql.env generate-allocations
 .venv/Scripts/python.exe -m scripts.postgresql_admin --env-file .local/postgresql.env counts
 .venv/Scripts/python.exe -m scripts.postgresql_admin --env-file .local/postgresql.env clear-allocations
@@ -156,7 +232,8 @@ Bulk generation resets projects and demo references by default, with one
 pre-operation archive. `--append` preserves existing records and uses the current
 templates, property options and organization. It does not inject a demo
 organization into a custom catalog. Only newly generated rows receive cyclic
-tags and pool assignments. Counts are validated before backup; zero projects
+tags. Append operations leave all allocations unchanged; new projects remain
+unallocated until an explicit refresh. Counts are validated before backup; zero projects
 and task limits from zero through 50 retain their existing meanings.
 
 The native generator reads template definitions, membership, required rules,

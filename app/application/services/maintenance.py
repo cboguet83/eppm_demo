@@ -73,11 +73,11 @@ class MaintenanceService:
         )
 
     def seed_pool_scenarios(
-        self, *, year: int | None = None, seed: int = 20260908, apply: bool = False
+        self, *, year: int | None = None, seed: int = 20260908, apply: bool = False, replace: bool = False
     ) -> PoolSeedReport:
-        """Preview or explicitly apply the existing additive pool scenario plan."""
+        """Preview or explicitly apply the existing Ressort A pool plan."""
         if year is not None and (type(year) is not int or not 1 <= year <= 9999):
             raise ValueError("Invalid scenario year.")
         if type(seed) is not int:
             raise ValueError("Invalid scenario random seed.")
-        return self._gateway.seed_pool_scenarios(year=year, seed=seed, apply=apply)
+        return self._gateway.seed_pool_scenarios(year=year, seed=seed, apply=apply, replace=replace)

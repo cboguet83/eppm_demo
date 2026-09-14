@@ -103,9 +103,9 @@ class PostgresMaintenanceGateway:
 
     @maintenance_errors
     def seed_pool_scenarios(
-        self, *, year: int | None, seed: int, apply: bool,
+        self, *, year: int | None, seed: int, apply: bool, replace: bool = False,
     ) -> PoolSeedReport:
-        """Preview or apply additive hierarchy scenarios using one archive."""
+        """Preview or apply Ressort A hierarchy using one archive."""
         return maintenance.seed_pool_scenarios(
-            self.database, self.backup, year=year, seed=seed, apply=apply,
+            self.database, self.backup, year=year, seed=seed, apply=apply, replace=replace,
         )

@@ -13,27 +13,27 @@
     "delete": "Hierarchietyp läschen",
     "deleted": "Hierarchietyp geläscht."
   },
-    "wbs": {
-        "title": "WBS",
-        "code": "WBS-Code",
-        "description": "Beschreiwung",
-        "fictive": "Fiktive WBS (#-Präfix)",
-        "allocation": "Zouweisung (%)",
-        "available": "Fir dëse Projet disponibel: {percentage}%",
-        "remaining": "Net zougewisen (%)",
-        "add": "WBS derbäisetzen",
-        "remove": "WBS ewechhuelen",
-        "select": "WBS auswielen",
-        "empty": "Keng WBS definéiert. E Fachadministrateur kann Entréeën an den Astellungen derbäisetzen.",
-        "none": "Dësem Projet ass kee WBS zougewisen.",
-        "entry": "Katalogentrée",
-        "new": "Neie WBS",
-        "save": "WBS späicheren",
-        "delete": "WBS läschen",
-        "confirm_delete": "Läsche vum WBS bestätegen",
-        "code_help": "Buschtawen, Zuelen, Punkten, Binde- an Ënnerstrécher. Fiktiv Coden fänke mat # un.",
-        "denied": "Nëmmen e Fachadministrateur däerf de WBS-Katalog verwalten."
-    },
+  "wbs": {
+    "title": "WBS",
+    "code": "WBS-Code",
+    "description": "Beschreiwung",
+    "fictive": "Fiktive WBS (#-Präfix)",
+    "allocation": "Zouweisung (%)",
+    "available": "Fir dëse Projet disponibel: {percentage}%",
+    "remaining": "Net zougewisen (%)",
+    "add": "WBS derbäisetzen",
+    "remove": "WBS ewechhuelen",
+    "select": "WBS auswielen",
+    "empty": "Keng WBS definéiert. E Fachadministrateur kann Entréeën an den Astellungen derbäisetzen.",
+    "none": "Dësem Projet ass kee WBS zougewisen.",
+    "entry": "Katalogentrée",
+    "new": "Neie WBS",
+    "save": "WBS späicheren",
+    "delete": "WBS läschen",
+    "confirm_delete": "Läsche vum WBS bestätegen",
+    "code_help": "Buschtawen, Zuelen, Punkten, Binde- an Ënnerstrécher. Fiktiv Coden fänke mat # un.",
+    "denied": "Nëmmen e Fachadministrateur däerf de WBS-Katalog verwalten."
+  },
   "auth": {
     "operation_failed": "D'Operatioun konnt net ofgeschloss ginn. Referenz: {reference}",
     "title": "Bei EPPM umellen",
@@ -271,7 +271,15 @@
     "custom_start_date": "Startdatum",
     "custom_end_date": "Enddatum",
     "field_assignment_notes": "Notizen / Allocatiounszweck",
-    "date_range_error": "Den Enddatum däerf net virum Startdatum leien."
+    "date_range_error": "Den Enddatum däerf net virum Startdatum leien.",
+    "period_relative": "Verschibung + Dauer",
+    "schedule_anchor": "Plangen ab",
+    "schedule_start": "Ufank",
+    "schedule_end": "Enn",
+    "offset_days": "Verschibung (Kalennerdeeg)",
+    "duration_days": "Dauer (Kalennerdeeg)",
+    "relative_schedule_help": "Positiv Wäerter verréckelen no vir, negativ no hannen. Den éischten Dag zielt mat. D’Datume follegen dem aktuelle Plang vun der Aufgab oder vum Projet.",
+    "calendar_days": "Kalennerdeeg"
   },
   "schema": {
     "title": "Dynamescht Schema & Parameter Definitioun",
@@ -412,6 +420,7 @@
       "collapse_all": "▶ Alles Zouklappen"
     },
     "context_menu": {
+      "log_event": "Evenement protokolléieren",
       "edit_step": "Schrëtt Detailer änneren",
       "add_step_after": "Schrëtt bäisetzen",
       "add_step": "Schrëtt derbäisetzen",
@@ -435,7 +444,8 @@
       "filter_predecessors": "Dëse Projet a Virgänger",
       "bulk_actions": "Sammelaktiounen",
       "view_project": "Projetsdetailer weisen",
-      "assign_resource": "Ressource zouweisen"
+      "assign_resource": "Ressource zouweisen",
+      "manage_dependencies": "Ofhängegkeete verwalten"
     },
     "resource_grid": {
       "only_overallocated": "Nëmmen iwwerbelaascht Ressourcepools",
@@ -461,7 +471,9 @@
       "defined_capacity": "Definéiert Kapazitéit",
       "consuming": "Verbrauchend Projeten",
       "consuming_all": "Verbrauchend Projeten an all Ofhängegkeeten",
-      "consuming_predecessors": "Verbrauchend Projeten a Virgänger"
+      "consuming_predecessors": "Verbrauchend Projeten a Virgänger",
+      "available_value": "Disponibel",
+      "overallocated_value": "Iwwerbelaascht"
     },
     "modal": {
       "add_title": "➕ Neie Schrëtt bäisetzen ({project_id})",
@@ -484,7 +496,16 @@
       "lag_placeholder": "Verzögerung (Deeg)",
       "btn_save": "💾 Ännerunge späicheren",
       "btn_cancel": "Ofbriechen",
-      "optional": "Fakultativ"
+      "optional": "Fakultativ",
+      "project_dependencies_title": "Ofhängegkeete verwalten — {name}",
+      "project_dependencies_header": "Agéiend Projetofhängegkeeten",
+      "dependencies_loading": "Ofhängegkeete gi gelueden…",
+      "dependencies_saving": "Ofhängegkeete gi gespäichert…",
+      "reload_dependencies": "Ofhängegkeeten nei lueden (Ännerunge verwerfen)",
+      "dependencies_warning_only": "Verknëppunge weisen Terminwarnungen; si änneren ni automatesch Datumer.",
+      "dependencies_undated": "Verschidden Ofhängegkeete kënnen nach net bewäert ginn, well Projet- oder Schrëttdatumer feelen. Datumer ginn ni automatesch geännert.",
+      "dependencies_retry": "Probéiert nach eng Kéier ze späicheren oder luet d’Ofhängegkeeten nei, fir Är Ännerungen ze verwerfen an déi aktuell Donnéeën ze kucken.",
+      "dependencies_invalid": "Wielt e geluedene Virgänger a gitt fir all Verknëppung eng ganz Zuel vu Kalennerdeeg an."
     },
     "diagnostics": {
       "title": "⚠️ Constraint Verletzung Diagnostik",
@@ -782,6 +803,7 @@
     "missing_code": "Zeil {row}: Gitt e WBS-Code fir dës Montanten an."
   },
   "dashboard": {
+    "project_status": "Projetstatus",
     "title": "Dashboard",
     "project": "Projet",
     "mail_code": "Courrierscode",
@@ -816,13 +838,14 @@
     "no_approved": "Keng approuvéiert Budgetsversioun a Finance disponibel.",
     "source": "Approuvéierte Budget {number} · {name}",
     "unmatched": "Keen approuvéierte Budget fir WBS: {codes}",
-    "allocation": "Zoudeelung",
+    "allocation": "Zouweisung",
     "total": "Total",
     "no_wbs": "Dëse Projet huet keng zougewisen WBS.",
     "unavailable": "Daten net disponibel oder Zougang geännert. Lued nei.",
     "pool": "Ressourcepools",
     "finance_overview": "Finanziellen Iwwerbléck",
     "approved_budget": "Geneemegte Budget",
+    "resources_allocation": "Ressourcenzouweisung",
     "capacity_overallocation": "Kapazitéit an Iwwerbelaaschtung",
     "overallocation": "Iwwerbelaaschtung",
     "total_capacity": "Gesamtkapazitéit vun de Pools",
@@ -834,6 +857,23 @@
     "unmatched_status": "Kee Budget {status} fir WBS-Coden: {codes}",
     "wbs_assignment": "WBS-Zouuerdnung",
     "no_consumers": "Keng zougänglech Projete benotzen déi betraffe Pools an dësem Quartal.",
-    "active_issues": "Aktiv Problemer"
+    "active_issues": "Aktiv Problemer",
+    "capacity_allocation": "Kapazitéit an Zouweisung",
+    "peak_day": "Dag vum Maximum",
+    "total_overallocation": "Total Iwwerbelaaschtung",
+    "total_allocation": "Total Zoudeelung",
+    "total_capacity_short": "Total Kapazitéit"
+  },
+  "pool_exceptions": {
+    "title": "Kapazitéitsausnamen",
+    "select": "Ausnam",
+    "new": "Nei Ausnam",
+    "start": "Ufanksdatum",
+    "end": "Enndatum",
+    "reduction": "Kapazitéitsreduktioun (FTE)",
+    "reason": "Grond",
+    "save": "Ausnam späicheren",
+    "delete": "Ausnam läschen",
+    "help": "Reduktioune sinn a FTE, net a Prozent. Iwwerlappend Reduktioune ginn zesummegerechent; d’Kapazitéit geet net ënner null. Béid Datume sinn abegraff."
   }
 }

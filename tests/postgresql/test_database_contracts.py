@@ -204,6 +204,6 @@ class TestDatabaseContracts(unittest.TestCase):
             cursor.execute("SELECT COUNT(*) FROM eppm.employee")
             self.assertEqual(cursor.fetchone()[0], 50)
             cursor.execute("SELECT COUNT(*) FROM eppm.resource_pool")
-            self.assertEqual(cursor.fetchone()[0], 103)
+            self.assertEqual(cursor.fetchone()[0], 33)
             cursor.execute("SELECT COUNT(*) FROM eppm.resource_pool_group")
-            self.assertEqual(cursor.fetchone()[0], 31)
+            self.assertEqual(cursor.fetchone()[0], 7)

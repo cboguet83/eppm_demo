@@ -19,7 +19,7 @@ def business(authorized, runtime):
     """Use two native projects with one scoped editor and separate administrators."""
     with psycopg.connect(authorized.setup.operator_url) as connection:
         connection.execute("DELETE FROM eppm.project WHERE id=3")
-        connection.execute("UPDATE eppm.project SET name=CASE id WHEN 1 THEN 'Visible' ELSE 'Hidden' END")
+        connection.execute("UPDATE eppm.project SET name=CASE id WHEN 1 THEN 'Visible' ELSE 'Hidden' END,status='In Progress'")
         connection.execute("DELETE FROM eppm.app_role_assignment WHERE user_id=1 AND role='project_viewer'")
         connection.execute("INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date) "
                            "VALUES(10,1,'Visible task','2026-01-01','2026-01-05'),"
@@ -55,7 +55,7 @@ def table_data(app):
 def test_dashboard_lazy_table_and_filters_cover_all_results(business, authorized):
     path,_,_,_,manager=business
     with psycopg.connect(authorized.setup.operator_url) as conn:
-        conn.cursor().executemany('INSERT INTO eppm.project(id,name) VALUES(%s,%s)',[(i,f'Project {i}') for i in range(3,13)])
+        conn.cursor().executemany("INSERT INTO eppm.project(id,name,status) VALUES(%s,%s,'In Progress')",[(i,f'Project {i}') for i in range(3,13)])
     app=AppTest.from_function(screen,args=(path,manager.actor),default_timeout=15).run()
     assert not app.exception
     assert not app.header
@@ -70,6 +70,32 @@ def test_dashboard_lazy_table_and_filters_cover_all_results(business, authorized
     assert table_data(app)['total']==1
     app.button(key='dashboard_clear').click().run()
     assert not app.exception and table_data(app)['total']==12
+
+
+def test_status_defaults_to_in_progress_and_can_include_completed_or_all_projects(business, authorized):
+    """Status is an editable filter, including when flexible matching uses All."""
+    path, _, _, _, manager = business
+    with psycopg.connect(authorized.setup.operator_url) as connection:
+        connection.execute("UPDATE eppm.project SET status='Completed' WHERE id=2")
+    app = AppTest.from_function(screen, args=(path, manager.actor), default_timeout=30).run()
+    assert not app.exception
+    assert app.multiselect(key='dashboard_filter_status').value == ['In Progress']
+    assert 'Active' not in app.multiselect(key='dashboard_filter_status').options
+    assert [row['id'] for row in table_data(app)['rows']] == [1]
+    app.multiselect(key='dashboard_filter_status').set_value(['In Progress', 'Completed']).run()
+    assert table_data(app)['total'] == 2
+    app.segmented_control(key='dashboard_match').set_value('All').run()
+    assert table_data(app)['total'] == 2
+    app.multiselect(key='dashboard_filter_status').set_value(['Completed']).run()
+    assert [row['id'] for row in table_data(app)['rows']] == [2]
+    app.multiselect(key='dashboard_filter_status').set_value([]).run()
+    assert table_data(app)['total'] == 2
+    app.run()
+    assert app.multiselect(key='dashboard_filter_status').value == []
+    app.multiselect(key='dashboard_filter_status').set_value(['In Progress']).run()
+    app.button(key='dashboard_clear').click().run()
+    assert app.multiselect(key='dashboard_filter_status').value == []
+    assert table_data(app)['total'] == 2
 
 
 def test_dashboard_no_scope_has_no_project_values(business):
@@ -134,6 +160,8 @@ def test_project_budget_and_dashboard_use_identical_rounded_shares_and_missing_v
     finance.today = lambda: date(2026, 6, 1)
     finance.save([{'code': 'A', 'amounts': {'2026': '100.01', '2027': '0'}}],
                  base_id=None, name='Approved plan', status='Approved', year=2026)
+    finance.save([{'code': 'A', 'amounts': {'2026': '150.03', '2027': '20'}}],
+                 base_id=None, name='Proposed plan', status='Proposed', year=2026)
     app = AppTest.from_function(budget_screen, args=(path, manager.actor, 1)).run()
     assert not app.exception and app.warning
     table = app.dataframe[0].value
@@ -144,8 +172,16 @@ def test_project_budget_and_dashboard_use_identical_rounded_shares_and_missing_v
     assert table['2028'].isna().all()
     dashboard = AppTest.from_function(screen, args=(path, manager.actor)).run()
     assert not dashboard.exception and dashboard.warning
-    assert len(dashboard.get('vega_lite_chart')) == 1
-    assert any(item.proto.id.endswith('-dashboard_resource_chart') for item in dashboard.get('bidi_component'))
+    chart = json.loads(next(item.proto.json for item in dashboard.get('bidi_component')
+                            if item.proto.id.endswith('-dashboard_finance_chart')))
+    assert [series['name'] for series in chart['budgetSeries']] == ['Approved', 'Proposed']
+    totals = [{point['date']: point['value'] for point in series['points']}
+              for series in chart['budgetSeries']]
+    assert totals[0]['2026-01-01'] == 50.01
+    assert totals[1]['2026-01-01'] == 75.02
+    assert totals[0]['2028-01-01'] is None
+    assert chart['start'] == '2024-01-01' and chart['end'] == '2036-01-01'
+    assert all(any(item.proto.id.endswith('-dashboard_resource_chart_' + metric) for item in dashboard.get('bidi_component')) for metric in ('allocation', 'overallocation'))
 
 
 def test_project_budget_empty_states_and_authorization(business):

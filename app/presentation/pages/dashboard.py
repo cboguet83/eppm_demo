@@ -15,7 +15,7 @@ from app.domain.finance import euro_text
 from app.presentation.components.action_table import action_table
 from app.presentation.components.dialog import dialog
 from app.presentation.components.dashboard_table import dashboard_table
-from app.presentation.components.dashboard_resource_chart import resource_chart
+from app.presentation.components.dashboard_resource_chart import finance_chart, resource_chart
 from app.presentation.navigation import PAGE_PLANNING
 from app.presentation.components.authorized_cache import authorized_cache
 from app.presentation.i18n import get_current_locale, t
@@ -37,7 +37,7 @@ def _report(_service: DashboardService, revision: tuple, ids: tuple[int, ...], s
 
 @authorized_cache(show_spinner=False, max_entries=64, ttl=300)
 def _shortages(_service: DashboardService, revision: tuple, ids: tuple[int, ...]):
-    return _service.resources(list(ids))
+    return _service.resource_breakdown(list(ids))
 
 
 def _reset_page() -> None:
@@ -51,6 +51,7 @@ def _clear() -> None:
             del st.session_state[key]
     st.session_state['dashboard_flex_fields'] = []
     st.session_state['dashboard_match'] = 'Any'
+    st.session_state['dashboard_filter_status'] = []
     _reset_page()
 
 
@@ -115,19 +116,27 @@ def _issues(service: DashboardService, ids: tuple[int, ...]) -> None:
 
 
 def _filters(service: DashboardService, catalog) -> tuple[dict[str, list[str]], bool]:
-    fixed = ('level3', 'level4', 'team', 'manager', 'pool')
-    fields = {'name': _label('project'), 'status': t('portfolio.col_status', default='Status'),
+    fixed = ('status', 'level3', 'level4', 'team', 'manager', 'pool')
+    st.session_state.setdefault('dashboard_filter_status', ['In Progress'])
+    st.session_state['dashboard_filter_status'] = [
+        'In Progress' if value == 'Active' else value
+        for value in st.session_state['dashboard_filter_status']
+    ]
+    fields = {'name': _label('project'),
               'project_manager': _label('manager'), 'level_3_manager_name': _label('level3'),
               '_project_tags': t('planning.flex_filter_project_tags', default='Project tags')}
     for parameter in catalog.parameters:
         label = parameter.get('translations', {}).get(get_current_locale()) or parameter.get('alias') or parameter['param_name']
         fields[parameter['param_id']] = label + (f" ({parameter['param_id']})" if label in fields.values() else '')
     selected_fields = [key for key in st.session_state.get('dashboard_flex_fields', []) if key in fields]
+    st.session_state['dashboard_flex_fields'] = selected_fields
     active = {key: st.session_state.get('dashboard_filter_' + key, []) for key in (*fixed, *selected_fields)}
     match_all = st.session_state.get('dashboard_match', 'Any') == 'All'
 
     def choose(key: str, label: str) -> None:
         options = service.choices(catalog, active, key, match_all)
+        if key == 'status':
+            options = sorted((set(options) - {'Active'}) | {'In Progress'}, key=str.casefold)
         state_key = 'dashboard_filter_' + key
         if state_key in st.session_state:
             st.session_state[state_key] = [value for value in st.session_state[state_key] if value in options]
@@ -135,7 +144,7 @@ def _filters(service: DashboardService, catalog) -> tuple[dict[str, list[str]], 
         active[key] = st.multiselect(label, options, key=state_key, on_change=_reset_page,
                                      format_func=lambda value: labels.get(value, value) or _label('unassigned'))
 
-    columns = st.columns(6, vertical_alignment='bottom')
+    columns = st.columns(7, vertical_alignment='bottom')
     with columns[0], st.popover(t('planning.flex_filters', default='Flexible filters'), width='stretch', icon=':material/filter_alt:'):
         chosen = st.multiselect(t('planning.flex_filter_fields', default='Filter fields'), list(fields),
                                 format_func=fields.get, key='dashboard_flex_fields', on_change=_reset_page)
@@ -146,7 +155,7 @@ def _filters(service: DashboardService, catalog) -> tuple[dict[str, list[str]], 
         active = {key: values for key, values in active.items() if key in fixed or key in chosen}
     for column, key in zip(columns[1:], fixed):
         with column:
-            choose(key, _label(key))
+            choose(key, _label('project_status') if key == 'status' else _label(key))
     st.button(t('planning.clear_all_filters', default='Clear all filters'), on_click=_clear,
               icon=':material/filter_alt_off:', key='dashboard_clear')
     return active, match_all
@@ -206,38 +215,23 @@ def _select_project(service: DashboardService, token: str) -> None:
     st.rerun('dashboard')
 
 
-def _finance_chart(service: DashboardService, report) -> None:
-    years = range(service.today().year-2, service.today().year+10)
-    # Layered Vega charts can retain their old named dataset when only Arrow data
-    # changes. Recreate this chart for different values, without rerunning the shell.
-    chart_revision = sha256(repr((years.start, tuple(sorted(report.budget.totals.items())))).encode()).hexdigest()[:16]
-    values = pd.DataFrame([{'date': f'{year}-01-01', 'budget': float(report.budget.totals[year])
-                            if year in report.budget.totals else None,
-                            'series': _label('approved_budget')} for year in years])
-    values['segment'] = values['budget'].isna().cumsum().astype(str)
-    st.vega_lite_chart(values, {
-        'name': 'dashboard_finance_' + chart_revision,
-        'layer': [
-            {'mark': {'type': 'line', 'point': {'filled': True}},
-             'encoding': {'detail': {'field': 'segment', 'type': 'nominal'},
-                          'x': {'field': 'date', 'type': 'temporal', 'title': _label('year'),
-                                'scale': {'domain': [f'{years.start}-01-01', f'{years.stop}-01-01']},
-                                'axis': {'format': '%Y', 'labelAngle': 0,
-                                         'values': [f'{year}-01-01' for year in years]}},
-                          'y': {'field': 'budget', 'type': 'quantitative', 'title': _label('euros')},
-                          'color': {'field': 'series', 'type': 'nominal', 'title': None,
-                                    'scale': {'range': ['#C41039']}, 'legend': {'orient': 'top-right','direction':'horizontal'}},
-                          'tooltip': [{'field': 'date', 'type': 'temporal', 'title': _label('year'), 'format': '%Y'},
-                                      {'field': 'budget', 'type': 'quantitative', 'title': _label('euros'), 'format': ',.2f'}]}},
-            {'data': {'values': [{'today': service.today().isoformat()}]},
-             'mark': {'type': 'rule', 'color': '#23934c', 'strokeDash': [6, 4], 'strokeWidth': 2},
-             'encoding': {'x': {'field': 'today', 'type': 'temporal'},
-                          'tooltip': [{'field': 'today', 'type': 'temporal', 'title': _label('today'), 'format': '%d/%m/%Y'}]}}
-        ]}, height=260, key='dashboard_finance_' + chart_revision)
+def _finance_chart(service: DashboardService, report, proposed) -> None:
+    """Display both authorized budget snapshots on the shared dashboard timeline."""
+    years = range(service.today().year - 2, service.today().year + 10)
+    series = [
+        {'name': t('finance.' + status, default=status),
+         'points': [{'date': f'{year}-01-01',
+                     'value': float(snapshot.budget.totals[year])
+                     if year in snapshot.budget.totals else None} for year in years]}
+        for status, snapshot in [('Approved', report), ('Proposed', proposed)]
+    ]
+    finance_chart(series=series, today=service.today().isoformat(), year=service.today().year,
+                  locale=get_current_locale(), title=_label('finance_overview'), value_label=_label('euros'))
 
 
-def _planning_jump(service: DashboardService, ids: tuple[int, ...], quarter: str) -> None:
-    projects = service.consuming_projects(list(ids), quarter)
+def _planning_jump(service: DashboardService, ids: tuple[int, ...], quarter: str,
+                   pool_id: int | None = None, metric: str = 'overallocation') -> None:
+    projects = service.consuming_projects(list(ids), quarter, pool_id, metric)
     if not projects:
         st.info(_label('no_consumers'))
         return
@@ -274,11 +268,15 @@ def render_dashboard(service: DashboardService) -> None:
             return
         ids = tuple(row['id'] for row in projects)
         report = _report(service, revision, ids)
+        proposed = _report(service, revision, ids, 'Proposed')
         finance, issues = st.columns([8, 1.5], vertical_alignment='center')
         with finance:
             st.subheader(_label('finance_overview'))
-            if _source(report):
-                _finance_chart(service, report)
+            approved_source, proposed_source = st.columns(2)
+            with approved_source:
+                _source(report)
+            with proposed_source:
+                _source(proposed, 'Proposed')
         with issues, st.container(border=True, key='dashboard_issue_card'):
             icon_color = '#df8b16' if report.issue_count else '#23934c'
             text_color = '#df8b16' if report.issue_count else '#000000'
@@ -288,12 +286,22 @@ def render_dashboard(service: DashboardService) -> None:
                          help=t('dashboard.issue_count', count=report.issue_count)) and report.issue_count:
                 _issues(service, ids)
             st.markdown(f"{report.issue_count} {_label('active_issues')}")
-        st.subheader(_label('capacity_overallocation'))
-        quarter = resource_chart(_shortages(service, revision, ids), today=service.today().isoformat(),
-            year=service.today().year, locale=get_current_locale(), labels={
-                'title': _label('capacity_overallocation'), 'overallocationLabel': _label('overallocation'),
-                'capacityLabel': _label('total_capacity'), 'goTo': _label('go_to_consumers')})
-        if quarter:
-            _planning_jump(service, ids, quarter)
+        _finance_chart(service, report, proposed)
+        series = _shortages(service, revision, ids)
+        st.subheader(_label('resources_allocation'))
+        st.html('<style>.st-key-dashboard_resource_charts {gap:4px !important;}</style>')
+        with st.container(key='dashboard_resource_charts'):
+            for metric in ('overallocation', 'allocation'):
+                selection = resource_chart(series, today=service.today().isoformat(),
+                    year=service.today().year, locale=get_current_locale(), metric=metric, labels={
+                        'title': _label(metric), 'valueLabel': _label(metric), 'totalValueLabel': _label('total_' + metric),
+                        'totalCapacityLabel': _label('total_capacity_short'),
+                        'totalLabel': _label('total'), 'allocatedLabel': _label('allocation'),
+                        'availableLabel': t('planning.resource_grid.available_value', default='Available'),
+                        'capacityLabel': _label('total_capacity'), 'goTo': _label('go_to_consumers')})
+                if isinstance(selection, dict) and selection.get('metric') == metric:
+                    if type(selection.get('pool_id')) is not int or not isinstance(selection.get('quarter'), str):
+                        raise ValueError('Invalid resource selection.')
+                    _planning_jump(service, ids, selection['quarter'], selection['pool_id'], metric)
     except (AccessDenied, ProjectStorageError, ValueError):
         st.error(_label('unavailable'))

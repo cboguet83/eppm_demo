@@ -47,10 +47,11 @@ def seed_projects(database: OperatorDatabase, backup: PostgresBackup, request: S
     """Seed under one archive and prepare planner statistics before first use."""
     validate_seed_request(request)
     frozen = replace(request, random_seed=randbits(128)) if request.random_seed is None else request
-    year = date.today().year
+    today = date.today()
+    year = today.year
 
     def generate(connection: psycopg.Connection) -> dict[str, int]:
-        result = generate_projects(connection, frozen, year=year)
+        result = generate_projects(connection, frozen, year=year, today=today)
         tables = connection.execute(
             "SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname='eppm' ORDER BY tablename"
         ).fetchall()
@@ -78,10 +79,10 @@ def clear_pool_allocations(database: OperatorDatabase, backup: PostgresBackup) -
 
 
 def seed_pool_scenarios(database: OperatorDatabase, backup: PostgresBackup, *, year: int | None = None,
-                        seed: int = 20260908, apply: bool = False) -> PoolSeedReport:
-    """Preview without writes or archive and apply a frozen additive plan once."""
+                        seed: int = 20260908, apply: bool = False, replace: bool = False) -> PoolSeedReport:
+    """Preview without writes or archive and apply a frozen Ressort A plan once."""
     current_year = date.today().year if year is None else year
-    plan = database.run(lambda connection: prepare_pool_scenarios(connection, year=current_year, seed=seed))
+    plan = database.run(lambda connection: prepare_pool_scenarios(connection, year=current_year, seed=seed, replace=replace))
     if not apply or not plan.inserts:
         return plan.report()
     return backed_up_write(database, backup, reason='seed-pools', fingerprint=plan.fingerprint,

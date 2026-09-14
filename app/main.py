@@ -134,7 +134,9 @@ def create_project_workspace(resources: RuntimeResources, *, access: BusinessAcc
     """Assemble project screens with lazily rendered collaboration sections."""
     from functools import partial
     from app.presentation.components.project_workspace import ProjectWorkspace
-    from app.presentation.pages.collaboration import render_project_contacts, render_project_log, render_project_links
+    from app.presentation.pages.collaboration import (
+        open_project_event_dialog, render_project_contacts, render_project_log, render_project_links,
+    )
 
     from app.presentation.pages.dashboard import render_project_budget
 
@@ -149,6 +151,7 @@ def create_project_workspace(resources: RuntimeResources, *, access: BusinessAcc
         create_schema_service(resources, access=access),
         partial(render_project_links, service=collaboration),
         partial(render_project_budget, service=create_dashboard_service(resources, access=access)),
+        partial(open_project_event_dialog, service=collaboration),
     )
 
 

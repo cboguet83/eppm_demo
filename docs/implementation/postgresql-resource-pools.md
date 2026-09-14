@@ -76,3 +76,41 @@ The runtime, capacity/cache integration, scheduling, portfolio/finance, exact
 money inputs and tools now use PostgreSQL. Full regression/coverage, authenticated
 browser responsiveness and representative deployed recovery remain acceptance
 gates; see [current migration evidence](postgresql-migration-evidence.md).
+
+## Relative assignment periods
+
+Project and task allocation dialogs offer full duration, fixed custom dates,
+and **Offset + duration**. Relative assignments persist `schedule_anchor`
+(`start` or `end`), signed `offset_days`, and positive `duration_days`; their
+stored start/end dates are null. Migration 0031 enforces complete, mutually
+exclusive scheduling fields. Existing authorization and project ownership guards
+apply to all three modes.
+
+Offsets use calendar days and always move forward when positive, including from
+an end anchor. Duration includes the first allocation day: May 31 + 10 days with
+5 days duration resolves to June 10–14. Moving the start to June 30 resolves to
+July 10–14. Negative offsets schedule before the chosen anchor. Project anchors
+come from the earliest task start and latest task end. Undated owners retain the
+existing project-bound/current-day fallback. Offset limits are ±9124 days and
+duration is 1–9125 days, consistent with the capacity reporting horizon.
+
+The domain resolver, joined allocation reads, compact Gantt links, and dashboard
+SQL all resolve current dates. Existing task/project revision invalidation makes
+schedule edits visible without updating assignment records. The regression tests
+cover both anchors and owners, inclusive dates, storage constraints, authorization,
+both dialogs, and dashboard parity across quarter boundaries.
+
+
+### Absolute pool capacity reductions
+
+Edit a pool in Settings and expand Capacity exceptions to create, edit or delete
+an inclusive date range, absolute FTE reduction and optional reason. Business
+administrators manage these shared records; PostgreSQL RLS and the application
+service both enforce this permission. Overlapping reductions add, with effective
+capacity floored at zero. A base of 5 with reductions of 0.5 from January 1 through
+March 3 and 0.25 from February 1 through November 5 yields 4.25 in the overlap.
+Reductions apply after employee staffing/calendar overrides when the pool is staffed.
+Migration 0032 stores exceptions and invalidates pool revisions. The Python
+capacity calculator, planning grid, assignment generator and native dashboard
+aggregation all consume the resulting effective calendar. Migration 0033 adds
+per-pool dashboard stacks and validates pool-specific drill-through server-side.

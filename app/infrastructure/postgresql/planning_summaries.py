@@ -3,6 +3,7 @@
 import psycopg
 
 from app.application.ports.planning import ProjectSummary
+from app.infrastructure.postgresql.project_dependencies import read_project_dependencies
 
 
 def read_project_summaries(connection: psycopg.Connection, project_ids: list[int]) -> list[ProjectSummary]:
@@ -15,7 +16,7 @@ def read_project_summaries(connection: psycopg.Connection, project_ids: list[int
     """
     if not project_ids:
         return []
-    return [ProjectSummary(id=row[0], name=row[1], start=row[2], end=row[3], taskCount=row[4],
+    summaries = [ProjectSummary(id=row[0], name=row[1], start=row[2], end=row[3], taskCount=row[4],
                            progress=float(row[5]), hasViolations=row[6]) for row in connection.execute('''
         WITH scope AS MATERIALIZED (SELECT id FROM eppm.project WHERE id=ANY(%s::bigint[])),
         selected_links AS MATERIALIZED (
@@ -41,3 +42,9 @@ def read_project_summaries(connection: psycopg.Connection, project_ids: list[int
                  coalesce(b.task_count,0),coalesce(b.progress,0),v.project_id IS NOT NULL
           FROM scope JOIN eppm.project p USING(id) LEFT JOIN bounds b ON b.project_id=p.id
           LEFT JOIN violations v ON v.project_id=p.id ORDER BY p.id''', (project_ids,))]
+    by_id = {summary['id']: summary for summary in summaries}
+    for dependency in read_project_dependencies(connection, project_ids):
+        summary = by_id[dependency['project_id']]
+        summary.setdefault('projectDependencies', []).append(dependency)
+        summary['hasViolations'] |= dependency['is_violated']
+    return summaries

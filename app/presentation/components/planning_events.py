@@ -2,6 +2,8 @@
 
 from typing import Any
 
+from app.domain.planning.project_dependencies import positive_identity
+
 
 def validate_event(event: dict[str, Any]) -> dict[str, Any]:
     """Normalize component scalar fields and reject malformed collection payloads.
@@ -10,6 +12,8 @@ def validate_event(event: dict[str, Any]) -> dict[str, Any]:
     ranges, and dependency rules remain authoritative in application/domain code.
     """
     result = dict(event)
+    if result.get('action') in {'load_project_dependencies', 'save_project_dependencies', 'log_project_event'}:
+        result['project_id'] = positive_identity(result.get('project_id'))
     for field in ("id", "task_id", "project_id", "pool_id", "group_id", "progress", "progress_pct"):
         value = result.get(field)
         if field not in result or value is None and field.endswith("id") or value == "":
