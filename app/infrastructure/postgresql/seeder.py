@@ -10,6 +10,7 @@ from app.infrastructure.postgresql.seed_catalog import (
     install_schema_catalog, install_tag_catalog, install_wbs_catalog, install_project_roles,
 )
 from app.infrastructure.postgresql.seed_projects import seed_sample_projects
+from app.infrastructure.postgresql.seed_budgets import install_budget_definition, assign_budget_shares
 
 
 def install_default_data(connection: psycopg.Connection, *, force: bool, include_projects: bool, year: int,
@@ -25,9 +26,11 @@ def install_default_data(connection: psycopg.Connection, *, force: bool, include
     install_tag_catalog(connection)
     install_wbs_catalog(connection)
     install_project_roles(connection)
+    install_budget_definition(connection, seed=20260908)
     if include_projects:
         seed_sample_projects(connection)
         _sample_tags(connection)
+        assign_budget_shares(connection, [row[0] for row in connection.execute('SELECT id FROM eppm.project ORDER BY id')], seed=20260908)
     connection.execute("INSERT INTO eppm.operator_seed_state(catalog) VALUES ('demo')")
     if build_pools and not connection.execute(
         'SELECT EXISTS(SELECT 1 FROM eppm.resource_pool) OR EXISTS(SELECT 1 FROM eppm.resource_pool_group)'

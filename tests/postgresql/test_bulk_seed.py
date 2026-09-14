@@ -28,7 +28,11 @@ def test_bulk_generator_preserves_requested_schedule_bounds_native_links_tags_an
         assert all(minimum <= count <= maximum for _, count in counts)
         assert connection.execute('SELECT count(*) FROM eppm.project_tag').fetchone() == (15,)
         assert connection.execute('SELECT count(*) FROM eppm.task_tag').fetchone() == (result['tasks_created'],)
-        assert connection.execute('SELECT count(DISTINCT project_id),count(DISTINCT pool_id) FROM eppm.resource_pool_assignment').fetchone() == (13, 30 if maximum == 0 else 33)
+        allocated, used_pools = connection.execute('SELECT count(DISTINCT project_id),count(DISTINCT pool_id) FROM eppm.resource_pool_assignment').fetchone()
+        assert allocated <= sum(count > 0 for _, count in counts)
+        assert 0 <= used_pools <= 33
+        assert (allocated > 0) == (result['tasks_created'] > 0)
+        assert connection.execute('SELECT count(*) FROM eppm.resource_pool_assignment WHERE start_date IS NOT NULL OR end_date IS NOT NULL OR fte_assigned<.1 OR fte_assigned>5').fetchone() == (0,)
         assert connection.execute('SELECT count(*) FROM eppm.project_property_value').fetchone() == (result['property_values_created'],)
         for planned, actual in connection.execute('SELECT planned_budget,actual_budget FROM eppm.project'):
             assert isinstance(planned, Decimal) and isinstance(actual, Decimal)

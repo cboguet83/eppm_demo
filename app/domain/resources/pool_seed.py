@@ -1,4 +1,4 @@
-"""Deterministic Ressort A layout and aggregate project demand in milli-FTE."""
+"""Deterministic Ressort A layout and whole-period allocation slots in milli-FTE."""
 
 from dataclasses import dataclass
 from datetime import date
@@ -62,126 +62,106 @@ class TaskPeriod:
     end: date
 
 
-TASK_POOLS = frozenset({'team C', 'team D', 'team E'})
+class _CapacityLedger:
+    """Track concurrent milli-FTE using inclusive task boundaries, without daily rows."""
+
+    def __init__(self) -> None:
+        self.events: dict[str, dict[int, int]] = {}
+
+    def remaining(self, pool_name: str, start: date, end: date, limit: int) -> int:
+        """Return the smallest spare capacity over the complete requested interval."""
+        if end < start:
+            raise ValueError('Assignment ends before it starts.')
+        first, last = start.toordinal(), end.toordinal()
+        active = peak = 0
+        for day, delta in sorted(self.events.get(pool_name, {}).items()):
+            if day > last:
+                break
+            if day > first:
+                peak = max(peak, active)
+            active += delta
+            if day >= first:
+                peak = max(peak, active)
+        return max(0, limit - max(peak, active))
+
+    def reserve(self, row: SeedDemand, sign: int = 1) -> None:
+        """Reserve or release a whole interval, including date.max safely."""
+        events = self.events.setdefault(row.pool_name, {})
+        for boundary, delta in ((row.start.toordinal(), row.milli_fte),
+                                (row.end.toordinal() + 1, -row.milli_fte)):
+            events[boundary] = events.get(boundary, 0) + sign * delta
+            if not events[boundary]:
+                del events[boundary]
 
 
-def membership_intervals(projects: list[ProjectPeriod]) -> list[tuple[int, int, tuple[int, ...]]]:
-    """Sweep inclusive dates into maximal constant-membership active intervals."""
-    events: dict[int, list[tuple[int, bool]]] = {}
-    for project in projects:
-        if project.end < project.start:
-            raise ValueError('Project demand ends before it starts.')
-        events.setdefault(project.start.toordinal(), []).append((project.project_id, True))
-        events.setdefault(project.end.toordinal() + 1, []).append((project.project_id, False))
-    active: set[int] = set()
-    result = []
-    boundaries = sorted(events)
-    for start, stop in zip(boundaries, boundaries[1:]):
-        for identity, entering in events[start]:
-            if entering:
-                active.add(identity)
-            else:
-                active.remove(identity)
-        if active:
-            result.append((start, stop - 1, tuple(sorted(active))))
-    return result
-
-
-def monthly_utilization(pool_name: str, rate: int, day: date) -> int:
-    """Vary monthly demand with bounded seasonal peaks and stable pool phases."""
-    if rate > 200:
-        raise ValueError('Combined demand exceeds 200% of pool capacity.')
-    phase = sum(map(ord, pool_name)) % 3
-    month = (day.month - 1 + phase) % 12
-    if pool_name in {'pool E1', 'pool E2'}:
-        rate = 80
-    if rate > 100:
-        return (85, 100, 115, 130, 160, 180, 145, 105, 95, 120, 150, 110)[month]
-    return rate * (60, 70, 80, 90, 100, 80, 70, 90, 60, 80, 100, 70)[month] // 100
-
-
-def _month_boundaries(first: int, last: int) -> list[int]:
-    """Return first-of-month split points without overflowing date.max."""
-    day = date.fromordinal(first)
-    year, month = day.year, day.month
-    result = []
-    while (year, month) < (9999, 12):
-        year, month = (year + 1, 1) if month == 12 else (year, month + 1)
-        boundary = date(year, month, 1).toordinal()
-        if boundary > last:
-            break
-        result.append(boundary)
-    return result
-
-
-def _pool_demand(pool: SeedPool, projects: list[ProjectPeriod], rate: int) -> list[SeedDemand]:
-    intervals = membership_intervals(projects)
-    if not intervals:
-        return []
-    result = []
-    for start, end, members in intervals:
-        boundaries = [start, *_month_boundaries(start, end), end + 1]
-        for first, stop in zip(boundaries, boundaries[1:]):
-            percent = monthly_utilization(pool.name, rate, date.fromordinal(first))
-            total = pool.capacity * 1000 * percent // 100
-            share, remainder = divmod(total, len(members))
-            if share < 1:
-                raise ValueError('Allocation precision cannot give every active project a positive milli-FTE share.')
-            if total > pool.capacity * 2000:
-                raise ValueError('Combined demand exceeds 200% of pool capacity.')
-            result.extend(SeedDemand(pool.name, identity, date.fromordinal(first), date.fromordinal(stop - 1),
-                                     share + (index < remainder)) for index, identity in enumerate(members))
-    return result
+def _utilization_rates(seed: int) -> tuple[list[SeedPool], dict[str, int]]:
+    """Retain seven overallocated pools, four underallocated pools and E1/E2 limits."""
+    pools = list(POOLS)
+    random.Random(seed).shuffle(pools)
+    ordinary = [pool for pool in pools if pool.name not in {'pool E1', 'pool E2'}]
+    rates = {pool.name: 150 if index < 7 else 75 if index < 11 else 100
+             for index, pool in enumerate(ordinary)}
+    rates.update({'pool E1': 80, 'pool E2': 80})
+    return pools, rates
 
 
 def plan_demand(projects: list[ProjectPeriod], seed: int, *,
                 tasks: list[TaskPeriod] | None = None) -> tuple[tuple[SeedDemand, ...], dict[str, int], int]:
-    """Allocate 90% of projects with seasonal pool demand and bounded E1/E2 usage.
+    """Allocate whole periods in project-ID order without monthly custom dates.
 
-    For fewer than 33 allocated projects, projects serve multiple pools so every
-    pool is exercised. Empty catalogs have no demand or utilization categories.
-    Ten percent unallocated uses nearest-whole rounding with halves rounded up.
+    The first quarter of projects (rounded up) uses project-level slots capped at
+    half each pool's configured demand. Remaining projects use the other half on
+    tasks. A project whose complete set of task slots cannot fit stays unallocated.
+    Each slot is 0.1 to 5 FTE. Pool demand categories are preserved; allocations
+    never exceed their configured category limit, including E1/E2 at 80%.
     """
-    rng = random.Random(seed)
     ordered = sorted(projects, key=lambda project: project.project_id)
-    rng.shuffle(ordered)
-    omitted = (len(ordered) + 5) // 10
-    selected = ordered[omitted:]
-    pool_order = list(POOLS)
-    rng.shuffle(pool_order)
-    rates = {pool.name: 150 if index < 7 else 75 if index < 11 else 100
-             for index, pool in enumerate(pool_order)}
-    rates.update({'pool E1': 80, 'pool E2': 80})
-    assigned: dict[str, list[ProjectPeriod]] = {pool.name: [] for pool in POOLS}
-    for index, project in enumerate(selected):
-        assigned[pool_order[index % len(POOLS)].name].append(project)
-    if selected:
-        for index, pool in enumerate(pool_order):
-            if not assigned[pool.name]:
-                assigned[pool.name].append(selected[index % len(selected)])
-    if tasks is not None:
-        selected_ids = {project.project_id for project in selected}
-        eligible = sorted((task for task in tasks if task.project_id in selected_ids), key=lambda task: task.task_id)
-        task_projects = {task.project_id for task in eligible}
-        for name in sorted(TASK_POOLS):
-            undated = [project for project in assigned[name] if project.project_id not in task_projects]
-            existing = {project.project_id for project in assigned['team B']}
-            assigned['team B'].extend(project for project in undated if project.project_id not in existing)
-            assigned[name] = [project for project in assigned[name] if project.project_id in task_projects]
-            if not assigned[name] and eligible:
-                fallback = eligible[0].project_id
-                assigned[name] = [project for project in selected if project.project_id == fallback]
-        rows = []
-        for pool in POOLS:
-            if pool.name not in TASK_POOLS:
-                rows.extend(_pool_demand(pool, assigned[pool.name], rates[pool.name]))
-                continue
-            owners = {project.project_id for project in assigned[pool.name]}
-            pool_tasks = {task.task_id: task for task in eligible if task.project_id in owners}
-            periods = [ProjectPeriod(task.task_id, task.start, task.end) for task in pool_tasks.values()]
-            for row in _pool_demand(pool, periods, rates[pool.name]):
-                task = pool_tasks[row.project_id]
-                rows.append(SeedDemand(row.pool_name, task.project_id, row.start, row.end, row.milli_fte, task.task_id))
-        return tuple(rows), {name: rate for name, rate in rates.items() if any(row.pool_name == name for row in rows)}, omitted
-    rows = tuple(row for pool in POOLS for row in _pool_demand(pool, assigned[pool.name], rates[pool.name]))
-    return rows, rates if selected else {}, omitted
+    eligible: dict[int, list[TaskPeriod]] = {}
+    for task in sorted(tasks or [], key=lambda task: (task.project_id, task.task_id)):
+        if task.end < task.start:
+            raise ValueError('Task ends before it starts.')
+        eligible.setdefault(task.project_id, []).append(task)
+    pools, rates = _utilization_rates(seed)
+    rng = random.Random(seed)
+    ledgers = (_CapacityLedger(), _CapacityLedger())
+    cursors = [0, 0]
+    rows: list[SeedDemand] = []
+    cutoff = (len(ordered) + 3) // 4
+    for index, project in enumerate(ordered):
+        if project.end < project.start:
+            raise ValueError('Project ends before it starts.')
+        if not eligible.get(project.project_id):
+            continue
+        phase = int(index >= cutoff)
+        targets = eligible[project.project_id] if phase else [project]
+        staged: list[SeedDemand] = []
+        original_cursor = cursors[phase]
+        for target in targets:
+            placed = False
+            for offset in range(len(pools)):
+                pool_index = (cursors[phase] + offset) % len(pools)
+                pool = pools[pool_index]
+                ceiling = 180 if rates[pool.name] > 100 else rates[pool.name]
+                limit = pool.capacity * 1000 * ceiling // 200
+                spare = ledgers[phase].remaining(pool.name, target.start, target.end, limit)
+                maximum = min(5000, spare) // 100
+                if maximum < 1:
+                    continue
+                row = SeedDemand(pool.name, project.project_id, target.start, target.end,
+                                 rng.randint(1, maximum) * 100,
+                                 target.task_id if isinstance(target, TaskPeriod) else None)
+                ledgers[phase].reserve(row)
+                staged.append(row)
+                cursors[phase] = (pool_index + 1) % len(pools)
+                placed = True
+                break
+            if not placed:
+                for row in staged:
+                    ledgers[phase].reserve(row, -1)
+                staged = []
+                cursors[phase] = original_cursor
+                break
+        rows.extend(staged)
+    used = {row.pool_name for row in rows}
+    omitted = len(ordered) - len({row.project_id for row in rows})
+    return tuple(rows), {name: rate for name, rate in rates.items() if name in used}, omitted

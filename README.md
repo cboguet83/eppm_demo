@@ -460,17 +460,17 @@ groups and 33 pools under Ressort A**, with Service E/G/I/M/P, Projets, and the
 configured capacities described in [the seeding guide](docs/implementation/postgresql-seeding.md).
 Pools use configured FTE capacity without employee/team mappings.
 
-The Python planner leaves 10% of projects unallocated and distributes the rest
-across all pools. Seven pools reach 150% utilization, four reach 75%, and the
-remaining 22 stay at 100% during active periods. Exceptional periods occupy the
-middle third of each pool's longest constant-project-membership interval.
-Combined demand is split exactly in thousandths of FTE and never exceeds 200%.
+The Python planner processes projects by ascending ID. The first 25% receive
+project-level slots using half each pool's configured allocation ceiling; remaining
+projects receive task-level slots using the other half. Each slot is 0.1 to 5 FTE
+and inherits its whole project/task period. Projects that cannot fit remain
+unallocated. The existing over/underallocation categories and E1/E2's 80% ceiling
+are retained; monthly custom assignment slices are no longer generated.
 
 Repeated ordinary seeding leaves an installed layout and its allocations alone.
 **Append-seeding never allocates newly appended projects or rebalances existing
 allocations.** Use an explicit allocation refresh when wanted. Catalog-only
-seeding creates the hierarchy without demand; small demos share projects across
-pools to exercise the full hierarchy. Custom organizations remain untouched.
+seeding creates the hierarchy without demand. Custom organizations remain untouched.
 
 Settings → Task Tags loads 100 assignments per page. Search, column filters, and
 sorting run against the entire database; paging never limits their scope.

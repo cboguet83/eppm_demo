@@ -16,6 +16,7 @@ from app.domain.projects.seed_statuses import project_statuses
 from app.domain.projects.project_types import TemplateProperty, resolve_template
 from app.domain.projects.property_values import encode_property_value
 from app.infrastructure.postgresql.pool_scenarios import apply_pool_scenarios, prepare_pool_scenarios
+from app.infrastructure.postgresql.seed_budgets import assign_budget_shares
 from app.infrastructure.postgresql.property_store import parameters, read_values
 from app.infrastructure.postgresql.seed_catalog import DEMO_TYPES, advance_seed_sequences, sample_values
 from app.infrastructure.postgresql.seeder import install_default_data
@@ -133,6 +134,8 @@ def generate_projects(connection: psycopg.Connection, request: SeedRequest, *, y
           ((task_ids[task - 1], task_ids[predecessor - 1] if predecessor is not None else None, project, kind, lag)
            for task, predecessor, project, kind, lag in dependencies))
     _annotations(connection, identities, task_ids)
+    if installed:
+        assign_budget_shares(connection, identities, seed=request.random_seed)
     if installed and request.clean_first:
         pools = apply_pool_scenarios(connection, prepare_pool_scenarios(connection, year=year, seed=request.random_seed))
     else:

@@ -57,31 +57,49 @@ mappings are generated, so effective capacity equals configured capacity.
 Missing required hierarchy codes and translations are created through the
 existing reference tables; existing labels are preserved.
 
-### Project demand
+### Demo WBS budgets
+
+Fresh demo/catalog seeding creates one sealed Approved Finance version named
+`Demo WBS budgets — ten-year plans`. Each of `p.1.10` through `p.10.10` totals
+between €5 million and €10 million over ten consecutive years. Start years are
+2020 for p1/p2, 2021 for p3/p4, 2022 for p5/p6, 2024 for p7/p8, and 2025 for p9/p10.
+Annual amounts follow a discrete Gaussian curve centered between years five and
+six, with standard deviation two years. Decimal arithmetic and largest-remainder
+cent allocation preserve exact totals.
+
+For a full generation, eligible projects have status `In Progress` and are ordered
+by ID. The first gets 100% of p.1.10; the second gets 100% of p.2.10 and 50% of
+p.3.10. The remaining 50% of p.3.10 and all of p.4.10–p.10.10 are distributed in
+25% increments across the next ten projects. Each WBS totals 100% when all twelve
+projects exist; with fewer projects, unused shares remain unallocated. Other
+statuses are excluded. The initial five-project sample follows the same rule.
+
+Finance history is retained, and an existing demo budget version is reused.
+Append-seeding does not assign additional WBS shares or redistribute existing ones.
+
+### Resource assignment periods
 
 `app/domain/resources/pool_seed.py` owns layout and demand planning in Python.
-Ten percent of projects are left unallocated (nearest whole, halves rounded up).
-With 1,000 projects, exactly 900 are allocated and 100 are unallocated. Projects
-are shuffled deterministically with the selected seed, then distributed across
-all 33 pools. With fewer than 33 allocated projects, projects serve multiple pools.
-Empty catalogs have no demand and no utilization classification.
+Projects are processed in ascending ID order. The first 25% (rounded up) use
+project-level assignments and can consume up to half of each pool's configured
+allocation ceiling. Remaining projects use task-level assignments against the
+other half. Unused capacity in one half is not transferred to the other.
 
-Assignment dates use each project's earliest task start and latest task end;
-projects without dated tasks use January 1?December 31 of the selected seed year.
-Team B remains project-level; teams C, D, and E use dated tasks. Projects without
-dated tasks assigned to those teams move to Team B; empty task pools use a dated
-task from the selected projects where available. Other pools remain project-level.
-Assignments are explicitly dated and use positive integer
-thousandths of FTE. A sweep of inclusive boundaries calculates constant active
-project membership. Each interval's combined demand is split among its projects,
-with remainder thousandths assigned in stable project-ID order. Preparation
-fails without writes if positive shares cannot be represented.
+Each project-level project receives one pool slot. Each task-level project receives
+one slot per dated task, ordered by task ID. Slots are between 0.1 and 5 FTE in
+0.1 increments and cover the complete inherited project/task period. No custom
+assignment dates, monthly slices, or offset schedules are stored. Projects without
+dated tasks remain unallocated. If any task in a project cannot fit, all provisional
+slots for that project are released and the project remains unallocated. Later IDs
+can reuse capacity in nonoverlapping periods.
 
-Demand changes at calendar-month boundaries, with staggered seasonal patterns
-by pool. High-demand pools vary from 85% to 180%, while other pools include
-periods below capacity. E1 and E2 always stay at or below 80% of their configured
-capacity. Daily shares remain exact to thousandths across overlapping assignments.
-Idle gaps do not count as underallocation.
+The existing utilization categories remain: seven high-demand pools may reach
+180%, four underallocated pools are capped at 75%, E1/E2 remain capped at 80%,
+and other pools are capped at 100%. Capacity is checked across every overlapping
+assignment boundary, separately for each reserved half. Actual utilization varies
+with project/task schedules; there are no artificial monthly peaks. The seed controls
+pool selection and slot amounts, but never shuffles project processing order.
+Unallocated counts now follow available slots rather than a fixed 10% quota.
 
 Append operations do not change or rebalance existing allocations, and newly
 appended projects remain unallocated. Ordinary repeated seeding is a no-op for

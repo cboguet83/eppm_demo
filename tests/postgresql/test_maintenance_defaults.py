@@ -24,10 +24,10 @@ def test_complete_native_default_seed_contains_annotations_scenarios_and_one_res
     with psycopg.connect(pg_database.operator_url) as connection:
         assert connection.execute('SELECT count(*) FROM eppm.project_tag').fetchone() == (5,)
         assert connection.execute('SELECT count(*) FROM eppm.task_tag').fetchone() == (15,)
-        assert connection.execute('SELECT count(*) FROM eppm.resource_pool_assignment').fetchone()[0] > 33
+        assert connection.execute('SELECT count(*) FROM eppm.resource_pool_assignment').fetchone()[0] == 11
         assert connection.execute('SELECT status,count(*) FROM eppm.project GROUP BY status').fetchall() == [('In Progress', 5)]
         assert connection.execute('SELECT count(*) FROM eppm.resource_pool_mapping').fetchone() == (0,)
-        assert connection.execute('SELECT count(DISTINCT project_id) FROM eppm.resource_pool_assignment').fetchone() == (4,)
+        assert connection.execute('SELECT count(DISTINCT project_id) FROM eppm.resource_pool_assignment').fetchone() == (5,)
         assert connection.execute('SELECT sum(planned_budget),sum(actual_budget) FROM eppm.project').fetchone() == (
             Decimal('1250000'), Decimal('842000'),
         )
@@ -58,7 +58,7 @@ def test_catalog_only_install_pool_preview_apply_clear_and_reset_follow_archive_
     assert maintenance.seed_defaults(operator, backup, force=True, year=2026)
     assert len(list(tmp_path.glob('*.dump'))) == 3
     assignment_count = operator.run(lambda c: c.execute('SELECT count(*) FROM eppm.resource_pool_assignment').fetchone()[0])
-    assert assignment_count > 33
+    assert assignment_count == 11
     assert maintenance.clear_pool_allocations(operator, backup) == assignment_count
     with psycopg.connect(pg_database.operator_url) as connection:
         assert connection.execute('SELECT count(*) FROM eppm.resource_pool_mapping').fetchone() == (0,)

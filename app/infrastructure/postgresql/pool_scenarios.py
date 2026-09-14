@@ -14,7 +14,7 @@ from app.infrastructure.postgresql.seed_catalog import advance_seed_sequences
 from app.infrastructure.postgresql.seed_plan import SeedInsert, SeedValue, next_seed_identity, source_fingerprint
 
 
-MARKER = 'Ressort A pool seed v3'
+MARKER = 'Ressort A pool seed v4'
 REPLACED_TABLES = ('resource_pool_assignment', 'resource_pool_mapping', 'resource_pool_group_member',
                    'resource_pool_tag', 'resource_pool', 'resource_pool_group')
 
@@ -75,7 +75,8 @@ def prepare_pool_scenarios(connection: psycopg.Connection, *, year: int, seed: i
     fingerprint = source_fingerprint(connection)
     counts = {table: connection.execute(sql.SQL('SELECT count(*) FROM eppm.{}').format(sql.Identifier(table))).fetchone()[0]
               for table in REPLACED_TABLES}
-    installed = connection.execute('SELECT 1 FROM eppm.resource_pool_group WHERE description=%s', (MARKER,)).fetchone()
+    installed = connection.execute('SELECT 1 FROM eppm.resource_pool_group WHERE description IN (%s,%s)',
+                                   (MARKER, 'Ressort A pool seed v3')).fetchone()
     if installed and not replace:
         return PoolScenarioPlan(fingerprint, (), json.dumps({'already_seeded': True, 'new_groups': 0, 'new_pools': 0}))
     if (counts['resource_pool'] or counts['resource_pool_group']) and not replace:
@@ -111,8 +112,8 @@ def prepare_pool_scenarios(connection: psycopg.Connection, *, year: int, seed: i
         'WHERE start_date IS NOT NULL AND end_date IS NOT NULL AND end_date>=start_date ORDER BY id')]
     demand, rates, omitted = plan_demand(periods, seed, tasks=tasks)
     for row in demand:
-        builder.insert('resource_pool_assignment', ('pool_id', 'project_id', 'task_id', 'fte_assigned', 'start_date', 'end_date', 'notes'),
-                       (pool_ids[row.pool_name], row.project_id, row.task_id, row.milli_fte / 1000, row.start, row.end, MARKER))
+        builder.insert('resource_pool_assignment', ('pool_id', 'project_id', 'task_id', 'fte_assigned', 'notes'),
+                       (pool_ids[row.pool_name], row.project_id, row.task_id, row.milli_fte / 1000, MARKER))
     report = dict(new_groups=7, new_pools=33, replacement=replace,
                   removed=counts if replace else {table: 0 for table in REPLACED_TABLES},
                   hierarchy=hierarchy, fingerprint=fingerprint, seed=seed, year=year,
