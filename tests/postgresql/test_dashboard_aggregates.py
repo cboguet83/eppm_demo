@@ -7,11 +7,29 @@ import psycopg
 import pytest
 
 from app.domain.dashboard import quarterly_capacity, quarterly_shortfall
+from app.infrastructure.postgresql.migration import MIGRATION_DIRECTORY
 from tests.postgresql.test_dashboard import DAY, reference_details, service
 from tests.postgresql.test_pool_capacity import staffing
 
 
+@pytest.fixture(autouse=True)
+def daily_baseline(staffing):
+    """Install the previous implementation only in the isolated test database."""
+    source = MIGRATION_DIRECTORY / '0035_dashboard_pool_availability.sql'
+    with psycopg.connect(staffing.setup.operator_url) as connection:
+        baseline = source.read_text().replace(
+            'eppm.dashboard_resource_breakdown', 'eppm.dashboard_resource_breakdown_daily_baseline')
+        connection.execute(baseline.replace(' AS $$', ' SET jit = off AS $$'))
+
+
 def assert_resources_match_domain(authorized, selected, day=DAY):
+    for quarter, pool, metric in ((None, None, 'overallocation'),
+                                  ('2026-Q1', None, 'allocation'),
+                                  ('2026-Q2', None, 'overallocation')):
+        args = (selected, day, quarter, pool, metric)
+        current = authorized.query('SELECT eppm.dashboard_resource_breakdown(%s,%s,%s,%s,%s)', args, user_id=4)
+        baseline = authorized.query('SELECT eppm.dashboard_resource_breakdown_daily_baseline(%s,%s,%s,%s,%s)', args, user_id=4)
+        assert current == baseline
     expected = reference_details(authorized, selected, day)
     actual = service(authorized, 4, lambda: day).resources(selected)
     assert actual == {'overallocation': quarterly_shortfall(expected, set(selected), day.year),
@@ -159,3 +177,30 @@ def test_missing_required_revision_sources_fail_closed(staffing, table, conditio
         connection.execute(sql.SQL('DELETE FROM eppm.{} WHERE ').format(sql.Identifier(table)) + sql.SQL(condition))
     with pytest.raises(ProjectStorageError):
         service(staffing).revision()
+
+
+def test_change_points_preserve_concurrent_pools_quarter_ties_and_leap_day(staffing):
+    with psycopg.connect(staffing.setup.operator_url) as connection:
+        connection.execute('DELETE FROM eppm.resource_pool_assignment')
+        connection.execute('DELETE FROM eppm.resource_pool_mapping')
+        connection.execute('UPDATE eppm.resource_pool SET capacity_fte=5')
+        connection.execute("""INSERT INTO eppm.resource_pool_assignment
+            (pool_id,project_id,fte_assigned,start_date,end_date) VALUES
+            (1,1,4,'2023-12-01','2024-06-30'),
+            (2,1,3,'2024-02-29','2024-03-01'),
+            (1,3,2,'2024-02-29','2024-02-29')""")
+        connection.execute("""INSERT INTO eppm.resource_pool_capacity_exception
+            (pool_id,start_date,end_date,reduction_fte) VALUES
+            (1,'2024-02-29','2024-02-29',2)""")
+    args = ([1], date(2024, 1, 1), '2024-Q1', 1, 'overallocation')
+    current = staffing.query('SELECT eppm.dashboard_resource_breakdown(%s,%s,%s,%s,%s)', args)[0][0]
+    baseline = staffing.query('SELECT eppm.dashboard_resource_breakdown_daily_baseline(%s,%s,%s,%s,%s)', args)[0][0]
+    assert current == baseline
+    assert current['allocation']['2024-Q1'] == 9
+    assert current['overallocation']['2024-Q1'] == 3
+    assert current['peak_days']['allocation']['2024-Q1'] == '2024-02-29'
+    assert current['peak_days']['allocation']['2024-Q2'] == '2024-04-01'
+    assert current['consumers'] == [1]
+    assert sum(pool['allocation']['2024-Q1'] for pool in current['pools']) == 9
+    assert staffing.query('SELECT eppm.dashboard_resource_breakdown(%s,%s)', ([], date(2024, 1, 1))) == staffing.query(
+        'SELECT eppm.dashboard_resource_breakdown_daily_baseline(%s,%s)', ([], date(2024, 1, 1)))
