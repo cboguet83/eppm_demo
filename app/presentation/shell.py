@@ -200,8 +200,21 @@ def render_application(workspace: ApplicationWorkspace) -> None:
         page_keys,
         format_func=lambda k: nav_map.get(k, k),
         key="app_sidebar_nav",
-        on_change=lambda: st.rerun("application_page"),
+        on_change=_change_sidebar_page,
     )
+
+    if st.session_state["app_sidebar_nav"] == PAGE_SETTINGS:
+        with st.sidebar.container(key="settings_subsections"):
+            st.radio(
+                t("nav.settings", default="Settings"),
+                ["org_structure", "param_def", "project_configuration"],
+                format_func=lambda section: {
+                    "org_structure": t("settings.section_org_structure", default="Organization Structure"),
+                    "param_def": t("settings.section_param_definition", default="Parameter Definition"),
+                    "project_configuration": t("project_collaboration.configuration", default="Project configuration"),
+                }[section],
+                key="rb_settings_section",
+            )
 
     if workspace.totals is not None:
         totals = workspace.totals()
@@ -214,6 +227,12 @@ def render_application(workspace: ApplicationWorkspace) -> None:
                 right.caption(f"{t('planning_totals.' + second, default=second.title())}  \n{totals[second]:,}")
 
     _render_application_page(workspace)
+
+
+def _change_sidebar_page() -> None:
+    """Open Settings at Organization Structure and refresh its sidebar sections."""
+    if st.session_state["app_sidebar_nav"] == PAGE_SETTINGS:
+        st.session_state["rb_settings_section"] = "org_structure"
 
 
 @st.fragment(key="application_page")

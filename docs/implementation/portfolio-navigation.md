@@ -3,6 +3,10 @@
 The sidebar shows language, the application title, and navigation in that order.
 Navigation labels have no icons or numbering. Compact account details and sign-out
 controls sit at the bottom, flowing below navigation on smaller screens.
+Settings reveals Organization Structure, Parameter Definition, and Project
+Configuration in the sidebar only while Settings is selected. Opening Settings
+selects Organization Structure. Its tabs start with Function Types, Hierarchy
+Types, Functions, Teams, Employees, and Resource Pools, followed by the tag tabs.
 Each route renders inside its own keyed container. The shell hides retained
 dashboard issue cards outside the dashboard route while the next page loads,
 preventing an unstyled red issue button from flashing during navigation.

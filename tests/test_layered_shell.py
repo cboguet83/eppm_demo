@@ -47,16 +47,16 @@ def test_shell_routes_navigation_redirects_and_language_changes():
     assert not app.exception
     assert PAGE_SETTINGS in [item.value for item in app.markdown]
     assert PAGE_PORTFOLIO not in [item.value for item in app.markdown]
-    assert app.session_state["shell_runs"] == 1
-    assert app.session_state["totals_reads"] == 1
+    assert app.session_state["shell_runs"] == 2
+    assert app.session_state["totals_reads"] == 2
     deltas = [message for message in rerun.messages if message.WhichOneof("type") == "delta"]
-    assert deltas and all(message.metadata.delta_path[0] == 0 for message in deltas)
-    assert all(message.delta.fragment_id for message in deltas)
+    assert deltas and any(message.metadata.delta_path[0] == 1 for message in deltas)
+    assert app.radio(key="rb_settings_section").value == "org_structure"
     app.session_state["nav_redirect"] = PAGE_PLANNING
     app.run()
     assert app.radio(key="app_sidebar_nav").value == PAGE_PLANNING
-    assert app.session_state["shell_runs"] == 2
-    assert app.session_state["totals_reads"] == 2
+    assert app.session_state["shell_runs"] == 3
+    assert app.session_state["totals_reads"] == 3
     app.selectbox(key="app_language_selector").set_value("fr").run()
     assert not app.exception
     assert app.selectbox(key="app_language_selector").value == "fr"
@@ -95,6 +95,45 @@ def test_sidebar_places_settings_after_finance():
     app = AppTest.from_function(app_with_finance).run()
     assert not app.exception
     assert app.radio(key="app_sidebar_nav").options == ["Finance", "Settings"]
+
+
+def test_settings_subsections_are_hidden_until_settings_opens():
+    """Settings reveals its sections and resets to Organization on reentry."""
+    app = AppTest.from_function(shell_app).run()
+    assert not any(radio.key == "rb_settings_section" for radio in app.radio)
+    app.radio(key="app_sidebar_nav").set_value(PAGE_SETTINGS).run()
+    sections = app.sidebar.radio(key="rb_settings_section")
+    assert sections.value == "org_structure"
+    assert len(sections.options) == 3
+    sections.set_value("param_def").run()
+    assert app.session_state["rb_settings_section"] == "param_def"
+    app.radio(key="app_sidebar_nav").set_value(PAGE_PORTFOLIO).run()
+    assert not any(radio.key == "rb_settings_section" for radio in app.radio)
+    app.radio(key="app_sidebar_nav").set_value(PAGE_SETTINGS).run()
+    assert app.sidebar.radio(key="rb_settings_section").value == "org_structure"
+    assert not app.exception
+
+
+def test_organization_tabs_follow_catalog_setup_order():
+    """Render the first catalog lazily with the requested organization tab order."""
+    def settings_app():
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        import streamlit as st
+        from app.presentation.pages.settings import render_settings_view
+
+        with patch("app.presentation.pages.settings.render_function_types",
+                   side_effect=lambda service: st.write("Function types loaded")):
+            render_settings_view(SimpleNamespace(organization=None))
+
+    app = AppTest.from_function(settings_app).run()
+    assert not app.exception
+    assert [tab.label.split(" ", 1)[-1] if tab.label[0] not in "ABCDEFGHIJKLMNOPQRSTUVWXYZ" else tab.label
+            for tab in app.tabs[:6]] == [
+        "Function Types", "Hierarchy types", "Functions", "Teams", "Employees", "Resource Pools",
+    ]
+    assert "Function types loaded" in [item.value for item in app.markdown]
+    assert not app.radio
 
 
 def test_navigation_replaces_the_outgoing_page_container_and_its_controls():
