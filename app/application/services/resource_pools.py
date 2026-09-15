@@ -75,12 +75,14 @@ class ResourcePoolService:
                              'and capacity exceptions first. Containers use their children’s capacity.')
 
     @classmethod
-    def _validate_pool_save(cls, store: ResourcePoolStore, pool: ResourcePool) -> None:
+    def _validate_pool_save(cls, store: ResourcePoolStore, pool: ResourcePool) -> ResourcePool:
         """Validate the proposed forest and conversion within the write snapshot."""
         existing = store.get_all_pools()
         tree = PoolHierarchy(existing)
-        if pool.id is not None and tree.children.get(pool.id) and pool.capacity_fte is not None:
-            raise ValueError("Container capacity is calculated from its children and cannot be edited.")
+        if pool.id is not None and tree.children.get(pool.id):
+            if pool.capacity_fte not in (None, 0):
+                raise ValueError("Container capacity is calculated from its children and cannot be edited.")
+            pool = replace(pool, capacity_fte=0.0)
         proposed_id = pool.id if pool.id is not None else max(tree.pools, default=0) + 1
         PoolHierarchy([row for row in existing if row.id != pool.id] + [replace(pool, id=proposed_id)])
         previous = tree.pools.get(pool.id)
@@ -89,9 +91,10 @@ class ResourcePoolService:
             parent = tree.pools[pool.parent_pool_id]
             # An unchanged update still advances the existing pool revision.
             # Invalidate any former leaf cache when the node changes role.
-            store.update_pool(replace(parent, capacity_fte=None))
+            store.update_pool(replace(parent, capacity_fte=0.0))
         if previous is not None and previous.parent_pool_id is not None and previous.parent_pool_id != pool.parent_pool_id:
             store.update_pool(tree.pools[previous.parent_pool_id])
+        return pool
 
     def capacity_exceptions(self, pool_id: int) -> list[PoolCapacityException]:
         """Read the selected pool's absolute-capacity reduction periods."""
@@ -168,8 +171,8 @@ class ResourcePoolService:
         pool = normalize_pool(pool)
         tag_ids = None if tag_ids is None else list(tag_ids)
         def operation(store: ResourcePoolStore) -> int:
-            self._validate_pool_save(store, pool)
-            result = store.create_pool(pool)
+            validated = self._validate_pool_save(store, pool)
+            result = store.create_pool(validated)
             if result and tag_ids is not None:
                 self._set_tags(store, result, tag_ids)
             return result
@@ -184,8 +187,8 @@ class ResourcePoolService:
         def operation(store: ResourcePoolStore) -> bool:
             if store.get_pool_by_id(pool.id) is None:
                 return False
-            self._validate_pool_save(store, pool)
-            result = store.update_pool(pool)
+            validated = self._validate_pool_save(store, pool)
+            result = store.update_pool(validated)
             if result and tag_ids is not None:
                 self._set_tags(store, pool.id, tag_ids)
             return result

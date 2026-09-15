@@ -31,8 +31,8 @@ def pool_ids(runtime, access):
     return assigned, empty
 
 
-def test_resource_pool_details_keep_controls_without_daily_chart(runtime, access, pool_ids):
-    """Pools with and without demand retain details but never render a chart."""
+def test_resource_pool_page_restores_breakdown_and_allocations_without_removed_controls(runtime, access, pool_ids):
+    """Pools with and without demand omit the removed detail controls."""
     assigned_pool_id, empty_pool_id = pool_ids
     app = AppTest.from_function(settings_app, args=(runtime, access))
     app.session_state['settings_active_tab'] = 'resource_pools'
@@ -44,17 +44,16 @@ def test_resource_pool_details_keep_controls_without_daily_chart(runtime, access
             assert not app.exception
             assert app.session_state['sb_selected_resource_pool'] == pool_id
             assert len(app.metric) == 5
-            assert app.success or app.error, 'Capacity status remains visible'
             button_keys = {button.key for button in app.button}
-            assert f'btn_edit_pool_{pool_id}' in button_keys
-            assert f'btn_add_map_{pool_id}' in button_keys
+            assert f'btn_edit_pool_{pool_id}' not in button_keys
+            assert f'btn_add_map_{pool_id}' not in button_keys
+            assert f'child_pool_{pool_id}' not in button_keys
             markup = '\n'.join(item.value for item in app.markdown)
-            assert 'Daily Capacity vs. Assigned Demand Timeline' not in markup
             assert 'Active Allocations on Projects & Tasks' in markup
             assert 'Deduplicated Assigned Capacity Breakdown' in markup
-            if pool_id == assigned_pool_id:
-                assert app.get('bidi_component'), 'Allocations expose row action buttons'
-                assert f'btn_unassign_{pool_id}' not in button_keys
+            assert app.get('bidi_component'), 'The pool hierarchy remains visible'
+            assert app.caption or app.error, 'Overassigned-period status remains visible'
+
 
 
 def test_pool_data_is_loaded_only_in_pool_tab_and_selection_survives_rerun(runtime, access, pool_ids):

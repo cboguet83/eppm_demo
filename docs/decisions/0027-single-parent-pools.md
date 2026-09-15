@@ -28,8 +28,9 @@ reassign the parent's project/task allocations first. The same rule applies when
 editing an assignment to target a container. Resource mappings and capacity
 exceptions also block conversion until they are moved or removed, so they cannot
 silently disappear from calculations. On successful conversion, the parent's own
-defined capacity becomes null. These changes roll back with any failed tag or
-detail save. Removing the last child makes the parent a leaf again; its former
+defined capacity becomes zero (updated by user decision on 2026-09-15). These
+changes roll back with any failed tag or detail save. Removing the last child
+makes the parent a leaf again; its former
 capacity is not restored automatically. Parent deletion requires moving or
 deleting its children first.
 
@@ -62,9 +63,19 @@ cache path. Portfolio totals include leaves only.
 Planning retains its existing `node_type=group` / `group_id` container transport
 fields for the Gantt component. Those IDs now identify **pools with children**;
 there is no separate persisted group. Allocation selectors contain leaves only.
-Settings provides a parent selector, child creation, child inspection, calculated
-container capacity and explicit conversion warnings. Demo allocation generation
-also selects leaves only.
+Settings provides an expandable pool tree with selection and right-click edit /
+create-child actions, a parent selector, calculated container capacity and explicit
+conversion warnings. The management title line is omitted; summary metrics remain.
+Tree rows are 30% shorter, with bold containers, localized pool and hierarchy
+types, and assignable followed by assigned capacity. Container assigned capacity
+is the sum of child assigned capacities. Below the tree, only the selected pool's
+overassigned periods, resource deduplication and detailed project/task allocations
+are shown. Container details preserve the contributing leaf pool for each resource
+and allocation. Columns are labeled Pool Capacity (FTE) and Mapped Capacity (FTE);
+mapped capacity has an explanatory tooltip. Containers have a light gray background.
+Editing and child creation use context actions;
+conversion warnings appear only when a blocked creation is attempted.
+Demo allocation generation also selects leaves only.
 
 ## Migration and future evolution
 

@@ -184,7 +184,7 @@ def _open_edit_pool_dialog(service: ResourcePoolService, pool_id: int) -> None:
                     id=pool_id,
                     name=edit_name.strip(),
                     description=edit_desc.strip(),
-                    capacity_fte=None if container else float(edit_capacity),
+                    capacity_fte=0.0 if container else float(edit_capacity),
                     pool_type_id=pool_type_id,
                     hierarchy_type_id=hierarchy_type_id,
                     parent_pool_id=parent_pool_id,

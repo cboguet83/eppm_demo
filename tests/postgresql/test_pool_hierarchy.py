@@ -84,7 +84,7 @@ def test_only_leaves_are_assignable_and_conversion_clears_parent_capacity(author
     pools = service(authorized)
     parent = pools.create_pool(ResourcePool('Parent', capacity_fte=100))
     leaf = pools.create_pool(ResourcePool('Leaf', capacity_fte=3, parent_pool_id=parent))
-    assert pools.get_pool_by_id(parent).capacity_fte is None
+    assert pools.get_pool_by_id(parent).capacity_fte == 0
     assert [row.id for row in pools.pool_choices()] == [leaf]
     assert pools.descendant_pool_ids(parent) == [leaf]
     with pytest.raises(ValueError, match='without children'):
@@ -192,3 +192,17 @@ def test_role_changes_during_cache_calculation_cannot_leave_stale_leaf_capacity(
         assert capacity.get_details([parent])[0].total_capacity_fte == 5
     pools.delete_pool(children[0])
     assert capacity.get_details([parent])[0].total_capacity_fte == 0
+
+
+def test_reparenting_zeros_new_parent_and_failed_child_save_restores_capacity(authorized):
+    pools = service(authorized)
+    parent = pools.create_pool(ResourcePool('Parent with capacity', capacity_fte=20))
+    child = pools.create_pool(ResourcePool('Existing leaf', capacity_fte=4))
+    with pytest.raises(ValueError):
+        pools.create_pool(ResourcePool('Invalid tags', parent_pool_id=parent), tag_ids=[999999])
+    assert pools.get_pool_by_id(parent).capacity_fte == 20
+    pools.update_pool(replace(pools.get_pool_by_id(child), parent_pool_id=parent))
+    assert pools.get_pool_by_id(parent).capacity_fte == 0
+    pools.update_pool(replace(pools.get_pool_by_id(parent), name='Renamed parent'))
+    assert pools.get_pool_by_id(parent).capacity_fte == 0
+    assert capacity_service(authorized).get_details([parent])[0].total_capacity_fte == 4

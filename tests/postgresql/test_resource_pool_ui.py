@@ -8,7 +8,7 @@ import streamlit as st
 from streamlit.testing.v1 import AppTest
 
 from app.domain.organization.models import Employee, Team
-from app.domain.resources.models import PoolAssignment, ResourcePool
+from app.domain.resources.models import PoolAssignment, PoolMapping, ResourcePool
 from app.application.services.business_access import BusinessAccess
 from app.main import create_organization_service, create_resource_pool_service
 from app.infrastructure.postgresql.seed_catalog import ensure_reference_catalog
@@ -192,6 +192,10 @@ def test_container_inspector_shows_children_and_aggregates_without_mapping_contr
     service = create_resource_pool_service(database, access=access)
     parent = service.create_pool(ResourcePool('Parent'))
     leaf = service.create_pool(ResourcePool('Delivery', capacity_fte=4, parent_pool_id=parent))
+    organization = create_organization_service(database, access=access)
+    employee = organization.create_employee(Employee('Ada', 'Lovelace', 'ada@pool.test', 'POOL-ADA'))
+    service.create_mapping(PoolMapping(leaf, 'employee', employee, 50))
+    assignment = service.create_assignment(PoolAssignment(leaf, 1, 0.25))
     app = native_screen("""
 from app.main import create_pool_capacity_service, create_organization_service, create_resource_pool_service
 from app.presentation.pages.resource_pools import render_resource_pools
@@ -199,10 +203,13 @@ render_resource_pools(create_resource_pool_service(runtime, access=access),
     create_pool_capacity_service(runtime, access=access), create_organization_service(runtime, access=access), 'planning')
 """, database, access)
     app.session_state['target_resource_pool_id'] = parent
-    app.run()
+    with patch('app.presentation.components.action_table.action_table', return_value=None) as table:
+        app.run()
+    assert table.call_args.kwargs['key'] == f'pool_assignments_{leaf}'
+    assert table.call_args.args[0][0]['id'] == assignment
     assert not app.exception and not app.error
-    assert any('Container pool' in info.value for info in app.info)
     assert app.dataframe[0].value.iloc[0]['Pool'] == 'Delivery'
-    assert app.dataframe[0].value.iloc[0]['Capacity (FTE)'] == 4
+    assert app.dataframe[0].value.iloc[0]['Resource'] == 'Ada Lovelace'
+    assert app.dataframe[0].value.iloc[0]['Effective FTE'] == 0.5
     assert not any(button.key == f'btn_add_map_{parent}' for button in app.button)
     assert app.metric[1].value == '4.00 FTE'

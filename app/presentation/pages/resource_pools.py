@@ -1,31 +1,19 @@
 """Resource-pool settings backed by typed catalog and capacity use cases."""
 
-import pandas as pd
 import streamlit as st
+import pandas as pd
 
 from app.application.services.organization import OrganizationService
 from app.application.services.resource_pools import ResourcePoolService
 from app.application.services.pool_capacity import PoolCapacityService
 from app.domain.resources.hierarchy import PoolHierarchy
-from app.presentation.components.organization_frames import (
-    functions_frame,
-    teams_frame,
-    employees_frame,
-)
-from app.presentation.components.resource_pool_frames import (
-    pools_frame,
-    mappings_frame,
-    tags_frame,
-)
 from app.presentation.components.resource_pool_dialogs import (
     pool_errors,
-    require_change,
     _open_add_pool_dialog,
     _open_edit_pool_dialog,
-    _open_delete_pool_dialog,
-    _open_add_pool_mapping_dialog,
     _render_pool_assignments_table,
 )
+from app.presentation.components.resource_pool_tree import resource_pool_tree
 from app.presentation.i18n import get_current_locale, t
 
 
@@ -36,10 +24,7 @@ def render_resource_pools(
     organization: OrganizationService,
     planning_page: str,
 ) -> None:
-    """Render summaries and fetch full capacity details only for the selected pool."""
-    df_funcs = functions_frame(organization.get_all_functions())
-    df_teams = teams_frame(organization.get_all_teams())
-    df_emps = employees_frame(organization.get_all_employees())
+    """Render the tree, overassigned periods and selected pool resource details."""
     all_pool_details = capacity.get_summaries()
     pool_records = service.get_all_pools()
     hierarchy = PoolHierarchy(pool_records)
@@ -49,9 +34,6 @@ def render_resource_pools(
     total_assigned_capacity = sum((p.assigned_capacity_fte for p in leaf_details))
     peak_portfolio_assigned = sum((p.peak_assigned_fte for p in leaf_details))
     overassigned_pools_count = sum((1 for p in leaf_details if p.is_overassigned))
-    st.subheader(
-        f"{t('settings.pools_title', default='Resource Pools Management')} ({total_pools} {t('settings.stat_pools', default='Pools')} • {total_portfolio_capacity:.2f} {t('settings.stat_capacity', default='FTE Capacity')})"
-    )
     kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(5)
     kpi1.metric(t("settings.kpi_total_pools", default="Total Pools"), total_pools)
     kpi2.metric(
@@ -78,7 +60,7 @@ def render_resource_pools(
         kpi5.metric(t("settings.kpi_overassigned_pools", default="Overassigned Pools"), "0")
     st.divider()
     st.caption("Pools form a hierarchy. Only pools without children can be assigned; containers total their children’s capacity.")
-    col_sel, col_add_btn = st.columns([4, 1])
+    _, col_add_btn = st.columns([4, 1])
     with col_add_btn:
         if st.button(
             t("settings.btn_create_pool", default="Create Pool"),
@@ -86,8 +68,7 @@ def render_resource_pools(
             width="stretch",
         ):
             _open_add_pool_dialog(service)
-    df_all_pools = pools_frame(pool_records)
-    if df_all_pools.empty:
+    if not pool_records:
         st.info(
             t(
                 "settings.no_pools_registered",
@@ -95,194 +76,60 @@ def render_resource_pools(
             )
         )
     else:
-        pool_id_map = {int(p.pool_id): p for p in all_pool_details}
-        pool_options = df_all_pools["id"].tolist()
         target_pool_id = st.session_state.pop("target_resource_pool_id", None)
-        if target_pool_id is not None and int(target_pool_id) in pool_options:
-            st.session_state["sb_selected_resource_pool"] = int(target_pool_id)
-        with col_sel:
-            selected_pool_id = st.selectbox(
-                t(
-                    "settings.select_pool_to_inspect",
-                    default="Select Resource Pool to Inspect & Configure",
-                ),
-                options=pool_options,
-                format_func=lambda pid: (
-                    f"#{pid} - {pool_id_map[pid].pool_name} (Defined {pool_id_map[pid].total_capacity_fte:.2f} FTE | Assigned {pool_id_map[pid].assigned_capacity_fte:.2f} FTE {('| OVERASSIGNED' if pool_id_map[pid].is_overassigned else '| OK')})"
-                    if pid in pool_id_map
-                    else f"Pool #{pid}"
-                ),
-                key="sb_selected_resource_pool",
-            )
+        selected_pool_id = target_pool_id or st.session_state.get("sb_selected_resource_pool")
+        if selected_pool_id not in hierarchy.pools:
+            selected_pool_id = next(identity for identity, pool in hierarchy.pools.items()
+                                    if pool.parent_pool_id is None)
+        st.session_state["sb_selected_resource_pool"] = selected_pool_id
+        event = resource_pool_tree(hierarchy,
+            {row.pool_id: row.total_capacity_fte for row in all_pool_details}, selected_pool_id,
+            assigned_capacities={row.pool_id: row.assigned_capacity_fte for row in all_pool_details},
+            pool_types={row.id: row.label(get_current_locale()) for row in service.get_all_pool_types()},
+            hierarchy_types={row.id: row.label(get_current_locale()) for row in service.get_all_hierarchy_types()})
+        if event:
+            selected_pool_id = event['id']
+            st.session_state["sb_selected_resource_pool"] = selected_pool_id
+            if event['action'] == 'select':
+                st.rerun()
+            elif event['action'] == 'edit':
+                _open_edit_pool_dialog(service, selected_pool_id)
+            else:
+                warning = service.parent_pool_warning(selected_pool_id)
+                if warning:
+                    st.warning(warning)
+                else:
+                    _open_add_pool_dialog(service, selected_pool_id)
         details = capacity.get_details([selected_pool_id])
         current_detail = details[0] if details else None
+        if current_detail and current_detail.is_overassigned:
+            st.error(
+                f"**Overassigned periods - {current_detail.pool_name}**\n\n"
+                + (', '.join(current_detail.overassignment_intervals) or 'Active overlapping assignments')
+            )
+        elif current_detail:
+            st.caption(f"No overassigned periods for {current_detail.pool_name}.")
         if current_detail:
-            c_info, c_actions = st.columns([4, 1])
-            with c_info:
-                st.markdown(
-                    f"### **{current_detail.pool_name}** `[Pool #{current_detail.pool_id}]`"
-                )
-                pool_obj = service.get_pool_by_id(selected_pool_id)
-                if pool_obj:
-                    type_labels = {record.id: record.label(get_current_locale())
-                                   for record in service.get_all_pool_types()}
-                    st.text(t("pool_types.type", default="Pool type") + ": " + type_labels.get(pool_obj.pool_type_id, ""))
-                if pool_obj and pool_obj.hierarchy_type_id is not None:
-                    hierarchy_labels = {record.id: record.label(get_current_locale())
-                                        for record in service.get_all_hierarchy_types()}
-                    st.text(t("hierarchy.type") + ": " + hierarchy_labels.get(pool_obj.hierarchy_type_id, ""))
-                if pool_obj and pool_obj.description:
-                    st.caption(f"{pool_obj.description}")
-                if pool_obj and pool_obj.parent_pool_id in hierarchy.pools:
-                    st.text(f"Parent pool: {hierarchy.pools[pool_obj.parent_pool_id].name}")
-                pool_tags = tags_frame(service.get_pool_tags(selected_pool_id))
-                if not pool_tags.empty:
-                    tag_text = " ".join(
-                        (f"`{row['tag_name']}`" for _, row in pool_tags.iterrows())
-                    )
-                    st.markdown(f"{tag_text}")
-            with c_actions:
-                c_edit, c_del = st.columns(2)
-                if c_edit.button(
-                    "Edit", key=f"btn_edit_pool_{selected_pool_id}", help="Edit pool details"
-                ):
-                    _open_edit_pool_dialog(service, selected_pool_id)
-                if c_del.button("Delete", key=f"btn_del_pool_{selected_pool_id}", help="Delete pool"):
-                    _open_delete_pool_dialog(service, selected_pool_id, current_detail.pool_name)
-            if current_detail.is_overassigned:
-                st.error(
-                    f"**DAILY OVERASSIGNMENT ALERT**: Peak daily demand of **{current_detail.peak_assigned_fte:.2f} FTE** exceeds defined pool capacity of **{current_detail.total_capacity_fte:.2f} FTE** by **+{current_detail.peak_excess_fte:.2f} FTE**!\n\n**Deduplicated assigned capacity**: {current_detail.assigned_capacity_fte:.2f} FTE.\n\n**Overassigned Period(s)**: {(', '.join(current_detail.overassignment_intervals) if current_detail.overassignment_intervals else 'Active overlapping assignments')}"
-                )
+            leaf_details = (
+                capacity.get_details(hierarchy.descendants(selected_pool_id, leaves_only=True))
+                if hierarchy.children.get(selected_pool_id) else [current_detail]
+            )
+            st.markdown("#### Deduplicated Assigned Capacity Breakdown")
+            st.caption("Employees mapped directly or through several teams are counted once within each pool.")
+            contributions = [
+                {"Pool": detail.pool_name, "Resource": item.resource_name,
+                 "Resource type": item.resource_type.title(), "Function": item.function_name,
+                 "Nominal FTE": item.nominal_fte, "Effective %": item.effective_allocation_pct,
+                 "Effective FTE": item.effective_fte, "Source": item.source_name,
+                 "Deduplication": "Direct override" if item.is_deduplicated else "Standard"}
+                for detail in leaf_details for item in detail.contributing_resources
+            ]
+            if contributions:
+                st.dataframe(pd.DataFrame(contributions), hide_index=True, width="stretch")
             else:
-                st.success(
-                    f"**CAPACITY NORMAL**: Defined pool capacity is **{current_detail.total_capacity_fte:.2f} FTE**; deduplicated assigned capacity is **{current_detail.assigned_capacity_fte:.2f} FTE**. Peak active daily demand is **{current_detail.peak_assigned_fte:.2f} FTE**."
-                )
-            st.divider()
-            warning = service.parent_pool_warning(selected_pool_id)
-            if st.button("Create child pool", key=f"child_pool_{selected_pool_id}", disabled=warning is not None):
-                _open_add_pool_dialog(service, selected_pool_id)
-            if warning:
-                st.warning(warning)
-            children = hierarchy.children.get(selected_pool_id, [])
-            if children:
-                st.info("Container pool: capacity and demand are aggregated from its children. Assign a leaf pool to a project or task.")
-                st.dataframe(pd.DataFrame([
-                    {"Pool": hierarchy.pools[identity].name,
-                     "Role": "Container" if hierarchy.children.get(identity) else "Assignable leaf",
-                     "Capacity (FTE)": pool_id_map[identity].total_capacity_fte if identity in pool_id_map else None}
-                    for identity in children]), hide_index=True, width="stretch")
-                return
-            st.write(
-                f"#### / {t('settings.mapped_teams_funcs', default='Assigned Teams & Employees')} (0% - 100%)"
-            )
-            df_pool_maps = mappings_frame(service.get_mappings_by_pool(selected_pool_id))
-            col_m_add, _ = st.columns([2, 3])
-            with col_m_add:
-                if st.button(
-                    t("settings.btn_add_mapping", default="Assign Team or Employee"),
-                    key=f"btn_add_map_{selected_pool_id}",
-                ):
-                    _open_add_pool_mapping_dialog(service, selected_pool_id, df_teams, df_emps)
-            if df_pool_maps.empty:
-                st.info(
-                    t(
-                        "settings.no_mappings_in_pool",
-                        default="No teams or employees assigned to this pool yet. Click 'Assign Team or Employee' above.",
-                    )
-                )
-            else:
-                team_lookup = (
-                    dict(zip(df_teams["team_id"], df_teams["team_name"]))
-                    if not df_teams.empty
-                    else {}
-                )
-                func_lookup = (
-                    dict(zip(df_funcs["function_id"], df_funcs["name"]))
-                    if not df_funcs.empty
-                    else {}
-                )
-                employee_lookup = (
-                    {
-                        int(
-                            row["employee_id"]
-                        ): f"{str(row['firstname']).strip()} {str(row['lastname']).strip()}".strip()
-                        for _, row in df_emps.iterrows()
-                    }
-                    if not df_emps.empty
-                    else {}
-                )
-                for _, m_row in df_pool_maps.iterrows():
-                    m_id = int(m_row["id"])
-                    m_type = str(m_row["target_type"]).lower()
-                    m_tid = int(m_row["target_id"])
-                    m_pct = float(m_row["allocation_pct"])
-                    if m_type == "team":
-                        target_label = team_lookup.get(m_tid, f"Team #{m_tid}")
-                        icon = "Team:"
-                    elif m_type == "employee":
-                        target_label = employee_lookup.get(m_tid, f"Employee #{m_tid}")
-                        icon = "Employee:"
-                    else:
-                        target_label = func_lookup.get(m_tid, f"Function #{m_tid}")
-                        icon = "Legacy function:"
-                    mc1, mc2, mc3 = st.columns([3, 2, 1])
-                    mc1.markdown(f"**{icon}** `{target_label}` `[#{m_tid}]`")
-                    new_pct = mc2.number_input(
-                        f"Allocation % (#{m_id})",
-                        min_value=0.0,
-                        max_value=100.0,
-                        value=m_pct,
-                        step=5.0,
-                        key=f"num_alloc_pct_{m_id}",
-                        label_visibility="collapsed",
-                    )
-                    if abs(new_pct - m_pct) > 0.01:
-                        require_change(service.update_mapping(m_id, float(new_pct)))
-                        st.rerun()
-                    if mc3.button(
-                        "", key=f"btn_del_map_{m_id}", help="Remove mapping from pool"
-                    ):
-                        require_change(service.delete_mapping(m_id))
-                        st.toast("Mapping removed from pool.")
-                        st.rerun()
-            st.divider()
-            st.write(
-                f"#### {t('settings.dedup_breakdown_title', default='Deduplicated Assigned Capacity Breakdown')}"
-            )
-            st.caption(
-                t(
-                    "settings.dedup_caption",
-                    default="Shows unique employees contributing to assigned capacity. Employees reached through several teams or assigned directly and through a team are counted once.",
-                )
-            )
-            if not current_detail.contributing_resources:
-                st.caption("No contributing functions found.")
-            else:
-                dedup_table_data = []
-                for cf in current_detail.contributing_resources:
-                    status_str = (
-                        "Considered Once (Direct Override)"
-                        if cf.is_deduplicated
-                        else "Standard"
-                    )
-                    dedup_table_data.append(
-                        {
-                            "Resource type": cf.resource_type.title(),
-                            "Resource ID": cf.resource_id,
-                            "Resource": cf.resource_name,
-                            "Function": cf.function_name,
-                            "Nominal FTE": f"{cf.nominal_fte:.2f}",
-                            "Effective %": f"{cf.effective_allocation_pct:.1f}%",
-                            "Effective FTE": f"{cf.effective_fte:.2f}",
-                            "Source": f"{cf.source_type.title()} ({cf.source_name})",
-                            "Deduplication Rule": status_str,
-                        }
-                    )
-                st.dataframe(pd.DataFrame(dedup_table_data), width="stretch", hide_index=True)
-            st.divider()
-            st.write(
-                f"#### / {t('settings.assignments_section_title', default='Active Allocations on Projects & Tasks')}"
-            )
-            _render_pool_assignments_table(
-                current_detail.assignments, selected_pool_id, service, planning_page
-            )
+                st.caption("No mapped resources contribute capacity to this pool.")
+            st.markdown("#### Active Allocations on Projects & Tasks")
+            for detail in leaf_details:
+                if len(leaf_details) > 1:
+                    st.markdown(f"**{detail.pool_name}**")
+                _render_pool_assignments_table(detail.assignments, detail.pool_id, service, planning_page)

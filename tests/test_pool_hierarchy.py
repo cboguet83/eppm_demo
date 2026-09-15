@@ -50,6 +50,7 @@ def test_container_sums_same_day_capacity_and_usage_instead_of_independent_peaks
                      daily_usage={'2026-01-02': 7}, daily_effective_capacity={}, daily_assigned_capacity={})
     result = aggregate_capacity(ResourcePool('Container', id=3, capacity_fte=999), [first, second])
     assert result.total_capacity_fte == result.effective_capacity_fte == 9
+    assert result.assigned_capacity_fte == 9
     assert result.defined_capacity_fte is None
     assert result.peak_assigned_fte == 7
     assert result.daily_usage == {'2026-01-01': 7, '2026-01-02': 7}
