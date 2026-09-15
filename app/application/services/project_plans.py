@@ -16,6 +16,22 @@ class ProjectPlanService:
         """Read accessible plan versions including archived history."""
         return self._gateway.run(lambda store: store.list_plans(project_id))
 
+    def dependency_context(self, contents: list[PlanContent]) -> dict[int, PlanContent]:
+        """Batch-load only external predecessor projects' current schedules."""
+        projects = {dep['predecessor_project_id'] for content in contents for dep in content.dependencies
+                    if dep['predecessor_project_id'] is not None}
+        tasks = {dep['predecessor_task_id'] for content in contents for dep in content.dependencies
+                 if dep['predecessor_task_id'] is not None}
+        return self._gateway.run(lambda store: store.current_context(list(projects), list(tasks)))
+
+    def tag_choices(self) -> dict[int, str]:
+        """Read existing tag names for plan task editing without catalog write rights."""
+        return self._gateway.run(lambda store: store.tag_choices())
+
+    def versioned_projects(self) -> list[int]:
+        """Return visible projects whose schedules are edited through new plans."""
+        return self._gateway.run(lambda store: store.versioned_projects())
+
     def initialize(self, project_id: int) -> ProjectPlan:
         """Capture a newly created project's initial current plan exactly once."""
         def operation(store: PlanStore) -> ProjectPlan:

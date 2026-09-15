@@ -6,6 +6,10 @@
 
 ## Context and decision
 
+Update: [ADR 0028](0028-project-plans.md) makes schedule edits append immutable
+plans for versioned projects. Actual progress remains live. The legacy direct
+editing workflow below remains available for unversioned operator data.
+
 The planning repository combined task writes, dependency normalization, SQL, and
 DataFrames. Creating or editing a task committed its details before replacing its
 dependencies in another transaction. A failed dependency change could therefore

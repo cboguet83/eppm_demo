@@ -52,6 +52,7 @@ def test_dashboard_drill_through_replaces_stale_planning_filters(database: Runti
         connection.execute("UPDATE eppm.project SET name='Second project' WHERE id=2")
     app = AppTest.from_function(planning_app, args=(database, access), default_timeout=30)
     app.session_state["ms_multi_projects"] = [1]
+    app.session_state['planning_view_mode'] = 'Project plans'
     app.session_state["ms_planning_tag_filter"] = ["Old tag"]
     app.session_state["active_resource_pool_filter"] = {"pool_ids": [999]}
     app.session_state["planning_flex_fields"] = ["name"]
@@ -163,7 +164,7 @@ def test_adding_task_keeps_multi_project_scope_and_focuses_the_created_project(d
         ({"progress_pct": None}, "number"),
         ({"task_name": ["bad"]}, "text"),
         ({"end_date": "2025-01-01"}, "after"),
-        ({"dependencies": [{"predecessor_task_id": 999}]}, "constraint"),
+        ({"dependencies": [{"predecessor_task_id": 999}]}, "not permitted"),
     ],
 )
 def test_malformed_or_conflicting_gantt_create_does_not_leave_a_task(

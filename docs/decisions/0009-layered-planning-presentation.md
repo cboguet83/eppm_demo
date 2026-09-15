@@ -6,6 +6,10 @@
 
 ## Context and decision
 
+Update: [ADR 0028](0028-project-plans.md) adds Project plans with a paired
+reference/alternative Gantt. Current portfolio remains the default for existing
+filters and drill-through; its versioned schedules are read-only.
+
 The Gantt screen still constructed repositories, loaded caches through database
 paths, and called legacy capacity helpers. Its project filters mixed DataFrame
 formatting with legacy organization and portfolio services.

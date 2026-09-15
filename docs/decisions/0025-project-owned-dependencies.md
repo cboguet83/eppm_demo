@@ -51,6 +51,12 @@ flowchart LR
 
 ## Consequences
 
+For versioned projects, [ADR 0028](0028-project-plans.md) supersedes direct link
+editing: dependencies are immutable plan content, edited through alternative
+drafts. Removed endpoints remain in plan history and produce comparison warnings;
+current projection links retain only live endpoints. Legacy unversioned edits
+keep the authorization and transaction rules described here.
+
 This adds storage and authorization infrastructure, without moving new scheduling
 rules into SQL. Summary reads batch visible project links and their date bounds.
 Whole-project warnings use the same endpoint semantics as step warnings. Separate

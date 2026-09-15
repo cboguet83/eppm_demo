@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from app.application.ports.planning_sources import PlanningSourceReader
 from app.application.services.organization import OrganizationService
 from app.application.services.planning import PlanningService
+from app.application.services.project_plans import ProjectPlanService
 from app.application.services.pool_capacity import PoolCapacityService
 from app.application.services.resource_pools import ResourcePoolService
 from app.application.services.schema import SchemaService
@@ -25,6 +26,7 @@ class PlanningWorkspace:
     schema: SchemaService
     projects: ProjectWorkspace
     sources: PlanningSourceReader
+    plans: ProjectPlanService | None = None
 
     def revision(self) -> tuple:
         """Include the source database identity in every display-cache key."""

@@ -1520,6 +1520,7 @@ def _render_planning_chart(
     gantt_event = _interactive_gantt(
         **args,
         permissions={"edit_all": permissions.allows(Permission.EDIT),
+                     "versioned_projects": workspace.plans.versioned_projects() if workspace.plans is not None else [],
                      "editable_projects": sorted(permissions.project_permissions.get(Permission.EDIT, frozenset())),
                      "manage_shared": permissions.allows(Permission.SHARED)},
         filter_reset=st.session_state.get("planning_filter_reset", 0),
@@ -1629,6 +1630,17 @@ def _render_planning_chart(
 @planning_errors
 def render_planning_milestones(workspace: PlanningWorkspace) -> None:
     """Render planning filters and their interactive Gantt and capacity grids."""
+    if workspace.plans is not None:
+        if not st.session_state.get('plan_drafts') and any(key in st.session_state for key in (
+                'dashboard_planning_projects', 'pending_resource_pool_filter', 'target_planning_project_id')):
+            st.session_state['planning_view_mode'] = 'Current portfolio'
+        mode = st.segmented_control('Planning view', ['Project plans', 'Current portfolio'],
+            default='Current portfolio', key='planning_view_mode', disabled=bool(st.session_state.get('plan_drafts')))
+        if mode == 'Project plans':
+            from app.presentation.pages.project_plans import render_project_plans
+            render_project_plans(workspace)
+            return
+        st.caption('Versioned schedules are read-only here. Open Project plans to edit an alternative or update actual progress.')
     st.html(
         """
         <style>

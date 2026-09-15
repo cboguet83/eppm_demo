@@ -229,7 +229,10 @@ def render_application(workspace: ApplicationWorkspace) -> None:
         format_func=lambda k: nav_map.get(k, k),
         key="app_sidebar_nav",
         on_change=_change_sidebar_page,
+        disabled=bool(st.session_state.get('plan_drafts')),
     )
+    if st.session_state.get('plan_drafts'):
+        st.sidebar.caption('Save or cancel the plan drafts before leaving Planning.')
 
     if workspace.totals is not None:
         totals = workspace.totals()

@@ -1,6 +1,6 @@
 # ADR 0028: Project plans and scenario comparison
 
-Status: implementation in progress on `feature/project-plan-scenarios`.
+Status: Accepted and implemented on `feature/project-plan-scenarios`.
 
 ## Decision
 
@@ -30,10 +30,52 @@ that projection in the same transaction as the current designation. Existing
 progress on surviving tasks is retained. New plans reserve stable task identities
 without publishing their tasks into the current schedule.
 
+Migration 0042 retains actual progress even when a task is absent from the current
+plan and later restored. Current projection links to removed tasks are pruned;
+the immutable owner plan keeps those links. The plan Gantt reports unresolved
+endpoints and resolves them again when that task is present in the compared plan.
+The older current-portfolio Gantt shows only links with live endpoints.
+Protected legacy primary references outside the approver's edit scope can block
+task removal during adoption. This fails atomically with an explicit message;
+it does not bypass another project's permissions.
+
+New projects receive an empty Approved current plan in their creation transaction.
+Legacy/operator-created projects can be initialized once from Project plans.
+Direct schedule/assignment/tag edits are rejected in Python for versioned projects.
+The current portfolio remains the default view, preserving existing drill-through
+filters; use Project plans to create alternatives. Actual progress has its own
+editor and never creates a plan version.
+
 Lifecycle and validation rules live in Python. No new PostgreSQL business
 functions are introduced. Existing authenticated row-security predicates enforce
 project scope. Projection write policies admit editors and approvers, while
 Python entry points distinguish editing drafts from adopting approved plans.
+Existing task and assignment authorization guards still protect ordinary direct
+writes; scoped approver publication is covered by the new row-security policies.
+Migration 0043 also preserves predecessor edit scope on direct link updates and
+deletions, alongside the insert restrictions.
+
+Snapshot reads redact inaccessible cross-project endpoints. Saving a copy retains
+those protected links internally. Legacy destructive scheduling operations retain
+their existing checks for references outside the actor's edit scope. The migration
+backfill is a frozen Python helper covered by the migration checksum; runtime
+codec changes do not alter an applied migration's checksum.
+
+## Workflow
+
+1. Open Planning → Project plans and select projects.
+2. Choose a Reference (baseline when available) and Alternative per project.
+3. Edit Alternative: change tasks, dependencies, tags and pool assignments using
+   the grids, import a task CSV template, or move alternative bars on the Gantt.
+4. Save creates Proposed plans by default (Draft is also available). Several
+   project drafts save in one transaction. Cancel discards an unsaved draft.
+5. A project approver or Business Admin approves a plan, then explicitly selects
+   Set current and/or Set baseline. Neither designation implies the other.
+
+Both comparison sides use current shared capacity and availability, including
+exceptions; resource demand follows each selected plan's dates and assignments.
+Optional resource impact includes other projects' current demand. Named portfolio
+scenario sets and portfolio comparison grids remain outside this release.
 
 ## C3 components
 
@@ -52,4 +94,7 @@ flowchart LR
 
 PostgreSQL tests cover immutable storage, scoped access, version creation,
 approval/adoption, independent baseline selection, deletion/restoration,
-stale metadata and atomic multi-project rollback.
+stale metadata and atomic multi-project rollback. Additional tests cover populated
+migrations, preserved actual progress, hidden and unresolved dependencies, new
+project initialization, live capacity exceptions and relative assignment dates.
+Streamlit and browser tests verify save/cancel and alternative-only Gantt editing.

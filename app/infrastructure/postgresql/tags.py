@@ -19,6 +19,7 @@ from app.infrastructure.postgresql.business import run_business
 from app.infrastructure.postgresql.errors import DatabaseUnavailableError, TransactionRetryError
 from app.infrastructure.postgresql.pool import Database
 from app.shared.logging import get_logger
+from app.infrastructure.postgresql.plan_guards import require_unversioned
 
 logger = get_logger(__name__)
 
@@ -236,16 +237,24 @@ class PostgresTagStore:
 
     def create_task_tag(self, tt: TaskTag) -> int:
         """Insert content with authoritative edit checks on the task's owner."""
+        require_unversioned(self.connection, task_id=tt.task_id)
         return self.connection.execute('INSERT INTO eppm.task_tag(task_id,tag_id,free_tag) VALUES (%s,%s,%s) RETURNING id',
                                        (tt.task_id, tt.tag_id, tt.free_tag)).fetchone()[0]
 
     def update_task_tag(self, tt: TaskTag) -> bool:
         """Validate old and new task owners through permanent mutation guards."""
+        require_unversioned(self.connection, task_id=tt.task_id)
+        previous = self.get_task_tag_by_id(tt.id)
+        if previous:
+            require_unversioned(self.connection, task_id=previous.task_id)
         return self.connection.execute('UPDATE eppm.task_tag SET task_id=%s,tag_id=%s,free_tag=%s WHERE id=%s',
                                        (tt.task_id, tt.tag_id, tt.free_tag, tt.id)).rowcount > 0
 
     def delete_task_tag(self, tt_id: int) -> bool:
         """Delete a visible assignment under its current owner's edit guard."""
+        previous = self.get_task_tag_by_id(tt_id)
+        if previous:
+            require_unversioned(self.connection, task_id=previous.task_id)
         return self.connection.execute('DELETE FROM eppm.task_tag WHERE id=%s', (tt_id,)).rowcount > 0
 
     def _links(self, ids: list[int], *, tasks: bool) -> dict[int, list[TagLink]]:

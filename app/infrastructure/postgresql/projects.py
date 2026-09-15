@@ -29,6 +29,12 @@ logger = get_logger(__name__)
 class PostgresProjectStore(PostgresWbsStore):
     """Execute project, property, link and WBS operations in one transaction."""
 
+    def __init__(self, connection: psycopg.Connection,
+                 initialize_plan: Callable[[int], None] | None = None) -> None:
+        """Inject initial-plan creation into the same project transaction."""
+        super().__init__(connection)
+        self._initialize_plan = initialize_plan
+
     def find(self, project_id: int) -> Project | None:
         """Read exact native budgets and all stored values, including inactive ones."""
         row = self.connection.execute('SELECT id,name,status,planned_budget,actual_budget,function_id,project_type_id '
@@ -68,6 +74,8 @@ class PostgresProjectStore(PostgresWbsStore):
                                 (identity, project.name, project.status, project.planned_budget, project.actual_budget,
                                  project.function_id, project.project_type_id))
         write_values(self.connection, identity, project.dynamic_attributes)
+        if self._initialize_plan is not None:
+            self._initialize_plan(identity)
         return identity
 
     def update(self, project: Project) -> None:
@@ -156,8 +164,18 @@ class PostgresProjectGateway:
     def run[Result](self, operation: Callable[[ProjectStore], Result], *, write: bool = False,
                     permission: Permission | None = None, project_ids: Collection[int] | None = None) -> Result:
         """Execute every attempt with fresh authorization and a caller-owned store."""
-        return self._run(lambda connection: operation(PostgresProjectStore(connection)), write=write,
-                         permission=permission, project_ids=project_ids)
+        def callback(connection: psycopg.Connection) -> Result:
+            from app.domain.planning.plans import PlanContent
+            from app.infrastructure.postgresql.project_plans import PostgresPlanStore
+
+            def initialize_plan(project_id: int) -> None:
+                security = PostgresAccessStore(connection, ServerRequestSigner(self.key), self.access.policy,
+                                               self.access.actor, writable=True)
+                PostgresPlanStore(connection, self.access, security).insert(
+                    project_id, 'Initial plan', 'approved', None, PlanContent(), current=True)
+
+            return operation(PostgresProjectStore(connection, initialize_plan))
+        return self._run(callback, write=write, permission=permission, project_ids=project_ids)
 
     def read_planning_catalog(self, property_ids: tuple[str, ...]) -> list[PlanningProject]:
         """Read only requested active properties within the visible project snapshot."""

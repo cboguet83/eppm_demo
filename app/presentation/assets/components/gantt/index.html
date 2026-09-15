@@ -2246,16 +2246,19 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     // Presentation hints only. Every server operation checks current stored grants.
     let editAllProjects = false;
     let editableProjectIds = new Set();
+    let versionedProjectIds = new Set();
     let canManageSharedData = false;
 
     function updatePermissionControls(permissions) {
       editAllProjects = permissions?.edit_all === true;
       editableProjectIds = new Set((permissions?.editable_projects || []).map(String));
+      versionedProjectIds = new Set((permissions?.versioned_projects || []).map(String));
       canManageSharedData = permissions?.manage_shared === true;
     }
 
     function canEditProject(projectId) {
-      return projectId != null && (editAllProjects || editableProjectIds.has(String(projectId)));
+      return projectId != null && !versionedProjectIds.has(String(projectId))
+        && (editAllProjects || editableProjectIds.has(String(projectId)));
     }
 
     function canEditTask(task) {

@@ -1,12 +1,14 @@
 """Immutable project-plan values and Python lifecycle/comparison rules."""
 
 from dataclasses import dataclass, field, replace
-from datetime import datetime
+from datetime import date, datetime
 from typing import TypedDict
 
 from app.domain.planning.rules import normalize_task
 from app.domain.resources.models import PoolAssignment
 from app.domain.resources.rules import normalize_assignment
+from app.domain.tags.models import TaskTag
+from app.domain.tags.rules import normalize_task_tag
 
 
 class PlanTask(TypedDict):
@@ -30,6 +32,13 @@ class PlanDependency(TypedDict):
     lag_days: int
 
 
+class PlanTag(TypedDict):
+    """Dictionary or free-text task tag, retained with the schedule version."""
+
+    tag_id: int | None
+    free_tag: str | None
+
+
 @dataclass
 class PlanContent:
     """Complete editable schedule copy, independent of database models."""
@@ -37,7 +46,7 @@ class PlanContent:
     tasks: list[PlanTask] = field(default_factory=list)
     dependencies: list[PlanDependency] = field(default_factory=list)
     assignments: list[PoolAssignment] = field(default_factory=list)
-    task_tags: dict[int, list[int]] = field(default_factory=dict)
+    task_tags: dict[int, list[PlanTag]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -96,17 +105,36 @@ def normalize_content(project_id: int, content: PlanContent) -> PlanContent:
             raise ValueError('Select exactly one dependency predecessor.')
         if row['link_type'] not in {'FS', 'FF', 'SS', 'SF'} or type(row['lag_days']) is not int:
             raise ValueError('Invalid dependency type or lag.')
+        if row['predecessor_task_id'] == row['task_id'] and row['task_id'] is not None:
+            raise ValueError('A task cannot depend on itself.')
+        if row['predecessor_project_id'] == project_id:
+            raise ValueError('Select another project as the predecessor.')
         if row not in dependencies:
             dependencies.append(dict(row))
     assignments = []
     for row in content.assignments:
         if row.task_id is not None and row.task_id not in identities:
             raise ValueError('A resource assignment targets a task absent from the plan.')
-        assignments.append(normalize_assignment(replace(row, project_id=project_id)))
+        normalized = normalize_assignment(replace(row, project_id=project_id))
+        try:
+            start = date.fromisoformat(normalized.start_date) if normalized.start_date else None
+            end = date.fromisoformat(normalized.end_date) if normalized.end_date else None
+        except (TypeError, ValueError) as exc:
+            raise ValueError('Assignment dates must use YYYY-MM-DD.') from exc
+        if start and end and start > end:
+            raise ValueError('Assignment start date cannot follow its stop date.')
+        assignments.append(normalized)
     if set(content.task_tags) - identities:
         raise ValueError('A tag targets a task absent from the plan.')
-    return PlanContent(tasks, dependencies, assignments,
-                       {identity: list(dict.fromkeys(tags)) for identity, tags in content.task_tags.items()})
+    normalized_tags = {}
+    for identity, tags in content.task_tags.items():
+        values = []
+        for tag in tags:
+            # Temporary negative task IDs are remapped only after validation.
+            value = normalize_task_tag(TaskTag(task_id=abs(identity), **tag))
+            values.append(PlanTag(tag_id=value.tag_id, free_tag=value.free_tag))
+        normalized_tags[identity] = values
+    return PlanContent(tasks, dependencies, assignments, normalized_tags)
 
 
 def compare_tasks(reference: PlanContent, alternative: PlanContent) -> list[dict]:

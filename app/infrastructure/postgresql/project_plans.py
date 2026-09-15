@@ -20,6 +20,9 @@ from app.infrastructure.postgresql.errors import DatabaseUnavailableError, Trans
 from app.infrastructure.postgresql.plan_content import capture_content, decode_content, encode_content
 from app.infrastructure.postgresql.pool import Database
 from app.infrastructure.postgresql.resource_pools import PostgresResourcePoolStore
+from app.shared.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class PostgresPlanStore:
@@ -28,6 +31,7 @@ class PostgresPlanStore:
     def __init__(self, connection: psycopg.Connection, access: BusinessAccess,
                  security: PostgresAccessStore) -> None:
         self.connection, self.access, self.security = connection, access, security
+        self._visibility: tuple[set[int], set[int]] | None = None
 
     def lock_project(self, project_id: int) -> None:
         """Serialize version numbering and designation changes for one owner."""
@@ -48,14 +52,56 @@ class PostgresPlanStore:
     def list_plans(self, project_id: int) -> list[ProjectPlan]:
         """Read immutable contents and current metadata under project RLS."""
         with self.connection.cursor(row_factory=dict_row) as cursor:
-            return [ProjectPlan(**dict(row, content=decode_content(row['content']))) for row in cursor.execute('''
+            rows = list(cursor.execute('''
                 SELECT p.id,p.project_id,p.version,p.name,s.code AS status,p.source_plan_id,
                     p.is_current,p.is_baseline,p.revision,p.author,p.created_at,p.content
                 FROM eppm.project_plan p JOIN eppm.plan_status s ON s.id=p.status_id
-                WHERE p.project_id=%s ORDER BY p.version DESC''', (project_id,))]
+                WHERE p.project_id=%s ORDER BY p.version DESC''', (project_id,)))
+        visibility = self._endpoint_visibility()
+        result = []
+        for row in rows:
+            content = decode_content(row['content'])
+            content.dependencies = [dep for dep in content.dependencies if self._dependency_visible(dep, content, visibility)]
+            result.append(ProjectPlan(**dict(row, content=content)))
+        return result
+
+    def _endpoint_visibility(self) -> tuple[set[int], set[int]]:
+        if self._visibility is None:
+            self._visibility = ({row[0] for row in self.connection.execute('SELECT id FROM eppm.project')},
+                                {row[0] for row in self.connection.execute('''SELECT id FROM eppm.project_task
+                                    UNION SELECT (task->>'id')::bigint FROM eppm.project_plan,
+                                        jsonb_array_elements(content->'tasks') task''')})
+        return self._visibility
+
+    @staticmethod
+    def _dependency_visible(dependency: dict, content: PlanContent,
+                            visibility: tuple[set[int], set[int]]) -> bool:
+        projects, tasks = visibility
+        if dependency['predecessor_project_id'] is not None:
+            return dependency['predecessor_project_id'] in projects
+        return dependency['predecessor_task_id'] in tasks | {row['id'] for row in content.tasks}
 
     def snapshot(self, project_id: int) -> PlanContent:
         return capture_content(self.connection, project_id)
+
+    def tag_choices(self) -> dict[int, str]:
+        return dict(self.connection.execute('SELECT id,tag FROM eppm.tag_dictionnary ORDER BY tag,id'))
+
+    def versioned_projects(self) -> list[int]:
+        """Read current-plan owners without loading their schedule snapshots."""
+        return [row[0] for row in self.connection.execute('SELECT project_id FROM eppm.project_plan WHERE is_current')]
+
+    def current_context(self, project_ids: list[int], task_ids: list[int]) -> dict[int, PlanContent]:
+        """Resolve referenced external schedules in one scoped query."""
+        result = {identity: decode_content(content) for identity, content in self.connection.execute('''
+            SELECT project_id,content FROM eppm.project_plan WHERE is_current AND
+            (project_id=ANY(%s::bigint[]) OR project_id IN
+                (SELECT project_id FROM eppm.project_plan,
+                    jsonb_array_elements(content->'tasks') task WHERE (task->>'id')::bigint=ANY(%s::bigint[])))''', (project_ids, task_ids))}
+        visibility = self._endpoint_visibility()
+        for content in result.values():
+            content.dependencies = [dep for dep in content.dependencies if self._dependency_visible(dep, content, visibility)]
+        return result
 
     def validate_references(self, project_id: int, content: PlanContent) -> None:
         """Check pool leaves, endpoint ownership and visible catalog references."""
@@ -70,18 +116,24 @@ class PostgresPlanStore:
         internal = {task['id'] for task in content.tasks}
         for dep in content.dependencies:
             predecessor = dep['predecessor_task_id']
-            if predecessor is not None and predecessor not in internal:
-                if not self.connection.execute('SELECT id FROM eppm.project_task WHERE id=%s', (predecessor,)).fetchone():
+            if predecessor is not None and predecessor not in internal and predecessor not in known:
+                if predecessor not in self._endpoint_visibility()[1]:
                     raise ValueError('A predecessor task is unavailable in the current project plans.')
             predecessor_project = dep['predecessor_project_id']
             if predecessor_project is not None and not self.connection.execute(
                     'SELECT id FROM eppm.project WHERE id=%s', (predecessor_project,)).fetchone():
                 raise AccessDenied()
-        tag_ids = {tag for tags in content.task_tags.values() for tag in tags}
+        tag_ids = {tag['tag_id'] for tags in content.task_tags.values() for tag in tags if tag['tag_id'] is not None}
         available = {row[0] for row in self.connection.execute(
             'SELECT id FROM eppm.tag_dictionnary WHERE id=ANY(%s::bigint[])', (list(tag_ids),))}
         if available != tag_ids:
             raise ValueError('A task tag no longer exists.')
+        known_assignments = {row.id for plan in self.list_plans(project_id) for row in plan.content.assignments}
+        known_assignments.update(row[0] for row in self.connection.execute(
+            'SELECT id FROM eppm.resource_pool_assignment WHERE project_id=%s', (project_id,)))
+        identities = [row.id for row in content.assignments if row.id and row.id > 0]
+        if len(identities) != len(set(identities)) or set(identities) - known_assignments:
+            raise ValueError('An assignment identity is duplicated or belongs to another project.')
 
     def reserve_identities(self, content: PlanContent) -> PlanContent:
         """Reserve permanent task/assignment IDs; sequence gaps on rollback are harmless."""
@@ -109,6 +161,16 @@ class PostgresPlanStore:
     def insert(self, project_id: int, name: str, status: str, source: int | None,
                content: PlanContent, *, current: bool = False) -> ProjectPlan:
         """Append a complete snapshot with a project-local monotonically increasing version."""
+        if source is not None:
+            raw = self.connection.execute('SELECT content FROM eppm.project_plan WHERE id=%s AND project_id=%s',
+                                           (source, project_id)).fetchone()
+            previous = decode_content(raw[0])
+            visibility = self._endpoint_visibility()
+            successors = {row['id'] for row in content.tasks}
+            protected = [dep for dep in previous.dependencies
+                         if not self._dependency_visible(dep, previous, visibility)
+                         and (dep['task_id'] is None or dep['task_id'] in successors)]
+            content = replace(content, dependencies=[*content.dependencies, *protected])
         identity = self.connection.execute('''INSERT INTO eppm.project_plan
             (project_id,version,name,status_id,source_plan_id,is_current,author,created_at,content)
             SELECT %s,coalesce(max(version),0)+1,%s,(SELECT id FROM eppm.plan_status WHERE code=%s),
@@ -157,5 +219,8 @@ class PostgresPlanGateway:
             return operation(PostgresPlanStore(connection, self.access, security))
         try:
             return run_business(self.database, self.key, self.access, callback, write=write)
-        except (psycopg.Error, DatabaseUnavailableError, TransactionRetryError):
+        except (psycopg.errors.ForeignKeyViolation, psycopg.errors.RestrictViolation):
+            raise ValueError('The plan change conflicts with protected references in other projects or a removed resource.') from None
+        except (psycopg.Error, DatabaseUnavailableError, TransactionRetryError) as error:
+            logger.error('Plan storage failure (%s; SQLSTATE=%s)', type(error).__name__, getattr(error, 'sqlstate', None))
             raise PlanningStorageError('The plan could not be saved. Reload and try again.') from None

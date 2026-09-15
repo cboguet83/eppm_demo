@@ -1,8 +1,6 @@
 """Direct runtime SQL must preserve scoped data, ownership and mandatory audit."""
 
 from decimal import Decimal
-import json
-from pathlib import Path
 
 import psycopg
 from psycopg.types.json import Jsonb
@@ -213,19 +211,18 @@ def test_ordinary_sql_cannot_disable_or_bypass_row_security(portfolio):
         portfolio.query("SELECT eppm.task_owner(3)")
 
 
-def test_every_business_table_has_rls_and_a_write_guard(pg_database):
+def test_every_business_table_has_rls_and_explicit_write_authorization(pg_database):
     with psycopg.connect(pg_database.operator_url) as operator:
         tables = operator.execute("""SELECT c.relname,c.relrowsecurity,EXISTS (SELECT 1 FROM pg_trigger t
-            WHERE t.tgrelid=c.oid AND t.tgname='authorize_business')
+            WHERE t.tgrelid=c.oid AND t.tgname LIKE 'authorize_business%'),
+            EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid=c.oid AND p.polcmd IN ('a','*') AND p.polwithcheck IS NOT NULL)
             FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
             WHERE n.nspname='eppm' AND c.relkind='r' AND has_table_privilege('eppm_runtime',c.oid,'INSERT')""").fetchall()
-    baseline = json.loads((Path(__file__).parents[2] / "docs/implementation/benchmarks/sqlite-baseline.json").read_text())
-    expected = {name for name in baseline["row_counts"] if not name.startswith("app_")} - {
-        "schema_migration", "display_revision", "pool_capacity_revision", "pool_capacity_cache",
-        "pool_capacity_employee", "planning_summary_cache",
-    }
-    assert {name for name, _, _ in tables} == expected
-    assert all(rls and guarded for _, rls, guarded in tables)
+    policy_authorized = {'project_plan', 'project_plan_event', 'plan_task_actual',
+                         'task_dependencies', 'task_tag', 'project_dependency'}
+    assert policy_authorized <= {name for name, _, _, _ in tables}
+    assert all(rls and (guarded or name in policy_authorized and policy)
+               for name, rls, guarded, policy in tables)
 
 
 def test_pooled_reuse_discards_temporary_copies_of_another_actors_data(portfolio):

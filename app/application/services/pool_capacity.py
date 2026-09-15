@@ -12,6 +12,8 @@ from app.domain.resources.container_capacity import aggregate_capacity
 from app.domain.resources.hierarchy import PoolHierarchy
 from app.domain.resources.allocation_scope import scope_pool_detail
 from app.domain.resources.models import PoolCapacityDetail, PoolCapacitySummary
+from app.domain.planning.plans import PlanContent
+from app.domain.planning.plan_comparison import scenario_capacity
 
 
 class PoolCapacityService:
@@ -54,6 +56,15 @@ class PoolCapacityService:
     def get_details(self, pool_ids: list[int], *, project_ids: set[int] | None = None) -> list[PoolCapacityDetail]:
         """Return full details only for explicitly requested pools."""
         return cast(list[PoolCapacityDetail], self._load(pool_ids, details=True, project_ids=project_ids))
+
+    def compare_plan_capacity(self, pool_ids: list[int], reference: dict[int, PlanContent],
+                              alternative: dict[int, PlanContent], names: dict[int, str]
+                              ) -> tuple[list[PoolCapacityDetail], list[PoolCapacityDetail]]:
+        """Evaluate both plan selections against one shared live-capacity snapshot."""
+        details = self.get_details(pool_ids)
+        today = self._today()
+        return (scenario_capacity(details, reference, names, today),
+                scenario_capacity(details, alternative, names, today))
 
     def current_capacities(self, hierarchy: PoolHierarchy, details: list[PoolCapacityDetail],
                            mapped_pool_ids: set[int]) -> dict[int, float]:

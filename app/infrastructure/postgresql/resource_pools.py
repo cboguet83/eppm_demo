@@ -21,6 +21,7 @@ from app.infrastructure.postgresql.errors import DatabaseUnavailableError, Trans
 from app.infrastructure.postgresql.hierarchy import hierarchy_types
 from app.infrastructure.postgresql.pool import Database
 from app.shared.logging import get_logger
+from app.infrastructure.postgresql.plan_guards import require_unversioned
 
 logger = get_logger(__name__)
 _CREATED = "to_char(created_at AT TIME ZONE 'UTC','YYYY-MM-DD HH24:MI:SS') AS created_at"
@@ -187,16 +188,24 @@ class PostgresResourcePoolStore:
 
     def create_assignment(self, assignment: PoolAssignment) -> int:
         """Create native demand under project-edit and task-owner guards."""
+        require_unversioned(self.connection, project_id=assignment.project_id)
         return self.connection.execute('INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,fte_assigned,start_date,end_date,notes,schedule_anchor,offset_days,duration_days) '
                                        'VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id', _assignment_values(assignment)).fetchone()[0]
 
     def update_assignment(self, assignment: PoolAssignment) -> bool:
         """Require both original and new project ownership for assignment moves."""
+        require_unversioned(self.connection, project_id=assignment.project_id)
+        previous = self.get_assignment_by_id(assignment.id)
+        if previous:
+            require_unversioned(self.connection, project_id=previous.project_id)
         return self.connection.execute('UPDATE eppm.resource_pool_assignment SET pool_id=%s,project_id=%s,task_id=%s,fte_assigned=%s,start_date=%s,end_date=%s,notes=%s,schedule_anchor=%s,offset_days=%s,duration_days=%s '
                                        'WHERE id=%s', (*_assignment_values(assignment), assignment.id)).rowcount > 0
 
     def delete_assignment(self, assignment_id: int) -> bool:
         """Delete visible demand only with edit permission on its current owner."""
+        previous = self.get_assignment_by_id(assignment_id)
+        if previous:
+            require_unversioned(self.connection, project_id=previous.project_id)
         return self.connection.execute('DELETE FROM eppm.resource_pool_assignment WHERE id=%s', (assignment_id,)).rowcount > 0
 
     def _assignment_map(self, ids: list[int], *, tasks: bool) -> dict[int, list[AssignmentLink]]:

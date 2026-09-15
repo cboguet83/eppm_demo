@@ -8,6 +8,9 @@ from app.domain.planning.plans import PlanContent
 def publish_current(connection: psycopg.Connection, project_id: int, content: PlanContent) -> None:
     """Apply the approved snapshot atomically while retaining live progress on matching tasks."""
     identities = [row['id'] for row in content.tasks]
+    connection.execute('''INSERT INTO eppm.plan_task_actual(task_id,project_id,progress_pct)
+        SELECT id,project_id,coalesce(progress_pct,0) FROM eppm.project_task WHERE project_id=%s
+        ON CONFLICT(task_id) DO UPDATE SET progress_pct=excluded.progress_pct''', (project_id,))
     connection.execute('DELETE FROM eppm.resource_pool_assignment WHERE project_id=%s', (project_id,))
     connection.execute('DELETE FROM eppm.project_dependency WHERE project_id=%s', (project_id,))
     connection.execute('''DELETE FROM eppm.task_dependencies WHERE task_id IN
@@ -15,13 +18,20 @@ def publish_current(connection: psycopg.Connection, project_id: int, content: Pl
     connection.execute('''DELETE FROM eppm.task_tag WHERE task_id IN
         (SELECT id FROM eppm.project_task WHERE project_id=%s)''', (project_id,))
     connection.execute('UPDATE eppm.project_task SET predecessor_id=NULL WHERE project_id=%s', (project_id,))
+    # Clear only authorized live legacy pointers. Uneditable protected references
+    # retain their FK and block adoption atomically instead of bypassing scope.
+    connection.execute('''UPDATE eppm.project_task SET predecessor_id=NULL WHERE id IN
+        (SELECT consumer.id FROM eppm.visible_project_task consumer JOIN eppm.project_task predecessor
+         ON predecessor.id=consumer.predecessor_id WHERE predecessor.project_id=%s
+         AND NOT(predecessor.id=ANY(%s::bigint[])))''', (project_id, identities))
     connection.execute('DELETE FROM eppm.project_task WHERE project_id=%s AND NOT(id=ANY(%s::bigint[]))',
                         (project_id, identities))
     for row in content.tasks:
-        connection.execute('''INSERT INTO eppm.project_task(id,project_id,task_name,phase,start_date,end_date,description)
-            VALUES(%s,%s,%s,%s,%s,%s,%s) ON CONFLICT(id) DO UPDATE SET task_name=excluded.task_name,
+        connection.execute('''INSERT INTO eppm.project_task(id,project_id,task_name,phase,start_date,end_date,description,progress_pct)
+            VALUES(%s,%s,%s,%s,%s,%s,%s,coalesce((SELECT progress_pct FROM eppm.plan_task_actual WHERE task_id=%s),0))
+            ON CONFLICT(id) DO UPDATE SET task_name=excluded.task_name,
             phase=excluded.phase,start_date=excluded.start_date,end_date=excluded.end_date,description=excluded.description''',
-            (row['id'], project_id, row['task_name'], row['phase'], row['start_date'], row['end_date'], row['description']))
+            (row['id'], project_id, row['task_name'], row['phase'], row['start_date'], row['end_date'], row['description'], row['id']))
     for row in content.dependencies:
         predecessor = row['predecessor_task_id']
         if predecessor is not None and not connection.execute(
@@ -38,7 +48,8 @@ def publish_current(connection: psycopg.Connection, project_id: int, content: Pl
                 (row['task_id'], predecessor, row['predecessor_project_id'], row['link_type'], row['lag_days']))
     for identity, tags in content.task_tags.items():
         for tag in tags:
-            connection.execute('INSERT INTO eppm.task_tag(task_id,tag_id) VALUES(%s,%s)', (identity, tag))
+            connection.execute('INSERT INTO eppm.task_tag(task_id,tag_id,free_tag) VALUES(%s,%s,%s)',
+                               (identity, tag['tag_id'], tag['free_tag']))
     for row in content.assignments:
         connection.execute('''INSERT INTO eppm.resource_pool_assignment
             (id,pool_id,project_id,task_id,fte_assigned,start_date,end_date,notes,schedule_anchor,offset_days,duration_days)
