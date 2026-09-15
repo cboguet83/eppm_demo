@@ -3,15 +3,14 @@
 from dataclasses import asdict
 import pandas as pd
 
+from app.application.ports.references import PoolGroupReference, PoolHierarchyMember
+
 from app.domain.resources.models import (
     AssignmentRow,
-    PoolGroupMemberRow,
-    PoolGroupSummary,
     PoolMapping,
     PoolTag,
     PoolTagChoice,
     ResourcePool,
-    ResourcePoolGroupMember,
 )
 
 
@@ -23,35 +22,15 @@ def pools_frame(records: list[ResourcePool]) -> pd.DataFrame:
     )
 
 
-def groups_frame(records: list[PoolGroupSummary]) -> pd.DataFrame:
-    """Keep stable groups columns, including empty catalogs."""
-    return pd.DataFrame(
-        [asdict(row) for row in records],
-        columns=[
-            "id",
-            "name",
-            "description",
-            "created_at",
-            "hierarchy_type_id",
-            "direct_pool_count",
-            "child_group_count",
-            "recursive_pool_count",
-        ],
-    )
+def groups_frame(records: list[PoolGroupReference]) -> pd.DataFrame:
+    """Format container labels for the existing Gantt transport."""
+    return pd.DataFrame([asdict(row) for row in records], columns=["id", "name"])
 
 
-def all_members_frame(records: list[ResourcePoolGroupMember]) -> pd.DataFrame:
+def all_members_frame(records: list[PoolHierarchyMember]) -> pd.DataFrame:
     """Keep stable all members columns, including empty catalogs."""
     return pd.DataFrame(
         [asdict(row) for row in records], columns=["group_id", "pool_id", "child_group_id"]
-    )
-
-
-def members_frame(records: list[PoolGroupMemberRow]) -> pd.DataFrame:
-    """Keep stable members columns, including empty catalogs."""
-    return pd.DataFrame(
-        [asdict(row) for row in records],
-        columns=["id", "group_id", "pool_id", "child_group_id", "member_type", "member_name"],
     )
 
 

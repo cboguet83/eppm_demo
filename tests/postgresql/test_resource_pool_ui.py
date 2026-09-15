@@ -8,7 +8,7 @@ import streamlit as st
 from streamlit.testing.v1 import AppTest
 
 from app.domain.organization.models import Employee, Team
-from app.domain.resources.models import PoolAssignment, ResourcePool, ResourcePoolGroup
+from app.domain.resources.models import PoolAssignment, ResourcePool
 from app.application.services.business_access import BusinessAccess
 from app.main import create_organization_service, create_resource_pool_service
 from app.infrastructure.postgresql.seed_catalog import ensure_reference_catalog
@@ -91,28 +91,25 @@ def test_failed_tag_write_rolls_back_pool_and_displays_safe_error(database: Runt
     assert create_resource_pool_service(database, access=access).get_all_pools() == []
 
 
-def test_group_dialogs_save_recursive_members_and_exclude_cycle_choices(database: RuntimeResources, access: BusinessAccess) -> None:
+def test_parent_selector_creates_children_excludes_descendants_and_warns_on_assignment(database: RuntimeResources, access: BusinessAccess) -> None:
     service = create_resource_pool_service(database, access=access)
-    pool = service.create_pool(ResourcePool("Delivery"))
-    child = service.create_pool_group(ResourcePoolGroup("Child"), pool_ids=[pool])
-    app = dialog(database, access, "_open_add_pool_group_dialog(service)")
-    app.text_input[0].input("Parent")
-    app.multiselect[0].set_value([pool])
-    app.multiselect[1].set_value([child])
+    parent = service.create_pool(ResourcePool('Parent'))
+    app = dialog(database, access, f"_open_add_pool_dialog(service, {parent})")
+    app.text_input[0].input('Child')
     app.button[0].click().run()
-    assert not app.exception
-    parent = next(group.id for group in service.get_all_pool_groups() if group.name == "Parent")
-    assert service.get_group_descendant_pool_ids(parent) == [pool]
-    app = dialog(database, access, f"_open_edit_pool_group_dialog(service, {child})")
-    assert app.multiselect[1].options == []
-    app.text_input[0].input("Renamed child")
-    app.multiselect[0].set_value([])
+    assert not app.exception and not app.error
+    child = next(pool for pool in service.get_all_pools() if pool.name == 'Child')
+    assert child.parent_pool_id == parent
+    app = dialog(database, access, f"_open_edit_pool_dialog(service, {parent})")
+    assert app.selectbox(key=f'parent_pool_{parent}').options == ['No parent (root pool)']
+    assert next(widget for widget in app.number_input if 'capacity' in widget.label.lower()).disabled
+    service.create_assignment(PoolAssignment(child.id, 1, 1))
+    app = dialog(database, access, f"_open_add_pool_dialog(service, {child.id})")
+    assert any('project or task assignments' in warning.value for warning in app.warning)
+    app.text_input[0].input('Blocked')
     app.button[0].click().run()
-    assert not app.exception and service.get_group_direct_member_ids(child) == ([], [])
-    app = dialog(database, access, f"_open_delete_pool_group_dialog(service, {parent}, 'Parent')")
-    app.button[0].click().run()
-    assert not app.exception and service.get_pool_group_by_id(parent) is None
-    assert service.get_pool_by_id(pool) is not None
+    assert not app.exception and any('Cannot add a child' in error.value for error in app.error)
+    assert len(service.get_all_pools()) == 2
 
 
 def test_mapping_dialog_preserves_team_and_employee_choices(database: RuntimeResources, access: BusinessAccess) -> None:
@@ -176,10 +173,7 @@ render_settings_view(create_settings_workspace(runtime, access=access))
         database, access,
     )
     app.session_state["settings_active_tab"] = "resource_pools"
-    with patch(
-        "app.application.services.resource_pools.ResourcePoolService.get_all_pool_groups",
-        side_effect=AssertionError("Closed groups loaded"),
-    ), patch("app.presentation.components.action_table.action_table", return_value=None) as table:
+    with patch("app.presentation.components.action_table.action_table", return_value=None) as table:
         app.run()
     assert not app.exception and len(app.metric) == 5
     rows, columns, actions = table.call_args.args
@@ -194,18 +188,21 @@ render_settings_view(create_settings_workspace(runtime, access=access))
     assert not app.exception and service.get_assignment_by_id(assignment) is None
 
 
-def test_open_group_inspector_shows_deduplicated_members(database: RuntimeResources, access: BusinessAccess) -> None:
+def test_container_inspector_shows_children_and_aggregates_without_mapping_controls(database: RuntimeResources, access: BusinessAccess) -> None:
     service = create_resource_pool_service(database, access=access)
-    pool = service.create_pool(ResourcePool("Delivery"))
-    service.create_pool_group(ResourcePoolGroup("Group"), pool_ids=[pool])
-    real_expander = st.expander
-
-    def expanded(*args, **kwargs):
-        kwargs["expanded"] = True
-        return real_expander(*args, **kwargs)
-
-    # Control only expander visibility; the widgets and application queries are real.
-    with patch("streamlit.expander", side_effect=expanded):
-        app = dialog(database, access, "_render_pool_groups_management(service)")
-    assert app.dataframe[0].value.iloc[0]["recursive_pool_count"] == 1
-    assert any("Pool: Delivery" in item.value for item in app.caption)
+    parent = service.create_pool(ResourcePool('Parent'))
+    leaf = service.create_pool(ResourcePool('Delivery', capacity_fte=4, parent_pool_id=parent))
+    app = native_screen("""
+from app.main import create_pool_capacity_service, create_organization_service, create_resource_pool_service
+from app.presentation.pages.resource_pools import render_resource_pools
+render_resource_pools(create_resource_pool_service(runtime, access=access),
+    create_pool_capacity_service(runtime, access=access), create_organization_service(runtime, access=access), 'planning')
+""", database, access)
+    app.session_state['target_resource_pool_id'] = parent
+    app.run()
+    assert not app.exception and not app.error
+    assert any('Container pool' in info.value for info in app.info)
+    assert app.dataframe[0].value.iloc[0]['Pool'] == 'Delivery'
+    assert app.dataframe[0].value.iloc[0]['Capacity (FTE)'] == 4
+    assert not any(button.key == f'btn_add_map_{parent}' for button in app.button)
+    assert app.metric[1].value == '4.00 FTE'

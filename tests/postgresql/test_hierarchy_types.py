@@ -1,5 +1,7 @@
 """Shared hierarchy catalog, optional assignments, migration, and authorization."""
 
+from tests.postgresql.pool_helpers import create_container
+
 from dataclasses import replace
 
 import psycopg
@@ -10,7 +12,7 @@ from app.application.exceptions import OrganizationConflictError, ResourcePoolCo
 from app.domain.access.models import AccessDenied
 from app.domain.hierarchy import HierarchyType, normalize_hierarchy_type, validate_hierarchy_type_id
 from app.domain.organization.models import Team
-from app.domain.resources.models import ResourcePool, ResourcePoolGroup
+from app.domain.resources.models import ResourcePool
 from app.infrastructure.postgresql.migration import migrate
 from app.infrastructure.postgresql.seed_catalog import ensure_reference_catalog
 from app.main import create_organization_service, create_resource_pool_service
@@ -62,8 +64,8 @@ def test_optional_assignments_round_trip_and_protect_referenced_types(catalog, k
                  Team("Team"), "team_id", OrganizationConflictError),
         "pool": (resources.create_pool, resources.get_pool_by_id, resources.update_pool,
                  ResourcePool("Pool"), "id", ResourcePoolConflictError),
-        "group": (resources.create_pool_group, resources.get_pool_group_by_id, resources.update_pool_group,
-                  ResourcePoolGroup("Group"), "id", ResourcePoolConflictError),
+        "group": (resources.create_pool, resources.get_pool_by_id, resources.update_pool,
+                  ResourcePool("Group"), "id", ResourcePoolConflictError),
     }[kind]
     record_id = create(record)
     assert read(record_id).hierarchy_type_id is None
@@ -82,7 +84,7 @@ def test_optional_assignments_round_trip_and_protect_referenced_types(catalog, k
     assert getattr(read(assigned_id), identity) == assigned_id
     assert read(assigned_id).hierarchy_type_id == 1
     table, key = {'team': ('team', 'team_id'), 'pool': ('resource_pool', 'id'),
-                  'group': ('resource_pool_group', 'id')}[kind]
+                  'group': ('resource_pool', 'id')}[kind]
     with pytest.raises(psycopg.errors.ForeignKeyViolation):
         authorized.query(sql.SQL('UPDATE eppm.{} SET hierarchy_type_id=99999 WHERE {}=%s').format(
             sql.Identifier(table), sql.Identifier(key)), (assigned_id,), user_id=4, write=True)
@@ -96,9 +98,9 @@ def test_native_reference_install_is_atomic_and_reentry_preserves_existing_entit
     resources = create_resource_pool_service(runtime, access=access)
     team = organization.create_team(Team('Existing team'))
     pool = resources.create_pool(ResourcePool('Existing pool'))
-    group = resources.create_pool_group(ResourcePoolGroup('Existing group'))
+    group = create_container(resources, ResourcePool('Existing group'))
     before = (organization.get_team_by_id(team), resources.get_pool_by_id(pool),
-              resources.get_pool_group_by_id(group))
+              resources.get_pool_by_id(group))
     with pytest.raises(RuntimeError, match='Rollback reference'), psycopg.connect(authorized.setup.operator_url) as connection:
         ensure_reference_catalog(connection)
         raise RuntimeError('Rollback reference')
@@ -110,7 +112,7 @@ def test_native_reference_install_is_atomic_and_reentry_preserves_existing_entit
     assert migrate(authorized.setup.operator_url) == ()
     assert len(organization.get_all_hierarchy_types()) == 7
     assert (organization.get_team_by_id(team), resources.get_pool_by_id(pool),
-            resources.get_pool_group_by_id(group)) == before
+            resources.get_pool_by_id(group)) == before
     assert all(entity.hierarchy_type_id is None for entity in before)
     type_id = organization.get_all_hierarchy_types()[0].id
     with pytest.raises(psycopg.errors.CheckViolation):

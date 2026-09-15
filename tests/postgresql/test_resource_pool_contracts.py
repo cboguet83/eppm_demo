@@ -1,5 +1,7 @@
 """Resource-pool rules, PostgreSQL integrity, atomic use cases, and display projections."""
 
+from tests.postgresql.pool_helpers import create_container
+
 from app.application.exceptions import ResourcePoolConflictError
 
 from app.presentation.components import resource_pool_frames
@@ -21,14 +23,9 @@ from app.domain.resources.models import (
     PoolAssignment,
     PoolMapping,
     ResourcePool,
-    ResourcePoolGroup,
-    ResourcePoolGroupMember,
 )
 from app.domain.resources.rules import (
-    descendant_groups,
-    descendant_pools,
     normalize_assignment,
-    normalize_group,
     normalize_mapping,
     normalize_pool,
 )
@@ -59,21 +56,12 @@ def test_pool_values_reject_negative_and_nonfinite_capacity(value: float) -> Non
             normalize(model)
 
 
-def test_group_traversal_terminates_on_cycles_and_deduplicates_shared_pools() -> None:
-    members = [
-        ResourcePoolGroupMember(1, child_group_id=2),
-        ResourcePoolGroupMember(2, child_group_id=1),
-        ResourcePoolGroupMember(1, pool_id=3),
-        ResourcePoolGroupMember(2, pool_id=3),
-    ]
-    assert descendant_groups(1, members) == {1, 2}
-    assert descendant_pools(1, members) == [3]
-    assert descendant_pools(99, members) == []
+def test_pool_mapping_kinds_and_pool_names_are_normalized() -> None:
     assert normalize_mapping(PoolMapping(1, " EMPLOYEE ", 1)).target_type == "employee"
     with pytest.raises(ValueError, match="target"):
         normalize_mapping(PoolMapping(1, "unknown", 1))
     with pytest.raises(ValueError, match="name"):
-        normalize_group(ResourcePoolGroup(" "))
+        normalize_pool(ResourcePool(" "))
 
 
 def test_pool_and_tags_roll_back_together_on_create_and_edit(database: RuntimeResources, access: BusinessAccess) -> None:
@@ -99,46 +87,30 @@ def test_pool_and_tags_roll_back_together_on_create_and_edit(database: RuntimeRe
         service.set_pool_tags(99, [1])
 
 
-def test_group_details_and_membership_save_or_roll_back_as_one(database: RuntimeResources, access: BusinessAccess) -> None:
+def test_pool_details_parent_and_tags_save_or_roll_back_together(database: RuntimeResources, access: BusinessAccess) -> None:
     service = create_resource_pool_service(database, access=access)
-    pool_id = service.create_pool(ResourcePool("Pool"))
-    child = service.create_pool_group(ResourcePoolGroup("Child"), pool_ids=[pool_id])
-    parent = service.create_pool_group(ResourcePoolGroup("Parent"), child_group_ids=[child])
-    with pytest.raises(ValueError, match="pool IDs"):
-        service.create_pool_group(ResourcePoolGroup("Failed"), pool_ids=[99])
-    assert len(service.get_all_pool_groups()) == 2
-    original = service.get_pool_group_by_id(child)
-    with pytest.raises(ValueError, match="loop"):
-        service.update_pool_group(replace(original, name="Lost"), child_group_ids=[parent])
-    assert service.get_pool_group_by_id(child) == original
-    assert service.get_group_direct_member_ids(child) == ([pool_id], [])
-    with pytest.raises(ValueError, match="group IDs"):
-        service.replace_group_members(child, [], [99])
-    with pytest.raises(ValueError, match="does not exist"):
-        service.replace_group_members(99, [], [])
-    assert service.get_allowed_child_group_ids(child) == []
-    assert service.get_allowed_child_group_ids(parent) == [child]
-    assert service.update_pool_group(replace(original, name="Renamed"))
-    assert service.get_group_descendant_pool_ids(parent) == [pool_id]
-    assert service.update_pool_group(
-        replace(original, name="Cleared"), pool_ids=[], child_group_ids=[]
-    )
-    assert service.get_group_descendant_pool_ids(parent) == []
-    assert service.delete_pool_group(child)
-    assert service.get_group_direct_member_ids(parent) == ([], [])
-    assert service.get_pool_by_id(pool_id) is not None
+    parent = service.create_pool(ResourcePool('Parent', capacity_fte=9))
+    child = service.create_pool(ResourcePool('Child'))
+    original = service.get_pool_by_id(child)
+    with pytest.raises(ValueError, match='tag IDs'):
+        service.update_pool(replace(original, name='Lost', parent_pool_id=parent), tag_ids=[99])
+    assert service.get_pool_by_id(child) == original
+    assert service.get_pool_by_id(parent).capacity_fte == 9
+    service.update_pool(replace(original, parent_pool_id=parent), tag_ids=[1])
+    assert service.get_pool_by_id(parent).capacity_fte is None
+    assert service.descendant_pool_ids(parent) == [child]
 
 
 def test_concurrent_opposite_group_edges_cannot_commit_a_cycle(database: RuntimeResources, access: BusinessAccess) -> None:
     service = create_resource_pool_service(database, access=access)
-    first = service.create_pool_group(ResourcePoolGroup("First"))
-    second = service.create_pool_group(ResourcePoolGroup("Second"))
+    first = create_container(service, ResourcePool("First"))
+    second = create_container(service, ResourcePool("Second"))
     barrier = Barrier(2)
 
     def link(parent: int, child: int) -> bool:
         barrier.wait(timeout=5)
         try:
-            service.replace_group_members(parent, [], [child])
+            service.update_pool(replace(service.get_pool_by_id(child), parent_pool_id=parent))
             return True
         except ValueError:
             return False
@@ -146,7 +118,7 @@ def test_concurrent_opposite_group_edges_cannot_commit_a_cycle(database: Runtime
     with ThreadPoolExecutor(max_workers=2) as executor:
         results = [executor.submit(link, first, second), executor.submit(link, second, first)]
         assert sorted(result.result(timeout=10) for result in results) == [False, True]
-    assert len(service.get_all_group_members()) == 1
+    assert len(service.group_membership()) == 1
 
 
 def test_assignment_filters_missing_records_and_mapping_upsert_identity(database: RuntimeResources, access: BusinessAccess) -> None:
@@ -178,12 +150,11 @@ def test_assignment_filters_missing_records_and_mapping_upsert_identity(database
     assert service.get_assignment_by_id(task_assignment) is None
     assert not service.update_pool(ResourcePool("Missing"))
     assert not service.update_pool(ResourcePool("Missing", id=99), tag_ids=[1])
-    assert not service.update_pool_group(ResourcePoolGroup("Missing"))
-    assert not service.update_pool_group(ResourcePoolGroup("Missing", id=99), pool_ids=[pool])
+    assert not service.update_pool(ResourcePool("Missing"))
     assert not service.update_assignment(assignment)
     assert not service.update_assignment(replace(assignment, id=99))
-    assert not service.delete_pool_group(99)
-    assert service.get_pool_group_by_id(99) is None
+    assert not service.delete_pool(99)
+    assert service.get_pool_by_id(99) is None
     assert not service.delete_mapping(99)
     assert not service.delete_assignment(99)
     assert not service.update_mapping(99, 0)
@@ -215,6 +186,6 @@ def test_gateway_rolls_back_reuses_the_pool_and_allows_an_independent_writer(
     with pytest.raises(ResourcePoolStorageError, match="could not be accessed") as failure:
         gateway.run(lambda store: store.connection.execute('SELECT * FROM eppm.missing_table'))
     assert "missing_table" not in str(failure.value)
-    with pytest.raises(ResourcePoolConflictError):
+    with pytest.raises(ValueError, match="no longer exists"):
         create_resource_pool_service(database, access=access).create_assignment(PoolAssignment(99, 1, 1))
     assert gateway.run(lambda store: store.get_all_pools()) == []

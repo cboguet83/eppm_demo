@@ -13,8 +13,8 @@ from app.domain.access.models import Permission
 from app.domain.hierarchy import HierarchyType
 from app.domain.resources.pool_types import PoolType
 from app.domain.resources.models import (
-    AssignmentLink, AssignmentRow, PoolAssignment, PoolCapacityException, PoolGroupMemberRow, PoolMapping,
-    PoolTag, PoolTagChoice, ResourcePool, ResourcePoolGroup, ResourcePoolGroupMember,
+    AssignmentLink, AssignmentRow, PoolAssignment, PoolCapacityException, PoolMapping,
+    PoolTag, PoolTagChoice, ResourcePool,
 )
 from app.infrastructure.postgresql.business import run_business
 from app.infrastructure.postgresql.errors import DatabaseUnavailableError, TransactionRetryError
@@ -24,8 +24,7 @@ from app.shared.logging import get_logger
 
 logger = get_logger(__name__)
 _CREATED = "to_char(created_at AT TIME ZONE 'UTC','YYYY-MM-DD HH24:MI:SS') AS created_at"
-_POOL = f"id,name,COALESCE(description,'') AS description,capacity_fte,{_CREATED},hierarchy_type_id,pool_type_id"
-_GROUP = f"id,name,COALESCE(description,'') AS description,{_CREATED},hierarchy_type_id"
+_POOL = f"id,name,COALESCE(description,'') AS description,capacity_fte,{_CREATED},hierarchy_type_id,pool_type_id,parent_pool_id"
 
 
 def _assignment_values(assignment: PoolAssignment) -> tuple[object, ...]:
@@ -109,6 +108,10 @@ class PostgresResourcePoolStore:
         """Read the shared pool catalog in stable name order."""
         return self._rows(ResourcePool, f'SELECT {_POOL} FROM eppm.resource_pool ORDER BY name COLLATE "C",id')
 
+    def assigned_pool_ids(self) -> set[int]:
+        """Read only occupied pool IDs, including assignments on hidden projects."""
+        return {row[0] for row in self.connection.execute('SELECT pool_id FROM eppm.assigned_pool_ids')}
+
     def get_pool_by_id(self, pool_id: int) -> ResourcePool | None:
         """Read one pool, including optional capacity and hierarchy classification."""
         rows = self._rows(ResourcePool, f'SELECT {_POOL} FROM eppm.resource_pool WHERE id=%s', (pool_id,))
@@ -116,61 +119,18 @@ class PostgresResourcePoolStore:
 
     def create_pool(self, pool: ResourcePool) -> int:
         """Create normalized pool details within the enclosing compound save."""
-        return self.connection.execute('INSERT INTO eppm.resource_pool(name,description,capacity_fte,hierarchy_type_id,pool_type_id) '
-                                       'VALUES (%s,%s,%s,%s,%s) RETURNING id',
-                                       (pool.name, pool.description, pool.capacity_fte, pool.hierarchy_type_id, pool.pool_type_id)).fetchone()[0]
+        return self.connection.execute('INSERT INTO eppm.resource_pool(name,description,capacity_fte,hierarchy_type_id,pool_type_id,parent_pool_id) '
+                                       'VALUES (%s,%s,%s,%s,%s,%s) RETURNING id',
+                                       (pool.name, pool.description, pool.capacity_fte, pool.hierarchy_type_id, pool.pool_type_id, pool.parent_pool_id)).fetchone()[0]
 
     def update_pool(self, pool: ResourcePool) -> bool:
         """Preserve identity and creation time when updating pool details."""
-        return self.connection.execute('UPDATE eppm.resource_pool SET name=%s,description=%s,capacity_fte=%s,hierarchy_type_id=%s,pool_type_id=%s WHERE id=%s',
-                                       (pool.name, pool.description, pool.capacity_fte, pool.hierarchy_type_id, pool.pool_type_id, pool.id)).rowcount > 0
+        return self.connection.execute('UPDATE eppm.resource_pool SET name=%s,description=%s,capacity_fte=%s,hierarchy_type_id=%s,pool_type_id=%s,parent_pool_id=%s WHERE id=%s',
+                                       (pool.name, pool.description, pool.capacity_fte, pool.hierarchy_type_id, pool.pool_type_id, pool.parent_pool_id, pool.id)).rowcount > 0
 
     def delete_pool(self, pool_id: int) -> bool:
         """Delete the pool and its native cascading memberships, tags and demand."""
         return self.connection.execute('DELETE FROM eppm.resource_pool WHERE id=%s', (pool_id,)).rowcount > 0
-
-    def get_all_group_members(self) -> list[ResourcePoolGroupMember]:
-        """Read graph identities once, without per-group connection acquisition."""
-        return self._rows(ResourcePoolGroupMember, 'SELECT group_id,pool_id,child_group_id FROM eppm.resource_pool_group_member ORDER BY id')
-
-    def groups(self) -> list[ResourcePoolGroup]:
-        """Read group details in the same snapshot used for recursive counts."""
-        return self._rows(ResourcePoolGroup, f'SELECT {_GROUP} FROM eppm.resource_pool_group ORDER BY name COLLATE "C",id')
-
-    def get_pool_group_by_id(self, group_id: int) -> ResourcePoolGroup | None:
-        """Read one group without materializing its recursive graph."""
-        rows = self._rows(ResourcePoolGroup, f'SELECT {_GROUP} FROM eppm.resource_pool_group WHERE id=%s', (group_id,))
-        return rows[0] if rows else None
-
-    def create_pool_group(self, group: ResourcePoolGroup) -> int:
-        """Create group details before adding validated membership in the same save."""
-        return self.connection.execute('INSERT INTO eppm.resource_pool_group(name,description,hierarchy_type_id) VALUES (%s,%s,%s) RETURNING id',
-                                       (group.name, group.description, group.hierarchy_type_id)).fetchone()[0]
-
-    def update_pool_group(self, group: ResourcePoolGroup) -> bool:
-        """Update group details without changing identity or creation time."""
-        return self.connection.execute('UPDATE eppm.resource_pool_group SET name=%s,description=%s,hierarchy_type_id=%s WHERE id=%s',
-                                       (group.name, group.description, group.hierarchy_type_id, group.id)).rowcount > 0
-
-    def delete_pool_group(self, group_id: int) -> bool:
-        """Delete group membership edges while preserving child groups and pools."""
-        return self.connection.execute('DELETE FROM eppm.resource_pool_group WHERE id=%s', (group_id,)).rowcount > 0
-
-    def get_group_members(self, group_id: int) -> list[PoolGroupMemberRow]:
-        """Join direct member labels with stable group-before-pool ordering."""
-        return self._rows(PoolGroupMemberRow, '''SELECT gm.id,gm.group_id,gm.pool_id,gm.child_group_id,
-            CASE WHEN gm.pool_id IS NOT NULL THEN 'pool' ELSE 'group' END AS member_type,
-            COALESCE(p.name,g.name) AS member_name FROM eppm.resource_pool_group_member gm
-            LEFT JOIN eppm.resource_pool p ON p.id=gm.pool_id LEFT JOIN eppm.resource_pool_group g ON g.id=gm.child_group_id
-            WHERE gm.group_id=%s ORDER BY (CASE WHEN gm.pool_id IS NOT NULL THEN 'pool' ELSE 'group' END) COLLATE "C",
-            COALESCE(p.name,g.name) COLLATE "C",gm.id''', (group_id,))
-
-    def replace_group_members(self, group_id: int, pool_ids: list[int], child_ids: list[int]) -> None:
-        """Replace all validated edges atomically under native cycle protection."""
-        self.connection.execute('DELETE FROM eppm.resource_pool_group_member WHERE group_id=%s', (group_id,))
-        with self.connection.cursor() as cursor:
-            cursor.executemany('INSERT INTO eppm.resource_pool_group_member(group_id,pool_id,child_group_id) VALUES (%s,%s,%s)',
-                               [(group_id, pool_id, None) for pool_id in pool_ids] + [(group_id, None, child) for child in child_ids])
 
     def get_all_mappings(self) -> list[PoolMapping]:
         """Read configuration mappings without joining private employee details."""

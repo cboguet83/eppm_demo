@@ -1,39 +1,30 @@
-"""Resource-pool use cases and atomic catalog/group/tag operations."""
+"""Resource-pool use cases and atomic catalog/hierarchy/tag operations."""
+
+from dataclasses import replace
+from datetime import date
+from math import isfinite
 
 from app.domain.access.models import Permission
 from app.domain.hierarchy import HierarchyType
 from app.domain.resources.pool_types import PoolType, normalize_pool_type
-from app.application.ports.references import PoolReference, PoolGroupReference
-
-
-from dataclasses import asdict, replace
-from datetime import date
-from math import isfinite
-
+from app.domain.resources.hierarchy import PoolHierarchy
+from app.application.ports.references import PoolReference, PoolGroupReference, PoolHierarchyMember
 from app.application.ports.resource_pools import ResourcePoolGateway, ResourcePoolStore
 from app.domain.resources.models import (
     AssignmentLink,
     AssignmentRow,
     PoolAssignment,
     PoolCapacityException,
-    PoolGroupMemberRow,
-    PoolGroupSummary,
     PoolMapping,
     PoolTag,
     PoolTagChoice,
     ResourcePool,
-    ResourcePoolGroup,
-    ResourcePoolGroupMember,
 )
 from app.domain.resources.rules import (
-    descendant_groups,
-    descendant_pools,
     normalize_assignment,
-    normalize_group,
     normalize_mapping,
     normalize_pool,
     validate_allocation_pct,
-    validate_group_children,
 )
 
 
@@ -46,7 +37,61 @@ class ResourcePoolService:
 
     def pool_choices(self) -> list[PoolReference]:
         """Read allocation-selector labels without pool configuration details."""
-        return self._gateway.run(lambda store: [PoolReference(row.id, row.name, row.capacity_fte) for row in store.get_all_pools()])
+        def operation(store: ResourcePoolStore) -> list[PoolReference]:
+            tree = PoolHierarchy(store.get_all_pools())
+            return [PoolReference(row.id, row.name, row.capacity_fte)
+                    for row in tree.pools.values() if not tree.children.get(row.id)]
+        return self._gateway.run(operation)
+
+    def descendant_pool_ids(self, pool_id: int) -> list[int]:
+        """Resolve assignable leaves; a deleted selection has no descendants."""
+        def operation(store: ResourcePoolStore) -> list[int]:
+            tree = PoolHierarchy(store.get_all_pools())
+            return tree.descendants(pool_id, leaves_only=True) if pool_id in tree.pools else []
+        return self._gateway.run(operation)
+
+    def parent_pool_warning(self, pool_id: int) -> str | None:
+        """Preview why a parent cannot receive children; writes always recheck."""
+        def operation(store: ResourcePoolStore) -> str | None:
+            tree = PoolHierarchy(store.get_all_pools())
+            try:
+                self._require_parent_available(store, tree, pool_id)
+            except ValueError as error:
+                return str(error)
+            return None
+        return self._gateway.run(operation, permission=Permission.SHARED)
+
+    @staticmethod
+    def _require_parent_available(store: ResourcePoolStore, tree: PoolHierarchy, pool_id: int) -> None:
+        """Protect assignments and direct resource configuration during conversion."""
+        pool = tree.pools.get(pool_id)
+        if pool is None:
+            raise ValueError("The parent pool no longer exists.")
+        if pool_id in store.assigned_pool_ids():
+            raise ValueError(f'Cannot add a child to “{pool.name}”: this pool has project or task assignments. '
+                             'Remove or reassign them before adding children.')
+        if store.get_mappings_by_pool(pool_id) or store.capacity_exceptions([pool_id]):
+            raise ValueError(f'Cannot add a child to “{pool.name}”: move or remove its resource mappings '
+                             'and capacity exceptions first. Containers use their children’s capacity.')
+
+    @classmethod
+    def _validate_pool_save(cls, store: ResourcePoolStore, pool: ResourcePool) -> None:
+        """Validate the proposed forest and conversion within the write snapshot."""
+        existing = store.get_all_pools()
+        tree = PoolHierarchy(existing)
+        if pool.id is not None and tree.children.get(pool.id) and pool.capacity_fte is not None:
+            raise ValueError("Container capacity is calculated from its children and cannot be edited.")
+        proposed_id = pool.id if pool.id is not None else max(tree.pools, default=0) + 1
+        PoolHierarchy([row for row in existing if row.id != pool.id] + [replace(pool, id=proposed_id)])
+        previous = tree.pools.get(pool.id)
+        if pool.parent_pool_id is not None and (previous is None or previous.parent_pool_id != pool.parent_pool_id):
+            cls._require_parent_available(store, tree, pool.parent_pool_id)
+            parent = tree.pools[pool.parent_pool_id]
+            # An unchanged update still advances the existing pool revision.
+            # Invalidate any former leaf cache when the node changes role.
+            store.update_pool(replace(parent, capacity_fte=None))
+        if previous is not None and previous.parent_pool_id is not None and previous.parent_pool_id != pool.parent_pool_id:
+            store.update_pool(tree.pools[previous.parent_pool_id])
 
     def capacity_exceptions(self, pool_id: int) -> list[PoolCapacityException]:
         """Read the selected pool's absolute-capacity reduction periods."""
@@ -60,23 +105,36 @@ class ResourcePoolService:
         if not isfinite(item.reduction_fte) or not 0.001 <= item.reduction_fte < 1_000_000_000:
             raise ValueError('Enter a positive finite capacity reduction in FTE.')
         item = replace(item, reduction_fte=round(item.reduction_fte, 3), reason=item.reason.strip())
-        return self._gateway.run(lambda store: store.save_capacity_exception(item), write=True, permission=Permission.SHARED)
+        def operation(store: ResourcePoolStore) -> int:
+            PoolHierarchy(store.get_all_pools()).require_leaf(item.pool_id)
+            return store.save_capacity_exception(item)
+        return self._gateway.run(operation, write=True, permission=Permission.SHARED)
 
     def delete_capacity_exception(self, identity: int) -> bool:
         """Remove an exception after current shared-management authorization."""
         return self._gateway.run(lambda store: store.delete_capacity_exception(identity), write=True, permission=Permission.SHARED)
 
     def group_choices(self) -> list[PoolGroupReference]:
-        """Read group labels for planning filters and allocation selectors."""
-        return self._gateway.run(lambda store: [PoolGroupReference(row.id, row.name) for row in store.groups()])
+        """Project container labels into the existing planning transport contract."""
+        def operation(store: ResourcePoolStore) -> list[PoolGroupReference]:
+            tree = PoolHierarchy(store.get_all_pools())
+            return [PoolGroupReference(row.id, row.name) for row in tree.pools.values()
+                    if tree.children.get(row.id)]
+        return self._gateway.run(operation)
 
-    def group_membership(self) -> list[ResourcePoolGroupMember]:
-        """Read only graph identities needed to render recursive planning groups."""
-        return self._gateway.run(lambda store: store.get_all_group_members())
+    def group_membership(self) -> list[PoolHierarchyMember]:
+        """Adapt pool ancestry to the existing Gantt container/leaf wire format."""
+        def operation(store: ResourcePoolStore) -> list[PoolHierarchyMember]:
+            tree = PoolHierarchy(store.get_all_pools())
+            return [PoolHierarchyMember(row.parent_pool_id,
+                        pool_id=None if tree.children.get(row.id) else row.id,
+                        child_group_id=row.id if tree.children.get(row.id) else None)
+                    for row in tree.pools.values() if row.parent_pool_id is not None]
+        return self._gateway.run(operation)
 
     def group_pool_ids(self, group_id: int) -> list[int]:
-        """Resolve selected group membership with deliberate cycle termination."""
-        return self._gateway.run(lambda store: descendant_pools(group_id, store.get_all_group_members()))
+        """Resolve a container ID carried by existing planning events."""
+        return self.descendant_pool_ids(group_id)
 
     def get_all_pool_types(self) -> list[PoolType]:
         """Read the shared pool classification catalog in one transaction."""
@@ -110,6 +168,7 @@ class ResourcePoolService:
         pool = normalize_pool(pool)
         tag_ids = None if tag_ids is None else list(tag_ids)
         def operation(store: ResourcePoolStore) -> int:
+            self._validate_pool_save(store, pool)
             result = store.create_pool(pool)
             if result and tag_ids is not None:
                 self._set_tags(store, result, tag_ids)
@@ -123,6 +182,9 @@ class ResourcePoolService:
         pool = normalize_pool(pool)
         tag_ids = None if tag_ids is None else list(tag_ids)
         def operation(store: ResourcePoolStore) -> bool:
+            if store.get_pool_by_id(pool.id) is None:
+                return False
+            self._validate_pool_save(store, pool)
             result = store.update_pool(pool)
             if result and tag_ids is not None:
                 self._set_tags(store, pool.id, tag_ids)
@@ -131,61 +193,15 @@ class ResourcePoolService:
 
     def delete_pool(self, pool_id: int) -> bool:
         """Delete pool within one application transaction."""
-        return self._gateway.run(lambda store: store.delete_pool(pool_id), write=True, permission=Permission.SHARED)
-
-    def get_all_group_members(self) -> list[ResourcePoolGroupMember]:
-        """Get all group members within one application transaction."""
-        return self._gateway.run(lambda store: store.get_all_group_members(), permission=Permission.SHARED)
-
-    def get_pool_group_by_id(self, group_id: int) -> ResourcePoolGroup | None:
-        """Get pool group by id within one application transaction."""
-        return self._gateway.run(lambda store: store.get_pool_group_by_id(group_id), permission=Permission.SHARED)
-
-    def create_pool_group(
-        self,
-        group: ResourcePoolGroup,
-        *,
-        pool_ids: list[int] | None = None,
-        child_group_ids: list[int] | None = None,
-    ) -> int:
-        """Create pool group within one application transaction."""
-        group = normalize_group(group)
-        pool_ids = None if pool_ids is None else list(pool_ids)
-        child_group_ids = None if child_group_ids is None else list(child_group_ids)
-        def operation(store: ResourcePoolStore) -> int:
-            result = store.create_pool_group(group)
-            if result and (pool_ids is not None or child_group_ids is not None):
-                self._replace_members(store, result, pool_ids or [], child_group_ids or [])
-            return result
-        return self._gateway.run(operation, write=True, permission=Permission.SHARED)
-
-    def update_pool_group(
-        self,
-        group: ResourcePoolGroup,
-        *,
-        pool_ids: list[int] | None = None,
-        child_group_ids: list[int] | None = None,
-    ) -> bool:
-        """Update pool group within one application transaction."""
-        if group.id is None:
-            return False
-        group = normalize_group(group)
-        pool_ids = None if pool_ids is None else list(pool_ids)
-        child_group_ids = None if child_group_ids is None else list(child_group_ids)
         def operation(store: ResourcePoolStore) -> bool:
-            result = store.update_pool_group(group)
-            if result and (pool_ids is not None or child_group_ids is not None):
-                self._replace_members(store, group.id, pool_ids or [], child_group_ids or [])
-            return result
+            tree = PoolHierarchy(store.get_all_pools())
+            if tree.children.get(pool_id):
+                raise ValueError("Move or delete this pool’s children before deleting the container.")
+            pool = tree.pools.get(pool_id)
+            if pool is not None and pool.parent_pool_id is not None:
+                store.update_pool(tree.pools[pool.parent_pool_id])
+            return store.delete_pool(pool_id)
         return self._gateway.run(operation, write=True, permission=Permission.SHARED)
-
-    def delete_pool_group(self, group_id: int) -> bool:
-        """Delete pool group within one application transaction."""
-        return self._gateway.run(lambda store: store.delete_pool_group(group_id), write=True, permission=Permission.SHARED)
-
-    def get_group_members(self, group_id: int) -> list[PoolGroupMemberRow]:
-        """Get group members within one application transaction."""
-        return self._gateway.run(lambda store: store.get_group_members(group_id), permission=Permission.SHARED)
 
     def get_mappings_by_pool(self, pool_id: int) -> list[PoolMapping]:
         """Get mappings by pool within one application transaction."""
@@ -198,7 +214,10 @@ class ResourcePoolService:
     def create_mapping(self, mapping: PoolMapping) -> int:
         """Create mapping within one application transaction."""
         mapping = normalize_mapping(mapping)
-        return self._gateway.run(lambda store: store.create_mapping(mapping), write=True, permission=Permission.SHARED)
+        def operation(store: ResourcePoolStore) -> int:
+            PoolHierarchy(store.get_all_pools()).require_leaf(mapping.pool_id)
+            return store.create_mapping(mapping)
+        return self._gateway.run(operation, write=True, permission=Permission.SHARED)
 
     def update_mapping(self, mapping_id: int, allocation_pct: float) -> bool:
         """Update mapping within one application transaction."""
@@ -226,14 +245,22 @@ class ResourcePoolService:
     def create_assignment(self, assignment: PoolAssignment) -> int:
         """Create assignment within one application transaction."""
         assignment = normalize_assignment(assignment)
-        return self._gateway.run(lambda store: store.create_assignment(assignment), write=True)
+        def operation(store: ResourcePoolStore) -> int:
+            PoolHierarchy(store.get_all_pools()).require_leaf(assignment.pool_id)
+            return store.create_assignment(assignment)
+        return self._gateway.run(operation, write=True)
 
     def update_assignment(self, assignment: PoolAssignment) -> bool:
         """Update assignment within one application transaction."""
         if assignment.id is None:
             return False
         assignment = normalize_assignment(assignment)
-        return self._gateway.run(lambda store: store.update_assignment(assignment), write=True)
+        def operation(store: ResourcePoolStore) -> bool:
+            if store.get_assignment_by_id(assignment.id) is None:
+                return False
+            PoolHierarchy(store.get_all_pools()).require_leaf(assignment.pool_id)
+            return store.update_assignment(assignment)
+        return self._gateway.run(operation, write=True)
 
     def delete_assignment(self, assignment_id: int) -> bool:
         """Delete assignment within one application transaction."""
@@ -258,77 +285,6 @@ class ResourcePoolService:
     def get_pool_tags(self, pool_id: int) -> list[PoolTag]:
         """Get pool tags within one application transaction."""
         return self._gateway.run(lambda store: store.get_pool_tags(pool_id), permission=Permission.SHARED)
-
-    def get_all_pool_groups(self) -> list[PoolGroupSummary]:
-        """Read counts and the complete graph in one consistent snapshot."""
-        def operation(store: ResourcePoolStore) -> list[PoolGroupSummary]:
-            groups, members = store.groups(), store.get_all_group_members()
-            return [
-                PoolGroupSummary(
-                    **asdict(group),
-                    direct_pool_count=sum(
-                        m.pool_id is not None for m in members if m.group_id == group.id
-                    ),
-                    child_group_count=sum(
-                        m.child_group_id is not None for m in members if m.group_id == group.id
-                    ),
-                    recursive_pool_count=len(descendant_pools(group.id, members)),
-                )
-                for group in groups
-            ]
-        return self._gateway.run(operation, permission=Permission.SHARED)
-
-    def get_group_direct_member_ids(self, group_id: int) -> tuple[list[int], list[int]]:
-        """Read direct pool and child IDs in the historical display order."""
-        members = self.get_group_members(group_id)
-        return (
-            [m.pool_id for m in members if m.pool_id is not None],
-            [m.child_group_id for m in members if m.child_group_id is not None],
-        )
-
-    def get_group_descendant_pool_ids(self, group_id: int) -> list[int]:
-        """Resolve the full graph with deliberate cycle termination."""
-        return self._gateway.run(lambda store: descendant_pools(group_id, store.get_all_group_members()), permission=Permission.SHARED)
-
-    def would_create_group_cycle(self, group_id: int, child_group_id: int) -> bool:
-        """Preview whether a proposed child can already reach its parent."""
-        return self._gateway.run(lambda store: int(group_id) in descendant_groups(int(child_group_id), store.get_all_group_members()), permission=Permission.SHARED)
-
-    def get_allowed_child_group_ids(self, group_id: int) -> list[int]:
-        """Read the graph once for the editor's child-group choices."""
-        def operation(store: ResourcePoolStore) -> list[int]:
-            members = store.get_all_group_members()
-            return [
-                group.id
-                for group in store.groups()
-                if group_id not in descendant_groups(group.id, members)
-            ]
-        return self._gateway.run(operation, permission=Permission.SHARED)
-
-    def replace_group_members(
-        self, group_id: int, pool_ids: list[int], child_group_ids: list[int]
-    ) -> None:
-        """Revalidate all new graph edges inside each complete write attempt."""
-        pool_ids, child_group_ids = list(pool_ids), list(child_group_ids)
-        def operation(store: ResourcePoolStore) -> None:
-            self._replace_members(store, group_id, pool_ids, child_group_ids)
-        return self._gateway.run(operation, write=True, permission=Permission.SHARED)
-
-    @staticmethod
-    def _replace_members(
-        store: ResourcePoolStore, group_id: int, pool_ids: list[int], child_ids: list[int]
-    ) -> None:
-        pools, children = sorted(set(map(int, pool_ids))), sorted(set(map(int, child_ids)))
-        groups = {group.id for group in store.groups()}
-        if group_id not in groups:
-            raise ValueError(f"Pool group #{group_id} does not exist.")
-        missing_pools = set(pools) - {pool.id for pool in store.get_all_pools()}
-        if missing_pools:
-            raise ValueError(f"Unknown resource pool IDs: {sorted(missing_pools)}")
-        if set(children) - groups:
-            raise ValueError(f"Unknown pool group IDs: {sorted(set(children) - groups)}")
-        validate_group_children(group_id, children, store.get_all_group_members())
-        store.replace_group_members(group_id, pools, children)
 
     def set_pool_tags(self, pool_id: int, tag_ids: list[int]) -> None:
         """Replace tags atomically after checking their current references."""

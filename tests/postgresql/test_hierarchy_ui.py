@@ -65,20 +65,15 @@ def entity_screen(service, kind, identity):
             resource_pool_dialogs._open_add_pool_dialog(service)
         else:
             resource_pool_dialogs._open_edit_pool_dialog(service, identity)
-    elif identity is None:
-        resource_pool_dialogs._open_add_pool_group_dialog(service)
-    else:
-        resource_pool_dialogs._open_edit_pool_group_dialog(service, identity)
 
 
-@pytest.mark.parametrize("kind", ["team", "pool", "group"])
+@pytest.mark.parametrize("kind", ["team", "pool"])
 def test_create_edit_and_clear_optional_hierarchy_in_entity_dialogs(database, access, kind):
     organization = create_organization_service(database, access=access)
     resources = create_resource_pool_service(database, access=access)
     service, read, identity = {
         "team": (organization, organization.get_all_teams, "team_id"),
         "pool": (resources, resources.get_all_pools, "id"),
-        "group": (resources, resources.get_all_pool_groups, "id"),
     }[kind]
     app = AppTest.from_function(entity_screen, args=(service, kind, None), default_timeout=15).run()
     assert not app.exception

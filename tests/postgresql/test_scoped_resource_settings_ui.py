@@ -42,16 +42,15 @@ def expanded_groups():
         yield
 
 
-@pytest.mark.parametrize("action", ["create_pool", "edit_pool", "delete_pool", "new_group", "edit_group", "delete_group", "add_mapping"])
+@pytest.mark.parametrize("action", ["create_pool", "edit_pool", "delete_pool", "add_mapping"])
 def test_business_administrator_resource_controls_open_actual_dialogs_without_premature_writes(pg_database, business, expanded_groups, action):
     path, _, _, _, manager = business
     with psycopg.connect(pg_database.operator_url) as connection:
-        connection.execute("INSERT INTO eppm.resource_pool_group(id,name) VALUES(1,'Delivery group')")
         connection.execute("INSERT INTO eppm.tag_dictionnary(id,tag) VALUES(1,'Priority')")
         connection.execute("INSERT INTO eppm.resource_pool_tag(pool_id,tag_id) VALUES(1,1)")
         connection.execute("UPDATE eppm.resource_pool SET description='Pool details' WHERE id=1")
         before = {table: connection.execute(f"SELECT * FROM eppm.{table} ORDER BY 1").fetchall() for table in (
-            "resource_pool", "resource_pool_group", "resource_pool_assignment", "resource_pool_mapping", "app_role_assignment",
+            "resource_pool", "resource_pool_assignment", "resource_pool_mapping", "app_role_assignment",
         )}
     app = AppTest.from_function(resource_settings_app, args=(path, manager.actor), default_timeout=30).run()
     assert not app.exception and not app.error
@@ -77,7 +76,7 @@ def test_empty_resource_group_inspector_does_not_invent_members_or_offer_editing
     path, _, _, _, manager = business
     app = AppTest.from_function(resource_settings_app, args=(path, manager.actor), default_timeout=30).run()
     assert not app.exception and not app.error
-    assert any("No pool groups yet" in item.value for item in app.info)
+    assert any("Pools form a hierarchy" in item.value for item in app.caption)
     assert not any(item.key == "selected_resource_pool_group" for item in app.selectbox)
     assert app.button(key="btn_edit_pool_1")
 

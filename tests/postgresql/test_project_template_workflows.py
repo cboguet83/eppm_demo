@@ -1,5 +1,7 @@
 """Real transaction regressions for schedule replacement and project link drafts."""
 
+from tests.postgresql.pool_helpers import create_container
+
 import csv
 from datetime import date
 import io
@@ -12,7 +14,7 @@ import pytest
 from app.application.exceptions import PlanningConflictError
 from app.application.services.business_access import BusinessAccess
 from app.domain.planning.schedule_template import export_template, parse_template
-from app.domain.resources.models import PoolAssignment, ResourcePool, ResourcePoolGroup
+from app.domain.resources.models import PoolAssignment, ResourcePool
 from app.main import create_planning_service, create_project_service, create_resource_pool_service
 from app.runtime import RuntimeResources
 from tests.postgresql.conftest import AuthorizedFixture
@@ -258,7 +260,7 @@ open_edit_project_dialog(1, create_project_workspace(runtime, access=access), re
 
 def test_group_popup_includes_allocations_from_descendants(database: RuntimeResources, access: BusinessAccess, authorized: AuthorizedFixture) -> None:
     resources = create_resource_pool_service(database, access=access)
-    group = resources.create_pool_group(ResourcePoolGroup(name="Group"), pool_ids=[1])
+    group = create_container(resources, ResourcePool(name="Group"), pool_ids=[1])
     with patch("app.presentation.components.action_table.action_table", return_value=None) as table:
         app = native_screen(f'''
 from app.main import create_planning_workspace
@@ -311,6 +313,8 @@ def test_split_dependency_columns_round_trip_and_reject_mismatched_lists(databas
 
 
 def test_clear_all_filters_resets_selection_and_resource_filter_state(database: RuntimeResources, access: BusinessAccess, authorized: AuthorizedFixture) -> None:
+    with psycopg.connect(authorized.setup.operator_url) as connection:
+        connection.execute("UPDATE eppm.project SET status='In Progress'")
     with patch("app.presentation.pages.planning._interactive_gantt", return_value=None) as chart:
         app = native_screen(f'''
 import streamlit as st

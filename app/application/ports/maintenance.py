@@ -62,14 +62,14 @@ class ParentSummary(TypedDict):
     """Counts of generated groups and pools beneath a service root."""
 
     parent: str
-    new_groups: int
+    new_containers: int
     new_pools: int
 
 
 class PoolSeedReport(TypedDict):
     """Preview/application outcome of a Ressort A pool installation."""
 
-    new_groups: int
+    new_containers: int
     new_pools: int
     applied: NotRequired[bool]
     already_seeded: NotRequired[bool]

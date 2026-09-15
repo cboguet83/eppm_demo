@@ -33,10 +33,19 @@ class PoolReference:
 
 @dataclass(frozen=True)
 class PoolGroupReference:
-    """Pool-group selection identity without administration metadata."""
+    """Container pool identity using the existing Gantt group transport name."""
 
     id: int | None
     name: str
+
+
+@dataclass(frozen=True)
+class PoolHierarchyMember:
+    """Transient Gantt edge; both group fields identify container pools."""
+
+    group_id: int
+    pool_id: int | None = None
+    child_group_id: int | None = None
 
 
 @dataclass(frozen=True)

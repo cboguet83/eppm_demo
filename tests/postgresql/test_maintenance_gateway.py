@@ -20,7 +20,7 @@ def test_explicit_operator_startup_migrates_once_and_forced_generation_keeps_one
     service = MaintenanceService(gateway)
     service.startup(projects=20)
     before = service.counts()
-    assert before['projects'] == 5 and before['pools'] == 33
+    assert before['projects'] == 5 and before['pools'] == 40
     assert len(list(tmp_path.glob('*.dump'))) == 1
     service.startup()
     assert service.counts() == before

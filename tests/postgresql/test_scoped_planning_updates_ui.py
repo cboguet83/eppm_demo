@@ -95,14 +95,14 @@ def test_changing_the_chart_selection_reads_current_capacity_once_per_rebuild(pg
 
     path, access, administrator, editor, _ = business
     with psycopg.connect(pg_database.operator_url) as connection:
-        connection.execute("INSERT INTO eppm.project(id,name) VALUES(3,'Other visible project')")
+        connection.execute("INSERT INTO eppm.project(id,name,status) VALUES(3,'Other visible project','In Progress')")
     access.grant(administrator, editor.actor.user_id, "project_viewer", {"kind": "projects", "project_ids": [3]})
     reads = []
     original = PlanningWorkspace.pool_details
 
-    def details(workspace, pool_ids=None):
+    def details(workspace, pool_ids=None, *, project_ids=None):
         reads.append(pool_ids)
-        return original(workspace, pool_ids)
+        return original(workspace, pool_ids, project_ids=project_ids)
 
     rerun = FragmentRun("planning_lazy_gantt", widget_json={
         "action": "filter_project", "project_id": 1, "filter_scope": "all", "nonce": "capacity-filter",
@@ -216,10 +216,10 @@ def test_gantt_pool_and_group_allocation_menus_open_only_scoped_rows(pg_database
 
     path, _, _, editor, _ = business
     with psycopg.connect(pg_database.operator_url) as connection:
-        connection.execute("INSERT INTO eppm.resource_pool_group(id,name) VALUES(1,'Delivery group')")
-        connection.execute("INSERT INTO eppm.resource_pool_group_member(group_id,pool_id) VALUES(1,1)")
+        connection.execute("INSERT INTO eppm.resource_pool(id,name) VALUES(10,'Delivery container')")
+        connection.execute("UPDATE eppm.resource_pool SET parent_pool_id=10 WHERE id=1")
     event = {"action": "show_pool_allocations", "pool_id": 0 if group else 1,
-             "group_id": 1 if group else None, "nonce": "allocations-menu"}
+             "group_id": 10 if group else None, "nonce": "allocations-menu"}
     table = Mock(return_value=SimpleNamespace(action=None))
     register = st.components.v2.component
     with patch("app.presentation.pages.planning._interactive_gantt", return_value=event), \
@@ -237,7 +237,7 @@ def test_gantt_pool_and_group_allocation_menus_open_only_scoped_rows(pg_database
 def test_pool_filter_can_retain_other_filters_without_broadening_project_access(pg_database, business, selection):
     path, service, admin, editor, _ = business
     with psycopg.connect(pg_database.operator_url) as connection:
-        connection.execute("INSERT INTO eppm.project(id,name) VALUES(3,'Other visible project')")
+        connection.execute("INSERT INTO eppm.project(id,name,status) VALUES(3,'Other visible project','In Progress')")
     service.grant(admin, editor.actor.user_id, "project_viewer", {"kind": "projects", "project_ids": [3]})
     event = {"action": "filter_by_resource_pool", "pool_id": 1, "pool_name": "Reference pool",
              "start_date": "2026-01-01", "end_date": "2026-01-05", "clear_other_filters": False,
@@ -271,7 +271,7 @@ def test_numeric_flex_filters_preserve_null_values_and_replace_an_incompatible_s
     schema.create_parameter("SCORE", None, "Numeric score", "NUMBER", alias="Score")
     schema.create_parameter("WEIGHT", None, "Numeric weight", "NUMBER", alias="Score")
     with psycopg.connect(pg_database.operator_url) as connection:
-        connection.execute("INSERT INTO eppm.project(id,name) VALUES(3,'Other visible project')")
+        connection.execute("INSERT INTO eppm.project(id,name,status) VALUES(3,'Other visible project','In Progress')")
         connection.execute("INSERT INTO eppm.project_property_value(project_id,param_id,kind,number_value) VALUES(1,'SCORE','number',42),(2,'SCORE','number',99)")
     service.grant(admin, editor.actor.user_id, "project_viewer", {"kind": "projects", "project_ids": [3]})
     with patch("app.presentation.pages.planning._interactive_gantt", return_value=None) as component:
@@ -294,9 +294,9 @@ def test_scoped_task_updates_refresh_only_the_affected_pool_within_nested_groups
     path, _, _, editor, _ = business
     with psycopg.connect(pg_database.operator_url) as connection:
         connection.execute("INSERT INTO eppm.resource_pool(id,name,capacity_fte) VALUES(2,'Unused pool',1)")
-        connection.execute("INSERT INTO eppm.resource_pool_group(id,name) VALUES(1,'First group'),(2,'Second group')")
-        connection.execute("INSERT INTO eppm.resource_pool_group_member(group_id,child_group_id) VALUES(1,2)")
-        connection.execute("INSERT INTO eppm.resource_pool_group_member(group_id,pool_id) VALUES(1,1),(2,2)")
+        connection.execute("INSERT INTO eppm.resource_pool(id,name) VALUES(10,'First container'),(20,'Second container')")
+        connection.execute("UPDATE eppm.resource_pool SET parent_pool_id=10 WHERE id=20")
+        connection.execute("UPDATE eppm.resource_pool SET parent_pool_id=CASE id WHEN 1 THEN 10 ELSE 20 END WHERE id IN (1,2)")
     with patch("app.presentation.pages.planning._interactive_gantt", return_value=None) as component:
         app = AppTest.from_function(scoped_planning_app, args=(path, editor.actor), default_timeout=30).run()
         assert not app.exception and not app.error

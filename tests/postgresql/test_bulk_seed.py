@@ -21,7 +21,7 @@ def test_bulk_generator_preserves_requested_schedule_bounds_native_links_tags_an
     request = SeedRequest(projects=15, min_tasks=minimum, max_tasks=maximum, random_seed=123)
     result = operator.run(lambda c: generate_projects(c, request, year=2026), write=True)
     assert result['projects_created'] == 15
-    assert result['pools_created'] == 33 and result['pool_groups_created'] == 7
+    assert result['pools_created'] == 40 and result['container_pools_created'] == 7
     assert 15 * minimum <= result['tasks_created'] <= 15 * maximum
     with psycopg.connect(pg_database.operator_url) as connection:
         counts = connection.execute('SELECT p.id,count(t.id) FROM eppm.project p LEFT JOIN eppm.project_task t ON t.project_id=p.id GROUP BY p.id').fetchall()
@@ -59,7 +59,7 @@ def test_bulk_append_preserves_custom_templates_existing_records_and_sequence_ga
         connection.execute("SELECT setval('eppm.project_id_seq',1099,true),setval('eppm.project_task_id_seq',10999,true)")
     result = operator.run(lambda c: generate_projects(c, SeedRequest(projects=4, min_tasks=1, max_tasks=1, clean_first=False), year=2026), write=True)
     assert result == {'projects_created': 4, 'tasks_created': 4, 'dependencies_created': 1,
-                      'project_types': 2, 'property_values_created': 4, 'pools_created': 0, 'pool_groups_created': 0}
+                      'project_types': 2, 'property_values_created': 4, 'pools_created': 0, 'container_pools_created': 0}
     with psycopg.connect(pg_database.operator_url) as connection:
         assert connection.execute('SELECT id FROM eppm.project ORDER BY id').fetchall() == [(999,), (1100,), (1101,), (1102,), (1103,)]
         assert connection.execute('SELECT id FROM eppm.project_task ORDER BY id').fetchall() == [(9999,), (11000,), (11001,), (11002,), (11003,)]

@@ -139,7 +139,7 @@ def generate_projects(connection: psycopg.Connection, request: SeedRequest, *, y
     if installed and request.clean_first:
         pools = apply_pool_scenarios(connection, prepare_pool_scenarios(connection, year=year, seed=request.random_seed))
     else:
-        pools = {'new_pools': 0, 'new_groups': 0}
+        pools = {'new_pools': 0, 'new_containers': 0}
     return {'projects_created': len(projects), 'tasks_created': len(tasks), 'dependencies_created': len(dependencies),
             'project_types': connection.execute('SELECT count(*) FROM eppm.project_type').fetchone()[0],
-            'property_values_created': len(parents), 'pools_created': pools['new_pools'], 'pool_groups_created': pools['new_groups']}
+            'property_values_created': len(parents), 'pools_created': pools['new_pools'], 'container_pools_created': pools['new_containers']}

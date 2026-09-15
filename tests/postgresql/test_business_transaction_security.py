@@ -1,5 +1,7 @@
 """Native scope enforcement and scoped application/UI workflows."""
 
+from tests.postgresql.pool_helpers import create_container
+
 from datetime import date
 
 import psycopg
@@ -213,7 +215,7 @@ def test_revoked_session_and_invalid_context_cannot_open_business_transaction(bu
     ("create_project_type_service", "get_all_types"),
     ("create_resource_pool_service", "get_all_mappings"),
     ("create_resource_pool_service", "get_all_pools"),
-    ("create_resource_pool_service", "get_all_pool_groups"),
+    ("create_resource_pool_service", "get_all_pools"),
     ("create_tag_service", "get_all_tags"),
     ("create_collaboration_service", "list_functions"),
     ("create_project_service", "generate_project_id"),
@@ -485,7 +487,7 @@ def test_scoped_allocation_popups_accept_only_visible_navigation_actions(pg_data
     from types import SimpleNamespace
     from unittest.mock import Mock, patch
     from streamlit.testing.v1 import AppTest
-    from app.domain.resources.models import ResourcePoolGroup
+    from app.domain.resources.models import ResourcePool
     from app.main import create_resource_pool_service
     from app.presentation.navigation import PAGE_PLANNING
 
@@ -494,7 +496,7 @@ def test_scoped_allocation_popups_accept_only_visible_navigation_actions(pg_data
     service.grant(admin, editor.actor.user_id, "project_viewer", {"kind": "projects", "project_ids": [1]})
     service.revoke(admin, assignment["id"])
     resources = create_resource_pool_service(path, access=manager)
-    resources.create_pool_group(ResourcePoolGroup("Visible group"), pool_ids=[1])
+    create_container(resources, ResourcePool("Visible group"), pool_ids=[1])
     component = Mock(side_effect=[SimpleNamespace(action=event), SimpleNamespace(action=None)])
     register = st.components.v2.component
     with patch("streamlit.components.v2.component", side_effect=lambda name, **kwargs:
@@ -611,7 +613,7 @@ def test_flexible_filters_offer_only_visible_values_and_clear_without_widening_a
 
     path, service, admin, editor, _ = business
     with psycopg.connect(pg_database.operator_url) as connection:
-        connection.execute("INSERT INTO eppm.project(id,name) VALUES(3,'Visible alternative')")
+        connection.execute("INSERT INTO eppm.project(id,name,status) VALUES(3,'Visible alternative','In Progress')")
         connection.execute("INSERT INTO eppm.project_property_value(project_id,param_id,kind,text_value) VALUES(3,'DEPT','text','Finance')")
         connection.execute("INSERT INTO eppm.project_tag(project_id,free_tag) VALUES(1,'Alpha'),(1,'Beta'),(3,'Alpha'),(2,'Private tag')")
     service.grant(admin, editor.actor.user_id, "project_viewer", {"kind": "projects", "project_ids": [3]})
@@ -700,19 +702,19 @@ def test_pool_context_filters_and_allocation_totals_remain_inside_current_read_s
     import json
     from unittest.mock import patch
     from streamlit.testing.v1 import AppTest
-    from app.domain.resources.models import ResourcePoolGroup
+    from app.domain.resources.models import ResourcePool
     from app.main import create_resource_pool_service
 
     path, service, admin, editor, manager = business
     with psycopg.connect(pg_database.operator_url) as connection:
-        connection.execute("INSERT INTO eppm.project(id,name) VALUES(3,'Visible successor')")
+        connection.execute("INSERT INTO eppm.project(id,name,status) VALUES(3,'Visible successor','In Progress')")
         connection.execute("INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date) VALUES(30,3,'Successor task','2026-01-06','2026-01-07')")
         connection.execute("INSERT INTO eppm.task_dependencies(task_id,predecessor_task_id,link_type,lag_days) VALUES(30,10,'FS',0)")
         connection.execute("INSERT INTO eppm.resource_pool_assignment(id,pool_id,project_id,fte_assigned,notes) VALUES(3,1,1,0.25,'<script>visible notes</script>')")
     service.grant(admin, editor.actor.user_id, "project_viewer", {"kind": "projects", "project_ids": [3]})
-    create_resource_pool_service(path, access=manager).create_pool_group(ResourcePoolGroup("Delivery group"), pool_ids=[1])
+    container_id = create_container(create_resource_pool_service(path, access=manager), ResourcePool("Delivery group"), pool_ids=[1])
     event = {
-        "action": "filter_by_resource_pool", "pool_id": 1, "group_id": 1 if group else None,
+        "action": "filter_by_resource_pool", "pool_id": 1, "group_id": container_id if group else None,
         "filter_scope": scope, "start_date": "2026-01-01", "end_date": "2026-01-05", "nonce": "scope-filter",
     }
     with patch("app.presentation.pages.planning._interactive_gantt", return_value=event) as component:

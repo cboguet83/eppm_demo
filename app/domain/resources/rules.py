@@ -1,4 +1,4 @@
-"""Resource-pool input rules and cycle-safe group traversal."""
+"""Resource-pool input normalization and numeric validation."""
 
 from dataclasses import replace
 from math import isfinite
@@ -8,8 +8,6 @@ from app.domain.resources.models import (
     PoolAssignment,
     PoolMapping,
     ResourcePool,
-    ResourcePoolGroup,
-    ResourcePoolGroupMember,
 )
 
 
@@ -73,14 +71,6 @@ def normalize_pool(pool: ResourcePool) -> ResourcePool:
     return replace(pool, name=pool.name.strip(), description=pool.description.strip())
 
 
-def normalize_group(group: ResourcePoolGroup) -> ResourcePoolGroup:
-    """Require a group name without changing its identity."""
-    validate_hierarchy_type_id(group.hierarchy_type_id)
-    if not group.name.strip():
-        raise ValueError("Pool group name is required.")
-    return replace(group, name=group.name.strip(), description=group.description.strip())
-
-
 def normalize_mapping(mapping: PoolMapping) -> PoolMapping:
     """Normalize the existing mapping kinds and validate its allocation."""
     target = mapping.target_type.strip().lower()
@@ -104,44 +94,3 @@ def normalize_assignment(assignment: PoolAssignment) -> PoolAssignment:
         if assignment.start_date is not None or assignment.end_date is not None:
             raise ValueError("Relative assignments cannot also store fixed dates.")
     return replace(assignment, notes=assignment.notes.strip())
-
-
-def descendant_groups(group_id: int, members: list[ResourcePoolGroupMember]) -> set[int]:
-    """Resolve groups once, terminating even on legacy cyclic input."""
-    children: dict[int, set[int]] = {}
-    for member in members:
-        if member.child_group_id is not None:
-            children.setdefault(member.group_id, set()).add(member.child_group_id)
-    pending, visited = [group_id], set()
-    while pending:
-        current = pending.pop()
-        if current in visited:
-            continue
-        visited.add(current)
-        pending.extend(children.get(current, set()) - visited)
-    return visited
-
-
-def descendant_pools(group_id: int, members: list[ResourcePoolGroupMember]) -> list[int]:
-    """Deduplicate pools reached through multiple branches of a group graph."""
-    groups = descendant_groups(group_id, members)
-    return sorted(
-        {
-            member.pool_id
-            for member in members
-            if member.group_id in groups and member.pool_id is not None
-        }
-    )
-
-
-def validate_group_children(
-    group_id: int,
-    child_ids: list[int],
-    members: list[ResourcePoolGroupMember],
-) -> None:
-    """Reject proposed edges that make the current group reachable from a child."""
-    for child_id in child_ids:
-        if group_id in descendant_groups(child_id, members):
-            raise ValueError(
-                f"Adding pool group #{child_id} below #{group_id} would create a loop."
-            )

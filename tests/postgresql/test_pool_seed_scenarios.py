@@ -40,7 +40,7 @@ def test_preview_is_non_mutating_frozen_and_repeat_install_preserves_allocations
     assert operator.run(snapshot) == before
     assert plan == operator.run(lambda c: prepare_pool_scenarios(c, year=2026, seed=42))
     report = plan.report()
-    assert (report['new_groups'], report['new_pools'], report['new_employee_mappings']) == (7, 33, 0)
+    assert (report['new_containers'], report['new_pools'], report['new_employee_mappings']) == (7, 40, 0)
     report['hierarchy'][0]['name'] = 'Mutated'
     assert plan.report()['hierarchy'][0]['name'] == 'Ressort A'
     with pytest.raises(FrozenInstanceError):
@@ -81,7 +81,7 @@ def test_capacity_exceptions_are_applied_after_unchanged_assignment_plan(pg_data
         for pool in POOLS:
             assert 1 <= counts[pool.name, 6] <= 3
             assert counts[pool.name, 12] == (2 if pool.capacity > 6 else 0)
-        identities = [row[0] for row in c.execute('SELECT id FROM eppm.resource_pool')]
+        identities = [row[0] for row in c.execute('SELECT p.id FROM eppm.resource_pool p WHERE NOT EXISTS (SELECT 1 FROM eppm.resource_pool child WHERE child.parent_pool_id=p.id)')]
         for inputs in read_operator_capacity_inputs(c, identities).values():
             detail = calculate_capacity(inputs, today=date(2026, 1, 1))
             assert detail.capacity_calendar
@@ -109,16 +109,14 @@ def test_current_size_replacement_preserves_projects_and_has_exact_capacity_mix(
         assert c.execute('SELECT count(*) FROM eppm.resource_pool_assignment WHERE start_date IS NOT NULL OR end_date IS NOT NULL OR fte_assigned<.1 OR fte_assigned>5').fetchone() == (0,)
         assert c.execute('WITH ordered AS (SELECT id,row_number() OVER(ORDER BY id) AS n FROM eppm.project) SELECT count(*) FROM eppm.resource_pool_assignment a JOIN ordered p ON p.id=a.project_id WHERE (p.n<=250 AND a.task_id IS NOT NULL) OR (p.n>250 AND a.task_id IS NULL)').fetchone() == (0,)
         rows = c.execute('SELECT p.name,g.name,h.code,p.capacity_fte FROM eppm.resource_pool p '
-                         'JOIN eppm.resource_pool_group_member m ON m.pool_id=p.id '
-                         'JOIN eppm.resource_pool_group g ON g.id=m.group_id '
-                         'JOIN eppm.hierarchy_type h ON h.id=p.hierarchy_type_id').fetchall()
+                         'JOIN eppm.resource_pool g ON g.id=p.parent_pool_id '
+                         'JOIN eppm.hierarchy_type h ON h.id=p.hierarchy_type_id WHERE p.capacity_fte IS NOT NULL').fetchall()
         assert set(rows) == {(p.name, p.parent, p.hierarchy_type, p.capacity) for p in POOLS}
-        groups = c.execute('SELECT g.name,parent.name,h.code FROM eppm.resource_pool_group g '
-                           'LEFT JOIN eppm.resource_pool_group_member m ON m.child_group_id=g.id '
-                           'LEFT JOIN eppm.resource_pool_group parent ON parent.id=m.group_id '
-                           'JOIN eppm.hierarchy_type h ON h.id=g.hierarchy_type_id').fetchall()
+        groups = c.execute('SELECT g.name,parent.name,h.code FROM eppm.resource_pool g '
+                           'LEFT JOIN eppm.resource_pool parent ON parent.id=g.parent_pool_id '
+                           'JOIN eppm.hierarchy_type h ON h.id=g.hierarchy_type_id WHERE g.capacity_fte IS NULL').fetchall()
         assert set(groups) == set(GROUPS)
-        ids = [r[0] for r in c.execute('SELECT id FROM eppm.resource_pool')]
+        ids = [r[0] for r in c.execute('SELECT p.id FROM eppm.resource_pool p WHERE NOT EXISTS (SELECT 1 FROM eppm.resource_pool child WHERE child.parent_pool_id=p.id)')]
         assert min(ids) > old_max
         categories = Counter()
         for values in read_operator_capacity_inputs(c, ids).values():

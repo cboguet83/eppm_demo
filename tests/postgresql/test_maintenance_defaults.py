@@ -18,7 +18,7 @@ def test_complete_native_default_seed_contains_annotations_scenarios_and_one_res
     assert maintenance.seed_defaults(operator, backup, year=2026)
     result = maintenance.counts(operator)
     assert {key: result[key] for key in ('projects', 'tasks', 'dependencies', 'project_types', 'pools')} == {
-        'projects': 5, 'tasks': 15, 'dependencies': 14, 'project_types': 5, 'pools': 33,
+        'projects': 5, 'tasks': 15, 'dependencies': 14, 'project_types': 5, 'pools': 40,
     }
     assert result['property_values'] > 100
     with psycopg.connect(pg_database.operator_url) as connection:
@@ -46,11 +46,11 @@ def test_catalog_only_install_pool_preview_apply_clear_and_reset_follow_archive_
     backup = PostgresBackup(pg_database.operator_url, tmp_path, tools=clients)
     assert maintenance.seed_defaults(operator, backup, include_projects=False)
     assert maintenance.counts(operator)['projects'] == 0
-    assert maintenance.counts(operator)['pools'] == 33
+    assert maintenance.counts(operator)['pools'] == 40
     assert len(list(tmp_path.glob('*.dump'))) == 1
     before = operator.run(source_fingerprint)
     preview = maintenance.seed_pool_scenarios(operator, backup, apply=False, year=2026, replace=True)
-    assert preview['new_pools'] == 33 and not preview['applied']
+    assert preview['new_pools'] == 40 and not preview['applied']
     assert operator.run(source_fingerprint) == before
     assert len(list(tmp_path.glob('*.dump'))) == 1
     assert maintenance.seed_pool_scenarios(operator, backup, apply=True, year=2026, replace=True)['applied']
@@ -63,7 +63,7 @@ def test_catalog_only_install_pool_preview_apply_clear_and_reset_follow_archive_
     with psycopg.connect(pg_database.operator_url) as connection:
         assert connection.execute('SELECT count(*) FROM eppm.resource_pool_mapping').fetchone() == (0,)
     assert maintenance.reset_database(operator, backup)['projects_deleted'] == 5
-    assert maintenance.counts(operator)['pools'] == 33
+    assert maintenance.counts(operator)['pools'] == 40
     assert len(list(tmp_path.glob('*.dump'))) == 5
 
 

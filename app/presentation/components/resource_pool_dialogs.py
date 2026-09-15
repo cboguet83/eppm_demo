@@ -3,6 +3,7 @@
 from collections.abc import Callable
 from functools import wraps
 from datetime import date
+from app.domain.resources.hierarchy import PoolHierarchy
 
 import pandas as pd
 import streamlit as st
@@ -18,7 +19,6 @@ from app.domain.resources.models import (
     PoolCapacityException,
     PoolMapping,
     ResourcePool,
-    ResourcePoolGroup,
 )
 from app.domain.resources.rules import (
     validate_pool_name,
@@ -27,8 +27,6 @@ from app.domain.resources.rules import (
 )
 from app.presentation.components.resource_pool_frames import (
     pools_frame,
-    groups_frame,
-    members_frame,
     tags_frame,
     tag_choices_frame,
 )
@@ -56,7 +54,7 @@ def require_change(changed: bool) -> None:
 
 @dialog(t("settings.dialog_add_pool", default="Create Resource Pool"))
 @pool_errors
-def _open_add_pool_dialog(service: ResourcePoolService) -> None:
+def _open_add_pool_dialog(service: ResourcePoolService, parent_pool_id: int | None = None) -> None:
     """Modal dialog to create a new resource pool."""
     new_name = st.text_input(
         t("settings.field_pool_name", default="Resource Pool Name *"),
@@ -68,6 +66,7 @@ def _open_add_pool_dialog(service: ResourcePoolService) -> None:
     )
     pool_type_id = pool_type_selector(service, key="new_pool_type")
     hierarchy_type_id = hierarchy_type_selector(service.get_all_hierarchy_types())
+    parent_pool_id = _parent_pool_selector(service, current=parent_pool_id)
     new_capacity = st.number_input(
         t("settings.field_pool_capacity", default="Defined capacity (FTE)"),
         min_value=0.0,
@@ -106,9 +105,11 @@ def _open_add_pool_dialog(service: ResourcePoolService) -> None:
                 capacity_fte=float(new_capacity),
                 pool_type_id=pool_type_id,
                 hierarchy_type_id=hierarchy_type_id,
+                parent_pool_id=parent_pool_id,
             ),
             tag_ids=selected_tag_ids,
         )
+        st.session_state['target_resource_pool_id'] = parent_pool_id if parent_pool_id is not None else p_id
         st.toast(f"Resource Pool '{new_name}' created (ID: {p_id})!")
         st.rerun()
     if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
@@ -123,8 +124,12 @@ def _open_edit_pool_dialog(service: ResourcePoolService, pool_id: int) -> None:
     if not pool:
         st.error("Resource pool not found.")
         return
-    with st.expander(t('pool_exceptions.title', default='Capacity exceptions')):
-        _capacity_exceptions_editor(service, pool_id)
+    container = bool(PoolHierarchy(service.get_all_pools()).children.get(pool_id))
+    if container:
+        st.info("This pool is a container. Capacity is calculated from its children; assign its leaf pools to projects and tasks.")
+    else:
+        with st.expander(t('pool_exceptions.title', default='Capacity exceptions')):
+            _capacity_exceptions_editor(service, pool_id)
     edit_name = st.text_input(
         t("settings.field_pool_name", default="Resource Pool Name *"), value=pool.name
     )
@@ -133,10 +138,12 @@ def _open_edit_pool_dialog(service: ResourcePoolService, pool_id: int) -> None:
     )
     pool_type_id = pool_type_selector(service, current=pool.pool_type_id, key=f"pool_type_{pool_id}")
     hierarchy_type_id = hierarchy_type_selector(service.get_all_hierarchy_types(), pool.hierarchy_type_id)
+    parent_pool_id = _parent_pool_selector(service, current=pool.parent_pool_id, pool_id=pool_id)
     edit_capacity = st.number_input(
         t("settings.field_pool_capacity", default="Defined capacity (FTE)"),
         min_value=0.0,
         value=float(pool.capacity_fte or 0.0),
+        disabled=container,
         step=0.25,
         help=t(
             "settings.field_pool_capacity_help",
@@ -177,9 +184,10 @@ def _open_edit_pool_dialog(service: ResourcePoolService, pool_id: int) -> None:
                     id=pool_id,
                     name=edit_name.strip(),
                     description=edit_desc.strip(),
-                    capacity_fte=float(edit_capacity),
+                    capacity_fte=None if container else float(edit_capacity),
                     pool_type_id=pool_type_id,
                     hierarchy_type_id=hierarchy_type_id,
+                    parent_pool_id=parent_pool_id,
                 ),
                 tag_ids=selected_tag_ids,
             )
@@ -188,6 +196,24 @@ def _open_edit_pool_dialog(service: ResourcePoolService, pool_id: int) -> None:
         st.rerun()
     if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
         st.rerun()
+
+
+def _parent_pool_selector(service: ResourcePoolService, *, current: int | None = None,
+                          pool_id: int | None = None) -> int | None:
+    """Offer valid ancestry and preview conversion warnings before saving."""
+    tree = PoolHierarchy(service.get_all_pools())
+    excluded = set(tree.descendants(pool_id)) if pool_id in tree.pools else set()
+    options = [None, *(identity for identity in tree.pools if identity not in excluded)]
+    selected = st.selectbox("Parent pool", options, index=options.index(current) if current in options else 0,
+        format_func=lambda identity: "No parent (root pool)" if identity is None else tree.pools[identity].name,
+        key=f"parent_pool_{pool_id}")
+    if selected is not None and (pool_id is None or selected != current):
+        warning = service.parent_pool_warning(selected)
+        if warning:
+            st.warning(warning)
+        else:
+            st.caption("The parent becomes a container and its capacity is calculated from its children.")
+    return selected
 
 
 def _capacity_exceptions_editor(service: ResourcePoolService, pool_id: int) -> None:
@@ -234,183 +260,6 @@ def _open_delete_pool_dialog(service: ResourcePoolService, pool_id: int, pool_na
         st.rerun()
     if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
         st.rerun()
-
-
-def _pool_group_option_maps(service: ResourcePoolService) -> tuple[dict[int, str], dict[int, str]]:
-    """Build current resource-pool and group labels for membership controls."""
-    pools = pools_frame(service.get_all_pools())
-    groups = groups_frame(service.get_all_pool_groups())
-    pool_labels = {int(row["id"]): str(row["name"]) for _, row in pools.iterrows()}
-    group_labels = {int(row["id"]): str(row["name"]) for _, row in groups.iterrows()}
-    return (pool_labels, group_labels)
-
-
-@dialog("Create pool group")
-@pool_errors
-def _open_add_pool_group_dialog(service: ResourcePoolService) -> None:
-    """Create a recursive group and its direct members."""
-    pool_labels, group_labels = _pool_group_option_maps(service)
-    name = st.text_input("Group name *", placeholder="e.g. Digital delivery")
-    description = st.text_area("Description", placeholder="Purpose of this pool group")
-    hierarchy_type_id = hierarchy_type_selector(service.get_all_hierarchy_types())
-    selected_pool_ids = st.multiselect(
-        "Direct pools", options=list(pool_labels), format_func=lambda pool_id: pool_labels[pool_id]
-    )
-    selected_group_ids = st.multiselect(
-        "Child groups",
-        options=list(group_labels),
-        format_func=lambda group_id: group_labels[group_id],
-        help="Child groups can contain pools or more child groups.",
-    )
-    save_col, cancel_col = st.columns(2)
-    if save_col.button("Save group", type="primary", width="stretch"):
-        service.create_pool_group(
-            ResourcePoolGroup(name=name, description=description, hierarchy_type_id=hierarchy_type_id),
-            pool_ids=selected_pool_ids,
-            child_group_ids=selected_group_ids,
-        )
-        st.toast(f"Pool group '{name}' created.")
-        st.rerun()
-    if cancel_col.button("Cancel", width="stretch"):
-        st.rerun()
-
-
-@dialog("Edit pool group")
-@pool_errors
-def _open_edit_pool_group_dialog(service: ResourcePoolService, group_id: int) -> None:
-    """Edit a recursive group while excluding child choices that form cycles."""
-    group = service.get_pool_group_by_id(group_id)
-    if group is None:
-        st.error("Pool group not found.")
-        return
-    pool_labels, group_labels = _pool_group_option_maps(service)
-    current_pool_ids, current_child_ids = service.get_group_direct_member_ids(group_id)
-    allowed_ids = service.get_allowed_child_group_ids(group_id)
-    safe_group_labels = {
-        candidate_id: label
-        for candidate_id, label in group_labels.items()
-        if candidate_id in allowed_ids
-    }
-    name = st.text_input("Group name *", value=group.name)
-    description = st.text_area("Description", value=group.description)
-    hierarchy_type_id = hierarchy_type_selector(service.get_all_hierarchy_types(), group.hierarchy_type_id)
-    selected_pool_ids = st.multiselect(
-        "Direct pools",
-        options=list(pool_labels),
-        default=current_pool_ids,
-        format_func=lambda pool_id: pool_labels[pool_id],
-    )
-    selected_group_ids = st.multiselect(
-        "Child groups",
-        options=list(safe_group_labels),
-        default=current_child_ids,
-        format_func=lambda child_id: safe_group_labels[child_id],
-        help="Groups that would introduce a direct or indirect loop are excluded.",
-    )
-    save_col, cancel_col = st.columns(2)
-    if save_col.button("Save changes", type="primary", width="stretch"):
-        require_change(
-            service.update_pool_group(
-                ResourcePoolGroup(id=group_id, name=name, description=description, hierarchy_type_id=hierarchy_type_id),
-                pool_ids=selected_pool_ids,
-                child_group_ids=selected_group_ids,
-            )
-        )
-        st.toast("Pool group updated.")
-        st.rerun()
-    if cancel_col.button("Cancel", width="stretch"):
-        st.rerun()
-
-
-@dialog("Delete pool group")
-@pool_errors
-def _open_delete_pool_group_dialog(
-    service: ResourcePoolService, group_id: int, group_name: str
-) -> None:
-    """Confirm deletion of a pool group without deleting its member pools."""
-    st.warning(f"Delete pool group **{group_name}**?")
-    st.caption("Member pools and child groups are retained; only group memberships are removed.")
-    confirm_col, cancel_col = st.columns(2)
-    if confirm_col.button("Delete group", type="primary", width="stretch"):
-        require_change(service.delete_pool_group(group_id))
-        st.toast(f"Pool group '{group_name}' deleted.")
-        st.rerun()
-    if cancel_col.button("Cancel", width="stretch"):
-        st.rerun()
-
-
-def _render_pool_groups_management(service: ResourcePoolService) -> None:
-    """Render creation, editing, and recursive membership inspection for pool groups."""
-    expander = st.expander("Recursive pool groups", expanded=False, on_change="rerun")
-    if not expander.open:
-        return
-    with expander:
-        title_col, create_col = st.columns([4, 1])
-        title_col.caption(
-            "Groups may contain resource pools or other groups. Recursive membership is deduplicated and loop-safe."
-        )
-        if create_col.button("New group", width="stretch"):
-            _open_add_pool_group_dialog(service)
-        groups = groups_frame(service.get_all_pool_groups())
-        if groups.empty:
-            st.info("No pool groups yet.")
-            return
-        hierarchy_labels = {record.id: record.label(get_current_locale()) for record in service.get_all_hierarchy_types()}
-        groups["hierarchy_type"] = groups["hierarchy_type_id"].map(hierarchy_labels).fillna("")
-        st.dataframe(
-            groups[
-                [
-                    "name",
-                    "description",
-                    "hierarchy_type",
-                    "direct_pool_count",
-                    "child_group_count",
-                    "recursive_pool_count",
-                ]
-            ],
-            column_config={
-                "name": "Group",
-                "description": "Description",
-                "hierarchy_type": t("hierarchy.type"),
-                "direct_pool_count": "Direct pools",
-                "child_group_count": "Child groups",
-                "recursive_pool_count": "All pools",
-            },
-            hide_index=True,
-            width="stretch",
-        )
-        group_labels = {int(row["id"]): str(row["name"]) for _, row in groups.iterrows()}
-        selected_group_id = st.selectbox(
-            "Inspect group",
-            options=list(group_labels),
-            format_func=lambda group_id: group_labels[group_id],
-            key="selected_resource_pool_group",
-        )
-        edit_col, delete_col, _ = st.columns([1, 1, 3])
-        if edit_col.button("Edit", width="stretch"):
-            _open_edit_pool_group_dialog(service, selected_group_id)
-        if delete_col.button("Delete", width="stretch"):
-            _open_delete_pool_group_dialog(
-                service, selected_group_id, group_labels[selected_group_id]
-            )
-        direct_members = members_frame(service.get_group_members(selected_group_id))
-        all_pool_ids = service.get_group_descendant_pool_ids(selected_group_id)
-        all_pools = pools_frame(service.get_all_pools())
-        pool_names = {int(row["id"]): str(row["name"]) for _, row in all_pools.iterrows()}
-        direct_labels = (
-            [
-                f"{('Pool' if row['member_type'] == 'pool' else 'Group')}: {row['member_name']}"
-                for _, row in direct_members.iterrows()
-            ]
-            if not direct_members.empty
-            else []
-        )
-        st.caption("Direct members: " + (" · ".join(direct_labels) if direct_labels else "None"))
-        st.write(
-            "Resolved pools:",
-            ", ".join((pool_names.get(pool_id, f"Pool #{pool_id}") for pool_id in all_pool_ids))
-            or "None",
-        )
 
 
 @dialog(t("settings.dialog_add_mapping", default="Assign Team or Employee to Pool"))

@@ -6,6 +6,7 @@ import streamlit as st
 from app.application.services.organization import OrganizationService
 from app.application.services.resource_pools import ResourcePoolService
 from app.application.services.pool_capacity import PoolCapacityService
+from app.domain.resources.hierarchy import PoolHierarchy
 from app.presentation.components.organization_frames import (
     functions_frame,
     teams_frame,
@@ -23,7 +24,6 @@ from app.presentation.components.resource_pool_dialogs import (
     _open_edit_pool_dialog,
     _open_delete_pool_dialog,
     _open_add_pool_mapping_dialog,
-    _render_pool_groups_management,
     _render_pool_assignments_table,
 )
 from app.presentation.i18n import get_current_locale, t
@@ -41,11 +41,14 @@ def render_resource_pools(
     df_teams = teams_frame(organization.get_all_teams())
     df_emps = employees_frame(organization.get_all_employees())
     all_pool_details = capacity.get_summaries()
+    pool_records = service.get_all_pools()
+    hierarchy = PoolHierarchy(pool_records)
+    leaf_details = [row for row in all_pool_details if not hierarchy.children.get(row.pool_id)]
     total_pools = len(all_pool_details)
-    total_portfolio_capacity = sum((p.total_capacity_fte for p in all_pool_details))
-    total_assigned_capacity = sum((p.assigned_capacity_fte for p in all_pool_details))
-    peak_portfolio_assigned = sum((p.peak_assigned_fte for p in all_pool_details))
-    overassigned_pools_count = sum((1 for p in all_pool_details if p.is_overassigned))
+    total_portfolio_capacity = sum((p.total_capacity_fte for p in leaf_details))
+    total_assigned_capacity = sum((p.assigned_capacity_fte for p in leaf_details))
+    peak_portfolio_assigned = sum((p.peak_assigned_fte for p in leaf_details))
+    overassigned_pools_count = sum((1 for p in leaf_details if p.is_overassigned))
     st.subheader(
         f"{t('settings.pools_title', default='Resource Pools Management')} ({total_pools} {t('settings.stat_pools', default='Pools')} • {total_portfolio_capacity:.2f} {t('settings.stat_capacity', default='FTE Capacity')})"
     )
@@ -74,8 +77,7 @@ def render_resource_pools(
     else:
         kpi5.metric(t("settings.kpi_overassigned_pools", default="Overassigned Pools"), "0")
     st.divider()
-    _render_pool_groups_management(service)
-    st.divider()
+    st.caption("Pools form a hierarchy. Only pools without children can be assigned; containers total their children’s capacity.")
     col_sel, col_add_btn = st.columns([4, 1])
     with col_add_btn:
         if st.button(
@@ -84,7 +86,7 @@ def render_resource_pools(
             width="stretch",
         ):
             _open_add_pool_dialog(service)
-    df_all_pools = pools_frame(service.get_all_pools())
+    df_all_pools = pools_frame(pool_records)
     if df_all_pools.empty:
         st.info(
             t(
@@ -131,6 +133,8 @@ def render_resource_pools(
                     st.text(t("hierarchy.type") + ": " + hierarchy_labels.get(pool_obj.hierarchy_type_id, ""))
                 if pool_obj and pool_obj.description:
                     st.caption(f"{pool_obj.description}")
+                if pool_obj and pool_obj.parent_pool_id in hierarchy.pools:
+                    st.text(f"Parent pool: {hierarchy.pools[pool_obj.parent_pool_id].name}")
                 pool_tags = tags_frame(service.get_pool_tags(selected_pool_id))
                 if not pool_tags.empty:
                     tag_text = " ".join(
@@ -140,10 +144,10 @@ def render_resource_pools(
             with c_actions:
                 c_edit, c_del = st.columns(2)
                 if c_edit.button(
-                    "", key=f"btn_edit_pool_{selected_pool_id}", help="Edit pool details"
+                    "Edit", key=f"btn_edit_pool_{selected_pool_id}", help="Edit pool details"
                 ):
                     _open_edit_pool_dialog(service, selected_pool_id)
-                if c_del.button("", key=f"btn_del_pool_{selected_pool_id}", help="Delete pool"):
+                if c_del.button("Delete", key=f"btn_del_pool_{selected_pool_id}", help="Delete pool"):
                     _open_delete_pool_dialog(service, selected_pool_id, current_detail.pool_name)
             if current_detail.is_overassigned:
                 st.error(
@@ -154,6 +158,20 @@ def render_resource_pools(
                     f"**CAPACITY NORMAL**: Defined pool capacity is **{current_detail.total_capacity_fte:.2f} FTE**; deduplicated assigned capacity is **{current_detail.assigned_capacity_fte:.2f} FTE**. Peak active daily demand is **{current_detail.peak_assigned_fte:.2f} FTE**."
                 )
             st.divider()
+            warning = service.parent_pool_warning(selected_pool_id)
+            if st.button("Create child pool", key=f"child_pool_{selected_pool_id}", disabled=warning is not None):
+                _open_add_pool_dialog(service, selected_pool_id)
+            if warning:
+                st.warning(warning)
+            children = hierarchy.children.get(selected_pool_id, [])
+            if children:
+                st.info("Container pool: capacity and demand are aggregated from its children. Assign a leaf pool to a project or task.")
+                st.dataframe(pd.DataFrame([
+                    {"Pool": hierarchy.pools[identity].name,
+                     "Role": "Container" if hierarchy.children.get(identity) else "Assignable leaf",
+                     "Capacity (FTE)": pool_id_map[identity].total_capacity_fte if identity in pool_id_map else None}
+                    for identity in children]), hide_index=True, width="stretch")
+                return
             st.write(
                 f"#### / {t('settings.mapped_teams_funcs', default='Assigned Teams & Employees')} (0% - 100%)"
             )

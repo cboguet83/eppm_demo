@@ -4,6 +4,7 @@ from dataclasses import replace
 
 from app.application.services.business_access import BusinessAccess
 from app.domain.resources.inputs import CapacityInputs, CapacityStaffing
+from app.domain.resources.hierarchy import PoolHierarchy
 from app.domain.resources.models import PoolCapacityDetail, PoolResourceContribution, ResourcePool
 from app.infrastructure.postgresql.pool import Database
 from app.infrastructure.postgresql.resource_pools import PostgresResourcePoolGateway, PostgresResourcePoolStore
@@ -21,6 +22,10 @@ class PostgresCapacityReader:
         pool_ids = list(pool_ids)
         return self._gateway.run(lambda store: read_capacity_inputs(store, pool_ids))
 
+    def pool_hierarchy(self) -> list[ResourcePool]:
+        """Read the shared forest used to expand capacity requests in Python."""
+        return self._gateway.run(lambda store: store.get_all_pools())
+
     def visible_details(self, details: list[PoolCapacityDetail]) -> list[PoolCapacityDetail]:
         """Recheck access before returning any individual staffing contributions."""
         def operation(store: PostgresResourcePoolStore) -> list[PoolCapacityDetail]:
@@ -36,12 +41,10 @@ def read_capacity_inputs(store: PostgresResourcePoolStore, pool_ids: list[int]) 
     individual contributions only to shared administrators. Raw employee and
     calendar records never cross this adapter boundary, including for admins.
     """
-    pools = {
-        identity: ResourcePool(name, id=identity, capacity_fte=capacity, pool_type_id=pool_type_id)
-        for identity, name, capacity, pool_type_id in store.connection.execute(
-            'SELECT id,name,capacity_fte,pool_type_id FROM eppm.resource_pool WHERE id=ANY(%s::bigint[])', (pool_ids,),
-        )
-    }
+    pools = {pool.id: pool for pool in store.get_all_pools()}
+    tree = PoolHierarchy(pools.values())
+    pool_ids = sorted(set(pool_ids) | {identity for pool_id in pool_ids if pool_id in pools
+                                     for identity in tree.descendants(pool_id)})
     inputs = {
         pool_id: CapacityInputs(pool_id, pool=pools.get(pool_id), staffing=CapacityStaffing())
         for pool_id in pool_ids

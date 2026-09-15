@@ -1,5 +1,7 @@
 """Unit tests for Resource Pools, partial mappings, de-duplication, and daily overassignment detection."""
 
+from tests.postgresql.pool_helpers import create_container
+
 from app.domain.resources.capacity_rules import accumulate_daily_usage
 from app.domain.resources.capacity_rules import calculate_pool_scope_daily_usage
 from app.domain.resources.capacity_rules import get_projects_consuming_pool_in_period
@@ -22,7 +24,6 @@ from app.domain.resources.models import (
     PoolAssignment,
     PoolMapping,
     ResourcePool,
-    ResourcePoolGroup,
 )
 from app.presentation.i18n import set_current_locale
 from app.main import create_planning_service, create_organization_service, create_project_service, create_resource_pool_service
@@ -76,39 +77,17 @@ class TestResourcePools(unittest.TestCase):
         """Nested groups deduplicate pools and reject direct, indirect, and raw-SQL loops."""
         pool_a = self.pool_repo.create_pool(ResourcePool(name="Pool A"))
         pool_b = self.pool_repo.create_pool(ResourcePool(name="Pool B"))
-        leaf = self.pool_repo.create_pool_group(ResourcePoolGroup(name="Leaf"))
-        middle = self.pool_repo.create_pool_group(ResourcePoolGroup(name="Middle"))
-        top = self.pool_repo.create_pool_group(ResourcePoolGroup(name="Top"))
+        leaf = create_container(self.pool_repo, ResourcePool(name="Leaf"))
+        middle = create_container(self.pool_repo, ResourcePool(name="Middle"))
+        top = create_container(self.pool_repo, ResourcePool(name="Top"))
 
-        self.pool_repo.replace_group_members(leaf, [pool_a], [])
-        self.pool_repo.replace_group_members(middle, [pool_b], [leaf])
-        self.pool_repo.replace_group_members(top, [pool_a], [middle])
-
-        self.assertEqual(
-            self.pool_repo.get_group_descendant_pool_ids(top),
-            [pool_a, pool_b],
-        )
-        with self.assertRaisesRegex(ValueError, "loop"):
-            self.pool_repo.replace_group_members(leaf, [pool_a], [leaf])
-        with self.assertRaisesRegex(ValueError, "loop"):
-            self.pool_repo.replace_group_members(leaf, [pool_a], [top])
-
-        # Validation happens before replacement, so rejected edits preserve members.
-        self.assertEqual(self.pool_repo.get_group_direct_member_ids(leaf), ([pool_a], []))
-
-        with psycopg.connect(self.setup.operator_url) as conn:
-            with self.assertRaisesRegex(psycopg.errors.CheckViolation, "cycle"):
-                conn.execute(
-                    """
-                    INSERT INTO eppm.resource_pool_group_member
-                        (group_id, pool_id, child_group_id)
-                    VALUES (%s, NULL, %s)
-                    """,
-                    (leaf, top),
-                )
-
-        groups = resource_pool_frames.groups_frame(self.pool_repo.get_all_pool_groups()).set_index("name")
-        self.assertEqual(int(groups.loc["Top", "recursive_pool_count"]), 2)
+        from dataclasses import replace
+        for child, parent in ((pool_a, leaf), (pool_b, middle), (leaf, middle), (middle, top)):
+            self.pool_repo.update_pool(replace(self.pool_repo.get_pool_by_id(child), parent_pool_id=parent))
+        self.assertEqual(self.pool_repo.descendant_pool_ids(top), [pool_a, pool_b])
+        with self.assertRaisesRegex(ValueError, "circular"):
+            self.pool_repo.update_pool(replace(self.pool_repo.get_pool_by_id(top), parent_pool_id=leaf))
+        self.assertIsNone(self.pool_repo.get_pool_by_id(top).parent_pool_id)
 
         from app.presentation.pages.planning import _build_resource_pool_hierarchy
 

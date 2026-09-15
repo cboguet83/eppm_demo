@@ -169,9 +169,10 @@ def prepare_allocation_plan(
         raise ValueError(
             'The database changed. Preview the allocation plan again before applying it.',
         )
-    pool_ids = [row[0] for row in connection.execute(
-        'SELECT id FROM eppm.resource_pool ORDER BY id',
-    )]
+    from app.domain.resources.hierarchy import PoolHierarchy
+    from app.infrastructure.postgresql.resource_pools import PostgresResourcePoolStore
+    tree = PoolHierarchy(PostgresResourcePoolStore(connection).get_all_pools())
+    pool_ids = sorted(identity for identity in tree.pools if not tree.children.get(identity))
     rates = allocation_rates(pool_ids, request)
     rng = random.Random(request.random_seed)
     unstaffed = set(rng.sample(

@@ -1,5 +1,19 @@
 # PostgreSQL resource pools and assignments
 
+## Current hierarchy (2026-09-15)
+
+Pool groups are replaced by `resource_pool.parent_pool_id`; see
+[ADR 0027](../decisions/0027-single-parent-pools.md). Only leaf pools accept
+allocations or direct capacity configuration. Containers sum child capacity and
+same-day demand in Python. Python services reject cycles and block child creation
+or reparenting beneath an assigned pool with an actionable warning.
+
+Migration 0040 converts group metadata and links atomically while preserving
+existing pool IDs and allocations. Multiple parents, name collisions or cycles
+block conversion and report identities to resolve. Back up the database before
+running the operator migration command. The older sections below describe the
+PostgreSQL port before this hierarchy change.
+
 `ResourcePoolService` now executes complete authorized callbacks through
 `PostgresResourcePoolGateway`. Native operations cover pool and group catalogs,
 optional hierarchy classifications, recursive membership, target mappings,

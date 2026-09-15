@@ -24,7 +24,8 @@ def business(pg_database, database):
     path = RuntimeResources(database, key)
     with psycopg.connect(pg_database.operator_url) as conn:
         ensure_reference_catalog(conn)
-        conn.execute("INSERT INTO eppm.project(id,name) VALUES(1,'Visible'),(2,'Hidden')")
+        # Keep scope fixtures inside the planner's current default status filter.
+        conn.execute("INSERT INTO eppm.project(id,name,status) VALUES(1,'Visible','In Progress'),(2,'Hidden','In Progress')")
         conn.execute("INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date) VALUES(10,1,'Visible task','2026-01-01','2026-01-05'),(20,2,'Hidden task','2026-01-01','2026-01-05')")
         conn.execute("INSERT INTO eppm.task_dependencies(task_id,predecessor_task_id,link_type,lag_days) VALUES(10,20,'FS',0)")
         conn.execute("UPDATE eppm.project_task SET predecessor_id=20 WHERE id=10")

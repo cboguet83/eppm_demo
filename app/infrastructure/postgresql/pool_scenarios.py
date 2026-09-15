@@ -15,8 +15,7 @@ from app.infrastructure.postgresql.seed_plan import SeedInsert, SeedValue, next_
 
 
 MARKER = 'Ressort A pool seed v4'
-REPLACED_TABLES = ('resource_pool_assignment', 'resource_pool_mapping', 'resource_pool_group_member',
-                   'resource_pool_tag', 'resource_pool', 'resource_pool_group')
+REPLACED_TABLES = ('resource_pool_assignment', 'resource_pool_mapping', 'resource_pool_tag', 'resource_pool')
 
 
 @dataclass(frozen=True)
@@ -41,7 +40,7 @@ class _Builder:
     def __init__(self, connection: psycopg.Connection) -> None:
         self.inserts: list[SeedInsert] = []
         self.next_ids = {table: next_seed_identity(connection, table)
-                         for table in ('resource_pool_group', 'resource_pool', 'hierarchy_type')}
+                         for table in ('resource_pool', 'hierarchy_type')}
 
     def insert(self, table: str, columns: tuple[str, ...], values: tuple[SeedValue, ...]) -> None:
         self.inserts.append(SeedInsert(table, columns, values))
@@ -75,31 +74,28 @@ def prepare_pool_scenarios(connection: psycopg.Connection, *, year: int, seed: i
     fingerprint = source_fingerprint(connection)
     counts = {table: connection.execute(sql.SQL('SELECT count(*) FROM eppm.{}').format(sql.Identifier(table))).fetchone()[0]
               for table in REPLACED_TABLES}
-    installed = connection.execute('SELECT 1 FROM eppm.resource_pool_group WHERE description IN (%s,%s)',
+    installed = connection.execute('SELECT 1 FROM eppm.resource_pool WHERE description IN (%s,%s)',
                                    (MARKER, 'Ressort A pool seed v3')).fetchone()
     if installed and not replace:
-        return PoolScenarioPlan(fingerprint, (), json.dumps({'already_seeded': True, 'new_groups': 0, 'new_pools': 0}))
-    if (counts['resource_pool'] or counts['resource_pool_group']) and not replace:
+        return PoolScenarioPlan(fingerprint, (), json.dumps({'already_seeded': True, 'new_containers': 0, 'new_pools': 0}))
+    if counts['resource_pool'] and not replace:
         raise ValueError('An existing pool layout requires explicit --replace; preview it before applying.')
     builder = _Builder(connection)
     types = _hierarchy_types(connection, builder)
     groups: dict[str, int] = {}
     hierarchy = []
     for name, parent, code in GROUPS:
-        identity = builder.identity('resource_pool_group')
+        identity = builder.identity('resource_pool')
         groups[name] = identity
-        builder.insert('resource_pool_group', ('id', 'name', 'description', 'hierarchy_type_id'),
-                       (identity, name, MARKER, types[code]))
-        if parent:
-            builder.insert('resource_pool_group_member', ('group_id', 'child_group_id'), (groups[parent], identity))
-        hierarchy.append({'name': name, 'parent': parent, 'hierarchy_type': code, 'kind': 'group'})
+        builder.insert('resource_pool', ('id', 'name', 'description', 'hierarchy_type_id', 'parent_pool_id'),
+                       (identity, name, MARKER, types[code], groups[parent] if parent else None))
+        hierarchy.append({'name': name, 'parent': parent, 'hierarchy_type': code, 'kind': 'container'})
     pool_ids = {}
     for pool in POOLS:
         identity = builder.identity('resource_pool')
         pool_ids[pool.name] = identity
-        builder.insert('resource_pool', ('id', 'name', 'description', 'hierarchy_type_id', 'capacity_fte'),
-                       (identity, pool.name, MARKER, types[pool.hierarchy_type], pool.capacity))
-        builder.insert('resource_pool_group_member', ('group_id', 'pool_id'), (groups[pool.parent], identity))
+        builder.insert('resource_pool', ('id', 'name', 'description', 'hierarchy_type_id', 'capacity_fte', 'parent_pool_id'),
+                       (identity, pool.name, MARKER, types[pool.hierarchy_type], pool.capacity, groups[pool.parent]))
         hierarchy.append({'name': pool.name, 'parent': pool.parent, 'hierarchy_type': pool.hierarchy_type,
                           'kind': 'pool', 'capacity_fte': pool.capacity})
     periods = [ProjectPeriod(identity, start or date(year, 1, 1), end or date(year, 12, 31))
@@ -120,7 +116,7 @@ def prepare_pool_scenarios(connection: psycopg.Connection, *, year: int, seed: i
         builder.insert('resource_pool_capacity_exception',
                        ('pool_id', 'start_date', 'end_date', 'reduction_fte', 'reason'),
                        (pool_ids[pool_name], start, end, 1, 'Demo capacity reduction'))
-    report = dict(new_groups=7, new_pools=33, replacement=replace,
+    report = dict(new_containers=7, new_pools=40, replacement=replace,
                   removed=counts if replace else {table: 0 for table in REPLACED_TABLES},
                   hierarchy=hierarchy, fingerprint=fingerprint, seed=seed, year=year,
                   total_projects=len(periods), allocated_projects=len(periods) - omitted,
@@ -148,10 +144,11 @@ def apply_pool_scenarios(connection: psycopg.Connection, plan: PoolScenarioPlan)
     if source_fingerprint(connection) != plan.fingerprint:
         raise ValueError('Database changed during preparation; rerun to prepare a fresh plan.')
     if plan.replace:
+        connection.execute('UPDATE eppm.resource_pool SET parent_pool_id=NULL')
         for table in REPLACED_TABLES:
             connection.execute(sql.SQL('DELETE FROM eppm.{}').format(sql.Identifier(table)))
     for command in plan.inserts:
         command.apply(connection)
     if plan.inserts:
-        advance_seed_sequences(connection, (('resource_pool_group', 'id'), ('resource_pool', 'id'), ('hierarchy_type', 'id')))
+        advance_seed_sequences(connection, (('resource_pool', 'id'), ('hierarchy_type', 'id')))
     return plan.report(applied=bool(plan.inserts))

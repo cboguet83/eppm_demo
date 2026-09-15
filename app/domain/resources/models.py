@@ -1,4 +1,4 @@
-"""Domain models for resource pools, recursive groups, mappings, and assignments."""
+"""Domain models for recursive resource pools, mappings, and assignments."""
 
 from dataclasses import dataclass, field
 from typing import NotRequired, TypedDict
@@ -83,6 +83,7 @@ class ResourcePool:
         created_at: ISO timestamp of creation.
         hierarchy_type_id: Optional shared hierarchy classification.
         pool_type_id: Required pool classification; Human (1) is the default.
+        parent_pool_id: Optional parent; pools with children are capacity containers.
     """
 
     name: str
@@ -92,6 +93,7 @@ class ResourcePool:
     created_at: str | None = None
     hierarchy_type_id: int | None = None
     pool_type_id: int = 1
+    parent_pool_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -104,30 +106,6 @@ class PoolCapacityException:
     reduction_fte: float
     reason: str = ''
     id: int | None = None
-
-
-@dataclass
-class ResourcePoolGroup:
-    """A recursive pool collection with an optional shared hierarchy classification."""
-
-    name: str
-    id: int | None = None
-    description: str = ""
-    created_at: str | None = None
-    hierarchy_type_id: int | None = None
-
-
-@dataclass
-class ResourcePoolGroupMember:
-    """A direct member of a pool group.
-
-    Exactly one of ``pool_id`` and ``child_group_id`` must be populated.
-    """
-
-    group_id: int
-    id: int | None = None
-    pool_id: int | None = None
-    child_group_id: int | None = None
 
 
 @dataclass
@@ -288,23 +266,6 @@ class PoolCapacityDetail:
     def capacity_calendar(self) -> dict[str, float]:
         """Return effective date overrides, retaining existing staffing snapshots."""
         return self.daily_effective_capacity or (self.daily_assigned_capacity if self.has_assigned_resources else {})
-
-
-@dataclass
-class PoolGroupSummary(ResourcePoolGroup):
-    """Group catalog entry with direct and recursively deduplicated pool counts."""
-
-    direct_pool_count: int = 0
-    child_group_count: int = 0
-    recursive_pool_count: int = 0
-
-
-@dataclass
-class PoolGroupMemberRow(ResourcePoolGroupMember):
-    """Direct member enriched with its display label."""
-
-    member_type: str = ""
-    member_name: str = ""
 
 
 @dataclass(frozen=True)

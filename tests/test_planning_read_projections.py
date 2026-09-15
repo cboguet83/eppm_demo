@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pandas as pd
 import pytest
 
-from app.domain.resources.models import ResourcePoolGroup, ResourcePoolGroupMember
+from app.application.ports.references import PoolGroupReference, PoolHierarchyMember
 from app.presentation.components.planning_catalog import (
     enrich_projects_with_organization, get_function_occupant_names,
     get_level_3_managing_function,
@@ -55,10 +55,10 @@ def test_unusable_hierarchy_rows_never_supply_a_managing_function() -> None:
 def test_resource_hierarchy_bounds_cycles_and_omits_missing_pool_references() -> None:
     # Synthetic read projections exercise the renderer's defensive cycle guard;
     # real database cycle prevention is tested independently in resource tests.
-    groups = [ResourcePoolGroup("First", id=1), ResourcePoolGroup("Second", id=2)]
+    groups = [PoolGroupReference(1, "First"), PoolGroupReference(2, "Second")]
     members = [
-        ResourcePoolGroupMember(1, child_group_id=2), ResourcePoolGroupMember(2, child_group_id=1),
-        ResourcePoolGroupMember(1, pool_id=10), ResourcePoolGroupMember(2, pool_id=999),
+        PoolHierarchyMember(1, child_group_id=2), PoolHierarchyMember(2, child_group_id=1),
+        PoolHierarchyMember(1, pool_id=10), PoolHierarchyMember(2, pool_id=999),
     ]
     workspace = SimpleNamespace(resources=SimpleNamespace(group_choices=lambda: groups, group_membership=lambda: members))
     hierarchy = _build_resource_pool_hierarchy(workspace, [{"id": 10, "name": "Available pool"}])

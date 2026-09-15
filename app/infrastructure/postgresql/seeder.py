@@ -33,7 +33,7 @@ def install_default_data(connection: psycopg.Connection, *, force: bool, include
         assign_budget_shares(connection, [row[0] for row in connection.execute('SELECT id FROM eppm.project ORDER BY id')], seed=20260908)
     connection.execute("INSERT INTO eppm.operator_seed_state(catalog) VALUES ('demo')")
     if build_pools and not connection.execute(
-        'SELECT EXISTS(SELECT 1 FROM eppm.resource_pool) OR EXISTS(SELECT 1 FROM eppm.resource_pool_group)'
+        'SELECT EXISTS(SELECT 1 FROM eppm.resource_pool)'
     ).fetchone()[0]:
         apply_pool_scenarios(connection, prepare_pool_scenarios(connection, year=year, seed=20260908))
     return True

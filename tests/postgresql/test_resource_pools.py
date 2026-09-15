@@ -1,5 +1,7 @@
 """Native pool workflows, scoped assignments and complete concurrent callbacks."""
 
+from tests.postgresql.pool_helpers import create_container
+
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from datetime import date
@@ -11,7 +13,7 @@ import pytest
 from app.application.exceptions import ResourcePoolConflictError, ResourcePoolStorageError
 from app.application.services.resource_pools import ResourcePoolService
 from app.domain.access.models import AccessDenied
-from app.domain.resources.models import PoolAssignment, PoolMapping, ResourcePool, ResourcePoolGroup
+from app.domain.resources.models import PoolAssignment, PoolMapping, ResourcePool
 from app.infrastructure.postgresql.resource_pools import PostgresResourcePoolGateway
 
 
@@ -68,42 +70,21 @@ def test_pool_details_tags_and_hierarchy_are_atomic_and_identity_is_stable(pools
     assert [row.id for row in service(authorized, 1).pool_choices()] == [identity]
 
 
-def test_recursive_group_save_counts_ordering_and_cascades_preserve_shared_children(pools, authorized):
-    pool = pools.create_pool(ResourcePool('Pool'))
-    child = pools.create_pool_group(ResourcePoolGroup('Child', hierarchy_type_id=1), pool_ids=[pool])
-    other = pools.create_pool_group(ResourcePoolGroup('Other'), pool_ids=[pool])
-    parent = pools.create_pool_group(ResourcePoolGroup('Parent'), pool_ids=[pool], child_group_ids=[child, other, child])
-    summary = {row.id: row for row in pools.get_all_pool_groups()}[parent]
-    assert (summary.direct_pool_count, summary.child_group_count, summary.recursive_pool_count) == (1, 2, 1)
-    assert [(row.member_type, row.member_name) for row in pools.get_group_members(parent)] == [('group', 'Child'), ('group', 'Other'), ('pool', 'Pool')]
-    assert pools.get_group_direct_member_ids(parent) == ([pool], [child, other])
-    assert pools.get_group_descendant_pool_ids(parent) == [pool]
-    assert pools.would_create_group_cycle(child, parent)
-    assert parent not in pools.get_allowed_child_group_ids(child)
-    original = pools.get_pool_group_by_id(child)
-    with pytest.raises(ValueError, match='loop'):
-        pools.update_pool_group(replace(original, name='Lost'), child_group_ids=[parent])
-    assert pools.get_pool_group_by_id(child) == original
-    assert pools.get_group_direct_member_ids(child) == ([pool], [])
-    with pytest.raises(ValueError, match='pool IDs'):
-        pools.create_pool_group(ResourcePoolGroup('Lost'), pool_ids=[999])
-    with pytest.raises(ValueError, match='group IDs'):
-        pools.replace_group_members(parent, [pool], [999])
-    with pytest.raises(ValueError, match='does not exist'):
-        pools.replace_group_members(999, [], [])
-    assert not pools.update_pool_group(ResourcePoolGroup('Absent'))
-    assert not pools.update_pool_group(ResourcePoolGroup('Absent', id=999), pool_ids=[pool])
-    assert pools.get_pool_group_by_id(999) is None and not pools.delete_pool_group(999)
-    assert pools.update_pool_group(replace(original, name='Changed', hierarchy_type_id=None))
-    assert pools.get_pool_group_by_id(child).created_at == original.created_at
-    reader = service(authorized, 1)
-    assert reader.group_pool_ids(parent) == [pool]
-    assert len(reader.group_choices()) == 3 and len(reader.group_membership()) == 5
-    assert pools.delete_pool_group(parent)
-    assert pools.get_pool_by_id(pool) and pools.get_pool_group_by_id(child)
-    assert len(pools.get_all_group_members()) == 2
-    assert pools.delete_pool(pool)
-    assert pools.get_all_group_members() == []
+def test_recursive_pools_resolve_leaves_and_reparent_without_changing_identity(pools, authorized):
+    root = pools.create_pool(ResourcePool('Root'))
+    branch = pools.create_pool(ResourcePool('Branch', parent_pool_id=root, hierarchy_type_id=1))
+    leaf = pools.create_pool(ResourcePool('Leaf', parent_pool_id=branch))
+    original = pools.get_pool_by_id(branch)
+    assert pools.descendant_pool_ids(root) == [leaf]
+    with pytest.raises(ValueError, match='circular'):
+        pools.update_pool(replace(original, parent_pool_id=leaf, name='Lost'))
+    assert pools.get_pool_by_id(branch) == original
+    with pytest.raises(ValueError, match='parent pool'):
+        pools.update_pool(replace(original, parent_pool_id=999))
+    assert pools.update_pool(replace(original, parent_pool_id=None))
+    assert pools.get_pool_by_id(branch).created_at == original.created_at
+    assert pools.delete_pool(root)
+    assert pools.get_pool_by_id(branch) and pools.get_pool_by_id(leaf)
 
 
 def test_mapping_upsert_retains_identity_and_all_target_kinds(pools):
@@ -195,7 +176,7 @@ def test_late_tag_insert_failure_restores_pool_details_and_existing_links(pools,
 
 def test_pool_delete_failure_restores_cascading_assignments_members_tags_and_mappings(pools, authorized):
     pool = pools.create_pool(ResourcePool('Pool'), tag_ids=[1])
-    group = pools.create_pool_group(ResourcePoolGroup('Group'), pool_ids=[pool])
+    group = create_container(pools, ResourcePool('Group'), pool_ids=[pool])
     mapping = pools.create_mapping(PoolMapping(pool, 'team', 1))
     assignment = pools.create_assignment(PoolAssignment(pool, 3, 1))
     with psycopg.connect(authorized.setup.operator_url) as connection:
@@ -205,12 +186,12 @@ def test_pool_delete_failure_restores_cascading_assignments_members_tags_and_map
     with pytest.raises(ResourcePoolConflictError):
         pools.delete_pool(pool)
     assert pools.get_assignment_by_id(assignment) and pools.get_mappings_by_pool(pool)[0].id == mapping
-    assert pools.get_pool_tags(pool)[0].tag_id == 1 and pools.get_group_direct_member_ids(group) == ([pool], [])
+    assert pools.get_pool_tags(pool)[0].tag_id == 1 and pools.get_pool_by_id(pool).parent_pool_id == group
     with psycopg.connect(authorized.setup.operator_url) as connection:
         connection.execute('DROP TRIGGER reject_pool_delete ON eppm.resource_pool')
     assert pools.delete_pool(pool)
     assert pools.get_assignments() == [] and pools.get_all_mappings() == [] and pools.get_pool_tags(pool) == []
-    assert pools.get_group_direct_member_ids(group) == ([], [])
+    assert pools.descendant_pool_ids(group) == [group]
 
 
 class GatedGateway(PostgresResourcePoolGateway):
@@ -228,20 +209,20 @@ class GatedGateway(PostgresResourcePoolGateway):
 
 
 def test_competing_recursive_edges_replay_and_revalidate_without_committing_a_cycle(pools, authorized):
-    groups = [pools.create_pool_group(ResourcePoolGroup(name)) for name in ('One', 'Two')]
+    groups = [create_container(pools, ResourcePool(name)) for name in ('One', 'Two')]
     barrier, attempts = Barrier(2), [0, 0]
     def connect(index):
         actor_service = ResourcePoolService(GatedGateway(authorized, barrier, attempts, index))
         try:
-            actor_service.replace_group_members(groups[index], [], [groups[1 - index]])
+            actor_service.update_pool(ResourcePool(('One', 'Two')[index], id=groups[index], parent_pool_id=groups[1 - index]))
             return 'saved'
         except ValueError as error:
-            assert 'loop' in str(error)
+            assert 'circular' in str(error)
             return 'cycle'
     with ThreadPoolExecutor(max_workers=2) as executor:
         outcomes = list(executor.map(connect, range(2)))
     assert sorted(outcomes) == ['cycle', 'saved'] and sum(attempts) >= 3
-    assert len(pools.get_all_group_members()) == 1
+    assert len(pools.group_membership()) == 1
 
 
 def test_concurrent_mapping_upsert_replays_to_one_identity(pools, authorized):
@@ -267,36 +248,37 @@ def test_concurrent_pool_name_and_tags_remain_one_committed_pair(pools, authoriz
     assert pools.get_pool_by_id(pool).name == f'Name {pools.get_pool_tags(pool)[0].tag_id}'
 
 
-def test_group_catalog_and_members_share_a_repeatable_read_snapshot(pools, authorized):
-    pool = pools.create_pool(ResourcePool('Pool'))
-    group = pools.create_pool_group(ResourcePoolGroup('Original'), pool_ids=[pool])
+def test_pool_catalog_and_parent_links_share_a_repeatable_read_snapshot(pools, authorized):
+    parent = pools.create_pool(ResourcePool('Original'))
+    leaf = pools.create_pool(ResourcePool('Leaf', parent_pool_id=parent))
     ready, changed = Event(), Event()
     def read():
         def operation(store):
-            groups = store.groups()
+            before = store.get_all_pools()
             ready.set()
             assert changed.wait(timeout=10)
-            return groups, store.get_all_group_members()
+            return before, store.get_all_pools()
         return gateway(authorized).run(operation)
     with ThreadPoolExecutor(max_workers=1) as executor:
         future = executor.submit(read)
         assert ready.wait(timeout=10)
         try:
-            pools.update_pool_group(ResourcePoolGroup('Changed', id=group), pool_ids=[])
+            pools.update_pool(replace(pools.get_pool_by_id(leaf), parent_pool_id=None))
         finally:
             changed.set()
-        groups, members = future.result()
-    assert groups[0].name == 'Original' and members[0].pool_id == pool
-    assert pools.get_all_pool_groups()[0].recursive_pool_count == 0
+        before, after = future.result()
+    assert before == after
+    assert next(row for row in before if row.id == leaf).parent_pool_id == parent
+    assert pools.get_pool_by_id(leaf).parent_pool_id is None
 
 
-@pytest.mark.parametrize('kind', ['pool', 'group', 'assignment'])
+@pytest.mark.parametrize('kind', ['pool', 'child', 'assignment'])
 def test_retry_retains_original_model_and_collection_inputs(pools, authorized, kind):
     pool = pools.create_pool(ResourcePool('Original'))
     submitted_tags, submitted_pools = [1], [pool]
-    models = {'pool': ResourcePool('Kept', id=pool), 'group': ResourcePoolGroup('Kept'), 'assignment': PoolAssignment(pool, 1, 0.75)}
+    models = {'pool': ResourcePool('Kept', id=pool), 'child': ResourcePool('Kept', parent_pool_id=pool), 'assignment': PoolAssignment(pool, 1, 0.75)}
     model, attempts = models[kind], []
-    table, action = {'pool': ('resource_pool_tag', 'INSERT'), 'group': ('resource_pool_group_member', 'INSERT'),
+    table, action = {'pool': ('resource_pool_tag', 'INSERT'), 'child': ('resource_pool', 'INSERT'),
                      'assignment': ('resource_pool_assignment', 'INSERT')}[kind]
     with psycopg.connect(authorized.setup.operator_url) as connection:
         connection.execute('CREATE SEQUENCE eppm.pool_attempt')
@@ -322,9 +304,9 @@ def test_retry_retains_original_model_and_collection_inputs(pools, authorized, k
     if kind == 'pool':
         actor_service.update_pool(model, tag_ids=submitted_tags)
         assert pools.get_pool_by_id(pool).name == 'Kept' and pools.get_pool_tags(pool)[0].tag_id == 1
-    elif kind == 'group':
-        group = actor_service.create_pool_group(model, pool_ids=submitted_pools)
-        assert pools.get_pool_group_by_id(group).name == 'Kept' and pools.get_group_direct_member_ids(group) == ([pool], [])
+    elif kind == 'child':
+        child = actor_service.create_pool(model)
+        assert pools.get_pool_by_id(child).name == 'Kept' and pools.get_pool_by_id(child).parent_pool_id == pool
     else:
         identity = actor_service.create_assignment(model)
         assert pools.get_assignment_by_id(identity).fte_assigned == 0.75
@@ -346,17 +328,16 @@ def test_native_dates_and_creation_timestamps_ignore_session_locale(pools, autho
 
 def test_nullable_legacy_descriptions_and_notes_remain_editable(pools, authorized):
     pool = pools.create_pool(ResourcePool('Pool'))
-    group = pools.create_pool_group(ResourcePoolGroup('Group'))
+    group = create_container(pools, ResourcePool('Group'))
     assignment = pools.create_assignment(PoolAssignment(pool, 1, 1))
     with psycopg.connect(authorized.setup.operator_url) as connection:
         connection.execute('UPDATE eppm.resource_pool SET description=NULL,created_at=NULL')
-        connection.execute('UPDATE eppm.resource_pool_group SET description=NULL,created_at=NULL')
         connection.execute('UPDATE eppm.resource_pool_assignment SET notes=NULL')
-    assert pools.get_pool_by_id(pool).description == pools.get_pool_group_by_id(group).description == ''
-    assert pools.get_pool_by_id(pool).created_at is None and pools.get_pool_group_by_id(group).created_at is None
+    assert pools.get_pool_by_id(pool).description == pools.get_pool_by_id(group).description == ''
+    assert pools.get_pool_by_id(pool).created_at is None and pools.get_pool_by_id(group).created_at is None
     assert pools.get_assignment_by_id(assignment).notes == ''
     assert pools.update_pool(pools.get_pool_by_id(pool))
-    assert pools.update_pool_group(pools.get_pool_group_by_id(group))
+    assert pools.update_pool(pools.get_pool_by_id(group))
     assert pools.update_assignment(pools.get_assignment_by_id(assignment))
 
 

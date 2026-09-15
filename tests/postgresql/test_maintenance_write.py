@@ -50,7 +50,7 @@ def test_scenario_database_retry_creates_one_real_pre_operation_archive(pg_datab
 
     result = backed_up_write(operator, PostgresBackup(pg_database.operator_url, tmp_path, tools=clients),
         reason='seed', fingerprint=plan.fingerprint, operation=operation)
-    assert result['new_pools'] == 33 and result['applied']
+    assert result['new_pools'] == 40 and result['applied']
     assert len(attempts) == 2
     archives = list(tmp_path.glob('*.dump'))
     assert len(archives) == 1
