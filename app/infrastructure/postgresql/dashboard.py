@@ -101,7 +101,8 @@ class PostgresDashboardReader:
         def operation(connection: psycopg.Connection, ids: list[int], _security: PostgresAccessStore) -> ResourceBreakdown:
             result = connection.execute('SELECT eppm.dashboard_resource_breakdown(%s::bigint[],%s)', (ids, today)).fetchone()[0]
             return ResourceBreakdown(allocation=result['allocation'], overallocation=result['overallocation'],
-                capacity=result['capacity'], pools=result['pools'], peak_days=result.get('peak_days', {}))
+                capacity=result['capacity'], pools=result['pools'], peak_days=result.get('peak_days', {}),
+                overallocated_pools=result.get('overallocated_pools', []))
         return self._run(operation, project_ids)
 
     def consuming_projects(self, project_ids: list[int], quarter: str, today: date,
@@ -126,5 +127,5 @@ class PostgresDashboardReader:
                     to_char(e.updated_at AT TIME ZONE 'UTC','YYYY-MM-DD HH24:MI:SS') AS updated_at,
                     p.name AS project_name,coalesce((SELECT label FROM eppm.project_event_type_translation
                         WHERE catalog_id=t.id AND locale=%s),t.name) AS event_type """ + _BLOCKERS +
-                    ' ORDER BY e.project_id,e.id DESC', (locale, ids)).fetchall()
+                    ' ORDER BY e.id DESC', (locale, ids)).fetchall()
         return self._run(operation, project_ids)

@@ -29,6 +29,7 @@ def assert_resources_match_domain(authorized, selected, day=DAY):
         args = (selected, day, quarter, pool, metric)
         current = authorized.query('SELECT eppm.dashboard_resource_breakdown(%s,%s,%s,%s,%s)', args, user_id=4)
         baseline = authorized.query('SELECT eppm.dashboard_resource_breakdown_daily_baseline(%s,%s,%s,%s,%s)', args, user_id=4)
+        current[0][0].pop('overallocated_pools')
         assert current == baseline
     expected = reference_details(authorized, selected, day)
     actual = service(authorized, 4, lambda: day).resources(selected)
@@ -195,6 +196,7 @@ def test_change_points_preserve_concurrent_pools_quarter_ties_and_leap_day(staff
     args = ([1], date(2024, 1, 1), '2024-Q1', 1, 'overallocation')
     current = staffing.query('SELECT eppm.dashboard_resource_breakdown(%s,%s,%s,%s,%s)', args)[0][0]
     baseline = staffing.query('SELECT eppm.dashboard_resource_breakdown_daily_baseline(%s,%s,%s,%s,%s)', args)[0][0]
+    current.pop('overallocated_pools')
     assert current == baseline
     assert current['allocation']['2024-Q1'] == 9
     assert current['overallocation']['2024-Q1'] == 3
@@ -202,5 +204,24 @@ def test_change_points_preserve_concurrent_pools_quarter_ties_and_leap_day(staff
     assert current['peak_days']['allocation']['2024-Q2'] == '2024-04-01'
     assert current['consumers'] == [1]
     assert sum(pool['allocation']['2024-Q1'] for pool in current['pools']) == 9
-    assert staffing.query('SELECT eppm.dashboard_resource_breakdown(%s,%s)', ([], date(2024, 1, 1))) == staffing.query(
+    assert staffing.query("SELECT eppm.dashboard_resource_breakdown(%s,%s) - 'overallocated_pools'", ([], date(2024, 1, 1))) == staffing.query(
         'SELECT eppm.dashboard_resource_breakdown_daily_baseline(%s,%s)', ([], date(2024, 1, 1)))
+
+
+def test_warning_lists_all_overallocated_pools_not_just_the_total_peak(staffing):
+    with psycopg.connect(staffing.setup.operator_url) as connection:
+        connection.execute('DELETE FROM eppm.resource_pool_assignment')
+        connection.execute('DELETE FROM eppm.resource_pool_mapping')
+        connection.execute('UPDATE eppm.resource_pool SET capacity_fte=1')
+        connection.execute("""INSERT INTO eppm.resource_pool_assignment
+            (pool_id,project_id,fte_assigned,start_date,end_date) VALUES
+            (1,1,10,'2026-01-01','2026-01-01'),
+            (2,1,2,'2026-02-01','2026-02-01'),
+            (3,1,.5,'2026-02-01','2026-02-01'),
+            (4,3,20,'2026-02-01','2026-02-01'),
+            (5,1,20,'2020-02-01','2020-02-01')""")
+    report = staffing.query('SELECT eppm.dashboard_resource_breakdown(%s,%s)', ([1], DAY))[0][0]
+    assert {pool['pool_id'] for pool in report['overallocated_pools']} == {1, 2}
+    assert all(set(pool) == {'pool_id', 'name'} for pool in report['overallocated_pools'])
+    assert next(pool for pool in report['pools'] if pool['pool_id'] == 2)['overallocation']['2026-Q1'] == 0
+    assert staffing.query('SELECT eppm.dashboard_resource_breakdown(%s,%s)', ([], DAY))[0][0]['overallocated_pools'] == []

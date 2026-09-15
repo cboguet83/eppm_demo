@@ -1,14 +1,14 @@
 # Dashboard
 
 After sign-in, Dashboard opens by default. It contains only projects you may read.
-Use the flexible filter, the four manager/team filters, or the resource-pool filter; selections within a fixed
+Use Advanced filters below Resource pools, the four manager/team filters, or the resource-pool filter; selections within a fixed
 filter are alternatives, while different filters are combined. Clear all resets
 the dashboard without changing Planning's filters.
 
 The Project status multiselect defaults to In Progress. Select other statuses to include
 completed or cancelled projects, or clear the selection to include all accessible
 statuses. Multiple statuses are alternatives regardless of flexible Any/All matching.
-Clear all filters also clears the status selection. The project table starts in project-ID order
+Clear all filters restores the default In Progress status selection. The project table starts in project-ID order
 and shows five rows at a time with continuous scrolling. Rows are loaded in batches
 of 50; the browser retains at most six batches and renders only the visible rows
 plus a small buffer. Collapse the table to keep its matching-project count visible.
@@ -55,9 +55,17 @@ before navigation and the destination retains its normal permissions.
 Both resource charts mark today and display the current year, two previous years,
 and nine future years. Per-pool colors are consistent across both charts.
 The Finance legend is below its x-axis. Resource charts have no legend.
+All three charts occupy a shared left column whose right edge aligns with the
+left edge of the warning frames. Active Issues occupies the top of the right
+column. A matching Overassigned Pools frame sits below it, showing the number of
+pools with excess demand in the dashboard's filtered scope and displayed years.
+Hover or focus that frame to see only their names. A pool is included if it has
+excess on any day, even when it contributes nothing on the total quarterly peak
+day. Zero overassigned pools shows a green warning indicator without a list.
 Resource axes show whole numbers, and resource tooltips show one decimal place.
 The large warning icon in the framed Active Issues card beside Finance overview
-opens the read-only active-issues table.
+opens the read-only active-issues table, ordered by decreasing event ID across projects.
+Both warning cards use singular labels for zero or one item.
 The icon is centered above the count and label. With no issues, the icon is green,
 the text is black, and the popup is disabled. Otherwise the icon, number, and text
 are orange. The resource chart's vertical titles sit beside their respective axes.

@@ -32,3 +32,10 @@ Portfolio provides a project-status multiselect defaulting to In Progress. It
 constrains the native paginated query as well as the displayed project count.
 Clear all filters clears search and column filters and restores In Progress;
 clearing the status selection itself includes all statuses.
+
+## Page loading
+
+The application sidebar immediately covers the main workspace with a blank loading
+screen and spinning indicator when a different page is clicked. Navigation remains
+available. The destination is revealed after the Streamlit rerun finishes and its
+loading placeholders are gone; ordinary same-page widget updates stay visible.

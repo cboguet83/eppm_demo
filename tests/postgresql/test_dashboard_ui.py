@@ -94,8 +94,8 @@ def test_status_defaults_to_in_progress_and_can_include_completed_or_all_project
     assert app.multiselect(key='dashboard_filter_status').value == []
     app.multiselect(key='dashboard_filter_status').set_value(['In Progress']).run()
     app.button(key='dashboard_clear').click().run()
-    assert app.multiselect(key='dashboard_filter_status').value == []
-    assert table_data(app)['total'] == 2
+    assert app.multiselect(key='dashboard_filter_status').value == ['In Progress']
+    assert table_data(app)['total'] == 1
 
 
 def test_dashboard_no_scope_has_no_project_values(business):
@@ -252,3 +252,22 @@ def test_pool_details_shortcut_selects_pool_and_rejects_unrelated_pool(business,
     else:
         assert all(value is None for value in state.values())
         assert app.info[0].value == 'Denied'
+
+
+def warning_screen():
+    from app.presentation.pages.dashboard import _pool_warning
+    _pool_warning([{'pool_id': 1, 'name': '<script>pool</script>'}, {'pool_id': 2, 'name': 'Pool B'}])
+
+
+def test_pool_warning_escapes_names_and_has_hover_and_keyboard_overlay():
+    app = AppTest.from_function(warning_screen).run()
+    assert not app.exception
+    html = next(item.proto.body for item in app.get('html') if 'dashboard-pool-warning' in item.proto.body)
+    assert '&lt;script&gt;pool&lt;/script&gt;' in html
+    assert '<li>Pool B</li>' in html
+    assert 'role="tooltip"' in html and 'tabindex="0"' in html
+    assert ':hover ul' in html and ':focus-within ul' in html
+    assert 'class="warning-symbol" translate="no">warning</span>' in html
+    assert 'Material Symbols Rounded' in html
+    assert '<svg' not in html
+    assert 'pool_id' not in html

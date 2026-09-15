@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from datetime import date
-from typing import Protocol, TypedDict
+from typing import NotRequired, Protocol, TypedDict
 
 from app.domain.dashboard import DashboardProject, WbsShare
 from app.domain.finance import BudgetSnapshot
@@ -36,6 +36,13 @@ class PoolResourceSeries(TypedDict):
     available: dict[str, float]
 
 
+class OverallocatedPool(TypedDict):
+    """Pool identity and label for the dashboard warning, without demand details."""
+
+    pool_id: int
+    name: str
+
+
 class ResourceBreakdown(TypedDict):
     """Safe aggregate metrics and pool labels, without hidden project records."""
 
@@ -44,6 +51,7 @@ class ResourceBreakdown(TypedDict):
     capacity: dict[str, float]
     pools: list[PoolResourceSeries]
     peak_days: dict[str, dict[str, str | None]]
+    overallocated_pools: NotRequired[list[OverallocatedPool]]
 
 
 class DashboardReader(Protocol):

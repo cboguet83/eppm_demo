@@ -1,13 +1,14 @@
 """Fragment-local portfolio dashboard and shared read-only allocated-budget view."""
 
 from hashlib import sha256
+from html import escape
 from functools import partial
 
 import pandas as pd
 import streamlit as st
 
 from app.application.exceptions import ProjectStorageError
-from app.application.ports.dashboard import DashboardCatalog
+from app.application.ports.dashboard import DashboardCatalog, OverallocatedPool
 from app.application.services.dashboard import DashboardService
 from app.domain.access.models import AccessDenied
 from app.domain.dashboard import DashboardProject
@@ -51,7 +52,7 @@ def _clear() -> None:
             del st.session_state[key]
     st.session_state['dashboard_flex_fields'] = []
     st.session_state['dashboard_match'] = 'Any'
-    st.session_state['dashboard_filter_status'] = []
+    st.session_state['dashboard_filter_status'] = ['In Progress']
     _reset_page()
 
 
@@ -144,8 +145,11 @@ def _filters(service: DashboardService, catalog) -> tuple[dict[str, list[str]], 
         active[key] = st.multiselect(label, options, key=state_key, on_change=_reset_page,
                                      format_func=lambda value: labels.get(value, value) or _label('unassigned'))
 
-    columns = st.columns(7, vertical_alignment='bottom')
-    with columns[0], st.popover(t('planning.flex_filters', default='Flexible filters'), width='stretch', icon=':material/filter_alt:'):
+    columns = st.columns(6, vertical_alignment='top')
+    for column, key in zip(columns, fixed):
+        with column:
+            choose(key, _label('project_status') if key == 'status' else _label(key))
+    with columns[-1], st.popover(_label('advanced_filters'), width='stretch', icon=':material/filter_alt:'):
         chosen = st.multiselect(t('planning.flex_filter_fields', default='Filter fields'), list(fields),
                                 format_func=fields.get, key='dashboard_flex_fields', on_change=_reset_page)
         match_all = st.segmented_control(t('planning.flex_filter_match_label', default='When several values are selected'),
@@ -153,9 +157,6 @@ def _filters(service: DashboardService, catalog) -> tuple[dict[str, list[str]], 
         for key in chosen:
             choose(key, fields[key])
         active = {key: values for key, values in active.items() if key in fixed or key in chosen}
-    for column, key in zip(columns[1:], fixed):
-        with column:
-            choose(key, _label('project_status') if key == 'status' else _label(key))
     st.button(t('planning.clear_all_filters', default='Clear all filters'), on_click=_clear,
               icon=':material/filter_alt_off:', key='dashboard_clear')
     return active, match_all
@@ -240,6 +241,31 @@ def _planning_jump(service: DashboardService, ids: tuple[int, ...], quarter: str
     st.rerun()
 
 
+def _pool_warning(pools: list[OverallocatedPool]) -> None:
+    """Show a matching warning frame with a names-only hover/focus overlay."""
+    label = _label('overassigned_pool' if len(pools) <= 1 else 'overassigned_pools')
+    color = '#df8b16' if pools else '#23934c'
+    names = ''.join(f'<li>{escape(pool["name"])}</li>' for pool in pools)
+    overlay = f'<ul role="tooltip" id="dashboard-pool-warning-list">{names}</ul>' if names else ''
+    description = 'aria-describedby="dashboard-pool-warning-list"' if pools else ''
+    with st.container(border=True, key='dashboard_pool_warning_card'):
+        st.html(f'''<style>
+        .dashboard-pool-warning {{position:relative;text-align:center;color:{color};outline-offset:4px}}
+        .dashboard-pool-warning .warning-icon {{height:90px;display:flex;align-items:center;justify-content:center}}
+        .dashboard-pool-warning .warning-symbol {{font-family:"Material Symbols Rounded";
+            font-size:52px;line-height:1;font-weight:400;font-style:normal;
+            font-feature-settings:"liga";text-transform:none;letter-spacing:normal}}
+        .dashboard-pool-warning p {{margin:0; color:{color if pools else '#000000'}}}
+        .dashboard-pool-warning ul {{display:none;position:absolute;right:100%;top:0;z-index:1000;
+            min-width:220px;max-width:340px;max-height:360px;overflow:auto;margin:0;padding:12px 24px;
+            text-align:left;color:var(--st-text-color,#111);background:var(--st-background-color,#fff);
+            border:1px solid #848486;border-radius:8px;box-shadow:0 4px 18px #0003}}
+        .dashboard-pool-warning:hover ul,.dashboard-pool-warning:focus-within ul {{display:block}}
+        </style><div class="dashboard-pool-warning" tabindex="0" {description}>
+        <div class="warning-icon" aria-hidden="true"><span class="warning-symbol" translate="no">warning</span></div>
+        <p>{len(pools)} {escape(label)}</p>{overlay}</div>''')
+
+
 def _pool_details_jump(service: DashboardService, ids: tuple[int, ...], quarter: str,
                        pool_id: int, metric: str) -> None:
     """Reauthorize the selected chart pool before opening its existing details."""
@@ -281,7 +307,7 @@ def render_dashboard(service: DashboardService) -> None:
         ids = tuple(row['id'] for row in projects)
         report = _report(service, revision, ids)
         proposed = _report(service, revision, ids, 'Proposed')
-        finance, issues = st.columns([8, 1.5], vertical_alignment='center')
+        finance, issues = st.columns([8, 1.5], gap=None, vertical_alignment='top')
         with finance:
             st.subheader(_label('finance_overview'))
             approved_source, proposed_source = st.columns(2)
@@ -293,34 +319,38 @@ def render_dashboard(service: DashboardService) -> None:
             icon_color = '#df8b16' if report.issue_count else '#23934c'
             text_color = '#df8b16' if report.issue_count else '#000000'
             st.html(f'<style>.st-key-dashboard_issue_card{{--issue-icon:{icon_color};--issue-text:{text_color}}}</style>')
-            if st.button(_label('active_issues'), icon=':material/warning:', key='dashboard_issue_count', width='stretch',
+            issue_label = _label('active_issue' if report.issue_count <= 1 else 'active_issues')
+            if st.button(issue_label, icon=':material/warning:', key='dashboard_issue_count', width='stretch',
                          disabled=report.issue_count == 0,
                          help=t('dashboard.issue_count', count=report.issue_count)) and report.issue_count:
                 _issues(service, ids)
-            st.markdown(f"{report.issue_count} {_label('active_issues')}")
-        _finance_chart(service, report, proposed)
-        series = _shortages(service, revision, ids)
-        st.subheader(_label('resources_allocation'))
-        st.html('<style>.st-key-dashboard_resource_charts {gap:4px !important;}</style>')
-        with st.container(key='dashboard_resource_charts'):
-            for metric in ('overallocation', 'allocation'):
-                selection = resource_chart(series, today=service.today().isoformat(),
-                    year=service.today().year, locale=get_current_locale(), metric=metric, labels={
-                        'title': _label(metric), 'valueLabel': _label(metric), 'totalValueLabel': _label('total_' + metric),
-                        'totalCapacityLabel': _label('total_capacity_short'),
-                        'totalLabel': _label('total'), 'allocatedLabel': _label('allocation'),
-                        'availableLabel': t('planning.resource_grid.available_value', default='Available'),
-                        'capacityLabel': _label('total_capacity'), 'goTo': _label('go_to_consumers'),
-                        'poolDetails': _label('pool_details')})
-                if isinstance(selection, dict) and selection.get('metric') == metric:
-                    if type(selection.get('pool_id')) is not int or not isinstance(selection.get('quarter'), str):
-                        raise ValueError('Invalid resource selection.')
-                    action = selection.get('action', 'planning')
-                    if action == 'pool_details':
-                        _pool_details_jump(service, ids, selection['quarter'], selection['pool_id'], metric)
-                    elif action == 'planning':
-                        _planning_jump(service, ids, selection['quarter'], selection['pool_id'], metric)
-                    else:
-                        raise ValueError('Invalid resource action.')
+            st.markdown(f"{report.issue_count} {issue_label}")
+        with finance:
+            _finance_chart(service, report, proposed)
+            series = _shortages(service, revision, ids)
+            st.subheader(_label('resources_allocation'))
+            st.html('<style>.st-key-dashboard_resource_charts {gap:4px !important;}</style>')
+            with st.container(key='dashboard_resource_charts'):
+                for metric in ('overallocation', 'allocation'):
+                    selection = resource_chart(series, today=service.today().isoformat(),
+                        year=service.today().year, locale=get_current_locale(), metric=metric, labels={
+                            'title': _label(metric), 'valueLabel': _label(metric), 'totalValueLabel': _label('total_' + metric),
+                            'totalCapacityLabel': _label('total_capacity_short'),
+                            'totalLabel': _label('total'), 'allocatedLabel': _label('allocation'),
+                            'availableLabel': t('planning.resource_grid.available_value', default='Available'),
+                            'capacityLabel': _label('total_capacity'), 'goTo': _label('go_to_consumers'),
+                            'poolDetails': _label('pool_details')})
+                    if isinstance(selection, dict) and selection.get('metric') == metric:
+                        if type(selection.get('pool_id')) is not int or not isinstance(selection.get('quarter'), str):
+                            raise ValueError('Invalid resource selection.')
+                        action = selection.get('action', 'planning')
+                        if action == 'pool_details':
+                            _pool_details_jump(service, ids, selection['quarter'], selection['pool_id'], metric)
+                        elif action == 'planning':
+                            _planning_jump(service, ids, selection['quarter'], selection['pool_id'], metric)
+                        else:
+                            raise ValueError('Invalid resource action.')
+        with issues:
+            _pool_warning(series.get('overallocated_pools', []))
     except (AccessDenied, ProjectStorageError, ValueError):
         st.error(_label('unavailable'))

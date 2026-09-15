@@ -4,6 +4,7 @@ import streamlit as st
 
 from app.presentation.components.application_workspace import ApplicationWorkspace
 from app.presentation.components.dialog import install_dialog_presentation
+from app.presentation.components.page_transition import install_page_transition
 from app.presentation.i18n import SUPPORTED_LOCALES, get_current_locale, set_current_locale, t
 from app.presentation.navigation import (
     PAGE_PORTFOLIO,
@@ -135,6 +136,7 @@ def render_application(workspace: ApplicationWorkspace) -> None:
     )
 
     install_dialog_presentation()
+    install_page_transition()
     render_language_selector()
 
     st.sidebar.title('EPPM POC')
