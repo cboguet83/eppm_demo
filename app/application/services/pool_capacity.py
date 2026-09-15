@@ -63,12 +63,38 @@ class PoolCapacityService:
         Unmapped leaves use defined capacity reduced by their pool exceptions.
         """
         day = self._today().isoformat()
-        leaves = {row.pool_id: (row.daily_assigned_capacity.get(day, row.assigned_capacity_fte)
-                               if row.pool_id in mapped_pool_ids
-                               else row.capacity_calendar.get(day, row.effective_capacity_fte))
+        leaves = {row.pool_id: self._capacity_on_date(row, day, mapped_pool_ids)
                   for row in details if not hierarchy.children.get(row.pool_id)}
         return {identity: round(sum(leaves.get(leaf, 0) for leaf in hierarchy.descendants(identity, leaves_only=True)), 3)
                 for identity in hierarchy.pools}
+
+    @staticmethod
+    def _capacity_on_date(detail: PoolCapacityDetail, day: str, mapped_pool_ids: set[int]) -> float:
+        """Use the same staffing or pool-exception rule for any calendar date."""
+        if detail.pool_id in mapped_pool_ids:
+            return detail.daily_assigned_capacity.get(day, detail.assigned_capacity_fte)
+        return detail.capacity_calendar.get(day, detail.effective_capacity_fte)
+
+    def peak_date_capacities(self, hierarchy: PoolHierarchy, details: list[PoolCapacityDetail],
+                             mapped_pool_ids: set[int]) -> dict[int, float]:
+        """Return available capacity on each pool's future peak-demand dates.
+
+        Containers sum their leaves on the container's peak date. If peak demand
+        repeats, use the lowest capacity across those dates so any peak shortage
+        is flagged. Pools without positive future demand return zero.
+        """
+        today = self._today().isoformat()
+        by_id = {row.pool_id: row for row in details}
+        result: dict[int, float] = {}
+        for row in details:
+            future = {day: value for day, value in row.daily_usage.items() if day >= today}
+            peak = max(future.values(), default=0)
+            leaves = [by_id[identity] for identity in hierarchy.descendants(row.pool_id, leaves_only=True)]
+            result[row.pool_id] = round(min((
+                sum(self._capacity_on_date(leaf, day, mapped_pool_ids) for leaf in leaves)
+                for day, value in future.items() if value == peak and peak > 0
+            ), default=0), 3)
+        return result
 
     def future_peak_demand(self, details: list[PoolCapacityDetail]) -> float:
         """Return the maximum combined required FTE from today onward.

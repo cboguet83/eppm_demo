@@ -2,8 +2,37 @@
 
 from bisect import bisect_left
 from collections.abc import Sequence, Set
+from dataclasses import dataclass, replace
+from datetime import date
 
 from app.domain.resources.models import PoolCapacityDetail
+
+
+@dataclass(frozen=True)
+class OverallocationPeriod:
+    """Inclusive consecutive dates with a constant excess FTE for one pool."""
+
+    pool_name: str
+    start_date: date
+    stop_date: date
+    fte: float
+
+
+def overallocation_periods(pools: Sequence[PoolCapacityDetail]) -> list[OverallocationPeriod]:
+    """Group each pool's overloaded days, splitting at gaps or excess changes."""
+    periods: list[OverallocationPeriod] = []
+    for pool in sorted(pools, key=lambda item: (item.pool_name.casefold(), item.pool_id)):
+        current: OverallocationPeriod | None = None
+        for day in sorted(pool.daily_overassignments, key=lambda item: item.date):
+            day_date = date.fromisoformat(day.date)
+            if (current is not None and (day_date - current.stop_date).days == 1
+                    and day.excess_fte == current.fte):
+                current = replace(current, stop_date=day_date)
+                periods[-1] = current
+            else:
+                current = OverallocationPeriod(pool.pool_name, day_date, day_date, day.excess_fte)
+                periods.append(current)
+    return periods
 
 
 def overloaded_consumers(pools: Sequence[PoolCapacityDetail], requested: Set[int]) -> set[int]:

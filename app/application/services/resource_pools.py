@@ -237,6 +237,25 @@ class ResourcePoolService:
         validate_allocation_pct(allocation_pct)
         return self._gateway.run(lambda store: store.update_mapping(mapping_id, allocation_pct), write=True, permission=Permission.SHARED)
 
+    def save_mappings(self, pool_id: int, mappings: list[PoolMapping]) -> None:
+        """Atomically add, edit and remove a leaf pool's employee/team mappings.
+
+        Legacy function mappings are preserved. Existing target identities retain
+        their mapping IDs through the store's upsert operation.
+        """
+        desired = [normalize_mapping(replace(row, pool_id=pool_id, id=None)) for row in mappings]
+        keys = {(row.target_type, row.target_id) for row in desired}
+        if len(keys) != len(desired) or any(row.target_type not in {'employee', 'team'} for row in desired):
+            raise ValueError('Select each employee or team only once.')
+        def operation(store: ResourcePoolStore) -> None:
+            PoolHierarchy(store.get_all_pools()).require_leaf(pool_id)
+            for row in store.get_mappings_by_pool(pool_id):
+                if row.target_type in {'employee', 'team'} and (row.target_type, row.target_id) not in keys:
+                    store.delete_mapping(row.id)
+            for row in desired:
+                store.create_mapping(row)
+        self._gateway.run(operation, write=True, permission=Permission.SHARED)
+
     def delete_mapping(self, mapping_id: int) -> bool:
         """Delete mapping within one application transaction."""
         return self._gateway.run(lambda store: store.delete_mapping(mapping_id), write=True, permission=Permission.SHARED)

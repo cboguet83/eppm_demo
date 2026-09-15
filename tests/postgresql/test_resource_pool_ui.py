@@ -10,6 +10,7 @@ from streamlit.testing.v1 import AppTest
 from app.domain.organization.models import Employee, Team
 from app.domain.resources.models import PoolAssignment, PoolMapping, ResourcePool
 from app.application.services.business_access import BusinessAccess
+from app.domain.access.models import AccessDenied
 from app.main import create_organization_service, create_resource_pool_service
 from app.infrastructure.postgresql.seed_catalog import ensure_reference_catalog
 from app.runtime import RuntimeResources
@@ -141,25 +142,54 @@ def test_mapping_dialog_preserves_team_and_employee_choices(database: RuntimeRes
     pool = service.create_pool(ResourcePool("Delivery"))
     org = create_organization_service(database, access=access)
     team = org.create_team(Team("Team"))
+    second_team = org.create_team(Team("Second team"))
     employee = org.create_employee(Employee("Ada", "Lovelace", "ada@example.invalid", "ADA"))
+    second_employee = org.create_employee(Employee("Grace", "Hopper", "grace@example.invalid", "GRACE"))
     app = dialog(database, access, f"_open_add_pool_mapping_dialog(service, {pool}, teams, employees)")
-    app.slider[0].set_value(50)
-    app.button[0].click().run()
+    app.multiselect(key=f'mapping_teams_{pool}').set_value([team, second_team]).run()
+    app.multiselect(key=f'mapping_employees_{pool}').set_value([employee, second_employee]).run()
+    assert all(widget.value == 100 for widget in app.number_input)
+    app.number_input(key=f'mapping_pct_{pool}_team_{team}').set_value(50)
+    app.number_input(key=f'mapping_pct_{pool}_employee_{employee}').set_value(25)
+    next(button for button in app.button if button.label == 'Save mappings').click().run()
     assert not app.exception
-    assert [
-        (mapping.target_id, mapping.allocation_pct)
-        for mapping in service.get_mappings_by_pool(pool)
-    ] == [(team, 50)]
-    app.get("button_group")[0].set_value("employee").run()
-    app.slider[0].set_value(25)
-    app.button[0].click().run()
+    before = {(row.target_type, row.target_id): row for row in service.get_mappings_by_pool(pool)}
+    assert len(before) == 4
+    assert before['team', team].allocation_pct == 50 and before['employee', employee].allocation_pct == 25
+    app.button(key=f'remove_mapping_{pool}_team_{team}').click().run()
+    app.button(key=f'remove_mapping_{pool}_team_{second_team}').click().run()
+    app.button(key=f'remove_mapping_{pool}_employee_{second_employee}').click().run()
+    assert app.multiselect(key=f'mapping_teams_{pool}').value == []
+    assert app.multiselect(key=f'mapping_employees_{pool}').value == [employee]
+    assert len(service.get_mappings_by_pool(pool)) == 4
+    app.number_input(key=f'mapping_pct_{pool}_employee_{employee}').set_value(75)
+    next(button for button in app.button if button.label == 'Save mappings').click().run()
     assert not app.exception
-    assert any(
-        mapping.target_type == "employee"
-        and mapping.target_id == employee
-        and mapping.allocation_pct == 25
-        for mapping in service.get_mappings_by_pool(pool)
-    )
+    after = service.get_mappings_by_pool(pool)
+    assert len(after) == 1 and after[0].id == before['employee', employee].id and after[0].allocation_pct == 75
+    app.button(key=f'remove_mapping_{pool}_employee_{employee}').click().run()
+    next(button for button in app.button if button.label == 'Save mappings').click().run()
+    assert not app.exception and service.get_mappings_by_pool(pool) == []
+
+
+def test_mapping_batch_rolls_back_removals_when_insertion_fails(database, access, authorized):
+    service = create_resource_pool_service(database, access=access)
+    pool = service.create_pool(ResourcePool('Delivery'))
+    org = create_organization_service(database, access=access)
+    team = org.create_team(Team('Original team'))
+    employee = org.create_employee(Employee('Ada', 'Lovelace', 'batch@example.invalid', 'BATCH'))
+    original = service.create_mapping(PoolMapping(pool, 'team', team, 50))
+    with psycopg.connect(authorized.setup.operator_url) as connection:
+        connection.execute('REVOKE INSERT ON eppm.resource_pool_mapping FROM eppm_runtime')
+    try:
+        with pytest.raises(AccessDenied):
+            service.save_mappings(pool, [PoolMapping(pool, 'employee', employee, 25)])
+    finally:
+        with psycopg.connect(authorized.setup.operator_url) as connection:
+            connection.execute('GRANT INSERT ON eppm.resource_pool_mapping TO eppm_runtime')
+    remaining = service.get_mappings_by_pool(pool)
+    assert len(remaining) == 1
+    assert remaining[0].id == original and remaining[0].allocation_pct == 50
 
 
 def test_concurrent_delete_and_read_failures_do_not_report_success(database: RuntimeResources, access: BusinessAccess, authorized) -> None:
@@ -210,6 +240,34 @@ render_settings_view(create_settings_workspace(runtime, access=access))
     app = dialog(database, access, f"_confirm_unassign(service, {pool}, {assignment}, 'Project')")
     app.button(key=f"confirm_unassign_{assignment}").click().run()
     assert not app.exception and service.get_assignment_by_id(assignment) is None
+
+
+def test_overallocation_grid_includes_nested_leaves_even_with_spare_container_capacity(database, access):
+    service = create_resource_pool_service(database, access=access)
+    parent = service.create_pool(ResourcePool('Parent'))
+    nested = service.create_pool(ResourcePool('Nested', parent_pool_id=parent))
+    first = service.create_pool(ResourcePool('First', capacity_fte=1, parent_pool_id=nested))
+    second = service.create_pool(ResourcePool('Second', capacity_fte=2, parent_pool_id=parent))
+    service.create_pool(ResourcePool('Spare', capacity_fte=100, parent_pool_id=parent))
+    for pool in [first, second]:
+        service.create_assignment(PoolAssignment(pool, 1, 3,
+            start_date='2027-01-01', end_date='2027-01-03'))
+    app = native_screen("""
+from app.main import create_pool_capacity_service, create_organization_service, create_resource_pool_service
+from app.presentation.pages.resource_pools import render_resource_pools
+render_resource_pools(create_resource_pool_service(runtime, access=access),
+    create_pool_capacity_service(runtime, access=access), create_organization_service(runtime, access=access), 'planning')
+""", database, access)
+    for selected, expected in [(parent, ['First', 'Second']), (nested, ['First']), (second, ['Second'])]:
+        app.session_state['target_resource_pool_id'] = selected
+        app.run()
+        assert not app.exception
+        grid = app.dataframe[0].value
+        assert list(grid.columns) == ['Pool name', 'Date start', 'Date stop', 'FTE']
+        assert grid['Pool name'].tolist() == expected
+        assert grid['FTE'].tolist() == ([2, 1] if selected == parent else [2] if selected == nested else [1])
+        assert grid['Date start'].astype(str).tolist() == ['2027-01-01'] * len(expected)
+        assert grid['Date stop'].astype(str).tolist() == ['2027-01-03'] * len(expected)
 
 
 def test_container_inspector_shows_children_and_aggregates_without_mapping_controls(database: RuntimeResources, access: BusinessAccess) -> None:

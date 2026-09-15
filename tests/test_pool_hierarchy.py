@@ -76,3 +76,26 @@ def test_future_peak_excludes_history_and_sums_only_simultaneous_demand() -> Non
     assert service.future_peak_demand([replace(first, daily_usage={'2026-09-15': 3})]) == 3
     assert service.future_peak_demand([replace(first, daily_usage={'2026-09-14': 100})]) == 0
     assert service.future_peak_demand([]) == 0
+
+
+def test_peak_capacity_uses_peak_day_exceptions_and_container_same_day_leaf_sum():
+    service = PoolCapacityService(Mock(), Mock(), lambda: date(2026, 9, 15))
+    first = PoolCapacityDetail(1, 'Mapped', 20, 8, 8, False, 0,
+        assigned_capacity_fte=10, daily_assigned_capacity={'2030-01-01': 3, '2030-01-02': 9},
+        daily_usage={'2026-09-14': 100, '2030-01-01': 8, '2030-01-02': 8})
+    second = PoolCapacityDetail(2, 'Unmapped', 5, 4, 4, False, 0,
+        effective_capacity_fte=5, daily_effective_capacity={'2030-01-01': 1},
+        daily_usage={'2030-01-01': 4})
+    empty = PoolCapacityDetail(4, 'Empty team', 50, 0, 0, False, 0,
+        assigned_capacity_fte=0, daily_usage={'2030-01-01': 1})
+    root = ResourcePool('Root', id=3)
+    tree = PoolHierarchy([root, ResourcePool('Mapped', id=1, parent_pool_id=3),
+                          ResourcePool('Unmapped', id=2, parent_pool_id=3),
+                          ResourcePool('Empty team', id=4, parent_pool_id=3)])
+    details = [first, second, empty, aggregate_capacity(root, [first, second, empty])]
+    assert service.peak_date_capacities(tree, details, {1, 4}) == {1: 3, 2: 1, 4: 0, 3: 4}
+    assert service.current_capacities(tree, details, {1, 4}) == {1: 10, 2: 5, 4: 0, 3: 15}
+    first.daily_usage = {'2030-01-03': 8}
+    assert service.peak_date_capacities(tree, details, {1, 4})[1] == 10
+    first.daily_usage = {'2026-09-14': 100}
+    assert service.peak_date_capacities(tree, details, {1, 4})[1] == 0

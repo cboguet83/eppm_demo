@@ -36,6 +36,8 @@ _CSS = """
 .pool-row.container[aria-selected=true] {background:#f1f3f5;}
 .pool-name {flex:1; overflow-wrap:anywhere;}
 .pool-meta {font-size:13px; opacity:.75; white-space:nowrap;}
+.pool-meta.capacity-exceeded {color:#c62828; opacity:1; font-weight:700;}
+.pool-warning {color:#c62828; margin-left:6px; flex-shrink:0;}
 .tree-toggle {display:inline-flex; justify-content:center; width:22px; flex-shrink:0;}
 .pool-row:focus-visible {outline:2px solid var(--st-primary-color);}
 """
@@ -70,14 +72,17 @@ export default function({data, parentElement, setTriggerValue, setStateValue}) {
     };
     const showMenu = (event, row, item, restoring = false) => {
         event.preventDefault(); event.stopPropagation(); closeMenu();
-        highlight(row);
+        if (row.id) highlight(row);
         root.dataset.context = JSON.stringify({id:row.id,x:event.clientX,y:event.clientY});
-        if (!restoring && row.id !== data.selected) setStateValue('selected',row.id);
+        if (!restoring && row.id && row.id !== data.selected) setStateValue('selected',row.id);
         menu = document.createElement('div'); menu.className = 'context-menu';
         menu.setAttribute('role', 'menu'); menu.setAttribute('aria-label', row.name);
         const heading = document.createElement('div'); heading.className = 'context-menu-header';
         heading.textContent = row.name; menu.appendChild(heading);
-        for (const [action, label] of [['edit','Edit pool'], ['create','Create child pool'], ['gantt','Show consuming projects in Gantt']]) {
+        const actions = row.id ? [['edit','Edit pool'], ['create','Create pool'], ['gantt','Show consuming projects in Gantt']]
+            : [['create_root','Create pool']];
+        if (row.id && !row.container) actions.splice(2,0,['map','Map employees or teams']);
+        for (const [action, label] of actions) {
             const button = document.createElement('button'); button.type = 'button';
             button.className = 'context-menu-item'; button.textContent = label;
             button.setAttribute('role','menuitem'); button.onclick = () => emit(row, action);
@@ -97,7 +102,16 @@ export default function({data, parentElement, setTriggerValue, setStateValue}) {
         menu.querySelector('button').focus();
     };
     const tree = document.createElement('div'); tree.className = 'tree-scroll';
+    tree.tabIndex = 0;
     tree.setAttribute('role','tree'); tree.setAttribute('aria-label','Resource pools');
+    tree.oncontextmenu = event => showMenu(event,{id:0,name:'Resource pools',container:true},tree);
+    tree.onkeydown = event => {
+        if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
+            const rect = tree.getBoundingClientRect();
+            showMenu({preventDefault:()=>event.preventDefault(),stopPropagation:()=>event.stopPropagation(),
+                clientX:rect.left+20,clientY:rect.top+40},{id:0,name:'Resource pools',container:true},tree);
+        }
+    };
     const header = document.createElement('div'); header.className = 'tree-columns';
     const openFilter = (event, field, label) => {
         event.stopPropagation(); closeMenu();
@@ -155,7 +169,7 @@ export default function({data, parentElement, setTriggerValue, setStateValue}) {
         button.setAttribute('aria-label',`Filter ${text}`); button.setAttribute('aria-haspopup','dialog');
         button.textContent = text + (Array.isArray(filters[fields[index]]) ? ' ▾ ●' : ' ▾');
         if (index === 5) button.title = "Today's capacity after employee availability exceptions, or pool capacity exceptions when unmapped.";
-        if (index === 6) button.title = 'Employee or team mappings. Containers indicate mappings through their children.';
+        if (index === 6) button.title = 'A check mark indicates direct employee or team mappings on a leaf pool.';
         if (index === 7) button.title = 'Maximum required FTE from today onward for the selected project statuses.';
         button.onclick = event => openFilter(event,fields[index],text);
         cell.appendChild(button); header.appendChild(cell);
@@ -197,8 +211,18 @@ export default function({data, parentElement, setTriggerValue, setStateValue}) {
         }
         const label = document.createElement('span'); label.className = 'pool-name'; label.textContent = row.name;
         identity.append(toggle,label); item.appendChild(identity);
+        if (row.current_exceeded || row.peak_exceeded) {
+            const warning = document.createElement('span'); warning.className = 'pool-warning';
+            warning.textContent = '\u26a0'; warning.setAttribute('role','img');
+            warning.title = [row.current_exceeded ? 'Current mappedcapacity exceeds pool capacity. Verify teams and employess mapping to this pool' : '',
+                row.peak_exceeded ? 'Future peak demand exceeds available capacity on a peak-demand date.' : ''].filter(Boolean).join(' ');
+            warning.setAttribute('aria-label',warning.title); label.appendChild(warning);
+        }
         for (const [index,value] of [row.pool_type,row.hierarchy_type,row.tags,row.capacity,row.assigned_capacity,row.mappings,row.peak_demand].entries()) {
             const cell = document.createElement('span'); cell.className = 'pool-meta';
+            if ((index === 4 && row.current_exceeded) || (index === 6 && row.peak_exceeded)) {
+                cell.classList.add('capacity-exceeded');
+            }
             if (index === 2) {cell.classList.add('pool-tags'); cell.title = value;}
             cell.textContent = value; item.appendChild(cell);
         }
@@ -219,7 +243,9 @@ export default function({data, parentElement, setTriggerValue, setStateValue}) {
         tree.appendChild(item);
     }
     if (!visible.size) {
-        const empty = document.createElement('p'); empty.textContent = 'No pools match these filters.'; tree.appendChild(empty);
+        const empty = document.createElement('p');
+        empty.textContent = data.rows.length ? 'No pools match these filters.' : 'No pools yet. Right-click here to create a pool.';
+        tree.appendChild(empty);
     }
     root.appendChild(tree);
     tree.scrollTop = scrollTop;
@@ -252,6 +278,7 @@ def resource_pool_tree(
     hierarchy_types: dict[int, str] | None = None,
     tags: dict[int, list[str]] | None = None,
     peak_demands: dict[int, float] | None = None,
+    peak_capacities: dict[int, float] | None = None,
     mapping_types: dict[int, set[str]] | None = None,
 ) -> TableAction | None:
     """Render a validated forest and accept actions only for existing pool IDs.
@@ -265,6 +292,7 @@ def resource_pool_tree(
         hierarchy_types: Localized labels by hierarchy type ID.
         tags: Pool-tag labels by pool ID.
         peak_demands: Peak required daily demand from today onward for selected statuses.
+        peak_capacities: Available capacity on peak-demand dates, including exceptions.
         mapping_types: Direct mapping target types by pool ID.
 
     Returns:
@@ -278,12 +306,13 @@ def resource_pool_tree(
         identity, depth = pending.pop()
         children = hierarchy.children.get(identity, [])
         targets = (mapping_types or {}).get(identity, set())
-        mapping_label = ('Employees & teams' if {'employee', 'team'} <= targets else
-                         'Employees' if 'employee' in targets else 'Teams' if 'team' in targets else 'None')
-        if children and any((mapping_types or {}).get(leaf, set()) & {'employee', 'team'}
-                            for leaf in hierarchy.descendants(identity, leaves_only=True)):
-            mapping_label = 'Via children'
+        mapping_label = '✓' if not children and targets & {'employee', 'team'} else ''
+        nominal_capacity = capacities.get(identity, 0)
+        current_capacity = (assigned_capacities or {}).get(identity, 0)
+        peak_demand = (peak_demands or {}).get(identity, 0)
         rows.append({'id': identity, 'name': hierarchy.pools[identity].name, 'depth': depth,
+                     'current_exceeded': current_capacity > nominal_capacity,
+                     'peak_exceeded': peak_demand > (peak_capacities or {}).get(identity, nominal_capacity),
                      'mappings': mapping_label,
                      'parent': hierarchy.pools[identity].parent_pool_id,
                      'peak_demand': f'{(peak_demands or {}).get(identity, 0):.2f}',
@@ -309,9 +338,13 @@ def resource_pool_tree(
                        key=key, width='stretch', height='content',
                        on_action_change=lambda: None, on_collapsed_change=lambda: None, on_filters_change=lambda: None, on_sort_change=lambda: None, on_selected_change=select_row)
     event = getattr(result, 'action', None)
-    if not isinstance(event, dict) or event.get('action') not in ('select', 'edit', 'create', 'gantt'):
+    if not isinstance(event, dict) or event.get('action') not in ('select', 'edit', 'create', 'gantt', 'map', 'create_root'):
         return None
     identity = event.get('id')
+    if event['action'] == 'create_root':
+        return TableAction(id=0, action='create_root') if type(identity) is int and identity == 0 else None
     if type(identity) is not int or identity not in hierarchy.pools:
+        return None
+    if event['action'] == 'map' and hierarchy.children.get(identity):
         return None
     return TableAction(id=identity, action=event['action'])

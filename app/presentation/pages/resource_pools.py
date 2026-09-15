@@ -13,10 +13,13 @@ from app.presentation.components.resource_pool_dialogs import (
     pool_errors,
     _open_add_pool_dialog,
     _open_edit_pool_dialog,
+    _open_add_pool_mapping_dialog,
     _render_pool_assignments_table,
 )
 from app.presentation.components.resource_pool_tree import resource_pool_tree
+from app.presentation.components.organization_frames import teams_frame, employees_frame
 from app.presentation.i18n import get_current_locale, t
+from app.domain.resources.overallocation import overallocation_periods
 
 
 @pool_errors
@@ -73,21 +76,10 @@ def render_resource_pools(
     st.caption("Pools form a hierarchy. Only pools without children can be assigned; containers total their children’s capacity.")
     st.caption("Pools have a defined capacity (FTE) and can be assigned to projects and tasks.")
     st.caption("Employees defined in the system can be mapped to pools via their team memberships or directly, and their effective allocation is counted towards the pool’s assigned capacity.")
-    _, col_add_btn = st.columns([4, 1])
-    with col_add_btn:
-        if st.button(
-            t("settings.btn_create_pool", default="Create Pool"),
-            type="primary",
-            width="stretch",
-        ):
-            _open_add_pool_dialog(service)
     if not pool_records:
-        st.info(
-            t(
-                "settings.no_pools_registered",
-                default="No resource pools registered yet. Click 'Create Pool' to add one.",
-            )
-        )
+        event = resource_pool_tree(hierarchy, {}, 0)
+        if event and event['action'] == 'create_root':
+            _open_add_pool_dialog(service)
     else:
         target_pool_id = st.session_state.pop("target_resource_pool_id", None)
         selected_pool_id = target_pool_id or st.session_state.get("sb_selected_resource_pool")
@@ -99,11 +91,14 @@ def render_resource_pools(
             {row.pool_id: row.total_capacity_fte for row in all_pool_details}, selected_pool_id,
             assigned_capacities=current_capacities,
             peak_demands={row.pool_id: capacity.future_peak_demand([row]) for row in all_pool_details},
+            peak_capacities=capacity.peak_date_capacities(hierarchy, all_pool_details, set(mapping_types)),
             mapping_types=mapping_types,
             pool_types={row.id: row.label(get_current_locale()) for row in service.get_all_pool_types()},
             hierarchy_types={row.id: row.label(get_current_locale()) for row in service.get_all_hierarchy_types()},
             tags=service.get_tags_by_pools(list(hierarchy.pools)))
-        if event:
+        if event and event['action'] == 'create_root':
+            _open_add_pool_dialog(service)
+        elif event:
             selected_pool_id = event['id']
             st.session_state["sb_selected_resource_pool"] = selected_pool_id
             if event['action'] == 'select':
@@ -112,6 +107,10 @@ def render_resource_pools(
                 _open_edit_pool_dialog(service, selected_pool_id)
             elif event['action'] == 'gantt':
                 _open_pool_consuming_projects(hierarchy, selected_pool_id, all_pool_details, statuses, planning_page)
+            elif event['action'] == 'map':
+                hierarchy.require_leaf(selected_pool_id)
+                _open_add_pool_mapping_dialog(service, selected_pool_id,
+                    teams_frame(organization.get_all_teams()), employees_frame(organization.get_all_employees()))
             else:
                 warning = service.parent_pool_warning(selected_pool_id)
                 if warning:
@@ -119,13 +118,6 @@ def render_resource_pools(
                 else:
                     _open_add_pool_dialog(service, selected_pool_id)
         current_detail = next((row for row in all_pool_details if row.pool_id == selected_pool_id), None)
-        if current_detail and current_detail.is_overassigned:
-            st.error(
-                f"**Overassigned periods - {current_detail.pool_name}**\n\n"
-                + (', '.join(current_detail.overassignment_intervals) or 'Active overlapping assignments')
-            )
-        elif current_detail:
-            st.caption(f"No overassigned periods for {current_detail.pool_name}.")
         if current_detail:
             leaf_details = (
                 [row for row in all_pool_details if row.pool_id in hierarchy.descendants(selected_pool_id, leaves_only=True)]
@@ -145,6 +137,19 @@ def render_resource_pools(
                 st.dataframe(pd.DataFrame(contributions), hide_index=True, width="stretch")
             else:
                 st.caption("No mapped resources contribute capacity to this pool.")
+            st.markdown('#### Pool overallocation')
+            periods = overallocation_periods(leaf_details)
+            if periods:
+                st.caption('FTE is the excess above available capacity. Dates are inclusive.')
+                st.dataframe(pd.DataFrame([
+                    {'Pool name': period.pool_name, 'Date start': period.start_date,
+                     'Date stop': period.stop_date, 'FTE': period.fte}
+                    for period in periods
+                ]), hide_index=True, width='stretch', column_config={
+                    'FTE': st.column_config.NumberColumn('FTE', format='%.3f'),
+                })
+            else:
+                st.caption(f"No overassigned periods for {current_detail.pool_name}.")
             st.markdown("#### Active Allocations on Projects & Tasks")
             for detail in leaf_details:
                 if len(leaf_details) > 1:

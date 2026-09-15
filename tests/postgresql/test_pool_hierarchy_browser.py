@@ -32,6 +32,66 @@ render_resource_pools(create_resource_pool_service(runtime, access=access),
 '''
 
 
+def test_capacity_excess_colors_values_and_warns_next_to_pool_names(authorized, tmp_path):
+    screen = '''
+import streamlit as st
+from app.domain.resources.hierarchy import PoolHierarchy
+from app.domain.resources.models import ResourcePool
+from app.presentation.components.resource_pool_tree import resource_pool_tree
+st.set_page_config(layout='wide')
+tree = PoolHierarchy([ResourcePool('Container', id=1),
+    ResourcePool('Current excess', id=2, parent_pool_id=1),
+    ResourcePool('Peak excess', id=3, parent_pool_id=1),
+    ResourcePool('At capacity', id=4, parent_pool_id=1)])
+resource_pool_tree(tree, {1:6, 2:2, 3:2, 4:2}, 1,
+    assigned_capacities={1:7, 2:4, 3:1, 4:2},
+    peak_demands={1:7, 2:1, 3:4, 4:2})
+'''
+    with native_server(authorized, tmp_path, screen) as server, sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            page = server.new_page(browser, viewport={'width': 1700, 'height': 900})
+            page.goto(server.origin)
+            for name, current, peak in [
+                ('Container', True, True), ('Current excess', True, False),
+                ('Peak excess', False, True), ('At capacity', False, False),
+            ]:
+                row = page.get_by_role('treeitem', name=name, exact=True)
+                expect(row).to_be_visible(timeout=30000)
+                expect(row.locator('.pool-name .pool-warning')).to_have_count(int(current or peak))
+                for index, exceeded in [(4, current), (6, peak)]:
+                    cell = row.locator('.pool-meta').nth(index)
+                    if exceeded:
+                        expect(cell).to_have_css('color', 'rgb(198, 40, 40)')
+                    else:
+                        expect(cell).not_to_have_css('color', 'rgb(198, 40, 40)')
+            page.screenshot(path=str(tmp_path / 'capacity-warnings.png'), full_page=True)
+        finally:
+            browser.close()
+
+
+def test_empty_pool_list_creates_root_from_context_menu_without_toolbar_button(authorized, tmp_path):
+    with native_server(authorized, tmp_path, SCREEN) as server, sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            page = server.new_page(browser)
+            page.goto(server.origin)
+            empty = page.get_by_text('No pools yet. Right-click here to create a pool.', exact=True)
+            expect(empty).to_be_visible(timeout=30000)
+            expect(page.get_by_role('button', name='Create Pool', exact=True)).to_have_count(0)
+            empty.click(button='right')
+            page.get_by_role('menuitem', name='Create pool', exact=True).click()
+            dialog = page.get_by_role('dialog')
+            dialog.get_by_role('textbox', name='Resource Pool Name *', exact=True).fill('First pool')
+            dialog.get_by_role('button', name='Save', exact=True).click()
+            expect(dialog).to_have_count(0)
+            expect(page.get_by_role('treeitem', name='First pool', exact=True)).to_be_visible()
+            with psycopg.connect(authorized.setup.operator_url) as connection:
+                assert connection.execute('SELECT name,parent_pool_id FROM eppm.resource_pool').fetchall() == [('First pool', None)]
+        finally:
+            browser.close()
+
+
 def test_create_child_switches_parent_to_container_and_disables_direct_capacity(authorized, tmp_path):
     parent = service(authorized).create_pool(ResourcePool('Engineering', capacity_fte=20))
     with native_server(authorized, tmp_path, SCREEN) as server, sync_playwright() as playwright:
@@ -46,7 +106,7 @@ def test_create_child_switches_parent_to_container_and_disables_direct_capacity(
             expect(parent_row).to_be_visible(timeout=30000)
             expect(page.get_by_role('heading', name='Resource Pools Management', exact=False)).to_have_count(0)
             parent_row.click(button='right')
-            page.get_by_role('menuitem', name='Create child pool', exact=True).click()
+            page.get_by_role('menuitem', name='Create pool', exact=True).click()
             dialog = page.get_by_role('dialog')
             dialog.get_by_role('textbox', name='Resource Pool Name *', exact=True).fill('Backend')
             dialog.get_by_role('spinbutton', name='Defined capacity (FTE)', exact=True).fill('4')
@@ -72,7 +132,7 @@ def test_create_child_switches_parent_to_container_and_disables_direct_capacity(
             expect(parent_row).to_have_attribute('aria-selected', 'true')
             expect(page.get_by_role('button', name='Edit', exact=True)).to_have_count(0)
             expect(page.get_by_role('button', name='Delete', exact=True)).to_have_count(0)
-            expect(page.get_by_role('button', name='Create child pool', exact=True)).to_have_count(0)
+            expect(page.get_by_role('button', name='Create pool', exact=True)).to_have_count(0)
             expect(parent_row).to_have_css('font-weight', '700')
             assert abs(parent_row.bounding_box()['height'] - 36.4) < 1
             expect(tree.get_by_role('button', name='Filter Pool type', exact=True)).to_be_visible()
@@ -112,7 +172,7 @@ def test_context_child_creation_warns_for_assigned_pool(authorized, tmp_path):
             page.goto(server.origin)
             row = page.get_by_role('treeitem', name='Assigned pool', exact=True)
             row.click(button='right', timeout=30000)
-            page.get_by_role('menuitem', name='Create child pool', exact=True).click()
+            page.get_by_role('menuitem', name='Create pool', exact=True).click()
             expect(page.get_by_role('dialog')).to_have_count(0)
             expect(page.get_by_text('Remove or reassign them before adding children.', exact=False).first).to_be_visible()
             with psycopg.connect(authorized.setup.operator_url) as connection:
@@ -220,8 +280,8 @@ render_resource_pools(create_resource_pool_service""")
             expect(row).to_be_visible(timeout=30000)
             expect(row.locator('.pool-meta').last).to_have_text('2.00')
             expect(row.locator('.pool-meta').nth(4)).to_have_text('0.00')
-            expect(row.locator('.pool-meta').nth(5)).to_have_text('Teams')
-            expect(page.get_by_role('treeitem', name='Root', exact=True)).to_contain_text('Via children')
+            expect(row.locator('.pool-meta').nth(5)).to_have_text('✓')
+            expect(page.get_by_role('treeitem', name='Root', exact=True).locator('.pool-meta').nth(5)).to_have_text('')
             statuses = page.get_by_role('combobox', name='Project statuses included in demand', exact=True)
             statuses.click()
             page.get_by_role('option', name='Completed', exact=True).click()
@@ -234,5 +294,60 @@ render_resource_pools(create_resource_pool_service""")
             expect(page.get_by_text('Gantt navigation queued', exact=True)).to_be_visible()
             expect(page.get_by_text('Projects: 1,2', exact=True)).to_be_visible()
             expect(page.get_by_text('Statuses: In Progress,Completed', exact=True)).to_be_visible()
+        finally:
+            browser.close()
+
+
+@pytest.mark.parametrize('target_type', ['team', 'employee'])
+def test_context_mapping_saves_leaf_mapping_and_keeps_container_indicator_blank(authorized, tmp_path, target_type):
+    import re
+    from app.domain.organization.models import Employee, Team
+    from app.main import create_organization_service
+    from app.runtime import RuntimeResources
+    pools = service(authorized)
+    parent = pools.create_pool(ResourcePool('Root'))
+    leaf = pools.create_pool(ResourcePool('Delivery', parent_pool_id=parent))
+    org = create_organization_service(RuntimeResources(authorized.database, authorized.key), access=authorized.binding(4).access)
+    org.create_team(Team('Delivery team'))
+    org.create_employee(Employee('Ada', 'Lovelace', 'mapping@example.test', 'MAPPING'))
+    with native_server(authorized, tmp_path, SCREEN) as server, sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            page = server.new_page(browser, viewport={'width': 1700, 'height': 1100})
+            page.goto(server.origin)
+            root = page.get_by_role('treeitem', name='Root', exact=True)
+            row = page.get_by_role('treeitem', name='Delivery', exact=True)
+            root.click(button='right', timeout=30000)
+            expect(page.get_by_role('menuitem', name='Map employees or teams', exact=True)).to_have_count(0)
+            root.press('Escape')
+            row.click(button='right')
+            page.get_by_role('menuitem', name='Map employees or teams', exact=True).click()
+            dialog = page.get_by_role('dialog')
+            selector = dialog.get_by_role('combobox', name='Teams' if target_type == 'team' else 'Employees', exact=True)
+            selector.click()
+            page.get_by_role('option', name=re.compile('Delivery team' if target_type == 'team' else 'Ada Lovelace')).click()
+            page.get_by_text('Select employees and teams to map.', exact=False).click()
+            expect(dialog.get_by_label(re.compile('Allocation'))).to_have_count(1)
+            expect(dialog.get_by_label(re.compile('Allocation'))).to_have_value('100.00')
+            expect(dialog.get_by_role('button', name='Remove', exact=True)).to_have_count(1)
+            page.screenshot(path=str(tmp_path / 'mapping-grid.png'), full_page=True)
+            dialog.get_by_role('button', name=re.compile('^Save')).click()
+            expect(dialog).to_have_count(0)
+            expect(row.locator('.pool-meta').nth(5)).to_have_text('✓')
+            expect(root.locator('.pool-meta').nth(5)).to_have_text('')
+            with psycopg.connect(authorized.setup.operator_url) as connection:
+                assert connection.execute('SELECT target_type,allocation_pct FROM eppm.resource_pool_mapping WHERE pool_id=%s', (leaf,)).fetchall() == [(target_type, 100)]
+            row.click(button='right')
+            page.get_by_role('menuitem', name='Map employees or teams', exact=True).click()
+            dialog.get_by_role('button', name='Remove', exact=True).click()
+            expect(dialog.get_by_label(re.compile('Allocation'))).to_have_count(0)
+            expect(dialog.get_by_text('No mappings.', exact=False)).to_be_visible()
+            dialog.get_by_role('button', name='Save mappings', exact=True).click()
+            expect(dialog).to_have_count(0)
+            expect(row.locator('.pool-meta').nth(5)).to_have_text('')
+            with psycopg.connect(authorized.setup.operator_url) as connection:
+                assert connection.execute(
+                    'SELECT id FROM eppm.resource_pool_mapping WHERE pool_id=%s', (leaf,)
+                ).fetchall() == []
         finally:
             browser.close()

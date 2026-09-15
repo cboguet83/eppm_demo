@@ -71,14 +71,35 @@ types, and assignable followed by assigned capacity. Container assigned capacity
 is the sum of child assigned capacities. Below the tree, only the selected pool's
 overassigned periods, resource deduplication and detailed project/task allocations
 are shown. Container details preserve the contributing leaf pool for each resource
-and allocation. Columns show Pool Capacity (FTE), Current Capacity (FTE), Mappings
-and Future Peak Demand (FTE). Mappings distinguishes employees, teams, both and no
-direct mappings; containers indicate mappings via children.
+and allocation. Overallocation is a grid of pool name, inclusive start/stop dates,
+and excess FTE. Consecutive dates with identical excess are grouped; changes and
+gaps start a new row. Container selection lists all descendant leaves' periods,
+even when aggregate spare capacity hides an individual leaf's overload. The grid
+uses the same project-status scope as the capacity details.
+Columns show Pool Capacity (FTE), Current Capacity (FTE), Mappings
+and Future Peak Demand (FTE). Mappings shows a check mark when a leaf has employee
+or team mappings; unmapped leaves and containers remain blank. Leaf context menus
+offer a mapping editor with multiple employee and team selections. Selected
+resources appear in a grid with type, name, editable allocation percentage and
+a Remove button on each row. New mappings default to 100%; existing mappings
+retain their saved allocation. Removing a row also clears its selection.
+Removals take effect in storage on Save, together with allocation edits.
+Python applies additions, percentage edits and removals in one transaction,
+preserving existing mapping identities and legacy function mappings. Container mapping actions
+are rejected, and the application service remains authoritative on save.
 Current capacity uses today's employee availability calendar when
 any employee or team is mapped, including empty teams and zero availability.
 Unmapped leaves use defined capacity less today's pool exceptions. Containers sum
 their leaves' current capacities. This display is calculated in Python using the
 capacity service's injected date. Containers have a light gray background.
+Current capacity is red when strictly greater than the row's Pool Capacity (FTE).
+Future peak demand is red when it exceeds capacity on a future peak-demand date,
+using the current-capacity rule at that date: mapped leaves use employee/team
+availability, and unmapped leaves use pool capacity with pool exceptions.
+Containers sum leaves on the container's peak date. Repeated peaks use the lowest
+capacity across their dates so a shortage on any peak date is flagged. Python
+performs these comparisons. Either excess adds a warning beside the pool name,
+with an explanatory tooltip; equality does not warn.
 Demand and overassigned periods are scoped by a project-status multiselect,
 defaulting to In Progress. An empty status selection includes no projects.
 Future peak demand is the maximum date-aligned required assignment from today
@@ -87,7 +108,10 @@ excluded. The portfolio peak also sums concurrent demand before taking its peak,
 so unrelated pool peaks on different dates are not added together.
 Right-click selects the pool and offers Gantt navigation to its consuming projects,
 carrying the same statuses and the existing resource filter contract.
-Editing and child creation use context actions;
+Editing and creation use context actions. The Create pool action on a row creates
+a child; the same action on the tree background or empty list creates a root.
+There is no standalone creation button. Keyboard users can focus the tree and
+press Shift+F10 to open the root creation menu;
 conversion warnings appear only when a blocked creation is attempted.
 Pool-tag choices and the hierarchy Tags column use dictionary entries whose
 existing tag group is named `pool_tag`; there is no separate `tag_type` column.

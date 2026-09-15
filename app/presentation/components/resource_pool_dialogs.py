@@ -23,7 +23,6 @@ from app.domain.resources.models import (
 from app.domain.resources.rules import (
     validate_pool_name,
     validate_capacity_fte,
-    validate_allocation_pct,
 )
 from app.presentation.components.resource_pool_frames import (
     pools_frame,
@@ -267,67 +266,82 @@ def _open_delete_pool_dialog(service: ResourcePoolService, pool_id: int, pool_na
         st.rerun()
 
 
-@dialog(t("settings.dialog_add_mapping", default="Assign Team or Employee to Pool"))
+def _remove_mapping_row(pool_id: int, kind: str, identity: int) -> None:
+    """Remove a draft row and synchronize its selection before widgets rerender."""
+    selection_key = f"mapping_{'teams' if kind == 'team' else 'employees'}_{pool_id}"
+    st.session_state[selection_key] = [
+        selected for selected in st.session_state[selection_key] if selected != identity
+    ]
+    st.session_state.pop(f'mapping_pct_{pool_id}_{kind}_{identity}', None)
+
+
+@dialog(t("settings.dialog_add_mapping", default="Assign Team or Employee to Pool"), width="large")
 @pool_errors
 def _open_add_pool_mapping_dialog(
     service: ResourcePoolService, pool_id: int, df_teams: pd.DataFrame, df_employees: pd.DataFrame
 ) -> None:
-    """Modal dialog to assign a team or employee to a resource pool."""
-    map_type = st.segmented_control(
-        t("settings.mapping_target_type", default="Mapping Target Type"),
-        options=["team", "employee"],
-        format_func=lambda x: "Team" if x == "team" else "Employee",
-        default="team",
+    """Manage several employee and team mappings with individual percentages."""
+    PoolHierarchy(service.get_all_pools()).require_leaf(pool_id)
+    existing = {
+        (row.target_type, row.target_id): row
+        for row in service.get_mappings_by_pool(pool_id)
+    }
+    teams = {int(row.team_id): row.team_name for row in df_teams.itertuples()}
+    employees = {
+        int(row.employee_id): f"{row.firstname} {row.lastname}".strip()
+        for row in df_employees.itertuples()
+    }
+    st.caption(
+        'Select employees and teams to map. Each selection adds a grid row at 100%. '
+        'Edit allocations or remove rows below. Save applies all changes together.'
     )
-    if map_type == "team":
-        if df_teams.empty:
-            st.warning("No teams available.")
-            return
-        team_map = dict(zip(df_teams["team_id"], df_teams["team_name"]))
-        target_id = st.selectbox(
-            t("settings.select_team", default="Select Team"),
-            options=df_teams["team_id"].tolist(),
-            format_func=lambda tid: f"{team_map.get(tid, f'Team #{tid}')} [#{tid}]",
-        )
-    else:
-        if df_employees.empty:
-            st.warning("No employees available.")
-            return
-        employee_map = {
-            int(
-                row["employee_id"]
-            ): f"{str(row['firstname']).strip()} {str(row['lastname']).strip()}".strip()
-            for _, row in df_employees.iterrows()
-        }
-        target_id = st.selectbox(
-            t("settings.select_employee", default="Select employee"),
-            options=df_employees["employee_id"].tolist(),
-            format_func=lambda eid: f"{employee_map.get(int(eid), f'Employee #{eid}')} [#{eid}]",
-        )
-    alloc_pct = st.slider(
-        t("settings.field_allocation_pct", default="Pool Allocation Percentage (%)"),
-        min_value=0.0,
-        max_value=100.0,
-        value=100.0,
-        step=5.0,
-        help="Percentage of this team or employee's capacity allocated to this pool (0% to 100%).",
+    selected_teams = st.multiselect(
+        'Teams', list(teams),
+        default=[identity for kind, identity in existing if kind == 'team' and identity in teams],
+        format_func=lambda identity: f'{teams[identity]} [#{identity}]',
+        key=f'mapping_teams_{pool_id}',
     )
-    col_save, col_cancel = st.columns(2)
-    if col_save.button(
-        t("settings.btn_save_mapping", default="Save Mapping"), type="primary", width="stretch"
-    ):
-        validate_allocation_pct(float(alloc_pct))
-        service.create_mapping(
-            PoolMapping(
-                pool_id=pool_id,
-                target_type=map_type,
-                target_id=int(target_id),
-                allocation_pct=float(alloc_pct),
-            )
-        )
-        st.toast("Mapping added / updated successfully!")
+    selected_employees = st.multiselect(
+        'Employees', list(employees),
+        default=[identity for kind, identity in existing if kind == 'employee' and identity in employees],
+        format_func=lambda identity: f'{employees[identity]} [#{identity}]',
+        key=f'mapping_employees_{pool_id}',
+    )
+    desired: list[PoolMapping] = []
+    with st.container(border=True, key=f'pool_mapping_grid_{pool_id}'):
+        widths = [1, 3, 2, 1]
+        for column, heading in zip(st.columns(widths), ['Type', 'Name', 'Allocation (%)', 'Action']):
+            column.markdown(f'**{heading}**')
+        if not selected_teams and not selected_employees:
+            st.caption('No mappings. Select a team or employee above to add a row.')
+        for kind, identities, labels in [
+            ('team', selected_teams, teams), ('employee', selected_employees, employees)
+        ]:
+            for identity in identities:
+                current = existing.get((kind, identity))
+                type_cell, name_cell, allocation_cell, action_cell = st.columns(
+                    widths, vertical_alignment='center', wrap=False,
+                )
+                type_cell.text(kind.title())
+                name_cell.text(labels[identity])
+                percentage = allocation_cell.number_input(
+                    f'{kind.title()}: {labels[identity]} - Allocation (%)',
+                    min_value=0.0, max_value=100.0,
+                    value=float(current.allocation_pct) if current else 100.0,
+                    step=5.0, key=f'mapping_pct_{pool_id}_{kind}_{identity}',
+                    label_visibility='collapsed',
+                )
+                action_cell.button(
+                    'Remove', key=f'remove_mapping_{pool_id}_{kind}_{identity}',
+                    on_click=_remove_mapping_row, args=(pool_id, kind, identity),
+                )
+                desired.append(PoolMapping(pool_id, kind, identity, percentage))
+    save, cancel = st.columns(2)
+    if save.button('Save mappings', type='primary', width='stretch'):
+        service.save_mappings(pool_id, desired)
+        st.toast('Mappings saved.')
         st.rerun()
-    if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
+    if cancel.button('Cancel', width='stretch'):
         st.rerun()
 
 
