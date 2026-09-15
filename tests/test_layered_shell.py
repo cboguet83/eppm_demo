@@ -104,13 +104,15 @@ def test_settings_subsections_are_hidden_until_settings_opens():
     app.radio(key="app_sidebar_nav").set_value(PAGE_SETTINGS).run()
     menu = app.sidebar.radio(key="app_sidebar_nav")
     assert menu.value == "settings:org_structure"
-    assert [label.strip() for label in menu.options][-4:] == [
-        "Settings", "Organization Structure", "Parameter Definition", "Project configuration",
+    assert [label.strip() for label in menu.options][-5:] == [
+        "Settings", "Organization Structure", "Parameter Definition", "Project configuration", "Tag Management",
     ]
-    assert all(label.startswith("\u00a0" * 4) for label in menu.options[-3:])
     assert len(app.sidebar.radio) == 1
     menu.set_value("settings:param_def").run()
     assert app.session_state["rb_settings_section"] == "param_def"
+    assert PAGE_SETTINGS in [item.value for item in app.markdown]
+    app.radio(key="app_sidebar_nav").set_value("settings:tag_management").run()
+    assert app.session_state["rb_settings_section"] == "tag_management"
     assert PAGE_SETTINGS in [item.value for item in app.markdown]
     app.radio(key="app_sidebar_nav").set_value(PAGE_PORTFOLIO).run()
     assert len(app.radio(key="app_sidebar_nav").options) == 3
@@ -134,12 +136,46 @@ def test_organization_tabs_follow_catalog_setup_order():
     app = AppTest.from_function(settings_app, default_timeout=15).run()
     assert not app.exception
     assert [tab.label.split(" ", 1)[-1] if tab.label[0] not in "ABCDEFGHIJKLMNOPQRSTUVWXYZ" else tab.label
-            for tab in app.tabs[:7]] == [
+            for tab in app.tabs] == [
         "Function Types", "Hierarchy types", "Functions", "Teams", "Employees", "Pool Types", "Resource Pools",
     ]
     assert "Function types loaded" in [item.value for item in app.markdown]
     assert not app.radio
     assert not app.header
+
+
+def test_tag_management_has_four_lazy_tabs():
+    """Each tag tab loads its own renderer without organization services."""
+    def tags_app():
+        from contextlib import ExitStack
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        import streamlit as st
+        from app.presentation.pages.settings import render_settings_view
+
+        st.session_state["rb_settings_section"] = "tag_management"
+        with ExitStack() as stack:
+            for name in ("tag_groups", "tag_dictionary", "project_tags", "task_tags"):
+                stack.enter_context(patch(
+                    "app.presentation.pages.settings.render_" + name,
+                    side_effect=lambda service, name=name: st.write(name),
+                ))
+            render_settings_view(SimpleNamespace(tags=None))
+
+    app = AppTest.from_function(tags_app).run()
+    assert [tab.label for tab in app.tabs] == [
+        "Tag Groups", "Tag Dictionary", "Project Tags", "Task Tags",
+    ]
+    for label, renderer in zip(
+        [tab.label for tab in app.tabs],
+        ("tag_groups", "tag_dictionary", "project_tags", "task_tags"),
+        strict=True,
+    ):
+        app.session_state["tag_management_tab"] = label
+        app.run()
+        assert not app.exception
+        assert [item.value for item in app.markdown] == [renderer]
+        assert not app.header
 
 
 def test_navigation_replaces_the_outgoing_page_container_and_its_controls():
@@ -264,4 +300,4 @@ def test_settings_only_access_opens_the_organization_child():
     app = AppTest.from_function(settings_only_app).run()
     assert not app.exception
     assert app.radio(key="app_sidebar_nav").value == "settings:org_structure"
-    assert len(app.radio(key="app_sidebar_nav").options) == 4
+    assert len(app.radio(key="app_sidebar_nav").options) == 5

@@ -472,7 +472,7 @@ Repeated ordinary seeding leaves an installed layout and its allocations alone.
 allocations.** Use an explicit allocation refresh when wanted. Catalog-only
 seeding creates the hierarchy without demand. Custom organizations remain untouched.
 
-Settings → Task Tags loads 100 assignments per page. Search, column filters, and
+Settings → Tag Management → Task Tags loads 100 assignments per page. Search, column filters, and
 sorting run against the entire database; paging never limits their scope.
 Task and dictionary choices load only when an add/edit dialog opens, with task
 search limited to 50 matches (an exact `#ID` finds any task). Browser regression
@@ -510,10 +510,11 @@ and `node --test tests/test_portfolio_table.cjs`.
    - Real-time constraint violation diagnostics detecting scheduling breaks.
    - Bulk CSV milestone loader with validation and downloadable template.
 3. **⚙️ 3. Settings**:
-   - Consolidated single settings hub with a top-level section toggle:
-     - **🏢 Organization Structure**: Manage 9 areas (Job Functions, Function Types, Teams, Employees with occupation percentages and calendar exceptions, Tag Groups, Tag Dictionary, Project Tags, Task Tags, and Resource Pools with dynamic capacity timelines).
+   - Click Settings to reveal four indented pages, with Organization Structure selected by default:
+     - **🏢 Organization Structure**: Manage Function Types, Hierarchy Types, Functions, Teams, Employees, Pool Types, and Resource Pools in tabs at the top of the page.
      - **🧩 Parameter Definition**: Dynamic schema builder to manage schema groups, create/edit typed parameters (TEXT, DATE, NUMBER, ENUM, TAGS, HYPERLINK), configure discrete options, and inspect the real-time schema hierarchy tree.
      - **Project configuration**: Maintain project roles and event types. Entries in use cannot be deleted.
+     - **Tag Management**: Manage Tag Groups, Tag Dictionary, Project Tags, and Task Tags in four tabs.
 4. **🌐 5-Language Internationalization (i18n)**:
    - Full live interface translation across English (`en`), French (`fr`), German (`de`), Luxembourgish (`lb`), and Portuguese (`pt`) with 100% key parity guaranteed by automated unit tests.
 

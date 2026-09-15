@@ -56,9 +56,11 @@ def test_inline_navigation_and_hierarchy_table_crud(popup_server, tmp_path):
             labels = nav.locator('[role="radiogroup"] label').all_text_contents()
             assert [label.strip() for label in labels] == [
                 "Portfolio Overview", "Settings", "Organization Structure",
-                "Parameter Definition", "Project configuration", "Application access",
+                "Parameter Definition", "Project configuration", "Tag Management", "Application access",
             ]
-            assert labels[2].startswith("\u00a0" * 4)
+            rows = nav.locator('[role="radiogroup"] > label')
+            expect(rows.nth(1).locator(':scope > div > div > div').first).to_be_hidden()
+            assert rows.nth(2).bounding_box()["x"] > rows.nth(1).bounding_box()["x"] + 15
             expect(page.get_by_role("heading", name="Settings", exact=True)).to_have_count(0)
             page.get_by_role("tab", name="Hierarchy types", exact=True).click()
             table = page.frame_locator("iframe").first

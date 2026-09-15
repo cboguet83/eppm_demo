@@ -528,6 +528,7 @@
   "settings": {
     "export_csv": "Exporter CSV",
     "title": "Paramètres",
+    "section_tag_management": "Gestion des ?tiquettes",
     "section_org_structure": "Structure Organisationnelle",
     "section_param_definition": "Définition des Paramètres",
     "tab_hierarchy": "Niveaux Hiérarchiques",

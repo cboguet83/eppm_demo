@@ -528,6 +528,7 @@
   "settings": {
     "export_csv": "CSV exportéieren",
     "title": "Astellungen",
+    "section_tag_management": "Tag-Verwaltung",
     "section_org_structure": "Organisatiounsstruktur",
     "section_param_definition": "Parameterdefinitioun",
     "tab_hierarchy": "Hierarchie Niveauen",

@@ -527,6 +527,7 @@
   "settings": {
     "export_csv": "Export CSV",
     "title": "Settings",
+    "section_tag_management": "Tag Management",
     "section_org_structure": "Organization Structure",
     "section_param_definition": "Parameter Definition",
     "tab_hierarchy": "Hierarchy Levels",

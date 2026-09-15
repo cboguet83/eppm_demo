@@ -56,6 +56,30 @@ def render_settings_view(workspace: SettingsWorkspace) -> None:
             with wbs_tab:
                 render_wbs_catalog(workspace.wbs)
         return
+    if selected_section == "tag_management":
+        tab_tag_groups, tab_tag_dict, tab_proj_tags, tab_task_tags = st.tabs(
+            [
+                t('settings.tab_tag_groups', default='Tag Groups'),
+                t('settings.tab_tag_dict', default='Tag Dictionary'),
+                t('settings.tab_proj_tags', default='Project Tags'),
+                t('settings.tab_task_tags', default='Task Tags'),
+            ],
+            key="tag_management_tab",
+            on_change="rerun",
+        )
+        if tab_tag_groups.open:
+            with tab_tag_groups:
+                render_tag_groups(workspace.tags)
+        if tab_tag_dict.open:
+            with tab_tag_dict:
+                render_tag_dictionary(workspace.tags)
+        if tab_proj_tags.open:
+            with tab_proj_tags:
+                render_project_tags(workspace.tags)
+        if tab_task_tags.open:
+            with tab_task_tags:
+                render_task_tags(workspace.tags)
+        return
     settings_tab_labels = [
         t('settings.tab_types', default='Function Types'),
         t("hierarchy.title"),
@@ -64,11 +88,9 @@ def render_settings_view(workspace: SettingsWorkspace) -> None:
         t('settings.tab_employees', default='Employees'),
         t('pool_types.title', default='Pool Types'),
         t('settings.tab_resource_pools', default='Resource Pools'),
-        t('settings.tab_tag_groups', default='Tag Groups'),
-        t('settings.tab_tag_dict', default='Tag Dictionary'),
-        t('settings.tab_proj_tags', default='Project Tags'),
-        t('settings.tab_task_tags', default='Task Tags'),
     ]
+    if st.session_state.get("settings_tab_selection") not in settings_tab_labels:
+        st.session_state["settings_tab_selection"] = settings_tab_labels[0]
     requested_tab = st.session_state.pop("settings_active_tab", None)
     if requested_tab == "resource_pools":
         st.session_state["settings_tab_selection"] = settings_tab_labels[6]
@@ -80,10 +102,6 @@ def render_settings_view(workspace: SettingsWorkspace) -> None:
         tab_emps,
         tab_pool_types,
         tab_pools,
-        tab_tag_groups,
-        tab_tag_dict,
-        tab_proj_tags,
-        tab_task_tags,
     ) = st.tabs(settings_tab_labels, key="settings_tab_selection", on_change="rerun")
     if tab_hierarchy.open:
         with tab_hierarchy:
@@ -103,18 +121,6 @@ def render_settings_view(workspace: SettingsWorkspace) -> None:
     if tab_pool_types.open:
         with tab_pool_types:
             render_pool_types(workspace.resources)
-    if tab_tag_groups.open:
-        with tab_tag_groups:
-            render_tag_groups(workspace.tags)
-    if tab_tag_dict.open:
-        with tab_tag_dict:
-            render_tag_dictionary(workspace.tags)
-    if tab_proj_tags.open:
-        with tab_proj_tags:
-            render_project_tags(workspace.tags)
-    if tab_task_tags.open:
-        with tab_task_tags:
-            render_task_tags(workspace.tags)
     if tab_pools.open:
         with tab_pools:
             render_resource_pools(
