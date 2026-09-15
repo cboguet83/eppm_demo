@@ -10,18 +10,25 @@ from app.presentation.components.context_menu import CONTEXT_MENU_CSS
 _CSS = """
 .pool-tree {font:inherit; border:1px solid var(--st-border-color); border-radius:8px;}
 .tree-scroll {max-height:460px; overflow:auto; padding:6px;}
-.pool-row {display:grid; grid-template-columns:minmax(240px,1fr) 120px 130px 180px 160px 165px;
+.pool-row {display:grid; grid-template-columns:minmax(240px,1fr) 110px 120px 130px 150px 150px 140px 185px;
     align-items:center; gap:8px; padding:4.2px 10px; box-sizing:border-box;
     border-radius:5px; cursor:pointer; min-height:36.4px; outline-offset:-2px;}
 .pool-row.container {font-weight:700; background:#f1f3f5; color:#263238;}
 .pool-identity {display:flex; align-items:center; min-width:0;}
-.tree-columns {display:grid; grid-template-columns:minmax(240px,1fr) 120px 130px 180px 160px 165px;
+.tree-columns {display:grid; grid-template-columns:minmax(240px,1fr) 110px 120px 130px 150px 150px 140px 185px;
     gap:8px; padding:8px 10px; font-size:12px; font-weight:600; position:sticky; top:0;
     background:var(--st-background-color); z-index:1;}
-.pool-row,.tree-columns {min-width:1100px;}
+.pool-row,.tree-columns {min-width:1300px;}
 .tree-columns input {display:block; box-sizing:border-box; width:100%; min-width:0; margin-top:6px;
     font:inherit; font-weight:400; padding:5px; border:1px solid var(--st-border-color);
     border-radius:4px; color:var(--st-text-color); background:var(--st-background-color);}
+.tree-columns .filter-button {display:flex; justify-content:space-between; align-items:center;
+    font:inherit; font-size:12px; white-space:nowrap; width:100%; padding:0; border:0; text-align:left;}
+.filter-panel {padding:12px; width:280px;}
+.filter-options {max-height:220px; overflow:auto; margin:8px 0;}
+.filter-option {display:flex; align-items:center; gap:8px; padding:4px 0; font-weight:400;}
+.filter-search {width:100%; box-sizing:border-box; padding:6px;}
+.filter-actions {display:flex; gap:6px;}
 .pool-tags {overflow:hidden; text-overflow:ellipsis;}
 .pool-row:hover {background:var(--st-secondary-background-color);}
 .pool-row[aria-selected=true] {background:var(--st-secondary-background-color);
@@ -41,34 +48,36 @@ export default function({data, parentElement, setTriggerValue, setStateValue}) {
     let menu = null;
     const collapsed = new Set(data.collapsed || []);
     const filters = data.filters || {};
-    const activeFilters = Object.values(filters).some(value => String(value).trim());
-    const fields = ['name','pool_type','hierarchy_type','tags','capacity','assigned_capacity'];
-    const matches = new Set(data.rows.filter(row => fields.every(field => {
-        const query = String(filters[field] || '').trim().toLocaleLowerCase();
-        if (!query) return true;
-        if (field === 'capacity' || field === 'assigned_capacity') return Number(row[field]) >= Number(query);
-        return String(row[field]).toLocaleLowerCase().includes(query);
-    })).map(row => row.id));
+    const activeFilters = Object.values(filters).some(value => Array.isArray(value));
+    const fields = ['name','pool_type','hierarchy_type','tags','capacity','assigned_capacity','mappings','peak_demand'];
+    const matches = new Set(data.rows.filter(row => fields.every(field =>
+        !Array.isArray(filters[field]) || filters[field].includes(String(row[field]))
+    )).map(row => row.id));
     const visible = new Set(matches);
     const byId = new Map(data.rows.map(row => [row.id,row]));
     for (const id of matches) {
         let parent = byId.get(id).parent;
         while (parent !== null && !visible.has(parent)) {visible.add(parent); parent = byId.get(parent)?.parent ?? null;}
     }
-    const closeMenu = () => {menu?.remove(); menu = null;};
+    const closeMenu = (clear = true) => {menu?.remove(); menu = null; if (clear) delete root.dataset.context;};
+    const highlight = row => root.querySelectorAll('[role=treeitem]').forEach(item =>
+        item.setAttribute('aria-selected', String(Number(item.dataset.id) === row.id)));
     const emit = (row, action) => {
         closeMenu();
         root.querySelectorAll('[role=treeitem]').forEach(item =>
             item.setAttribute('aria-selected', String(Number(item.dataset.id) === row.id)));
         setTriggerValue('action', {id:row.id, action});
     };
-    const showMenu = (event, row, item) => {
+    const showMenu = (event, row, item, restoring = false) => {
         event.preventDefault(); event.stopPropagation(); closeMenu();
+        highlight(row);
+        root.dataset.context = JSON.stringify({id:row.id,x:event.clientX,y:event.clientY});
+        if (!restoring && row.id !== data.selected) setStateValue('selected',row.id);
         menu = document.createElement('div'); menu.className = 'context-menu';
         menu.setAttribute('role', 'menu'); menu.setAttribute('aria-label', row.name);
         const heading = document.createElement('div'); heading.className = 'context-menu-header';
         heading.textContent = row.name; menu.appendChild(heading);
-        for (const [action, label] of [['edit','Edit pool'], ['create','Create child pool']]) {
+        for (const [action, label] of [['edit','Edit pool'], ['create','Create child pool'], ['gantt','Show consuming projects in Gantt']]) {
             const button = document.createElement('button'); button.type = 'button';
             button.className = 'context-menu-item'; button.textContent = label;
             button.setAttribute('role','menuitem'); button.onclick = () => emit(row, action);
@@ -90,24 +99,80 @@ export default function({data, parentElement, setTriggerValue, setStateValue}) {
     const tree = document.createElement('div'); tree.className = 'tree-scroll';
     tree.setAttribute('role','tree'); tree.setAttribute('aria-label','Resource pools');
     const header = document.createElement('div'); header.className = 'tree-columns';
-    for (const [index,text] of ['Pool','Pool type','Hierarchy type','Tags','Pool Capacity (FTE)','Mapped Capacity (FTE)'].entries()) {
-        const cell = document.createElement('span'); cell.textContent = text;
-        if (text === 'Mapped Capacity (FTE)') {
-            cell.title = 'FTE calculated from the employees mapped in the pool.';
-            cell.tabIndex = 0;
+    const openFilter = (event, field, label) => {
+        event.stopPropagation(); closeMenu();
+        menu = document.createElement('div'); menu.className = 'context-menu filter-panel';
+        menu.setAttribute('role','dialog'); menu.setAttribute('aria-label',`Filter ${label}`);
+        const numeric = ['capacity','assigned_capacity','peak_demand'].includes(field);
+        const values = [...new Set(data.rows.map(row => String(row[field])))].sort((a,b) => numeric ? Number(a)-Number(b) : a.localeCompare(b));
+        const selected = new Set(Array.isArray(filters[field]) ? filters[field] : values);
+        const button = (label, action) => {
+            const result = document.createElement('button'); result.className = 'context-menu-item';
+            result.textContent = label; result.onclick = action; return result;
+        };
+        for (const [label,descending] of [['Sort ascending',false],['Sort descending',true]]) {
+            menu.appendChild(button(label,()=>{closeMenu();setStateValue('sort',{field,descending});}));
         }
-        const input = document.createElement('input');
-        input.type = index >= 4 ? 'number' : 'search';
-        input.setAttribute('aria-label', `Filter ${text}`);
-        input.placeholder = index >= 4 ? 'Minimum FTE' : 'Filter…';
-        if (index >= 4) {input.min = '0'; input.step = '0.01';}
-        input.value = filters[fields[index]] || '';
-        input.onchange = () => setStateValue('filters', {...filters,[fields[index]]:input.value});
-        cell.appendChild(input); header.appendChild(cell);
+        const search = document.createElement('input'); search.type = 'search'; search.className = 'filter-search';
+        search.placeholder = 'Search'; search.setAttribute('aria-label','Search filter values'); menu.appendChild(search);
+        const all = document.createElement('label'); all.className = 'filter-option';
+        const allCheck = document.createElement('input'); allCheck.type = 'checkbox';
+        all.append(allCheck,document.createTextNode('Select all')); menu.appendChild(all);
+        const options = document.createElement('div'); options.className = 'filter-options'; menu.appendChild(options);
+        const renderOptions = () => {
+            options.replaceChildren();
+            const shown = values.filter(value => value.toLocaleLowerCase().includes(search.value.toLocaleLowerCase()));
+            allCheck.checked = shown.every(value => selected.has(value));
+            allCheck.indeterminate = !allCheck.checked && shown.some(value=>selected.has(value));
+            for (const value of shown) {
+                const label = document.createElement('label'); label.className = 'filter-option';
+                const check = document.createElement('input'); check.type = 'checkbox'; check.checked = selected.has(value);
+                check.onchange = () => {if(check.checked) selected.add(value); else selected.delete(value); renderOptions();};
+                label.append(check,document.createTextNode(value || '(Blanks)')); options.appendChild(label);
+            }
+        };
+        search.oninput = renderOptions;
+        allCheck.onchange = () => {
+            for (const value of values.filter(value=>value.toLocaleLowerCase().includes(search.value.toLocaleLowerCase()))) {
+                if(allCheck.checked) selected.add(value); else selected.delete(value);
+            }
+            renderOptions();
+        };
+        renderOptions();
+        const actions = document.createElement('div'); actions.className = 'filter-actions';
+        actions.append(button('Apply',()=>{const next={...filters}; next[field]=[...selected]; closeMenu();setStateValue('filters',next);}),
+                       button('Clear filter',()=>{const next={...filters};delete next[field];closeMenu();setStateValue('filters',next);}),
+                       button('Cancel',()=>closeMenu()));
+        menu.appendChild(actions); root.appendChild(menu);
+        const rect = event.currentTarget.getBoundingClientRect();
+        menu.style.left = Math.max(10,Math.min(rect.left,window.innerWidth-menu.offsetWidth-10))+'px';
+        menu.style.top = Math.max(10,Math.min(rect.bottom,window.innerHeight-menu.offsetHeight-10))+'px';
+        search.focus();
+    };
+    for (const [index,text] of ['Pool','Pool type','Hierarchy type','Tags','Pool Capacity (FTE)','Current Capacity (FTE)','Mappings','Future Peak Demand (FTE)'].entries()) {
+        const cell = document.createElement('span');
+        const button = document.createElement('button'); button.className = 'context-menu-item filter-button';
+        button.setAttribute('aria-label',`Filter ${text}`); button.setAttribute('aria-haspopup','dialog');
+        button.textContent = text + (Array.isArray(filters[fields[index]]) ? ' ▾ ●' : ' ▾');
+        if (index === 5) button.title = "Today's capacity after employee availability exceptions, or pool capacity exceptions when unmapped.";
+        if (index === 6) button.title = 'Employee or team mappings. Containers indicate mappings through their children.';
+        if (index === 7) button.title = 'Maximum required FTE from today onward for the selected project statuses.';
+        button.onclick = event => openFilter(event,fields[index],text);
+        cell.appendChild(button); header.appendChild(cell);
     }
     tree.appendChild(header);
+    const children = new Map();
+    for (const row of data.rows) {if (!children.has(row.parent)) children.set(row.parent,[]); children.get(row.parent).push(row);}
+    const sort = data.sort || {};
+    if (fields.includes(sort.field)) for (const siblings of children.values()) siblings.sort((a,b)=> {
+        const compare = ['capacity','assigned_capacity','peak_demand'].includes(sort.field)
+            ? Number(a[sort.field])-Number(b[sort.field]) : String(a[sort.field]).localeCompare(String(b[sort.field]));
+        return sort.descending ? -compare : compare;
+    });
+    const orderedRows = []; const pending = [...(children.get(null) || [])].reverse();
+    while(pending.length) {const row = pending.pop();orderedRows.push(row);pending.push(...[...(children.get(row.id)||[])].reverse());}
     let hiddenBelow = null;
-    for (const row of data.rows) {
+    for (const row of orderedRows) {
         if (!visible.has(row.id)) continue;
         if (!activeFilters && hiddenBelow !== null && row.depth > hiddenBelow) continue;
         hiddenBelow = null;
@@ -132,12 +197,12 @@ export default function({data, parentElement, setTriggerValue, setStateValue}) {
         }
         const label = document.createElement('span'); label.className = 'pool-name'; label.textContent = row.name;
         identity.append(toggle,label); item.appendChild(identity);
-        for (const [index,value] of [row.pool_type,row.hierarchy_type,row.tags,row.capacity,row.assigned_capacity].entries()) {
+        for (const [index,value] of [row.pool_type,row.hierarchy_type,row.tags,row.capacity,row.assigned_capacity,row.mappings,row.peak_demand].entries()) {
             const cell = document.createElement('span'); cell.className = 'pool-meta';
             if (index === 2) {cell.classList.add('pool-tags'); cell.title = value;}
             cell.textContent = value; item.appendChild(cell);
         }
-        item.lastElementChild.title = 'FTE calculated from the employees mapped to the pool.';
+        item.children[5].title = "Today's capacity after employee availability exceptions, or pool capacity exceptions when unmapped.";
         item.onclick = () => emit(row,'select');
         item.oncontextmenu = event => showMenu(event,row,item);
         item.onkeydown = event => {
@@ -162,12 +227,19 @@ export default function({data, parentElement, setTriggerValue, setStateValue}) {
         tree.querySelector(`[data-id="${root.dataset.focusPool}"]`)?.focus({preventScroll:true});
         delete root.dataset.focusPool;
     }
+    if (root.dataset.context) {
+        const context = JSON.parse(root.dataset.context); const row = byId.get(context.id);
+        const item = tree.querySelector(`[data-id="${context.id}"]`);
+        if (row && item) showMenu({preventDefault:()=>{},stopPropagation:()=>{},clientX:context.x,clientY:context.y},row,item,true);
+    }
+    const escape = event => {if(event.key === 'Escape') closeMenu();};
+    document.addEventListener('keydown',escape);
     const outside = event => {if (menu && !event.composedPath().includes(menu)) closeMenu();};
     document.addEventListener('pointerdown',outside);
     document.addEventListener('scroll',closeMenu,true);
     return () => {
         document.removeEventListener('pointerdown',outside);
-        document.removeEventListener('scroll',closeMenu,true); closeMenu();
+        document.removeEventListener('scroll',closeMenu,true); document.removeEventListener('keydown',escape); closeMenu(false);
     };
 }
 """
@@ -179,6 +251,8 @@ def resource_pool_tree(
     pool_types: dict[int, str] | None = None,
     hierarchy_types: dict[int, str] | None = None,
     tags: dict[int, list[str]] | None = None,
+    peak_demands: dict[int, float] | None = None,
+    mapping_types: dict[int, set[str]] | None = None,
 ) -> TableAction | None:
     """Render a validated forest and accept actions only for existing pool IDs.
 
@@ -186,10 +260,12 @@ def resource_pool_tree(
         hierarchy: Validated pool snapshot used for iterative tree ordering.
         capacities: Effective capacity by pool, including container rollups.
         selected: Pool currently inspected by the surrounding page.
-        assigned_capacities: Assigned resource capacity, already summed for containers.
+        assigned_capacities: Today's current capacity, already summed for containers.
         pool_types: Localized labels by pool type ID.
         hierarchy_types: Localized labels by hierarchy type ID.
         tags: Pool-tag labels by pool ID.
+        peak_demands: Peak required daily demand from today onward for selected statuses.
+        mapping_types: Direct mapping target types by pool ID.
 
     Returns:
         A validated selection, edit or child-creation event, when triggered.
@@ -201,8 +277,16 @@ def resource_pool_tree(
     while pending:
         identity, depth = pending.pop()
         children = hierarchy.children.get(identity, [])
+        targets = (mapping_types or {}).get(identity, set())
+        mapping_label = ('Employees & teams' if {'employee', 'team'} <= targets else
+                         'Employees' if 'employee' in targets else 'Teams' if 'team' in targets else 'None')
+        if children and any((mapping_types or {}).get(leaf, set()) & {'employee', 'team'}
+                            for leaf in hierarchy.descendants(identity, leaves_only=True)):
+            mapping_label = 'Via children'
         rows.append({'id': identity, 'name': hierarchy.pools[identity].name, 'depth': depth,
+                     'mappings': mapping_label,
                      'parent': hierarchy.pools[identity].parent_pool_id,
+                     'peak_demand': f'{(peak_demands or {}).get(identity, 0):.2f}',
                      'tags': ', '.join((tags or {}).get(identity, [])),
                      'container': bool(children), 'capacity': f'{capacities.get(identity, 0):.2f}',
                      'assigned_capacity': f'{(assigned_capacities or {}).get(identity, 0):.2f}',
@@ -215,12 +299,17 @@ def resource_pool_tree(
         'eppm_resource_pool_tree', html='<div class="pool-tree"></div>',
         css=_CSS + CONTEXT_MENU_CSS, js=_JS,
     )
+    def select_row() -> None:
+        selected_id = st.session_state[key].get('selected')
+        if type(selected_id) is int and selected_id in hierarchy.pools:
+            st.session_state['sb_selected_resource_pool'] = selected_id
+
     result = component(data={'rows': rows, 'selected': selected, 'collapsed': state.get('collapsed', []),
-                             'filters': state.get('filters', {})},
+                             'filters': state.get('filters', {}), 'sort': state.get('sort', {})},
                        key=key, width='stretch', height='content',
-                       on_action_change=lambda: None, on_collapsed_change=lambda: None, on_filters_change=lambda: None)
+                       on_action_change=lambda: None, on_collapsed_change=lambda: None, on_filters_change=lambda: None, on_sort_change=lambda: None, on_selected_change=select_row)
     event = getattr(result, 'action', None)
-    if not isinstance(event, dict) or event.get('action') not in ('select', 'edit', 'create'):
+    if not isinstance(event, dict) or event.get('action') not in ('select', 'edit', 'create', 'gantt'):
         return None
     identity = event.get('id')
     if type(identity) is not int or identity not in hierarchy.pools:

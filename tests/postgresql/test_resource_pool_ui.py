@@ -22,7 +22,7 @@ def database(authorized) -> RuntimeResources:
         ensure_reference_catalog(connection)
         connection.execute("INSERT INTO eppm.tag_group(id,tag_group_name) VALUES(1,'pool_tag'),(2,'project_tag')")
         connection.execute("INSERT INTO eppm.tag_dictionnary(id,tag,tag_group_id) VALUES(1,'Priority',1),(2,'Project only',2),(3,'Unclassified',NULL)")
-        connection.execute("UPDATE eppm.project SET name='<script>project</script>' WHERE id=1")
+        connection.execute("UPDATE eppm.project SET name='<script>project</script>',status='In Progress' WHERE id=1")
     return RuntimeResources(authorized.database, authorized.key)
 
 
@@ -55,7 +55,7 @@ dialogs.{invocation}
 def test_pool_dialogs_create_edit_and_delete_with_tags(database: RuntimeResources, access: BusinessAccess) -> None:
     service = create_resource_pool_service(database, access=access)
     app = dialog(database, access, "_open_add_pool_dialog(service)")
-    assert app.multiselect[0].options == ['pool_tag · Priority']
+    assert app.multiselect[0].options == ['Priority']
     app.button[0].click().run()
     assert app.error and service.get_all_pools() == []
     app.text_input[0].input("Delivery")
@@ -67,7 +67,7 @@ def test_pool_dialogs_create_edit_and_delete_with_tags(database: RuntimeResource
     assert pool.capacity_fte == 2.5
     assert service.get_pool_tags(pool.id)[0].tag_name == "Priority"
     app = dialog(database, access, f"_open_edit_pool_dialog(service, {pool.id})")
-    assert app.multiselect[0].options == ['pool_tag · Priority']
+    assert app.multiselect[0].options == ['Priority']
     next(widget for widget in app.text_input if widget.label == 'Resource Pool Name *').input('Renamed')
     app.multiselect[0].set_value([])
     next(widget for widget in app.button if widget.label == 'Save Changes').click().run()
@@ -128,7 +128,7 @@ def test_new_pool_dialog_saves_initial_exception_and_hides_legacy_nonpool_tags(d
     service.set_pool_tags(pool.id, [1, 2, 3])
     app = dialog(database, access, f'_open_edit_pool_dialog(service, {pool.id})')
     assert not app.exception
-    assert app.multiselect[0].options == ['pool_tag · Priority']
+    assert app.multiselect[0].options == ['Priority']
     assert app.multiselect[0].value == [1]
     assert service.get_tags_by_pools([pool.id]) == {pool.id: ['Priority']}
     next(button for button in app.button if button.label == 'Save Changes').click().run()

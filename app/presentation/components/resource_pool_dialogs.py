@@ -79,11 +79,7 @@ def _open_add_pool_dialog(service: ResourcePoolService, parent_pool_id: int | No
     )
     df_tags = tag_choices_frame(service.get_tag_choices())
     tag_labels = {
-        int(row["id"]): (
-            f"{row['tag_group_name']} · {row['tag']}"
-            if pd.notna(row.get("tag_group_name"))
-            else str(row["tag"])
-        )
+        int(row["id"]): str(row["tag"])
         for _, row in df_tags.iterrows()
     }
     selected_tag_ids = st.multiselect(
@@ -159,11 +155,7 @@ def _open_edit_pool_dialog(service: ResourcePoolService, pool_id: int) -> None:
     )
     df_tags = tag_choices_frame(service.get_tag_choices())
     tag_labels = {
-        int(row["id"]): (
-            f"{row['tag_group_name']} · {row['tag']}"
-            if pd.notna(row.get("tag_group_name"))
-            else str(row["tag"])
-        )
+        int(row["id"]): str(row["tag"])
         for _, row in df_tags.iterrows()
     }
     existing_pool_tags = tags_frame(service.get_pool_tags(pool_id))

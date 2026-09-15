@@ -71,15 +71,30 @@ types, and assignable followed by assigned capacity. Container assigned capacity
 is the sum of child assigned capacities. Below the tree, only the selected pool's
 overassigned periods, resource deduplication and detailed project/task allocations
 are shown. Container details preserve the contributing leaf pool for each resource
-and allocation. Columns are labeled Pool Capacity (FTE) and Mapped Capacity (FTE);
-mapped capacity has an explanatory tooltip. Containers have a light gray background.
+and allocation. Columns show Pool Capacity (FTE), Current Capacity (FTE), Mappings
+and Future Peak Demand (FTE). Mappings distinguishes employees, teams, both and no
+direct mappings; containers indicate mappings via children.
+Current capacity uses today's employee availability calendar when
+any employee or team is mapped, including empty teams and zero availability.
+Unmapped leaves use defined capacity less today's pool exceptions. Containers sum
+their leaves' current capacities. This display is calculated in Python using the
+capacity service's injected date. Containers have a light gray background.
+Demand and overassigned periods are scoped by a project-status multiselect,
+defaulting to In Progress. An empty status selection includes no projects.
+Future peak demand is the maximum date-aligned required assignment from today
+onward across that selected scope, with no fixed future cutoff. Past dates are
+excluded. The portfolio peak also sums concurrent demand before taking its peak,
+so unrelated pool peaks on different dates are not added together.
+Right-click selects the pool and offers Gantt navigation to its consuming projects,
+carrying the same statuses and the existing resource filter contract.
 Editing and child creation use context actions;
 conversion warnings appear only when a blocked creation is attempted.
 Pool-tag choices and the hierarchy Tags column use dictionary entries whose
 existing tag group is named `pool_tag`; there is no separate `tag_type` column.
 Legacy links to other tag groups are hidden but preserved during pool edits.
-Tag labels are loaded in one batch. Each tree header includes a filter: text
-matching for names, classifications and tags, and minimum FTE for capacities.
+Tag choices show only their names. Tag labels are loaded in one batch. Each tree
+header opens an Excel-style menu with search, value checkboxes, select all,
+apply/clear/cancel and ascending/descending sibling sorting.
 Filters combine and retain matching rows' ancestors; matching branches are
 expanded while filtering. Filters persist across dialog saves.
 The edit dialog places exception management at the bottom. Creation optionally

@@ -19,7 +19,7 @@ def test_tree_rejects_malformed_or_stale_client_events(event):
         assert resource_pool_tree(tree, {}, 1) is None
 
 
-@pytest.mark.parametrize('action', ['select', 'edit', 'create'])
+@pytest.mark.parametrize('action', ['select', 'edit', 'create', 'gantt'])
 def test_tree_accepts_actions_for_existing_pools_and_orders_children(action):
     tree = PoolHierarchy([ResourcePool('Zulu', id=1, hierarchy_type_id=7), ResourcePool('Child', id=2, parent_pool_id=1),
                           ResourcePool('Alpha', id=3)])
@@ -45,3 +45,14 @@ def test_tree_presentation_handles_hierarchies_deeper_than_python_recursion_limi
     rows = component.call_args.kwargs['data']['rows']
     assert len(rows) == 1500
     assert rows[-1]['depth'] == 1499
+
+
+def test_mapping_column_distinguishes_direct_targets_from_container_children():
+    tree = PoolHierarchy([ResourcePool('Root', id=1),
+                          *(ResourcePool(str(identity), id=identity, parent_pool_id=1) for identity in range(2, 6))])
+    component = Mock(return_value=SimpleNamespace(action=None))
+    with patch('streamlit.components.v2.component', return_value=component):
+        resource_pool_tree(tree, {}, 1, mapping_types={2: {'employee'}, 3: {'team'}, 4: {'employee', 'team'}})
+    rows = component.call_args.kwargs['data']['rows']
+    assert {row['id']: row['mappings'] for row in rows} == {
+        1: 'Via children', 2: 'Employees', 3: 'Teams', 4: 'Employees & teams', 5: 'None'}

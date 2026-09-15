@@ -7,6 +7,8 @@ from app.application.services.organization import OrganizationService
 from app.application.services.resource_pools import ResourcePoolService
 from app.application.services.pool_capacity import PoolCapacityService
 from app.domain.resources.hierarchy import PoolHierarchy
+from app.domain.projects.project import PROJECT_STATUSES
+from app.domain.resources.models import PoolCapacityDetail
 from app.presentation.components.resource_pool_dialogs import (
     pool_errors,
     _open_add_pool_dialog,
@@ -25,14 +27,23 @@ def render_resource_pools(
     planning_page: str,
 ) -> None:
     """Render the tree, overassigned periods and selected pool resource details."""
-    all_pool_details = capacity.get_summaries()
     pool_records = service.get_all_pools()
     hierarchy = PoolHierarchy(pool_records)
+    statuses = st.multiselect('Project statuses included in demand', PROJECT_STATUSES,
+                              default=['In Progress'], key='pool_demand_statuses')
+    project_ids = service.project_ids_for_statuses(statuses)
+    all_pool_details = capacity.get_details(list(hierarchy.pools), project_ids=project_ids)
+    mappings = service.get_all_mappings()
+    mapping_types: dict[int, set[str]] = {}
+    for mapping in mappings:
+        mapping_types.setdefault(mapping.pool_id, set()).add(mapping.target_type)
+    current_capacities = capacity.current_capacities(hierarchy, all_pool_details,
+                                                    set(mapping_types))
     leaf_details = [row for row in all_pool_details if not hierarchy.children.get(row.pool_id)]
     total_pools = len(all_pool_details)
     total_portfolio_capacity = sum((p.total_capacity_fte for p in leaf_details))
     total_assigned_capacity = sum((p.assigned_capacity_fte for p in leaf_details))
-    peak_portfolio_assigned = sum((p.peak_assigned_fte for p in leaf_details))
+    peak_portfolio_assigned = capacity.future_peak_demand(leaf_details)
     overassigned_pools_count = sum((1 for p in leaf_details if p.is_overassigned))
     kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(5)
     kpi1.metric(t("settings.kpi_total_pools", default="Total Pools"), total_pools)
@@ -45,7 +56,7 @@ def render_resource_pools(
         f"{total_assigned_capacity:.2f} FTE",
     )
     kpi4.metric(
-        t("settings.kpi_peak_demand", default="Peak Active Demand"),
+        "Future Peak Demand",
         f"{peak_portfolio_assigned:.2f} FTE",
     )
     if overassigned_pools_count > 0:
@@ -86,7 +97,9 @@ def render_resource_pools(
         st.session_state["sb_selected_resource_pool"] = selected_pool_id
         event = resource_pool_tree(hierarchy,
             {row.pool_id: row.total_capacity_fte for row in all_pool_details}, selected_pool_id,
-            assigned_capacities={row.pool_id: row.assigned_capacity_fte for row in all_pool_details},
+            assigned_capacities=current_capacities,
+            peak_demands={row.pool_id: capacity.future_peak_demand([row]) for row in all_pool_details},
+            mapping_types=mapping_types,
             pool_types={row.id: row.label(get_current_locale()) for row in service.get_all_pool_types()},
             hierarchy_types={row.id: row.label(get_current_locale()) for row in service.get_all_hierarchy_types()},
             tags=service.get_tags_by_pools(list(hierarchy.pools)))
@@ -97,14 +110,15 @@ def render_resource_pools(
                 st.rerun()
             elif event['action'] == 'edit':
                 _open_edit_pool_dialog(service, selected_pool_id)
+            elif event['action'] == 'gantt':
+                _open_pool_consuming_projects(hierarchy, selected_pool_id, all_pool_details, statuses, planning_page)
             else:
                 warning = service.parent_pool_warning(selected_pool_id)
                 if warning:
                     st.warning(warning)
                 else:
                     _open_add_pool_dialog(service, selected_pool_id)
-        details = capacity.get_details([selected_pool_id])
-        current_detail = details[0] if details else None
+        current_detail = next((row for row in all_pool_details if row.pool_id == selected_pool_id), None)
         if current_detail and current_detail.is_overassigned:
             st.error(
                 f"**Overassigned periods - {current_detail.pool_name}**\n\n"
@@ -114,7 +128,7 @@ def render_resource_pools(
             st.caption(f"No overassigned periods for {current_detail.pool_name}.")
         if current_detail:
             leaf_details = (
-                capacity.get_details(hierarchy.descendants(selected_pool_id, leaves_only=True))
+                [row for row in all_pool_details if row.pool_id in hierarchy.descendants(selected_pool_id, leaves_only=True)]
                 if hierarchy.children.get(selected_pool_id) else [current_detail]
             )
             st.markdown("####  Mapped  Capacity Breakdown")
@@ -136,3 +150,24 @@ def render_resource_pools(
                 if len(leaf_details) > 1:
                     st.markdown(f"**{detail.pool_name}**")
                 _render_pool_assignments_table(detail.assignments, detail.pool_id, service, planning_page)
+
+
+def _open_pool_consuming_projects(hierarchy: PoolHierarchy, pool_id: int,
+                                  details: list[PoolCapacityDetail], statuses: list[str],
+                                  planning_page: str) -> None:
+    """Queue the Gantt's existing pool filter for status-scoped consuming projects."""
+    pool_ids = hierarchy.descendants(pool_id, leaves_only=True)
+    projects = sorted({row['project_id'] for detail in details if detail.pool_id in pool_ids
+                       for row in detail.assignments if row['fte_assigned'] > 0})
+    st.session_state['planning_statuses'] = list(statuses)
+    for key in ('target_planning_project_id', 'target_planning_task_id', 'pending_project_context_filter'):
+        st.session_state.pop(key, None)
+    st.session_state['active_resource_pool_filter'] = {
+        'pool_id': pool_id, 'group_id': pool_id if hierarchy.children.get(pool_id) else None,
+        'pool_ids': pool_ids, 'pool_name': hierarchy.pools[pool_id].name,
+        'start_date': '0001-01-01', 'end_date': '9999-12-31', 'clear_other_filters': True,
+        'project_ids': projects, 'count': len(projects),
+    }
+    st.session_state['pending_resource_pool_filter'] = {'clear_other': True, 'target_pids': projects}
+    st.session_state['nav_redirect'] = planning_page
+    st.rerun()

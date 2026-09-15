@@ -1,12 +1,15 @@
 """Pure pool ancestry and date-aligned container capacity contracts."""
 
 from dataclasses import replace
+from datetime import date
+from unittest.mock import Mock
 
 import pytest
 
 from app.domain.resources.container_capacity import aggregate_capacity
 from app.domain.resources.hierarchy import PoolHierarchy
 from app.domain.resources.models import PoolCapacityDetail, ResourcePool
+from app.application.services.pool_capacity import PoolCapacityService
 
 
 def test_deep_pool_tree_is_iterative_and_resolves_only_leaf_pools() -> None:
@@ -60,3 +63,16 @@ def test_container_sums_same_day_capacity_and_usage_instead_of_independent_peaks
     overloaded = aggregate_capacity(ResourcePool('Container', id=3), [replace(first, effective_capacity_fte=1),
         replace(second, effective_capacity_fte=1)])
     assert overloaded.is_overassigned and overloaded.peak_excess_fte == 5
+
+
+def test_future_peak_excludes_history_and_sums_only_simultaneous_demand() -> None:
+    service = PoolCapacityService(Mock(), Mock(), lambda: date(2026, 9, 15))
+    first = PoolCapacityDetail(1, 'First', 2, 100, 100, True, 98,
+                              daily_usage={'2026-09-14': 100, '2026-09-15': 3,
+                                           '2026-10-01': 8, '2030-01-01': 12})
+    second = replace(first, pool_id=2, daily_usage={'2026-09-15': 4, '2027-01-01': 11})
+    assert service.future_peak_demand([first]) == 12
+    assert service.future_peak_demand([first, second]) == 12
+    assert service.future_peak_demand([replace(first, daily_usage={'2026-09-15': 3})]) == 3
+    assert service.future_peak_demand([replace(first, daily_usage={'2026-09-14': 100})]) == 0
+    assert service.future_peak_demand([]) == 0

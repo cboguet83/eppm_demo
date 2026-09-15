@@ -225,3 +225,42 @@ def test_initial_capacity_exception_is_atomic_with_pool_creation(authorized):
     with pytest.raises(ResourcePoolStorageError):
         pools.create_pool(ResourcePool('Rolled back'), capacity_exceptions=[exception])
     assert [pool.name for pool in pools.get_all_pools()] == ['Pool with initial leave']
+
+
+def test_today_capacity_uses_mapping_availability_or_pool_exceptions_and_status_scopes_peak(authorized):
+    from app.main import create_organization_service
+    from app.runtime import RuntimeResources
+    from app.domain.organization.models import Employee, EmployeeCalendarException, Team
+    from app.domain.resources.hierarchy import PoolHierarchy
+
+    pools = service(authorized)
+    org = create_organization_service(RuntimeResources(authorized.database, authorized.key), access=authorized.binding(4).access)
+    root = pools.create_pool(ResourcePool('Root'))
+    mapped = pools.create_pool(ResourcePool('Mapped', capacity_fte=10, parent_pool_id=root))
+    fallback = pools.create_pool(ResourcePool('Fallback', capacity_fte=4, parent_pool_id=root))
+    empty = pools.create_pool(ResourcePool('Empty team', capacity_fte=9, parent_pool_id=root))
+    employee = org.create_employee(Employee('Ada', 'Lovelace', 'current@example.test', 'CURRENT'))
+    org.create_employee_calendar_exception(EmployeeCalendarException(employee, date(2026, 1, 1), date(2026, 1, 1), 0))
+    pools.create_mapping(PoolMapping(mapped, 'employee', employee, 100))
+    pools.create_mapping(PoolMapping(empty, 'team', org.create_team(Team('Empty team')), 100))
+    pools.save_capacity_exception(PoolCapacityException(fallback, '2026-01-01', '2026-01-01', 1))
+    with psycopg.connect(authorized.setup.operator_url) as connection:
+        connection.execute("UPDATE eppm.project SET status=CASE id WHEN 1 THEN 'In Progress' WHEN 2 THEN 'Completed' ELSE 'Draft' END")
+    pools.create_assignment(PoolAssignment(mapped, 1, 2, start_date='2026-01-01', end_date='2026-01-01'))
+    pools.create_assignment(PoolAssignment(mapped, 2, 7, start_date='2026-01-02', end_date='2026-01-02'))
+    pools.create_assignment(PoolAssignment(fallback, 1, 3, start_date='2026-01-01', end_date='2026-01-01'))
+    capacity = capacity_service(authorized)
+    tree = PoolHierarchy(pools.get_all_pools())
+    ids = list(tree.pools)
+    mapped_ids = {row.pool_id for row in pools.get_all_mappings()}
+    scoped = capacity.get_details(ids, project_ids=pools.project_ids_for_statuses(['In Progress']))
+    assert capacity.current_capacities(tree, scoped, mapped_ids) == {root: 3, mapped: 0, fallback: 3, empty: 0}
+    assert next(row for row in scoped if row.pool_id == root).peak_assigned_fte == 5
+    all_statuses = capacity.get_details(ids, project_ids=pools.project_ids_for_statuses(['In Progress', 'Completed']))
+    assert next(row for row in all_statuses if row.pool_id == root).peak_assigned_fte == 7
+    assert capacity.current_capacities(tree, all_statuses, mapped_ids) == capacity.current_capacities(tree, scoped, mapped_ids)
+    assert all(row.peak_assigned_fte == 0 for row in capacity.get_details(ids, project_ids=pools.project_ids_for_statuses([])))
+    capacity._today = lambda: date(2026, 1, 2)
+    assert capacity.current_capacities(tree, scoped, mapped_ids) == {root: 5, mapped: 1, fallback: 4, empty: 0}
+    with pytest.raises(ValueError, match='Unknown project status'):
+        pools.project_ids_for_statuses(['Unknown'])

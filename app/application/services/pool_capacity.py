@@ -55,6 +55,36 @@ class PoolCapacityService:
         """Return full details only for explicitly requested pools."""
         return cast(list[PoolCapacityDetail], self._load(pool_ids, details=True, project_ids=project_ids))
 
+    def current_capacities(self, hierarchy: PoolHierarchy, details: list[PoolCapacityDetail],
+                           mapped_pool_ids: set[int]) -> dict[int, float]:
+        """Calculate today's staffing or fallback capacity, then sum container leaves.
+
+        Any mapping selects staffing, including an empty team or zero availability.
+        Unmapped leaves use defined capacity reduced by their pool exceptions.
+        """
+        day = self._today().isoformat()
+        leaves = {row.pool_id: (row.daily_assigned_capacity.get(day, row.assigned_capacity_fte)
+                               if row.pool_id in mapped_pool_ids
+                               else row.capacity_calendar.get(day, row.effective_capacity_fte))
+                  for row in details if not hierarchy.children.get(row.pool_id)}
+        return {identity: round(sum(leaves.get(leaf, 0) for leaf in hierarchy.descendants(identity, leaves_only=True)), 3)
+                for identity in hierarchy.pools}
+
+    def future_peak_demand(self, details: list[PoolCapacityDetail]) -> float:
+        """Return the maximum combined required FTE from today onward.
+
+        Demand is summed on the same date before selecting the peak. Callers
+        pass disjoint pools already scoped to the selected project statuses.
+        Past dates are excluded, and no future demand returns zero.
+        """
+        today = self._today().isoformat()
+        demand: dict[str, float] = {}
+        for detail in details:
+            for day, required in detail.daily_usage.items():
+                if day >= today:
+                    demand[day] = demand.get(day, 0.0) + required
+        return round(max(demand.values(), default=0.0), 3)
+
     def _load(self, pool_ids: list[int] | None, *, details: bool,
               project_ids: set[int] | None = None) -> list[PoolCapacityDetail] | list[PoolCapacitySummary]:
         """Cache leaves and rebuild containers, retrying if their ancestry changes.

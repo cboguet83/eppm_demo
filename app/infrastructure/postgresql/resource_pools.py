@@ -234,6 +234,10 @@ class PostgresResourcePoolStore:
         return self._rows(PoolTagChoice, 'SELECT t.id,t.tag,t.tag_group_id,g.tag_group_name FROM eppm.tag_dictionnary t '
                                         'LEFT JOIN eppm.tag_group g ON g.id=t.tag_group_id ORDER BY t.tag COLLATE "C",t.id')
 
+    def project_statuses(self) -> dict[int, str]:
+        """Read statuses of projects visible under the current actor's RLS."""
+        return dict(self.connection.execute('SELECT id,status FROM eppm.project').fetchall())
+
     def get_pool_tags(self, pool_id: int) -> list[PoolTag]:
         """Read the selected pool's current tags in dictionary display order."""
         return self._rows(PoolTag, 'SELECT p.id,p.pool_id,p.tag_id,t.tag AS tag_name,g.tag_group_name FROM eppm.resource_pool_tag p '

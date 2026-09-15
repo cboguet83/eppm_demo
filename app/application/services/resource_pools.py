@@ -296,6 +296,15 @@ class ResourcePoolService:
         return self._gateway.run(lambda store: [tag for tag in store.get_tag_choices()
                                                 if tag.tag_group_name == 'pool_tag'], permission=Permission.SHARED)
 
+    def project_ids_for_statuses(self, statuses: list[str]) -> set[int]:
+        """Select visible projects for demand; an empty selection means no demand."""
+        from app.domain.projects.project import PROJECT_STATUSES
+        selected = set(statuses)
+        if selected - set(PROJECT_STATUSES):
+            raise ValueError('Unknown project status.')
+        return self._gateway.run(lambda store: {identity for identity, status in store.project_statuses().items()
+                                                if status in selected})
+
     def get_tags_by_pools(self, pool_ids: list[int]) -> dict[int, list[str]]:
         """Batch pool-tag labels for the hierarchy without per-row queries."""
         def operation(store: ResourcePoolStore) -> dict[int, list[str]]:
