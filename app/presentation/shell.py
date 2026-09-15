@@ -192,29 +192,35 @@ def render_application(workspace: ApplicationWorkspace) -> None:
 
     if "nav_redirect" in st.session_state and st.session_state["nav_redirect"]:
         st.session_state["app_sidebar_nav"] = st.session_state.pop("nav_redirect")
-    if st.session_state.get("app_sidebar_nav") not in page_keys:
-        st.session_state["app_sidebar_nav"] = page_keys[0]
-
+    section_labels = {
+        "org_structure": t("settings.section_org_structure", default="Organization Structure"),
+        "param_def": t("settings.section_param_definition", default="Parameter Definition"),
+        "project_configuration": t("project_collaboration.configuration", default="Project configuration"),
+    }
+    child_routes = {"settings:" + section: section for section in section_labels}
+    current = st.session_state.get("app_sidebar_nav")
+    if current in child_routes and PAGE_SETTINGS not in page_keys:
+        current = None
+    if current not in page_keys and current not in child_routes:
+        current = page_keys[0]
+    if current == PAGE_SETTINGS:
+        section = st.session_state.get("rb_settings_section", "org_structure")
+        current = "settings:" + (section if section in section_labels else "org_structure")
+    st.session_state["app_sidebar_nav"] = current
+    menu_keys = list(page_keys)
+    if current in child_routes:
+        position = menu_keys.index(PAGE_SETTINGS) + 1
+        menu_keys[position:position] = child_routes
+        st.session_state["rb_settings_section"] = child_routes[current]
+    nav_map.update({route: "\u00a0" * 4 + section_labels[section]
+                    for route, section in child_routes.items()})
     st.sidebar.radio(
         t("app.sidebar_nav", default="Navigation"),
-        page_keys,
+        menu_keys,
         format_func=lambda k: nav_map.get(k, k),
         key="app_sidebar_nav",
         on_change=_change_sidebar_page,
     )
-
-    if st.session_state["app_sidebar_nav"] == PAGE_SETTINGS:
-        with st.sidebar.container(key="settings_subsections"):
-            st.radio(
-                t("nav.settings", default="Settings"),
-                ["org_structure", "param_def", "project_configuration"],
-                format_func=lambda section: {
-                    "org_structure": t("settings.section_org_structure", default="Organization Structure"),
-                    "param_def": t("settings.section_param_definition", default="Parameter Definition"),
-                    "project_configuration": t("project_collaboration.configuration", default="Project configuration"),
-                }[section],
-                key="rb_settings_section",
-            )
 
     if workspace.totals is not None:
         totals = workspace.totals()
@@ -233,12 +239,15 @@ def _change_sidebar_page() -> None:
     """Open Settings at Organization Structure and refresh its sidebar sections."""
     if st.session_state["app_sidebar_nav"] == PAGE_SETTINGS:
         st.session_state["rb_settings_section"] = "org_structure"
+        st.session_state["app_sidebar_nav"] = "settings:org_structure"
 
 
 @st.fragment(key="application_page")
 def _render_application_page(workspace: ApplicationWorkspace) -> None:
     """Switch the main page while retaining navigation, account controls and totals."""
     page = st.session_state.get("app_sidebar_nav")
+    if page in ("settings:org_structure", "settings:param_def", "settings:project_configuration"):
+        page = PAGE_SETTINGS
     render_page = workspace.pages.get(page)
     if render_page is None:
         st.info(t("auth.no_access", default="Your account has no assigned application access. Contact an access administrator."))

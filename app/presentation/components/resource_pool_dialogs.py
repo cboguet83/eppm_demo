@@ -9,6 +9,7 @@ import streamlit as st
 
 from app.presentation.components.dialog import dialog
 from app.presentation.components.hierarchy import hierarchy_type_selector
+from app.presentation.pages.pool_types import pool_type_selector
 
 from app.application.exceptions import OrganizationStorageError, ResourcePoolStorageError
 from app.application.services.resource_pools import ResourcePoolService
@@ -53,7 +54,7 @@ def require_change(changed: bool) -> None:
         raise ValueError("This record no longer exists. Please refresh and try again.")
 
 
-@dialog(t("settings.dialog_add_pool", default="➕ Create Resource Pool"))
+@dialog(t("settings.dialog_add_pool", default="Create Resource Pool"))
 @pool_errors
 def _open_add_pool_dialog(service: ResourcePoolService) -> None:
     """Modal dialog to create a new resource pool."""
@@ -65,6 +66,7 @@ def _open_add_pool_dialog(service: ResourcePoolService) -> None:
         t("settings.field_pool_desc", default="Description"),
         placeholder="Purpose and specialty of this pool...",
     )
+    pool_type_id = pool_type_selector(service, key="new_pool_type")
     hierarchy_type_id = hierarchy_type_selector(service.get_all_hierarchy_types())
     new_capacity = st.number_input(
         t("settings.field_pool_capacity", default="Defined capacity (FTE)"),
@@ -93,7 +95,7 @@ def _open_add_pool_dialog(service: ResourcePoolService) -> None:
     )
     col_save, col_cancel = st.columns(2)
     if col_save.button(
-        t("settings.btn_save", default="💾 Save Pool"), type="primary", width="stretch"
+        t("settings.btn_save", default="Save Pool"), type="primary", width="stretch"
     ):
         validate_pool_name(new_name)
         validate_capacity_fte(float(new_capacity))
@@ -102,17 +104,18 @@ def _open_add_pool_dialog(service: ResourcePoolService) -> None:
                 name=new_name.strip(),
                 description=new_desc.strip(),
                 capacity_fte=float(new_capacity),
+                pool_type_id=pool_type_id,
                 hierarchy_type_id=hierarchy_type_id,
             ),
             tag_ids=selected_tag_ids,
         )
-        st.toast(f"Resource Pool '{new_name}' created (ID: {p_id})!", icon="✅")
+        st.toast(f"Resource Pool '{new_name}' created (ID: {p_id})!")
         st.rerun()
     if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
         st.rerun()
 
 
-@dialog(t("settings.dialog_edit_pool", default="✏️ Edit Resource Pool"))
+@dialog(t("settings.dialog_edit_pool", default="Edit Resource Pool"))
 @pool_errors
 def _open_edit_pool_dialog(service: ResourcePoolService, pool_id: int) -> None:
     """Modal dialog to edit an existing resource pool."""
@@ -128,6 +131,7 @@ def _open_edit_pool_dialog(service: ResourcePoolService, pool_id: int) -> None:
     edit_desc = st.text_area(
         t("settings.field_pool_desc", default="Description"), value=pool.description
     )
+    pool_type_id = pool_type_selector(service, current=pool.pool_type_id, key=f"pool_type_{pool_id}")
     hierarchy_type_id = hierarchy_type_selector(service.get_all_hierarchy_types(), pool.hierarchy_type_id)
     edit_capacity = st.number_input(
         t("settings.field_pool_capacity", default="Defined capacity (FTE)"),
@@ -163,7 +167,7 @@ def _open_edit_pool_dialog(service: ResourcePoolService, pool_id: int) -> None:
     )
     col_save, col_cancel = st.columns(2)
     if col_save.button(
-        t("settings.btn_save_changes", default="💾 Save Changes"), type="primary", width="stretch"
+        t("settings.btn_save_changes", default="Save Changes"), type="primary", width="stretch"
     ):
         validate_pool_name(edit_name)
         validate_capacity_fte(float(edit_capacity))
@@ -174,12 +178,13 @@ def _open_edit_pool_dialog(service: ResourcePoolService, pool_id: int) -> None:
                     name=edit_name.strip(),
                     description=edit_desc.strip(),
                     capacity_fte=float(edit_capacity),
+                    pool_type_id=pool_type_id,
                     hierarchy_type_id=hierarchy_type_id,
                 ),
                 tag_ids=selected_tag_ids,
             )
         )
-        st.toast("Resource Pool updated successfully!", icon="✏️")
+        st.toast("Resource Pool updated successfully!")
         st.rerun()
     if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
         st.rerun()
@@ -210,22 +215,22 @@ def _capacity_exceptions_editor(service: ResourcePoolService, pool_id: int) -> N
         st.rerun()
 
 
-@dialog(t("settings.delete_confirm_title", default="🗑️ Confirm Deletion"))
+@dialog(t("settings.delete_confirm_title", default="Confirm Deletion"))
 @pool_errors
 def _open_delete_pool_dialog(service: ResourcePoolService, pool_id: int, pool_name: str) -> None:
     """Modal dialog to confirm deletion of a resource pool."""
     st.warning(
-        f"⚠️ Are you sure you want to delete Resource Pool **{pool_name}** (ID: #{pool_id})?"
+        f"Are you sure you want to delete Resource Pool **{pool_name}** (ID: #{pool_id})?"
     )
     st.caption(
         "All mappings and project/task assignments linked to this pool will also be deleted."
     )
     col_confirm, col_cancel = st.columns(2)
     if col_confirm.button(
-        t("settings.btn_confirm_delete", default="🗑️ Yes, Delete"), type="primary", width="stretch"
+        t("settings.btn_confirm_delete", default="Yes, Delete"), type="primary", width="stretch"
     ):
         require_change(service.delete_pool(pool_id))
-        st.toast(f"Resource Pool '{pool_name}' deleted.", icon="🗑️")
+        st.toast(f"Resource Pool '{pool_name}' deleted.")
         st.rerun()
     if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
         st.rerun()
@@ -240,7 +245,7 @@ def _pool_group_option_maps(service: ResourcePoolService) -> tuple[dict[int, str
     return (pool_labels, group_labels)
 
 
-@dialog("➕ Create pool group")
+@dialog("Create pool group")
 @pool_errors
 def _open_add_pool_group_dialog(service: ResourcePoolService) -> None:
     """Create a recursive group and its direct members."""
@@ -258,19 +263,19 @@ def _open_add_pool_group_dialog(service: ResourcePoolService) -> None:
         help="Child groups can contain pools or more child groups.",
     )
     save_col, cancel_col = st.columns(2)
-    if save_col.button("💾 Save group", type="primary", width="stretch"):
+    if save_col.button("Save group", type="primary", width="stretch"):
         service.create_pool_group(
             ResourcePoolGroup(name=name, description=description, hierarchy_type_id=hierarchy_type_id),
             pool_ids=selected_pool_ids,
             child_group_ids=selected_group_ids,
         )
-        st.toast(f"Pool group '{name}' created.", icon="✅")
+        st.toast(f"Pool group '{name}' created.")
         st.rerun()
     if cancel_col.button("Cancel", width="stretch"):
         st.rerun()
 
 
-@dialog("✏️ Edit pool group")
+@dialog("Edit pool group")
 @pool_errors
 def _open_edit_pool_group_dialog(service: ResourcePoolService, group_id: int) -> None:
     """Edit a recursive group while excluding child choices that form cycles."""
@@ -303,7 +308,7 @@ def _open_edit_pool_group_dialog(service: ResourcePoolService, group_id: int) ->
         help="Groups that would introduce a direct or indirect loop are excluded.",
     )
     save_col, cancel_col = st.columns(2)
-    if save_col.button("💾 Save changes", type="primary", width="stretch"):
+    if save_col.button("Save changes", type="primary", width="stretch"):
         require_change(
             service.update_pool_group(
                 ResourcePoolGroup(id=group_id, name=name, description=description, hierarchy_type_id=hierarchy_type_id),
@@ -311,13 +316,13 @@ def _open_edit_pool_group_dialog(service: ResourcePoolService, group_id: int) ->
                 child_group_ids=selected_group_ids,
             )
         )
-        st.toast("Pool group updated.", icon="✅")
+        st.toast("Pool group updated.")
         st.rerun()
     if cancel_col.button("Cancel", width="stretch"):
         st.rerun()
 
 
-@dialog("🗑️ Delete pool group")
+@dialog("Delete pool group")
 @pool_errors
 def _open_delete_pool_group_dialog(
     service: ResourcePoolService, group_id: int, group_name: str
@@ -326,9 +331,9 @@ def _open_delete_pool_group_dialog(
     st.warning(f"Delete pool group **{group_name}**?")
     st.caption("Member pools and child groups are retained; only group memberships are removed.")
     confirm_col, cancel_col = st.columns(2)
-    if confirm_col.button("🗑️ Delete group", type="primary", width="stretch"):
+    if confirm_col.button("Delete group", type="primary", width="stretch"):
         require_change(service.delete_pool_group(group_id))
-        st.toast(f"Pool group '{group_name}' deleted.", icon="🗑️")
+        st.toast(f"Pool group '{group_name}' deleted.")
         st.rerun()
     if cancel_col.button("Cancel", width="stretch"):
         st.rerun()
@@ -336,7 +341,7 @@ def _open_delete_pool_group_dialog(
 
 def _render_pool_groups_management(service: ResourcePoolService) -> None:
     """Render creation, editing, and recursive membership inspection for pool groups."""
-    expander = st.expander("🗂️ Recursive pool groups", expanded=False, on_change="rerun")
+    expander = st.expander("Recursive pool groups", expanded=False, on_change="rerun")
     if not expander.open:
         return
     with expander:
@@ -344,7 +349,7 @@ def _render_pool_groups_management(service: ResourcePoolService) -> None:
         title_col.caption(
             "Groups may contain resource pools or other groups. Recursive membership is deduplicated and loop-safe."
         )
-        if create_col.button("➕ New group", width="stretch"):
+        if create_col.button("New group", width="stretch"):
             _open_add_pool_group_dialog(service)
         groups = groups_frame(service.get_all_pool_groups())
         if groups.empty:
@@ -382,9 +387,9 @@ def _render_pool_groups_management(service: ResourcePoolService) -> None:
             key="selected_resource_pool_group",
         )
         edit_col, delete_col, _ = st.columns([1, 1, 3])
-        if edit_col.button("✏️ Edit", width="stretch"):
+        if edit_col.button("Edit", width="stretch"):
             _open_edit_pool_group_dialog(service, selected_group_id)
-        if delete_col.button("🗑️ Delete", width="stretch"):
+        if delete_col.button("Delete", width="stretch"):
             _open_delete_pool_group_dialog(
                 service, selected_group_id, group_labels[selected_group_id]
             )
@@ -408,7 +413,7 @@ def _render_pool_groups_management(service: ResourcePoolService) -> None:
         )
 
 
-@dialog(t("settings.dialog_add_mapping", default="➕ Assign Team or Employee to Pool"))
+@dialog(t("settings.dialog_add_mapping", default="Assign Team or Employee to Pool"))
 @pool_errors
 def _open_add_pool_mapping_dialog(
     service: ResourcePoolService, pool_id: int, df_teams: pd.DataFrame, df_employees: pd.DataFrame
@@ -455,7 +460,7 @@ def _open_add_pool_mapping_dialog(
     )
     col_save, col_cancel = st.columns(2)
     if col_save.button(
-        t("settings.btn_save_mapping", default="💾 Save Mapping"), type="primary", width="stretch"
+        t("settings.btn_save_mapping", default="Save Mapping"), type="primary", width="stretch"
     ):
         validate_allocation_pct(float(alloc_pct))
         service.create_mapping(
@@ -466,7 +471,7 @@ def _open_add_pool_mapping_dialog(
                 allocation_pct=float(alloc_pct),
             )
         )
-        st.toast("Mapping added / updated successfully!", icon="✅")
+        st.toast("Mapping added / updated successfully!")
         st.rerun()
     if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
         st.rerun()

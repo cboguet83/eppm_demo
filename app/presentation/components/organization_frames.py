@@ -19,7 +19,7 @@ def functions_frame(records: list[OrgFunction]) -> pd.DataFrame:
 
 def teams_frame(records: list[Team]) -> pd.DataFrame:
     """Retain the existing teams columns, including empty catalogs."""
-    return pd.DataFrame([asdict(record) for record in records], columns=['team_id', 'team_name', 'manager_function_id', 'leader_function_id', 'hierarchy_type_id'])
+    return pd.DataFrame([asdict(record) for record in records], columns=['team_id', 'team_name', 'manager_function_id', 'leader_function_id', 'hierarchy_type_id', 'parent_team_id'])
 
 
 def employees_frame(records: list[Employee]) -> pd.DataFrame:

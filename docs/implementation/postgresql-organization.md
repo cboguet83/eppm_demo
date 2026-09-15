@@ -98,3 +98,20 @@ retry; the calendar loser must report the service's overlap validation. This run
 also includes `tests/postgresql/test_foundation.py`, validating fresh migration
 and pool lifecycle behavior with the new directory view. Log:
 `.local/postgresql-organization-replay.log`.
+
+## CSV exports and Settings presentation
+
+Functions, Function Types, Teams, and Employees each offer **Export CSV** in
+Settings. Each file contains the complete authorized catalog, with stable model
+field names, IDs, optional references, and a header even when empty. The team
+export includes `parent_team_id`. Files use comma separators, UTF-8 with a BOM,
+and spreadsheet-safe escaping for formula-like text.
+
+`OrganizationService.export_csv` reads one catalog in an authorized transaction.
+`DownloadRoutes` serves `/downloads/organization/{catalog}.csv`, rechecking the
+browser session and shared-data permission on each GET or HEAD. Responses are
+uncached attachments; employee information is never published through static
+media URLs.
+
+Settings headings, tabs, action labels, dialogs, and catalog tables use plain
+text without decorative icons.

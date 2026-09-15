@@ -149,7 +149,8 @@ def _filters(service: DashboardService, catalog) -> tuple[dict[str, list[str]], 
     for column, key in zip(columns, fixed):
         with column:
             choose(key, _label('project_status') if key == 'status' else _label(key))
-    with columns[-1], st.popover(_label('advanced_filters'), width='stretch', icon=':material/filter_alt:'):
+    actions = st.columns(6, vertical_alignment='bottom')
+    with actions[-1], st.popover(_label('advanced_filters'), width='stretch', icon=':material/filter_alt:'):
         chosen = st.multiselect(t('planning.flex_filter_fields', default='Filter fields'), list(fields),
                                 format_func=fields.get, key='dashboard_flex_fields', on_change=_reset_page)
         match_all = st.segmented_control(t('planning.flex_filter_match_label', default='When several values are selected'),
@@ -157,8 +158,9 @@ def _filters(service: DashboardService, catalog) -> tuple[dict[str, list[str]], 
         for key in chosen:
             choose(key, fields[key])
         active = {key: values for key, values in active.items() if key in fixed or key in chosen}
-    st.button(t('planning.clear_all_filters', default='Clear all filters'), on_click=_clear,
-              icon=':material/filter_alt_off:', key='dashboard_clear')
+    with actions[0]:
+        st.button(t('planning.clear_all_filters', default='Clear all filters'), on_click=_clear,
+                  icon=':material/filter_alt_off:', key='dashboard_clear')
     return active, match_all
 
 

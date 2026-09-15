@@ -82,6 +82,7 @@ class ResourcePool:
             the calculated assigned capacity supplies the limit.
         created_at: ISO timestamp of creation.
         hierarchy_type_id: Optional shared hierarchy classification.
+        pool_type_id: Required pool classification; Human (1) is the default.
     """
 
     name: str
@@ -90,6 +91,7 @@ class ResourcePool:
     capacity_fte: float | None = None
     created_at: str | None = None
     hierarchy_type_id: int | None = None
+    pool_type_id: int = 1
 
 
 @dataclass(frozen=True)

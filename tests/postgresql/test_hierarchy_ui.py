@@ -94,10 +94,12 @@ def test_create_edit_and_clear_optional_hierarchy_in_entity_dialogs(database, ac
     app = AppTest.from_function(entity_screen, args=(service, kind, getattr(entity, identity)), default_timeout=15).run()
     assert app.selectbox(key="hierarchy_type_selection").value == 4
     app.selectbox(key="hierarchy_type_selection").set_value(2)
-    app.button[0].click().run()
+    save = next(button for button in app.button if button.label.endswith("Save Changes")) if kind == "pool" else app.button[0]
+    save.click().run()
     assert not app.exception and read()[0].hierarchy_type_id == 2
     app.selectbox(key="hierarchy_type_selection").set_value(0)
-    app.button[0].click().run()
+    save = next(button for button in app.button if button.label.endswith("Save Changes")) if kind == "pool" else app.button[0]
+    save.click().run()
     assert not app.exception and read()[0].hierarchy_type_id is None
 
 
@@ -109,11 +111,28 @@ def settings_screen(resources, access):
     render_settings_view(create_settings_workspace(resources, access=access))
 
 
+def catalog_dialog(resources, access, action, identity=None):
+    """Keep the production modal mounted across AppTest's full-script reruns."""
+    from app.presentation.pages.hierarchy import _edit_hierarchy_type, _delete_hierarchy_type
+    from app.presentation.i18n import set_current_locale
+    from app.main import create_organization_service
+
+    set_current_locale("en")
+    service = create_organization_service(resources, access=access)
+    record = next((row for row in service.get_all_hierarchy_types() if row.id == identity), None)
+    if action == "delete":
+        if record is not None:
+            _delete_hierarchy_type(service, record)
+    else:
+        _edit_hierarchy_type(service, record)
+
+
 def test_settings_catalog_creates_localized_labels_edits_and_deletes(database, access):
     app = AppTest.from_function(settings_screen, args=(database, access), default_timeout=15)
     app.session_state["settings_tab_selection"] = "Hierarchy types"
     app.run()
     assert not app.exception
+    app = AppTest.from_function(catalog_dialog, args=(database, access, "add"), default_timeout=15).run()
     app.button[0].click().run()
     assert app.error
     app.text_input[0].input("custom")
@@ -124,14 +143,15 @@ def test_settings_catalog_creates_localized_labels_edits_and_deletes(database, a
     service = create_organization_service(database, access=access)
     saved = service.get_all_hierarchy_types()[-1]
     assert saved.code == "custom" and saved.label("fr") == "Libellé personnalisé"
-    app.selectbox(key="hierarchy_catalog_selection").set_value(saved.id).run()
+    app = AppTest.from_function(catalog_dialog, args=(database, access, "edit", saved.id), default_timeout=15).run()
     assert app.text_input[0].disabled
     app.text_input[1].input("Renamed label")
     app.button[0].click().run()
     assert service.get_all_hierarchy_types()[-1].label("en") == "Renamed label"
-    assert app.button[1].disabled
+    app = AppTest.from_function(catalog_dialog, args=(database, access, "delete", saved.id), default_timeout=15).run()
+    assert app.button[0].disabled
     app.checkbox[0].check().run()
-    app.button[1].click().run()
+    app.button[0].click().run()
     assert not app.exception
     assert len(service.get_all_hierarchy_types()) == 7
 
@@ -139,12 +159,9 @@ def test_settings_catalog_creates_localized_labels_edits_and_deletes(database, a
 def test_settings_cannot_delete_a_type_assigned_to_a_team(database, access):
     service = create_organization_service(database, access=access)
     service.create_team(Team("Existing", hierarchy_type_id=1))
-    app = AppTest.from_function(settings_screen, args=(database, access), default_timeout=15)
-    app.session_state["settings_tab_selection"] = "Hierarchy types"
-    app.run()
-    app.selectbox(key="hierarchy_catalog_selection").set_value(1).run()
+    app = AppTest.from_function(catalog_dialog, args=(database, access, "delete", 1), default_timeout=15).run()
     app.checkbox[0].check().run()
-    app.button[1].click().run()
+    app.button[0].click().run()
     assert not app.exception and app.error
     assert service.get_all_teams()[0].hierarchy_type_id == 1
 

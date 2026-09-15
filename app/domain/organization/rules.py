@@ -132,7 +132,35 @@ def normalize_team(value: Team) -> Team:
     """Validate and trim a team name without changing its references."""
     validate_hierarchy_type_id(value.hierarchy_type_id)
     validate_team(value.team_name)
+    if value.parent_team_id is not None:
+        if type(value.parent_team_id) is not int or not 1 <= value.parent_team_id <= 9223372036854775807:
+            raise ValueError("Parent team must be a valid team identifier.")
+        if value.parent_team_id == value.team_id:
+            raise ValueError("A team cannot be its own parent.")
     return replace(value, team_name=value.team_name.strip())
+
+
+def validate_team_parent(team: Team, teams: list[Team]) -> None:
+    """Require an existing parent and reject circular ancestor chains.
+
+    Args:
+        team: Team being created or updated.
+        teams: Current team catalog from the same write transaction.
+
+    Raises:
+        ValueError: The parent is missing or the relationship creates a cycle.
+    """
+    by_id = {item.team_id: item for item in teams}
+    visited = {team.team_id} if team.team_id is not None else set()
+    parent_id = team.parent_team_id
+    while parent_id is not None:
+        if parent_id in visited:
+            raise ValueError("The parent team link would create a circular hierarchy.")
+        visited.add(parent_id)
+        parent = by_id.get(parent_id)
+        if parent is None:
+            raise ValueError("The parent team no longer exists. Please refresh.")
+        parent_id = parent.parent_team_id
 
 
 def normalize_employee(value: Employee) -> Employee:

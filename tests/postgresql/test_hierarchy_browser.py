@@ -61,12 +61,15 @@ def test_browser_edits_catalog_and_assigns_then_clears_pool_type(popup_server, t
             errors = []
             page.on("pageerror", lambda error: errors.append(str(error)))
             page.goto(popup_server.origin)
+            table = page.frame_locator("iframe").first
+            table.locator(".table-toolbar").click(button="right")
+            table.locator("#ctx-add-label").click()
             page.get_by_role("textbox", name="Code", exact=True).fill("custom", timeout=30000)
             page.get_by_role("textbox", name="English").fill("Custom hierarchy")
             page.get_by_role("button", name="Save hierarchy type", exact=True).click()
             expect(page.get_by_text("Saved label: Custom hierarchy", exact=True)).to_be_visible()
-            page.get_by_role("combobox", name="Hierarchy type", exact=True).click()
-            page.get_by_role("option", name="Custom hierarchy", exact=True).click()
+            table.get_by_role("cell", name="Custom hierarchy", exact=True).click(button="right")
+            table.locator("#ctx-edit-label").click()
             expect(page.get_by_role("textbox", name="Code", exact=True)).to_be_disabled()
             page.get_by_role("textbox", name="English").fill("Renamed hierarchy")
             page.get_by_role("button", name="Save hierarchy type", exact=True).click()

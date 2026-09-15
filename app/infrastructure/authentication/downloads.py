@@ -17,12 +17,39 @@ from app.shared.logging import get_logger
 class DownloadRoutes:
     """Use the browser's server-verified session; URLs never carry credentials or data."""
 
-    def __init__(self, access: AccessService, export_template: Callable[[Actor, int], str]) -> None:
+    def __init__(self, access: AccessService, export_template: Callable[[Actor, int], str], *,
+                 export_organization: Callable[[Actor, str], str] | None = None) -> None:
+        """Bind authenticated project and optional organization exporters."""
         self.access, self.export_template = access, export_template
+        self.export_organization = export_organization
 
     def routes(self) -> list[Route]:
         """Expose a fixed attachment endpoint without cached or static media URLs."""
-        return [Route("/downloads/projects/{project_id:int}/template.csv", self.project_template)]
+        routes = [Route("/downloads/projects/{project_id:int}/template.csv", self.project_template)]
+        if self.export_organization is not None:
+            routes.append(Route('/downloads/organization/{catalog:str}.csv', self.organization_catalog))
+        return routes
+
+    async def organization_catalog(self, request: Request) -> Response:
+        """Reauthorize each organization attachment, including employee information."""
+        reference = token_urlsafe(16)
+        try:
+            actor = await run_in_threadpool(self.access.actor, request.cookies.get(SESSION_COOKIE, ''))
+            catalog = request.path_params['catalog']
+            if catalog not in {'functions', 'function_types', 'teams', 'employees'} or self.export_organization is None:
+                raise ValueError('Unknown organization catalog.')
+            content = await run_in_threadpool(self.export_organization, actor, catalog)
+        except (AccessDenied, ValueError):
+            return JSONResponse({'error': {'code': 'download_denied', 'reference': reference}},
+                                status_code=403, headers={'Cache-Control': 'no-store'})
+        except Exception:
+            # Deliberate HTTP boundary; never expose employee data or error payloads.
+            get_logger(__name__).error('organization_download.failed reference=%s', reference)
+            return JSONResponse({'error': {'code': 'download_failed', 'reference': reference}},
+                                status_code=503, headers={'Cache-Control': 'no-store'})
+        return Response(('\ufeff' + content).encode('utf-8'), media_type='text/csv; charset=utf-8',
+                        headers={'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff',
+                                 'Content-Disposition': f'attachment; filename="{catalog}.csv"'})
 
     async def project_template(self, request: Request) -> Response:
         """Authorize and generate the requested template on each GET or HEAD request."""

@@ -65,9 +65,9 @@ def test_pool_dialogs_create_edit_and_delete_with_tags(database: RuntimeResource
     assert pool.capacity_fte == 2.5
     assert service.get_pool_tags(pool.id)[0].tag_name == "Priority"
     app = dialog(database, access, f"_open_edit_pool_dialog(service, {pool.id})")
-    app.text_input[0].input("Renamed")
+    next(widget for widget in app.text_input if widget.label == 'Resource Pool Name *').input('Renamed')
     app.multiselect[0].set_value([])
-    app.button[0].click().run()
+    next(widget for widget in app.button if widget.label == 'Save Changes').click().run()
     assert not app.exception
     assert service.get_pool_by_id(pool.id).name == "Renamed"
     assert service.get_pool_tags(pool.id) == []

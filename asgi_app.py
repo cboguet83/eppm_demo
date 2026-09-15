@@ -60,6 +60,12 @@ def application_security(resources: RuntimeResources) -> tuple[list[BaseRoute], 
         service = create_planning_service(resources, access=BusinessAccess(actor, access.policy))
         return service.export_project_template(project_id)
 
+    def export_organization(actor: Actor, catalog: str) -> str:
+        from app.main import create_organization_service
+
+        service = create_organization_service(resources, access=BusinessAccess(actor, access.policy))
+        return service.export_csv(catalog)
+
     def read_tasks(actor: Actor, project_ids: list[int], revision: str, *,
                    source_tokens: dict[int, str] | None = None) -> dict[str, object]:
         from app.domain.access.models import Permission
@@ -89,7 +95,8 @@ def application_security(resources: RuntimeResources) -> tuple[list[BaseRoute], 
     def export_budget(actor: Actor, snapshot_id: int) -> str:
         return create_finance_service(resources, access=BusinessAccess(actor, access.policy)).export(snapshot_id)
 
-    routes = (AuthenticationRoutes(client, access).routes() + DownloadRoutes(access, export_template).routes()
+    routes = (AuthenticationRoutes(client, access).routes()
+              + DownloadRoutes(access, export_template, export_organization=export_organization).routes()
               + FinanceDownloadRoutes(access, export_budget).routes()
               + PlanningReadRoutes(access, read_tasks, read_allocations=read_allocations,
                                    read_task_sources=read_task_sources).routes())

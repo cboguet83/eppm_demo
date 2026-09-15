@@ -127,25 +127,27 @@ class PostgresOrganizationStore:
 
     def get_all_teams(self) -> list[Team]:
         """Read optional hierarchy assignments in the existing name order."""
-        return self._rows(Team, 'SELECT team_id,team_name,manager_function_id,leader_function_id,hierarchy_type_id '
+        return self._rows(Team, 'SELECT team_id,team_name,manager_function_id,leader_function_id,hierarchy_type_id,parent_team_id '
                           'FROM eppm.team ORDER BY team_name COLLATE "C"')
 
     def get_team_by_id(self, team_id: int) -> Team | None:
         """Find a team without loading or altering its members."""
-        return self._one(Team, 'SELECT team_id,team_name,manager_function_id,leader_function_id,hierarchy_type_id '
+        return self._one(Team, 'SELECT team_id,team_name,manager_function_id,leader_function_id,hierarchy_type_id,parent_team_id '
                          'FROM eppm.team WHERE team_id=%s', (team_id,))
 
     def create_team(self, team: Team) -> int:
         """Insert team details within the surrounding membership transaction."""
-        return self.connection.execute('INSERT INTO eppm.team(team_name,manager_function_id,leader_function_id,hierarchy_type_id) '
-                                       'VALUES (%s,%s,%s,%s) RETURNING team_id',
-                                       (team.team_name, team.manager_function_id, team.leader_function_id, team.hierarchy_type_id)).fetchone()[0]
+        return self.connection.execute('INSERT INTO eppm.team(team_name,manager_function_id,leader_function_id,hierarchy_type_id,parent_team_id) '
+                                       'VALUES (%s,%s,%s,%s,%s) RETURNING team_id',
+                                       (team.team_name, team.manager_function_id, team.leader_function_id,
+                                        team.hierarchy_type_id, team.parent_team_id)).fetchone()[0]
 
     def update_team(self, team: Team) -> bool:
         """Update team details and preserve absent-team behavior."""
-        return self.connection.execute('UPDATE eppm.team SET team_name=%s,manager_function_id=%s,leader_function_id=%s,hierarchy_type_id=%s '
+        return self.connection.execute('UPDATE eppm.team SET team_name=%s,manager_function_id=%s,leader_function_id=%s,hierarchy_type_id=%s,parent_team_id=%s '
                                        'WHERE team_id=%s', (team.team_name, team.manager_function_id,
-                                                           team.leader_function_id, team.hierarchy_type_id, team.team_id)).rowcount > 0
+                                                           team.leader_function_id, team.hierarchy_type_id,
+                                                           team.parent_team_id, team.team_id)).rowcount > 0
 
     def delete_team(self, team_id: int) -> bool:
         """Delete a team and let native cascades remove its memberships."""

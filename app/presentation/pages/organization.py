@@ -48,6 +48,7 @@ def _table(name: str, **kwargs: object) -> dict[str, object] | None:
 @organization_errors
 def render_functions(service: OrganizationService) -> None:
     """Render the functions catalog only when its tab is open."""
+    st.link_button(t('settings.export_csv'), '/downloads/organization/functions.csv')
     df_types = function_types_frame(service.get_all_function_types())
     df_funcs = functions_frame(service.get_all_functions())
     total_funcs = len(df_funcs)
@@ -131,6 +132,7 @@ def render_functions(service: OrganizationService) -> None:
 @organization_errors
 def render_function_types(service: OrganizationService) -> None:
     """Render the function types catalog only when its tab is open."""
+    st.link_button(t('settings.export_csv'), '/downloads/organization/function_types.csv')
     df_types = function_types_frame(service.get_all_function_types())
     total_types = len(df_types)
     st.subheader(f"{t('settings.types_title', default='Function Types Management')} ({total_types} {t('settings.stat_types', default='Types')})")
@@ -190,6 +192,7 @@ def render_function_types(service: OrganizationService) -> None:
 @organization_errors
 def render_teams(service: OrganizationService) -> None:
     """Render the teams catalog only when its tab is open."""
+    st.link_button(t('settings.export_csv'), '/downloads/organization/teams.csv')
     df_funcs = functions_frame(service.get_all_functions())
     df_teams = teams_frame(service.get_all_teams())
     hierarchy_labels = {record.id: record.label(get_current_locale()) for record in service.get_all_hierarchy_types()}
@@ -197,12 +200,14 @@ def render_teams(service: OrganizationService) -> None:
     st.subheader(f"{t('settings.teams_title', default='Teams Management')} ({total_teams} {t('settings.stat_teams', default='Teams')})")
 
     enriched_teams = enrich_teams(df_teams, df_funcs)
+    team_names = dict(zip(df_teams['team_id'], df_teams['team_name']))
     teams_payload = []
     if not enriched_teams.empty:
         for row in enriched_teams.to_dict(orient="records"):
             teams_payload.append({
                 "team_id": int(row["team_id"]),
                 "team_name": str(row["team_name"]),
+                "parent_team_name": team_names.get(row.get('parent_team_id'), ''),
                 "hierarchy_type": hierarchy_labels.get(row.get("hierarchy_type_id"), ""),
                 "manager_function_id": int(row["manager_function_id"]) if pd.notna(row.get("manager_function_id")) else None,
                 "manager_function_name": str(row["manager_function_name"]) if pd.notna(row.get("manager_function_name")) else "—",
@@ -215,6 +220,7 @@ def render_teams(service: OrganizationService) -> None:
         translations={
             "col_id": "ID",
             "col_team_name": t("settings.col_team_name", default="Team Name"),
+            "col_parent_team": t('settings.col_parent_team'),
             "col_hierarchy_type": t("hierarchy.type"),
             "col_team_mgr": t("settings.col_team_mgr", default="Manager Function"),
             "col_team_leader": t("settings.col_team_leader", default="Team Leader"),
@@ -259,6 +265,7 @@ def render_teams(service: OrganizationService) -> None:
 @organization_errors
 def render_employees(service: OrganizationService) -> None:
     """Render the employees catalog only when its tab is open."""
+    st.link_button(t('settings.export_csv'), '/downloads/organization/employees.csv')
     df_types = function_types_frame(service.get_all_function_types())
     df_funcs = functions_frame(service.get_all_functions())
     df_emps = employees_frame(service.get_all_employees())

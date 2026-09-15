@@ -38,13 +38,11 @@ def render_schema_definition(service: SchemaService, type_service: ProjectTypeSe
 
 def _render_schema_definition(service: SchemaService, type_service: ProjectTypeService) -> None:
     """Renders the Parameters Definition screen for schema groups, fields, options, and live tree."""
-    st.header(f"⚙️ {t('schema.title')}")
-
     tab_groups, tab_params, tab_options, tab_preview, tab_types = st.tabs([
         t("schema.tab_groups"),
         t("schema.tab_params"),
         t("schema.tab_options"),
-        f"👁️ {t('schema.tab_tree', default='Live Schema Tree')}",
+        t('schema.tab_tree', default='Live Schema Tree'),
         t("project_types.title"),
     ])
 
@@ -92,7 +90,7 @@ def _render_groups(service: SchemaService, groups: pd.DataFrame) -> None:
 
     # Section A: Add New Group
     with col_left:
-        st.markdown(f"#### ➕ {t('schema.grp_create_header')}")
+        st.markdown(f"#### {t('schema.grp_create_header')}")
         next_avail_order = service.get_next_available_group_order()
 
         with st.form("form_add_group"):
@@ -114,7 +112,7 @@ def _render_groups(service: SchemaService, groups: pd.DataFrame) -> None:
 
     # Section B: Edit Existing Group
     with col_right:
-        st.markdown("#### ✏️ Edit Existing Schema Group")
+        st.markdown("#### Edit Existing Schema Group")
         if groups.empty:
             st.caption("No groups available to edit.")
         else:
@@ -134,7 +132,7 @@ def _render_groups(service: SchemaService, groups: pd.DataFrame) -> None:
                     value=int(curr_grp["display_order"]),
                     step=1,
                 )
-                btn_save_grp = st.form_submit_button("💾 Save Changes", width="stretch")
+                btn_save_grp = st.form_submit_button("Save Changes", width="stretch")
 
                 if btn_save_grp:
                     updated = _save(service.update_group, grp_id_to_edit, edit_grp_name, int(edit_grp_order))
@@ -151,7 +149,7 @@ def _render_groups(service: SchemaService, groups: pd.DataFrame) -> None:
     else:
         st.dataframe(groups, width="stretch", hide_index=True)
 
-        st.write("##### 🗑️ Delete Schema Group")
+        st.write("##### Delete Schema Group")
         del_col1, del_col2 = st.columns([2, 2])
         del_grp_id = del_col1.selectbox(
             "Select Group to Delete",
@@ -191,7 +189,7 @@ def _render_parameters(service: SchemaService, type_service: ProjectTypeService,
             for _, g in groups.iterrows():
                 gid = int(g["id"])
                 grp_options.append(gid)
-                grp_map[gid] = f"📁 {g['group_name']} (Order: {g['display_order']})"
+                grp_map[gid] = f"{g['group_name']} (Order: {g['display_order']})"
 
         selected_gid = col3.selectbox(
             t("schema.param_group_assign"),
@@ -254,7 +252,7 @@ def _render_parameters(service: SchemaService, type_service: ProjectTypeService,
             cols_to_show.append("alias")
         cols_to_show.append("param_type")
         if "mandatory" in params_display.columns:
-            params_display["mandatory"] = params_display["mandatory"].apply(lambda x: "✅ Yes" if bool(x) else "No")
+            params_display["mandatory"] = params_display["mandatory"].apply(lambda x: "Yes" if bool(x) else "No")
             cols_to_show.append("mandatory")
 
         st.dataframe(
@@ -329,7 +327,7 @@ def _render_options(service: SchemaService, params: pd.DataFrame, options: pd.Da
                 options=current_opts["id"].tolist(),
                 format_func=lambda x: str(current_opts[current_opts["id"] == x]["option_value"].iloc[0]),
             )
-            if st.button("🗑️ Delete Selected Option"):
+            if st.button("Delete Selected Option"):
                 _save(service.delete_option, del_opt_id)
                 st.success("Option deleted.")
                 st.rerun()
@@ -344,7 +342,7 @@ def _render_schema_tree(groups: pd.DataFrame, params: pd.DataFrame, options: pd.
         if not groups.empty:
             for _, grp in groups.iterrows():
                 gid = grp["id"]
-                st.markdown(f"### 📁 `{grp['group_name']}` (Order: {grp['display_order']})")
+                st.markdown(f"### `{grp['group_name']}` (Order: {grp['display_order']})")
                 grp_params = params[params["group_id"] == gid]
                 if grp_params.empty:
                     st.caption("  *No parameters assigned to this group.*")
@@ -353,7 +351,7 @@ def _render_schema_tree(groups: pd.DataFrame, params: pd.DataFrame, options: pd.
                         pid = p["param_id"]
                         ptype = p["param_type"]
                         pname = p["param_name"]
-                        st.markdown(f"- 🏷️ **{pname}** (`{pid}`) — Type: `{ptype}`")
+                        st.markdown(f"- **{pname}** (`{pid}`) — Type: `{ptype}`")
                         if ptype in CHOICE_TYPES:
                             p_opts = options[options["param_id"] == pid]["option_value"].tolist()
                             if p_opts:
@@ -365,12 +363,12 @@ def _render_schema_tree(groups: pd.DataFrame, params: pd.DataFrame, options: pd.
         # Ungrouped parameters
         ungrouped_params = params[params["group_id"].isna()]
         if not ungrouped_params.empty:
-            st.markdown(f"### 📌 {t('schema.param_group_none')}")
+            st.markdown(f"### {t('schema.param_group_none')}")
             for _, p in ungrouped_params.iterrows():
                 pid = p["param_id"]
                 ptype = p["param_type"]
                 pname = p["param_name"]
-                st.markdown(f"- 🏷️ **{pname}** (`{pid}`) — Type: `{ptype}`")
+                st.markdown(f"- **{pname}** (`{pid}`) — Type: `{ptype}`")
                 if ptype in CHOICE_TYPES:
                     p_opts = options[options["param_id"] == pid]["option_value"].tolist()
                     if p_opts:

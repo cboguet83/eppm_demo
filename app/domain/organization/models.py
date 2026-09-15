@@ -53,6 +53,7 @@ class Team:
         manager_function_id: Optional manager function ID for the team.
         leader_function_id: Optional team leader function ID.
         hierarchy_type_id: Optional shared hierarchy classification.
+        parent_team_id: Optional parent team in the team hierarchy.
     """
 
     team_name: str
@@ -60,6 +61,7 @@ class Team:
     manager_function_id: int | None = None
     leader_function_id: int | None = None
     hierarchy_type_id: int | None = None
+    parent_team_id: int | None = None
 
 
 @dataclass

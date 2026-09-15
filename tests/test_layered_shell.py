@@ -51,7 +51,7 @@ def test_shell_routes_navigation_redirects_and_language_changes():
     assert app.session_state["totals_reads"] == 2
     deltas = [message for message in rerun.messages if message.WhichOneof("type") == "delta"]
     assert deltas and any(message.metadata.delta_path[0] == 1 for message in deltas)
-    assert app.radio(key="rb_settings_section").value == "org_structure"
+    assert app.radio(key="app_sidebar_nav").value == "settings:org_structure"
     app.session_state["nav_redirect"] = PAGE_PLANNING
     app.run()
     assert app.radio(key="app_sidebar_nav").value == PAGE_PLANNING
@@ -102,15 +102,20 @@ def test_settings_subsections_are_hidden_until_settings_opens():
     app = AppTest.from_function(shell_app).run()
     assert not any(radio.key == "rb_settings_section" for radio in app.radio)
     app.radio(key="app_sidebar_nav").set_value(PAGE_SETTINGS).run()
-    sections = app.sidebar.radio(key="rb_settings_section")
-    assert sections.value == "org_structure"
-    assert len(sections.options) == 3
-    sections.set_value("param_def").run()
+    menu = app.sidebar.radio(key="app_sidebar_nav")
+    assert menu.value == "settings:org_structure"
+    assert [label.strip() for label in menu.options][-4:] == [
+        "Settings", "Organization Structure", "Parameter Definition", "Project configuration",
+    ]
+    assert all(label.startswith("\u00a0" * 4) for label in menu.options[-3:])
+    assert len(app.sidebar.radio) == 1
+    menu.set_value("settings:param_def").run()
     assert app.session_state["rb_settings_section"] == "param_def"
+    assert PAGE_SETTINGS in [item.value for item in app.markdown]
     app.radio(key="app_sidebar_nav").set_value(PAGE_PORTFOLIO).run()
-    assert not any(radio.key == "rb_settings_section" for radio in app.radio)
+    assert len(app.radio(key="app_sidebar_nav").options) == 3
     app.radio(key="app_sidebar_nav").set_value(PAGE_SETTINGS).run()
-    assert app.sidebar.radio(key="rb_settings_section").value == "org_structure"
+    assert app.sidebar.radio(key="app_sidebar_nav").value == "settings:org_structure"
     assert not app.exception
 
 
@@ -126,14 +131,15 @@ def test_organization_tabs_follow_catalog_setup_order():
                    side_effect=lambda service: st.write("Function types loaded")):
             render_settings_view(SimpleNamespace(organization=None))
 
-    app = AppTest.from_function(settings_app).run()
+    app = AppTest.from_function(settings_app, default_timeout=15).run()
     assert not app.exception
     assert [tab.label.split(" ", 1)[-1] if tab.label[0] not in "ABCDEFGHIJKLMNOPQRSTUVWXYZ" else tab.label
-            for tab in app.tabs[:6]] == [
-        "Function Types", "Hierarchy types", "Functions", "Teams", "Employees", "Resource Pools",
+            for tab in app.tabs[:7]] == [
+        "Function Types", "Hierarchy types", "Functions", "Teams", "Employees", "Pool Types", "Resource Pools",
     ]
     assert "Function types loaded" in [item.value for item in app.markdown]
     assert not app.radio
+    assert not app.header
 
 
 def test_navigation_replaces_the_outgoing_page_container_and_its_controls():
@@ -241,3 +247,21 @@ def test_streamlit_main_ignores_operator_arguments_and_gates_unconfigured_busine
     app = AppTest.from_function(main_app).run()
     assert not app.exception and app.error
     assert not app.radio and not app.dataframe and not app.metric
+
+
+def test_settings_only_access_opens_the_organization_child():
+    """The only authorized parent page must still expose selectable children."""
+    def settings_only_app():
+        import streamlit as st
+        from app.presentation.components.application_workspace import ApplicationWorkspace
+        from app.presentation.navigation import PAGE_SETTINGS
+        from app.presentation.shell import render_application
+
+        render_application(ApplicationWorkspace(
+            "settings-only", {PAGE_SETTINGS: lambda: st.write("Settings content")}, None,
+        ))
+
+    app = AppTest.from_function(settings_only_app).run()
+    assert not app.exception
+    assert app.radio(key="app_sidebar_nav").value == "settings:org_structure"
+    assert len(app.radio(key="app_sidebar_nav").options) == 4

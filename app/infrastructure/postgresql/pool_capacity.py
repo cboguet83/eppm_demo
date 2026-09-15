@@ -37,9 +37,9 @@ def read_capacity_inputs(store: PostgresResourcePoolStore, pool_ids: list[int]) 
     calendar records never cross this adapter boundary, including for admins.
     """
     pools = {
-        identity: ResourcePool(name, id=identity, capacity_fte=capacity)
-        for identity, name, capacity in store.connection.execute(
-            'SELECT id,name,capacity_fte FROM eppm.resource_pool WHERE id=ANY(%s::bigint[])', (pool_ids,),
+        identity: ResourcePool(name, id=identity, capacity_fte=capacity, pool_type_id=pool_type_id)
+        for identity, name, capacity, pool_type_id in store.connection.execute(
+            'SELECT id,name,capacity_fte,pool_type_id FROM eppm.resource_pool WHERE id=ANY(%s::bigint[])', (pool_ids,),
         )
     }
     inputs = {

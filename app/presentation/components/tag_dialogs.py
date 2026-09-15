@@ -34,7 +34,7 @@ def require_change(changed: bool) -> None:
         raise ValueError("This record no longer exists. Please refresh and try again.")
 
 
-@dialog(t("settings.dialog_add_tag_group", default="➕ Create Tag Group"))
+@dialog(t("settings.dialog_add_tag_group", default="Create Tag Group"))
 @tag_errors
 def _open_add_tag_group_dialog(service: TagService) -> None:
     """Modal dialog to create a new tag group."""
@@ -43,16 +43,16 @@ def _open_add_tag_group_dialog(service: TagService) -> None:
     )
     col_save, col_cancel = st.columns(2)
     if col_save.button(
-        t("settings.btn_save", default="💾 Save Group"), type="primary", width="stretch"
+        t("settings.btn_save", default="Save Group"), type="primary", width="stretch"
     ):
         new_id = service.create_tag_group(TagGroup(tag_group_name=new_name.strip()))
-        st.toast(f"Tag Group '{new_name}' created (ID: {new_id})!", icon="✅")
+        st.toast(f"Tag Group '{new_name}' created (ID: {new_id})!")
         st.rerun()
     if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
         st.rerun()
 
 
-@dialog(t("settings.dialog_edit_tag_group", default="✏️ Edit Tag Group"))
+@dialog(t("settings.dialog_edit_tag_group", default="Edit Tag Group"))
 @tag_errors
 def _open_edit_tag_group_dialog(service: TagService, group_id: int, current_name: str) -> None:
     """Modal dialog to edit a tag group."""
@@ -62,45 +62,45 @@ def _open_edit_tag_group_dialog(service: TagService, group_id: int, current_name
     )
     col_save, col_cancel = st.columns(2)
     if col_save.button(
-        t("settings.btn_save_changes", default="💾 Save Changes"), type="primary", width="stretch"
+        t("settings.btn_save_changes", default="Save Changes"), type="primary", width="stretch"
     ):
         require_change(
             service.update_tag_group(TagGroup(id=group_id, tag_group_name=edit_name.strip()))
         )
-        st.toast("Tag Group updated successfully!", icon="✏️")
+        st.toast("Tag Group updated successfully!")
         st.rerun()
     if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
         st.rerun()
 
 
-@dialog(t("settings.delete_confirm_title", default="🗑️ Confirm Deletion"))
+@dialog(t("settings.delete_confirm_title", default="Confirm Deletion"))
 @tag_errors
 def _open_delete_tag_group_dialog(service: TagService, group_id: int, group_name: str) -> None:
     """Modal dialog to confirm deletion of a tag group."""
     usage_count = service.count_tags_by_group(group_id)
     if usage_count > 0:
         st.error(
-            f"⚠️ Cannot delete Tag Group **{group_name}** (ID: {group_id}) because {usage_count} dictionary tags belong to it."
+            f"Cannot delete Tag Group **{group_name}** (ID: {group_id}) because {usage_count} dictionary tags belong to it."
         )
         if st.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
             st.rerun()
         return
     st.warning(
-        f"⚠️ {t('settings.delete_confirm_msg', name=group_name, default=f'Are you sure you want to delete Tag Group **{group_name}** (ID: {group_id})?')}"
+        f"{t('settings.delete_confirm_msg', name=group_name, default=f'Are you sure you want to delete Tag Group **{group_name}** (ID: {group_id})?')}"
     )
     st.caption("This action cannot be undone.")
     col_confirm, col_cancel = st.columns(2)
     if col_confirm.button(
-        t("settings.btn_confirm_delete", default="🗑️ Yes, Delete"), type="primary", width="stretch"
+        t("settings.btn_confirm_delete", default="Yes, Delete"), type="primary", width="stretch"
     ):
         require_change(service.delete_tag_group(group_id))
-        st.toast(f"Tag Group '{group_name}' deleted.", icon="🗑️")
+        st.toast(f"Tag Group '{group_name}' deleted.")
         st.rerun()
     if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
         st.rerun()
 
 
-@dialog(t("settings.dialog_add_tag", default="➕ Create Tag"))
+@dialog(t("settings.dialog_add_tag", default="Create Tag"))
 @tag_errors
 def _open_add_tag_dialog(service: TagService, df_groups: pd.DataFrame) -> None:
     """Modal dialog to create a new tag in the dictionary."""
@@ -114,20 +114,20 @@ def _open_add_tag_dialog(service: TagService, df_groups: pd.DataFrame) -> None:
     new_group = st.selectbox(
         t("settings.field_tag_group", default="Tag Group (Optional)"),
         options=group_opts,
-        format_func=lambda x: f"📁 {group_map.get(x, '')}" if x is not None else "— None",
+        format_func=lambda x: f"{group_map.get(x, '')}" if x is not None else "— None",
     )
     col_save, col_cancel = st.columns(2)
     if col_save.button(
-        t("settings.btn_save", default="💾 Save Tag"), type="primary", width="stretch"
+        t("settings.btn_save", default="Save Tag"), type="primary", width="stretch"
     ):
         new_id = service.create_tag(TagDictionary(tag=new_tag.strip(), tag_group_id=new_group))
-        st.toast(f"Tag '{new_tag}' created (ID: {new_id})!", icon="✅")
+        st.toast(f"Tag '{new_tag}' created (ID: {new_id})!")
         st.rerun()
     if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
         st.rerun()
 
 
-@dialog(t("settings.dialog_edit_tag", default="✏️ Edit Tag"))
+@dialog(t("settings.dialog_edit_tag", default="Edit Tag"))
 @tag_errors
 def _open_edit_tag_dialog(
     service: TagService,
@@ -150,49 +150,49 @@ def _open_edit_tag_dialog(
         t("settings.field_tag_group", default="Tag Group (Optional)"),
         options=group_opts,
         index=idx,
-        format_func=lambda x: f"📁 {group_map.get(x, '')}" if x is not None else "— None",
+        format_func=lambda x: f"{group_map.get(x, '')}" if x is not None else "— None",
     )
     col_save, col_cancel = st.columns(2)
     if col_save.button(
-        t("settings.btn_save_changes", default="💾 Save Changes"), type="primary", width="stretch"
+        t("settings.btn_save_changes", default="Save Changes"), type="primary", width="stretch"
     ):
         require_change(
             service.update_tag(
                 TagDictionary(id=tag_id, tag=edit_tag.strip(), tag_group_id=edit_group)
             )
         )
-        st.toast("Tag updated successfully!", icon="✏️")
+        st.toast("Tag updated successfully!")
         st.rerun()
     if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
         st.rerun()
 
 
-@dialog(t("settings.delete_confirm_title", default="🗑️ Confirm Deletion"))
+@dialog(t("settings.delete_confirm_title", default="Confirm Deletion"))
 @tag_errors
 def _open_delete_tag_dialog(service: TagService, tag_id: int, tag_name: str) -> None:
     """Modal dialog to confirm deletion of a dictionary tag."""
     usages = service.count_tag_usages(tag_id)
     if usages > 0:
         st.warning(
-            f"⚠️ Tag **{tag_name}** currently has {usages} project, task, or resource-pool assignment(s). Deleting it will also remove those assignments."
+            f"Tag **{tag_name}** currently has {usages} project, task, or resource-pool assignment(s). Deleting it will also remove those assignments."
         )
     else:
         st.warning(
-            f"⚠️ {t('settings.delete_confirm_msg', name=tag_name, default=f'Are you sure you want to delete Tag **{tag_name}** (ID: {tag_id})?')}"
+            f"{t('settings.delete_confirm_msg', name=tag_name, default=f'Are you sure you want to delete Tag **{tag_name}** (ID: {tag_id})?')}"
         )
     st.caption("This action cannot be undone.")
     col_confirm, col_cancel = st.columns(2)
     if col_confirm.button(
-        t("settings.btn_confirm_delete", default="🗑️ Yes, Delete"), type="primary", width="stretch"
+        t("settings.btn_confirm_delete", default="Yes, Delete"), type="primary", width="stretch"
     ):
         require_change(service.delete_tag(tag_id))
-        st.toast(f"Tag '{tag_name}' deleted.", icon="🗑️")
+        st.toast(f"Tag '{tag_name}' deleted.")
         st.rerun()
     if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
         st.rerun()
 
 
-@dialog(t("settings.dialog_add_proj_tag", default="➕ Assign Project Tag"))
+@dialog(t("settings.dialog_add_proj_tag", default="Assign Project Tag"))
 @tag_errors
 def _open_add_project_tag_dialog(
     service: TagService, df_projects: pd.DataFrame, df_tags: pd.DataFrame
@@ -213,7 +213,7 @@ def _open_add_project_tag_dialog(
     selected_tag = st.selectbox(
         t("settings.field_dict_tag", default="Dictionary Tag (Optional)"),
         options=tag_opts,
-        format_func=lambda x: f"🏷️ {tag_map[x]}" if x is not None else "— None (Use Free Tag)",
+        format_func=lambda x: f"{tag_map[x]}" if x is not None else "— None (Use Free Tag)",
     )
     free_tag_val = st.text_input(
         t("settings.field_free_tag", default="Free-form Tag (Optional)"),
@@ -221,18 +221,18 @@ def _open_add_project_tag_dialog(
     )
     col_save, col_cancel = st.columns(2)
     if col_save.button(
-        t("settings.btn_save", default="💾 Assign Tag"), type="primary", width="stretch"
+        t("settings.btn_save", default="Assign Tag"), type="primary", width="stretch"
     ):
         pt_id = service.create_project_tag(
             ProjectTag(project_id=selected_proj, tag_id=selected_tag, free_tag=free_tag_val)
         )
-        st.toast(f"Project tag assignment #{pt_id} created!", icon="✅")
+        st.toast(f"Project tag assignment #{pt_id} created!")
         st.rerun()
     if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
         st.rerun()
 
 
-@dialog(t("settings.dialog_edit_proj_tag", default="✏️ Edit Project Tag Assignment"))
+@dialog(t("settings.dialog_edit_proj_tag", default="Edit Project Tag Assignment"))
 @tag_errors
 def _open_edit_project_tag_dialog(
     service: TagService,
@@ -261,7 +261,7 @@ def _open_edit_project_tag_dialog(
         t("settings.field_dict_tag", default="Dictionary Tag (Optional)"),
         options=tag_opts,
         index=t_idx,
-        format_func=lambda x: f"🏷️ {tag_map[x]}" if x is not None else "— None (Use Free Tag)",
+        format_func=lambda x: f"{tag_map[x]}" if x is not None else "— None (Use Free Tag)",
     )
     free_tag_val = st.text_input(
         t("settings.field_free_tag", default="Free-form Tag (Optional)"),
@@ -269,7 +269,7 @@ def _open_edit_project_tag_dialog(
     )
     col_save, col_cancel = st.columns(2)
     if col_save.button(
-        t("settings.btn_save_changes", default="💾 Save Changes"), type="primary", width="stretch"
+        t("settings.btn_save_changes", default="Save Changes"), type="primary", width="stretch"
     ):
         require_change(
             service.update_project_tag(
@@ -278,26 +278,26 @@ def _open_edit_project_tag_dialog(
                 )
             )
         )
-        st.toast("Project tag updated successfully!", icon="✏️")
+        st.toast("Project tag updated successfully!")
         st.rerun()
     if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
         st.rerun()
 
 
-@dialog(t("settings.delete_confirm_title", default="🗑️ Confirm Deletion"))
+@dialog(t("settings.delete_confirm_title", default="Confirm Deletion"))
 @tag_errors
 def _open_delete_project_tag_dialog(service: TagService, pt_id: int, tag_label: str) -> None:
     """Modal dialog to confirm deletion of a project tag assignment."""
     st.warning(
-        f"⚠️ Are you sure you want to remove project tag assignment **{tag_label}** (ID: #{pt_id})?"
+        f"Are you sure you want to remove project tag assignment **{tag_label}** (ID: #{pt_id})?"
     )
     st.caption("This action cannot be undone.")
     col_confirm, col_cancel = st.columns(2)
     if col_confirm.button(
-        t("settings.btn_confirm_delete", default="🗑️ Yes, Delete"), type="primary", width="stretch"
+        t("settings.btn_confirm_delete", default="Yes, Delete"), type="primary", width="stretch"
     ):
         require_change(service.delete_project_tag(pt_id))
-        st.toast(f"Project tag #{pt_id} deleted.", icon="🗑️")
+        st.toast(f"Project tag #{pt_id} deleted.")
         st.rerun()
     if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
         st.rerun()
@@ -343,7 +343,7 @@ def _handle_task_tag_query_change() -> None:
             st.session_state["_last_task_tag_query_nonce"] = event.get("nonce")
 
 
-@dialog(t("settings.dialog_add_task_tag", default="➕ Assign Task Tag"))
+@dialog(t("settings.dialog_add_task_tag", default="Assign Task Tag"))
 @tag_errors
 def _open_add_task_tag_dialog(service: TagService) -> None:
     """Modal dialog to assign a tag to a task."""
@@ -354,7 +354,7 @@ def _open_add_task_tag_dialog(service: TagService) -> None:
     selected_tag = st.selectbox(
         t("settings.field_dict_tag", default="Dictionary Tag (Optional)"),
         options=tag_opts,
-        format_func=lambda x: f"🏷️ {tag_map[x]}" if x is not None else "— None (Use Free Tag)",
+        format_func=lambda x: f"{tag_map[x]}" if x is not None else "— None (Use Free Tag)",
     )
     free_tag_val = st.text_input(
         t("settings.field_free_tag", default="Free-form Tag (Optional)"),
@@ -362,7 +362,7 @@ def _open_add_task_tag_dialog(service: TagService) -> None:
     )
     col_save, col_cancel = st.columns(2)
     if col_save.button(
-        t("settings.btn_save", default="💾 Assign Tag"),
+        t("settings.btn_save", default="Assign Tag"),
         type="primary",
         width="stretch",
         disabled=selected_task is None,
@@ -370,13 +370,13 @@ def _open_add_task_tag_dialog(service: TagService) -> None:
         tt_id = service.create_task_tag(
             TaskTag(task_id=selected_task, tag_id=selected_tag, free_tag=free_tag_val)
         )
-        st.toast(f"Task tag assignment #{tt_id} created!", icon="✅")
+        st.toast(f"Task tag assignment #{tt_id} created!")
         st.rerun()
     if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
         st.rerun()
 
 
-@dialog(t("settings.dialog_edit_task_tag", default="✏️ Edit Task Tag Assignment"))
+@dialog(t("settings.dialog_edit_task_tag", default="Edit Task Tag Assignment"))
 @tag_errors
 def _open_edit_task_tag_dialog(
     service: TagService,
@@ -398,7 +398,7 @@ def _open_edit_task_tag_dialog(
         t("settings.field_dict_tag", default="Dictionary Tag (Optional)"),
         options=tag_opts,
         index=tg_idx,
-        format_func=lambda x: f"🏷️ {tag_map[x]}" if x is not None else "— None (Use Free Tag)",
+        format_func=lambda x: f"{tag_map[x]}" if x is not None else "— None (Use Free Tag)",
     )
     free_tag_val = st.text_input(
         t("settings.field_free_tag", default="Free-form Tag (Optional)"),
@@ -406,7 +406,7 @@ def _open_edit_task_tag_dialog(
     )
     col_save, col_cancel = st.columns(2)
     if col_save.button(
-        t("settings.btn_save_changes", default="💾 Save Changes"),
+        t("settings.btn_save_changes", default="Save Changes"),
         type="primary",
         width="stretch",
         disabled=selected_task is None,
@@ -418,26 +418,26 @@ def _open_edit_task_tag_dialog(
                 )
             )
         )
-        st.toast("Task tag updated successfully!", icon="✏️")
+        st.toast("Task tag updated successfully!")
         st.rerun()
     if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
         st.rerun()
 
 
-@dialog(t("settings.delete_confirm_title", default="🗑️ Confirm Deletion"))
+@dialog(t("settings.delete_confirm_title", default="Confirm Deletion"))
 @tag_errors
 def _open_delete_task_tag_dialog(service: TagService, tt_id: int, tag_label: str) -> None:
     """Modal dialog to confirm deletion of a task tag assignment."""
     st.warning(
-        f"⚠️ Are you sure you want to remove task tag assignment **{tag_label}** (ID: #{tt_id})?"
+        f"Are you sure you want to remove task tag assignment **{tag_label}** (ID: #{tt_id})?"
     )
     st.caption("This action cannot be undone.")
     col_confirm, col_cancel = st.columns(2)
     if col_confirm.button(
-        t("settings.btn_confirm_delete", default="🗑️ Yes, Delete"), type="primary", width="stretch"
+        t("settings.btn_confirm_delete", default="Yes, Delete"), type="primary", width="stretch"
     ):
         require_change(service.delete_task_tag(tt_id))
-        st.toast(f"Task tag #{tt_id} deleted.", icon="🗑️")
+        st.toast(f"Task tag #{tt_id} deleted.")
         st.rerun()
     if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
         st.rerun()

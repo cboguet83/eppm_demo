@@ -7,6 +7,7 @@ from app.presentation.navigation import PAGE_PLANNING
 from app.presentation.components.settings_workspace import SettingsWorkspace
 from app.presentation.pages.resource_pools import render_resource_pools
 from app.presentation.pages.hierarchy import render_hierarchy_types
+from app.presentation.pages.pool_types import render_pool_types
 from app.presentation.pages.organization import (
     render_functions,
     render_function_types,
@@ -25,7 +26,6 @@ from app.presentation.pages.tags import (
 @st.fragment
 def render_settings_view(workspace: SettingsWorkspace) -> None:
     """Render the sidebar-selected section and load only its active catalog tab."""
-    st.header(f"⚙️ {t('settings.title', default='Settings')}")
     selected_section = st.session_state.get("rb_settings_section", "org_structure")
     if selected_section == "param_def":
         render_schema_definition(
@@ -57,26 +57,28 @@ def render_settings_view(workspace: SettingsWorkspace) -> None:
                 render_wbs_catalog(workspace.wbs)
         return
     settings_tab_labels = [
-        f"🏷️ {t('settings.tab_types', default='Function Types')}",
+        t('settings.tab_types', default='Function Types'),
         t("hierarchy.title"),
-        f"💼 {t('settings.tab_functions', default='Functions')}",
-        f"🛡️ {t('settings.tab_teams', default='Teams')}",
-        f"👥 {t('settings.tab_employees', default='Employees')}",
-        f"🏊 {t('settings.tab_resource_pools', default='Resource Pools')}",
-        f"📁 {t('settings.tab_tag_groups', default='Tag Groups')}",
-        f"📚 {t('settings.tab_tag_dict', default='Tag Dictionary')}",
-        f"📌 {t('settings.tab_proj_tags', default='Project Tags')}",
-        f"📋 {t('settings.tab_task_tags', default='Task Tags')}",
+        t('settings.tab_functions', default='Functions'),
+        t('settings.tab_teams', default='Teams'),
+        t('settings.tab_employees', default='Employees'),
+        t('pool_types.title', default='Pool Types'),
+        t('settings.tab_resource_pools', default='Resource Pools'),
+        t('settings.tab_tag_groups', default='Tag Groups'),
+        t('settings.tab_tag_dict', default='Tag Dictionary'),
+        t('settings.tab_proj_tags', default='Project Tags'),
+        t('settings.tab_task_tags', default='Task Tags'),
     ]
     requested_tab = st.session_state.pop("settings_active_tab", None)
     if requested_tab == "resource_pools":
-        st.session_state["settings_tab_selection"] = settings_tab_labels[5]
+        st.session_state["settings_tab_selection"] = settings_tab_labels[6]
     (
         tab_types,
         tab_hierarchy,
         tab_funcs,
         tab_teams,
         tab_emps,
+        tab_pool_types,
         tab_pools,
         tab_tag_groups,
         tab_tag_dict,
@@ -98,6 +100,9 @@ def render_settings_view(workspace: SettingsWorkspace) -> None:
     if tab_emps.open:
         with tab_emps:
             render_employees(workspace.organization)
+    if tab_pool_types.open:
+        with tab_pool_types:
+            render_pool_types(workspace.resources)
     if tab_tag_groups.open:
         with tab_tag_groups:
             render_tag_groups(workspace.tags)

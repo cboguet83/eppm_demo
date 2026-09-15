@@ -11,6 +11,7 @@ from app.application.ports.resource_pools import ResourcePoolStore
 from app.application.services.business_access import BusinessAccess
 from app.domain.access.models import Permission
 from app.domain.hierarchy import HierarchyType
+from app.domain.resources.pool_types import PoolType
 from app.domain.resources.models import (
     AssignmentLink, AssignmentRow, PoolAssignment, PoolCapacityException, PoolGroupMemberRow, PoolMapping,
     PoolTag, PoolTagChoice, ResourcePool, ResourcePoolGroup, ResourcePoolGroupMember,
@@ -23,7 +24,7 @@ from app.shared.logging import get_logger
 
 logger = get_logger(__name__)
 _CREATED = "to_char(created_at AT TIME ZONE 'UTC','YYYY-MM-DD HH24:MI:SS') AS created_at"
-_POOL = f"id,name,COALESCE(description,'') AS description,capacity_fte,{_CREATED},hierarchy_type_id"
+_POOL = f"id,name,COALESCE(description,'') AS description,capacity_fte,{_CREATED},hierarchy_type_id,pool_type_id"
 _GROUP = f"id,name,COALESCE(description,'') AS description,{_CREATED},hierarchy_type_id"
 
 
@@ -74,6 +75,36 @@ class PostgresResourcePoolStore:
         """Delete one pool reduction without changing nominal capacity."""
         return self.connection.execute('DELETE FROM eppm.resource_pool_capacity_exception WHERE id=%s', (identity,)).rowcount > 0
 
+    def get_all_pool_types(self) -> list[PoolType]:
+        """Read type names, parent identities, and translations without N+1 queries."""
+        return self._rows(PoolType, """SELECT p.id,p.name,p.parent_pool_type_id,
+            coalesce(jsonb_object_agg(t.locale,t.name) FILTER (WHERE t.locale IS NOT NULL),'{}'::jsonb) AS translations
+            FROM eppm.pool_type p LEFT JOIN eppm.pool_type_translation t ON t.pool_type_id=p.id
+            GROUP BY p.id ORDER BY p.id""")
+
+    def save_pool_type(self, item: PoolType) -> int:
+        """Write a type and all its translated names within the caller's transaction."""
+        if item.id is None:
+            row = self.connection.execute(
+                'INSERT INTO eppm.pool_type(name,parent_pool_type_id) VALUES (%s,%s) RETURNING id',
+                (item.name, item.parent_pool_type_id)).fetchone()
+        else:
+            row = self.connection.execute(
+                'UPDATE eppm.pool_type SET name=%s,parent_pool_type_id=%s WHERE id=%s RETURNING id',
+                (item.name, item.parent_pool_type_id, item.id)).fetchone()
+        if row is None:
+            raise ValueError('This pool type no longer exists.')
+        identity = row[0]
+        self.connection.execute('DELETE FROM eppm.pool_type_translation WHERE pool_type_id=%s', (identity,))
+        with self.connection.cursor() as cursor:
+            cursor.executemany('INSERT INTO eppm.pool_type_translation(pool_type_id,locale,name) VALUES (%s,%s,%s)',
+                               [(identity, locale, name) for locale, name in item.translations.items()])
+        return identity
+
+    def delete_pool_type(self, identity: int) -> bool:
+        """Delete an unused type, cascading only its translated names."""
+        return self.connection.execute('DELETE FROM eppm.pool_type WHERE id=%s', (identity,)).rowcount > 0
+
     def get_all_pools(self) -> list[ResourcePool]:
         """Read the shared pool catalog in stable name order."""
         return self._rows(ResourcePool, f'SELECT {_POOL} FROM eppm.resource_pool ORDER BY name COLLATE "C",id')
@@ -85,14 +116,14 @@ class PostgresResourcePoolStore:
 
     def create_pool(self, pool: ResourcePool) -> int:
         """Create normalized pool details within the enclosing compound save."""
-        return self.connection.execute('INSERT INTO eppm.resource_pool(name,description,capacity_fte,hierarchy_type_id) '
-                                       'VALUES (%s,%s,%s,%s) RETURNING id',
-                                       (pool.name, pool.description, pool.capacity_fte, pool.hierarchy_type_id)).fetchone()[0]
+        return self.connection.execute('INSERT INTO eppm.resource_pool(name,description,capacity_fte,hierarchy_type_id,pool_type_id) '
+                                       'VALUES (%s,%s,%s,%s,%s) RETURNING id',
+                                       (pool.name, pool.description, pool.capacity_fte, pool.hierarchy_type_id, pool.pool_type_id)).fetchone()[0]
 
     def update_pool(self, pool: ResourcePool) -> bool:
         """Preserve identity and creation time when updating pool details."""
-        return self.connection.execute('UPDATE eppm.resource_pool SET name=%s,description=%s,capacity_fte=%s,hierarchy_type_id=%s WHERE id=%s',
-                                       (pool.name, pool.description, pool.capacity_fte, pool.hierarchy_type_id, pool.id)).rowcount > 0
+        return self.connection.execute('UPDATE eppm.resource_pool SET name=%s,description=%s,capacity_fte=%s,hierarchy_type_id=%s,pool_type_id=%s WHERE id=%s',
+                                       (pool.name, pool.description, pool.capacity_fte, pool.hierarchy_type_id, pool.pool_type_id, pool.id)).rowcount > 0
 
     def delete_pool(self, pool_id: int) -> bool:
         """Delete the pool and its native cascading memberships, tags and demand."""

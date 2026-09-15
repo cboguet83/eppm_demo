@@ -2,6 +2,7 @@
 
 from app.domain.access.models import Permission
 from app.domain.hierarchy import HierarchyType
+from app.domain.resources.pool_types import PoolType, normalize_pool_type
 from app.application.ports.references import PoolReference, PoolGroupReference
 
 
@@ -76,6 +77,21 @@ class ResourcePoolService:
     def group_pool_ids(self, group_id: int) -> list[int]:
         """Resolve selected group membership with deliberate cycle termination."""
         return self._gateway.run(lambda store: descendant_pools(group_id, store.get_all_group_members()))
+
+    def get_all_pool_types(self) -> list[PoolType]:
+        """Read the shared pool classification catalog in one transaction."""
+        return self._gateway.run(lambda store: store.get_all_pool_types(), permission=Permission.SHARED)
+
+    def save_pool_type(self, item: PoolType) -> int:
+        """Validate ancestry and save a type with its translations atomically."""
+        def operation(store: ResourcePoolStore) -> int:
+            normalized = normalize_pool_type(item, store.get_all_pool_types())
+            return store.save_pool_type(normalized)
+        return self._gateway.run(operation, write=True, permission=Permission.SHARED)
+
+    def delete_pool_type(self, identity: int) -> bool:
+        """Delete an unused leaf type; database references protect pools and children."""
+        return self._gateway.run(lambda store: store.delete_pool_type(identity), write=True, permission=Permission.SHARED)
 
     def get_all_pools(self) -> list[ResourcePool]:
         """Get all pools within one application transaction."""

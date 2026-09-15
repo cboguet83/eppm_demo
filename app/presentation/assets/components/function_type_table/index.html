@@ -74,7 +74,7 @@
 
     .search-input {
       width: 100%;
-      padding: 6px 10px 6px 28px;
+      padding: 6px 10px;
       font-size: 12px;
       border: 1px solid var(--border-dark);
       border-radius: 6px;
@@ -88,15 +88,6 @@
       box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
     }
 
-    .search-icon {
-      position: absolute;
-      left: 8px;
-      top: 50%;
-      transform: translateY(-50%);
-      font-size: 11px;
-      color: var(--text-muted);
-      pointer-events: none;
-    }
 
     .btn-reset-filters {
       display: inline-flex;
@@ -539,11 +530,6 @@
       margin: 4px 0;
     }
 
-    .ctx-icon {
-      font-size: 14px;
-      width: 16px;
-      text-align: center;
-    }
 
     /* Shared EPPM context-menu standard (context_menu.py). */
 
@@ -580,11 +566,11 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     <div class="table-toolbar">
       <div class="toolbar-left">
         <div class="search-input-wrapper">
-          <span class="search-icon">🔍</span>
+
           <input type="text" id="search-box" class="search-input" placeholder="Quick search..." oninput="onGlobalSearch(this.value)" />
         </div>
         <button type="button" id="btn-clear" class="btn-reset-filters" onclick="clearAllFilters()" style="display:none;">
-          <span>🔄</span> <span id="lbl-clear">Clear Filters</span>
+          <span id="lbl-clear">Clear Filters</span>
         </button>
       </div>
 
@@ -599,15 +585,17 @@ button:not(.context-menu-item):disabled {opacity:.5;}
           <tr>
             <th class="sortable col-id" onclick="sortTable('function_type_id')">ID <span id="sort-function_type_id"></span></th>
             <th class="sortable col-name" onclick="sortTable('function_type')"><span id="th-name">Function Type Name</span> <span id="sort-function_type"></span></th>
+            <th class="parent-column sortable" style="display:none" onclick="sortTable('parent_name')"><span id="th-parent">Parent pool type</span><span id="sort-parent_name"></span></th>
           </tr>
           <tr class="filter-row">
             <th><input type="text" class="col-filter-input" id="flt-id" placeholder="#" oninput="setColFilter('function_type_id', this.value)" /></th>
             <th>
-              <div class="excel-trigger" id="trigger-flt-type" onclick="openExcelFilter('function_type', 'Function Type', event)">
+              <div class="excel-trigger" id="trigger-flt-type" onclick="openExcelFilter('function_type', translations.col_type_name || 'Function Type', event)">
                 <span class="excel-trigger-text" id="label-flt-type">All</span>
                 <span class="excel-trigger-icon">▼</span>
               </div>
             </th>
+            <th class="parent-column" style="display:none"><input class="col-filter-input" id="flt-parent" placeholder="Filter..." oninput="setColFilter('parent_name', this.value)" /></th>
           </tr>
         </thead>
         <tbody id="table-body">
@@ -639,16 +627,16 @@ button:not(.context-menu-item):disabled {opacity:.5;}
   <div class="context-menu" id="context-menu">
     <div class="context-menu-header" id="ctx-header">Function Type Actions</div>
     <div class="context-menu-item" onclick="triggerAction('add')">
-      <span class="ctx-icon">➕</span>
+
       <span id="ctx-add-label">Add New Function Type</span>
     </div>
     <div class="context-menu-item" id="ctx-item-edit" onclick="triggerAction('edit')">
-      <span class="ctx-icon">✏️</span>
+
       <span id="ctx-edit-label">Edit Function Type</span>
     </div>
     <div class="context-menu-divider" id="ctx-divider"></div>
     <div class="context-menu-item danger" id="ctx-item-delete" onclick="triggerAction('delete')">
-      <span class="ctx-icon">🗑️</span>
+
       <span id="ctx-delete-label">Delete Function Type</span>
     </div>
   </div>
@@ -666,6 +654,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       }
     };
 
+    let showParent = false;
     let typesData = [];
     let filteredData = [];
     let translations = {};
@@ -894,7 +883,8 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         if (globalSearchQuery) {
           const matchGlobal =
             (d.function_type && String(d.function_type).toLowerCase().includes(globalSearchQuery)) ||
-            (d.function_type_id && String(d.function_type_id).includes(globalSearchQuery));
+            (d.function_type_id && String(d.function_type_id).includes(globalSearchQuery)) ||
+            (showParent && d.parent_name && String(d.parent_name).toLowerCase().includes(globalSearchQuery));
           if (!matchGlobal) return false;
         }
 
@@ -902,6 +892,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
           if (!String(d.function_type_id).includes(colFilters['function_type_id'])) return false;
         }
 
+        if (showParent && colFilters.parent_name && !String(d.parent_name || '').toLowerCase().includes(colFilters.parent_name)) return false;
         if (excelFilters.function_type !== null) {
           const rawVal = d.function_type;
           const val = (rawVal === null || rawVal === undefined || rawVal === '') ? '—' : String(rawVal);
@@ -928,7 +919,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         return sortAsc ? (valA > valB ? 1 : -1) : (valA < valB ? 1 : -1);
       });
 
-      ['function_type_id', 'function_type'].forEach(col => {
+      ['function_type_id', 'function_type', 'parent_name'].forEach(col => {
         const iconSpan = document.getElementById(`sort-${col}`);
         if (iconSpan) iconSpan.innerText = (currentSortCol === col) ? (sortAsc ? ' ▲' : ' ▼') : '';
       });
@@ -936,7 +927,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       if (filteredData.length === 0) {
         tbody.innerHTML = `
           <tr>
-            <td colspan="2" class="empty-state">
+            <td colspan="${showParent ? 3 : 2}" class="empty-state">
               ${escapeHtml(translations.no_types || 'No function types registered matching the filters.')}
             </td>
           </tr>
@@ -952,6 +943,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
           tr.innerHTML = `
             <td class="col-id">${d.function_type_id}</td>
             <td class="col-name">${escapeHtml(d.function_type)}</td>
+            ${showParent ? `<td>${escapeHtml(d.parent_name || "—")}</td>` : ""}
           `;
 
           tr.addEventListener('click', () => selectRow(d, tr));
@@ -1053,7 +1045,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     }
 
     document.getElementById('main-container').addEventListener('contextmenu', (e) => {
-      if (e.target.closest('tbody tr')) return;
+      if (e.target.closest('tbody tr[data-id]')) return;
       e.preventDefault();
       closeExcelPopup();
       selectedItem = null;
@@ -1075,9 +1067,9 @@ button:not(.context-menu-item):disabled {opacity:.5;}
 
     function updateTranslations() {
       if (translations.col_type_name) document.getElementById('th-name').innerText = translations.col_type_name;
-      if (translations.action_add) document.getElementById('ctx-add-label').innerText = `${translations.action_add} Function Type`;
-      if (translations.action_edit) document.getElementById('ctx-edit-label').innerText = `${translations.action_edit} Function Type`;
-      if (translations.action_delete) document.getElementById('ctx-delete-label').innerText = `${translations.action_delete} Function Type`;
+      if (translations.action_add) document.getElementById('ctx-add-label').innerText = `${translations.action_add} ${translations.entity_name || "Function Type"}`;
+      if (translations.action_edit) document.getElementById('ctx-edit-label').innerText = `${translations.action_edit} ${translations.entity_name || "Function Type"}`;
+      if (translations.action_delete) document.getElementById('ctx-delete-label').innerText = `${translations.action_delete} ${translations.entity_name || "Function Type"}`;
 
       if (translations.filter_clear) document.getElementById('lbl-clear').innerText = translations.filter_clear;
       if (translations.search_placeholder) document.getElementById('search-box').placeholder = translations.search_placeholder;
@@ -1093,6 +1085,9 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     window.addEventListener('message', function(event) {
       if (event.data && event.data.type === 'streamlit:render') {
         const args = event.data.args || {};
+        showParent = Boolean(args.show_parent);
+        document.querySelectorAll('.parent-column').forEach(el => el.style.display = showParent ? '' : 'none');
+        document.getElementById('th-parent').textContent = args.translations?.col_parent || 'Parent pool type';
         if (args.translations) {
           translations = args.translations;
           updateTranslations();

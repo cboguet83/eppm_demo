@@ -47,7 +47,7 @@ def render_resource_pools(
     peak_portfolio_assigned = sum((p.peak_assigned_fte for p in all_pool_details))
     overassigned_pools_count = sum((1 for p in all_pool_details if p.is_overassigned))
     st.subheader(
-        f"🏊 {t('settings.pools_title', default='Resource Pools Management')} ({total_pools} {t('settings.stat_pools', default='Pools')} • {total_portfolio_capacity:.2f} {t('settings.stat_capacity', default='FTE Capacity')})"
+        f"{t('settings.pools_title', default='Resource Pools Management')} ({total_pools} {t('settings.stat_pools', default='Pools')} • {total_portfolio_capacity:.2f} {t('settings.stat_capacity', default='FTE Capacity')})"
     )
     kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(5)
     kpi1.metric(t("settings.kpi_total_pools", default="Total Pools"), total_pools)
@@ -66,19 +66,20 @@ def render_resource_pools(
     if overassigned_pools_count > 0:
         kpi5.metric(
             t("settings.kpi_overassigned_pools", default="Overassigned Pools"),
-            f"{overassigned_pools_count} ⚠️",
+            str(overassigned_pools_count),
             delta=f"+{overassigned_pools_count} Alert",
             delta_color="inverse",
+            delta_arrow="off",
         )
     else:
-        kpi5.metric(t("settings.kpi_overassigned_pools", default="Overassigned Pools"), "0 ✅")
+        kpi5.metric(t("settings.kpi_overassigned_pools", default="Overassigned Pools"), "0")
     st.divider()
     _render_pool_groups_management(service)
     st.divider()
     col_sel, col_add_btn = st.columns([4, 1])
     with col_add_btn:
         if st.button(
-            t("settings.btn_create_pool", default="➕ Create Pool"),
+            t("settings.btn_create_pool", default="Create Pool"),
             type="primary",
             width="stretch",
         ):
@@ -101,11 +102,11 @@ def render_resource_pools(
             selected_pool_id = st.selectbox(
                 t(
                     "settings.select_pool_to_inspect",
-                    default="🔍 Select Resource Pool to Inspect & Configure",
+                    default="Select Resource Pool to Inspect & Configure",
                 ),
                 options=pool_options,
                 format_func=lambda pid: (
-                    f"🏊 #{pid} - {pool_id_map[pid].pool_name} (Defined {pool_id_map[pid].total_capacity_fte:.2f} FTE | Assigned {pool_id_map[pid].assigned_capacity_fte:.2f} FTE {('| ⚠️ OVERASSIGNED' if pool_id_map[pid].is_overassigned else '| ✅ OK')})"
+                    f"#{pid} - {pool_id_map[pid].pool_name} (Defined {pool_id_map[pid].total_capacity_fte:.2f} FTE | Assigned {pool_id_map[pid].assigned_capacity_fte:.2f} FTE {('| OVERASSIGNED' if pool_id_map[pid].is_overassigned else '| OK')})"
                     if pid in pool_id_map
                     else f"Pool #{pid}"
                 ),
@@ -117,46 +118,50 @@ def render_resource_pools(
             c_info, c_actions = st.columns([4, 1])
             with c_info:
                 st.markdown(
-                    f"### 🏊 **{current_detail.pool_name}** `[Pool #{current_detail.pool_id}]`"
+                    f"### **{current_detail.pool_name}** `[Pool #{current_detail.pool_id}]`"
                 )
                 pool_obj = service.get_pool_by_id(selected_pool_id)
+                if pool_obj:
+                    type_labels = {record.id: record.label(get_current_locale())
+                                   for record in service.get_all_pool_types()}
+                    st.text(t("pool_types.type", default="Pool type") + ": " + type_labels.get(pool_obj.pool_type_id, ""))
                 if pool_obj and pool_obj.hierarchy_type_id is not None:
                     hierarchy_labels = {record.id: record.label(get_current_locale())
                                         for record in service.get_all_hierarchy_types()}
                     st.text(t("hierarchy.type") + ": " + hierarchy_labels.get(pool_obj.hierarchy_type_id, ""))
                 if pool_obj and pool_obj.description:
-                    st.caption(f"📝 {pool_obj.description}")
+                    st.caption(f"{pool_obj.description}")
                 pool_tags = tags_frame(service.get_pool_tags(selected_pool_id))
                 if not pool_tags.empty:
                     tag_text = " ".join(
                         (f"`{row['tag_name']}`" for _, row in pool_tags.iterrows())
                     )
-                    st.markdown(f"🏷️ {tag_text}")
+                    st.markdown(f"{tag_text}")
             with c_actions:
                 c_edit, c_del = st.columns(2)
                 if c_edit.button(
-                    "✏️", key=f"btn_edit_pool_{selected_pool_id}", help="Edit pool details"
+                    "", key=f"btn_edit_pool_{selected_pool_id}", help="Edit pool details"
                 ):
                     _open_edit_pool_dialog(service, selected_pool_id)
-                if c_del.button("🗑️", key=f"btn_del_pool_{selected_pool_id}", help="Delete pool"):
+                if c_del.button("", key=f"btn_del_pool_{selected_pool_id}", help="Delete pool"):
                     _open_delete_pool_dialog(service, selected_pool_id, current_detail.pool_name)
             if current_detail.is_overassigned:
                 st.error(
-                    f"🚨 **DAILY OVERASSIGNMENT ALERT**: Peak daily demand of **{current_detail.peak_assigned_fte:.2f} FTE** exceeds defined pool capacity of **{current_detail.total_capacity_fte:.2f} FTE** by **+{current_detail.peak_excess_fte:.2f} FTE**!\n\n👥 **Deduplicated assigned capacity**: {current_detail.assigned_capacity_fte:.2f} FTE.\n\n📅 **Overassigned Period(s)**: {(', '.join(current_detail.overassignment_intervals) if current_detail.overassignment_intervals else 'Active overlapping assignments')}"
+                    f"**DAILY OVERASSIGNMENT ALERT**: Peak daily demand of **{current_detail.peak_assigned_fte:.2f} FTE** exceeds defined pool capacity of **{current_detail.total_capacity_fte:.2f} FTE** by **+{current_detail.peak_excess_fte:.2f} FTE**!\n\n**Deduplicated assigned capacity**: {current_detail.assigned_capacity_fte:.2f} FTE.\n\n**Overassigned Period(s)**: {(', '.join(current_detail.overassignment_intervals) if current_detail.overassignment_intervals else 'Active overlapping assignments')}"
                 )
             else:
                 st.success(
-                    f"✅ **CAPACITY NORMAL**: Defined pool capacity is **{current_detail.total_capacity_fte:.2f} FTE**; deduplicated assigned capacity is **{current_detail.assigned_capacity_fte:.2f} FTE**. Peak active daily demand is **{current_detail.peak_assigned_fte:.2f} FTE**."
+                    f"**CAPACITY NORMAL**: Defined pool capacity is **{current_detail.total_capacity_fte:.2f} FTE**; deduplicated assigned capacity is **{current_detail.assigned_capacity_fte:.2f} FTE**. Peak active daily demand is **{current_detail.peak_assigned_fte:.2f} FTE**."
                 )
             st.divider()
             st.write(
-                f"#### 🛡️ / 👤 {t('settings.mapped_teams_funcs', default='Assigned Teams & Employees')} (0% - 100%)"
+                f"#### / {t('settings.mapped_teams_funcs', default='Assigned Teams & Employees')} (0% - 100%)"
             )
             df_pool_maps = mappings_frame(service.get_mappings_by_pool(selected_pool_id))
             col_m_add, _ = st.columns([2, 3])
             with col_m_add:
                 if st.button(
-                    t("settings.btn_add_mapping", default="➕ Assign Team or Employee"),
+                    t("settings.btn_add_mapping", default="Assign Team or Employee"),
                     key=f"btn_add_map_{selected_pool_id}",
                 ):
                     _open_add_pool_mapping_dialog(service, selected_pool_id, df_teams, df_emps)
@@ -195,13 +200,13 @@ def render_resource_pools(
                     m_pct = float(m_row["allocation_pct"])
                     if m_type == "team":
                         target_label = team_lookup.get(m_tid, f"Team #{m_tid}")
-                        icon = "🛡️ Team:"
+                        icon = "Team:"
                     elif m_type == "employee":
                         target_label = employee_lookup.get(m_tid, f"Employee #{m_tid}")
-                        icon = "👤 Employee:"
+                        icon = "Employee:"
                     else:
                         target_label = func_lookup.get(m_tid, f"Function #{m_tid}")
-                        icon = "💼 Legacy function:"
+                        icon = "Legacy function:"
                     mc1, mc2, mc3 = st.columns([3, 2, 1])
                     mc1.markdown(f"**{icon}** `{target_label}` `[#{m_tid}]`")
                     new_pct = mc2.number_input(
@@ -217,14 +222,14 @@ def render_resource_pools(
                         require_change(service.update_mapping(m_id, float(new_pct)))
                         st.rerun()
                     if mc3.button(
-                        "🗑️", key=f"btn_del_map_{m_id}", help="Remove mapping from pool"
+                        "", key=f"btn_del_map_{m_id}", help="Remove mapping from pool"
                     ):
                         require_change(service.delete_mapping(m_id))
-                        st.toast("Mapping removed from pool.", icon="🗑️")
+                        st.toast("Mapping removed from pool.")
                         st.rerun()
             st.divider()
             st.write(
-                f"#### 🔍 {t('settings.dedup_breakdown_title', default='Deduplicated Assigned Capacity Breakdown')}"
+                f"#### {t('settings.dedup_breakdown_title', default='Deduplicated Assigned Capacity Breakdown')}"
             )
             st.caption(
                 t(
@@ -238,7 +243,7 @@ def render_resource_pools(
                 dedup_table_data = []
                 for cf in current_detail.contributing_resources:
                     status_str = (
-                        "✅ Considered Once (Direct Override)"
+                        "Considered Once (Direct Override)"
                         if cf.is_deduplicated
                         else "Standard"
                     )
@@ -258,7 +263,7 @@ def render_resource_pools(
                 st.dataframe(pd.DataFrame(dedup_table_data), width="stretch", hide_index=True)
             st.divider()
             st.write(
-                f"#### 📁 / 📋 {t('settings.assignments_section_title', default='Active Allocations on Projects & Tasks')}"
+                f"#### / {t('settings.assignments_section_title', default='Active Allocations on Projects & Tasks')}"
             )
             _render_pool_assignments_table(
                 current_detail.assignments, selected_pool_id, service, planning_page

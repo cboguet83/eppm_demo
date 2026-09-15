@@ -1,18 +1,18 @@
 """Organization use cases, validation, and atomic multi-record changes."""
 
-from app.domain.access.models import Permission
-from app.domain.hierarchy import HierarchyType, normalize_hierarchy_type, validate_hierarchy_type_id
-from app.application.ports.references import EmployeeReference, FunctionReference
-
-
-from dataclasses import replace
+import csv
+import io
+from dataclasses import fields, replace
 from datetime import date
 
 from app.application.ports.organization import CalendarExceptionRow, OrganizationGateway, OrganizationStore
+from app.application.ports.references import EmployeeReference, FunctionReference
+from app.domain.access.models import Permission
+from app.domain.hierarchy import HierarchyType, normalize_hierarchy_type, validate_hierarchy_type_id
 from app.domain.organization.models import Employee, EmployeeCalendarException, FunctionType, OrgFunction, Team
 from app.domain.organization.rules import (
     next_employee_code, normalize_employee, normalize_exception, normalize_function,
-    normalize_function_type, normalize_team,
+    normalize_function_type, normalize_team, validate_team_parent,
 )
 
 
@@ -98,6 +98,43 @@ class OrganizationService:
         """Get all teams within one organization transaction."""
         return self._gateway.run(lambda store: store.get_all_teams(), permission=Permission.SHARED)
 
+    def export_csv(self, catalog: str) -> str:
+        """Export a complete organization catalog after checking shared-data access.
+
+        Args:
+            catalog: One of functions, function_types, teams, or employees.
+
+        Returns:
+            Comma-separated UTF-8 text with stable field names and escaped cells.
+
+        Raises:
+            ValueError: The catalog name is unsupported.
+        """
+        def operation(store: OrganizationStore) -> str:
+            catalogs = {
+                'functions': (OrgFunction, store.get_all_functions),
+                'function_types': (FunctionType, store.get_all_function_types),
+                'teams': (Team, store.get_all_teams),
+                'employees': (Employee, store.get_all_employees),
+            }
+            if catalog not in catalogs:
+                raise ValueError('Unknown organization catalog.')
+            model, read = catalogs[catalog]
+            columns = [field.name for field in fields(model)]
+            output = io.StringIO(newline='')
+            writer = csv.writer(output, lineterminator='\r\n')
+            writer.writerow(columns)
+            for record in read():
+                values = [getattr(record, column) for column in columns]
+                writer.writerow([
+                    "'" + value if isinstance(value, str) and value.startswith(
+                        ('=', '+', '-', '@', '\t', '\r', '\n')) else value
+                    for value in values
+                ])
+            return output.getvalue()
+
+        return self._gateway.run(operation, permission=Permission.SHARED)
+
     def get_team_by_id(self, team_id: int) -> Team | None:
         """Get team by id within one organization transaction."""
         return self._gateway.run(lambda store: store.get_team_by_id(team_id), permission=Permission.SHARED)
@@ -107,6 +144,8 @@ class OrganizationService:
         team = normalize_team(team)
         function_ids = list(function_ids) if function_ids is not None else None
         def operation(store: OrganizationStore) -> int:
+            if team.parent_team_id is not None:
+                validate_team_parent(team, store.get_all_teams())
             result = store.create_team(team)
             if result and function_ids is not None:
                 store.set_team_functions(result, function_ids)
@@ -120,6 +159,8 @@ class OrganizationService:
         team = normalize_team(team)
         function_ids = list(function_ids) if function_ids is not None else None
         def operation(store: OrganizationStore) -> bool:
+            if team.parent_team_id is not None:
+                validate_team_parent(team, store.get_all_teams())
             result = store.update_team(team)
             if result and function_ids is not None:
                 store.set_team_functions(team.team_id, function_ids)

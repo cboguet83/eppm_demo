@@ -37,7 +37,7 @@ def require_change(changed: bool) -> None:
         raise ValueError("This record no longer exists. Please refresh and try again.")
 
 
-@dialog(t("settings.dialog_add_func", default="➕ Create Job Function"))
+@dialog(t("settings.dialog_add_func", default="Create Job Function"))
 @organization_errors
 def _open_add_function_dialog(
     service: OrganizationService,
@@ -86,7 +86,7 @@ def _open_add_function_dialog(
     )
 
     col_save, col_cancel = st.columns(2)
-    if col_save.button(t("settings.btn_save", default="💾 Save Function"), type="primary", width="stretch"):
+    if col_save.button(t("settings.btn_save", default="Save Function"), type="primary", width="stretch"):
         try:
             validate_function(new_name, int(new_level), int(new_fte))
             new_fid = service.create_function(
@@ -100,7 +100,7 @@ def _open_add_function_dialog(
                     has_reports=new_has_reports,
                 )
             )
-            st.toast(t("settings.msg_func_created", name=new_name, default=f"Function '{new_name}' created (ID: {new_fid})!"), icon="✅")
+            st.toast(t("settings.msg_func_created", name=new_name, default=f"Function '{new_name}' created (ID: {new_fid})!"))
             st.rerun()
         except ValueError as val_err:
             st.error(str(val_err))
@@ -111,7 +111,7 @@ def _open_add_function_dialog(
         st.rerun()
 
 
-@dialog(t("settings.dialog_edit_func", default="✏️ Edit Job Function"))
+@dialog(t("settings.dialog_edit_func", default="Edit Job Function"))
 @organization_errors
 def _open_edit_function_dialog(
     service: OrganizationService,
@@ -175,7 +175,7 @@ def _open_edit_function_dialog(
     )
 
     col_save, col_cancel = st.columns(2)
-    if col_save.button(t("settings.btn_save_changes", default="💾 Save Changes"), type="primary", width="stretch"):
+    if col_save.button(t("settings.btn_save_changes", default="Save Changes"), type="primary", width="stretch"):
         try:
             validate_function(edit_name, int(edit_level), int(edit_fte))
             require_change(service.update_function(
@@ -190,7 +190,7 @@ def _open_edit_function_dialog(
                     has_reports=edit_has_reports,
                 )
             ))
-            st.toast(t("settings.msg_func_updated", default="Function updated successfully!"), icon="✏️")
+            st.toast(t("settings.msg_func_updated", default="Function updated successfully!"))
             st.rerun()
         except ValueError as val_err:
             st.error(str(val_err))
@@ -201,7 +201,7 @@ def _open_edit_function_dialog(
         st.rerun()
 
 
-@dialog(t("settings.delete_confirm_title", default="🗑️ Confirm Deletion"))
+@dialog(t("settings.delete_confirm_title", default="Confirm Deletion"))
 @organization_errors
 def _open_delete_function_dialog(
     service: OrganizationService,
@@ -209,20 +209,44 @@ def _open_delete_function_dialog(
     func_name: str,
 ) -> None:
     """Modal dialog to confirm deletion of a job function."""
-    st.warning(f"⚠️ {t('settings.delete_confirm_msg', name=func_name, default=f'Are you sure you want to delete Function **{func_name}** (ID: {func_id})?')}")
+    st.warning(f"{t('settings.delete_confirm_msg', name=func_name, default=f'Are you sure you want to delete Function **{func_name}** (ID: {func_id})?')}")
     st.caption("This action cannot be undone.")
 
     col_confirm, col_cancel = st.columns(2)
-    if col_confirm.button(t("settings.btn_confirm_delete", default="🗑️ Yes, Delete"), type="primary", width="stretch"):
+    if col_confirm.button(t("settings.btn_confirm_delete", default="Yes, Delete"), type="primary", width="stretch"):
         require_change(service.delete_function(func_id))
-        st.toast(t("settings.msg_func_deleted", default=f"Function '{func_name}' deleted."), icon="🗑️")
+        st.toast(t("settings.msg_func_deleted", default=f"Function '{func_name}' deleted."))
         st.rerun()
 
     if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
         st.rerun()
 
 
-@dialog(t("settings.dialog_add_team", default="➕ Create Team"))
+def _parent_team_selector(service: OrganizationService, team: Team | None = None) -> int | None:
+    """Offer an optional parent, excluding the edited team and its descendants."""
+    teams = service.get_all_teams()
+    blocked = {team.team_id} if team else set()
+    while True:
+        descendants = {item.team_id for item in teams if item.parent_team_id in blocked}
+        if descendants <= blocked:
+            break
+        blocked |= descendants
+    labels = {item.team_id: f'{item.team_name} (#{item.team_id})'
+              for item in teams if item.team_id not in blocked}
+    # None also represents an empty Streamlit widget state; use an explicit option.
+    options = [0, *labels]
+    current = team.parent_team_id if team else None
+    unassigned_label = t('settings.no_parent_team')
+    value = st.selectbox(
+        t('settings.field_parent_team'), options,
+        index=options.index(current) if current in options else 0,
+        format_func=lambda value: labels[value] if value else unassigned_label,
+        key=f'parent_team_{team.team_id if team else "new"}',
+    )
+    return value or None
+
+
+@dialog(t("settings.dialog_add_team", default="Create Team"))
 @organization_errors
 def _open_add_team_dialog(
     service: OrganizationService,
@@ -231,6 +255,7 @@ def _open_add_team_dialog(
     """Modal dialog to create a new team."""
     new_name = st.text_input(t("settings.field_team_name", default="Team Name *"), placeholder="e.g. Equipe BIM")
     hierarchy_type_id = hierarchy_type_selector(service.get_all_hierarchy_types())
+    parent_team_id = _parent_team_selector(service)
 
     func_opts = [None] + (df_funcs["function_id"].tolist() if not df_funcs.empty else [])
     func_map = dict(zip(df_funcs["function_id"], df_funcs["name"])) if not df_funcs.empty else {}
@@ -255,7 +280,7 @@ def _open_add_team_dialog(
     )
 
     col_save, col_cancel = st.columns(2)
-    if col_save.button(t("settings.btn_save", default="💾 Save Team"), type="primary", width="stretch"):
+    if col_save.button(t("settings.btn_save", default="Save Team"), type="primary", width="stretch"):
         try:
             validate_team(new_name)
             new_tid = service.create_team(
@@ -264,9 +289,10 @@ def _open_add_team_dialog(
                     manager_function_id=new_mgr,
                     leader_function_id=new_leader,
                     hierarchy_type_id=hierarchy_type_id,
+                    parent_team_id=parent_team_id,
                 ), function_ids=new_members,
             )
-            st.toast(t("settings.msg_team_created", name=new_name, default=f"Team '{new_name}' created (ID: {new_tid})!"), icon="✅")
+            st.toast(t("settings.msg_team_created", name=new_name, default=f"Team '{new_name}' created (ID: {new_tid})!"))
             st.rerun()
         except ValueError as val_err:
             st.error(str(val_err))
@@ -277,7 +303,7 @@ def _open_add_team_dialog(
         st.rerun()
 
 
-@dialog(t("settings.dialog_edit_team", default="✏️ Edit Team"))
+@dialog(t("settings.dialog_edit_team", default="Edit Team"))
 @organization_errors
 def _open_edit_team_dialog(
     service: OrganizationService,
@@ -293,6 +319,7 @@ def _open_edit_team_dialog(
     func_map = dict(zip(df_funcs["function_id"], df_funcs["name"])) if not df_funcs.empty else {}
     edit_name = st.text_input(t("settings.field_team_name", default="Team Name *"), value=team_obj.team_name)
     hierarchy_type_id = hierarchy_type_selector(service.get_all_hierarchy_types(), team_obj.hierarchy_type_id)
+    parent_team_id = _parent_team_selector(service, team_obj)
 
     func_opts = [None] + (df_funcs["function_id"].tolist() if not df_funcs.empty else [])
     mgr_idx = func_opts.index(team_obj.manager_function_id) if team_obj.manager_function_id in func_opts else 0
@@ -322,7 +349,7 @@ def _open_edit_team_dialog(
     )
 
     col_save, col_cancel = st.columns(2)
-    if col_save.button(t("settings.btn_save_changes", default="💾 Save Changes"), type="primary", width="stretch"):
+    if col_save.button(t("settings.btn_save_changes", default="Save Changes"), type="primary", width="stretch"):
         try:
             validate_team(edit_name)
             require_change(service.update_team(
@@ -332,9 +359,10 @@ def _open_edit_team_dialog(
                     manager_function_id=edit_mgr,
                     leader_function_id=edit_leader,
                     hierarchy_type_id=hierarchy_type_id,
+                    parent_team_id=parent_team_id,
                 ), function_ids=edit_members,
             ))
-            st.toast(t("settings.msg_team_updated", default="Team updated successfully!"), icon="✏️")
+            st.toast(t("settings.msg_team_updated", default="Team updated successfully!"))
             st.rerun()
         except ValueError as val_err:
             st.error(str(val_err))
@@ -345,7 +373,7 @@ def _open_edit_team_dialog(
         st.rerun()
 
 
-@dialog(t("settings.delete_confirm_title", default="🗑️ Confirm Deletion"))
+@dialog(t("settings.delete_confirm_title", default="Confirm Deletion"))
 @organization_errors
 def _open_delete_team_dialog(
     service: OrganizationService,
@@ -353,32 +381,32 @@ def _open_delete_team_dialog(
     team_name: str,
 ) -> None:
     """Modal dialog to confirm deletion of a team."""
-    st.warning(f"⚠️ {t('settings.delete_confirm_msg', name=team_name, default=f'Are you sure you want to delete Team **{team_name}** (ID: {team_id})?')}")
+    st.warning(f"{t('settings.delete_confirm_msg', name=team_name, default=f'Are you sure you want to delete Team **{team_name}** (ID: {team_id})?')}")
     st.caption("This action cannot be undone.")
 
     col_confirm, col_cancel = st.columns(2)
-    if col_confirm.button(t("settings.btn_confirm_delete", default="🗑️ Yes, Delete"), type="primary", width="stretch"):
+    if col_confirm.button(t("settings.btn_confirm_delete", default="Yes, Delete"), type="primary", width="stretch"):
         require_change(service.delete_team(team_id))
-        st.toast(t("settings.msg_team_deleted", default=f"Team '{team_name}' deleted."), icon="🗑️")
+        st.toast(t("settings.msg_team_deleted", default=f"Team '{team_name}' deleted."))
         st.rerun()
 
     if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
         st.rerun()
 
 
-@dialog(t("settings.dialog_add_type", default="➕ Create Function Type"))
+@dialog(t("settings.dialog_add_type", default="Create Function Type"))
 @organization_errors
 def _open_add_function_type_dialog(service: OrganizationService) -> None:
     """Modal dialog to create a new function type."""
     new_name = st.text_input(t("settings.field_type_name", default="Function Type *"), placeholder="e.g. Contractor")
 
     col_save, col_cancel = st.columns(2)
-    if col_save.button(t("settings.btn_save", default="💾 Save Type"), type="primary", width="stretch"):
+    if col_save.button(t("settings.btn_save", default="Save Type"), type="primary", width="stretch"):
         clean_name = new_name.strip()
         if clean_name:
             try:
                 new_tid = service.create_function_type(FunctionType(function_type=clean_name))
-                st.toast(t("settings.msg_type_created", name=clean_name, default=f"Function Type '{clean_name}' created (ID: {new_tid})!"), icon="✅")
+                st.toast(t("settings.msg_type_created", name=clean_name, default=f"Function Type '{clean_name}' created (ID: {new_tid})!"))
                 st.rerun()
             except OrganizationStorageError as e:
                 st.error(str(e))
@@ -389,7 +417,7 @@ def _open_add_function_type_dialog(service: OrganizationService) -> None:
         st.rerun()
 
 
-@dialog(t("settings.dialog_edit_type", default="✏️ Edit Function Type"))
+@dialog(t("settings.dialog_edit_type", default="Edit Function Type"))
 @organization_errors
 def _open_edit_function_type_dialog(
     service: OrganizationService,
@@ -400,12 +428,12 @@ def _open_edit_function_type_dialog(
     edit_name = st.text_input(t("settings.field_type_name", default="Function Type *"), value=current_name)
 
     col_save, col_cancel = st.columns(2)
-    if col_save.button(t("settings.btn_save_changes", default="💾 Save Changes"), type="primary", width="stretch"):
+    if col_save.button(t("settings.btn_save_changes", default="Save Changes"), type="primary", width="stretch"):
         clean_name = edit_name.strip()
         if clean_name:
             try:
                 require_change(service.update_function_type(FunctionType(function_type_id=type_id, function_type=clean_name)))
-                st.toast(t("settings.msg_type_updated", default="Function Type updated successfully!"), icon="✏️")
+                st.toast(t("settings.msg_type_updated", default="Function Type updated successfully!"))
                 st.rerun()
             except OrganizationStorageError as e:
                 st.error(str(e))
@@ -416,7 +444,7 @@ def _open_edit_function_type_dialog(
         st.rerun()
 
 
-@dialog(t("settings.delete_confirm_title", default="🗑️ Confirm Deletion"))
+@dialog(t("settings.delete_confirm_title", default="Confirm Deletion"))
 @organization_errors
 def _open_delete_function_type_dialog(
     service: OrganizationService,
@@ -424,20 +452,20 @@ def _open_delete_function_type_dialog(
     type_name: str,
 ) -> None:
     """Modal dialog to confirm deletion of a function type."""
-    st.warning(f"⚠️ {t('settings.delete_confirm_msg', name=type_name, default=f'Are you sure you want to delete Function Type **{type_name}** (ID: {type_id})?')}")
+    st.warning(f"{t('settings.delete_confirm_msg', name=type_name, default=f'Are you sure you want to delete Function Type **{type_name}** (ID: {type_id})?')}")
     st.caption("This action cannot be undone.")
 
     col_confirm, col_cancel = st.columns(2)
-    if col_confirm.button(t("settings.btn_confirm_delete", default="🗑️ Yes, Delete"), type="primary", width="stretch"):
+    if col_confirm.button(t("settings.btn_confirm_delete", default="Yes, Delete"), type="primary", width="stretch"):
         require_change(service.delete_function_type(type_id))
-        st.toast(t("settings.msg_type_deleted", default=f"Function Type '{type_name}' deleted."), icon="🗑️")
+        st.toast(t("settings.msg_type_deleted", default=f"Function Type '{type_name}' deleted."))
         st.rerun()
 
     if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
         st.rerun()
 
 
-@dialog(t("settings.dialog_add_emp", default="➕ Add New Employee"))
+@dialog(t("settings.dialog_add_emp", default="Add New Employee"))
 @organization_errors
 def _open_add_employee_dialog(
     service: OrganizationService,
@@ -525,7 +553,7 @@ def _open_add_employee_dialog(
             )
 
     col_save, col_cancel = st.columns(2)
-    if col_save.button(t("settings.btn_save", default="💾 Save Employee"), type="primary", width="stretch"):
+    if col_save.button(t("settings.btn_save", default="Save Employee"), type="primary", width="stretch"):
         try:
             validate_employee(
                 new_first, new_last, new_email, new_code, new_occupation
@@ -556,7 +584,7 @@ def _open_add_employee_dialog(
                         function_id=new_func, occupation_percentage=new_occupation,
                     ), initial_exception=initial_exception,
                 )
-                st.toast(t("settings.msg_emp_created", name=f"{new_first} {new_last}", default=f"Employee '{new_first} {new_last}' added (ID: {new_eid})!"), icon="✅")
+                st.toast(t("settings.msg_emp_created", name=f"{new_first} {new_last}", default=f"Employee '{new_first} {new_last}' added (ID: {new_eid})!"))
                 st.rerun()
         except ValueError as val_err:
             st.error(str(val_err))
@@ -746,7 +774,7 @@ def _render_employee_calendar_exception_editor(
                     "settings.msg_calendar_exception_updated",
                     default="Calendar exception updated.",
                 )
-            st.toast(message, icon="✅")
+            st.toast(message)
             st.rerun(scope="fragment")
         except (ValueError, TypeError) as err:
             st.error(str(err))
@@ -764,12 +792,11 @@ def _render_employee_calendar_exception_editor(
                 "settings.msg_calendar_exception_deleted",
                 default="Calendar exception deleted.",
             ),
-            icon="🗑️",
         )
         st.rerun(scope="fragment")
 
 
-@dialog(t("settings.dialog_edit_emp", default="✏️ Edit Employee Profile"))
+@dialog(t("settings.dialog_edit_emp", default="Edit Employee Profile"))
 @organization_errors
 def _open_edit_employee_dialog(
     service: OrganizationService,
@@ -821,7 +848,7 @@ def _open_edit_employee_dialog(
     )
 
     col_save, col_cancel = st.columns(2)
-    if col_save.button(t("settings.btn_save_changes", default="💾 Save Changes"), type="primary", width="stretch"):
+    if col_save.button(t("settings.btn_save_changes", default="Save Changes"), type="primary", width="stretch"):
         try:
             validate_employee(
                 edit_first, edit_last, edit_email, edit_code, edit_occupation
@@ -845,7 +872,7 @@ def _open_edit_employee_dialog(
                         occupation_percentage=edit_occupation,
                     )
                 ))
-                st.toast(t("settings.msg_emp_updated", default="Employee profile updated successfully!"), icon="✏️")
+                st.toast(t("settings.msg_emp_updated", default="Employee profile updated successfully!"))
                 st.rerun()
         except ValueError as val_err:
             st.error(str(val_err))
@@ -856,7 +883,7 @@ def _open_edit_employee_dialog(
         st.rerun()
 
 
-@dialog(t("settings.delete_confirm_title", default="🗑️ Confirm Deletion"))
+@dialog(t("settings.delete_confirm_title", default="Confirm Deletion"))
 @organization_errors
 def _open_delete_employee_dialog(
     service: OrganizationService,
@@ -864,13 +891,13 @@ def _open_delete_employee_dialog(
     emp_name: str,
 ) -> None:
     """Modal dialog to confirm deletion of an employee profile."""
-    st.warning(f"⚠️ {t('settings.delete_confirm_msg', name=emp_name, default=f'Are you sure you want to delete Employee profile **{emp_name}** (ID: {emp_id})?')}")
+    st.warning(f"{t('settings.delete_confirm_msg', name=emp_name, default=f'Are you sure you want to delete Employee profile **{emp_name}** (ID: {emp_id})?')}")
     st.caption("This action cannot be undone.")
 
     col_confirm, col_cancel = st.columns(2)
-    if col_confirm.button(t("settings.btn_confirm_delete", default="🗑️ Yes, Delete"), type="primary", width="stretch"):
+    if col_confirm.button(t("settings.btn_confirm_delete", default="Yes, Delete"), type="primary", width="stretch"):
         require_change(service.delete_employee(emp_id))
-        st.toast(t("settings.msg_emp_deleted", default=f"Employee '{emp_name}' deleted."), icon="🗑️")
+        st.toast(t("settings.msg_emp_deleted", default=f"Employee '{emp_name}' deleted."))
         st.rerun()
 
     if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):

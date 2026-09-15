@@ -65,6 +65,8 @@ def validate_capacity_fte(capacity_fte: float) -> None:
 def normalize_pool(pool: ResourcePool) -> ResourcePool:
     """Validate pool capacity while preserving the unspecified-capacity fallback."""
     validate_hierarchy_type_id(pool.hierarchy_type_id)
+    if type(pool.pool_type_id) is not int or pool.pool_type_id <= 0:
+        raise ValueError("A valid pool type is required.")
     validate_pool_name(pool.name)
     if pool.capacity_fte is not None:
         validate_capacity_fte(pool.capacity_fte)

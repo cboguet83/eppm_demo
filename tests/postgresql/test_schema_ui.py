@@ -48,11 +48,11 @@ def test_schema_editor_group_property_options_and_reference_guards(runtime: Runt
     app = editor(runtime, access)
 
     widget(app.text_input, "Group Name *").input("Custom group")
-    widget(app.button, "📁 Create Group").click().run()
+    widget(app.button, "Create Group").click().run()
     assert not app.exception
     group = schema.get_all_groups()[0]
     widget(app.text_input, "Group Name *", 1).input("Renamed group")
-    widget(app.button, "💾 Save Changes").click().run()
+    widget(app.button, "Save Changes").click().run()
     assert schema.get_all_groups()[0].group_name == "Renamed group"
 
     widget(app.selectbox, "Parameter Data Type *").select("ENUM").run()
@@ -61,7 +61,7 @@ def test_schema_editor_group_property_options_and_reference_guards(runtime: Runt
     app.multiselect(key="new_property_types").select(special).run()
     widget(app.text_input, "Parameter Label / Name *").input("Route")
     widget(app.text_input, "Initial Option / Tag Values (comma-separated)").input(" A, B ")
-    widget(app.button, "➕ Add Parameter").click().run()
+    widget(app.button, "Add Parameter").click().run()
     assert not app.exception, [error.message for error in app.exception]
     parameter = schema.get_all_parameters()[0]
     assert (parameter.param_id, parameter.group_id, parameter.param_type) == ("PRM_001", group.id, "ENUM")
@@ -75,18 +75,18 @@ def test_schema_editor_group_property_options_and_reference_guards(runtime: Runt
     assert schema.get_all_parameters()[0].mandatory is True
 
     widget(app.text_input, "New Option Value *").input("C")
-    widget(app.button, "➕ Add Option").click().run()
+    widget(app.button, "Add Option").click().run()
     assert [option.option_value for option in schema.get_all_options()] == ["A", "B", "C"]
     option_c = schema.get_all_options()[-1]
     widget(app.selectbox, "Delete Option").select(option_c.id).run()
-    widget(app.button, "🗑️ Delete Selected Option").click().run()
+    widget(app.button, "Delete Selected Option").click().run()
     assert [option.option_value for option in schema.get_all_options()] == ["A", "B"]
 
     project = create_project_service(runtime, access=access).create_project(
         name="Uses route", project_type_id=special, dynamic_attributes={"PRM_001": "A"},
     )
     widget(app.selectbox, "Delete Option").select(schema.get_all_options()[0].id).run()
-    widget(app.button, "🗑️ Delete Selected Option").click().run()
+    widget(app.button, "Delete Selected Option").click().run()
     assert not app.exception
     assert any("referenced" in error.value for error in app.error)
     assert len(schema.get_all_options()) == 2
@@ -117,7 +117,7 @@ def test_schema_editor_shows_safe_errors_and_keeps_failed_creation_atomic(runtim
     widget(app.selectbox, "Parameter Data Type *").select("ENUM").run()
     widget(app.text_input, "Parameter Label / Name *").input("Failed property")
     widget(app.text_input, "Initial Option / Tag Values (comma-separated)").input("A, Reject")
-    widget(app.button, "➕ Add Parameter").click().run()
+    widget(app.button, "Add Parameter").click().run()
     assert not app.exception
     assert any("conflicts" in error.value for error in app.error)
     assert all("private storage" not in error.value for error in app.error)
@@ -142,6 +142,6 @@ render_settings_view(create_settings_workspace(runtime, access=access))
     assert not app.exception, [error.message for error in app.exception]
     assert "Project templates" in [tab.label for tab in app.tabs]
     widget(app.text_input, "Group Name *").input("From settings")
-    widget(app.button, "📁 Create Group").click().run()
+    widget(app.button, "Create Group").click().run()
     assert not app.exception
     assert create_schema_service(runtime, access=access).get_all_groups()[0].group_name == "From settings"

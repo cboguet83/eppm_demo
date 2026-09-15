@@ -4,9 +4,10 @@ The sidebar shows language, the application title, and navigation in that order.
 Navigation labels have no icons or numbering. Compact account details and sign-out
 controls sit at the bottom, flowing below navigation on smaller screens.
 Settings reveals Organization Structure, Parameter Definition, and Project
-Configuration in the sidebar only while Settings is selected. Opening Settings
+Configuration as indented entries immediately beneath Settings in the same
+navigation list, only while a Settings page is selected. Opening Settings
 selects Organization Structure. Its tabs start with Function Types, Hierarchy
-Types, Functions, Teams, Employees, and Resource Pools, followed by the tag tabs.
+Types, Functions, Teams, Employees, Pool Types, and Resource Pools, followed by the tag tabs.
 Each route renders inside its own keyed container. The shell hides retained
 dashboard issue cards outside the dashboard route while the next page loads,
 preventing an unstyled red issue button from flashing during navigation.
@@ -43,3 +44,8 @@ The application sidebar immediately covers the main workspace with a blank loadi
 screen and spinning indicator when a different page is clicked. Navigation remains
 available. The destination is revealed after the Streamlit rerun finishes and its
 loading placeholders are gone; ordinary same-page widget updates stay visible.
+
+Settings pages start with their tabs, without a Settings heading. Hierarchy Types
+uses the shared Function Types table with filtering, sorting, and right-click
+Add/Edit/Delete actions. Modal editors retain immutable codes, translated labels,
+and the existing protection against deleting classifications in use.

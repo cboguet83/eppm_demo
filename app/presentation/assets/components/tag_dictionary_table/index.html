@@ -74,7 +74,7 @@
 
     .search-input {
       width: 100%;
-      padding: 6px 10px 6px 28px;
+      padding: 6px 10px;
       font-size: 12px;
       border: 1px solid var(--border-dark);
       border-radius: 6px;
@@ -88,15 +88,6 @@
       box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
     }
 
-    .search-icon {
-      position: absolute;
-      left: 8px;
-      top: 50%;
-      transform: translateY(-50%);
-      font-size: 11px;
-      color: var(--text-muted);
-      pointer-events: none;
-    }
 
     .btn-reset-filters {
       display: inline-flex;
@@ -364,7 +355,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     <div class="table-toolbar">
       <div class="toolbar-left">
         <div class="search-input-wrapper">
-          <span class="search-icon">🔍</span>
+
           <input type="text" id="search-box" class="search-input" placeholder="Search dictionary tags..." oninput="handleGlobalSearch()" />
         </div>
         <button class="btn-reset-filters" id="btn-reset" onclick="resetAllFilters()">
@@ -376,7 +367,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
           <span id="stat-count">0</span> <span id="lbl-stat-tags">Tags</span>
         </div>
         <button class="btn-add-primary" onclick="triggerAction('add')">
-          <span>➕</span> <span id="lbl-add-btn">Add Tag</span>
+          <span id="lbl-add-btn">Add Tag</span>
         </button>
       </div>
     </div>
@@ -421,14 +412,14 @@ button:not(.context-menu-item):disabled {opacity:.5;}
   <div id="context-menu" class="context-menu">
     <div class="context-menu-header" id="ctx-header">Tag Actions</div>
     <div class="context-menu-item" onclick="triggerAction('add')">
-      <span>➕</span> <span id="ctx-add-label">Add New Tag</span>
+      <span id="ctx-add-label">Add New Tag</span>
     </div>
     <div class="context-menu-divider" id="ctx-divider"></div>
     <div class="context-menu-item" id="ctx-edit" onclick="triggerAction('edit')">
-      <span>✏️</span> <span id="ctx-edit-label">Edit Tag</span>
+      <span id="ctx-edit-label">Edit Tag</span>
     </div>
     <div class="context-menu-item danger" id="ctx-delete" onclick="triggerAction('delete')">
-      <span>🗑️</span> <span id="ctx-delete-label">Delete Tag</span>
+      <span id="ctx-delete-label">Delete Tag</span>
     </div>
   </div>
 
@@ -494,12 +485,12 @@ button:not(.context-menu-item):disabled {opacity:.5;}
             tr.classList.add('selected');
           }
 
-          const groupLabel = item.tag_group_name ? `📁 ${escapeHtml(item.tag_group_name)}` : '— (None)';
+          const groupLabel = item.tag_group_name ? `${escapeHtml(item.tag_group_name)}` : '— (None)';
 
           tr.innerHTML = `
             <td style="font-weight: 600; color: #64748b;">#${item.id}</td>
             <td style="font-weight: 600;">
-              <span class="tag-badge">🏷️ ${escapeHtml(item.tag)}</span>
+              <span class="tag-badge">${escapeHtml(item.tag)}</span>
             </td>
             <td><span class="group-badge">${groupLabel}</span></td>
             <td><span class="group-badge">${item.usage_count || 0}</span></td>

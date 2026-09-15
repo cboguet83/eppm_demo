@@ -74,7 +74,7 @@
 
     .search-input {
       width: 100%;
-      padding: 6px 10px 6px 28px;
+      padding: 6px 10px;
       font-size: 12px;
       border: 1px solid var(--border-dark);
       border-radius: 6px;
@@ -88,15 +88,6 @@
       box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
     }
 
-    .search-icon {
-      position: absolute;
-      left: 8px;
-      top: 50%;
-      transform: translateY(-50%);
-      font-size: 11px;
-      color: var(--text-muted);
-      pointer-events: none;
-    }
 
     .btn-reset-filters {
       display: inline-flex;
@@ -563,11 +554,6 @@
       margin: 4px 0;
     }
 
-    .ctx-icon {
-      font-size: 14px;
-      width: 16px;
-      text-align: center;
-    }
 
     /* Shared EPPM context-menu standard (context_menu.py). */
 
@@ -604,11 +590,11 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     <div class="table-toolbar">
       <div class="toolbar-left">
         <div class="search-input-wrapper">
-          <span class="search-icon">🔍</span>
+
           <input type="text" id="search-box" class="search-input" placeholder="Quick search..." oninput="onGlobalSearch(this.value)" />
         </div>
         <button type="button" id="btn-clear" class="btn-reset-filters" onclick="clearAllFilters()" style="display:none;">
-          <span>🔄</span> <span id="lbl-clear">Clear Filters</span>
+          <span id="lbl-clear">Clear Filters</span>
         </button>
       </div>
 
@@ -692,16 +678,16 @@ button:not(.context-menu-item):disabled {opacity:.5;}
   <div class="context-menu" id="context-menu">
     <div class="context-menu-header" id="ctx-header">Employee Actions</div>
     <div class="context-menu-item" onclick="triggerAction('add')">
-      <span class="ctx-icon">➕</span>
+
       <span id="ctx-add-label">Add New Employee</span>
     </div>
     <div class="context-menu-item" id="ctx-item-edit" onclick="triggerAction('edit')">
-      <span class="ctx-icon">✏️</span>
+
       <span id="ctx-edit-label">Edit Employee Profile</span>
     </div>
     <div class="context-menu-divider" id="ctx-divider"></div>
     <div class="context-menu-item danger" id="ctx-item-delete" onclick="triggerAction('delete')">
-      <span class="ctx-icon">🗑️</span>
+
       <span id="ctx-delete-label">Delete Employee</span>
     </div>
   </div>

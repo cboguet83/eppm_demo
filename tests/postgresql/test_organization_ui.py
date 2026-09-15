@@ -162,7 +162,7 @@ render_settings_view(create_settings_workspace(runtime, access=access))
         "app.application.services.pool_capacity.PoolCapacityService.get_summaries",
         side_effect=AssertionError("Hidden resource pools loaded"),
     ):
-        for label in ("💼 Functions", "🏷️ Function Types", "🛡️ Teams", "👥 Employees"):
+        for label in ("Functions", "Function Types", "Teams", "Employees"):
             app.session_state["settings_tab_selection"] = label
             app.run()
             assert not app.exception, [error.message for error in app.exception]

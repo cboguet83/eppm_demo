@@ -4,6 +4,7 @@ After sign-in, Dashboard opens by default. It contains only projects you may rea
 Use Advanced filters below Resource pools, the four manager/team filters, or the resource-pool filter; selections within a fixed
 filter are alternatives, while different filters are combined. Clear all resets
 the dashboard without changing Planning's filters.
+Clear all filters and Advanced filters share the same horizontal action row.
 
 The Project status multiselect defaults to In Progress. Select other statuses to include
 completed or cancelled projects, or clear the selection to include all accessible
