@@ -50,7 +50,7 @@ def test_resource_pool_page_restores_breakdown_and_allocations_without_removed_c
             assert f'child_pool_{pool_id}' not in button_keys
             markup = '\n'.join(item.value for item in app.markdown)
             assert 'Active Allocations on Projects & Tasks' in markup
-            assert 'Deduplicated Assigned Capacity Breakdown' in markup
+            assert 'Mapped  Capacity Breakdown' in markup
             assert app.get('bidi_component'), 'The pool hierarchy remains visible'
             assert app.caption or app.error, 'Overassigned-period status remains visible'
 

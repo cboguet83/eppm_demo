@@ -81,7 +81,7 @@ def test_create_child_switches_parent_to_container_and_disables_direct_capacity(
             expect(parent_row).to_contain_text('Human')
             expect(tree.get_by_text('Pool Capacity (FTE)', exact=True)).to_be_visible()
             expect(tree.get_by_text('Mapped Capacity (FTE)', exact=True)).to_have_attribute('title', 'FTE calculated from the employees mapped in the pool.')
-            expect(page.get_by_text('Deduplicated Assigned Capacity Breakdown', exact=True)).to_be_visible()
+            expect(page.get_by_text('Mapped Capacity Breakdown', exact=True)).to_be_visible()
             expect(page.get_by_text('Active Allocations on Projects & Tasks', exact=True)).to_be_visible()
             expect(parent_row).to_have_css('background-color', 'rgb(241, 243, 245)')
             expect(page.get_by_text('No overassigned periods for Engineering.', exact=True)).to_be_visible()
@@ -117,5 +117,60 @@ def test_context_child_creation_warns_for_assigned_pool(authorized, tmp_path):
             expect(page.get_by_text('Remove or reassign them before adding children.', exact=False).first).to_be_visible()
             with psycopg.connect(authorized.setup.operator_url) as connection:
                 assert connection.execute('SELECT id,capacity_fte FROM eppm.resource_pool').fetchall() == [(parent, 8)]
+        finally:
+            browser.close()
+
+
+def test_header_filters_keep_ancestors_and_pool_tags_and_exception_editor_are_visible(authorized, tmp_path):
+    pools = service(authorized)
+    with psycopg.connect(authorized.setup.operator_url) as connection:
+        connection.execute("INSERT INTO eppm.tag_group(id,tag_group_name) VALUES(1,'pool_tag'),(2,'project_tag')")
+        connection.execute("INSERT INTO eppm.tag_dictionnary(id,tag,tag_group_id) VALUES(1,'Backend skill',1),(2,'Project only',2)")
+    parent = pools.create_pool(ResourcePool('Engineering', capacity_fte=10))
+    child = pools.create_pool(ResourcePool('Backend', capacity_fte=4, parent_pool_id=parent), tag_ids=[1])
+    pools.create_pool(ResourcePool('Other', capacity_fte=2, parent_pool_id=parent))
+    with native_server(authorized, tmp_path, SCREEN) as server, sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            page = server.new_page(browser, viewport={'width': 1600, 'height': 1100})
+            page.goto(server.origin)
+            tree = page.get_by_role('tree', name='Resource pools')
+            expect(tree).to_be_visible(timeout=30000)
+            parent_row = tree.get_by_role('treeitem', name='Engineering', exact=True)
+            child_row = tree.get_by_role('treeitem', name='Backend', exact=True)
+            expect(child_row).to_contain_text('Backend skill')
+            parent_row.press('ArrowLeft')
+            expect(child_row).to_have_count(0)
+            tag_filter = page.get_by_role('searchbox', name='Filter Tags', exact=True)
+            tag_filter.fill('Backend skill')
+            tag_filter.press('Tab')
+            expect(child_row).to_be_visible()
+            expect(parent_row).to_be_visible()
+            expect(tree.get_by_role('treeitem', name='Other', exact=True)).to_have_count(0)
+            capacity_filter = page.get_by_role('spinbutton', name='Filter Pool Capacity (FTE)', exact=True)
+            capacity_filter.fill('5')
+            capacity_filter.press('Tab')
+            expect(page.get_by_text('No pools match these filters.', exact=True)).to_be_visible()
+            capacity_filter.fill('')
+            capacity_filter.press('Tab')
+            expect(child_row).to_be_visible()
+            child_row.click(button='right')
+            page.get_by_role('menuitem', name='Edit pool', exact=True).click()
+            dialog = page.get_by_role('dialog')
+            tag_selector = dialog.get_by_role('combobox', name='Pool tags', exact=True)
+            tag_selector.click()
+            expect(page.get_by_role('option', name='project_tag · Project only', exact=True)).to_have_count(0)
+            tag_selector.press('Escape')
+            exceptions = dialog.get_by_text('Capacity exceptions', exact=True)
+            expect(exceptions).to_be_visible()
+            assert exceptions.bounding_box()['y'] > dialog.get_by_role('button', name='Save Changes', exact=True).bounding_box()['y']
+            exceptions.click()
+            dialog.get_by_role('textbox', name='Reason', exact=True).fill('Training')
+            dialog.get_by_role('button', name='Save exception', exact=True).click()
+            expect(dialog).to_have_count(0)
+            with psycopg.connect(authorized.setup.operator_url) as connection:
+                assert connection.execute('SELECT reason FROM eppm.resource_pool_capacity_exception WHERE pool_id=%s', (child,)).fetchone() == ('Training',)
+            expect(tag_filter).to_have_value('Backend skill')
+            page.screenshot(path=str(tmp_path / 'pool-tags-filters.png'), full_page=True)
         finally:
             browser.close()

@@ -10,15 +10,19 @@ from app.presentation.components.context_menu import CONTEXT_MENU_CSS
 _CSS = """
 .pool-tree {font:inherit; border:1px solid var(--st-border-color); border-radius:8px;}
 .tree-scroll {max-height:460px; overflow:auto; padding:6px;}
-.pool-row {display:grid; grid-template-columns:minmax(240px,1fr) 140px 150px 155px 155px;
+.pool-row {display:grid; grid-template-columns:minmax(240px,1fr) 120px 130px 180px 160px 165px;
     align-items:center; gap:8px; padding:4.2px 10px; box-sizing:border-box;
     border-radius:5px; cursor:pointer; min-height:36.4px; outline-offset:-2px;}
 .pool-row.container {font-weight:700; background:#f1f3f5; color:#263238;}
 .pool-identity {display:flex; align-items:center; min-width:0;}
-.tree-columns {display:grid; grid-template-columns:minmax(240px,1fr) 140px 150px 155px 155px;
+.tree-columns {display:grid; grid-template-columns:minmax(240px,1fr) 120px 130px 180px 160px 165px;
     gap:8px; padding:8px 10px; font-size:12px; font-weight:600; position:sticky; top:0;
     background:var(--st-background-color); z-index:1;}
-.pool-row,.tree-columns {min-width:900px;}
+.pool-row,.tree-columns {min-width:1100px;}
+.tree-columns input {display:block; box-sizing:border-box; width:100%; min-width:0; margin-top:6px;
+    font:inherit; font-weight:400; padding:5px; border:1px solid var(--st-border-color);
+    border-radius:4px; color:var(--st-text-color); background:var(--st-background-color);}
+.pool-tags {overflow:hidden; text-overflow:ellipsis;}
 .pool-row:hover {background:var(--st-secondary-background-color);}
 .pool-row[aria-selected=true] {background:var(--st-secondary-background-color);
     box-shadow:inset 3px 0 var(--st-primary-color);}
@@ -26,7 +30,6 @@ _CSS = """
 .pool-name {flex:1; overflow-wrap:anywhere;}
 .pool-meta {font-size:13px; opacity:.75; white-space:nowrap;}
 .tree-toggle {display:inline-flex; justify-content:center; width:22px; flex-shrink:0;}
-.tree-help {font-size:13px; opacity:.7; padding:10px 16px; border-bottom:1px solid var(--st-border-color);}
 .pool-row:focus-visible {outline:2px solid var(--st-primary-color);}
 """
 
@@ -37,6 +40,21 @@ export default function({data, parentElement, setTriggerValue, setStateValue}) {
     root.replaceChildren();
     let menu = null;
     const collapsed = new Set(data.collapsed || []);
+    const filters = data.filters || {};
+    const activeFilters = Object.values(filters).some(value => String(value).trim());
+    const fields = ['name','pool_type','hierarchy_type','tags','capacity','assigned_capacity'];
+    const matches = new Set(data.rows.filter(row => fields.every(field => {
+        const query = String(filters[field] || '').trim().toLocaleLowerCase();
+        if (!query) return true;
+        if (field === 'capacity' || field === 'assigned_capacity') return Number(row[field]) >= Number(query);
+        return String(row[field]).toLocaleLowerCase().includes(query);
+    })).map(row => row.id));
+    const visible = new Set(matches);
+    const byId = new Map(data.rows.map(row => [row.id,row]));
+    for (const id of matches) {
+        let parent = byId.get(id).parent;
+        while (parent !== null && !visible.has(parent)) {visible.add(parent); parent = byId.get(parent)?.parent ?? null;}
+    }
     const closeMenu = () => {menu?.remove(); menu = null;};
     const emit = (row, action) => {
         closeMenu();
@@ -69,24 +87,29 @@ export default function({data, parentElement, setTriggerValue, setStateValue}) {
         menu.style.top = Math.max(10, Math.min(event.clientY, window.innerHeight-menu.offsetHeight-10))+'px';
         menu.querySelector('button').focus();
     };
-    const help = document.createElement('div'); help.className = 'tree-help';
-    help.textContent = 'Select a pool to inspect it. Right-click or press Shift+F10 to edit or create a child.';
-    root.appendChild(help);
     const tree = document.createElement('div'); tree.className = 'tree-scroll';
     tree.setAttribute('role','tree'); tree.setAttribute('aria-label','Resource pools');
     const header = document.createElement('div'); header.className = 'tree-columns';
-    for (const text of ['Pool','Pool type','Hierarchy type','Pool Capacity (FTE)','Mapped Capacity (FTE)']) {
+    for (const [index,text] of ['Pool','Pool type','Hierarchy type','Tags','Pool Capacity (FTE)','Mapped Capacity (FTE)'].entries()) {
         const cell = document.createElement('span'); cell.textContent = text;
         if (text === 'Mapped Capacity (FTE)') {
             cell.title = 'FTE calculated from the employees mapped in the pool.';
             cell.tabIndex = 0;
         }
-        header.appendChild(cell);
+        const input = document.createElement('input');
+        input.type = index >= 4 ? 'number' : 'search';
+        input.setAttribute('aria-label', `Filter ${text}`);
+        input.placeholder = index >= 4 ? 'Minimum FTE' : 'Filter…';
+        if (index >= 4) {input.min = '0'; input.step = '0.01';}
+        input.value = filters[fields[index]] || '';
+        input.onchange = () => setStateValue('filters', {...filters,[fields[index]]:input.value});
+        cell.appendChild(input); header.appendChild(cell);
     }
     tree.appendChild(header);
     let hiddenBelow = null;
     for (const row of data.rows) {
-        if (hiddenBelow !== null && row.depth > hiddenBelow) continue;
+        if (!visible.has(row.id)) continue;
+        if (!activeFilters && hiddenBelow !== null && row.depth > hiddenBelow) continue;
         hiddenBelow = null;
         const item = document.createElement('div'); item.className = 'pool-row'; item.tabIndex = 0;
         item.dataset.id = row.id; item.setAttribute('role','treeitem');
@@ -96,21 +119,22 @@ export default function({data, parentElement, setTriggerValue, setStateValue}) {
         const identity = document.createElement('span'); identity.className = 'pool-identity';
         identity.style.paddingLeft = (row.depth*24)+'px';
         const toggle = document.createElement('span'); toggle.className = 'tree-toggle';
-        toggle.setAttribute('aria-hidden','true'); toggle.textContent = row.container ? (collapsed.has(row.id) ? '▸' : '▾') : '·';
+        toggle.setAttribute('aria-hidden','true'); toggle.textContent = row.container ? (collapsed.has(row.id) && !activeFilters ? '▸' : '▾') : '·';
         const changeExpanded = () => {
             root.dataset.focusPool = row.id;
             if (collapsed.has(row.id)) collapsed.delete(row.id); else collapsed.add(row.id);
             setStateValue('collapsed',[...collapsed]);
         };
         if (row.container) {
-            item.setAttribute('aria-expanded',String(!collapsed.has(row.id)));
+            item.setAttribute('aria-expanded',String(activeFilters || !collapsed.has(row.id)));
             toggle.onclick = event => {event.stopPropagation(); changeExpanded();};
             if (collapsed.has(row.id)) hiddenBelow = row.depth;
         }
         const label = document.createElement('span'); label.className = 'pool-name'; label.textContent = row.name;
         identity.append(toggle,label); item.appendChild(identity);
-        for (const value of [row.pool_type,row.hierarchy_type,row.capacity,row.assigned_capacity]) {
+        for (const [index,value] of [row.pool_type,row.hierarchy_type,row.tags,row.capacity,row.assigned_capacity].entries()) {
             const cell = document.createElement('span'); cell.className = 'pool-meta';
+            if (index === 2) {cell.classList.add('pool-tags'); cell.title = value;}
             cell.textContent = value; item.appendChild(cell);
         }
         item.lastElementChild.title = 'FTE calculated from the employees mapped to the pool.';
@@ -128,6 +152,9 @@ export default function({data, parentElement, setTriggerValue, setStateValue}) {
                        (event.key === 'ArrowLeft' && !collapsed.has(row.id)))) {event.preventDefault(); changeExpanded();}
         };
         tree.appendChild(item);
+    }
+    if (!visible.size) {
+        const empty = document.createElement('p'); empty.textContent = 'No pools match these filters.'; tree.appendChild(empty);
     }
     root.appendChild(tree);
     tree.scrollTop = scrollTop;
@@ -151,6 +178,7 @@ def resource_pool_tree(
     *, assigned_capacities: dict[int, float] | None = None,
     pool_types: dict[int, str] | None = None,
     hierarchy_types: dict[int, str] | None = None,
+    tags: dict[int, list[str]] | None = None,
 ) -> TableAction | None:
     """Render a validated forest and accept actions only for existing pool IDs.
 
@@ -161,6 +189,7 @@ def resource_pool_tree(
         assigned_capacities: Assigned resource capacity, already summed for containers.
         pool_types: Localized labels by pool type ID.
         hierarchy_types: Localized labels by hierarchy type ID.
+        tags: Pool-tag labels by pool ID.
 
     Returns:
         A validated selection, edit or child-creation event, when triggered.
@@ -173,6 +202,8 @@ def resource_pool_tree(
         identity, depth = pending.pop()
         children = hierarchy.children.get(identity, [])
         rows.append({'id': identity, 'name': hierarchy.pools[identity].name, 'depth': depth,
+                     'parent': hierarchy.pools[identity].parent_pool_id,
+                     'tags': ', '.join((tags or {}).get(identity, [])),
                      'container': bool(children), 'capacity': f'{capacities.get(identity, 0):.2f}',
                      'assigned_capacity': f'{(assigned_capacities or {}).get(identity, 0):.2f}',
                      'pool_type': (pool_types or {}).get(hierarchy.pools[identity].pool_type_id, '—'),
@@ -184,9 +215,10 @@ def resource_pool_tree(
         'eppm_resource_pool_tree', html='<div class="pool-tree"></div>',
         css=_CSS + CONTEXT_MENU_CSS, js=_JS,
     )
-    result = component(data={'rows': rows, 'selected': selected, 'collapsed': state.get('collapsed', [])},
+    result = component(data={'rows': rows, 'selected': selected, 'collapsed': state.get('collapsed', []),
+                             'filters': state.get('filters', {})},
                        key=key, width='stretch', height='content',
-                       on_action_change=lambda: None, on_collapsed_change=lambda: None)
+                       on_action_change=lambda: None, on_collapsed_change=lambda: None, on_filters_change=lambda: None)
     event = getattr(result, 'action', None)
     if not isinstance(event, dict) or event.get('action') not in ('select', 'edit', 'create'):
         return None

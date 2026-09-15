@@ -206,3 +206,22 @@ def test_reparenting_zeros_new_parent_and_failed_child_save_restores_capacity(au
     pools.update_pool(replace(pools.get_pool_by_id(parent), name='Renamed parent'))
     assert pools.get_pool_by_id(parent).capacity_fte == 0
     assert capacity_service(authorized).get_details([parent])[0].total_capacity_fte == 4
+
+
+def test_initial_capacity_exception_is_atomic_with_pool_creation(authorized):
+    pools = service(authorized)
+    exception = PoolCapacityException(999, '2026-01-01', '2026-01-03', 0.5, 'Initial leave')
+    identity = pools.create_pool(ResourcePool('Pool with initial leave', capacity_fte=2), capacity_exceptions=[exception])
+    saved = pools.capacity_exceptions(identity)
+    assert len(saved) == 1 and saved[0].pool_id == identity and saved[0].reduction_fte == 0.5
+    with pytest.raises(ValueError):
+        pools.create_pool(ResourcePool('Invalid initial leave'), capacity_exceptions=[replace(exception, reduction_fte=-1)])
+    with psycopg.connect(authorized.setup.operator_url) as connection:
+        connection.execute("CREATE FUNCTION eppm.reject_initial_exception() RETURNS trigger LANGUAGE plpgsql AS $$ "
+                           "BEGIN RAISE EXCEPTION 'test failure'; END $$")
+        connection.execute('CREATE TRIGGER reject_initial_exception BEFORE INSERT ON eppm.resource_pool_capacity_exception '
+                           'FOR EACH ROW EXECUTE FUNCTION eppm.reject_initial_exception()')
+    from app.application.exceptions import ResourcePoolStorageError
+    with pytest.raises(ResourcePoolStorageError):
+        pools.create_pool(ResourcePool('Rolled back'), capacity_exceptions=[exception])
+    assert [pool.name for pool in pools.get_all_pools()] == ['Pool with initial leave']

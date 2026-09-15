@@ -92,6 +92,15 @@ def _open_add_pool_dialog(service: ResourcePoolService, parent_pool_id: int | No
         format_func=lambda tag_id: tag_labels[tag_id],
         placeholder="Select dictionary tags",
     )
+    initial_exceptions = []
+    with st.expander(t('pool_exceptions.title', default='Capacity exceptions')):
+        if st.checkbox('Add an initial capacity exception', key='new_pool_add_exception'):
+            first = st.date_input('Start date', value=date.today(), key='new_pool_exception_start')
+            last = st.date_input('End date', value=date.today(), key='new_pool_exception_end')
+            reduction = st.number_input('Capacity reduction (FTE)', min_value=0.001, value=0.5,
+                                        step=0.25, key='new_pool_exception_reduction')
+            reason = st.text_input('Reason', key='new_pool_exception_reason')
+            initial_exceptions.append(PoolCapacityException(0, first.isoformat(), last.isoformat(), reduction, reason))
     col_save, col_cancel = st.columns(2)
     if col_save.button(
         t("settings.btn_save", default="Save Pool"), type="primary", width="stretch"
@@ -108,6 +117,7 @@ def _open_add_pool_dialog(service: ResourcePoolService, parent_pool_id: int | No
                 parent_pool_id=parent_pool_id,
             ),
             tag_ids=selected_tag_ids,
+            capacity_exceptions=initial_exceptions,
         )
         st.session_state['target_resource_pool_id'] = parent_pool_id if parent_pool_id is not None else p_id
         st.toast(f"Resource Pool '{new_name}' created (ID: {p_id})!")
@@ -127,9 +137,6 @@ def _open_edit_pool_dialog(service: ResourcePoolService, pool_id: int) -> None:
     container = bool(PoolHierarchy(service.get_all_pools()).children.get(pool_id))
     if container:
         st.info("This pool is a container. Capacity is calculated from its children; assign its leaf pools to projects and tasks.")
-    else:
-        with st.expander(t('pool_exceptions.title', default='Capacity exceptions')):
-            _capacity_exceptions_editor(service, pool_id)
     edit_name = st.text_input(
         t("settings.field_pool_name", default="Resource Pool Name *"), value=pool.name
     )
@@ -168,7 +175,7 @@ def _open_edit_pool_dialog(service: ResourcePoolService, pool_id: int) -> None:
     selected_tag_ids = st.multiselect(
         "Pool tags",
         options=list(tag_labels),
-        default=existing_tag_ids,
+        default=[identity for identity in existing_tag_ids if identity in tag_labels],
         format_func=lambda tag_id: tag_labels[tag_id],
         placeholder="Select dictionary tags",
     )
@@ -189,13 +196,19 @@ def _open_edit_pool_dialog(service: ResourcePoolService, pool_id: int) -> None:
                     hierarchy_type_id=hierarchy_type_id,
                     parent_pool_id=parent_pool_id,
                 ),
-                tag_ids=selected_tag_ids,
+                tag_ids=selected_tag_ids + [identity for identity in existing_tag_ids if identity not in tag_labels],
             )
         )
         st.toast("Resource Pool updated successfully!")
         st.rerun()
     if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
         st.rerun()
+
+    with st.expander(t('pool_exceptions.title', default='Capacity exceptions')):
+        if container:
+            st.caption('Manage capacity exceptions on the child pools. Containers aggregate their capacity.')
+        else:
+            _capacity_exceptions_editor(service, pool_id)
 
 
 def _parent_pool_selector(service: ResourcePoolService, *, current: int | None = None,

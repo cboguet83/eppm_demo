@@ -60,6 +60,8 @@ def render_resource_pools(
         kpi5.metric(t("settings.kpi_overassigned_pools", default="Overassigned Pools"), "0")
     st.divider()
     st.caption("Pools form a hierarchy. Only pools without children can be assigned; containers total their children’s capacity.")
+    st.caption("Pools have a defined capacity (FTE) and can be assigned to projects and tasks.")
+    st.caption("Employees defined in the system can be mapped to pools via their team memberships or directly, and their effective allocation is counted towards the pool’s assigned capacity.")
     _, col_add_btn = st.columns([4, 1])
     with col_add_btn:
         if st.button(
@@ -86,7 +88,8 @@ def render_resource_pools(
             {row.pool_id: row.total_capacity_fte for row in all_pool_details}, selected_pool_id,
             assigned_capacities={row.pool_id: row.assigned_capacity_fte for row in all_pool_details},
             pool_types={row.id: row.label(get_current_locale()) for row in service.get_all_pool_types()},
-            hierarchy_types={row.id: row.label(get_current_locale()) for row in service.get_all_hierarchy_types()})
+            hierarchy_types={row.id: row.label(get_current_locale()) for row in service.get_all_hierarchy_types()},
+            tags=service.get_tags_by_pools(list(hierarchy.pools)))
         if event:
             selected_pool_id = event['id']
             st.session_state["sb_selected_resource_pool"] = selected_pool_id
@@ -114,7 +117,7 @@ def render_resource_pools(
                 capacity.get_details(hierarchy.descendants(selected_pool_id, leaves_only=True))
                 if hierarchy.children.get(selected_pool_id) else [current_detail]
             )
-            st.markdown("#### Deduplicated Assigned Capacity Breakdown")
+            st.markdown("####  Mapped  Capacity Breakdown")
             st.caption("Employees mapped directly or through several teams are counted once within each pool.")
             contributions = [
                 {"Pool": detail.pool_name, "Resource": item.resource_name,

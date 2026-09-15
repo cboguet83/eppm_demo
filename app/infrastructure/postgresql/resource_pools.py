@@ -240,6 +240,13 @@ class PostgresResourcePoolStore:
                                   'JOIN eppm.tag_dictionnary t ON t.id=p.tag_id LEFT JOIN eppm.tag_group g ON g.id=t.tag_group_id '
                                   'WHERE p.pool_id=%s ORDER BY t.tag COLLATE "C",p.id', (pool_id,))
 
+    def get_tags_by_pools(self, pool_ids: list[int]) -> list[PoolTag]:
+        """Read tags for the requested shared pool snapshot in one query."""
+        return self._rows(PoolTag, 'SELECT p.id,p.pool_id,p.tag_id,t.tag AS tag_name,g.tag_group_name '
+                         'FROM eppm.resource_pool_tag p JOIN eppm.tag_dictionnary t ON t.id=p.tag_id '
+                         'LEFT JOIN eppm.tag_group g ON g.id=t.tag_group_id '
+                         'WHERE p.pool_id=ANY(%s::bigint[]) ORDER BY t.tag COLLATE "C",p.id', (pool_ids,))
+
     def set_pool_tags(self, pool_id: int, tag_ids: list[int]) -> None:
         """Replace validated tag choices as part of the complete pool save."""
         self.connection.execute('DELETE FROM eppm.resource_pool_tag WHERE pool_id=%s', (pool_id,))

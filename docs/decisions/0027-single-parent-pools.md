@@ -75,6 +75,16 @@ and allocation. Columns are labeled Pool Capacity (FTE) and Mapped Capacity (FTE
 mapped capacity has an explanatory tooltip. Containers have a light gray background.
 Editing and child creation use context actions;
 conversion warnings appear only when a blocked creation is attempted.
+Pool-tag choices and the hierarchy Tags column use dictionary entries whose
+existing tag group is named `pool_tag`; there is no separate `tag_type` column.
+Legacy links to other tag groups are hidden but preserved during pool edits.
+Tag labels are loaded in one batch. Each tree header includes a filter: text
+matching for names, classifications and tags, and minimum FTE for capacities.
+Filters combine and retain matching rows' ancestors; matching branches are
+expanded while filtering. Filters persist across dialog saves.
+The edit dialog places exception management at the bottom. Creation optionally
+accepts an initial exception, validated and saved with the pool in one Python
+transaction. Containers expose a reminder to manage exceptions on their leaves.
 Demo allocation generation also selects leaves only.
 
 ## Migration and future evolution

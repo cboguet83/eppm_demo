@@ -100,14 +100,19 @@ class ResourcePoolService:
         """Read the selected pool's absolute-capacity reduction periods."""
         return self._gateway.run(lambda store: store.capacity_exceptions([pool_id]))
 
-    def save_capacity_exception(self, item: PoolCapacityException) -> int:
-        """Validate an inclusive reduction and authorize shared configuration edits."""
+    @staticmethod
+    def _normalize_capacity_exception(item: PoolCapacityException) -> PoolCapacityException:
+        """Validate and normalize an inclusive capacity reduction."""
         first, last = date.fromisoformat(item.start_date), date.fromisoformat(item.end_date)
         if not 0 <= (last - first).days < 9125:
             raise ValueError('The exception must end on or after its start and span at most 9125 days.')
         if not isfinite(item.reduction_fte) or not 0.001 <= item.reduction_fte < 1_000_000_000:
             raise ValueError('Enter a positive finite capacity reduction in FTE.')
-        item = replace(item, reduction_fte=round(item.reduction_fte, 3), reason=item.reason.strip())
+        return replace(item, reduction_fte=round(item.reduction_fte, 3), reason=item.reason.strip())
+
+    def save_capacity_exception(self, item: PoolCapacityException) -> int:
+        """Validate an inclusive reduction and authorize shared configuration edits."""
+        item = self._normalize_capacity_exception(item)
         def operation(store: ResourcePoolStore) -> int:
             PoolHierarchy(store.get_all_pools()).require_leaf(item.pool_id)
             return store.save_capacity_exception(item)
@@ -166,15 +171,20 @@ class ResourcePoolService:
         """Get pool by id within one application transaction."""
         return self._gateway.run(lambda store: store.get_pool_by_id(pool_id), permission=Permission.SHARED)
 
-    def create_pool(self, pool: ResourcePool, *, tag_ids: list[int] | None = None) -> int:
-        """Create pool within one application transaction."""
+    def create_pool(self, pool: ResourcePool, *, tag_ids: list[int] | None = None,
+                    capacity_exceptions: list[PoolCapacityException] | None = None) -> int:
+        """Create a pool, tags and optional initial reductions atomically."""
         pool = normalize_pool(pool)
         tag_ids = None if tag_ids is None else list(tag_ids)
+        exceptions = [self._normalize_capacity_exception(replace(item, id=None))
+                      for item in capacity_exceptions or []]
         def operation(store: ResourcePoolStore) -> int:
             validated = self._validate_pool_save(store, pool)
             result = store.create_pool(validated)
             if result and tag_ids is not None:
                 self._set_tags(store, result, tag_ids)
+            for item in exceptions:
+                store.save_capacity_exception(replace(item, pool_id=result))
             return result
         return self._gateway.run(operation, write=True, permission=Permission.SHARED)
 
@@ -282,8 +292,19 @@ class ResourcePoolService:
         return self._gateway.run(lambda store: store.get_project_assignments_map(project_ids))
 
     def get_tag_choices(self) -> list[PoolTagChoice]:
-        """Get tag choices within one application transaction."""
-        return self._gateway.run(lambda store: store.get_tag_choices(), permission=Permission.SHARED)
+        """Offer only dictionary entries classified by the pool_tag group."""
+        return self._gateway.run(lambda store: [tag for tag in store.get_tag_choices()
+                                                if tag.tag_group_name == 'pool_tag'], permission=Permission.SHARED)
+
+    def get_tags_by_pools(self, pool_ids: list[int]) -> dict[int, list[str]]:
+        """Batch pool-tag labels for the hierarchy without per-row queries."""
+        def operation(store: ResourcePoolStore) -> dict[int, list[str]]:
+            result: dict[int, list[str]] = {}
+            for tag in store.get_tags_by_pools(pool_ids):
+                if tag.tag_group_name == 'pool_tag':
+                    result.setdefault(tag.pool_id, []).append(tag.tag_name)
+            return result
+        return self._gateway.run(operation, permission=Permission.SHARED)
 
     def get_pool_tags(self, pool_id: int) -> list[PoolTag]:
         """Get pool tags within one application transaction."""

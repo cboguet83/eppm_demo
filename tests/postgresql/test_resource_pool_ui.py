@@ -20,7 +20,8 @@ from tests.postgresql.ui import native_screen
 def database(authorized) -> RuntimeResources:
     with psycopg.connect(authorized.setup.operator_url) as connection:
         ensure_reference_catalog(connection)
-        connection.execute("INSERT INTO eppm.tag_dictionnary(id,tag) VALUES(1,'Priority')")
+        connection.execute("INSERT INTO eppm.tag_group(id,tag_group_name) VALUES(1,'pool_tag'),(2,'project_tag')")
+        connection.execute("INSERT INTO eppm.tag_dictionnary(id,tag,tag_group_id) VALUES(1,'Priority',1),(2,'Project only',2),(3,'Unclassified',NULL)")
         connection.execute("UPDATE eppm.project SET name='<script>project</script>' WHERE id=1")
     return RuntimeResources(authorized.database, authorized.key)
 
@@ -54,6 +55,7 @@ dialogs.{invocation}
 def test_pool_dialogs_create_edit_and_delete_with_tags(database: RuntimeResources, access: BusinessAccess) -> None:
     service = create_resource_pool_service(database, access=access)
     app = dialog(database, access, "_open_add_pool_dialog(service)")
+    assert app.multiselect[0].options == ['pool_tag · Priority']
     app.button[0].click().run()
     assert app.error and service.get_all_pools() == []
     app.text_input[0].input("Delivery")
@@ -65,6 +67,7 @@ def test_pool_dialogs_create_edit_and_delete_with_tags(database: RuntimeResource
     assert pool.capacity_fte == 2.5
     assert service.get_pool_tags(pool.id)[0].tag_name == "Priority"
     app = dialog(database, access, f"_open_edit_pool_dialog(service, {pool.id})")
+    assert app.multiselect[0].options == ['pool_tag · Priority']
     next(widget for widget in app.text_input if widget.label == 'Resource Pool Name *').input('Renamed')
     app.multiselect[0].set_value([])
     next(widget for widget in app.button if widget.label == 'Save Changes').click().run()
@@ -110,6 +113,27 @@ def test_parent_selector_creates_children_excludes_descendants_and_warns_on_assi
     app.button[0].click().run()
     assert not app.exception and any('Cannot add a child' in error.value for error in app.error)
     assert len(service.get_all_pools()) == 2
+
+
+def test_new_pool_dialog_saves_initial_exception_and_hides_legacy_nonpool_tags(database, access):
+    service = create_resource_pool_service(database, access=access)
+    app = dialog(database, access, '_open_add_pool_dialog(service)')
+    app.text_input[0].input('Initial exception')
+    app.checkbox(key='new_pool_add_exception').check().run()
+    app.text_input(key='new_pool_exception_reason').input('Training')
+    next(button for button in app.button if button.label == 'Save').click().run()
+    assert not app.exception and not app.error
+    pool = next(row for row in service.get_all_pools() if row.name == 'Initial exception')
+    assert service.capacity_exceptions(pool.id)[0].reason == 'Training'
+    service.set_pool_tags(pool.id, [1, 2, 3])
+    app = dialog(database, access, f'_open_edit_pool_dialog(service, {pool.id})')
+    assert not app.exception
+    assert app.multiselect[0].options == ['pool_tag · Priority']
+    assert app.multiselect[0].value == [1]
+    assert service.get_tags_by_pools([pool.id]) == {pool.id: ['Priority']}
+    next(button for button in app.button if button.label == 'Save Changes').click().run()
+    assert not app.exception and not app.error
+    assert {tag.tag_id for tag in service.get_pool_tags(pool.id)} == {1, 2, 3}
 
 
 def test_mapping_dialog_preserves_team_and_employee_choices(database: RuntimeResources, access: BusinessAccess) -> None:
