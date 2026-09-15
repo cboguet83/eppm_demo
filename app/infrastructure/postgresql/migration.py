@@ -42,6 +42,9 @@ def discover_migrations(directory: Path = MIGRATION_DIRECTORY) -> tuple[Migratio
         checksum_content = content
         if path.name == '0040_pool_hierarchy.sql':
             checksum_content += Path(__file__).with_name('pool_hierarchy_migration.py').read_bytes()
+        if path.name == '0041_project_plans.sql':
+            checksum_content += Path(__file__).with_name('project_plan_migration.py').read_bytes()
+            checksum_content += Path(__file__).with_name('plan_content.py').read_bytes()
         migrations.append(Migration(len(migrations) + 1, path.name, sha256(checksum_content).hexdigest(), source))
     if not migrations:
         raise MigrationError("No migration files were found.")
@@ -104,6 +107,9 @@ def migrate(url: str, *, directory: Path = MIGRATION_DIRECTORY) -> tuple[str, ..
                     if migration.name == '0040_pool_hierarchy.sql':
                         from app.infrastructure.postgresql.pool_hierarchy_migration import convert_pool_groups
                         convert_pool_groups(connection)
+                    if migration.name == '0041_project_plans.sql':
+                        from app.infrastructure.postgresql.project_plan_migration import capture_initial_plans
+                        capture_initial_plans(connection)
                     connection.execute(
                         "INSERT INTO eppm.schema_migration(version, name, checksum) VALUES (%s, %s, %s)",
                         (migration.version, migration.name, migration.checksum),
