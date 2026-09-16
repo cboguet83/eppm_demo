@@ -55,7 +55,7 @@ def test_changed_task_sources_or_authority_reject_the_batch(pg_database, task_br
     service.grant(admin, actor.user_id, 'project_viewer', {'kind': 'projects', 'project_ids': [2]})
     with psycopg.connect(pg_database.operator_url) as connection:
         connection.execute("INSERT INTO eppm.resource_pool(id,name,capacity_fte) VALUES(1,'Shared',1)")
-        connection.execute("INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,fte_assigned) VALUES(1,1,10,0.6),(1,2,20,0.6)")
+        connection.execute('INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,fte_assigned,project_plan_id) VALUES (1,1,10,0.6,(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(1,2,20,0.6,(SELECT id FROM eppm.project_plan WHERE project_id=2 AND is_current))')
         if change in {'pool', 'pool_consumer'}:
             connection.execute('DELETE FROM eppm.task_dependencies')
     if change == 'membership':
@@ -97,7 +97,7 @@ def test_hidden_sources_do_not_change_tokens_and_native_keys_match_chart_capture
     workspace = workspace_for(task_browser)
     with psycopg.connect(pg_database.operator_url) as connection:
         connection.execute("INSERT INTO eppm.resource_pool(id,name,capacity_fte) VALUES(1,'Shared',1)")
-        connection.execute("INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,fte_assigned) VALUES(1,1,10,0.6),(1,2,20,0.6)")
+        connection.execute('INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,fte_assigned,project_plan_id) VALUES (1,1,10,0.6,(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(1,2,20,0.6,(SELECT id FROM eppm.project_plan WHERE project_id=2 AND is_current))')
     expected = workspace.sources.capture([1]).tokens
     assert workspace.sources.read([1]) == expected
     with psycopg.connect(pg_database.operator_url) as connection:
@@ -133,7 +133,7 @@ def test_project_level_pool_links_do_not_depend_on_other_projects_demand(pg_data
     with psycopg.connect(pg_database.operator_url) as connection:
         connection.execute('DELETE FROM eppm.task_dependencies')
         connection.execute("INSERT INTO eppm.resource_pool(id,name,capacity_fte) VALUES(1,'Shared',1)")
-        connection.execute("INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,fte_assigned) VALUES(1,1,NULL,0.6),(1,2,20,0.6)")
+        connection.execute('INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,fte_assigned,project_plan_id) VALUES (1,1,NULL,0.6,(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(1,2,20,0.6,(SELECT id FROM eppm.project_plan WHERE project_id=2 AND is_current))')
     sources = source_request(task_browser)
     original = planning_transport.build_task_payload
 
@@ -165,7 +165,7 @@ def test_project_level_pool_links_do_not_depend_on_other_projects_demand(pg_data
 def test_project_pool_label_link_and_allocation_kind_changes_still_require_refresh(pg_database, task_browser, statement):
     with psycopg.connect(pg_database.operator_url) as connection:
         connection.execute("INSERT INTO eppm.resource_pool(id,name,capacity_fte) VALUES(1,'Shared',1)")
-        connection.execute("INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,fte_assigned) VALUES(1,1,0.6)")
+        connection.execute('INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,fte_assigned,project_plan_id) VALUES (1,1,0.6,(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current))')
     sources = source_request(task_browser)
     with psycopg.connect(pg_database.operator_url) as connection:
         connection.execute(statement)

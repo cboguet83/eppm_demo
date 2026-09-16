@@ -1,5 +1,6 @@
 """Scoped cache fingerprints, transactional invalidation and independent writers."""
 
+from tests.postgresql.plan_fixtures import seed_test_plans
 from concurrent.futures import ThreadPoolExecutor
 from threading import Event
 from uuid import uuid4
@@ -46,10 +47,8 @@ def revisions(authorized, user_id=1):
 def sources(authorized):
     with psycopg.connect(authorized.setup.operator_url) as connection:
         connection.execute("INSERT INTO eppm.resource_pool(id,name,capacity_fte) VALUES (1,'First',1),(2,'Second',2)")
-        connection.execute("""INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date)
-            VALUES (1,1,'One','2026-01-01','2026-01-05'),(2,2,'Two','2026-01-01','2026-01-06'),
-                   (3,3,'Hidden','2026-01-01','2026-01-07')""")
-        connection.execute('INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,fte_assigned) VALUES (1,1,1,0.5),(1,3,3,5),(2,2,2,1)')
+        connection.execute("INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date,project_plan_id) VALUES (1,1,'One','2026-01-01','2026-01-05',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(2,2,'Two','2026-01-01','2026-01-06',(SELECT id FROM eppm.project_plan WHERE project_id=2 AND is_current)),(3,3,'Hidden','2026-01-01','2026-01-07',(SELECT id FROM eppm.project_plan WHERE project_id=3 AND is_current))")
+        connection.execute('INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,fte_assigned,project_plan_id) VALUES (1,1,1,0.5,(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(1,3,3,5,(SELECT id FROM eppm.project_plan WHERE project_id=3 AND is_current)),(2,2,2,1,(SELECT id FROM eppm.project_plan WHERE project_id=2 AND is_current))')
     return authorized
 
 
@@ -58,7 +57,9 @@ def test_all_business_sources_are_tracked_but_authentication_and_cache_tables_ar
         tracked = {row[0] for row in connection.execute("""SELECT c.relname FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid
             JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='eppm' AND t.tgname='cache_revision'""")}
     assert tracked == DISPLAY_SOURCE_TABLES
-    for table in ('project_cache_revision', 'pool_cache_revision', 'catalog_cache_revision'):
+    assert sources.query('SELECT project_id FROM eppm.project_cache_revision ORDER BY project_id') == [(1,), (2,)]
+    assert sources.query('UPDATE eppm.project_cache_revision SET revision=revision+1 WHERE project_id=3 RETURNING project_id', write=True) == []
+    for table in ('pool_cache_revision', 'catalog_cache_revision'):
         with pytest.raises(psycopg.errors.InsufficientPrivilege):
             sources.query(sql.SQL('SELECT * FROM eppm.{}').format(sql.Identifier(table)), user_id=4)
 
@@ -118,7 +119,8 @@ def test_predecessor_fingerprints_use_only_visible_endpoints_and_terminate_cycle
 
 def test_moving_the_last_visible_assignment_changes_both_pool_source_sets_and_project_revisions(sources):
     before = revisions(sources)
-    sources.query('''UPDATE eppm.resource_pool_assignment SET pool_id=2,project_id=2,task_id=2
+    sources.query('''UPDATE eppm.resource_pool_assignment SET pool_id=2,project_id=2,task_id=2,
+        project_plan_id=(SELECT id FROM eppm.project_plan WHERE project_id=2 AND is_current)
         WHERE project_id=1''', user_id=4, write=True)
     after = revisions(sources)
     assert dict(after.pool_sources) == {1: (), 2: (2,)}
@@ -165,6 +167,7 @@ def test_generation_ids_prevent_reuse_after_project_or_pool_recreation(sources):
         connection.execute('DELETE FROM eppm.project_task WHERE project_id=2')
         connection.execute('DELETE FROM eppm.project WHERE id=2')
         connection.execute("INSERT INTO eppm.project(id,name) VALUES (2,'Read only')")
+        seed_test_plans(connection)
         connection.execute('DELETE FROM eppm.resource_pool WHERE id=2')
         connection.execute("INSERT INTO eppm.resource_pool(id,name,capacity_fte) VALUES (2,'Second',2)")
     after = revisions(sources, 4)
@@ -241,6 +244,7 @@ def test_copied_epoch_in_a_recreated_database_cannot_reuse_the_previous_incarnat
             connection.execute('UPDATE eppm.database_identity SET epoch=%s', (before.identity[0],))
             connection.execute("INSERT INTO eppm.project_type(name,is_general) VALUES ('General',true)")
             connection.execute("INSERT INTO eppm.project(id,name) VALUES (1,'Editable'),(2,'Read only')")
+            seed_test_plans(connection)
             connection.execute("INSERT INTO eppm.app_user(id,status,created_at,updated_at) VALUES (1,'active',900,900)")
             connection.execute("INSERT INTO eppm.app_session VALUES ('session-1',1,950,2000,980,false,false)")
             connection.execute("""INSERT INTO eppm.app_role_assignment(user_id,role,scope_json,created_at,created_by)

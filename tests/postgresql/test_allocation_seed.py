@@ -1,5 +1,6 @@
 """Native allocation previews, daily capacity parity and atomic backed-up writes."""
 
+from tests.postgresql.plan_fixtures import seed_test_plans
 from dataclasses import replace
 from datetime import date
 
@@ -33,8 +34,10 @@ def install(connection, *, project=True):
     if project:
         ensure_reference_catalog(connection)
         connection.execute("INSERT INTO eppm.project(id,name) VALUES (1,'Existing project')")
-    connection.execute("INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date) "
-                       "VALUES (1,1,'Task','2026-06-01','2026-06-05')")
+        seed_test_plans(connection)
+    from app.infrastructure.postgresql.seed_plan import ensure_operator_plan
+    ensure_operator_plan(connection, 1)
+    connection.execute("INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date,project_plan_id) VALUES (1,1,'Task','2026-06-01','2026-06-05',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current))")
     connection.execute("INSERT INTO eppm.employee(employee_id,firstname,lastname,email,employee_code) "
                        "VALUES (1,'Test','Employee','test@example.invalid','E1')")
     with connection.cursor() as cursor:
@@ -42,8 +45,7 @@ def install(connection, *, project=True):
                            [(identity, f'Pool {identity}') for identity in range(1, 11)])
         cursor.executemany("INSERT INTO eppm.resource_pool_mapping(pool_id,target_type,target_id,allocation_pct) "
                            "VALUES (%s,'employee',1,100)", [(identity,) for identity in range(1, 11)])
-    connection.execute("INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,fte_assigned,start_date,end_date) "
-                       "VALUES (1,1,0.5,'2026-06-01','2026-06-05')")
+    connection.execute("INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,fte_assigned,start_date,end_date,project_plan_id) VALUES (1,1,0.5,'2026-06-01','2026-06-05',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current))")
     connection.execute("INSERT INTO eppm.employee_calendar_exception(employee_id,start_date,end_date,occupation_percentage) "
                        "VALUES (1,'2026-06-03','2026-06-03',0)")
 

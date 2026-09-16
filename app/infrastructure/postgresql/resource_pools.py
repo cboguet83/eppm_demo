@@ -161,15 +161,15 @@ class PostgresResourcePoolStore:
                         only_project_level: bool = False, *, pool_ids: Collection[int] | None = None) -> list[AssignmentRow]:
         """Filter actor-visible demand before resolving optional task/date labels."""
         return self._rows(AssignmentRow, '''WITH bounds AS (
-            SELECT project_id,min(start_date) AS first,max(end_date) AS last FROM eppm.project_task
-            WHERE project_id IN (SELECT project_id FROM eppm.resource_pool_assignment WHERE schedule_anchor IS NOT NULL)
+            SELECT project_id,min(start_date) AS first,max(end_date) AS last FROM eppm.current_project_task
+            WHERE project_id IN (SELECT project_id FROM eppm.current_resource_pool_assignment WHERE schedule_anchor IS NOT NULL)
             GROUP BY project_id) SELECT a.id,a.pool_id,pool.name AS pool_name,a.project_id,p.name AS project_name,
             a.task_id,t.task_name,to_char(t.start_date,'YYYY-MM-DD') AS task_start_date,to_char(t.end_date,'YYYY-MM-DD') AS task_end_date,
             a.schedule_anchor,a.offset_days,a.duration_days,a.fte_assigned,to_char(a.start_date,'YYYY-MM-DD') AS custom_start_date,to_char(a.end_date,'YYYY-MM-DD') AS custom_end_date,
             to_char(COALESCE(relative.first,a.start_date,t.start_date),'YYYY-MM-DD') AS effective_start_date,
             to_char(COALESCE(relative.last,a.end_date,t.end_date),'YYYY-MM-DD') AS effective_end_date,a.notes
-            FROM eppm.resource_pool_assignment a JOIN eppm.resource_pool pool ON pool.id=a.pool_id
-            JOIN eppm.project p ON p.id=a.project_id LEFT JOIN eppm.project_task t ON t.id=a.task_id
+            FROM eppm.current_resource_pool_assignment a JOIN eppm.resource_pool pool ON pool.id=a.pool_id
+            JOIN eppm.project p ON p.id=a.project_id LEFT JOIN eppm.current_project_task t ON t.id=a.task_id
             LEFT JOIN bounds b ON b.project_id=a.project_id
             LEFT JOIN LATERAL eppm.assignment_period(coalesce(t.start_date,b.first,current_date),
                 coalesce(t.end_date,b.last,current_date),a.schedule_anchor,a.offset_days,a.duration_days) relative ON true
@@ -183,14 +183,14 @@ class PostgresResourcePoolStore:
         """Read one visible assignment with ISO date and empty-note boundaries."""
         rows = self._rows(PoolAssignment, '''SELECT id,pool_id,project_id,task_id,fte_assigned,
             to_char(start_date,'YYYY-MM-DD') AS start_date,to_char(end_date,'YYYY-MM-DD') AS end_date,COALESCE(notes,'') AS notes,schedule_anchor,offset_days,duration_days
-            FROM eppm.resource_pool_assignment WHERE id=%s''', (assignment_id,))
+            FROM eppm.current_resource_pool_assignment WHERE id=%s''', (assignment_id,))
         return rows[0] if rows else None
 
     def create_assignment(self, assignment: PoolAssignment) -> int:
         """Create native demand under project-edit and task-owner guards."""
         require_current_edit(self.connection, project_id=assignment.project_id)
-        return self.connection.execute('INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,fte_assigned,start_date,end_date,notes,schedule_anchor,offset_days,duration_days) '
-                                       'VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id', _assignment_values(assignment)).fetchone()[0]
+        return self.connection.execute('INSERT INTO eppm.current_resource_pool_assignment(project_plan_id,pool_id,project_id,task_id,fte_assigned,start_date,end_date,notes,schedule_anchor,offset_days,duration_days) '
+                                       'VALUES ((SELECT id FROM eppm.project_plan WHERE project_id=%s AND is_current),%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id', (assignment.project_id, *_assignment_values(assignment))).fetchone()[0]
 
     def update_assignment(self, assignment: PoolAssignment) -> bool:
         """Require both original and new project ownership for assignment moves."""
@@ -198,15 +198,15 @@ class PostgresResourcePoolStore:
         previous = self.get_assignment_by_id(assignment.id)
         if previous:
             require_current_edit(self.connection, project_id=previous.project_id)
-        return self.connection.execute('UPDATE eppm.resource_pool_assignment SET pool_id=%s,project_id=%s,task_id=%s,fte_assigned=%s,start_date=%s,end_date=%s,notes=%s,schedule_anchor=%s,offset_days=%s,duration_days=%s '
-                                       'WHERE id=%s', (*_assignment_values(assignment), assignment.id)).rowcount > 0
+        return self.connection.execute('UPDATE eppm.current_resource_pool_assignment SET project_plan_id=(SELECT id FROM eppm.project_plan WHERE project_id=%s AND is_current),pool_id=%s,project_id=%s,task_id=%s,fte_assigned=%s,start_date=%s,end_date=%s,notes=%s,schedule_anchor=%s,offset_days=%s,duration_days=%s '
+                                       'WHERE id=%s', (assignment.project_id, *_assignment_values(assignment), assignment.id)).rowcount > 0
 
     def delete_assignment(self, assignment_id: int) -> bool:
         """Delete visible demand only with edit permission on its current owner."""
         previous = self.get_assignment_by_id(assignment_id)
         if previous:
             require_current_edit(self.connection, project_id=previous.project_id)
-        return self.connection.execute('DELETE FROM eppm.resource_pool_assignment WHERE id=%s', (assignment_id,)).rowcount > 0
+        return self.connection.execute('DELETE FROM eppm.current_resource_pool_assignment WHERE id=%s', (assignment_id,)).rowcount > 0
 
     def _assignment_map(self, ids: list[int], *, tasks: bool) -> dict[int, list[AssignmentLink]]:
         """Batch compact planning links without leaking hidden keys or task demand into projects."""
@@ -216,13 +216,13 @@ class PostgresResourcePoolStore:
         result: dict[int, list[AssignmentLink]] = {}
         for identity, pool_id, pool_name, owner_id, fte, start, end in self.connection.execute(
             f'''WITH bounds AS (SELECT project_id,min(start_date) AS first,max(end_date) AS last
-                FROM eppm.project_task WHERE project_id IN (SELECT project_id FROM eppm.resource_pool_assignment
+                FROM eppm.current_project_task WHERE project_id IN (SELECT project_id FROM eppm.current_resource_pool_assignment
                 WHERE {owner}=ANY(%s::bigint[])) GROUP BY project_id)
                 SELECT a.id,a.pool_id,p.name,a.{owner},a.fte_assigned,
                 to_char(coalesce(relative.first,a.start_date),'YYYY-MM-DD'),
                 to_char(coalesce(relative.last,a.end_date),'YYYY-MM-DD')
-                FROM eppm.resource_pool_assignment a JOIN eppm.resource_pool p ON p.id=a.pool_id
-                LEFT JOIN eppm.project_task t ON t.id=a.task_id LEFT JOIN bounds b ON b.project_id=a.project_id
+                FROM eppm.current_resource_pool_assignment a JOIN eppm.resource_pool p ON p.id=a.pool_id
+                LEFT JOIN eppm.current_project_task t ON t.id=a.task_id LEFT JOIN bounds b ON b.project_id=a.project_id
                 LEFT JOIN LATERAL eppm.assignment_period(coalesce(t.start_date,b.first,current_date),
                     coalesce(t.end_date,b.last,current_date),a.schedule_anchor,a.offset_days,a.duration_days) relative ON true
                 WHERE a.{owner}=ANY(%s::bigint[]) {extra} ORDER BY p.name COLLATE "C",a.id''', (ids, ids)):

@@ -14,12 +14,9 @@ from tests.postgresql.ui import runtime, access, native_screen
 def status_data(authorized, runtime):
     with psycopg.connect(authorized.setup.operator_url) as connection:
         connection.execute("UPDATE eppm.project SET status=CASE id WHEN 1 THEN 'In Progress' WHEN 2 THEN 'Completed' ELSE 'Draft' END")
-        connection.execute("INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date) SELECT id,id,'Work','2025-07-01'::date,'2025-10-31'::date FROM eppm.project")
+        connection.execute("INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date,project_plan_id) SELECT id,id,'Work','2025-07-01'::date,'2025-10-31'::date,(SELECT id FROM eppm.project_plan WHERE project_id=project.id AND is_current) FROM eppm.project")
         connection.execute("INSERT INTO eppm.resource_pool(id,name,capacity_fte) VALUES(1,'Pool A',5)")
-        connection.execute("""INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,fte_assigned,start_date,end_date,notes)
-            VALUES (1,1,2,'2025-07-01','2025-09-30','Selected Q3'),
-                   (1,1,3,'2025-10-01','2025-10-31','Selected Q4'),
-                   (1,2,10,'2025-08-01','2025-08-31','Completed Q3')""")
+        connection.execute("INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,fte_assigned,start_date,end_date,notes,project_plan_id) VALUES (1,1,2,'2025-07-01','2025-09-30','Selected Q3',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(1,1,3,'2025-10-01','2025-10-31','Selected Q4',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(1,2,10,'2025-08-01','2025-08-31','Completed Q3',(SELECT id FROM eppm.project_plan WHERE project_id=2 AND is_current))")
     return runtime
 
 

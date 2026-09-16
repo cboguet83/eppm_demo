@@ -1,5 +1,6 @@
 """Actual authenticated HTTP task batches preserve scope and reject stale delivery."""
 
+from tests.postgresql.plan_fixtures import seed_test_plans
 
 import psycopg
 import pytest
@@ -23,7 +24,8 @@ def task_browser(pg_database, transport):
     service.set_status(admin, actor.user_id, "active")
     with psycopg.connect(pg_database.operator_url) as connection:
         connection.execute("INSERT INTO eppm.project(id,name) VALUES(1,'Visible'),(2,'Hidden')")
-        connection.execute("INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date) VALUES(10,1,'Visible task','2026-01-01','2026-01-05'),(20,2,'Hidden task','2026-01-01','2026-01-05')")
+        seed_test_plans(connection)
+        connection.execute("INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date,project_plan_id) VALUES (10,1,'Visible task','2026-01-01','2026-01-05',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(20,2,'Hidden task','2026-01-01','2026-01-05',(SELECT id FROM eppm.project_plan WHERE project_id=2 AND is_current))")
         connection.execute("INSERT INTO eppm.task_dependencies(task_id,predecessor_task_id,link_type,lag_days) VALUES(10,20,'FS',0)")
     assignment = service.grant(admin, actor.user_id, "project_viewer", {"kind": "projects", "project_ids": [1]})
 
@@ -72,8 +74,7 @@ def test_task_batches_read_only_assigned_pools_and_keep_other_authorized_consume
     _, service, admin, actor, _, resources, body, _ = task_browser
     with psycopg.connect(pg_database.operator_url) as connection:
         connection.execute("INSERT INTO eppm.resource_pool(id,name,capacity_fte) VALUES(1,'Shared',1),(2,'Unrelated',1)")
-        connection.execute("""INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,fte_assigned)
-            VALUES(1,1,10,0.6),(1,2,20,0.6),(2,2,20,3)""")
+        connection.execute('INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,fte_assigned,project_plan_id) VALUES (1,1,10,0.6,(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(1,2,20,0.6,(SELECT id FROM eppm.project_plan WHERE project_id=2 AND is_current)),(2,2,20,3,(SELECT id FROM eppm.project_plan WHERE project_id=2 AND is_current))')
     if include_other_consumer:
         service.grant(admin, actor.user_id, "project_viewer", {"kind": "projects", "project_ids": [2]})
     workspace = create_planning_workspace(resources, access=BusinessAccess(actor, service.policy))
@@ -138,8 +139,8 @@ def test_dependency_query_work_does_not_grow_with_unrelated_visible_tasks(task_b
     assert workspace.planning.get_dependencies_for_projects([1, 1]) == before
     before_plan = plans[-1]
     with psycopg.connect(pg_database.operator_url) as connection:
-        connection.execute("""INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date)
-            SELECT task_id,2,'Unrelated','2026-01-01'::date,'2026-01-05'::date FROM generate_series(100,5099) task_id""")
+        connection.execute("""INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date,project_plan_id)
+            SELECT task_id,2,'Unrelated','2026-01-01'::date,'2026-01-05'::date,(SELECT id FROM eppm.project_plan WHERE project_id=2 AND is_current) FROM generate_series(100,5099) task_id""")
         connection.execute("""INSERT INTO eppm.task_dependencies(task_id,predecessor_task_id,link_type,lag_days)
             SELECT task_id,20,'FS',0 FROM generate_series(100,5099) task_id""")
         connection.execute("ANALYZE eppm.project_task")

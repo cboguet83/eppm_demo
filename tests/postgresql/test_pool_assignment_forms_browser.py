@@ -29,7 +29,7 @@ def popup_server(authorized, tmp_path, request):
     """Seed native allocation choices before starting the restricted screen."""
     with psycopg.connect(authorized.setup.operator_url) as connection:
         connection.execute("UPDATE eppm.project SET name='Project' WHERE id=1")
-        connection.execute("INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date) VALUES(1,1,'Task','2026-01-01','2026-12-31')")
+        connection.execute("INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date,project_plan_id) VALUES (1,1,'Task','2026-01-01','2026-12-31',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current))")
         connection.execute("INSERT INTO eppm.resource_pool(id,name,capacity_fte) SELECT i,'Pool ' || i,3 FROM generate_series(1,103) i")
     with native_server(authorized, tmp_path, request.param) as server:
         yield server

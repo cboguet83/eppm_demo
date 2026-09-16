@@ -109,7 +109,7 @@ def test_allocation_row_unassignment_can_only_open_for_an_assignment_in_the_sele
     path, _, _, _, manager = business
     with psycopg.connect(pg_database.operator_url) as connection:
         connection.execute("INSERT INTO eppm.resource_pool(id,name,capacity_fte) VALUES(2,'Other pool',1)")
-        connection.execute("INSERT INTO eppm.resource_pool_assignment(id,pool_id,project_id,fte_assigned) VALUES(3,2,1,1)")
+        connection.execute('INSERT INTO eppm.resource_pool_assignment(id,pool_id,project_id,fte_assigned,project_plan_id) VALUES (3,2,1,1,(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current))')
     component = Mock(return_value=SimpleNamespace(action={"id": target, "action": "unassign"}))
     register = st.components.v2.component
     with patch("streamlit.components.v2.component", side_effect=lambda name, **kwargs:

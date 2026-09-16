@@ -90,6 +90,8 @@ def _dependency_editor(project_id: int, draft: dict, tasks: list[dict],
         })
     result = []
     for row in edited.to_dict('records'):
+        if pd.notna(row['task_id']) and row['task_id'] not in labels.values():
+            continue
         for key, options in zip(columns[:3], choices):
             row[key] = {value: identity for identity, value in options.items()}.get(row[key])
         row['lag_days'] = int(row['lag_days']) if pd.notna(row['lag_days']) else 0
@@ -125,6 +127,8 @@ def _assignment_editor(project_id: int, draft: dict, tasks: list[dict], pools: d
     result = []
     for row in edited.to_dict('records'):
         row = {key: value if pd.notna(value) else None for key, value in row.items()}
+        if row['task_id'] is not None and row['task_id'] not in labels.values():
+            continue
         row['task_id'] = {name: identity for identity, name in labels.items()}.get(row['task_id'])
         for key in ['id', 'offset_days', 'duration_days']:
             if row[key] is not None:
@@ -224,7 +228,7 @@ def render_project_plans(workspace: PlanningWorkspace) -> None:
     for project_id, identity in st.session_state.pop('plan_pending_selection', {}).items():
         st.session_state[f'plan_alternative_{project_id}'] = identity
     st.markdown('### Project plans')
-    st.caption('Compare reference and alternative schedules. Edits create a new plan on Save; current plans change only through adoption.')
+    st.caption('Compare reference and alternative schedules. Save creates a new scenario. Use Set current to activate it.')
     initial = st.session_state.get('target_planning_project_id')
     default = [initial] if initial in names else list(names)[:1]
     selected = st.multiselect('Projects to compare', list(names), default=default,
@@ -234,6 +238,7 @@ def render_project_plans(workspace: PlanningWorkspace) -> None:
     pools = {row.id: f'{row.name} [#{row.id}]' for row in pool_rows if row.id not in parent_ids}
     transport = []
     reference_plans, alternative_plans = {}, {}
+    task_choices = service.task_choices() if drafts else []
     for project_id in selected:
         plans = service.list_plans(project_id)
         editable = permissions.allows(Permission.EDIT, project_id)
@@ -248,7 +253,17 @@ def render_project_plans(workspace: PlanningWorkspace) -> None:
         st.markdown(f'#### {names[project_id]}')
         live = [plan for plan in plans if plan.status != 'deleted']
         by_id = {plan.id: plan for plan in live}
-        current = next(plan for plan in live if plan.is_current)
+        if not live:
+            st.info('This project has no active or alternative plan. Restore a deleted plan to continue.')
+            if admin:
+                for plan in plans:
+                    if st.button('Restore ' + _label(plan), key=f'plan_restore_{plan.id}'):
+                        service.change(project_id, plan.id, plan.revision, 'status', 'proposed')
+                        st.rerun()
+            continue
+        current = next((plan for plan in live if plan.is_current), live[0])
+        if not current.is_current:
+            st.info('No active plan. Select an approved scenario and choose Set current to activate it.')
         baseline = next((plan for plan in live if plan.is_baseline), current)
         for key, fallback in [(f'plan_reference_{project_id}', baseline.id), (f'plan_alternative_{project_id}', current.id)]:
             if key in st.session_state and st.session_state[key] not in by_id:
@@ -291,9 +306,10 @@ def render_project_plans(workspace: PlanningWorkspace) -> None:
                             st.rerun()
         if project_id in drafts:
             external = {row['id']: f'{names.get(row["project_id"], "Project")} / {row["task_name"]} (#{row["id"]})'
-                        for row in workspace.planning.get_all_milestones() if row['project_id'] != project_id}
+                        for row in task_choices if row['project_id'] != project_id}
             _render_draft(project_id, drafts[project_id], pools, service.tag_choices(), names, external)
-        _actual_progress(workspace, current, editable)
+        if current.is_current:
+            _actual_progress(workspace, current, editable)
         content = drafts[project_id]['content'] if project_id in drafts else alternative_content
         if project_id in drafts:
             try:

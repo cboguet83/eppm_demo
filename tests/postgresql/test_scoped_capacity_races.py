@@ -1,5 +1,6 @@
 """Capacity caching discards results when persisted access or inputs change mid-read."""
 
+from tests.postgresql.plan_fixtures import seed_test_plans
 import json
 from datetime import date
 
@@ -217,9 +218,10 @@ def test_capacity_inputs_include_only_projects_consuming_the_requested_pools(pg_
     path, _, _, editor, manager = business
     with psycopg.connect(pg_database.operator_url) as connection:
         connection.execute("INSERT INTO eppm.project(id,name) VALUES(3,'Unrelated')")
-        connection.execute("INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date) VALUES(30,3,'Other task','2026-01-01','2026-01-05')")
+        seed_test_plans(connection)
+        connection.execute("INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date,project_plan_id) VALUES (30,3,'Other task','2026-01-01','2026-01-05',(SELECT id FROM eppm.project_plan WHERE project_id=3 AND is_current))")
         connection.execute("INSERT INTO eppm.resource_pool(id,name,capacity_fte) VALUES(2,'Other pool',1)")
-        connection.execute("INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,fte_assigned) VALUES(2,3,30,1)")
+        connection.execute('INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,fte_assigned,project_plan_id) VALUES (2,3,30,1,(SELECT id FROM eppm.project_plan WHERE project_id=3 AND is_current))')
     for access, expected in ((manager, {1, 2}), (editor, {1})):
         reader = PostgresCapacityReader(path.database, path.key, access=access)
         inputs = reader.read([1])

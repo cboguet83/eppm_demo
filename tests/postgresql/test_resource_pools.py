@@ -32,9 +32,7 @@ def pools(authorized):
         connection.execute("INSERT INTO eppm.hierarchy_type_translation VALUES (1,'fr','Service')")
         connection.execute("INSERT INTO eppm.tag_group(tag_group_name) VALUES ('Priority')")
         connection.execute("INSERT INTO eppm.tag_dictionnary(tag,tag_group_id) VALUES ('High',1),('Low',NULL)")
-        connection.execute("""INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date)
-            VALUES (11,1,'Visible','2026-01-01','2026-01-05'),(12,2,'Read only','2026-02-01','2026-02-05'),
-                   (13,3,'Private','2026-03-01','2026-03-05')""")
+        connection.execute("INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date,project_plan_id) VALUES (11,1,'Visible','2026-01-01','2026-01-05',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(12,2,'Read only','2026-02-01','2026-02-05',(SELECT id FROM eppm.project_plan WHERE project_id=2 AND is_current)),(13,3,'Private','2026-03-01','2026-03-05',(SELECT id FROM eppm.project_plan WHERE project_id=3 AND is_current))")
     return service(authorized)
 
 

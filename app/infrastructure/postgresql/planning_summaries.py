@@ -20,17 +20,17 @@ def read_project_summaries(connection: psycopg.Connection, project_ids: list[int
                            progress=float(row[5]), hasViolations=row[6]) for row in connection.execute('''
         WITH scope AS MATERIALIZED (SELECT id FROM eppm.project WHERE id=ANY(%s::bigint[])),
         selected_links AS MATERIALIZED (
-            SELECT d.* FROM eppm.task_dependencies d JOIN eppm.project_task task ON task.id=d.task_id
+            SELECT d.* FROM eppm.effective_task_dependencies d JOIN eppm.current_project_task task ON task.id=d.task_id
             WHERE task.project_id IN (SELECT id FROM scope)
         ), bounds AS (
             SELECT project_id,min(start_date) AS first_date,max(end_date) AS last_date,count(*) AS task_count,
-                   avg(progress_pct) AS progress FROM eppm.project_task
+                   avg(progress_pct) AS progress FROM eppm.current_project_task
             WHERE project_id IN (SELECT id FROM scope UNION SELECT predecessor_project_id
                                 FROM selected_links WHERE predecessor_task_id IS NULL)
             GROUP BY project_id
         ), violations AS (
-            SELECT task.project_id FROM selected_links d JOIN eppm.project_task task ON task.id=d.task_id
-            LEFT JOIN eppm.project_task pred ON pred.id=d.predecessor_task_id
+            SELECT task.project_id FROM selected_links d JOIN eppm.current_project_task task ON task.id=d.task_id
+            LEFT JOIN eppm.current_project_task pred ON pred.id=d.predecessor_task_id
             LEFT JOIN bounds b ON b.project_id=d.predecessor_project_id
             WHERE (CASE WHEN upper(d.link_type) IN ('FF','SF') THEN task.end_date ELSE task.start_date END)
                 - (CASE WHEN d.predecessor_task_id IS NOT NULL THEN

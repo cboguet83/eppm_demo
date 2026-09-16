@@ -1,5 +1,6 @@
 """Revision reads retain bounded query work after repeated pooled execution."""
 
+from tests.postgresql.plan_fixtures import seed_test_plans
 import psycopg
 import pytest
 
@@ -12,14 +13,15 @@ def revision_workload(authorized):
     """Seed a large synthetic graph in this test's separately owned database."""
     with psycopg.connect(authorized.setup.operator_url) as connection:
         connection.execute("INSERT INTO eppm.project(id,name) SELECT id,'Project '||id FROM generate_series(4,10001) id")
+        seed_test_plans(connection)
         connection.execute("INSERT INTO eppm.resource_pool(id,name,capacity_fte) SELECT id,'Pool '||id,10 FROM generate_series(1,100) id")
-        connection.execute("""INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date)
-            SELECT (project.id-1)*7+n,project.id,'Task '||n,'2026-01-01'::date+n,'2026-01-01'::date+n+1
+        connection.execute("""INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date,project_plan_id)
+            SELECT (project.id-1)*7+n,project.id,'Task '||n,'2026-01-01'::date+n,'2026-01-01'::date+n+1,(SELECT id FROM eppm.project_plan WHERE project_id=project.id AND is_current)
             FROM eppm.project project CROSS JOIN generate_series(1,7) n""")
         connection.execute("""INSERT INTO eppm.task_dependencies(task_id,predecessor_task_id)
             SELECT id,id-1 FROM eppm.project_task WHERE id>1""")
-        connection.execute("""INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,fte_assigned)
-            SELECT 1+(id%100),id,(id-1)*7+1,0.5 FROM eppm.project""")
+        connection.execute("""INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,fte_assigned,project_plan_id)
+            SELECT 1+(id%100),id,(id-1)*7+1,0.5,(SELECT id FROM eppm.project_plan WHERE project_id=project.id AND is_current) FROM eppm.project""")
         for table in ('project', 'project_task', 'task_dependencies', 'resource_pool',
                       'resource_pool_assignment', 'project_cache_revision', 'pool_cache_revision'):
             connection.execute('ANALYZE eppm.' + table)

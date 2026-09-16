@@ -178,7 +178,8 @@ def prepare_allocation_plan(
     unstaffed = set(rng.sample(
         pool_ids, percentage_count(len(pool_ids), request.unstaffed_pools_pct),
     ))
-    projects = dict(connection.execute('SELECT id,name FROM eppm.project ORDER BY id'))
+    projects = dict(connection.execute('''SELECT id,name FROM eppm.project
+        WHERE id IN (SELECT project_id FROM eppm.project_plan WHERE is_current) ORDER BY id'''))
     if rates and not projects:
         raise ValueError('Create projects before generating pool allocations.')
     inputs = read_operator_capacity_inputs(connection, pool_ids)
@@ -198,7 +199,7 @@ def prepare_allocation_plan(
                for identity, values in inputs.items()}
     tasks = connection.execute(
         'SELECT id,project_id,start_date,end_date,task_name '
-        'FROM eppm.project_task ORDER BY id',
+        'FROM eppm.current_project_task ORDER BY id',
     ).fetchall()
     project_ids = list(projects)
     assignments = []
@@ -249,7 +250,7 @@ def apply_allocation_plan(
         raise ValueError(
             'The database changed. Preview the allocation plan again before applying it.',
         )
-    connection.execute('DELETE FROM eppm.resource_pool_assignment')
+    connection.execute('DELETE FROM eppm.current_resource_pool_assignment')
     connection.execute(
         'DELETE FROM eppm.resource_pool_mapping WHERE pool_id=ANY(%s::bigint[])',
         (list(plan.clear_mappings),),

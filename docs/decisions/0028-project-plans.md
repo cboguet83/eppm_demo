@@ -2,6 +2,9 @@
 
 Status: Accepted and implemented on `feature/project-plan-scenarios`.
 
+Storage and active/baseline behavior are superseded by
+[ADR 0029: Relational project plans](0029-relational-project-plans.md).
+
 ## Decision
 
 Each project has immutable schedule/resource-assignment plan versions. A plan's

@@ -1,4 +1,4 @@
-"""Actor-scoped append-only plan storage and transactional current projection."""
+"""Actor-scoped relational plan storage and transactional active selection."""
 
 from collections.abc import Callable
 from dataclasses import replace
@@ -6,9 +6,9 @@ from datetime import datetime, timezone
 
 import psycopg
 from psycopg.rows import dict_row
-from psycopg.types.json import Jsonb
 
 from app.application.exceptions import PlanningStorageError
+from app.application.ports.planning import TaskChoice
 from app.application.services.business_access import BusinessAccess
 from app.domain.access.models import AccessDenied, Permission
 from app.domain.planning.plans import PlanContent, ProjectPlan, PlanTask
@@ -17,7 +17,8 @@ from app.infrastructure.postgresql.access import PostgresAccessStore
 from app.infrastructure.postgresql.authorization import ServerRequestSigner
 from app.infrastructure.postgresql.business import run_business
 from app.infrastructure.postgresql.errors import DatabaseUnavailableError, TransactionRetryError
-from app.infrastructure.postgresql.plan_content import capture_content, capture_contents, decode_content, encode_content
+from app.infrastructure.postgresql.plan_content import capture_content, capture_contents
+from app.infrastructure.postgresql.plan_rows import copy_protected_links, read_plans, write_plan
 from app.infrastructure.postgresql.pool import Database
 from app.infrastructure.postgresql.resource_pools import PostgresResourcePoolStore
 from app.shared.logging import get_logger
@@ -50,17 +51,18 @@ class PostgresPlanStore:
         return (*allowed, self.access.global_permission(self.security, Permission.SHARED))
 
     def list_plans(self, project_id: int) -> list[ProjectPlan]:
-        """Read immutable contents and current metadata under project RLS."""
+        """Read explicit plan contents and metadata under project row security."""
         with self.connection.cursor(row_factory=dict_row) as cursor:
             rows = list(cursor.execute('''
                 SELECT p.id,p.project_id,p.version,p.name,s.code AS status,p.source_plan_id,
-                    p.is_current,p.is_baseline,p.revision,p.author,p.created_at,p.content
+                    p.is_current,p.is_baseline,p.revision,p.author,p.created_at,p.is_frozen
                 FROM eppm.project_plan p JOIN eppm.plan_status s ON s.id=p.status_id
                 WHERE p.project_id=%s ORDER BY p.version DESC''', (project_id,)))
+        contents = read_plans(self.connection, [row['id'] for row in rows])
         visibility = self._endpoint_visibility()
         result = []
         for row in rows:
-            content = decode_content(row['content'])
+            content = contents[row['id']]
             content.dependencies = [dep for dep in content.dependencies if self._dependency_visible(dep, content, visibility)]
             result.append(ProjectPlan(**dict(row, content=content)))
         return result
@@ -68,9 +70,7 @@ class PostgresPlanStore:
     def _endpoint_visibility(self) -> tuple[set[int], set[int]]:
         if self._visibility is None:
             self._visibility = ({row[0] for row in self.connection.execute('SELECT id FROM eppm.project')},
-                                {row[0] for row in self.connection.execute('''SELECT id FROM eppm.project_task
-                                    UNION SELECT (task->>'id')::bigint FROM eppm.project_plan,
-                                        jsonb_array_elements(content->'tasks') task''')})
+                                {row[0] for row in self.connection.execute('SELECT coalesce(stable_task_id,id) FROM eppm.project_task')})
         return self._visibility
 
     @staticmethod
@@ -86,8 +86,10 @@ class PostgresPlanStore:
 
     def baseline_tasks(self, project_ids: list[int]) -> dict[int, list[PlanTask]]:
         """Batch-load baseline tasks under project RLS without returning dependencies."""
-        return dict(self.connection.execute('''SELECT project_id,content->'tasks' FROM eppm.project_plan
-            WHERE is_baseline AND project_id=ANY(%s::bigint[])''', (project_ids,)))
+        owners = dict(self.connection.execute('SELECT project_id,id FROM eppm.project_plan WHERE is_baseline AND project_id=ANY(%s::bigint[])', (project_ids,)))
+        contents = read_plans(self.connection, list(owners.values()))
+        active = dict(self.connection.execute('SELECT coalesce(stable_task_id,id),id FROM eppm.current_project_task WHERE project_id=ANY(%s::bigint[])', (project_ids,)))
+        return {project: [dict(task, id=active.get(task['id'], -task['id'])) for task in contents[plan].tasks] for project, plan in owners.items()}
 
     def baseline_projects(self) -> list[int]:
         """Read baseline presence under project RLS without loading snapshot content."""
@@ -96,6 +98,14 @@ class PostgresPlanStore:
 
     def tag_choices(self) -> dict[int, str]:
         return dict(self.connection.execute('SELECT id,tag FROM eppm.tag_dictionnary ORDER BY tag,id'))
+
+    def task_choices(self) -> list[TaskChoice]:
+        """Batch active selector labels while keeping physical version IDs private."""
+        with self.connection.cursor(row_factory=dict_row) as cursor:
+            return [TaskChoice(**row) for row in cursor.execute('''
+                SELECT coalesce(t.stable_task_id,t.id) AS id,t.task_name,t.project_id,p.name AS project_name
+                FROM eppm.current_project_task t JOIN eppm.project p ON p.id=t.project_id
+                ORDER BY t.project_id,t.start_date,t.id''')]
 
     def versioned_projects(self) -> list[int]:
         """Read current-plan owners without loading their schedule snapshots."""
@@ -106,9 +116,7 @@ class PostgresPlanStore:
         owners = [row[0] for row in self.connection.execute('''
             SELECT project_id FROM eppm.project_plan WHERE is_current AND
             (project_id=ANY(%s::bigint[]) OR project_id IN
-                (SELECT project_id FROM eppm.project_plan,
-                    jsonb_array_elements(content->'tasks') task WHERE (task->>'id')::bigint=ANY(%s::bigint[]))
-                OR project_id IN (SELECT project_id FROM eppm.project_task WHERE id=ANY(%s::bigint[])))''', (project_ids, task_ids, task_ids))]
+                (SELECT project_id FROM eppm.project_task WHERE coalesce(stable_task_id,id)=ANY(%s::bigint[])))''', (project_ids, task_ids))]
         result = capture_contents(self.connection, owners)
         visibility = self._endpoint_visibility()
         for content in result.values():
@@ -122,7 +130,7 @@ class PostgresPlanStore:
             tree.require_leaf(assignment.pool_id)
         known = {task['id'] for plan in self.list_plans(project_id) for task in plan.content.tasks}
         known.update(row[0] for row in self.connection.execute(
-            'SELECT id FROM eppm.project_task WHERE project_id=%s', (project_id,)))
+            'SELECT coalesce(stable_task_id,id) FROM eppm.project_task WHERE project_id=%s', (project_id,)))
         if any(task['id'] > 0 and task['id'] not in known for task in content.tasks):
             raise ValueError('A task identity does not belong to this project.')
         internal = {task['id'] for task in content.tasks}
@@ -173,28 +181,26 @@ class PostgresPlanStore:
     def insert(self, project_id: int, name: str, status: str, source: int | None,
                content: PlanContent, *, current: bool = False) -> ProjectPlan:
         """Append a complete snapshot with a project-local monotonically increasing version."""
-        if source is not None:
-            raw = self.connection.execute('SELECT content FROM eppm.project_plan WHERE id=%s AND project_id=%s',
-                                           (source, project_id)).fetchone()
-            previous = decode_content(raw[0])
-            visibility = self._endpoint_visibility()
-            successors = {row['id'] for row in content.tasks}
-            protected = [dep for dep in previous.dependencies
-                         if not self._dependency_visible(dep, previous, visibility)
-                         and (dep['task_id'] is None or dep['task_id'] in successors)]
-            content = replace(content, dependencies=[*content.dependencies, *protected])
         identity = self.connection.execute('''INSERT INTO eppm.project_plan
-            (project_id,version,name,status_id,source_plan_id,is_current,author,created_at,content)
+            (project_id,version,name,status_id,source_plan_id,is_current,author,created_at)
             SELECT %s,coalesce(max(version),0)+1,%s,(SELECT id FROM eppm.plan_status WHERE code=%s),
-                %s,%s,%s,%s,%s FROM eppm.project_plan WHERE project_id=%s RETURNING id''',
+                %s,%s,%s,%s FROM eppm.project_plan WHERE project_id=%s RETURNING id''',
             (project_id, name, status, source, current, self.access.audit_actor,
-             datetime.fromtimestamp(self.access.policy.clock(), timezone.utc), Jsonb(encode_content(content)), project_id)).fetchone()[0]
+             datetime.fromtimestamp(self.access.policy.clock(), timezone.utc), project_id)).fetchone()[0]
+        write_plan(self.connection, identity, project_id, content)
+        if source is not None:
+            copy_protected_links(self.connection, source, identity)
         self._event(project_id, identity, 'created', None, status)
         return next(row for row in self.list_plans(project_id) if row.id == identity)
 
     def metadata(self, plan: ProjectPlan, action: str, value: str) -> None:
         """Persist an already-authorized metadata change and its immutable audit record."""
         if action == 'status':
+            if value == 'deleted':
+                self.connection.execute('UPDATE eppm.project_plan SET is_current=false,is_baseline=false WHERE id=%s', (plan.id,))
+                for designation in ('current', 'baseline'):
+                    if getattr(plan, 'is_' + designation):
+                        self._event(plan.project_id, plan.id, designation, 'true', 'false')
             self.connection.execute('''UPDATE eppm.project_plan SET status_id=(SELECT id FROM eppm.plan_status
                 WHERE code=%s),revision=revision+1 WHERE id=%s''', (value, plan.id))
             old = plan.status
@@ -209,16 +215,20 @@ class PostgresPlanStore:
                     self._event(plan.project_id, identity, action, 'true', 'false')
             self.connection.execute(f'UPDATE eppm.project_plan SET {column}=%s,revision=revision+1 WHERE id=%s',
                                     (value == 'true', plan.id))
+            if action == 'baseline' and value == 'true':
+                self.connection.execute('UPDATE eppm.project_plan SET is_frozen=true WHERE id=%s', (plan.id,))
+        self.connection.execute('UPDATE eppm.project_cache_revision SET revision=revision+1 WHERE project_id=%s', (plan.project_id,))
         self._event(plan.project_id, plan.id, action, old, value)
 
     def publish(self, plan: ProjectPlan) -> None:
-        """Materialize the designated immutable plan for existing current-only readers."""
-        from app.infrastructure.postgresql.plan_projection import publish_current
-        publish_current(self.connection, plan.project_id, plan.content)
+        """Refresh shared actual progress when selecting existing plan rows."""
+        # Activation selects existing rows. Actual progress remains shared by stable identity.
+        self.connection.execute('''UPDATE eppm.project_task t SET progress_pct=a.progress_pct FROM eppm.plan_task_actual a
+            WHERE t.project_plan_id=%s AND coalesce(t.stable_task_id,t.id)=a.task_id''', (plan.id,))
 
 
 class PostgresPlanGateway:
-    """Keep plan snapshots, metadata and projection writes in one actor-bound transaction."""
+    """Keep plan rows, metadata and activation in one actor-bound transaction."""
 
     def __init__(self, database: Database, key: bytes, *, access: BusinessAccess) -> None:
         self.database, self.key, self.access = database, key, access

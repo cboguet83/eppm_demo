@@ -1,5 +1,6 @@
 """Real planning component mutations, safe failures, and injected data isolation."""
 
+from tests.postgresql.plan_fixtures import seed_test_plans
 from secrets import token_hex
 from unittest.mock import patch
 
@@ -239,7 +240,7 @@ def test_task_bundle_reads_tags_and_assignments_from_the_same_snapshot(database:
         connection.execute("INSERT INTO eppm.task_tag(task_id,free_tag) VALUES(1,'Before')")
         connection.execute("INSERT INTO eppm.resource_pool(id,name,capacity_fte) VALUES(1,'Pool',1)")
         connection.execute(
-            "INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,fte_assigned) VALUES(1,1,1,0.5)"
+            'INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,fte_assigned,project_plan_id) VALUES (1,1,1,0.5,(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current))'
         )
     changed = []
     dependencies = PostgresPlanningStore.get_dependencies_for_projects
@@ -275,6 +276,7 @@ def test_injected_display_caches_keep_databases_separate(database: RuntimeResour
     with psycopg.connect(restore_target.operator_url) as connection:
         connection.execute("INSERT INTO eppm.project_type(name,is_general) VALUES ('General',true)")
         connection.execute("INSERT INTO eppm.project(name) VALUES ('Other database')")
+        seed_test_plans(connection)
         connection.execute("INSERT INTO eppm.app_user(id,status,created_at,updated_at) VALUES (4,'active',900,900)")
         connection.execute("INSERT INTO eppm.app_session VALUES ('session-4',4,950,2000,980,false,false)")
         connection.execute("""INSERT INTO eppm.app_role_assignment(user_id,role,scope_json,created_at,created_by)

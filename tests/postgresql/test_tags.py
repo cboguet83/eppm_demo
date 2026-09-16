@@ -21,9 +21,7 @@ def service(authorized, user_id=4):
 @pytest.fixture
 def tags(authorized):
     with psycopg.connect(authorized.setup.operator_url) as connection:
-        connection.execute("""INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date)
-            VALUES (1,1,'Build','2026-09-01','2026-09-02'),(2,2,'Review','2026-09-01','2026-09-02'),
-                   (3,3,'Hidden task','2026-09-01','2026-09-02')""")
+        connection.execute("INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date,project_plan_id) VALUES (1,1,'Build','2026-09-01','2026-09-02',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(2,2,'Review','2026-09-01','2026-09-02',(SELECT id FROM eppm.project_plan WHERE project_id=2 AND is_current)),(3,3,'Hidden task','2026-09-01','2026-09-02',(SELECT id FROM eppm.project_plan WHERE project_id=3 AND is_current))")
         connection.execute("INSERT INTO eppm.resource_pool(name) VALUES ('Pool')")
     return service(authorized)
 
@@ -169,8 +167,8 @@ def test_assignment_mutations_check_both_previous_and_requested_project_owners(t
 
 def test_paging_uses_literal_filters_numeric_ids_stable_sort_and_bounded_selectors(tags, authorized):
     with psycopg.connect(authorized.setup.operator_url) as connection:
-        connection.execute("""INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date)
-            SELECT n,1,'Task '||n,'2026-09-01'::date,'2026-09-02'::date FROM generate_series(1001,1350) n""")
+        connection.execute("""INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date,project_plan_id)
+            SELECT n,1,'Task '||n,'2026-09-01'::date,'2026-09-02'::date,(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current) FROM generate_series(1001,1350) n""")
         connection.execute("""INSERT INTO eppm.task_tag(task_id,free_tag)
             SELECT n,CASE WHEN n=1001 THEN 'Rare 100%_tag' ELSE 'Common' END FROM generate_series(1001,1350) n""")
     tags.create_task_tag(TaskTag(task_id=3, free_tag='Hidden'))

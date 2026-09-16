@@ -1,5 +1,6 @@
 """Real PostgreSQL replacement safety, exact hierarchy and calculated demand."""
 
+from tests.postgresql.plan_fixtures import seed_test_plans
 from collections import Counter
 from dataclasses import FrozenInstanceError, replace
 from datetime import date
@@ -217,7 +218,8 @@ def test_project_without_tasks_uses_seed_year_and_short_task_dates_remain_inclus
     def setup(c):
         install(c, projects=False)
         c.execute("INSERT INTO eppm.project(id,name) VALUES (1,'Undated'),(2,'One day'),(3,'Two days')")
-        c.execute("INSERT INTO eppm.project_task(project_id,task_name,start_date,end_date) VALUES (2,'One','2027-02-03','2027-02-03'),(3,'Two','2027-02-03','2027-02-04')")
+        seed_test_plans(c)
+        c.execute("INSERT INTO eppm.project_task(project_id,task_name,start_date,end_date,project_plan_id) VALUES (2,'One','2027-02-03','2027-02-03',(SELECT id FROM eppm.project_plan WHERE project_id=2 AND is_current)),(3,'Two','2027-02-03','2027-02-04',(SELECT id FROM eppm.project_plan WHERE project_id=3 AND is_current))")
     operator.run(setup, write=True)
     plan = operator.run(lambda c: prepare_pool_scenarios(c, year=2028, seed=1))
     operator.run(lambda c: apply_pool_scenarios(c, plan), write=True)

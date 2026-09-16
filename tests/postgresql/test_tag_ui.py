@@ -18,7 +18,7 @@ def database(authorized, runtime: RuntimeResources) -> RuntimeResources:
     with psycopg.connect(authorized.setup.operator_url) as connection, connection.cursor() as cursor:
         connection.execute("UPDATE eppm.project SET name='Delivery' WHERE id=1")
         cursor.executemany(
-            "INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date) VALUES(%s,1,%s,'2026-09-01','2026-09-03')",
+            "INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date,project_plan_id) VALUES (%s,1,%s,'2026-09-01','2026-09-03',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current))",
             [(i, f"Task {i}") for i in range(1, 61)],
         )
     return runtime

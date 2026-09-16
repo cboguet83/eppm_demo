@@ -22,9 +22,31 @@ class SeedInsert:
 
     def apply(self, connection: psycopg.Connection) -> None:
         """Execute parameterized values with safely quoted fixed identifiers."""
-        connection.execute(sql.SQL('INSERT INTO eppm.{} ({}) VALUES ({})').format(
-            sql.Identifier(self.table), sql.SQL(',').join(map(sql.Identifier, self.columns)),
-            sql.SQL(',').join(sql.Placeholder() for _ in self.values)), self.values)
+        columns, values = self.columns, self.values
+        if self.table in {'project_task', 'resource_pool_assignment', 'project_dependency'}:
+            project_id = values[columns.index('project_id')]
+            columns = (*columns, 'project_plan_id')
+            values = (*values, ensure_operator_plan(connection, project_id))
+        query = sql.SQL('INSERT INTO eppm.{} ({}) VALUES ({})').format(
+            sql.Identifier(self.table), sql.SQL(',').join(map(sql.Identifier, columns)),
+            sql.SQL(',').join(sql.Placeholder() for _ in values))
+        if self.table == 'project':
+            identity = connection.execute(query + sql.SQL(' RETURNING id'), values).fetchone()[0]
+            ensure_operator_plan(connection, identity)
+        else:
+            connection.execute(query, values)
+
+
+def ensure_operator_plan(connection: psycopg.Connection, project_id: int) -> int:
+    """Create a seeded project's first active plan inside the operator transaction."""
+    row = connection.execute('SELECT id FROM eppm.project_plan WHERE project_id=%s AND is_current', (project_id,)).fetchone()
+    if row:
+        return row[0]
+    if connection.execute('SELECT 1 FROM eppm.project_plan WHERE project_id=%s', (project_id,)).fetchone():
+        raise ValueError('Activate a plan before generating tasks or allocations for this project.')
+    return connection.execute('''INSERT INTO eppm.project_plan(project_id,version,name,status_id,is_current,author,created_at)
+        SELECT %s,coalesce(max(version),0)+1,'Initial plan',3,true,'operator',CURRENT_TIMESTAMP FROM eppm.project_plan
+        WHERE project_id=%s RETURNING id''', (project_id, project_id)).fetchone()[0]
 
 
 def next_seed_identity(connection: psycopg.Connection, table: str) -> int:

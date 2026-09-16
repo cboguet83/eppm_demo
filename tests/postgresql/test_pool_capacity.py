@@ -55,13 +55,8 @@ def staffing(authorized):
             VALUES (1,'team',1,50),(1,'team',2,75),(1,'function',3,30),(1,'employee',2,10),
                    (1,'employee',4,25),(1,'employee',99,50),(1,'function',99,50),
                    (3,'employee',1,0),(4,'function',4,35),(6,'team',3,100)""")
-        connection.execute("""INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date)
-            VALUES (1,1,'Visible','2026-01-01','2026-01-05'),(2,2,'Read only','2026-01-02','2026-01-04'),
-                   (3,3,'Hidden','2026-01-01','2026-01-06')""")
-        connection.execute("""INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,fte_assigned,start_date,end_date)
-            VALUES (1,1,NULL,1,NULL,NULL),(1,1,1,0.75,NULL,'2026-01-04'),
-                   (1,2,2,0.5,'2026-01-03',NULL),(1,3,3,20,NULL,NULL),
-                   (2,1,NULL,0.5,NULL,NULL),(3,1,1,0.25,NULL,NULL),(6,3,3,30,NULL,NULL)""")
+        connection.execute("INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date,project_plan_id) VALUES (1,1,'Visible','2026-01-01','2026-01-05',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(2,2,'Read only','2026-01-02','2026-01-04',(SELECT id FROM eppm.project_plan WHERE project_id=2 AND is_current)),(3,3,'Hidden','2026-01-01','2026-01-06',(SELECT id FROM eppm.project_plan WHERE project_id=3 AND is_current))")
+        connection.execute("INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,fte_assigned,start_date,end_date,project_plan_id) VALUES (1,1,NULL,1,NULL,NULL,(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(1,1,1,0.75,NULL,'2026-01-04',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(1,2,2,0.5,'2026-01-03',NULL,(SELECT id FROM eppm.project_plan WHERE project_id=2 AND is_current)),(1,3,3,20,NULL,NULL,(SELECT id FROM eppm.project_plan WHERE project_id=3 AND is_current)),(2,1,NULL,0.5,NULL,NULL,(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(3,1,1,0.25,NULL,NULL,(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(6,3,3,30,NULL,NULL,(SELECT id FROM eppm.project_plan WHERE project_id=3 AND is_current))")
     return authorized
 
 
@@ -175,7 +170,7 @@ def test_explicit_service_calculation_uses_the_requested_day_without_a_cache(sta
     with psycopg.connect(staffing.setup.operator_url) as connection:
         connection.execute('DELETE FROM eppm.resource_pool_assignment WHERE pool_id=2')
         connection.execute('DELETE FROM eppm.project_task WHERE project_id=2')
-        connection.execute('INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,fte_assigned) VALUES (2,2,0.75)')
+        connection.execute('INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,fte_assigned,project_plan_id) VALUES (2,2,0.75,(SELECT id FROM eppm.project_plan WHERE project_id=2 AND is_current))')
     class UnusedCache:
         def load(self, *args, **kwargs):
             raise AssertionError('An explicit calculation must not request cached results')

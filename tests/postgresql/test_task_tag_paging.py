@@ -27,7 +27,7 @@ class TaskTagPagingTests(unittest.TestCase):
         self.resources, self.access = runtime, access
         with psycopg.connect(authorized.setup.operator_url) as connection, connection.cursor() as cursor:
             connection.execute("UPDATE eppm.project SET name='Search Project' WHERE id=1")
-            cursor.executemany("INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date) VALUES(%s,1,%s,'2026-01-01','2026-01-02')",
+            cursor.executemany("INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date,project_plan_id) VALUES (%s,1,%s,'2026-01-01','2026-01-02',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current))",
                                [(i, f'Task {i}') for i in range(1, 351)])
             cursor.executemany('INSERT INTO eppm.task_tag(task_id,free_tag) VALUES(%s,%s)',
                                [(i, 'Rare 100%_tag' if i == 1 else 'Common') for i in range(1, 351)])

@@ -39,7 +39,7 @@ def read_catalog(connection: psycopg.Connection, project_ids: list[int]) -> Dash
     ids = list(projects)
     pool_names = {}
     for project_id, pool_id, name in connection.execute('''SELECT DISTINCT a.project_id,p.id,p.name
-        FROM eppm.resource_pool_assignment a JOIN eppm.resource_pool p ON p.id=a.pool_id
+        FROM eppm.current_resource_pool_assignment a JOIN eppm.resource_pool p ON p.id=a.pool_id
         WHERE a.fte_assigned>0 AND a.project_id=ANY(%s::bigint[]) ORDER BY a.project_id,p.id''', (ids,)):
         pool_names[str(pool_id)] = name
         projects[project_id]['fields'].setdefault('pool', []).append(str(pool_id))

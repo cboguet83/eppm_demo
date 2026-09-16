@@ -13,14 +13,12 @@ from app.shared.config.database import DatabaseConfig
 @pytest.fixture
 def portfolio(authorized):
     with psycopg.connect(authorized.setup.operator_url) as operator:
-        operator.execute("""INSERT INTO eppm.project_task(project_id,task_name,start_date,end_date)
-            VALUES (1,'Editable task','2026-01-01','2026-01-02'),(2,'Read only task','2026-01-01','2026-01-02'),
-                   (3,'Hidden task','2026-01-01','2026-01-02')""")
+        operator.execute("INSERT INTO eppm.project_task(project_id,task_name,start_date,end_date,project_plan_id) VALUES (1,'Editable task','2026-01-01','2026-01-02',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(2,'Read only task','2026-01-01','2026-01-02',(SELECT id FROM eppm.project_plan WHERE project_id=2 AND is_current)),(3,'Hidden task','2026-01-01','2026-01-02',(SELECT id FROM eppm.project_plan WHERE project_id=3 AND is_current))")
         operator.execute("UPDATE eppm.project_task SET predecessor_id=3 WHERE id=1")
         operator.execute("INSERT INTO eppm.task_dependencies(task_id,predecessor_task_id) VALUES (1,2),(1,3)")
         operator.execute("INSERT INTO eppm.task_dependencies(task_id,predecessor_project_id) VALUES (1,3)")
         operator.execute("INSERT INTO eppm.resource_pool(name) VALUES ('Pool')")
-        operator.execute("INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,fte_assigned) VALUES (1,1,1,1),(1,3,3,9)")
+        operator.execute('INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,fte_assigned,project_plan_id) VALUES (1,1,1,1,(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(1,3,3,9,(SELECT id FROM eppm.project_plan WHERE project_id=3 AND is_current))')
         operator.execute("INSERT INTO eppm.wbs(code) VALUES ('WBS')")
         operator.execute("INSERT INTO eppm.project_wbs VALUES (1,1,10),(3,1,70)")
         operator.execute("INSERT INTO eppm.project_link(project_id,url,alias) VALUES (1,'https://example.invalid/visible','Visible'),(3,'https://example.invalid/hidden','Hidden')")
@@ -72,7 +70,7 @@ def test_employee_contact_and_staffing_rows_remain_private(portfolio):
     "UPDATE eppm.project_task SET predecessor_id=NULL WHERE id=1",
     "INSERT INTO eppm.task_dependencies(task_id,predecessor_task_id) VALUES (1,2)",
     "INSERT INTO eppm.task_dependencies(task_id,predecessor_project_id) VALUES (1,3)",
-    "INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,fte_assigned) VALUES (1,1,3,1)",
+    'INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,fte_assigned,project_plan_id) VALUES (1,1,3,1,(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current))',
     "UPDATE eppm.project_property_value SET text_value='South' WHERE project_id=1",
     "UPDATE eppm.project_property_value SET param_id='NOTE' WHERE project_id=1",
     "DELETE FROM eppm.project_property_value WHERE project_id=1",
@@ -137,9 +135,9 @@ def test_property_scopes_change_visibility_from_persisted_values(portfolio):
 
 
 def test_task_tag_cascade_authorizes_before_parent_disappears(portfolio):
-    portfolio.query("INSERT INTO eppm.project_task(project_id,task_name,start_date,end_date) VALUES (1,'Disposable','2026-01-01','2026-01-02')", write=True)
+    portfolio.query("INSERT INTO eppm.project_task(project_id,task_name,start_date,end_date,project_plan_id) VALUES (1,'Disposable','2026-01-01','2026-01-02',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current))", write=True)
     portfolio.query("INSERT INTO eppm.task_tag(task_id,free_tag) VALUES (4,'Tag')", write=True)
-    portfolio.query("INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,fte_assigned) VALUES (1,1,4,1)", write=True)
+    portfolio.query('INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,fte_assigned,project_plan_id) VALUES (1,1,4,1,(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current))', write=True)
     portfolio.query("DELETE FROM eppm.project_task WHERE id=4", write=True)
     assert portfolio.query("SELECT count(*) FROM eppm.task_tag") == [(0,)]
     assert portfolio.query("SELECT count(*) FROM eppm.resource_pool_assignment WHERE task_id=4") == [(0,)]

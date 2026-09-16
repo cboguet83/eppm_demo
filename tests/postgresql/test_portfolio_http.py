@@ -18,8 +18,7 @@ def badge_browser(pg_database, task_browser):
     browser, service, _, actor, _, resources, body, _ = task_browser
     with psycopg.connect(pg_database.operator_url) as connection:
         connection.execute("INSERT INTO eppm.resource_pool(id,name,capacity_fte) VALUES (1,'Shared pool',1)")
-        connection.execute("""INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,fte_assigned,start_date,end_date)
-            VALUES (1,1,2,'2026-01-01','2026-01-05'),(1,2,3,'2026-01-01','2026-01-05')""")
+        connection.execute("INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,fte_assigned,start_date,end_date,project_plan_id) VALUES (1,1,2,'2026-01-01','2026-01-05',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(1,2,3,'2026-01-01','2026-01-05',(SELECT id FROM eppm.project_plan WHERE project_id=2 AND is_current))")
 
     def read_allocations(current_actor, ids, revision):
         access = BusinessAccess(current_actor, service.policy)

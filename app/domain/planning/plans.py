@@ -1,4 +1,4 @@
-"""Immutable project-plan values and Python lifecycle/comparison rules."""
+"""Relational plan DTOs and Python lifecycle/comparison rules."""
 
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime
@@ -51,7 +51,7 @@ class PlanContent:
 
 @dataclass(frozen=True)
 class ProjectPlan:
-    """Saved plan metadata and immutable-by-contract content snapshot."""
+    """Plan metadata and a detached copy of its current schedule content."""
 
     id: int
     project_id: int
@@ -65,6 +65,7 @@ class ProjectPlan:
     author: str
     created_at: datetime
     content: PlanContent
+    is_frozen: bool = False
 
 
 STATUSES = ('draft', 'proposed', 'approved', 'rejected', 'deleted')
@@ -77,7 +78,7 @@ def validate_status_change(plan: ProjectPlan, status: str, *, editor: bool,
         raise ValueError('Unknown plan status.')
     if plan.status == 'deleted' and not admin:
         raise ValueError('Only a Business Admin can change a Deleted plan status.')
-    if (plan.is_current or plan.is_baseline) and status != 'approved':
+    if (plan.is_current or plan.is_baseline) and status not in {'approved', 'deleted'}:
         raise ValueError('Move the current/baseline designation before changing status.')
     privileged = status in {'approved', 'rejected'} or plan.status == 'approved'
     if not admin and not (approver if privileged else editor):

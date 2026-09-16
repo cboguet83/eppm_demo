@@ -26,8 +26,7 @@ class PoolCapacityCacheTests(unittest.TestCase):
         with psycopg.connect(self.setup.operator_url) as conn, conn.cursor() as cursor:
             conn.execute("UPDATE eppm.project SET name='Project' WHERE id=1")
             conn.execute(
-                "INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date) "
-                "VALUES(1,1,'Task','2026-01-01','2026-12-31')"
+                "INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date,project_plan_id) VALUES (1,1,'Task','2026-01-01','2026-12-31',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current))"
             )
             conn.execute(
                 "INSERT INTO eppm.employee(employee_id,firstname,lastname,email,employee_code) "
@@ -41,7 +40,7 @@ class PoolCapacityCacheTests(unittest.TestCase):
                 "INSERT INTO eppm.resource_pool_mapping(pool_id,target_type,target_id) VALUES(1,'employee',1)"
             )
             conn.execute(
-                "INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,fte_assigned) VALUES(1,1,1,0.5)"
+                'INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,fte_assigned,project_plan_id) VALUES (1,1,1,0.5,(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current))'
             )
 
     def test_persisted_details_equal_uncached_service_and_warm_reads_do_not_compute(self) -> None:

@@ -150,6 +150,9 @@ def authorized(pg_database: PostgreSQLFixture) -> AuthorizedFixture:
     with psycopg.connect(pg_database.operator_url) as operator:
         operator.execute("INSERT INTO eppm.project_type(name,is_general) VALUES ('General',true)")
         operator.execute("INSERT INTO eppm.project(name) VALUES ('Editable'),('Read only'),('Hidden')")
+        operator.execute('''INSERT INTO eppm.project_plan
+            (project_id,version,name,status_id,is_current,author,created_at)
+            SELECT id,1,'Initial plan',3,true,'test setup',CURRENT_TIMESTAMP FROM eppm.project''')
         for user_id in range(1, 6):
             operator.execute("INSERT INTO eppm.app_user(id,status,created_at,updated_at) VALUES (%s,'active',900,900)", (user_id,))
             operator.execute("INSERT INTO eppm.app_session VALUES (%s,%s,950,2000,980,false,false)",

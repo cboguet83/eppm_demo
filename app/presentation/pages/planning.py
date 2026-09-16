@@ -1661,7 +1661,7 @@ def render_planning_milestones(workspace: PlanningWorkspace) -> None:
             from app.presentation.pages.project_plans import render_project_plans
             render_project_plans(workspace)
             return
-        st.caption('Drag tasks to reschedule the current portfolio. Saved plans and baselines keep their dates.')
+        st.caption('Drag tasks to update the active plan. Baselines and other scenarios keep their dates.')
     st.html(
         """
         <style>

@@ -20,9 +20,9 @@ def test_only_positive_consumers_overlapping_an_overloaded_day_are_flagged(
     with psycopg.connect(authorized.setup.operator_url) as connection, connection.cursor() as cursor:
         connection.execute("INSERT INTO eppm.resource_pool(id,name,capacity_fte) VALUES (1,'Pool',1)")
         cursor.executemany(
-            'INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,fte_assigned,start_date,end_date) '
-            'VALUES (1,%s,%s,%s,%s)',
-            [(identity, demand, start, end) for identity, (demand, start, end) in zip(identities, (
+            'INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,fte_assigned,start_date,end_date,project_plan_id) '
+            'VALUES (1,%s,%s,%s,%s,(SELECT id FROM eppm.project_plan WHERE project_id=%s AND is_current))',
+            [(identity, demand, start, end, identity) for identity, (demand, start, end) in zip(identities, (
                 (1, '2027-01-01', '2027-12-31'),
                 (0.1, '2027-05-15', '2027-05-15'),
                 (1, '2028-01-01', '2028-01-01'),
@@ -48,8 +48,8 @@ def test_staffed_pool_uses_assigned_capacity_and_exception_zero_not_theory(
         connection.execute("""INSERT INTO eppm.employee(employee_id,firstname,lastname,email,employee_code)
             VALUES (1,'A','Person','a@example.test','A')""")
         connection.execute("INSERT INTO eppm.resource_pool_mapping(pool_id,target_type,target_id) VALUES (1,'employee',1)")
-        connection.execute("""INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,fte_assigned,start_date,end_date)
-            VALUES (1,%s,0.5,'2027-01-01','2027-12-31')""", (project,))
+        connection.execute("""INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,fte_assigned,start_date,end_date,project_plan_id)
+            VALUES (1,%s,0.5,'2027-01-01','2027-12-31',(SELECT id FROM eppm.project_plan WHERE project_id=%s AND is_current))""", (project, project))
     service = create_project_overallocation_service(runtime, access=access)
     assert service.overallocated_project_ids([project]) == set()
     with psycopg.connect(authorized.setup.operator_url) as connection:

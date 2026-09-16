@@ -30,7 +30,7 @@ def test_plan_save_approve_adopt_baseline_and_soft_delete_are_independent(author
     content.tasks.append(draft_task())
     proposed = editor.save(1, initial.id, initial.revision, 'Option A', content)
     assert proposed.status == 'proposed' and not proposed.is_current
-    assert authorized.query('SELECT id FROM eppm.project_task') == []
+    assert authorized.query('SELECT id FROM eppm.current_project_task') == []
     with pytest.raises(ValueError, match='approver'):
         editor.change(1, proposed.id, proposed.revision, 'status', 'approved')
     admin.change(1, proposed.id, proposed.revision, 'status', 'approved')
@@ -39,17 +39,14 @@ def test_plan_save_approve_adopt_baseline_and_soft_delete_are_independent(author
     approved = admin.list_plans(1)[0]
     admin.change(1, approved.id, approved.revision, 'current', 'true')
     adopted = admin.list_plans(1)[0]
-    assert adopted.is_current and adopted.is_baseline
-    assert authorized.query('SELECT task_name FROM eppm.project_task') == [('Design',)]
-    with pytest.raises(ValueError, match='designation'):
-        admin.change(1, adopted.id, adopted.revision, 'status', 'deleted')
+    assert adopted.is_current and not adopted.is_baseline
+    assert approved.is_baseline and approved.id != adopted.id
+    assert authorized.query('SELECT task_name FROM eppm.current_project_task') == [('Design',)]
+    admin.change(1, adopted.id, adopted.revision, 'status', 'deleted')
     old = next(plan for plan in admin.list_plans(1) if plan.id == initial.id)
     admin.change(1, old.id, old.revision, 'current', 'true')
     adopted = next(plan for plan in admin.list_plans(1) if plan.id == adopted.id)
-    assert adopted.is_baseline and not adopted.is_current
-    admin.change(1, adopted.id, adopted.revision, 'baseline', 'false')
-    adopted = admin.list_plans(1)[0]
-    admin.change(1, adopted.id, adopted.revision, 'status', 'deleted')
+    assert adopted.status == 'deleted' and not adopted.is_current
     deleted = admin.list_plans(1)[0]
     with pytest.raises(ValueError, match='Business Admin'):
         editor.change(1, deleted.id, deleted.revision, 'status', 'proposed')
@@ -64,7 +61,7 @@ def test_plan_scope_stale_metadata_and_atomic_multi_project_save(authorized):
     assert service(authorized, 2).list_plans(1) == []
     with pytest.raises(AccessDenied):
         editor.save(2, second.id, second.revision, 'Denied', second.content)
-    admin.change(1, first.id, first.revision, 'baseline', 'true')
+    admin.change(1, first.id, first.revision, 'current', 'false')
     with pytest.raises(PlanningConflictError):
         editor.save(1, first.id, first.revision, 'Stale', first.content)
     current = admin.list_plans(1)[0]
@@ -75,8 +72,13 @@ def test_plan_scope_stale_metadata_and_atomic_multi_project_save(authorized):
 
 
 def test_runtime_cannot_rewrite_saved_plan_contents(authorized):
-    plan = service(authorized).initialize(1)
-    with pytest.raises(psycopg.errors.InsufficientPrivilege):
+    plans = service(authorized, 4)
+    with psycopg.connect(authorized.setup.operator_url) as connection:
+        connection.execute("INSERT INTO eppm.project_task(project_plan_id,project_id,task_name,start_date,end_date) VALUES(1,1,'Frozen','2027-01-01','2027-01-02')")
+    plan = plans.baseline_current(1)
+    assert authorized.query('UPDATE eppm.project_task SET task_name=%s WHERE project_plan_id=%s RETURNING id',
+        ('Changed', plan.id), write=True) == []
+    with pytest.raises(psycopg.errors.UndefinedColumn):
         authorized.database.run(lambda connection: connection.execute(
             "UPDATE eppm.project_plan SET content='{}' WHERE id=%s", (plan.id,)),
             write=True, bind=authorized.binding(1))
@@ -103,7 +105,7 @@ def test_scoped_approver_can_adopt_but_cannot_edit_plan_contents(authorized):
 def test_progress_survives_plan_removal_and_reintroduction_of_task(authorized):
     admin = service(authorized, 4)
     with psycopg.connect(authorized.setup.operator_url) as connection:
-        connection.execute("INSERT INTO eppm.project_task(project_id,task_name,start_date,end_date,progress_pct) VALUES(1,'Task','2027-01-01','2027-01-02',65)")
+        connection.execute("INSERT INTO eppm.project_task(project_id,task_name,start_date,end_date,progress_pct,project_plan_id) VALUES (1,'Task','2027-01-01','2027-01-02',65,(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current))")
     first = admin.initialize(1)
     empty = deepcopy(first.content)
     empty.tasks = []
@@ -118,8 +120,9 @@ def test_progress_survives_plan_removal_and_reintroduction_of_task(authorized):
 
 def test_plan_copy_preserves_hidden_dependencies_without_disclosing_endpoints(authorized):
     with psycopg.connect(authorized.setup.operator_url) as connection:
-        connection.execute("INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date) VALUES(1,1,'Visible','2027-01-01','2027-01-02'),(2,3,'Hidden','2027-01-01','2027-01-02')")
+        connection.execute("INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date,project_plan_id) VALUES (1,1,'Visible','2027-01-01','2027-01-02',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(2,3,'Hidden','2027-01-01','2027-01-02',(SELECT id FROM eppm.project_plan WHERE project_id=3 AND is_current))")
         connection.execute('INSERT INTO eppm.task_dependencies(task_id,predecessor_task_id) VALUES(1,2)')
+        connection.execute("SELECT setval('eppm.project_task_id_seq',2)")
     admin, editor = service(authorized, 4), service(authorized)
     first = admin.initialize(1)
     visible = editor.list_plans(1)[0]
@@ -133,6 +136,7 @@ def test_current_menu_edits_preserve_saved_plan_and_baseline(authorized):
     from app.infrastructure.postgresql.planning import PostgresPlanningGateway
     from app.application.services.planning import PlanningService
     plans = service(authorized, 4)
+    active = plans.initialize(1)
     initial = plans.baseline_current(1)
     planning = PlanningService(PostgresPlanningGateway(authorized.database, authorized.key,
         access=authorized.binding(4).access))
@@ -140,14 +144,14 @@ def test_current_menu_edits_preserve_saved_plan_and_baseline(authorized):
     assert planning.update_milestone(task_id, 'Edited task', 'General', '2027-01-02', '2027-01-03', 25)
     assert plans.current_content(1).tasks[0]['task_name'] == 'Edited task'
     saved = plans.list_plans(1)
-    assert len(saved) == 1 and saved[0].is_baseline
+    assert len(saved) == 2 and saved[0].is_baseline
     assert saved[0].content == initial.content
-    assert saved[0].revision > initial.revision
+    assert saved[0].revision == initial.revision
     with pytest.raises(PlanningConflictError):
-        plans.save(1, initial.id, initial.revision, 'Stale draft', initial.content)
+        plans.save(1, active.id, active.revision, 'Stale draft', active.content)
     assert planning.delete_milestone(task_id)
     assert plans.current_content(1).tasks == []
-    assert authorized.query('SELECT id FROM eppm.project_task') == []
+    assert authorized.query('SELECT id FROM eppm.current_project_task') == []
 
 
 def test_current_tags_and_allocations_remain_editable_with_baseline(authorized):
@@ -158,7 +162,7 @@ def test_current_tags_and_allocations_remain_editable_with_baseline(authorized):
     from tests.postgresql.test_tags import service as tag_service
 
     with psycopg.connect(authorized.setup.operator_url) as connection:
-        connection.execute("INSERT INTO eppm.project_task(project_id,task_name,start_date,end_date) VALUES(1,'Task','2027-01-01','2027-01-05')")
+        connection.execute("INSERT INTO eppm.project_task(project_id,task_name,start_date,end_date,project_plan_id) VALUES (1,'Task','2027-01-01','2027-01-05',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current))")
         connection.execute("INSERT INTO eppm.resource_pool(name,capacity_fte) VALUES('Delivery',5)")
     plans = service(authorized, 4)
     baseline = plans.baseline_current(1)
@@ -176,13 +180,13 @@ def test_current_tags_and_allocations_remain_editable_with_baseline(authorized):
     assert pools.delete_assignment(allocation_id)
     assert plans.current_content(1).task_tags == {}
     assert plans.current_content(1).assignments == []
-    assert len(plans.list_plans(1)) == 1
+    assert len(plans.list_plans(1)) == 2
 
 
 def test_removed_cross_project_predecessor_remains_an_unresolved_plan_link(authorized):
     from app.domain.planning.plan_comparison import dependency_warnings
     with psycopg.connect(authorized.setup.operator_url) as connection:
-        connection.execute("INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date) VALUES(10,1,'Predecessor','2027-01-01','2027-01-02'),(20,2,'Consumer','2027-01-03','2027-01-04')")
+        connection.execute("INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date,project_plan_id) VALUES (10,1,'Predecessor','2027-01-01','2027-01-02',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(20,2,'Consumer','2027-01-03','2027-01-04',(SELECT id FROM eppm.project_plan WHERE project_id=2 AND is_current))")
         connection.execute('INSERT INTO eppm.task_dependencies(task_id,predecessor_task_id) VALUES(20,10)')
         connection.execute('UPDATE eppm.project_task SET predecessor_id=10 WHERE id=20')
     admin = service(authorized, 4)
@@ -204,7 +208,7 @@ def test_removed_cross_project_predecessor_remains_an_unresolved_plan_link(autho
 
 def test_initial_plan_captures_legacy_primary_link_and_free_text_tag(authorized):
     with psycopg.connect(authorized.setup.operator_url) as connection:
-        connection.execute("INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date) VALUES(10,1,'First','2027-01-01','2027-01-02'),(20,1,'Second','2027-01-03','2027-01-04')")
+        connection.execute("INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date,project_plan_id) VALUES (10,1,'First','2027-01-01','2027-01-02',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(20,1,'Second','2027-01-03','2027-01-04',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current))")
         connection.execute('UPDATE eppm.project_task SET predecessor_id=10 WHERE id=20')
         connection.execute("INSERT INTO eppm.task_tag(task_id,free_tag) VALUES(20,'Critical')")
     plans = service(authorized, 4)
@@ -237,23 +241,23 @@ def test_plan_assignments_remap_new_tasks_and_publish_only_on_adoption(authorize
         schedule_anchor='start', offset_days=2, duration_days=3))
     alternative = plans.save(1, initial.id, initial.revision, 'Resourced option', content)
     assert alternative.content.assignments[0].task_id == alternative.content.tasks[0]['id'] > 0
-    assert authorized.query('SELECT id FROM eppm.resource_pool_assignment') == []
+    assert authorized.query('SELECT id FROM eppm.current_resource_pool_assignment') == []
     plans.change(1, alternative.id, alternative.revision, 'status', 'approved')
     approved = plans.list_plans(1)[0]
     plans.change(1, approved.id, approved.revision, 'current', 'true')
-    assert authorized.query('SELECT fte_assigned,schedule_anchor,offset_days,duration_days FROM eppm.resource_pool_assignment') == [(2, 'start', 2, 3)]
+    assert authorized.query('SELECT fte_assigned,schedule_anchor,offset_days,duration_days FROM eppm.current_resource_pool_assignment') == [(2, 'start', 2, 3)]
     previous = next(row for row in plans.list_plans(1) if row.id == initial.id)
     plans.change(1, previous.id, previous.revision, 'current', 'true')
-    assert authorized.query('SELECT id FROM eppm.resource_pool_assignment') == []
+    assert authorized.query('SELECT id FROM eppm.current_resource_pool_assignment') == []
     assert plans.list_plans(1)[0].content.assignments == alternative.content.assignments
 
 
-def test_adoption_cannot_remove_another_projects_protected_primary_reference(authorized):
+def test_activation_preserves_another_projects_protected_primary_reference(authorized):
     from psycopg.types.json import Jsonb
     with psycopg.connect(authorized.setup.operator_url) as connection:
         connection.execute('''INSERT INTO eppm.app_role_assignment(user_id,role,scope_json,created_at,created_by)
             VALUES(3,'project_approver',%s,900,'test')''', (Jsonb({'kind': 'projects', 'project_ids': [1]}),))
-        connection.execute("INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date) VALUES(10,1,'First','2027-01-01','2027-01-02'),(20,3,'Protected','2027-01-03','2027-01-04')")
+        connection.execute("INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date,project_plan_id) VALUES (10,1,'First','2027-01-01','2027-01-02',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(20,3,'Protected','2027-01-03','2027-01-04',(SELECT id FROM eppm.project_plan WHERE project_id=3 AND is_current))")
         connection.execute('UPDATE eppm.project_task SET predecessor_id=10 WHERE id=20')
     editor, approver = service(authorized), service(authorized, 3)
     initial = editor.initialize(1)
@@ -262,16 +266,15 @@ def test_adoption_cannot_remove_another_projects_protected_primary_reference(aut
     alternative = editor.save(1, initial.id, initial.revision, 'Without predecessor', content)
     approver.change(1, alternative.id, alternative.revision, 'status', 'approved')
     approved = approver.list_plans(1)[0]
-    with pytest.raises(ValueError, match='protected references'):
-        approver.change(1, approved.id, approved.revision, 'current', 'true')
-    assert next(row for row in approver.list_plans(1) if row.is_current).id == initial.id
+    approver.change(1, approved.id, approved.revision, 'current', 'true')
+    assert next(row for row in approver.list_plans(1) if row.is_current).id == approved.id
     with psycopg.connect(authorized.setup.operator_url) as connection:
         assert connection.execute('SELECT predecessor_id FROM eppm.project_task WHERE id=20').fetchone() == (10,)
 
 
 def test_direct_link_updates_and_deletions_keep_predecessor_edit_scope(authorized):
     with psycopg.connect(authorized.setup.operator_url) as connection:
-        connection.execute("INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date) VALUES(10,1,'Editable','2027-01-01','2027-01-02'),(20,2,'Read only','2027-01-03','2027-01-04')")
+        connection.execute("INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date,project_plan_id) VALUES (10,1,'Editable','2027-01-01','2027-01-02',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(20,2,'Read only','2027-01-03','2027-01-04',(SELECT id FROM eppm.project_plan WHERE project_id=2 AND is_current))")
         connection.execute('INSERT INTO eppm.task_dependencies(task_id,predecessor_task_id) VALUES(10,20)')
     assert authorized.query("UPDATE eppm.task_dependencies SET link_type='SS' WHERE task_id=10 RETURNING id", write=True) == []
     assert authorized.query('DELETE FROM eppm.task_dependencies WHERE task_id=10 RETURNING id', write=True) == []

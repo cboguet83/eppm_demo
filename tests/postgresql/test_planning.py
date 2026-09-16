@@ -1,5 +1,6 @@
 """Real PostgreSQL scheduling, scope isolation and atomic schedule replacement."""
 
+from tests.postgresql.plan_fixtures import seed_test_plans
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from threading import Barrier, Event
@@ -52,8 +53,7 @@ def snapshot(authorized):
 def decorate(authorized):
     with psycopg.connect(authorized.setup.operator_url) as connection:
         connection.execute("INSERT INTO eppm.resource_pool(name,capacity_fte) VALUES ('Shared',2),('Zero',1),('Private',1)")
-        connection.execute('''INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,fte_assigned)
-            VALUES (1,1,1,0.5),(1,1,NULL,0.25),(2,1,1,0),(3,3,3,1)''')
+        connection.execute('INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,fte_assigned,project_plan_id) VALUES (1,1,1,0.5,(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(1,1,NULL,0.25,(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(2,1,1,0,(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(3,3,3,1,(SELECT id FROM eppm.project_plan WHERE project_id=3 AND is_current))')
         connection.execute("INSERT INTO eppm.tag_dictionnary(tag) VALUES ('Visible'),('Private')")
         connection.execute('INSERT INTO eppm.task_tag(task_id,tag_id) VALUES (1,1),(3,2)')
         connection.execute('INSERT INTO eppm.project_tag(project_id,tag_id) VALUES (1,1),(3,2)')
@@ -148,6 +148,9 @@ def test_recursive_scopes_stop_at_cycles_and_hidden_project_boundaries(schedule,
     schedule.add_dependency(3, predecessor_task_id=2)
     with psycopg.connect(authorized.setup.operator_url) as connection:
         fourth = connection.execute("INSERT INTO eppm.project(name) VALUES ('Beyond hidden') RETURNING id").fetchone()[0]
+        seed_test_plans(connection)
+        from app.infrastructure.postgresql.seed_plan import ensure_operator_plan
+        ensure_operator_plan(connection, fourth)
         connection.execute("""INSERT INTO eppm.app_role_assignment(user_id,role,scope_json,created_at,created_by)
             VALUES (1,'project_viewer',%s,900,'test setup')""", (Jsonb({'kind': 'projects', 'project_ids': [fourth]}),))
     task = create(schedule, fourth)
@@ -210,6 +213,7 @@ def test_sql_summary_matches_domain_rules_for_all_link_types_and_signed_lags(sch
 def test_summary_empty_dates_task_endpoint_precedence_and_full_template_lag_range(schedule, authorized):
     with psycopg.connect(authorized.setup.operator_url) as connection:
         empty = connection.execute("INSERT INTO eppm.project(name) VALUES ('Empty') RETURNING id").fetchone()[0]
+        seed_test_plans(connection)
     assert schedule.get_project_summaries([empty]) == [dict(id=empty, name='Empty', start=None, end=None,
                                                            taskCount=0, progress=0.0, hasViolations=False)]
     schedule.update_dates(3, '2027-01-01', '2027-01-02')

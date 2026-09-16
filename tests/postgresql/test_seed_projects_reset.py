@@ -1,5 +1,6 @@
 """Native curated projects and reset invariants before maintenance orchestration."""
 
+from tests.postgresql.plan_fixtures import seed_test_plans
 from decimal import Decimal
 
 import psycopg
@@ -110,11 +111,13 @@ def test_empty_full_reset_initializes_general_and_manual_identity_high_water_sur
     }
     with psycopg.connect(pg_database.operator_url) as connection:
         connection.execute("INSERT INTO eppm.project(id,name) VALUES (999,'Manual operator identity')")
-        connection.execute("INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date) "
-                           "VALUES (777,999,'Manual task','2026-01-01','2026-01-02')")
+        seed_test_plans(connection)
+        from app.infrastructure.postgresql.seed_plan import ensure_operator_plan
+        ensure_operator_plan(connection, 999)
+        connection.execute("INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date,project_plan_id) VALUES (777,999,'Manual task','2026-01-01','2026-01-02',(SELECT id FROM eppm.project_plan WHERE project_id=999 AND is_current))")
     operator.run(flush_projects, write=True)
     identity = operator.run(lambda connection: create_seed_project(connection, name='New project'), write=True)
     assert identity > 999
     with psycopg.connect(pg_database.operator_url) as connection:
-        assert connection.execute("INSERT INTO eppm.project_task(project_id,task_name,start_date,end_date) "
-                                  "VALUES (%s,'New task','2026-01-01','2026-01-02') RETURNING id", (identity,)).fetchone()[0] > 777
+        assert connection.execute("INSERT INTO eppm.project_task(project_id,task_name,start_date,end_date,project_plan_id) "
+                                  "VALUES (%s,'New task','2026-01-01','2026-01-02',(SELECT id FROM eppm.project_plan WHERE project_id=%s AND is_current)) RETURNING id", (identity, identity)).fetchone()[0] > 777

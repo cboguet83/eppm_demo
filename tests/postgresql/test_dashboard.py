@@ -1,5 +1,6 @@
 """Native dashboard scope, exact reports and aggregate-only competing demand."""
 
+from tests.postgresql.plan_fixtures import seed_test_plans
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from decimal import Decimal
@@ -134,8 +135,9 @@ def test_revision_is_opaque_actor_scoped_and_tracks_only_relevant_competing_sour
     assert dashboard.revision() == before
     with psycopg.connect(staffing.setup.operator_url) as connection:
         connection.execute("INSERT INTO eppm.project(id,name) VALUES (4,'Unrelated hidden')")
+        seed_test_plans(connection)
         connection.execute("INSERT INTO eppm.resource_pool(id,name) VALUES (7,'Other hidden pool')")
-        connection.execute('INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,fte_assigned) VALUES (7,4,1)')
+        connection.execute('INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,fte_assigned,project_plan_id) VALUES (7,4,1,(SELECT id FROM eppm.project_plan WHERE project_id=4 AND is_current))')
     assert dashboard.revision() == before
     staffing.query('UPDATE eppm.resource_pool_assignment SET fte_assigned=21 WHERE project_id=3 AND pool_id=1', user_id=4, write=True)
     assert dashboard.revision() != before

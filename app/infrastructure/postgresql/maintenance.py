@@ -66,8 +66,8 @@ def seed_projects(database: OperatorDatabase, backup: PostgresBackup, request: S
 def counts(database: OperatorDatabase) -> DatabaseCounts:
     """Read all maintenance counts in one consistent native snapshot."""
     row = database.run(lambda connection: connection.execute('''SELECT
-        (SELECT count(*) FROM eppm.project), (SELECT count(*) FROM eppm.project_task),
-        (SELECT count(*) FROM eppm.task_dependencies), (SELECT count(*) FROM eppm.project_type),
+        (SELECT count(*) FROM eppm.project), (SELECT count(*) FROM eppm.current_project_task),
+        (SELECT count(*) FROM eppm.current_task_dependencies), (SELECT count(*) FROM eppm.project_type),
         (SELECT count(*) FROM eppm.project_property_value), (SELECT count(*) FROM eppm.resource_pool)''').fetchone())
     return DatabaseCounts(projects=row[0], tasks=row[1], dependencies=row[2], project_types=row[3], property_values=row[4], pools=row[5])
 
@@ -75,7 +75,7 @@ def counts(database: OperatorDatabase) -> DatabaseCounts:
 def clear_pool_allocations(database: OperatorDatabase, backup: PostgresBackup) -> int:
     """Archive and clear demand while retaining pools and employee membership."""
     return backed_up_write(database, backup, reason='clear-allocations', fingerprint=database.run(source_fingerprint),
-        operation=lambda connection: connection.execute('DELETE FROM eppm.resource_pool_assignment').rowcount)
+        operation=lambda connection: connection.execute('DELETE FROM eppm.current_resource_pool_assignment').rowcount)
 
 
 def seed_pool_scenarios(database: OperatorDatabase, backup: PostgresBackup, *, year: int | None = None,

@@ -31,7 +31,7 @@ render_planning_milestones(create_planning_workspace(runtime,access=access))
 
 def test_paired_gantt_retains_missing_tasks_and_saves_drag_as_new_version(authorized, tmp_path):
     with psycopg.connect(authorized.setup.operator_url) as connection:
-        connection.execute("INSERT INTO eppm.project_task(project_id,task_name,start_date,end_date) VALUES (1,'Design','2027-01-01','2027-01-05'),(1,'Removed task','2027-01-06','2027-01-08')")
+        connection.execute("INSERT INTO eppm.project_task(project_id,task_name,start_date,end_date,project_plan_id) VALUES (1,'Design','2027-01-01','2027-01-05',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(1,'Removed task','2027-01-06','2027-01-08',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current))")
     plans = service(authorized, 4)
     initial = plans.initialize(1)
     draft = deepcopy(initial.content)
@@ -61,10 +61,13 @@ def test_paired_gantt_retains_missing_tasks_and_saves_drag_as_new_version(author
             page.get_by_role('button', name='Save as new plan', exact=True).click()
             expect(page.get_by_role('button', name='Edit alternative', exact=True)).to_be_enabled()
             with psycopg.connect(authorized.setup.operator_url) as connection:
-                rows = connection.execute('SELECT name,is_current,content FROM eppm.project_plan WHERE project_id=1 ORDER BY version').fetchall()
+                from app.infrastructure.postgresql.plan_rows import read_plans
+                metadata = connection.execute('SELECT id,name,is_current FROM eppm.project_plan WHERE project_id=1 ORDER BY version').fetchall()
+                contents = read_plans(connection, [row[0] for row in metadata])
+                rows = [(name, current, contents[identity]) for identity, name, current in metadata]
             assert [row[0] for row in rows] == ['Initial plan', 'Option A', 'Shifted option']
             assert rows[0][1] and not rows[1][1] and not rows[2][1]
-            assert rows[0][2]['tasks'][0]['start_date'] == rows[1][2]['tasks'][0]['start_date'] == '2027-01-01'
-            assert rows[2][2]['tasks'][0]['start_date'] == '2027-01-02'
+            assert rows[0][2].tasks[0]['start_date'] == rows[1][2].tasks[0]['start_date'] == '2027-01-01'
+            assert rows[2][2].tasks[0]['start_date'] == '2027-01-02'
         finally:
             browser.close()

@@ -1,5 +1,6 @@
 """Dashboard browser scenarios seeded outside the restricted application process."""
 
+from tests.postgresql.plan_fixtures import seed_test_plans
 from datetime import date
 
 import psycopg
@@ -44,14 +45,15 @@ def popup_server(authorized, tmp_path, request):
         ensure_reference_catalog(connection)
         connection.execute("UPDATE eppm.project SET name='Project ' || lpad(id::text,4,'0')")
         connection.execute("INSERT INTO eppm.project(id,name) SELECT i,'Project ' || lpad(i::text,4,'0') FROM generate_series(4,1000) i")
+        seed_test_plans(connection)
         connection.execute("INSERT INTO eppm.wbs(id,code,description) VALUES(1,'A','Example')")
         connection.execute('INSERT INTO eppm.project_wbs(project_id,wbs_id,percentage) VALUES(1,1,50)')
         if request.param == 'shared-budget':
             connection.execute('INSERT INTO eppm.project_wbs(project_id,wbs_id,percentage) VALUES(2,1,25)')
         connection.execute("INSERT INTO eppm.resource_pool(id,name,capacity_fte) VALUES(1,'Pool A',1),(2,'Pool B',1)")
         connection.cursor().executemany(
-            "INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,fte_assigned,start_date,end_date) VALUES(%s,%s,%s,'2026-01-01','2026-03-31')",
-            [(1, 1, 1), (1, 2, 2), (2, 1, 1), (2, 2, 1)],
+            "INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,fte_assigned,start_date,end_date,project_plan_id) VALUES(%s,%s,%s,'2026-01-01','2026-03-31',(SELECT id FROM eppm.project_plan WHERE project_id=%s AND is_current))",
+            [(1, 1, 1, 1), (1, 2, 2, 2), (2, 1, 1, 1), (2, 2, 1, 2)],
         )
         blocker = connection.execute("SELECT id FROM eppm.project_event_type WHERE system_code='blocking_point'").fetchone()[0]
         connection.execute("INSERT INTO eppm.project_log_event(project_id,title,description,comment,event_type_id,status) VALUES(1,'Delivery blocked',%s,'Read only',%s,'active')",

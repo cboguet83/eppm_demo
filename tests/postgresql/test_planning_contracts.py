@@ -135,8 +135,7 @@ def test_planning_gateway_rolls_back_reuses_leases_and_hides_storage_details(
 
     def abort_task(store: PostgresPlanningStore) -> None:
         assert store.connection.info.transaction_status == psycopg.pq.TransactionStatus.INTRANS
-        store.connection.execute("""INSERT INTO eppm.project_task(project_id,task_name,start_date,end_date)
-            VALUES (1,'Rolled back','2026-01-01','2026-01-02')""")
+        store.connection.execute("INSERT INTO eppm.project_task(project_id,task_name,start_date,end_date,project_plan_id) VALUES (1,'Rolled back','2026-01-01','2026-01-02',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current))")
         with psycopg.connect(authorized.setup.operator_url) as competitor:
             competitor.execute("SET LOCAL statement_timeout='1s'")
             competitor.execute("UPDATE eppm.project SET name='Independent' WHERE id=3")

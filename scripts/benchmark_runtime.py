@@ -48,7 +48,7 @@ class BenchmarkContext:
         return self.resources.database.run(
             lambda connection: connection.execute(
                 'SELECT (SELECT count(*) FROM eppm.project), '
-                '(SELECT count(*) FROM eppm.project_task), '
+                '(SELECT count(*) FROM eppm.current_project_task), '
                 '(SELECT count(*) FROM eppm.resource_pool)'
             ).fetchone(), bind=ActorBinding(self.access, self.resources.key),
         )
@@ -69,8 +69,8 @@ class BenchmarkContext:
             raise ValueError('Task reference must be a positive integer.')
         row = self.resources.database.run(
             lambda connection: connection.execute(
-                'SELECT t.id FROM eppm.project_task t WHERE %s::bigint IS NULL OR t.id=%s '
-                'ORDER BY EXISTS(SELECT 1 FROM eppm.resource_pool_assignment a '
+                'SELECT t.id FROM eppm.current_project_task t WHERE %s::bigint IS NULL OR t.id=%s '
+                'ORDER BY EXISTS(SELECT 1 FROM eppm.current_resource_pool_assignment a '
                 'WHERE a.task_id=t.id) DESC, t.id LIMIT 1', (requested, requested)
             ).fetchone(), bind=ActorBinding(self.access, self.resources.key),
         )

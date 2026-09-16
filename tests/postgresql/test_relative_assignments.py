@@ -51,5 +51,5 @@ def test_database_rejects_partial_and_mixed_relative_modes(authorized, pools, co
     identity = pools.create_pool(ResourcePool('Constraint pool'))
     with psycopg.connect(authorized.setup.operator_url) as connection:
         with pytest.raises(psycopg.errors.CheckViolation):
-            connection.execute(f'INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,fte_assigned,{columns}) VALUES (%s,1,1,{values})', (identity,))
+            connection.execute(f'INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,fte_assigned,{columns},project_plan_id) VALUES (%s,1,1,{values},(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current))', (identity,))
 

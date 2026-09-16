@@ -38,7 +38,7 @@ def read_operator_capacity_inputs(
         identity: (start.isoformat(), end.isoformat())
         for identity, start, end in connection.execute(
             'SELECT project_id,min(start_date),max(end_date) '
-            'FROM eppm.project_task GROUP BY project_id',
+            'FROM eppm.current_project_task GROUP BY project_id',
         )
     }
     pools = {pool.id: pool for pool in store.get_all_pools()}

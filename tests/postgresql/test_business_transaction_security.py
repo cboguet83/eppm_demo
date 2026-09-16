@@ -1,5 +1,6 @@
 """Native scope enforcement and scoped application/UI workflows."""
 
+from tests.postgresql.plan_fixtures import seed_test_plans
 from tests.postgresql.pool_helpers import create_container
 
 from datetime import date
@@ -57,8 +58,7 @@ def test_scoped_summary_cache_cannot_reuse_a_global_hidden_dependency_indicator(
     ("UPDATE eppm.project_task SET project_id=0 WHERE id=10", False),
     ("UPDATE eppm.resource_pool_assignment SET project_id=1 WHERE id=2", True),
     ("UPDATE eppm.resource_pool_assignment SET task_id=20 WHERE id=1", False),
-    ("INSERT INTO eppm.resource_pool_assignment(id,pool_id,project_id,task_id,fte_assigned) VALUES(2,1,1,10,2) "
-     "ON CONFLICT(id) DO UPDATE SET project_id=excluded.project_id,task_id=excluded.task_id,fte_assigned=excluded.fte_assigned", False),
+    ('INSERT INTO eppm.resource_pool_assignment(id,pool_id,project_id,task_id,fte_assigned,project_plan_id) VALUES (2,1,1,10,2,(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)) ON CONFLICT(id) DO UPDATE SET project_id=excluded.project_id,task_id=excluded.task_id,fte_assigned=excluded.fte_assigned', False),
     ("INSERT INTO eppm.task_dependencies(task_id,predecessor_task_id,link_type,lag_days) VALUES(20,10,'FS',0)", False),
     ("INSERT INTO eppm.task_dependencies(task_id,predecessor_project_id,link_type,lag_days) VALUES(10,2,'FS',0)", False),
     ("INSERT INTO eppm.task_tag(task_id,free_tag) VALUES(20,'Unauthorized tag')", False),
@@ -186,6 +186,7 @@ def test_authorized_cascade_deletion_and_new_project_visibility_work_in_one_tran
         connection.execute("DELETE FROM eppm.project_task WHERE project_id=1")
         connection.execute("DELETE FROM eppm.project WHERE id=1")
         new_id = connection.execute("INSERT INTO eppm.project(name) VALUES('New authorized project') RETURNING id").fetchone()[0]
+        seed_test_plans(connection)
         assert connection.execute("SELECT name FROM eppm.project WHERE id=%s", (new_id,)).fetchone() == ("New authorized project",)
         assert connection.execute("SELECT * FROM eppm.project_property_value WHERE project_id=1").fetchall() == []
 
@@ -589,7 +590,7 @@ def test_csv_import_validates_preview_and_rechecks_every_affected_project_before
     if scenario == "replace":
         assert not app.error
         with psycopg.connect(pg_database.operator_url) as connection:
-            assert connection.execute("SELECT task_name,start_date,end_date FROM eppm.project_task WHERE project_id=1 ORDER BY id").fetchall() == [
+            assert connection.execute("SELECT task_name,start_date,end_date FROM eppm.current_project_task WHERE project_id=1 ORDER BY id").fetchall() == [
                 ("Replacement first", date(2026, 2, 13), date(2026, 2, 14)), ("Replacement second", date(2026, 2, 15), date(2026, 2, 16)),
             ]
             assert connection.execute("SELECT id FROM eppm.resource_pool_assignment").fetchall() == [(2,)]
@@ -614,6 +615,7 @@ def test_flexible_filters_offer_only_visible_values_and_clear_without_widening_a
     path, service, admin, editor, _ = business
     with psycopg.connect(pg_database.operator_url) as connection:
         connection.execute("INSERT INTO eppm.project(id,name,status) VALUES(3,'Visible alternative','In Progress')")
+        seed_test_plans(connection)
         connection.execute("INSERT INTO eppm.project_property_value(project_id,param_id,kind,text_value) VALUES(3,'DEPT','text','Finance')")
         connection.execute("INSERT INTO eppm.project_tag(project_id,free_tag) VALUES(1,'Alpha'),(1,'Beta'),(3,'Alpha'),(2,'Private tag')")
     service.grant(admin, editor.actor.user_id, "project_viewer", {"kind": "projects", "project_ids": [3]})
@@ -708,9 +710,10 @@ def test_pool_context_filters_and_allocation_totals_remain_inside_current_read_s
     path, service, admin, editor, manager = business
     with psycopg.connect(pg_database.operator_url) as connection:
         connection.execute("INSERT INTO eppm.project(id,name,status) VALUES(3,'Visible successor','In Progress')")
-        connection.execute("INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date) VALUES(30,3,'Successor task','2026-01-06','2026-01-07')")
+        seed_test_plans(connection)
+        connection.execute("INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date,project_plan_id) VALUES (30,3,'Successor task','2026-01-06','2026-01-07',(SELECT id FROM eppm.project_plan WHERE project_id=3 AND is_current))")
         connection.execute("INSERT INTO eppm.task_dependencies(task_id,predecessor_task_id,link_type,lag_days) VALUES(30,10,'FS',0)")
-        connection.execute("INSERT INTO eppm.resource_pool_assignment(id,pool_id,project_id,fte_assigned,notes) VALUES(3,1,1,0.25,'<script>visible notes</script>')")
+        connection.execute("INSERT INTO eppm.resource_pool_assignment(id,pool_id,project_id,fte_assigned,notes,project_plan_id) VALUES (3,1,1,0.25,'<script>visible notes</script>',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current))")
     service.grant(admin, editor.actor.user_id, "project_viewer", {"kind": "projects", "project_ids": [3]})
     container_id = create_container(create_resource_pool_service(path, access=manager), ResourcePool("Delivery group"), pool_ids=[1])
     event = {

@@ -112,8 +112,8 @@ def test_delete_rolls_back_dependencies_if_final_delete_fails(database: RuntimeR
     service = create_project_service(database, access=access)
     pid = service.create_project(name="Project with tasks")
     with psycopg.connect(authorized.setup.operator_url) as conn:
-        conn.execute("INSERT INTO eppm.project_task(project_id,task_name,start_date,end_date) VALUES (%s,%s,%s,%s)",
-                     (pid, "First task", "2026-09-01", "2026-09-02"))
+        conn.execute("INSERT INTO eppm.project_task(project_id,task_name,start_date,end_date,project_plan_id) VALUES (%s,%s,%s,%s,(SELECT id FROM eppm.project_plan WHERE project_id=%s AND is_current))",
+                     (pid, "First task", "2026-09-01", "2026-09-02", pid))
         conn.execute("""CREATE FUNCTION eppm.reject_project_delete() RETURNS trigger LANGUAGE plpgsql AS $$
             BEGIN RAISE EXCEPTION 'blocked' USING ERRCODE='23514'; END $$""")
         conn.execute("""CREATE TRIGGER reject_project_delete BEFORE DELETE ON eppm.project

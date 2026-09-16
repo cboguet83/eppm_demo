@@ -12,10 +12,12 @@ def test_dependency_closure_does_not_rescan_unrelated_tasks_for_each_connected_p
     path, _, _, _, administrator = business
     with psycopg.connect(pg_database.operator_url) as connection:
         connection.cursor().executemany("INSERT INTO eppm.project(id,name) VALUES(%s,%s)", [(i, f"Connected {i}") for i in range(3, 12)])
+        connection.execute("""INSERT INTO eppm.project_plan(project_id,version,name,status_id,is_current,author,created_at)
+            SELECT id,1,'Initial plan',3,true,'test',CURRENT_TIMESTAMP FROM eppm.project WHERE id>=3""")
         connection.cursor().executemany(
-            "INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date) VALUES(%s,%s,%s,'2026-01-01','2026-01-02')",
-            [(i * 10, i, "Connected task") for i in range(3, 12)]
-            + [(i, 2, "Unrelated task") for i in range(1000, 6000)],
+            "INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date,project_plan_id) VALUES(%s,%s,%s,'2026-01-01','2026-01-02',(SELECT id FROM eppm.project_plan WHERE project_id=%s AND is_current))",
+            [(i * 10, i, "Connected task", i) for i in range(3, 12)]
+            + [(i, 2, "Unrelated task", 2) for i in range(1000, 6000)],
         )
         connection.cursor().executemany(
             "INSERT INTO eppm.task_dependencies(task_id,predecessor_task_id) VALUES(%s,%s)",
@@ -67,9 +69,11 @@ def test_dependency_filters_follow_visible_task_project_and_legacy_links_without
     path, access, administrator, editor, _ = business
     with psycopg.connect(pg_database.operator_url) as connection:
         connection.cursor().executemany("INSERT INTO eppm.project(id,name) VALUES(%s,%s)", [(i, f"Project {i}") for i in range(3, 6)])
+        connection.execute("""INSERT INTO eppm.project_plan(project_id,version,name,status_id,is_current,author,created_at)
+            SELECT id,1,'Initial plan',3,true,'test',CURRENT_TIMESTAMP FROM eppm.project WHERE id>=3""")
         connection.cursor().executemany(
-            "INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date) VALUES(%s,%s,%s,'2026-01-01','2026-01-02')",
-            [(i * 10, i, "Task") for i in range(3, 6)],
+            "INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date,project_plan_id) VALUES(%s,%s,%s,'2026-01-01','2026-01-02',(SELECT id FROM eppm.project_plan WHERE project_id=%s AND is_current))",
+            [(i * 10, i, "Task", i) for i in range(3, 6)],
         )
         connection.execute("INSERT INTO eppm.task_dependencies(task_id,predecessor_project_id) VALUES(10,3)")
         connection.execute("UPDATE eppm.project_task SET predecessor_id=10 WHERE id=40")

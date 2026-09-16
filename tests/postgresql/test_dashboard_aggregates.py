@@ -1,5 +1,6 @@
 """Independent demand/calendar parity at the dashboard's private SQL boundary."""
 
+from tests.postgresql.plan_fixtures import seed_test_plans
 from datetime import date, timedelta
 import random
 
@@ -54,9 +55,7 @@ def test_relative_demand_matches_domain_after_owner_dates_cross_quarters(staffin
     with psycopg.connect(staffing.setup.operator_url) as connection:
         connection.execute('DELETE FROM eppm.resource_pool_assignment')
         connection.execute("UPDATE eppm.project_task SET start_date='2026-03-25',end_date='2026-03-31' WHERE project_id=1")
-        connection.execute("""INSERT INTO eppm.resource_pool_assignment
-            (pool_id,project_id,task_id,fte_assigned,schedule_anchor,offset_days,duration_days)
-            VALUES (1,1,1,20,'start',10,5),(2,1,NULL,20,'end',10,5)""")
+        connection.execute("INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,fte_assigned,schedule_anchor,offset_days,duration_days,project_plan_id) VALUES (1,1,1,20,'start',10,5,(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(2,1,NULL,20,'end',10,5,(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current))")
     report = assert_resources_match_domain(staffing, [1])
     assert report['overallocation']['2026-Q1'] == 0
     assert report['overallocation']['2026-Q2'] > 0
@@ -82,8 +81,8 @@ def test_randomized_overlapping_project_and_task_demand_keeps_float_rounding_ord
                         start = first + timedelta(days=rng.randrange(12))
                         end = start + timedelta(days=rng.randrange(12))
                         connection.execute('''INSERT INTO eppm.resource_pool_assignment
-                            (pool_id,project_id,task_id,fte_assigned,start_date,end_date)
-                            VALUES (%s,%s,%s,%s,%s,%s)''', (pool, project, task, rng.choice(choices), start, end))
+                            (pool_id,project_id,task_id,fte_assigned,start_date,end_date,project_plan_id)
+                            VALUES (%s,%s,%s,%s,%s,%s,(SELECT id FROM eppm.project_plan WHERE project_id=%s AND is_current))''', (pool, project, task, rng.choice(choices), start, end, project))
         selected = [1] if iteration % 2 else [1, 2]
         assert_resources_match_domain(staffing, selected)
 
@@ -100,9 +99,7 @@ def test_calendar_peaks_are_concurrent_and_full_quarter_overrides_replace_baseli
             (employee_id,start_date,end_date,occupation_percentage) VALUES
             (1,'2026-01-01','2026-01-01',100),(4,'2026-02-01','2026-02-01',100),
             (1,'2026-04-01','2026-06-30',0),(4,'2026-04-01','2026-06-30',0)''')
-        connection.execute('''INSERT INTO eppm.resource_pool_assignment
-            (pool_id,project_id,fte_assigned,start_date,end_date) VALUES
-            (1,1,2,'2026-01-01','2026-06-30'),(2,1,3,'2026-01-01','2026-06-30')''')
+        connection.execute("INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,fte_assigned,start_date,end_date,project_plan_id) VALUES (1,1,2,'2026-01-01','2026-06-30',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(2,1,3,'2026-01-01','2026-06-30',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current))")
     actual = assert_resources_match_domain(staffing, [1])
     assert actual['capacity']['2026-Q1'] == 1.2
     assert actual['capacity']['2026-Q2'] == 0
@@ -113,11 +110,9 @@ def test_calendar_peaks_are_concurrent_and_full_quarter_overrides_replace_baseli
 def test_undated_custom_partial_and_quarter_boundary_periods_keep_the_current_day_fallback(staffing):
     with psycopg.connect(staffing.setup.operator_url) as connection:
         connection.execute("INSERT INTO eppm.project(id,name) VALUES (4,'Undated')")
+        seed_test_plans(connection)
         connection.execute('DELETE FROM eppm.resource_pool_assignment')
-        connection.execute('''INSERT INTO eppm.resource_pool_assignment
-            (pool_id,project_id,fte_assigned,start_date,end_date) VALUES
-            (2,4,3,NULL,NULL),(5,4,1,'2026-09-30',NULL),
-            (4,4,1,NULL,'2026-10-01')''')
+        connection.execute("INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,fte_assigned,start_date,end_date,project_plan_id) VALUES (2,4,3,NULL,NULL,(SELECT id FROM eppm.project_plan WHERE project_id=4 AND is_current)),(5,4,1,'2026-09-30',NULL,(SELECT id FROM eppm.project_plan WHERE project_id=4 AND is_current)),(4,4,1,NULL,'2026-10-01',(SELECT id FROM eppm.project_plan WHERE project_id=4 AND is_current))")
     dashboard = service(staffing, 4, lambda: date(2026, 9, 30))
     before = dashboard.revision()
     september = assert_resources_match_domain(staffing, [4], date(2026, 9, 30))
@@ -131,9 +126,7 @@ def test_undated_custom_partial_and_quarter_boundary_periods_keep_the_current_da
 def test_long_periods_keep_the_25_year_demand_cap_and_displayed_window(staffing):
     with psycopg.connect(staffing.setup.operator_url) as connection:
         connection.execute('DELETE FROM eppm.resource_pool_assignment')
-        connection.execute('''INSERT INTO eppm.resource_pool_assignment
-            (pool_id,project_id,fte_assigned,start_date,end_date) VALUES
-            (5,1,2,'2000-01-01','2099-12-31'),(5,3,30,'2000-01-01','2099-12-31')''')
+        connection.execute("INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,fte_assigned,start_date,end_date,project_plan_id) VALUES (5,1,2,'2000-01-01','2099-12-31',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(5,3,30,'2000-01-01','2099-12-31',(SELECT id FROM eppm.project_plan WHERE project_id=3 AND is_current))")
     actual = assert_resources_match_domain(staffing, [1])
     assert actual['overallocation']['2024-Q4'] == 32
     assert actual['overallocation']['2025-Q1'] == actual['overallocation']['2026-Q1'] == 0
@@ -143,9 +136,7 @@ def test_long_periods_keep_the_25_year_demand_cap_and_displayed_window(staffing)
 def test_partial_period_resolving_backwards_does_not_invent_selected_consuming_days(staffing):
     with psycopg.connect(staffing.setup.operator_url) as connection:
         connection.execute('DELETE FROM eppm.resource_pool_assignment')
-        connection.execute('''INSERT INTO eppm.resource_pool_assignment
-            (pool_id,project_id,task_id,fte_assigned,start_date,end_date) VALUES
-            (5,1,1,3,'2026-01-10',NULL),(5,3,3,30,'2026-01-10','2026-01-10')''')
+        connection.execute("INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,fte_assigned,start_date,end_date,project_plan_id) VALUES (5,1,1,3,'2026-01-10',NULL,(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(5,3,3,30,'2026-01-10','2026-01-10',(SELECT id FROM eppm.project_plan WHERE project_id=3 AND is_current))")
     actual = assert_resources_match_domain(staffing, [1])
     assert all(value == 0 for value in actual['overallocation'].values())
     assert service(staffing).consuming_projects([1], '2026-Q1') == []
@@ -185,11 +176,7 @@ def test_change_points_preserve_concurrent_pools_quarter_ties_and_leap_day(staff
         connection.execute('DELETE FROM eppm.resource_pool_assignment')
         connection.execute('DELETE FROM eppm.resource_pool_mapping')
         connection.execute('UPDATE eppm.resource_pool SET capacity_fte=5')
-        connection.execute("""INSERT INTO eppm.resource_pool_assignment
-            (pool_id,project_id,fte_assigned,start_date,end_date) VALUES
-            (1,1,4,'2023-12-01','2024-06-30'),
-            (2,1,3,'2024-02-29','2024-03-01'),
-            (1,3,2,'2024-02-29','2024-02-29')""")
+        connection.execute("INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,fte_assigned,start_date,end_date,project_plan_id) VALUES (1,1,4,'2023-12-01','2024-06-30',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(2,1,3,'2024-02-29','2024-03-01',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(1,3,2,'2024-02-29','2024-02-29',(SELECT id FROM eppm.project_plan WHERE project_id=3 AND is_current))")
         connection.execute("""INSERT INTO eppm.resource_pool_capacity_exception
             (pool_id,start_date,end_date,reduction_fte) VALUES
             (1,'2024-02-29','2024-02-29',2)""")
@@ -213,13 +200,7 @@ def test_warning_lists_all_overallocated_pools_not_just_the_total_peak(staffing)
         connection.execute('DELETE FROM eppm.resource_pool_assignment')
         connection.execute('DELETE FROM eppm.resource_pool_mapping')
         connection.execute('UPDATE eppm.resource_pool SET capacity_fte=1')
-        connection.execute("""INSERT INTO eppm.resource_pool_assignment
-            (pool_id,project_id,fte_assigned,start_date,end_date) VALUES
-            (1,1,10,'2026-01-01','2026-01-01'),
-            (2,1,2,'2026-02-01','2026-02-01'),
-            (3,1,.5,'2026-02-01','2026-02-01'),
-            (4,3,20,'2026-02-01','2026-02-01'),
-            (5,1,20,'2020-02-01','2020-02-01')""")
+        connection.execute("INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,fte_assigned,start_date,end_date,project_plan_id) VALUES (1,1,10,'2026-01-01','2026-01-01',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(2,1,2,'2026-02-01','2026-02-01',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(3,1,.5,'2026-02-01','2026-02-01',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(4,3,20,'2026-02-01','2026-02-01',(SELECT id FROM eppm.project_plan WHERE project_id=3 AND is_current)),(5,1,20,'2020-02-01','2020-02-01',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current))")
     report = staffing.query('SELECT eppm.dashboard_resource_breakdown(%s,%s)', ([1], DAY))[0][0]
     assert {pool['pool_id'] for pool in report['overallocated_pools']} == {1, 2}
     assert all(set(pool) == {'pool_id', 'name'} for pool in report['overallocated_pools'])

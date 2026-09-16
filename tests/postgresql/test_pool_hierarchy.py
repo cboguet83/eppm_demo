@@ -43,7 +43,7 @@ def test_migration_preserves_leaf_ids_assignments_and_converts_groups(empty_data
         connection.execute("INSERT INTO eppm.resource_pool_group_member(group_id,pool_id) VALUES (2,1)")
         connection.execute("INSERT INTO eppm.project_type(id,name) VALUES (1,'General')")
         connection.execute("INSERT INTO eppm.project(id,name) VALUES (1,'Project')")
-        connection.execute("INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,fte_assigned) VALUES (1,1,2)")
+        connection.execute('INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,fte_assigned,project_plan_id) VALUES (1,1,2,(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current))')
     assert migrate(url) == ('0040_pool_hierarchy.sql',)
     assert migrate(url) == ()
     with psycopg.connect(url) as connection:

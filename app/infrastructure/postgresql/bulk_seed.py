@@ -126,10 +126,14 @@ def generate_projects(connection: psycopg.Connection, request: SeedRequest, *, y
     task_ids = _identities(connection, 'project_task', len(tasks))
     _copy(connection, 'project', ('id', 'name', 'status', 'planned_budget', 'actual_budget', 'function_id', 'project_type_id'),
           ((row.id, row.name, row.status, row.planned_budget, row.actual_budget, row.function_id, row.project_type_id) for row in projects))
+    plans = dict(connection.execute('''INSERT INTO eppm.project_plan
+        (project_id,version,name,status_id,is_current,author,created_at)
+        SELECT id,1,'Initial plan',3,true,'operator',CURRENT_TIMESTAMP FROM eppm.project
+        WHERE id=ANY(%s::bigint[]) RETURNING project_id,id''', (identities,)))
     _copy(connection, 'project_property_value', ('project_id', 'param_id', 'kind', 'text_value', 'number_value', 'date_value'), parents)
     _copy(connection, 'project_property_value_item', ('project_id', 'param_id', 'position', 'value'), selections)
-    _copy(connection, 'project_task', ('id', 'project_id', 'task_name', 'phase', 'start_date', 'end_date', 'progress_pct', 'description'),
-          ((identity, *row) for identity, row in zip(task_ids, tasks)))
+    _copy(connection, 'project_task', ('id', 'project_id', 'task_name', 'phase', 'start_date', 'end_date', 'progress_pct', 'description', 'project_plan_id'),
+          ((identity, *row, plans[row[0]]) for identity, row in zip(task_ids, tasks)))
     _copy(connection, 'task_dependencies', ('task_id', 'predecessor_task_id', 'predecessor_project_id', 'link_type', 'lag_days'),
           ((task_ids[task - 1], task_ids[predecessor - 1] if predecessor is not None else None, project, kind, lag)
            for task, predecessor, project, kind, lag in dependencies))

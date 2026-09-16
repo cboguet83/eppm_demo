@@ -23,8 +23,8 @@ def test_task_source_query_preserves_keys_without_scanning_unrelated_tasks(warm_
 
     before, initial = run_business(fixture.database, fixture.key, access, inspect)
     with psycopg.connect(fixture.setup.operator_url) as connection:
-        connection.execute("""INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date)
-            SELECT id,3,'Unrelated','2026-01-01','2026-01-02' FROM generate_series(70008,75007) id""")
+        connection.execute("""INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date,project_plan_id)
+            SELECT id,3,'Unrelated','2026-01-01','2026-01-02',(SELECT id FROM eppm.project_plan WHERE project_id=3 AND is_current) FROM generate_series(70008,75007) id""")
         connection.execute("""INSERT INTO eppm.task_dependencies(task_id,predecessor_task_id)
             SELECT id,15 FROM eppm.project_task WHERE id>=70008""")
         connection.execute('ANALYZE eppm.project_task')

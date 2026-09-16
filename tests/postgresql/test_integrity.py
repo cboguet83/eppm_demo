@@ -1,5 +1,6 @@
 """Native values and permanent invariants through an authorized nonowner pool."""
 
+from tests.postgresql.plan_fixtures import seed_test_plans
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -41,6 +42,7 @@ def business(pg_database):
     with psycopg.connect(pg_database.operator_url) as operator:
         operator.execute("INSERT INTO eppm.project_type(name,is_general) VALUES ('General',true)")
         operator.execute("INSERT INTO eppm.project(name) VALUES ('First'),('Second')")
+        seed_test_plans(operator)
         operator.execute("INSERT INTO eppm.wbs(code) VALUES ('A'),('B')")
         operator.execute("INSERT INTO eppm.resource_pool(name) VALUES ('Pool')")
         operator.execute("INSERT INTO eppm.resource_pool_group(name) VALUES ('First'),('Second'),('Third')")
@@ -84,8 +86,7 @@ def test_native_money_dates_booleans_and_json_round_trip_exactly(business):
     amount = Decimal("9007199254740993.01234567890123456789")
     execute(business, "UPDATE eppm.project SET planned_budget=%s WHERE id=1", (amount,), write=True)
     assert execute(business, "SELECT planned_budget FROM eppm.project WHERE id=1") == [(amount,)]
-    rows = execute(business, """INSERT INTO eppm.project_task(project_id,task_name,start_date,end_date)
-        VALUES (1,'Task',%s,%s) RETURNING id,start_date,end_date""", (date(2026, 1, 1), date(2026, 1, 2)), write=True)
+    rows = execute(business, "INSERT INTO eppm.project_task(project_id,task_name,start_date,end_date,project_plan_id) VALUES (1,'Task',%s,%s,(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)) RETURNING id,start_date,end_date", (date(2026, 1, 1), date(2026, 1, 2)), write=True)
     assert type(rows[0][0]) is int and rows[0][1:] == (date(2026, 1, 1), date(2026, 1, 2))
     assert execute(business, "SELECT is_general FROM eppm.project_type") == [(True,)]
 
@@ -177,13 +178,12 @@ def test_wbs_total_is_enforced_across_projects_on_insert_and_update(business):
 
 
 def test_task_and_assignment_ownership_and_date_invariants(business):
-    task = execute(business, """INSERT INTO eppm.project_task(project_id,task_name,start_date,end_date)
-        VALUES (1,'Task','2026-01-01','2026-01-02') RETURNING id""", write=True)[0][0]
+    task = execute(business, "INSERT INTO eppm.project_task(project_id,task_name,start_date,end_date,project_plan_id) VALUES (1,'Task','2026-01-01','2026-01-02',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)) RETURNING id", write=True)[0][0]
     with pytest.raises(psycopg.errors.CheckViolation):
         execute(business, "UPDATE eppm.project_task SET end_date='2025-01-01'", write=True)
     with pytest.raises(psycopg.errors.InsufficientPrivilege):
-        execute(business, "INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,fte_assigned) VALUES (1,2,%s,1)", (task,), write=True)
-    execute(business, "INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,fte_assigned) VALUES (1,1,%s,1)", (task,), write=True)
+        execute(business, 'INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,fte_assigned,project_plan_id) VALUES (1,2,%s,1,(SELECT id FROM eppm.project_plan WHERE project_id=2 AND is_current))', (task,), write=True)
+    execute(business, 'INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,fte_assigned,project_plan_id) VALUES (1,1,%s,1,(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current))', (task,), write=True)
     with pytest.raises(psycopg.errors.CheckViolation):
         execute(business, "UPDATE eppm.project_task SET project_id=2", write=True)
     execute(business, "DELETE FROM eppm.project_task", write=True)

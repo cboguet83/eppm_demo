@@ -43,7 +43,7 @@ def _sample_tags(connection: psycopg.Connection) -> None:
     """Cycle the accepted dictionary tags over projects and tasks in ID order."""
     for target, table, owner, group in (
         ('project', 'project_tag', 'project_id', 'project_tag'),
-        ('project_task', 'task_tag', 'task_id', 'Task_Tag'),
+        ('current_project_task', 'task_tag', 'task_id', 'Task_Tag'),
     ):
         tags = [row[0] for row in connection.execute('SELECT d.id FROM eppm.tag_dictionnary d '
             'JOIN eppm.tag_group g ON d.tag_group_id=g.id WHERE g.tag_group_name=%s ORDER BY d.id', (group,))]

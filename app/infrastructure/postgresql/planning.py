@@ -31,9 +31,9 @@ from app.infrastructure.postgresql.plan_guards import require_current_edit, requ
 logger = get_logger(__name__)
 _TASK_COLUMNS = """m.id,m.project_id,m.task_name,m.phase,to_char(m.start_date,'YYYY-MM-DD') AS start_date,
                    to_char(m.end_date,'YYYY-MM-DD') AS end_date,m.progress_pct,m.description,m.predecessor_id"""
-_INSERT_TASK = '''INSERT INTO eppm.project_task(project_id,task_name,phase,start_date,end_date,progress_pct,description,predecessor_id)
-                  VALUES (%s,%s,%s,%s,%s,%s,%s,%s)'''
-_INSERT_DEPENDENCY = '''INSERT INTO eppm.task_dependencies(task_id,predecessor_task_id,predecessor_project_id,link_type,lag_days)
+_INSERT_TASK = '''INSERT INTO eppm.project_task(project_plan_id,project_id,task_name,phase,start_date,end_date,progress_pct,description,predecessor_id)
+                  VALUES ((SELECT id FROM eppm.project_plan WHERE project_id=%s AND is_current),%s,%s,%s,%s,%s,%s,%s,%s)'''
+_INSERT_DEPENDENCY = '''INSERT INTO eppm.current_task_dependencies(task_id,predecessor_task_id,predecessor_project_id,link_type,lag_days)
                         VALUES (%s,%s,%s,%s,%s)'''
 
 
@@ -77,15 +77,15 @@ class PostgresPlanningStore:
 
     def get_totals(self) -> PlanningTotals:
         """Count visible owners and endpoints before computing planning totals."""
-        row = self.connection.execute('''SELECT (SELECT count(*) FROM eppm.project),(SELECT count(*) FROM eppm.project_task),
-            (SELECT count(*) FROM eppm.task_dependencies)+(SELECT count(*) FROM eppm.project_dependency),
-            (SELECT count(DISTINCT pool_id) FROM eppm.resource_pool_assignment)''').fetchone()
+        row = self.connection.execute('''SELECT (SELECT count(*) FROM eppm.project),(SELECT count(*) FROM eppm.current_project_task),
+            (SELECT count(*) FROM eppm.effective_task_dependencies)+(SELECT count(*) FROM eppm.effective_project_dependency),
+            (SELECT count(DISTINCT pool_id) FROM eppm.current_resource_pool_assignment)''').fetchone()
         return PlanningTotals(projects=row[0], tasks=row[1], dependencies=row[2], pools=row[3])
 
     def _tasks(self, where: str = '', params: Sequence[object] = ()) -> list[TaskRow]:
         """Use the permanent redacted predecessor projection for all task fields."""
         return self._rows(TaskRow, f'''SELECT {_TASK_COLUMNS},p.task_name AS predecessor_name
-            FROM eppm.visible_project_task m LEFT JOIN eppm.project_task p ON p.id=m.predecessor_id
+            FROM eppm.visible_project_task m LEFT JOIN eppm.current_project_task p ON p.id=m.predecessor_id
             {where} ORDER BY m.project_id,m.start_date,m.id''', params)
 
     def get_milestones_by_project(self, project_id: int) -> list[TaskRow]:
@@ -119,7 +119,7 @@ class PostgresPlanningStore:
             params = [search, search]
         else:
             where, params = '', []
-        return self._rows(TaskChoice, 'SELECT t.id,t.task_name,t.project_id,p.name AS project_name FROM eppm.project_task t '
+        return self._rows(TaskChoice, 'SELECT t.id,t.task_name,t.project_id,p.name AS project_name FROM eppm.current_project_task t '
                                      'JOIN eppm.project p ON p.id=t.project_id ' + where + ' ORDER BY t.id DESC LIMIT %s',
                           [*params, max(1, min(100, int(limit)))])
 
@@ -131,8 +131,8 @@ class PostgresPlanningStore:
                    pred.task_name AS predecessor_task_name,to_char(pred.start_date,'YYYY-MM-DD') AS pred_start_date,
                    to_char(pred.end_date,'YYYY-MM-DD') AS pred_end_date,pred.project_id AS pred_task_project_id,
                    p.name AS predecessor_project_name {label}
-            FROM selected_tasks task JOIN eppm.task_dependencies d ON d.task_id=task.id
-            LEFT JOIN eppm.project_task pred ON pred.id=d.predecessor_task_id
+            FROM selected_tasks task JOIN eppm.effective_task_dependencies d ON d.task_id=task.id
+            LEFT JOIN eppm.current_project_task pred ON pred.id=d.predecessor_task_id
             LEFT JOIN eppm.project p ON p.id=d.predecessor_project_id ORDER BY d.id''', params)
 
     def get_dependencies_for_project(self, project_id: int) -> list[DependencySchedule]:
@@ -143,22 +143,22 @@ class PostgresPlanningStore:
         """Batch incoming links without enumerating unrelated projects."""
         if not project_ids:
             return []
-        return self._dependencies('SELECT id,task_name FROM eppm.project_task WHERE project_id=ANY(%s::bigint[])', (project_ids,))
+        return self._dependencies('SELECT id,task_name FROM eppm.current_project_task WHERE project_id=ANY(%s::bigint[])', (project_ids,))
 
     def get_task_dependencies(self, task_id: int) -> list[DependencySchedule]:
         """Read one task's incoming links with the existing minimal field contract."""
-        return self._dependencies('SELECT id,task_name FROM eppm.project_task WHERE id=%s', (task_id,), task_label=False)
+        return self._dependencies('SELECT id,task_name FROM eppm.current_project_task WHERE id=%s', (task_id,), task_label=False)
 
     def get_project_date_bounds(self, project_id: int) -> tuple[str | None, str | None]:
         """Aggregate native dates and retain absent-project null bounds."""
         return self.connection.execute("SELECT to_char(min(start_date),'YYYY-MM-DD'),to_char(max(end_date),'YYYY-MM-DD') "
-                                       'FROM eppm.project_task WHERE project_id=%s', (project_id,)).fetchone()
+                                       'FROM eppm.current_project_task WHERE project_id=%s', (project_id,)).fetchone()
 
     def get_all_project_date_bounds(self) -> ProjectBounds:
         """Expose visible aggregate dates with both integer and chart-string keys."""
         result: ProjectBounds = {}
         for identity, start, end in self.connection.execute("SELECT project_id,to_char(min(start_date),'YYYY-MM-DD'),to_char(max(end_date),'YYYY-MM-DD') "
-                                                          'FROM eppm.project_task GROUP BY project_id'):
+                                                          'FROM eppm.current_project_task GROUP BY project_id'):
             result[identity] = result[str(identity)] = (start, end)
         return result
 
@@ -166,7 +166,7 @@ class PostgresPlanningStore:
         """Read minimal visible predecessor exports while excluding requested owners."""
         result: dict[str, list[ExternalTask]] = {}
         for identity, project_id, name, start, end in self.connection.execute('''SELECT id,project_id,task_name,
-            to_char(start_date,'YYYY-MM-DD'),to_char(end_date,'YYYY-MM-DD') FROM eppm.project_task
+            to_char(start_date,'YYYY-MM-DD'),to_char(end_date,'YYYY-MM-DD') FROM eppm.current_project_task
             WHERE NOT project_id=ANY(%s::bigint[]) ORDER BY project_id,start_date,id''', (exclude_project_ids or [],)):
             result.setdefault(str(project_id), []).append(ExternalTask(id=identity, task_name=name, start_date=start, end_date=end))
         return result
@@ -174,10 +174,14 @@ class PostgresPlanningStore:
     def create_task(self, project_id: int, values: TaskValues) -> int:
         """Create normalized native task fields without publishing before commit."""
         require_current_edit(self.connection, project_id=project_id)
-        return self.connection.execute(_INSERT_TASK + ' RETURNING id', (project_id, *_task_params(values))).fetchone()[0]
+        identity = self.connection.execute(_INSERT_TASK + ' RETURNING id', (project_id, project_id, *_task_params(values))).fetchone()[0]
+        self.update_progress(identity, values.get('progress_pct', 0))
+        return identity
 
     def update_task(self, task_id: int, values: TaskValues) -> bool:
         """Update task details with native old/new predecessor authorization."""
+        if not self.connection.execute('SELECT id FROM eppm.current_project_task WHERE id=%s', (task_id,)).fetchone():
+            return False
         require_current_edit(self.connection, task_id=task_id)
         previous = self.connection.execute('SELECT predecessor_id,predecessor_editable FROM eppm.plan_task_edit_access WHERE id=%s', (task_id,)).fetchone()
         predecessor = values.get('predecessor_id')
@@ -186,13 +190,16 @@ class PostgresPlanningStore:
             raise AccessDenied()
         if previous and previous[0] != predecessor:
             for endpoint in {previous[0], predecessor} - {None}:
-                allowed = self.connection.execute('''SELECT 1 FROM eppm.project_task
+                allowed = self.connection.execute('''SELECT 1 FROM eppm.current_project_task
                     WHERE id=%s AND project_id IN (SELECT unnest(eppm.permission_projects('project.edit')))''', (endpoint,)).fetchone()
                 if not allowed:
                     from app.domain.access.models import AccessDenied
                     raise AccessDenied()
-        return self.connection.execute('''UPDATE eppm.project_task SET task_name=%s,phase=%s,start_date=%s,end_date=%s,
+        changed = self.connection.execute('''UPDATE eppm.project_task SET task_name=%s,phase=%s,start_date=%s,end_date=%s,
             progress_pct=%s,description=%s,predecessor_id=%s WHERE id=%s''', (*_task_params(values), task_id)).rowcount > 0
+        if changed:
+            self.update_progress(task_id, values.get('progress_pct', 0))
+        return changed
 
     def insert_dependency(self, task_id: int, dependency: DependencyInput) -> None:
         """Create one normalized link under endpoint ownership checks."""
@@ -202,13 +209,15 @@ class PostgresPlanningStore:
     def replace_dependencies(self, task_id: int, dependencies: list[DependencyInput]) -> None:
         """Replace visible incoming links as one guarded, rollback-safe batch."""
         require_current_edit(self.connection, task_id=task_id)
-        self.connection.execute('DELETE FROM eppm.task_dependencies WHERE task_id=%s', (task_id,))
+        self.connection.execute('DELETE FROM eppm.current_task_dependencies WHERE task_id=%s', (task_id,))
         with self.connection.cursor() as cursor:
             cursor.executemany(_INSERT_DEPENDENCY, [_dependency_params(task_id, dependency) for dependency in dependencies])
 
     def update_dates(self, milestone_id: int, start_date: str, end_date: str) -> bool:
         """Reschedule the live task without changing snapshots or creating a plan."""
         project_id = require_reschedule(self.connection, milestone_id)
+        if project_id is None:
+            return False
         changed = self.connection.execute('UPDATE eppm.project_task SET start_date=%s,end_date=%s WHERE id=%s',
             (date.fromisoformat(start_date), date.fromisoformat(end_date), milestone_id)).rowcount > 0
         if changed:
@@ -217,24 +226,35 @@ class PostgresPlanningStore:
 
     def update_progress(self, milestone_id: int, progress_pct: int) -> bool:
         """Store the existing domain-clamped progress value."""
+        if require_reschedule(self.connection, milestone_id) is None:
+            return False
+        self.connection.execute('''INSERT INTO eppm.plan_task_actual(task_id,project_id,progress_pct)
+            SELECT coalesce(stable_task_id,id),project_id,%s FROM eppm.project_task WHERE id=%s
+            ON CONFLICT(task_id) DO UPDATE SET progress_pct=excluded.progress_pct''', (progress_pct, milestone_id))
         return self.connection.execute('UPDATE eppm.project_task SET progress_pct=%s WHERE id=%s', (progress_pct, milestone_id)).rowcount > 0
 
     def bulk_create_milestones(self, rows: list[TaskInput]) -> int:
         """Insert the whole validated import in the surrounding serializable save."""
         for project_id in {row['project_id'] for row in rows}:
             require_current_edit(self.connection, project_id=project_id)
-        with self.connection.cursor() as cursor:
-            cursor.executemany(_INSERT_TASK, [(row['project_id'], *_task_params(row)) for row in rows])
+        for row in rows:
+            identity = self.connection.execute(_INSERT_TASK + ' RETURNING id',
+                (row['project_id'], row['project_id'], *_task_params(row))).fetchone()[0]
+            self.update_progress(identity, row.get('progress_pct', 0))
         return len(rows)
 
     def delete_milestone(self, milestone_id: int) -> bool:
         """Remove visible edges and primary references before deleting the owner."""
+        if not self.connection.execute('SELECT id FROM eppm.current_project_task WHERE id=%s', (milestone_id,)).fetchone():
+            return False
         require_current_edit(self.connection, task_id=milestone_id)
         self._require_removable([milestone_id])
-        self.connection.execute('DELETE FROM eppm.task_dependencies WHERE task_id=%s OR predecessor_task_id=%s', (milestone_id, milestone_id))
+        self.connection.execute('DELETE FROM eppm.current_task_dependencies WHERE task_id=%s OR predecessor_task_id=%s', (milestone_id, milestone_id))
         self.connection.execute('''UPDATE eppm.project_task SET predecessor_id=NULL WHERE id IN
             (SELECT id FROM eppm.visible_project_task WHERE predecessor_id=%s)''', (milestone_id,))
-        return self.connection.execute('DELETE FROM eppm.project_task WHERE id=%s', (milestone_id,)).rowcount > 0
+        self.connection.execute('DELETE FROM eppm.current_resource_pool_assignment WHERE task_id=%s', (milestone_id,))
+        self.connection.execute('DELETE FROM eppm.current_task_tag WHERE task_id=%s', (milestone_id,))
+        return self.connection.execute('UPDATE eppm.project_task SET is_deleted=true WHERE id=%s', (milestone_id,)).rowcount > 0
 
     def project_exists(self, project_id: int) -> bool:
         """Check project visibility without hydrating project records."""
@@ -242,7 +262,7 @@ class PostgresPlanningStore:
 
     def valid_template_references(self, project_id: int, task_ids: set[int], project_ids: set[int]) -> tuple[set[int], set[int]]:
         """Validate external identities in two scoped batches before replacement."""
-        tasks = {row[0] for row in self.connection.execute('SELECT id FROM eppm.project_task WHERE project_id<>%s AND id=ANY(%s::bigint[])',
+        tasks = {row[0] for row in self.connection.execute('SELECT id FROM eppm.current_project_task WHERE project_id<>%s AND id=ANY(%s::bigint[])',
                                                          (project_id, sorted(task_ids)))}
         projects = {row[0] for row in self.connection.execute('SELECT id FROM eppm.project WHERE id<>%s AND id=ANY(%s::bigint[])',
                                                             (project_id, sorted(project_ids)))}
@@ -252,17 +272,18 @@ class PostgresPlanningStore:
         """Remove schedule edges and all project/task allocations in one operation."""
         require_current_edit(self.connection, project_id=project_id)
         self._require_removable([row[0] for row in self.connection.execute(
-            'SELECT id FROM eppm.project_task WHERE project_id=%s', (project_id,))])
-        tasks = 'SELECT id FROM eppm.project_task WHERE project_id=%s'
-        self.connection.execute(f'DELETE FROM eppm.resource_pool_assignment WHERE project_id=%s OR task_id IN ({tasks})', (project_id, project_id))
-        self.connection.execute(f'DELETE FROM eppm.task_dependencies WHERE task_id IN ({tasks}) OR predecessor_task_id IN ({tasks}) OR predecessor_project_id=%s',
+            'SELECT id FROM eppm.current_project_task WHERE project_id=%s', (project_id,))])
+        tasks = 'SELECT id FROM eppm.current_project_task WHERE project_id=%s'
+        self.connection.execute(f'DELETE FROM eppm.current_resource_pool_assignment WHERE project_id=%s OR task_id IN ({tasks})', (project_id, project_id))
+        self.connection.execute(f'DELETE FROM eppm.current_task_tag WHERE task_id IN ({tasks})', (project_id,))
+        self.connection.execute(f'DELETE FROM eppm.current_task_dependencies WHERE task_id IN ({tasks}) OR predecessor_task_id IN ({tasks}) OR predecessor_project_id=%s',
                                 (project_id, project_id, project_id))
         self.connection.execute(f'''UPDATE eppm.project_task SET predecessor_id=NULL WHERE id IN
             (SELECT id FROM eppm.visible_project_task WHERE predecessor_id IN ({tasks}))''', (project_id,))
-        self.connection.execute('DELETE FROM eppm.project_task WHERE project_id=%s', (project_id,))
+        self.connection.execute('UPDATE eppm.project_task SET is_deleted=true WHERE id IN (SELECT id FROM eppm.current_project_task WHERE project_id=%s)', (project_id,))
 
     def _require_removable(self, task_ids: list[int]) -> None:
-        if self.connection.execute('SELECT 1 FROM eppm.plan_task_edit_access WHERE id=ANY(%s::bigint[]) AND NOT removable',
+        if self.connection.execute('SELECT 1 FROM eppm.plan_task_edit_access WHERE id=ANY(%s::bigint[]) AND (NOT removable OR NOT predecessor_editable)',
                                    (task_ids,)).fetchone():
             raise PlanningConflictError('The task is referenced by another project outside your edit scope.')
 
@@ -273,23 +294,23 @@ class PostgresPlanningStore:
             return [row[0] for row in self.connection.execute('SELECT id FROM eppm.project WHERE id=ANY(%s::bigint[]) ORDER BY id', (seeds,))]
         successors = '''UNION SELECT project_links.successor FROM project_links WHERE project_links.predecessor=selected.id
             UNION SELECT legacy.successor FROM legacy WHERE legacy.predecessor=selected.id
-            UNION SELECT task.project_id FROM eppm.task_dependencies d JOIN eppm.project_task task ON task.id=d.task_id
+            UNION SELECT task.project_id FROM eppm.effective_task_dependencies d JOIN eppm.current_project_task task ON task.id=d.task_id
                 WHERE d.predecessor_project_id=selected.id AND d.predecessor_task_id IS NULL
-            UNION SELECT task.project_id FROM eppm.project_task pred JOIN eppm.task_dependencies d ON d.predecessor_task_id=pred.id
-                JOIN eppm.project_task task ON task.id=d.task_id WHERE pred.project_id=selected.id''' if scope == 'all' else ''
+            UNION SELECT task.project_id FROM eppm.current_project_task pred JOIN eppm.effective_task_dependencies d ON d.predecessor_task_id=pred.id
+                JOIN eppm.current_project_task task ON task.id=d.task_id WHERE pred.project_id=selected.id''' if scope == 'all' else ''
         return [row[0] for row in self.connection.execute(f'''WITH RECURSIVE legacy AS MATERIALIZED (
             SELECT task.project_id AS successor,pred.project_id AS predecessor FROM eppm.visible_project_task task
-            JOIN eppm.project_task pred ON pred.id=task.predecessor_id
+            JOIN eppm.current_project_task pred ON pred.id=task.predecessor_id
         ), project_links AS MATERIALIZED (
             SELECT d.project_id AS successor,coalesce(d.predecessor_project_id,pred.project_id) AS predecessor
-            FROM eppm.project_dependency d LEFT JOIN eppm.project_task pred ON pred.id=d.predecessor_task_id
+            FROM eppm.effective_project_dependency d LEFT JOIN eppm.current_project_task pred ON pred.id=d.predecessor_task_id
         ), selected(id) AS (
             SELECT id FROM eppm.project WHERE id=ANY(%s::bigint[])
             UNION SELECT neighbor.id FROM selected CROSS JOIN LATERAL (
                 SELECT legacy.predecessor AS id FROM legacy WHERE legacy.successor=selected.id
                 UNION SELECT project_links.predecessor FROM project_links WHERE project_links.successor=selected.id
-                UNION SELECT coalesce(pred.project_id,d.predecessor_project_id) FROM eppm.project_task task
-                    JOIN eppm.task_dependencies d ON d.task_id=task.id LEFT JOIN eppm.project_task pred ON pred.id=d.predecessor_task_id
+                UNION SELECT coalesce(pred.project_id,d.predecessor_project_id) FROM eppm.current_project_task task
+                    JOIN eppm.effective_task_dependencies d ON d.task_id=task.id LEFT JOIN eppm.current_project_task pred ON pred.id=d.predecessor_task_id
                     WHERE task.project_id=selected.id
                 {successors}
             ) neighbor WHERE neighbor.id IS NOT NULL
@@ -301,20 +322,20 @@ class PostgresPlanningStore:
 
     def affected_task_projects(self, task_id: int) -> tuple[set[int], set[int]]:
         """Read the visible task's direct dependency owners and consuming pools."""
-        row = self.connection.execute('SELECT project_id FROM eppm.project_task WHERE id=%s', (task_id,)).fetchone()
+        row = self.connection.execute('SELECT project_id FROM eppm.current_project_task WHERE id=%s', (task_id,)).fetchone()
         if row is None:
             return set(), set()
         project_id = row[0]
-        projects = {project_id} | {row[0] for row in self.connection.execute('''SELECT DISTINCT task.project_id FROM eppm.task_dependencies d
-            JOIN eppm.project_task task ON task.id=d.task_id WHERE d.predecessor_task_id=%s OR d.predecessor_project_id=%s
-            UNION SELECT project_id FROM eppm.project_dependency WHERE predecessor_task_id=%s OR predecessor_project_id=%s''',
+        projects = {project_id} | {row[0] for row in self.connection.execute('''SELECT DISTINCT task.project_id FROM eppm.effective_task_dependencies d
+            JOIN eppm.current_project_task task ON task.id=d.task_id WHERE d.predecessor_task_id=%s OR d.predecessor_project_id=%s
+            UNION SELECT project_id FROM eppm.effective_project_dependency WHERE predecessor_task_id=%s OR predecessor_project_id=%s''',
             (task_id, project_id, task_id, project_id))}
-        pools = {row[0] for row in self.connection.execute('SELECT DISTINCT pool_id FROM eppm.resource_pool_assignment WHERE project_id=%s', (project_id,))}
+        pools = {row[0] for row in self.connection.execute('SELECT DISTINCT pool_id FROM eppm.current_resource_pool_assignment WHERE project_id=%s', (project_id,))}
         return projects, pools
 
     def consuming_pool_ids(self, project_ids: list[int]) -> list[int]:
         """Read distinct positive-demand pools after project-owner filtering."""
-        return [row[0] for row in self.connection.execute('''SELECT DISTINCT pool_id FROM eppm.resource_pool_assignment
+        return [row[0] for row in self.connection.execute('''SELECT DISTINCT pool_id FROM eppm.current_resource_pool_assignment
             WHERE fte_assigned>0 AND project_id=ANY(%s::bigint[]) ORDER BY pool_id''', (project_ids,))]
 
     def read_task_bundle(self, project_ids: list[int]) -> PlanningTaskBundle:
@@ -328,7 +349,7 @@ class PostgresPlanningStore:
                                        if link.get('predecessor_project_id') and not link.get('predecessor_task_id')}
         bounds: ProjectBounds = {str(identity): (None, None) for identity in bound_ids}
         bounds.update({str(identity): (start, end) for identity, start, end in self.connection.execute('''SELECT project_id,
-            to_char(min(start_date),'YYYY-MM-DD'),to_char(max(end_date),'YYYY-MM-DD') FROM eppm.project_task
+            to_char(min(start_date),'YYYY-MM-DD'),to_char(max(end_date),'YYYY-MM-DD') FROM eppm.current_project_task
             WHERE project_id=ANY(%s::bigint[]) GROUP BY project_id''', (sorted(bound_ids),))})
         tags, resources = PostgresTagStore(self.connection), PostgresResourcePoolStore(self.connection)
         return PlanningTaskBundle(tasks, dependencies, tags.get_task_tags_by_task_ids(task_ids), resources.get_task_assignments_map(task_ids),

@@ -24,7 +24,7 @@ from app.infrastructure.postgresql.plan_guards import require_current_edit
 logger = get_logger(__name__)
 
 _TASK_JOINS = (
-    'FROM eppm.task_tag tt LEFT JOIN eppm.project_task ptk ON tt.task_id=ptk.id '
+    'FROM eppm.current_task_tag tt LEFT JOIN eppm.current_project_task ptk ON tt.task_id=ptk.id '
     'LEFT JOIN eppm.project p ON ptk.project_id=p.id '
     'LEFT JOIN eppm.tag_dictionnary td ON tt.tag_id=td.id '
     'LEFT JOIN eppm.tag_group tg ON td.tag_group_id=tg.id '
@@ -82,7 +82,7 @@ class PostgresTagStore:
     def get_all_tags(self) -> list[DictionaryRow]:
         """Aggregate scoped project, task and pool usage before joining labels."""
         return self._rows(DictionaryRow,
-            'WITH usages AS (SELECT tag_id FROM eppm.project_tag UNION ALL SELECT tag_id FROM eppm.task_tag '
+            'WITH usages AS (SELECT tag_id FROM eppm.project_tag UNION ALL SELECT tag_id FROM eppm.current_task_tag '
             'UNION ALL SELECT tag_id FROM eppm.resource_pool_tag), counts AS '
             '(SELECT tag_id,count(*) AS usage_count FROM usages GROUP BY tag_id) '
             'SELECT td.id,td.tag,td.tag_group_id,tg.tag_group_name,COALESCE(c.usage_count,0) AS usage_count '
@@ -135,7 +135,7 @@ class PostgresTagStore:
         """Count only policy-visible assignments, including pool memberships."""
         return self.connection.execute(
             'SELECT (SELECT count(*) FROM eppm.project_tag WHERE tag_id=%s) + '
-            '(SELECT count(*) FROM eppm.task_tag WHERE tag_id=%s) + '
+            '(SELECT count(*) FROM eppm.current_task_tag WHERE tag_id=%s) + '
             '(SELECT count(*) FROM eppm.resource_pool_tag WHERE tag_id=%s)', (tag_id,) * 3).fetchone()[0]
 
     def get_all_resource_pool_tags(self) -> list[PoolTagRow]:
@@ -211,7 +211,7 @@ class PostgresTagStore:
         column = columns.get(sort, 'tt.id')
         order = column if column == 'tt.id' else f'lower({column} COLLATE "C") COLLATE "C"'
         direction, nulls = ('ASC', 'FIRST') if ascending else ('DESC', 'LAST')
-        total = self.connection.execute('SELECT count(*) FROM eppm.task_tag').fetchone()[0]
+        total = self.connection.execute('SELECT count(*) FROM eppm.current_task_tag').fetchone()[0]
         filtered = self.connection.execute('SELECT count(*) ' + _TASK_JOINS + where, params).fetchone()[0] if conditions else total
         page_size = max(1, min(200, int(page_size)))
         pages = max(1, (filtered + page_size - 1) // page_size)
@@ -227,18 +227,18 @@ class PostgresTagStore:
     def get_task_tags_by_task(self, task_id: int) -> list[TaskTagRow]:
         """Read one task's compact assignment labels without other task fields."""
         return self._rows(TaskTagRow,
-            'SELECT tt.id,tt.task_id,tt.tag_id,tt.free_tag,td.tag AS tag_name,tg.tag_group_name FROM eppm.task_tag tt '
+            'SELECT tt.id,tt.task_id,tt.tag_id,tt.free_tag,td.tag AS tag_name,tg.tag_group_name FROM eppm.current_task_tag tt '
             'LEFT JOIN eppm.tag_dictionnary td ON td.id=tt.tag_id LEFT JOIN eppm.tag_group tg ON tg.id=td.tag_group_id '
             'WHERE tt.task_id=%s ORDER BY tt.id', (task_id,))
 
     def get_task_tag_by_id(self, tt_id: int) -> TaskTag | None:
         """Find one visible task assignment by identity."""
-        return self._one(TaskTag, 'SELECT id,task_id,tag_id,free_tag FROM eppm.task_tag WHERE id=%s', (tt_id,))
+        return self._one(TaskTag, 'SELECT id,task_id,tag_id,free_tag FROM eppm.current_task_tag WHERE id=%s', (tt_id,))
 
     def create_task_tag(self, tt: TaskTag) -> int:
         """Insert content with authoritative edit checks on the task's owner."""
         require_current_edit(self.connection, task_id=tt.task_id)
-        return self.connection.execute('INSERT INTO eppm.task_tag(task_id,tag_id,free_tag) VALUES (%s,%s,%s) RETURNING id',
+        return self.connection.execute('INSERT INTO eppm.current_task_tag(task_id,tag_id,free_tag) VALUES (%s,%s,%s) RETURNING id',
                                        (tt.task_id, tt.tag_id, tt.free_tag)).fetchone()[0]
 
     def update_task_tag(self, tt: TaskTag) -> bool:
@@ -247,7 +247,7 @@ class PostgresTagStore:
         previous = self.get_task_tag_by_id(tt.id)
         if previous:
             require_current_edit(self.connection, task_id=previous.task_id)
-        return self.connection.execute('UPDATE eppm.task_tag SET task_id=%s,tag_id=%s,free_tag=%s WHERE id=%s',
+        return self.connection.execute('UPDATE eppm.current_task_tag SET task_id=%s,tag_id=%s,free_tag=%s WHERE id=%s',
                                        (tt.task_id, tt.tag_id, tt.free_tag, tt.id)).rowcount > 0
 
     def delete_task_tag(self, tt_id: int) -> bool:
@@ -255,13 +255,13 @@ class PostgresTagStore:
         previous = self.get_task_tag_by_id(tt_id)
         if previous:
             require_current_edit(self.connection, task_id=previous.task_id)
-        return self.connection.execute('DELETE FROM eppm.task_tag WHERE id=%s', (tt_id,)).rowcount > 0
+        return self.connection.execute('DELETE FROM eppm.current_task_tag WHERE id=%s', (tt_id,)).rowcount > 0
 
     def _links(self, ids: list[int], *, tasks: bool) -> dict[int, list[TagLink]]:
         """Batch explicit link rows; only internal constants select SQL identifiers."""
         if not ids:
             return {}
-        table, owner = ('task_tag', 'task_id') if tasks else ('project_tag', 'project_id')
+        table, owner = ('current_task_tag', 'task_id') if tasks else ('project_tag', 'project_id')
         result: dict[int, list[TagLink]] = {identity: [] for identity in ids}
         with self.connection.cursor(row_factory=dict_row) as cursor:
             rows = cursor.execute(
@@ -295,7 +295,7 @@ class PostgresTagStore:
             params = [search, search]
         else:
             where, params = '', []
-        return self._rows(TaskChoice, 'SELECT t.id,t.task_name,t.project_id,p.name AS project_name FROM eppm.project_task t '
+        return self._rows(TaskChoice, 'SELECT t.id,t.task_name,t.project_id,p.name AS project_name FROM eppm.current_project_task t '
             'JOIN eppm.project p ON p.id=t.project_id ' + where + 'ORDER BY t.id DESC LIMIT %s', params + [max(1, min(100, int(limit)))])
 
     def get_task_choice(self, task_id: int) -> TaskChoice | None:

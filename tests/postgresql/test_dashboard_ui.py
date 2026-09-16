@@ -21,12 +21,9 @@ def business(authorized, runtime):
         connection.execute("DELETE FROM eppm.project WHERE id=3")
         connection.execute("UPDATE eppm.project SET name=CASE id WHEN 1 THEN 'Visible' ELSE 'Hidden' END,status='In Progress'")
         connection.execute("DELETE FROM eppm.app_role_assignment WHERE user_id=1 AND role='project_viewer'")
-        connection.execute("INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date) "
-                           "VALUES(10,1,'Visible task','2026-01-01','2026-01-05'),"
-                           "(20,2,'Hidden task','2026-01-01','2026-01-05')")
+        connection.execute("INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date,project_plan_id) VALUES (10,1,'Visible task','2026-01-01','2026-01-05',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(20,2,'Hidden task','2026-01-01','2026-01-05',(SELECT id FROM eppm.project_plan WHERE project_id=2 AND is_current))")
         connection.execute("INSERT INTO eppm.resource_pool(id,name,capacity_fte) VALUES(1,'Reference pool',3)")
-        connection.execute("INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,fte_assigned) "
-                           "VALUES(1,1,10,1),(1,2,20,2)")
+        connection.execute('INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,fte_assigned,project_plan_id) VALUES (1,1,10,1,(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(1,2,20,2,(SELECT id FROM eppm.project_plan WHERE project_id=2 AND is_current))')
     editor, manager = authorized.binding(1).access, authorized.binding(4).access
     service = AccessService(PostgresAccessGateway(runtime.database, runtime.key, editor.policy),
                             editor.policy, 'https://issuer.example.test', lambda: 'unused')

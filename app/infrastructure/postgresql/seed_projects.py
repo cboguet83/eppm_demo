@@ -12,6 +12,7 @@ from app.domain.projects.project_types import PropertyValue
 from app.infrastructure.postgresql.projects import PostgresProjectStore
 from app.infrastructure.postgresql.property_store import write_values
 from app.infrastructure.postgresql.seed_catalog import advance_seed_sequences, sample_values
+from app.infrastructure.postgresql.seed_plan import ensure_operator_plan
 
 
 def create_seed_project(connection: psycopg.Connection, *, name: str, status: str = 'Draft',
@@ -40,6 +41,7 @@ def create_seed_project(connection: psycopg.Connection, *, name: str, status: st
                                     'VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id', (project_id, *fields)).fetchone()[0]
         advance_seed_sequences(connection, (('project', 'id'),))
     write_values(connection, result, values)
+    ensure_operator_plan(connection, result)
     return result
 
 
@@ -73,9 +75,9 @@ def seed_sample_projects(connection: psycopg.Connection) -> None:
             ('Delivery', 'EXE', date(2026, 2, 16), date(2026, 6, 30), 60),
             ('Acceptance', 'DEF', date(2026, 7, 1), date(2026, 9, 15), 0),
         ):
-            task = connection.execute('INSERT INTO eppm.project_task(project_id,task_name,phase,start_date,end_date,progress_pct) '
-                'VALUES (%s,%s,%s,%s,%s,%s) RETURNING id',
-                (project, task_name, phase, start, end, 100 if type_name == 'Compliance' else progress)).fetchone()[0]
+            task = connection.execute('INSERT INTO eppm.project_task(project_plan_id,project_id,task_name,phase,start_date,end_date,progress_pct) '
+                'VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id',
+                (ensure_operator_plan(connection, project), project, task_name, phase, start, end, 100 if type_name == 'Compliance' else progress)).fetchone()[0]
             if previous:
                 connection.execute("INSERT INTO eppm.task_dependencies(task_id,predecessor_task_id,link_type,lag_days) VALUES (%s,%s,'FS',0)",
                                    (task, previous))

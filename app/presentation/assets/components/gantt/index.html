@@ -2300,7 +2300,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       const live = new Set(tasks.map(t => String(t.id)));
       return tasks.map(t => ({...t, baseline:oldById.get(String(t.id))})).concat(
         baseline.filter(t => !live.has(String(t.id))).map(t => ({
-          id:'baseline-'+projectId+'-'+t.id, display_id:t.id, project_id:String(projectId), name:t.task_name,
+          id:'baseline-'+projectId+'-'+t.id, display_id:Math.abs(t.id), project_id:String(projectId), name:t.task_name,
           start:t.start_date, end:t.end_date, description:t.description || '', baseline:t, baselineOnly:true
         })));
     }

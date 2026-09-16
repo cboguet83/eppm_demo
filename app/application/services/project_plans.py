@@ -1,6 +1,10 @@
 """Python-owned plan lifecycle, immutable saves and current-plan adoption."""
 
+from copy import deepcopy
+from dataclasses import replace
+
 from app.application.exceptions import PlanningConflictError
+from app.application.ports.planning import TaskChoice
 from app.application.ports.project_plans import PlanGateway, PlanStore
 from app.domain.access.models import AccessDenied
 from app.domain.planning.plans import PlanContent, ProjectPlan, PlanTask, normalize_content, validate_status_change
@@ -41,13 +45,13 @@ class ProjectPlanService:
             if not (approver or admin):
                 raise AccessDenied()
             current = next((plan for plan in store.list_plans(project_id) if plan.is_current), None)
+            if current is None:
+                raise ValueError('Activate a plan before setting the baseline.')
             content = store.snapshot(project_id)
-            if current is None or content != current.content:
-                saved = store.insert(project_id, 'Current schedule baseline', 'approved',
-                                     current.id if current else None, content)
-                store.metadata(saved, 'current', 'true')
-            else:
-                saved = current
+            previous = next((plan for plan in store.list_plans(project_id) if plan.is_baseline), None)
+            if previous is not None and previous.content == content:
+                return previous
+            saved = store.insert(project_id, 'Current schedule baseline', 'approved', current.id, content)
             store.metadata(saved, 'baseline', 'true')
             return next(plan for plan in store.list_plans(project_id) if plan.id == saved.id)
         return self._gateway.run(operation, write=True)
@@ -64,6 +68,10 @@ class ProjectPlanService:
         """Read existing tag names for plan task editing without catalog write rights."""
         return self._gateway.run(lambda store: store.tag_choices())
 
+    def task_choices(self) -> list[TaskChoice]:
+        """Read active dependency choices addressed by stable task identities."""
+        return self._gateway.run(lambda store: store.task_choices())
+
     def versioned_projects(self) -> list[int]:
         """Return visible projects whose schedules are edited through new plans."""
         return self._gateway.run(lambda store: store.versioned_projects())
@@ -74,7 +82,10 @@ class ProjectPlanService:
             store.lock_project(project_id)
             plans = store.list_plans(project_id)
             if plans:
-                return next(plan for plan in plans if plan.is_current)
+                current = next((plan for plan in plans if plan.is_current), None)
+                if current is None:
+                    raise ValueError('Activate an existing plan before editing the schedule.')
+                return current
             editor, _, admin = store.permissions(project_id)
             if not (editor or admin):
                 raise AccessDenied()
@@ -83,11 +94,11 @@ class ProjectPlanService:
         return self._gateway.run(operation, write=True)
 
     def save(self, project_id: int, source_id: int, revision: int, name: str,
-             content: PlanContent, status: str = 'proposed') -> ProjectPlan:
-        """Save one draft as a new version; never modify its source or adopt it."""
+             content: PlanContent | None = None, status: str = 'proposed') -> ProjectPlan:
+        """Save a revision, copying the source schedule and allocations by default."""
         return self.save_many([(project_id, source_id, revision, name, content, status)])[0]
 
-    def save_many(self, drafts: list[tuple[int, int, int, str, PlanContent, str]]) -> list[ProjectPlan]:
+    def save_many(self, drafts: list[tuple[int, int, int, str, PlanContent | None, str]]) -> list[ProjectPlan]:
         """Save all changed projects in one transaction, or keep every draft unsaved."""
         if len({item[0] for item in drafts}) != len(drafts):
             raise ValueError('Only one draft per project can be saved together.')
@@ -106,6 +117,13 @@ class ProjectPlanService:
                 source = self._find(store, project_id, source_id, revision)
                 if source.status == 'deleted':
                     raise ValueError('Restore the Deleted plan before copying it.')
+                content = deepcopy(source.content if content is None else content)
+                removed = {task['id'] for task in source.content.tasks} - {task['id'] for task in content.tasks}
+                content = replace(content,
+                    assignments=[row for row in content.assignments if row.task_id not in removed],
+                    dependencies=[row for row in content.dependencies if row['task_id'] not in removed
+                                  and row['predecessor_task_id'] not in removed],
+                    task_tags={identity: tags for identity, tags in content.task_tags.items() if identity not in removed})
                 normalized = normalize_content(project_id, content)
                 store.validate_references(project_id, normalized)
                 normalized = store.reserve_identities(normalized)
@@ -135,13 +153,17 @@ class ProjectPlanService:
                     raise AccessDenied()
                 if plan.status != 'approved':
                     raise ValueError('Only Approved plans can be current or baseline.')
-                if value not in {'true', 'false'} or (action == 'current' and value != 'true'):
-                    raise ValueError('A project must retain a current plan.')
-                if action == 'current':
+                if value not in {'true', 'false'}:
+                    raise ValueError('Invalid plan designation.')
+                if action == 'current' and value == 'true':
                     store.validate_references(project_id, plan.content)
+                if action == 'baseline' and value == 'true' and plan.is_current:
+                    plan = store.insert(project_id, plan.name + ' baseline', 'approved', plan.id, plan.content)
+                elif action == 'current' and value == 'true' and plan.is_frozen:
+                    plan = store.insert(project_id, plan.name + ' working copy', 'approved', plan.id, plan.content)
             else:
                 raise ValueError('Unknown plan action.')
             store.metadata(plan, action, value)
-            if action == 'current':
+            if action == 'current' and value == 'true':
                 store.publish(plan)
         self._gateway.run(operation, write=True)

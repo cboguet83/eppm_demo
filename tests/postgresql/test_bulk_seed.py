@@ -1,5 +1,6 @@
 """Native generator constraints, template parity, append behavior and exact budgets."""
 
+from tests.postgresql.plan_fixtures import seed_test_plans
 from datetime import date
 from decimal import Decimal
 
@@ -55,7 +56,10 @@ def test_bulk_append_preserves_custom_templates_existing_records_and_sequence_ga
         connection.execute("INSERT INTO eppm.schema_parameters(param_id,param_name,param_type,mandatory) VALUES ('CHOICE','Choice','ENUM',true)")
         connection.execute("INSERT INTO eppm.schema_param_options(param_id,option_value) VALUES ('CHOICE','Configured')")
         connection.execute("INSERT INTO eppm.project(id,name) VALUES (999,'Existing')")
-        connection.execute("INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date) VALUES (9999,999,'Keep','2026-01-01','2026-01-02')")
+        seed_test_plans(connection)
+        from app.infrastructure.postgresql.seed_plan import ensure_operator_plan
+        ensure_operator_plan(connection, 999)
+        connection.execute("INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date,project_plan_id) VALUES (9999,999,'Keep','2026-01-01','2026-01-02',(SELECT id FROM eppm.project_plan WHERE project_id=999 AND is_current))")
         connection.execute("SELECT setval('eppm.project_id_seq',1099,true),setval('eppm.project_task_id_seq',10999,true)")
     result = operator.run(lambda c: generate_projects(c, SeedRequest(projects=4, min_tasks=1, max_tasks=1, clean_first=False), year=2026), write=True)
     assert result == {'projects_created': 4, 'tasks_created': 4, 'dependencies_created': 1,
@@ -74,6 +78,7 @@ def test_invalid_required_custom_template_rolls_back_bulk_write_and_keeps_existi
     with psycopg.connect(pg_database.operator_url) as connection:
         connection.execute("INSERT INTO eppm.schema_parameters(param_id,param_name,param_type,mandatory) VALUES ('EMPTY','Empty','ENUM',true)")
         connection.execute("INSERT INTO eppm.project(name) VALUES ('Existing')")
+        seed_test_plans(connection)
     before = operator.run(source_fingerprint)
     with pytest.raises(ValueError, match='no configured options'):
         operator.run(lambda c: generate_projects(c, SeedRequest(projects=3, clean_first=False), year=2026), write=True)
@@ -194,6 +199,9 @@ def test_concurrent_task_insert_between_reservation_and_copy_keeps_distinct_nati
     operator.run(ensure_reference_catalog, write=True)
     with psycopg.connect(pg_database.operator_url) as connection:
         project = connection.execute("INSERT INTO eppm.project(name) VALUES ('Existing') RETURNING id").fetchone()[0]
+        seed_test_plans(connection)
+        from app.infrastructure.postgresql.seed_plan import ensure_operator_plan
+        ensure_operator_plan(connection, project)
     original = bulk_seed._identities
     external = []
 
@@ -201,8 +209,8 @@ def test_concurrent_task_insert_between_reservation_and_copy_keeps_distinct_nati
         identities = original(connection, table, count)
         if table == 'project_task':
             with psycopg.connect(pg_database.operator_url) as other:
-                external.append(other.execute("INSERT INTO eppm.project_task(project_id,task_name,start_date,end_date) "
-                    "VALUES (%s,'Concurrent','2026-01-01','2026-01-02') RETURNING id", (project,)).fetchone()[0])
+                external.append(other.execute("INSERT INTO eppm.project_task(project_id,task_name,start_date,end_date,project_plan_id) "
+                    "VALUES (%s,'Concurrent','2026-01-01','2026-01-02',(SELECT id FROM eppm.project_plan WHERE project_id=%s AND is_current)) RETURNING id", (project, project)).fetchone()[0])
         return identities
 
     monkeypatch.setattr(bulk_seed, '_identities', reserve)

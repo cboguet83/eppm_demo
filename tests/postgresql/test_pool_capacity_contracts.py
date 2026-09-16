@@ -60,7 +60,7 @@ def database(runtime: RuntimeResources, authorized: AuthorizedFixture) -> Runtim
             [(1, "A", 2), (2, "B", 3)],
         )
         connection.execute(
-            "INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,fte_assigned) VALUES(1,1,1)"
+            'INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,fte_assigned,project_plan_id) VALUES (1,1,1,(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current))'
         )
     return runtime
 

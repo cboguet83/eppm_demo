@@ -110,12 +110,10 @@ class PostgresProjectStore(PostgresWbsStore):
 
     def delete(self, project_id: int) -> bool:
         """Clear dependency edges and tasks before deleting their owning project."""
-        self.connection.execute('DELETE FROM eppm.task_dependencies WHERE predecessor_project_id=%s '
-                                'OR task_id IN (SELECT id FROM eppm.project_task WHERE project_id=%s) '
-                                'OR predecessor_task_id IN (SELECT id FROM eppm.project_task WHERE project_id=%s)',
+        self.connection.execute('DELETE FROM eppm.current_task_dependencies WHERE predecessor_project_id=%s '
+                                'OR task_id IN (SELECT id FROM eppm.current_project_task WHERE project_id=%s) '
+                                'OR predecessor_task_id IN (SELECT id FROM eppm.current_project_task WHERE project_id=%s)',
                                 (project_id, project_id, project_id))
-        self.connection.execute('UPDATE eppm.project_task SET predecessor_id=NULL WHERE project_id=%s', (project_id,))
-        self.connection.execute('DELETE FROM eppm.project_task WHERE project_id=%s', (project_id,))
         return self.connection.execute('DELETE FROM eppm.project WHERE id=%s', (project_id,)).rowcount > 0
 
 

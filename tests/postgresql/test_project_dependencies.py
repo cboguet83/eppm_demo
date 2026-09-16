@@ -15,7 +15,7 @@ def service(authorized, user_id=1):
 @pytest.fixture
 def links(authorized):
     with psycopg.connect(authorized.setup.operator_url) as c:
-        c.execute("INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date) VALUES (1,1,'Successor','2026-01-10','2026-01-20'),(2,2,'Predecessor','2026-01-01','2026-01-15'),(3,3,'Hidden','2026-02-01','2026-02-20')")
+        c.execute("INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date,project_plan_id) VALUES (1,1,'Successor','2026-01-10','2026-01-20',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(2,2,'Predecessor','2026-01-01','2026-01-15',(SELECT id FROM eppm.project_plan WHERE project_id=2 AND is_current)),(3,3,'Hidden','2026-02-01','2026-02-20',(SELECT id FROM eppm.project_plan WHERE project_id=3 AND is_current))")
         c.execute("SELECT setval(pg_get_serial_sequence('eppm.project_task','id'),3)")
     return authorized
 
@@ -43,7 +43,7 @@ def test_project_link_save_only_changes_dependencies_and_accepts_read_only_prede
 def test_stale_predecessor_dates_reject_save_and_hidden_links_are_preserved(links):
     planning = service(links)
     with psycopg.connect(links.setup.operator_url) as c:
-        c.execute("INSERT INTO eppm.project_dependency(project_id,predecessor_project_id) VALUES (1,3)")
+        c.execute('INSERT INTO eppm.project_dependency(project_id,predecessor_project_id,project_plan_id) VALUES (1,3,(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current))')
     panel = planning.get_project_dependency_panel(1)
     assert panel['dependencies'] == []
     panel = planning.save_project_dependencies(1, [link()], [], panel['revision'])
@@ -65,9 +65,9 @@ def test_invisible_and_self_predecessors_fail_without_mutation(links, values):
 
 
 @pytest.mark.parametrize('sql', [
-    "INSERT INTO eppm.project_dependency(project_id,predecessor_project_id) VALUES (2,1)",
-    "INSERT INTO eppm.project_dependency(project_id,predecessor_project_id) VALUES (1,3)",
-    "INSERT INTO eppm.project_dependency(project_id,predecessor_task_id) VALUES (1,1)",
+    'INSERT INTO eppm.project_dependency(project_id,predecessor_project_id,project_plan_id) VALUES (2,1,(SELECT id FROM eppm.project_plan WHERE project_id=2 AND is_current))',
+    'INSERT INTO eppm.project_dependency(project_id,predecessor_project_id,project_plan_id) VALUES (1,3,(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current))',
+    'INSERT INTO eppm.project_dependency(project_id,predecessor_task_id,project_plan_id) VALUES (1,1,(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current))',
 ])
 def test_native_constraints_and_authorization_reject_direct_invalid_writes(links, sql):
     with pytest.raises(psycopg.Error):
@@ -97,7 +97,7 @@ def test_project_summaries_tokens_filters_and_affected_owners_follow_project_lin
     assert planning.affected_task_projects(2)[0] == {1, 2}
     with psycopg.connect(links.setup.operator_url) as c:
         c.execute("UPDATE eppm.project_task SET end_date='2026-01-09' WHERE id=2")
-        c.execute('INSERT INTO eppm.project_dependency(project_id,predecessor_project_id) VALUES(2,1),(2,3),(3,1)')
+        c.execute('INSERT INTO eppm.project_dependency(project_id,predecessor_project_id,project_plan_id) VALUES (2,1,(SELECT id FROM eppm.project_plan WHERE project_id=2 AND is_current)),(2,3,(SELECT id FROM eppm.project_plan WHERE project_id=2 AND is_current)),(3,1,(SELECT id FROM eppm.project_plan WHERE project_id=3 AND is_current))')
     summary = planning.get_project_summaries([1])[0]
     assert not summary['hasViolations'] and len(summary['projectDependencies']) == 1
     assert planning.get_project_dependency_panel(1)['revision'] != panel['revision']
@@ -108,7 +108,7 @@ def test_project_summaries_tokens_filters_and_affected_owners_follow_project_lin
 def test_inaccessible_link_ids_cannot_be_updated_or_deleted_and_revocation_rejects_save(links):
     planning = service(links)
     with psycopg.connect(links.setup.operator_url) as c:
-        identity = c.execute('INSERT INTO eppm.project_dependency(project_id,predecessor_project_id) VALUES(1,3) RETURNING id').fetchone()[0]
+        identity = c.execute('INSERT INTO eppm.project_dependency(project_id,predecessor_project_id,project_plan_id) VALUES (1,3,(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)) RETURNING id').fetchone()[0]
     panel = planning.get_project_dependency_panel(1)
     for upserts, deletes in [([link() | {'id': identity}], []), ([], [identity])]:
         with pytest.raises(ValueError):
@@ -191,7 +191,7 @@ def test_changed_successor_bounds_and_step_membership_refresh_project_warnings(l
     planning.create_milestone(1, 'Earlier start', 'General', '2025-12-01', '2025-12-02', 0)
     assert planning.get_project_summaries([1])[0]['hasViolations']
     with psycopg.connect(links.setup.operator_url) as c:
-        c.execute('UPDATE eppm.project_task SET project_id=3 WHERE task_name=%s', ('Earlier start',))
+        c.execute('UPDATE eppm.project_task SET project_id=3,project_plan_id=(SELECT id FROM eppm.project_plan WHERE project_id=3 AND is_current) WHERE task_name=%s', ('Earlier start',))
     assert not planning.get_project_summaries([1])[0]['hasViolations']
     with pytest.raises(PlanningConflictError):
         planning.save_project_dependencies(1, [], [], saved['revision'])

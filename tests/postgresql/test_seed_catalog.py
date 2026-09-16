@@ -1,5 +1,6 @@
 """Native seed catalogs retain editable references, demo relationships and identity safety."""
 
+from tests.postgresql.plan_fixtures import seed_test_plans
 from decimal import Decimal
 import random
 from concurrent.futures import ThreadPoolExecutor
@@ -164,8 +165,8 @@ def test_repairing_an_explicit_task_identity_holds_concurrent_inserts_until_the_
     operator.run(ensure_reference_catalog, write=True)
     with psycopg.connect(pg_database.operator_url) as connection:
         connection.execute("INSERT INTO eppm.project(name) VALUES ('Existing')")
-        connection.execute("INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date) "
-                           "VALUES (100,1,'Explicit','2026-01-01','2026-01-02')")
+        seed_test_plans(connection)
+        connection.execute("INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date,project_plan_id) VALUES (100,1,'Explicit','2026-01-01','2026-01-02',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current))")
     ready = Event()
     pids = []
 
@@ -173,8 +174,7 @@ def test_repairing_an_explicit_task_identity_holds_concurrent_inserts_until_the_
         with psycopg.connect(pg_database.operator_url) as connection:
             pids.append(connection.execute('SELECT pg_backend_pid()').fetchone()[0])
             ready.set()
-            return connection.execute("INSERT INTO eppm.project_task(project_id,task_name,start_date,end_date) "
-                "VALUES (1,'Concurrent','2026-01-01','2026-01-02') RETURNING id").fetchone()[0]
+            return connection.execute("INSERT INTO eppm.project_task(project_id,task_name,start_date,end_date,project_plan_id) VALUES (1,'Concurrent','2026-01-01','2026-01-02',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)) RETURNING id").fetchone()[0]
 
     with psycopg.connect(pg_database.operator_url) as repair, ThreadPoolExecutor(max_workers=1) as executor:
         repair.execute('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE')

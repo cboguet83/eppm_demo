@@ -193,9 +193,7 @@ def test_wbs_reference_edits_and_removal_keep_zero_share_references_protected(pr
 
 def test_delete_restores_dependency_graph_and_other_children_if_parent_delete_fails(projects, authorized):
     with psycopg.connect(authorized.setup.operator_url) as connection:
-        connection.execute("""INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date,predecessor_id)
-            VALUES (10,1,'First','2026-09-01','2026-09-02',NULL),(11,1,'Second','2026-09-02','2026-09-03',10),
-                   (12,2,'External','2026-09-03','2026-09-04',NULL)""")
+        connection.execute("INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date,predecessor_id,project_plan_id) VALUES (10,1,'First','2026-09-01','2026-09-02',NULL,(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(11,1,'Second','2026-09-02','2026-09-03',10,(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(12,2,'External','2026-09-03','2026-09-04',NULL,(SELECT id FROM eppm.project_plan WHERE project_id=2 AND is_current))")
         connection.execute('INSERT INTO eppm.task_dependencies(task_id,predecessor_task_id) VALUES (11,10),(12,11)')
         connection.execute("INSERT INTO eppm.task_tag(task_id,free_tag) VALUES (10,'Tag')")
         connection.execute("INSERT INTO eppm.project_link(project_id,url,alias) VALUES (1,'https://example.test','Docs')")

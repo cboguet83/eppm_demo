@@ -101,10 +101,11 @@ def prepare_pool_scenarios(connection: psycopg.Connection, *, year: int, seed: i
     periods = [ProjectPeriod(identity, start or date(year, 1, 1), end or date(year, 12, 31))
                for identity, start, end in connection.execute(
                    'SELECT p.id,min(t.start_date),max(t.end_date) FROM eppm.project p '
-                   'LEFT JOIN eppm.project_task t ON t.project_id=p.id '
-                   'AND t.start_date IS NOT NULL AND t.end_date IS NOT NULL GROUP BY p.id ORDER BY p.id')]
+                   'LEFT JOIN eppm.current_project_task t ON t.project_id=p.id '
+                   'AND t.start_date IS NOT NULL AND t.end_date IS NOT NULL '
+                   'WHERE p.id IN (SELECT project_id FROM eppm.project_plan WHERE is_current) GROUP BY p.id ORDER BY p.id')]
     tasks = [TaskPeriod(identity, project_id, start, end) for identity, project_id, start, end in connection.execute(
-        'SELECT id,project_id,start_date,end_date FROM eppm.project_task '
+        'SELECT id,project_id,start_date,end_date FROM eppm.current_project_task '
         'WHERE start_date IS NOT NULL AND end_date IS NOT NULL AND end_date>=start_date ORDER BY id')]
     demand, rates, omitted = plan_demand(periods, seed, tasks=tasks)
     for row in demand:

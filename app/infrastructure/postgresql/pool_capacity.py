@@ -62,7 +62,7 @@ def read_capacity_inputs(store: PostgresResourcePoolStore, pool_ids: list[int]) 
     bounds = {
         project_id: (start, end) for project_id, start, end in store.connection.execute(
             "SELECT project_id,to_char(min(start_date),'YYYY-MM-DD'),to_char(max(end_date),'YYYY-MM-DD') "
-            'FROM eppm.project_task WHERE project_id=ANY(%s::bigint[]) GROUP BY project_id', (project_ids,),
+            'FROM eppm.current_project_task WHERE project_id=ANY(%s::bigint[]) GROUP BY project_id', (project_ids,),
         )
     }
     for values in inputs.values():

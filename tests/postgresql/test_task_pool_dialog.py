@@ -37,7 +37,7 @@ class TaskPoolDialogTests(unittest.TestCase):
     def test_project_popup_batches_only_assigned_pools_and_reuses_the_result(self) -> None:
         from app.application.services.pool_capacity import PoolCapacityService
         with psycopg.connect(self.setup.operator_url) as conn:
-            conn.execute('INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,fte_assigned) VALUES(1,1,0.5)')
+            conn.execute('INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,fte_assigned,project_plan_id) VALUES (1,1,0.5,(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current))')
         original = PoolCapacityService.get_details
         app = AppTest.from_function(project_pool_app, args=(self.resources, self.access))
         with patch.object(PoolCapacityService, 'get_details', autospec=True, side_effect=original) as reads:
@@ -58,8 +58,7 @@ class TaskPoolDialogTests(unittest.TestCase):
         with psycopg.connect(self.setup.operator_url) as conn, conn.cursor() as cursor:
             conn.execute("UPDATE eppm.project SET name='Project' WHERE id=1")
             cursor.executemany(
-                'INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date) '
-                'VALUES(%s,1,%s,%s,%s)',
+                'INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date,project_plan_id) VALUES (%s,1,%s,%s,%s,(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current))',
                 [(1, 'Assigned task', '2026-01-01', '2026-12-31'),
                  (2, 'Empty task', '2026-02-01', '2026-02-28')],
             )
@@ -77,8 +76,7 @@ class TaskPoolDialogTests(unittest.TestCase):
                 "VALUES(1,'employee',1)"
             )
             cursor.executemany(
-                'INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,fte_assigned) '
-                'VALUES(1,1,1,%s)', [(0.25,), (0.25,)],
+                'INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,fte_assigned,project_plan_id) VALUES (1,1,1,%s,(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current))', [(0.25,), (0.25,)],
             )
 
     def app(self, task_id: int = 1) -> AppTest:

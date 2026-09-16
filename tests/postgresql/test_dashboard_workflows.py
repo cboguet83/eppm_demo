@@ -1,5 +1,6 @@
 """Native dashboard catalog, issue, scope and calendar workflows."""
 
+from tests.postgresql.plan_fixtures import seed_test_plans
 from datetime import date
 from decimal import Decimal
 import psycopg
@@ -113,8 +114,9 @@ def test_undated_assignments_use_today_and_invalidate_on_calendar_day_change(bus
     path, _, _, _, manager = business
     with psycopg.connect(authorized.setup.operator_url) as conn:
         conn.execute("INSERT INTO eppm.project(id,name) VALUES(3,'Undated project')")
+        seed_test_plans(conn)
         conn.execute("INSERT INTO eppm.resource_pool(id,name,capacity_fte) VALUES(2,'Undated pool',1)")
-        conn.execute('INSERT INTO eppm.resource_pool_assignment(project_id,pool_id,fte_assigned) VALUES(3,2,2)')
+        conn.execute('INSERT INTO eppm.resource_pool_assignment(project_id,pool_id,fte_assigned,project_plan_id) VALUES (3,2,2,(SELECT id FROM eppm.project_plan WHERE project_id=3 AND is_current))')
     service = create_dashboard_service(path, access=manager)
     service.today = lambda: date(2026, 9, 30)
     revision = service.revision()
