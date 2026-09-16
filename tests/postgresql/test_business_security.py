@@ -216,7 +216,7 @@ def test_every_business_table_has_rls_and_explicit_write_authorization(pg_databa
             EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid=c.oid AND p.polcmd IN ('a','*') AND p.polwithcheck IS NOT NULL)
             FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
             WHERE n.nspname='eppm' AND c.relkind='r' AND has_table_privilege('eppm_runtime',c.oid,'INSERT')""").fetchall()
-    policy_authorized = {'project_plan', 'project_plan_event', 'plan_task_actual',
+    policy_authorized = {'project_plan', 'project_plan_event',
                          'task_dependencies', 'task_tag', 'project_dependency'}
     assert policy_authorized <= {name for name, _, _, _ in tables}
     assert all(rls and (guarded or name in policy_authorized and policy)

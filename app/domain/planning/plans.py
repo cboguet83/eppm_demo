@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 
 from app.domain.planning.rules import normalize_task
 from app.domain.resources.models import PoolAssignment
@@ -12,7 +12,7 @@ from app.domain.tags.rules import normalize_task_tag
 
 
 class PlanTask(TypedDict):
-    """Stable task identity and versioned schedule; progress remains live."""
+    """Stable task identity with a plan-owned schedule and progress."""
 
     id: int
     task_name: str
@@ -20,6 +20,7 @@ class PlanTask(TypedDict):
     start_date: str
     end_date: str
     description: str
+    progress_pct: NotRequired[int]
 
 
 class ComparisonTask(PlanTask):
@@ -103,7 +104,7 @@ def normalize_content(project_id: int, content: PlanContent) -> PlanContent:
         identities.add(identity)
         value = normalize_task(row)
         tasks.append(PlanTask(id=identity, **{key: value[key] for key in (
-            'task_name', 'phase', 'start_date', 'end_date', 'description')}))
+            'task_name', 'phase', 'start_date', 'end_date', 'description', 'progress_pct')}))
     dependencies = []
     for row in content.dependencies:
         if row['task_id'] is not None and row['task_id'] not in identities:

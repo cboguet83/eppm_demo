@@ -30,6 +30,16 @@ bars can be dragged or resized; a revision-checked Python service updates that
 scenario's existing task rows and audits the date change. Active plans and the
 pool allocation grid remain unchanged.
 
+Comparison starts disabled on a new browser session and whenever navigation
+opens the page again. Scenario management can explicitly hide comparison or
+activate the displayed approved alternative after confirmation. Activation
+retains the previous plan as inactive. Purple dependency links use the alternative
+schedule, including its added tasks. Contextual task, dependency, assignment,
+CSV and task-tag operations target the selected alternative and check its revision
+under the project lock. Deleted tasks release their scenario assignments.
+Project tags and project logs remain shared; logging is available independently
+of the Gantt edit checkbox, subject to project authorization.
+
 Plan management is a lazy Project plans tab immediately after Project log in the
 portfolio master-detail view. It uses the selected project without another project
 selector. Unsaved drafts are kept separately for each project in session state.
@@ -46,7 +56,11 @@ Physical row IDs distinguish versions. Task identity across versions is
 `coalesce(stable_task_id, id)`; assignment identity uses the same pattern with
 `stable_assignment_id`. Existing rows can therefore retain their physical IDs.
 Comparison matches stable task IDs, including renames and removed tasks.
-Actual progress stays in `plan_task_actual` and follows the stable task identity.
+Progress is versioned in `project_task.progress_pct`. Copies inherit their source
+plan's progress, then evolve independently. Activation never overwrites it.
+Migration 0047 removes the redundant `plan_task_actual` mirror without changing
+any existing task row or frozen baseline. This supersedes the earlier shared
+actual-progress decision.
 Project master data, finance, pool definitions and availability remain shared.
 
 Activating an ordinary alternative changes the active designation atomically
@@ -112,7 +126,7 @@ flowchart LR
 
 Real PostgreSQL tests cover migration from populated storage, activation without
 row replacement, single-active constraints, cross-plan assignment rejection,
-frozen history, deletion, protected dependencies, shared actuals and allocation
+frozen history, deletion, protected dependencies, independent progress and allocation
 inheritance/cleanup. Browser tests cover the current portfolio and explicit
 scenario comparison, baseline replacement confirmation and former-task lanes.
 

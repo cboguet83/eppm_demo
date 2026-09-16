@@ -27,7 +27,8 @@ def test_existing_schedule_becomes_approved_current_with_primary_link_and_tags(e
         assert len(content.tasks) == 2
         assert content.dependencies[0]['predecessor_task_id'] == 1
         assert content.task_tags[2] == [{'tag_id': None, 'free_tag': 'Critical'}]
-        assert connection.execute('SELECT progress_pct FROM eppm.plan_task_actual ORDER BY task_id').fetchall() == [(65,), (0,)]
+        assert [task['progress_pct'] for task in content.tasks] == [65, 0]
+        assert connection.execute("SELECT to_regclass('eppm.plan_task_actual')").fetchone() == (None,)
     assert migrate(empty_database.operator_url) == ()
 
 
@@ -55,3 +56,27 @@ def test_relational_upgrade_preserves_divergent_live_work_baseline_and_identity_
             (9000, 'Baseline task', False, True)]
         assert connection.execute("SELECT nextval('eppm.project_task_id_seq')").fetchone()[0] > 10001
         assert connection.execute('SELECT count(*) FROM eppm.project_plan').fetchone() == (2,)
+
+
+def test_retiring_actual_mirror_preserves_each_plan_task_progress(empty_database, tmp_path):
+    for migration in discover_migrations()[:46]:
+        (tmp_path / migration.name).write_bytes(migration.sql.encode('utf-8'))
+    migrate(empty_database.operator_url, directory=tmp_path)
+    with psycopg.connect(empty_database.operator_url) as connection:
+        connection.execute("INSERT INTO eppm.project_type(name,is_general) VALUES('General',true)")
+        connection.execute("INSERT INTO eppm.project(name) VALUES('Progress versions')")
+        connection.execute("""INSERT INTO eppm.project_plan(project_id,version,name,status_id,is_current,is_baseline,is_frozen,author,created_at)
+            VALUES(1,1,'Current',3,true,false,false,'test',CURRENT_TIMESTAMP),
+                  (1,2,'Baseline',3,false,true,true,'test',CURRENT_TIMESTAMP),
+                  (1,3,'Alternative',2,false,false,false,'test',CURRENT_TIMESTAMP)""")
+        connection.execute("""INSERT INTO eppm.project_task(project_id,project_plan_id,stable_task_id,task_name,start_date,end_date,progress_pct)
+            VALUES(1,1,1,'Task','2027-01-01','2027-01-02',65),
+                  (1,2,1,'Task','2027-01-01','2027-01-02',20),
+                  (1,3,1,'Task','2027-01-01','2027-01-02',90)""")
+        connection.execute('INSERT INTO eppm.plan_task_actual VALUES(1,1,65)')
+        before = connection.execute('SELECT * FROM eppm.project_task ORDER BY id').fetchall()
+    assert migrate(empty_database.operator_url) == ('0047_plan_owned_progress.sql',)
+    with psycopg.connect(empty_database.operator_url) as connection:
+        check_schema(connection)
+        assert connection.execute('SELECT * FROM eppm.project_task ORDER BY id').fetchall() == before
+        assert connection.execute("SELECT to_regclass('eppm.plan_task_actual')").fetchone() == (None,)

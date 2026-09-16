@@ -80,6 +80,12 @@ class ProjectPlanService:
             return plan, store.comparison_tasks(plan)
         return self._gateway.run(operation)
 
+    def comparison_endpoints(self, contents: list[PlanContent]) -> dict[int, dict]:
+        """Batch visible active endpoints for alternative dependency rendering."""
+        identities = {dep['predecessor_task_id'] for content in contents for dep in content.dependencies
+                      if dep['predecessor_task_id'] is not None}
+        return self._gateway.run(lambda store: store.comparison_endpoints(list(identities)))
+
     def reschedule_alternative(self, project_id: int, plan_id: int, revision: int,
                                task_id: int, start_date: str, end_date: str) -> None:
         """Edit dates in the selected scenario without modifying active demand."""
@@ -97,6 +103,26 @@ class ProjectPlanService:
             task.update(start_date=start_date, end_date=end_date)
             normalized = normalize_content(project_id, content)
             store.reschedule_task(plan, next(row for row in normalized.tasks if row['id'] == task_id))
+        self._gateway.run(operation, write=True)
+
+    def update_alternative(self, project_id: int, plan_id: int, revision: int, content: PlanContent) -> None:
+        """Save scenario-owned edits atomically, freeing allocations of removed tasks."""
+        def operation(store: PlanStore) -> None:
+            store.lock_project(project_id)
+            editor, _, admin = store.permissions(project_id)
+            if not (editor or admin):
+                raise AccessDenied()
+            plan = self._find(store, project_id, plan_id, revision)
+            self._require_alternative(plan)
+            removed = {row['id'] for row in plan.content.tasks} - {row['id'] for row in content.tasks}
+            cleaned = replace(deepcopy(content),
+                assignments=[row for row in content.assignments if row.task_id not in removed],
+                dependencies=[row for row in content.dependencies if row['task_id'] not in removed
+                              and row['predecessor_task_id'] not in removed],
+                task_tags={key: value for key, value in content.task_tags.items() if key not in removed})
+            normalized = normalize_content(project_id, cleaned)
+            store.validate_references(project_id, normalized)
+            store.update_content(plan, store.reserve_identities(normalized))
         self._gateway.run(operation, write=True)
 
     def delete_baseline(self, project_id: int) -> None:
@@ -187,11 +213,18 @@ class ProjectPlanService:
             raise PlanningConflictError('The plan changed. Reload before saving your changes.')
         return plan
 
-    def change(self, project_id: int, plan_id: int, revision: int, action: str, value: str) -> None:
+    def activate_alternative(self, project_id: int, plan_id: int, revision: int) -> None:
+        """Activate an approved alternative, rechecking its designation under lock."""
+        self.change(project_id, plan_id, revision, 'current', 'true', alternative_only=True)
+
+    def change(self, project_id: int, plan_id: int, revision: int, action: str, value: str,
+               *, alternative_only: bool = False) -> None:
         """Audit an authorized status/current/baseline change without copying content."""
         def operation(store: PlanStore) -> None:
             store.lock_project(project_id)
             plan = self._find(store, project_id, plan_id, revision)
+            if alternative_only:
+                self._require_alternative(plan)
             editor, approver, admin = store.permissions(project_id)
             if action == 'status':
                 validate_status_change(plan, value, editor=editor, approver=approver, admin=admin)
@@ -211,6 +244,4 @@ class ProjectPlanService:
             else:
                 raise ValueError('Unknown plan action.')
             store.metadata(plan, action, value)
-            if action == 'current' and value == 'true':
-                store.publish(plan)
         self._gateway.run(operation, write=True)

@@ -103,6 +103,14 @@ class PostgresPlanStore:
         return [ComparisonTask(**dict(task, id=active.get(task['id'], -task['id']), stable_id=task['id']))
                 for task in plan.content.tasks]
 
+    def comparison_endpoints(self, task_ids: list[int]) -> dict[int, dict]:
+        """Resolve visible external stable identities to active chart endpoints."""
+        with self.connection.cursor(row_factory=dict_row) as cursor:
+            return {row['stable_id']: dict(row) for row in cursor.execute('''
+                SELECT coalesce(stable_task_id,id) AS stable_id,id,project_id,task_name,
+                    start_date::text,end_date::text FROM eppm.current_project_task
+                WHERE coalesce(stable_task_id,id)=ANY(%s::bigint[])''', (task_ids,))}
+
     def reschedule_task(self, plan: ProjectPlan, task: PlanTask) -> None:
         """Persist one validated scenario edit and increment its conflict token."""
         self.connection.execute('''UPDATE eppm.project_task SET start_date=%s,end_date=%s
@@ -113,6 +121,12 @@ class PostgresPlanStore:
         self._event(plan.project_id, plan.id, 'task_dates',
                     f"{task['id']}:{old['start_date']}:{old['end_date']}",
                     f"{task['id']}:{task['start_date']}:{task['end_date']}")
+
+    def update_content(self, plan: ProjectPlan, content: PlanContent) -> None:
+        """Persist a validated alternative revision without touching active rows."""
+        write_plan(self.connection, plan.id, plan.project_id, content, previous=plan.content)
+        self.connection.execute('UPDATE eppm.project_plan SET revision=revision+1 WHERE id=%s', (plan.id,))
+        self._event(plan.project_id, plan.id, 'content', str(plan.revision), str(plan.revision + 1))
 
     def tag_choices(self) -> dict[int, str]:
         return dict(self.connection.execute('SELECT id,tag FROM eppm.tag_dictionnary ORDER BY tag,id'))
@@ -237,12 +251,6 @@ class PostgresPlanStore:
                 self.connection.execute('UPDATE eppm.project_plan SET is_frozen=true WHERE id=%s', (plan.id,))
         self.connection.execute('UPDATE eppm.project_cache_revision SET revision=revision+1 WHERE project_id=%s', (plan.project_id,))
         self._event(plan.project_id, plan.id, action, old, value)
-
-    def publish(self, plan: ProjectPlan) -> None:
-        """Refresh shared actual progress when selecting existing plan rows."""
-        # Activation selects existing rows. Actual progress remains shared by stable identity.
-        self.connection.execute('''UPDATE eppm.project_task t SET progress_pct=a.progress_pct FROM eppm.plan_task_actual a
-            WHERE t.project_plan_id=%s AND coalesce(t.stable_task_id,t.id)=a.task_id''', (plan.id,))
 
 
 class PostgresPlanGateway:

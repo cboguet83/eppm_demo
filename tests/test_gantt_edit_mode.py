@@ -24,3 +24,19 @@ def test_server_edit_guard_defaults_to_read_only_and_protects_active_comparison(
 def test_gantt_mode_flags_require_real_booleans(action, enabled):
     with pytest.raises(ValueError):
         validate_event(dict(action=action, enabled=enabled))
+
+
+def test_alternative_actions_validate_plan_identity_and_operation():
+    event = dict(action='alternative_action', operation='delete_step', project_id='1', plan_id='5', revision='2', id='3')
+    assert validate_event(event)['plan_id'] == 5
+    for field, value in [('project_id', None), ('plan_id', 0), ('revision', -1), ('id', False), ('operation', [])]:
+        with pytest.raises(ValueError):
+            validate_event(event | {field: value})
+
+
+def test_logs_are_available_without_editing_and_hide_does_not_mutate_plans(monkeypatch):
+    state = {'planning_alternatives': {1: 5}}
+    monkeypatch.setattr(planning_scenarios.st, 'session_state', state)
+    assert 'log_project_event' not in planning_scenarios.MUTATIONS
+    planning_scenarios.handle_scenario_event({'action': 'hide_alternatives'}, None)
+    assert state['planning_alternatives'] == {}

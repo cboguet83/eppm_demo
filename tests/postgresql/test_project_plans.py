@@ -130,6 +130,10 @@ def test_plan_copy_preserves_hidden_dependencies_without_disclosing_endpoints(au
     copied = editor.save(1, visible.id, visible.revision, 'Edited copy', visible.content)
     assert copied.content.dependencies == []
     assert admin.list_plans(1)[0].content.dependencies == first.content.dependencies
+    changed = deepcopy(copied.content)
+    changed.tasks[0]['task_name'] = 'Alternative edit with hidden predecessor'
+    editor.update_alternative(1, copied.id, copied.revision, changed)
+    assert admin.list_plans(1)[0].content.dependencies == first.content.dependencies
 
 
 def test_current_menu_edits_preserve_saved_plan_and_baseline(authorized):

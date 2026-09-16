@@ -33,7 +33,7 @@ def _new_draft(plan: ProjectPlan, content: PlanContent | None = None) -> dict:
 
 def _task_editor(project_id: int, draft: dict) -> list[dict]:
     base = draft['base']
-    columns = ['id', 'task_name', 'phase', 'start_date', 'end_date', 'description']
+    columns = ['id', 'task_name', 'phase', 'start_date', 'end_date', 'description', 'progress_pct']
     frame = pd.DataFrame(base.tasks, columns=columns)
     for column in ['start_date', 'end_date']:
         frame[column] = pd.to_datetime(frame[column]).dt.date
@@ -43,6 +43,7 @@ def _task_editor(project_id: int, draft: dict) -> list[dict]:
             'phase': 'Phase', 'description': 'Description',
             'start_date': st.column_config.DateColumn('Start date', required=True),
             'end_date': st.column_config.DateColumn('End date', required=True),
+            'progress_pct': st.column_config.NumberColumn('Progress (%)', min_value=0, max_value=100, step=1, default=0),
         })
     rows = []
     negative = min([0, *(row['id'] for row in base.tasks)]) - 1
@@ -50,6 +51,7 @@ def _task_editor(project_id: int, draft: dict) -> list[dict]:
         if pd.isna(row['id']):
             row['id'], negative = negative, negative - 1
         row['id'] = int(row['id'])
+        row['progress_pct'] = int(row['progress_pct']) if pd.notna(row['progress_pct']) else 0
         for column in ['start_date', 'end_date']:
             row[column] = str(row[column]) if pd.notna(row[column]) else ''
         for column in ['task_name', 'phase', 'description']:
@@ -66,14 +68,16 @@ def _task_labels(tasks: list[dict]) -> dict[int, str]:
 
 
 def _dependency_editor(project_id: int, draft: dict, tasks: list[dict],
-                       projects: dict[int, str], external: dict[int, str]) -> list[dict]:
+                       projects: dict[int, str], external: dict[int, str], *,
+                       fixed_successor: bool = False, successor_id: int | None = None) -> list[dict]:
     labels = _task_labels(tasks)
     predecessors = external | labels
     for dep in draft['base'].dependencies:
         identity = dep['predecessor_task_id']
         if identity is not None and identity not in predecessors:
             predecessors[identity] = f'Task absent from current schedule ({identity})'
-    st.caption('An empty successor means the whole project. Select either a predecessor task or project.')
+    st.caption('Select either a predecessor task or project.' if fixed_successor else
+               'An empty successor means the whole project. Select either a predecessor task or project.')
     columns = ['task_id', 'predecessor_task_id', 'predecessor_project_id', 'link_type', 'lag_days']
     frame = pd.DataFrame([row for row in draft['base'].dependencies
                           if row['task_id'] is None or row['task_id'] in labels], columns=columns)
@@ -81,6 +85,7 @@ def _dependency_editor(project_id: int, draft: dict, tasks: list[dict],
     for column, options in zip(columns[:3], choices):
         frame[column] = frame[column].map(options)
     edited = st.data_editor(frame, hide_index=True, num_rows='dynamic', width='stretch',
+        disabled=['task_id'] if fixed_successor else [],
         key=f'plan_dependencies_{project_id}_{draft["epoch"]}', column_config={
             'task_id': st.column_config.SelectboxColumn('Successor task', options=list(labels.values())),
             'predecessor_task_id': st.column_config.SelectboxColumn('Predecessor task', options=list(predecessors.values())),
@@ -94,6 +99,8 @@ def _dependency_editor(project_id: int, draft: dict, tasks: list[dict],
             continue
         for key, options in zip(columns[:3], choices):
             row[key] = {value: identity for identity, value in options.items()}.get(row[key])
+        if fixed_successor:
+            row['task_id'] = successor_id
         row['lag_days'] = int(row['lag_days']) if pd.notna(row['lag_days']) else 0
         row['link_type'] = row['link_type'] if pd.notna(row['link_type']) else 'FS'
         # Removing a successor also removes its incoming dependencies.
@@ -102,8 +109,10 @@ def _dependency_editor(project_id: int, draft: dict, tasks: list[dict],
     return result
 
 
-def _assignment_editor(project_id: int, draft: dict, tasks: list[dict], pools: dict[int, str]) -> list[PoolAssignment]:
-    st.caption('Leave Task empty for project-level demand. Relative dates follow the selected task/project schedule.')
+def _assignment_editor(project_id: int, draft: dict, tasks: list[dict], pools: dict[int, str], *,
+                       fixed_task: bool = False, task_id: int | None = None) -> list[PoolAssignment]:
+    st.caption('Relative dates follow the selected task/project schedule.' if fixed_task else
+               'Leave Task empty for project-level demand. Relative dates follow the selected task/project schedule.')
     labels = _task_labels(tasks)
     columns = ['id', 'pool_id', 'task_id', 'fte_assigned', 'start_date', 'end_date',
                'schedule_anchor', 'offset_days', 'duration_days', 'notes']
@@ -111,7 +120,7 @@ def _assignment_editor(project_id: int, draft: dict, tasks: list[dict], pools: d
                           if row.task_id is None or row.task_id in labels], columns=columns)
     frame['pool_id'] = frame['pool_id'].map(lambda identity: pools.get(identity, f'Unavailable pool #{identity}'))
     frame['task_id'] = frame['task_id'].map(labels)
-    edited = st.data_editor(frame, hide_index=True, num_rows='dynamic', width='stretch', disabled=['id'],
+    edited = st.data_editor(frame, hide_index=True, num_rows='dynamic', width='stretch', disabled=['id', 'task_id'] if fixed_task else ['id'],
         key=f'plan_assignments_{project_id}_{draft["epoch"]}', column_config={
             'id': None, 'pool_id': st.column_config.SelectboxColumn('Pool', options=list(pools.values()), required=True),
             'task_id': st.column_config.SelectboxColumn('Task', options=list(labels.values())),
@@ -130,6 +139,8 @@ def _assignment_editor(project_id: int, draft: dict, tasks: list[dict], pools: d
         if row['task_id'] is not None and row['task_id'] not in labels.values():
             continue
         row['task_id'] = {name: identity for identity, name in labels.items()}.get(row['task_id'])
+        if fixed_task:
+            row['task_id'] = task_id
         for key in ['id', 'offset_days', 'duration_days']:
             if row[key] is not None:
                 row[key] = int(row[key])
@@ -160,7 +171,7 @@ def _render_draft(project_id: int, draft: dict, pools: dict[int, str], tag_choic
                     steps = parse_template(uploaded.getvalue().decode('utf-8-sig'))
                     imported = PlanContent()
                     for step in steps:
-                        imported.tasks.append(dict(id=-step.number, **{key: step.values.get(key, '') for key in
+                        imported.tasks.append(dict(id=-step.number, progress_pct=step.values.get('progress_pct', 0), **{key: step.values.get(key, '') for key in
                             ['task_name', 'phase', 'start_date', 'end_date', 'description']}))
                         for dep in step.dependencies:
                             imported.dependencies.append(dict(task_id=-step.number,
@@ -198,8 +209,8 @@ def _render_draft(project_id: int, draft: dict, pools: dict[int, str], tag_choic
 
 
 def _actual_progress(workspace: PlanningWorkspace, current: ProjectPlan, editable: bool) -> None:
-    """Edit live progress independently of immutable schedule versions."""
-    with st.expander('Actual progress · current plan'):
+    """Edit progress on the current plan's own task rows."""
+    with st.expander('Progress · current plan'):
         rows = workspace.planning.get_milestones_by_project(current.project_id)
         frame = pd.DataFrame([{'id': row['id'], 'Task': row['task_name'],
                                'Progress (%)': row['progress_pct'] or 0} for row in rows],
@@ -212,7 +223,7 @@ def _actual_progress(workspace: PlanningWorkspace, current: ProjectPlan, editabl
             for row in edited.to_dict('records'):
                 if row['Progress (%)'] != previous[row['id']]:
                     workspace.planning.update_progress(int(row['id']), int(row['Progress (%)']))
-            st.toast('Actual progress saved.')
+            st.toast('Current plan progress saved.')
             st.rerun()
 
 

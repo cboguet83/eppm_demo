@@ -13,13 +13,20 @@ def validate_event(event: dict[str, Any]) -> dict[str, Any]:
     """
     result = dict(event)
     if result.get('action') in {'load_project_dependencies', 'save_project_dependencies', 'log_project_event',
-                              'baseline_current_project', 'delete_project_baseline', 'choose_alternative', 'update_alternative_dates'}:
+                              'baseline_current_project', 'delete_project_baseline', 'choose_alternative', 'update_alternative_dates', 'activate_alternative', 'alternative_action'}:
         result['project_id'] = positive_identity(result.get('project_id'))
     if result.get('action') in {'toggle_baseline', 'toggle_edit'} and type(result.get('enabled')) is not bool:
         raise ValueError('Invalid planning mode selection.')
     if result.get('action') == 'update_alternative_dates':
         for field in ('plan_id', 'revision', 'id'):
             result[field] = positive_identity(result.get(field))
+    if result.get('action') in {'activate_alternative', 'alternative_action'}:
+        for field in ('plan_id', 'revision'):
+            result[field] = positive_identity(result.get(field))
+    if result.get('action') == 'alternative_action' and result.get('id') is not None:
+        result['id'] = positive_identity(result['id'])
+    if result.get('action') == 'alternative_action' and not isinstance(result.get('operation'), str):
+        raise ValueError('Invalid alternative scenario action.')
     for field in ("id", "task_id", "project_id", "pool_id", "group_id", "progress", "progress_pct"):
         value = result.get(field)
         if field not in result or value is None and field.endswith("id") or value == "":

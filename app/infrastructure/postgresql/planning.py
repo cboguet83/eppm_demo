@@ -228,9 +228,8 @@ class PostgresPlanningStore:
         """Store the existing domain-clamped progress value."""
         if require_reschedule(self.connection, milestone_id) is None:
             return False
-        self.connection.execute('''INSERT INTO eppm.plan_task_actual(task_id,project_id,progress_pct)
-            SELECT coalesce(stable_task_id,id),project_id,%s FROM eppm.project_task WHERE id=%s
-            ON CONFLICT(task_id) DO UPDATE SET progress_pct=excluded.progress_pct''', (progress_pct, milestone_id))
+        self.connection.execute('''UPDATE eppm.project_plan SET revision=revision+1 WHERE id=
+            (SELECT project_plan_id FROM eppm.project_task WHERE id=%s)''', (milestone_id,))
         return self.connection.execute('UPDATE eppm.project_task SET progress_pct=%s WHERE id=%s', (progress_pct, milestone_id)).rowcount > 0
 
     def bulk_create_milestones(self, rows: list[TaskInput]) -> int:

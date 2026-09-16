@@ -219,7 +219,7 @@ def _handle_gantt_component_change(widget_key: str, workspace: PlanningWorkspace
         return
     st.session_state["last_gantt_nonce"] = nonce
     if gantt_event['action'] in MUTATIONS:
-        require_edit()
+        require_edit(alternative=gantt_event['action'] == 'manage_project_tags')
     if gantt_event['action'] in {'load_project_dependencies', 'save_project_dependencies'}:
         _handle_project_dependency_event(gantt_event, workspace, nonce)
         return
@@ -1549,7 +1549,7 @@ def _render_planning_chart(
             action = gantt_event.get("action")
             step_id = gantt_event.get("id")
             if action in MUTATIONS:
-                require_edit()
+                require_edit(alternative=action == 'manage_project_tags')
             if action in SCENARIO_ACTIONS:
                 handle_scenario_event(gantt_event, workspace)
                 st.rerun('planning_workspace')
@@ -1640,6 +1640,11 @@ def _render_planning_chart(
     scenario_project = st.session_state.pop('planning_scenario_dialog_project', None)
     if scenario_project is not None:
         choose_alternative(scenario_project, workspace)
+    alternative_event = st.session_state.pop('planning_alternative_editor', None)
+    if alternative_event is not None:
+        from app.presentation.pages.planning_alternative_editor import edit_alternative
+
+        edit_alternative(alternative_event, workspace)
     active_rf = st.session_state.get("active_resource_pool_filter")
     if active_rf and workspace.resources is not None:
         _render_filtered_active_allocations(
