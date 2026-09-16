@@ -45,6 +45,7 @@ def popup_server(authorized, tmp_path, request):
         ensure_reference_catalog(connection)
         connection.execute("UPDATE eppm.project SET name='Project ' || lpad(id::text,4,'0')")
         connection.execute("INSERT INTO eppm.project(id,name) SELECT i,'Project ' || lpad(i::text,4,'0') FROM generate_series(4,1000) i")
+        connection.execute("UPDATE eppm.project SET status='In Progress'")
         seed_test_plans(connection)
         connection.execute("INSERT INTO eppm.wbs(id,code,description) VALUES(1,'A','Example')")
         connection.execute('INSERT INTO eppm.project_wbs(project_id,wbs_id,percentage) VALUES(1,1,50)')

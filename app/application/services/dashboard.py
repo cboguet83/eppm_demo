@@ -63,9 +63,11 @@ class DashboardService:
         """Read both quarterly resource series in one authorized snapshot."""
         return self.reader.resources(project_ids, self.today())
 
-    def resource_breakdown(self, project_ids: list[int]) -> ResourceBreakdown:
+    def resource_breakdown(self, project_ids: list[int], pool_id: int | None = None) -> ResourceBreakdown:
         """Read per-pool chart stacks on the same authorized snapshot as totals."""
-        return self.reader.resource_breakdown(project_ids, self.today())
+        if pool_id is not None and (type(pool_id) is not int or pool_id <= 0):
+            raise ValueError('Select a valid resource pool.')
+        return self.reader.resource_breakdown(project_ids, self.today(), pool_id)
 
     def consuming_projects(self, project_ids: list[int], quarter: str,
                            pool_id: int | None = None, metric: str = 'overallocation') -> list[int]:

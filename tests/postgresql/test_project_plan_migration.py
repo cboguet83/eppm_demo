@@ -75,7 +75,7 @@ def test_retiring_actual_mirror_preserves_each_plan_task_progress(empty_database
                   (1,3,1,'Task','2027-01-01','2027-01-02',90)""")
         connection.execute('INSERT INTO eppm.plan_task_actual VALUES(1,1,65)')
         before = connection.execute('SELECT * FROM eppm.project_task ORDER BY id').fetchall()
-    assert migrate(empty_database.operator_url) == ('0047_plan_owned_progress.sql',)
+    assert migrate(empty_database.operator_url) == tuple(item.name for item in discover_migrations()[46:])
     with psycopg.connect(empty_database.operator_url) as connection:
         check_schema(connection)
         assert connection.execute('SELECT * FROM eppm.project_task ORDER BY id').fetchall() == before

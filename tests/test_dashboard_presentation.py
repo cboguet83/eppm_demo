@@ -21,6 +21,7 @@ def test_pool_warning_uses_singular_for_zero_and_one(count, label):
 
 def test_clear_restores_default_status_and_removes_other_filters(monkeypatch):
     state = {'dashboard_filter_status': ['Completed'], 'dashboard_filter_pool': ['7'],
+             'dashboard_filter_chart_pool': 7,
              'dashboard_flex_fields': ['name'], 'dashboard_match': 'All',
              'dashboard_selected_project': 4, 'dashboard_offset': 10}
     monkeypatch.setattr(dashboard.st, 'session_state', state)

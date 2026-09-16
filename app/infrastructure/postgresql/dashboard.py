@@ -96,10 +96,11 @@ class PostgresDashboardReader:
             return {key: {quarter: float(value) for quarter, value in row[key].items()} for key in ('overallocation', 'capacity')}
         return self._run(operation, project_ids)
 
-    def resource_breakdown(self, project_ids: list[int], today: date) -> ResourceBreakdown:
+    def resource_breakdown(self, project_ids: list[int], today: date, pool_id: int | None = None) -> ResourceBreakdown:
         """Read safe pool contributions while retaining competing-demand privacy."""
         def operation(connection: psycopg.Connection, ids: list[int], _security: PostgresAccessStore) -> ResourceBreakdown:
-            result = connection.execute('SELECT eppm.dashboard_resource_breakdown(%s::bigint[],%s)', (ids, today)).fetchone()[0]
+            result = connection.execute('SELECT eppm.dashboard_resource_breakdown(%s::bigint[],%s,NULL,%s)',
+                                        (ids, today, pool_id)).fetchone()[0]
             return ResourceBreakdown(allocation=result['allocation'], overallocation=result['overallocation'],
                 capacity=result['capacity'], pools=result['pools'], peak_days=result.get('peak_days', {}),
                 overallocated_pools=result.get('overallocated_pools', []))

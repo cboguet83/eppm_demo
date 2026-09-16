@@ -37,8 +37,8 @@ def _report(_service: DashboardService, revision: tuple, ids: tuple[int, ...], s
 
 
 @authorized_cache(show_spinner=False, max_entries=64, ttl=300)
-def _shortages(_service: DashboardService, revision: tuple, ids: tuple[int, ...]):
-    return _service.resource_breakdown(list(ids))
+def _shortages(_service: DashboardService, revision: tuple, ids: tuple[int, ...], pool_id: int | None = None):
+    return _service.resource_breakdown(list(ids), pool_id)
 
 
 def _reset_page() -> None:
@@ -331,6 +331,17 @@ def render_dashboard(service: DashboardService) -> None:
             _finance_chart(service, report, proposed)
             series = _shortages(service, revision, ids)
             st.subheader(_label('resources_allocation'))
+            selected_pool = st.session_state.get('dashboard_filter_chart_pool')
+            pool_names = {pool['pool_id']: pool['name'] for pool in series['pools']}
+            if selected_pool not in pool_names:
+                st.session_state.pop('dashboard_filter_chart_pool', None)
+                selected_pool = None
+            if selected_pool is not None:
+                st.caption(t('dashboard.filtered_pool', pool=pool_names[selected_pool]))
+                if st.button(_label('clear_pool_filter'), key='dashboard_clear_chart_pool'):
+                    del st.session_state['dashboard_filter_chart_pool']
+                    st.rerun(scope='fragment')
+                series = _shortages(service, revision, ids, selected_pool)
             st.html('<style>.st-key-dashboard_resource_charts {gap:4px !important;}</style>')
             with st.container(key='dashboard_resource_charts'):
                 for metric in ('overallocation', 'allocation'):
@@ -341,7 +352,7 @@ def render_dashboard(service: DashboardService) -> None:
                             'totalLabel': _label('total'), 'allocatedLabel': _label('allocation'),
                             'availableLabel': t('planning.resource_grid.available_value', default='Available'),
                             'capacityLabel': _label('total_capacity'), 'goTo': _label('go_to_consumers'),
-                            'poolDetails': _label('pool_details')})
+                            'poolDetails': _label('pool_details'), 'filterPool': _label('filter_pool')})
                     if isinstance(selection, dict) and selection.get('metric') == metric:
                         if type(selection.get('pool_id')) is not int or not isinstance(selection.get('quarter'), str):
                             raise ValueError('Invalid resource selection.')
@@ -350,6 +361,9 @@ def render_dashboard(service: DashboardService) -> None:
                             _pool_details_jump(service, ids, selection['quarter'], selection['pool_id'], metric)
                         elif action == 'planning':
                             _planning_jump(service, ids, selection['quarter'], selection['pool_id'], metric)
+                        elif action == 'filter_pool' and selection['pool_id'] in pool_names:
+                            st.session_state['dashboard_filter_chart_pool'] = selection['pool_id']
+                            st.rerun(scope='fragment')
                         else:
                             raise ValueError('Invalid resource action.')
         with issues:

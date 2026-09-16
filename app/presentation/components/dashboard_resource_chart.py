@@ -68,6 +68,8 @@ export default function({data,parentElement,setTriggerValue}) {
         item.onclick=()=>{closeMenu();setTriggerValue('selection',{quarter:row.quarter,pool_id:pool.pool_id,metric:data.metric,action:'planning'});};menu.appendChild(item);
         const details=document.createElement('button');details.className='context-menu-item';details.type='button';details.setAttribute('role','menuitem');details.textContent=data.poolDetails;
         details.onclick=()=>{closeMenu();setTriggerValue('selection',{quarter:row.quarter,pool_id:pool.pool_id,metric:data.metric,action:'pool_details'});};menu.appendChild(details);
+        const filter=document.createElement('button');filter.className='context-menu-item';filter.type='button';filter.setAttribute('role','menuitem');filter.textContent=data.filterPool;
+        filter.onclick=()=>{closeMenu();setTriggerValue('selection',{quarter:row.quarter,pool_id:pool.pool_id,metric:data.metric,action:'filter_pool'});};menu.appendChild(filter);
         root.appendChild(menu);position(menu,x,y);item.focus({preventScroll:true});
     };
     const path=[];

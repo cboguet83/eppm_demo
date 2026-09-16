@@ -32,7 +32,7 @@ function setup(){
       budgetSeries:metric==='finance'?[{name:'Approved',points:[{date:'2026-01-01',value:100},{date:'2026-04-01',value:null},{date:'2026-07-01',value:80}]},{name:'Proposed',points:[{date:'2026-01-01',value:120}]}]:[],
       metric,locale:'en',rows:metric==='finance'?[]:[{quarter:'2026-Q1',value:metric==='allocation'?10:3,capacity}],
       pools:[{pool_id:1,name:'Pool X',allocation:{'2026-Q1':10},overallocation:{'2026-Q1':3},available:{'2026-Q1':-3}}],
-      totalLabel:'Total',allocatedLabel:'Allocation',availableLabel:'Available',goTo:'Planning',poolDetails:'Pool details',
+      totalLabel:'Total',allocatedLabel:'Allocation',availableLabel:'Available',goTo:'Planning',poolDetails:'Pool details',filterPool:'Filter on this pool',
       totalValueLabel:metric==='allocation'?'Total allocation':'Total overallocation',totalCapacityLabel:'Total capacity',
       valueLabel:metric==='overallocation'?'Overallocation':'Allocation',capacityLabel:'Total pools capacity',today:'2026-01-01',start:'2026-01-01',end:'2027-01-01'}});
     return {root,svg:root.children.find(e=>e.tag==='svg'),cleanup,events};
@@ -133,10 +133,10 @@ test('both resource menus navigate to the selected pool or its consuming project
   const {build}=setup();
   for(const metric of ['allocation','overallocation']){
     const chart=build(metric),bar=chart.svg.children.find(e=>e.tag==='rect');
-    for(const [index,action] of [[1,'planning'],[2,'pool_details']]){
+    for(const [index,action] of [[1,'planning'],[2,'pool_details'],[3,'filter_pool']]){
       bar.oncontextmenu({preventDefault(){},clientX:400,clientY:100});
       const menu=chart.root.children.find(e=>e.className==='context-menu');
-      assert.deepEqual(menu.children.slice(1).map(e=>e.textContent),['Planning','Pool details']);
+      assert.deepEqual(menu.children.slice(1).map(e=>e.textContent),['Planning','Pool details','Filter on this pool']);
       menu.children[index].onclick();
       assert.deepEqual(chart.events.at(-1),{name:'selection',quarter:'2026-Q1',pool_id:1,metric,action});
       assert.equal(chart.root.children.some(e=>e.className==='context-menu'),false);

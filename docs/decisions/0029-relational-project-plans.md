@@ -172,6 +172,17 @@ retains its security barrier, hidden-endpoint redaction and SELECT-only runtime
 grant. Performance regressions cover 1,000 projects with inactive history and
 primary links, and repeated revision reads across 10,001 projects.
 
+## Dashboard resource plan scope
+
+Dashboard resource allocation, overallocation and consumer drill-through use only
+active-plan assignments and task dates. Migration 0048 repairs the resource reader
+omitted from the original source conversion, preserving its existing private
+competing-demand aggregate and calculation rules. Inactive alternatives, baselines,
+and deleted plans cannot contribute demand. Both resource chart context menus can
+filter to one pool; this recalculates its own quarterly peaks and capacity. The
+filter applies to both charts, leaves the project/finance selection unchanged, and
+can be removed with Show all pools or Clear all filters.
+
 ## CSV revision imports and comparison diagnostics
 
 CSV import always creates a new revision with a mandatory version name, retaining
