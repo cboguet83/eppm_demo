@@ -182,7 +182,10 @@ plan and always leaves existing active designations unchanged. CSV tasks are new
 identities with no resource assignments. Activate a revision separately through
 scenario management after approval. Day and month may have one digit; two-digit
 years in slash-separated dates resolve to 2000–2099, preserving the selected
-DD/MM or MM/DD order and rejecting invalid calendar dates.
+DD/MM or MM/DD order and rejecting invalid calendar dates. An unambiguous slash
+date such as 9/20/2025 determines the order for other dates in that file, including
+10/1/2026 (October 1). If there is no consistent unambiguous evidence, the selected
+date format remains the fallback.
 
 
 Baseline visibility is toggled in Scenario management immediately above Delete
@@ -190,9 +193,17 @@ baseline. Dual-view project rows show both task counts, with the active count ab
 in its scenario color. Alternative constraint warnings open the shared diagnostics
 and step editor using that scenario's stable task identity. Row heights are retained.
 
-In dual view, affected pools and containers have an alternative demand row below
-their active rows. Alternative-only pools remain visible with Hide unused pools.
+In dual view, pools and containers have comparison Total and Selected Projects
+demand rows beneath their active rows, respecting the corresponding display toggles.
+Alternative-only pools remain visible with Hide unused pools.
 Python resolves assignment periods against each alternative schedule and reuses
-project/task demand deduplication; container rows sum their descendant pools.
+project/task demand deduplication. Displayed alternatives replace their projects'
+active allocations; all other projects retain active allocations. Status exclusions
+apply to both plans, and Selected Projects additionally applies the portfolio
+selection. Container rows sum their descendant pools.
 These rows retain the resource context menu with every action disabled. Closing
 comparison removes the alternative consumption rows without altering active demand.
+
+Task and project bar context menus inspect the clicked lane. Active bars never
+inherit alternative constraint warnings or editing actions; alternative bars retain
+their scenario-owned diagnostics. Project exports also follow the clicked lane.

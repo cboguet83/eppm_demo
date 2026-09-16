@@ -99,7 +99,7 @@ def test_alternative_tooltips_project_dependencies_tags_and_csv_reuse_shared_pan
             frame.locator('#ctx-import-csv').click()
             expect(page.get_by_role('dialog')).to_contain_text('Schedule CSV')
             page.locator('input[type=file]').set_input_files(dict(name='replacement.csv', mimeType='text/csv',
-                buffer=b'step_number,task_name,start_date,end_date\n1,Imported scenario,09/01/2027,09/01/2027\n'))
+                buffer=b'step_number,task_name,start_date,end_date\n1,Imported scenario,9/20/2025,10/1/2026\n'))
             expect(page.get_by_role('button', name='Import plan revision', exact=True)).to_be_disabled()
             page.get_by_role('textbox', name='Version name', exact=True).fill('CSV revision')
             page.get_by_role('textbox', name='Version name', exact=True).press('Tab')
@@ -114,5 +114,8 @@ def test_alternative_tooltips_project_dependencies_tags_and_csv_reuse_shared_pan
             assert saved[alternative.id].tasks[0]['task_name'] == 'Alternative build'
             with psycopg.connect(authorized.setup.operator_url) as connection:
                 assert connection.execute("SELECT name,s.code FROM eppm.project_plan p JOIN eppm.plan_status s ON s.id=p.status_id WHERE p.project_id=1 AND p.name='CSV revision' AND NOT is_current").fetchone() == ('CSV revision', 'draft')
+                imported_id = connection.execute("SELECT id FROM eppm.project_plan WHERE project_id=1 AND name='CSV revision'").fetchone()[0]
+                imported = read_plans(connection, [imported_id])[imported_id].tasks[0]
+                assert (imported['start_date'], imported['end_date']) == ('2025-09-20', '2026-10-01')
         finally:
             browser.close()

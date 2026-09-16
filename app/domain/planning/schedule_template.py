@@ -109,6 +109,22 @@ def _parse_step(row: dict[str, str], line: int, date_format: str) -> TemplateSte
         raise ValueError(f"Row {line}: {exc}") from exc
 
 
+def _detected_date_format(rows: list[dict[str, str]], fallback: str) -> str:
+    """Infer slash-date order from values above twelve; ambiguous files use the selector."""
+    detected = set()
+    for row in rows:
+        for column in ('start_date', 'end_date'):
+            parts = (row.get(column) or '').strip().split('/')
+            if len(parts) != 3 or not all(part.isdigit() for part in parts):
+                continue
+            first, second = int(parts[0]), int(parts[1])
+            if 12 < first <= 31 and 1 <= second <= 12:
+                detected.add('DD/MM/YYYY')
+            if 12 < second <= 31 and 1 <= first <= 12:
+                detected.add('MM/DD/YYYY')
+    return next(iter(detected)) if len(detected) == 1 else fallback
+
+
 def parse_template(content: str, *, date_format: str = "YYYY-MM-DD") -> list[TemplateStep]:
     """Validate every cell and local reference before any database writes."""
     if date_format not in {"YYYY-MM-DD", "DD/MM/YYYY", "MM/DD/YYYY"}:
@@ -122,8 +138,10 @@ def parse_template(content: str, *, date_format: str = "YYYY-MM-DD") -> list[Tem
         allowed = required | {"phase", "description", "progress_pct", "preceding_step", "dependency_type", "dependency_lag"}
         if len(fields) != len(set(fields)) or set(fields) - allowed:
             raise ValueError("Duplicate or unsupported columns in the project template.")
+        rows = list(reader)
+        date_format = _detected_date_format(rows, date_format)
         steps = []
-        for line, row in enumerate(reader, 2):
+        for line, row in enumerate(rows, 2):
             if None in row or any(value is None for value in row.values()):
                 raise ValueError(f"Row {line}: Column count does not match the header.")
             steps.append(_parse_step(row, line, date_format))

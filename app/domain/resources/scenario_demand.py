@@ -30,3 +30,33 @@ def scenario_pool_demand(contents: dict[int, PlanContent]) -> dict[int, dict[str
                 task_id=assignment.task_id, task_name='', fte_assigned=assignment.fte_assigned,
                 start_date=first, end_date=last, is_custom_period=bool(assignment.start_date), notes=''))
     return {identity: demand_timeline(rows) for identity, rows in pools.items()}
+
+
+def comparison_pool_demand(
+    active_assignments: dict[int, list[CapacityAssignment]],
+    alternatives: dict[int, PlanContent],
+    selected_projects: set[int],
+    included_projects: set[int],
+) -> dict[int, dict[str, dict[str, float]]]:
+    """Substitute displayed alternatives while preserving selection and status scope.
+
+    Each project's active allocations are removed before its alternative is added,
+    including when the alternative no longer allocates a previously used pool.
+    """
+    replacements = {pid: content for pid, content in alternatives.items() if pid in included_projects}
+    total_alternative = scenario_pool_demand(replacements)
+    selected_alternative = scenario_pool_demand({pid: content for pid, content in replacements.items()
+                                                if pid in selected_projects})
+    result = {}
+    for pool_id in active_assignments.keys() | total_alternative.keys():
+        retained = [row for row in active_assignments.get(pool_id, [])
+                    if row['project_id'] in included_projects and row['project_id'] not in replacements]
+        series = {}
+        for scope, projects, alternative in [('total', None, total_alternative),
+                                              ('selected', selected_projects, selected_alternative)]:
+            usage = demand_timeline(retained, projects)
+            for day, amount in alternative.get(pool_id, {}).items():
+                usage[day] = round(usage.get(day, 0) + amount, 3)
+            series[scope] = usage
+        result[pool_id] = series
+    return result

@@ -1568,7 +1568,8 @@ def _render_planning_chart(
     pool_details_cache = snapshot["details"]
     permissions = workspace.projects.projects.permissions()
     args["task_revision"] = planning_revision_token(snapshot["revision"])
-    args.update(scenario_payload(workspace, list(ids)))
+    args.update(scenario_payload(workspace, list(ids), pool_details=pool_details_cache,
+                                 status_project_ids=list(status_project_ids)))
     show_baseline = bool(st.session_state.get('planning_show_baseline', False))
     args['show_baseline'] = show_baseline
     args['baseline_tasks'] = workspace.plans.baseline_tasks(list(ids)) if show_baseline and workspace.plans else {}
@@ -2126,6 +2127,8 @@ def _schedule_csv_dialog(workspace: PlanningWorkspace, project_id: int, action: 
         )),
     )
     steps = parse_template(content, date_format=date_format)
+    st.caption("Date order is detected from unambiguous dates (for example 9/20/2025). "
+               "If all dates are ambiguous, the selected format is used. The preview shows the resolved dates.")
     steps_payload = list(csv.DictReader(io.StringIO(content.lstrip("\ufeff"))))
     for row, step in zip(steps_payload, steps, strict=True):
         row["start_date"] = step.values["start_date"]

@@ -1882,7 +1882,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         <button class="context-menu-item" onclick="activateAlternativeScenario()"><span id="ctx-activate-alternative">Set alternative as active scenario</span></button>
       </div>
     </div>
-    <div class="context-menu-item warning" id="ctx-proj-violation-btn" onclick="openProjectDiagModal()" style="display:none;">
+    <div class="context-menu-item warning" id="ctx-proj-violation-btn" onclick="openProjectDiagModal(selectedContextMenuProjectId, selectedContextMenuProjectAlternative)" style="display:none;">
       <span>⚠️</span>
       <span id="ctx-proj-violation-label">View Project Violations</span>
     </div>
@@ -2434,7 +2434,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         : showTaskHoverTooltip(event, scenarioTask({project_id:projectId, alternativeTask:task})));
       bar.addEventListener('mousemove', moveTooltip);
       bar.addEventListener('mouseleave', hideTooltip);
-      bar.addEventListener('contextmenu', event => summary ? showProjectContextMenu(event, projectId)
+      bar.addEventListener('contextmenu', event => summary ? showProjectContextMenu(event, projectId, true)
         : showContextMenu(event, scenarioTask({id:task.id, project_id:projectId, alternativeTask:task})));
       if (!summary) {
         bar.addEventListener('dblclick', () => {
@@ -3796,6 +3796,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     }
 
     let selectedContextMenuProjectId = null;
+    let selectedContextMenuProjectAlternative = false;
 
     function projectDependencyIssues(projectId, alternative = false) {
       if (alternative) return (alternatives[String(projectId)]?.dependencies || [])
@@ -3804,7 +3805,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       return (summary?.projectDependencies || []).filter(d => d.is_violated || !d.is_evaluable);
     }
 
-    function showProjectContextMenu(e, projectId) {
+    function showProjectContextMenu(e, projectId, useAlternative = Boolean(alternatives[String(projectId)])) {
       if (e) {
         e.preventDefault();
         e.stopPropagation();
@@ -3814,6 +3815,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       hideTooltip();
 
       selectedContextMenuProjectId = projectId;
+      selectedContextMenuProjectAlternative = useAlternative;
       selectedContextMenuTask = null;
       setMenuActionsVisible(['ctx-create-alternative'], editEnabled && canLogProject(projectId));
       setMenuActionsVisible(['ctx-hide-alternative'], comparingScenario());
@@ -3822,7 +3824,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       setMenuActionsVisible(['ctx-project-baseline'], canBaselineProject(projectId));
       setMenuActionsVisible(['ctx-delete-baseline'], canBaselineProject(projectId) && baselineProjectIds.has(String(projectId)));
       setMenuActionsVisible(['ctx-project-add-step', 'ctx-import-csv', 'ctx-label-project-tags',
-        'ctx-label-project-pools', 'ctx-project-dependencies', 'ctx-project-log-event'], canEditProject(projectId));
+        'ctx-label-project-pools', 'ctx-project-dependencies', 'ctx-project-log-event'], canEditProject(projectId) && (!comparingScenario() || useAlternative));
       setMenuActionsVisible(['ctx-project-log-event'], canLogProject(projectId));
       setMenuActionsVisible(['ctx-import-csv'], canImportProject(projectId));
       const menu = document.getElementById('project-context-menu');
@@ -3831,7 +3833,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       // Check for project violations
       const violBtn = document.getElementById('ctx-proj-violation-btn');
       const violLabel = document.getElementById('ctx-proj-violation-label');
-      const alternative = alternatives[String(projectId)];
+      const alternative = useAlternative ? alternatives[String(projectId)] : null;
       const projTasks = alternative ? alternative.tasks : tasksData.filter(t => String(t.project_id || currentProjectId) === String(projectId));
       let totalViols = projectDependencyIssues(projectId, Boolean(alternative)).length;
       projTasks.forEach(t => {
@@ -4478,7 +4480,8 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       if (!selectedContextMenuProjectId) return;
       if (action !== 'export_csv_template' && !(action === 'import_csv_template'
           ? canImportProject(selectedContextMenuProjectId) : canEditProject(selectedContextMenuProjectId))) return;
-      if (action !== 'manage_project_tags' && alternativeAction(action, selectedContextMenuProjectId)) return;
+      if (action !== 'manage_project_tags' && (selectedContextMenuProjectAlternative || action === 'import_csv_template') &&
+          alternativeAction(action, selectedContextMenuProjectId)) return;
 
       Streamlit.setComponentValue({
         action,
@@ -5025,7 +5028,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       const startStr = el.dataset.startDate || '';
       const endStr = el.dataset.endDate || '';
       const pool = getResourcePoolById(el.dataset.poolId);
-      const usage = el.dataset.scope === 'alternative' ? pool?.alternative_daily_usage
+      const usage = el.dataset.scope?.startsWith('alternative') ? pool?.[el.dataset.scope + '_daily_usage']
         : el.dataset.scope === 'selected' ? pool?.selected_projects_daily_usage : pool?.daily_usage;
       const status = pool ? getDemandCapacityStatusForPeriod(usage,
         Number(pool.displayed_assigned_capacity ?? pool.theoretical_capacity ?? pool.capacity ?? 0),
@@ -5078,7 +5081,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       }
 
       menu.querySelectorAll('.context-menu-item').forEach(item => {
-        const disabled = allocationScope === 'alternative';
+        const disabled = allocationScope.startsWith('alternative');
         item.setAttribute('aria-disabled', String(disabled));
         item.style.pointerEvents = disabled ? 'none' : '';
         item.style.opacity = disabled ? '.45' : '';
@@ -5109,7 +5112,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
 
     function triggerGoToResourcePoolDetails(action = "go_to_pool_details") {
       hideResourceCellContextMenu();
-      if (!selectedResourceCellCtx || selectedResourceCellCtx.allocation_scope === 'alternative') return;
+      if (!selectedResourceCellCtx || selectedResourceCellCtx.allocation_scope?.startsWith('alternative')) return;
       if (action === 'go_to_pool_details' && !canManageSharedData) return;
       Streamlit.setComponentValue({
         action,
@@ -5125,7 +5128,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
 
     function triggerFilterResourcePool(clearOther, scope = 'this') {
       hideResourceCellContextMenu();
-      if (!selectedResourceCellCtx || selectedResourceCellCtx.allocation_scope === 'alternative') return;
+      if (!selectedResourceCellCtx || selectedResourceCellCtx.allocation_scope?.startsWith('alternative')) return;
       Streamlit.setComponentValue({
         action: "filter_by_resource_pool",
         filter_scope: scope,
@@ -5147,7 +5150,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     }
 
     function triggerClearResourcePoolFilter(e) {
-      if (selectedResourceCellCtx?.allocation_scope === 'alternative' && e?.target.closest('#resource-cell-context-menu')) return;
+      if (selectedResourceCellCtx?.allocation_scope?.startsWith('alternative') && e?.target.closest('#resource-cell-context-menu')) return;
       if (e) {
         e.stopPropagation();
         e.preventDefault();
@@ -5193,10 +5196,11 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     let onlyOverallocatedPools = false;
 
     function isResourcePoolVisible(pool) {
-      const alternative = comparingScenario() ? alternativePoolUsage[String(pool.id)] : null;
+      const comparison = comparingScenario() ? alternativePoolUsage[String(pool.id)] : null;
+      const alternative = comparison?.selected;
       const used = pool.used_by_selected_projects || (alternative && Object.keys(alternative).length);
       return (!hideUnusedPools || used) && (!onlyOverallocatedPools ||
-        [pool.daily_usage, alternative || {}].some(usage => getDemandCapacityStatusForPeriod(
+        [pool.daily_usage, comparison?.total || {}, alternative || {}].some(usage => getDemandCapacityStatusForPeriod(
           usage, pool.displayed_assigned_capacity ?? pool.capacity ?? 0,
           pool.daily_assigned_capacity || {}, formatDate(timelineStart), formatDate(timelineEnd)
         ).isOverallocated));
@@ -5268,13 +5272,19 @@ button:not(.context-menu-item):disabled {opacity:.5;}
 
       hierarchy.forEach(node => visit(node, 0));
       if (!comparingScenario()) return rows;
-      return rows.flatMap((row, index) => {
-        if (rows[index + 1]?.nodeKey === row.nodeKey) return [row];
-        const usage = row.rowType === 'group_total'
-          ? aggregatePoolUsage(row.node.descendant_pool_ids || [], 'alternative_daily_usage')
-          : alternativePoolUsage[String(row.pool.id)];
-        if (!usage || !Object.keys(usage).length) return [row];
-        return [row, {...row, rowType:row.rowType === 'group_total' ? 'group_total' : 'alternative_demand', alternative:true, usage}];
+      return rows.flatMap(row => {
+        if (row.rowType === 'pool_assigned') return [row];
+        const scopes = row.rowType === 'group_total'
+          ? [...(showTotalRows ? ['total'] : []), ...(showSelectedRows ? ['selected'] : [])]
+          : [row.rowType === 'pool_selected' ? 'selected' : 'total'];
+        const comparisonRows = scopes.map(scope => {
+          const usage = row.rowType === 'group_total'
+            ? aggregatePoolUsage(row.node.descendant_pool_ids || [], `alternative_${scope}_daily_usage`)
+            : alternativePoolUsage[String(row.pool.id)]?.[scope] || {};
+          return {...row, rowType:row.rowType === 'group_total' ? 'group_total' : 'alternative_demand',
+            alternative:true, comparisonScope:scope, usage};
+        });
+        return [row, ...comparisonRows];
       });
     }
 
@@ -5284,7 +5294,8 @@ button:not(.context-menu-item):disabled {opacity:.5;}
 
     function renderResourceGrid(topCells, bottomCells) {
       resourcePoolIndex = new Map((resourcePoolsData || []).map(pool => [Number(pool.id),
-        {...pool, alternative_daily_usage:alternativePoolUsage[String(pool.id)] || {}}]));
+        {...pool, alternative_total_daily_usage:alternativePoolUsage[String(pool.id)]?.total || {},
+          alternative_selected_daily_usage:alternativePoolUsage[String(pool.id)]?.selected || {}}]));
       if (topCells) {
         lastRenderedTopCells = topCells;
       } else {
@@ -5512,12 +5523,12 @@ button:not(.context-menu-item):disabled {opacity:.5;}
           const pool = row.pool;
           const label = escapeHtml(pool.name);
           leftHtml += `<div class="resource-left-row alternative-resource-row sub-row"
-            data-row-id="${escapeHtml(row.nodeKey)}-alternative" data-pool-id="${pool.id}"
-            data-pool-name="${label}" data-scope="alternative" oncontextmenu="handlePoolRowContextMenu(event, this)">
+            data-row-id="${escapeHtml(row.nodeKey)}-alternative-${row.comparisonScope}" data-pool-id="${pool.id}"
+            data-pool-name="${label}" data-scope="alternative_${row.comparisonScope}" oncontextmenu="handlePoolRowContextMenu(event, this)">
             <div class="resource-pool-name" style="padding-left:${indent}px;color:#9333ea">
-              <span class="r-name-text">${label}</span><span class="r-badge">Alternative scenario</span>
+              <span class="r-name-text">${label}</span><span class="r-badge">Alternative ${row.comparisonScope === 'selected' ? 'Selected Projects' : 'Total Assignments'}</span>
             </div></div>`;
-          const cells = renderDemandCells(pool, row.usage, 'alternative');
+          const cells = renderDemandCells(pool, row.usage, 'alternative_' + row.comparisonScope);
           rightHtml += `<div class="resource-right-row alternative-resource-row sub-row"
             style="width:${totalTimelineWidth}px;box-sizing:border-box;padding-left:${columnLeft}px;">${cells}</div>`;
           return;
@@ -5531,10 +5542,10 @@ button:not(.context-menu-item):disabled {opacity:.5;}
           });
           const groupUsage = row.alternative ? row.usage : aggregatePoolUsage(descendantIds, 'daily_usage');
           leftHtml += `
-            <div class="resource-left-row resource-group-row ${row.alternative ? 'alternative-resource-row' : ''}" data-scope="${row.alternative ? 'alternative' : 'total'}"
+            <div class="resource-left-row resource-group-row ${row.alternative ? 'alternative-resource-row' : ''}" data-scope="${row.alternative ? 'alternative_' + row.comparisonScope : 'total'}"
                  data-group-id="${Number(group.group_id)}" data-group-name="${escapeHtml(group.name)}"
                  oncontextmenu="handleGroupContextMenu(event)"
-                 data-row-id="${escapeHtml(row.nodeKey)}${row.alternative ? '-alternative' : ''}"
+                 data-row-id="${escapeHtml(row.nodeKey)}${row.alternative ? '-alternative-' + row.comparisonScope : ''}"
                  title="${escapeHtml(groupAssignmentDetails(group, group.descendant_pool_ids || [], formatDate(timelineStart), formatDate(timelineEnd)))}">
               <div class="resource-pool-name" style="padding-left:${indent}px;">
                 <button class="resource-tree-toggle" type="button"
@@ -5542,7 +5553,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
                         onclick="toggleResourceNode('${row.nodeKey}')">${toggle}</button>
                 <span class="resource-tree-icon">📁</span>
                 <span class="r-name-text">${escapeHtml(group.name)}</span>
-                <span class="r-badge group-badge">${row.alternative ? 'Alternative scenario' : 'Group total'}</span>
+                <span class="r-badge group-badge">${row.alternative ? (row.comparisonScope === 'selected' ? 'Alternative Selected Projects' : 'Alternative Total Assignments') : 'Group total'}</span>
               </div>
             </div>
           `;
@@ -5552,7 +5563,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
             const demand = getMaxDemandForPeriod(groupUsage, startStr, endStr);
             const isOver = descendantIds.some(poolId => {
               const childPool = getResourcePoolById(poolId);
-              return childPool && (row.alternative ? getDemandCapacityStatusForPeriod(childPool.alternative_daily_usage,
+              return childPool && (row.alternative ? getDemandCapacityStatusForPeriod(childPool['alternative_' + row.comparisonScope + '_daily_usage'],
                 childPool.displayed_assigned_capacity ?? childPool.capacity ?? 0, childPool.daily_assigned_capacity, startStr, endStr).isOverallocated
                 : isDisplayedPoolPeriodOverallocated(childPool, startStr, endStr));
             });
@@ -5561,7 +5572,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
               : 'cell-empty';
             return `<div class="resource-demand-cell ${cellClass} resource-group-cell"
                          data-group-id="${Number(group.group_id)}" data-group-name="${escapeHtml(group.name)}"
-                         data-start="${startStr}" data-end="${endStr}" data-scope="${row.alternative ? 'alternative' : 'total'}" oncontextmenu="handleGroupContextMenu(event)"
+                         data-start="${startStr}" data-end="${endStr}" data-scope="${row.alternative ? 'alternative_' + row.comparisonScope : 'total'}" oncontextmenu="handleGroupContextMenu(event)"
                          style="width:${c.width}px;"
                          title="${escapeHtml(groupAssignmentDetails(group, group.descendant_pool_ids || [], startStr, endStr))}">
                       ${demand > 0 ? formatResourceValue(demand) : '—'}
@@ -6446,7 +6457,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
             rowEl.onmouseenter = (e) => showProjectHoverTooltip(e, item.project_id);
             rowEl.onmousemove = (e) => moveTooltip(e);
             rowEl.onmouseleave = () => hideTooltip();
-            rowEl.oncontextmenu = (e) => showProjectContextMenu(e, item.project_id);
+            rowEl.oncontextmenu = (e) => showProjectContextMenu(e, item.project_id, false);
 
             const projectBaseline = baselineTasks[String(item.project_id)] || [];
             const projectAlternative = alternatives[String(item.project_id)]?.tasks || [];
@@ -6512,7 +6523,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
                 ${hasViol ? `<div class="violation-warning-badge">⚠️</div>` : ''}
                 <div class="milestone-diamond-shape" title="Milestone: ${escapeHtml(t.name)}"></div>
               `;
-              mWrapper.oncontextmenu = (e) => showContextMenu(e, t);
+              mWrapper.oncontextmenu = (e) => showContextMenu(e, t, false);
               mWrapper.ondblclick = () => openEditModalById(t.id);
               mWrapper.onmouseenter = (e) => showTaskHoverTooltip(e, t);
               mWrapper.onmousemove = (e) => moveTooltip(e);
@@ -6532,7 +6543,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
                 </div>
                 <div class="resize-handle right"></div>
               `;
-              bWrapper.oncontextmenu = (e) => showContextMenu(e, t);
+              bWrapper.oncontextmenu = (e) => showContextMenu(e, t, false);
               bWrapper.ondblclick = () => openEditModalById(t.id);
               bWrapper.onmouseenter = (e) => showTaskHoverTooltip(e, t);
               bWrapper.onmousemove = (e) => moveTooltip(e);

@@ -18,11 +18,14 @@ def test_alternative_only_pool_and_container_demand_are_separate(authorized, tmp
     plans = service(authorized, 4)
     active = plans.initialize(1)
     with psycopg.connect(authorized.setup.operator_url) as connection:
-        connection.execute("UPDATE eppm.project SET status='In Progress'")
+        connection.execute("UPDATE eppm.project SET status='In Progress' WHERE id IN (1,2)")
         connection.execute("INSERT INTO eppm.project_task(project_plan_id,project_id,task_name,start_date,end_date) VALUES(%s,1,'Task','2027-01-01','2027-01-05')", (active.id,))
         connection.execute("INSERT INTO eppm.resource_pool(id,name,capacity_fte) VALUES(1,'Active pool',4),(2,'Alternative pool',4),(3,'Container',0)")
         connection.execute('UPDATE eppm.resource_pool SET parent_pool_id=3 WHERE id=2')
         connection.execute('INSERT INTO eppm.resource_pool_assignment(project_plan_id,project_id,pool_id,fte_assigned) VALUES(%s,1,1,1)', (active.id,))
+        connection.execute('''INSERT INTO eppm.resource_pool_assignment(project_plan_id,project_id,pool_id,fte_assigned,start_date,end_date)
+            SELECT id,project_id,2,CASE WHEN project_id=2 THEN 1 ELSE 100 END,'2027-01-01','2027-01-05'
+            FROM eppm.project_plan WHERE is_current AND project_id IN (2,3)''')
     active = plans.list_plans(1)[0]
     content = deepcopy(active.content)
     content.assignments = [PoolAssignment(2, 1, 2.5, task_id=content.tasks[0]['id'])]
@@ -36,9 +39,10 @@ def test_alternative_only_pool_and_container_demand_are_separate(authorized, tmp
             api.expect(frame.locator('#frozen-row-proj-1')).to_be_visible(timeout=40000)
             display_alternative(page, frame)
             rows = frame.locator('#resource-left-body .alternative-resource-row')
-            api.expect(rows).to_have_count(2)
-            api.expect(rows.last).to_contain_text('Alternative pool')
-            cells = frame.locator('.alternative-resource-row [data-pool-id="2"][data-demand="2.5"]')
+            api.expect(rows).to_have_count(6)
+            api.expect(rows.filter(has_text='Alternative pool')).to_have_count(2)
+            api.expect(frame.locator('[data-pool-id="2"][data-scope="alternative_total"][data-demand="3.5"]').first).to_be_visible()
+            cells = frame.locator('[data-pool-id="2"][data-scope="alternative_selected"][data-demand="2.5"]')
             api.expect(cells.first).to_be_visible()
             active_cells = frame.locator('[data-pool-id="1"][data-scope="total"][data-demand="1"]')
             api.expect(active_cells.first).to_be_visible()
