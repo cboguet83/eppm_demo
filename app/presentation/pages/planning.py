@@ -2080,7 +2080,9 @@ def _pool_allocations_dialog(pool_id: int, workspace: PlanningWorkspace, group_i
 def _schedule_csv_dialog(workspace: PlanningWorkspace, project_id: int, action: str,
                          alternative_event: dict | None = None) -> None:
     """Load exports or validate an import only after its menu is invoked."""
-    if not workspace.projects.projects.permissions().allows(Permission.EDIT, project_id):
+    permissions = workspace.projects.projects.permissions()
+    if not (permissions.allows(Permission.EDIT, project_id)
+            or permissions.allows(Permission.APPROVE, project_id)):
         st.info(t("access.read_only", default="You have read-only access to this project."))
         return
     project = workspace.projects.projects.get_project_by_id(project_id)
@@ -2094,16 +2096,14 @@ def _schedule_csv_dialog(workspace: PlanningWorkspace, project_id: int, action: 
     plan = selected_plan(alternative_event, workspace) if alternative_event else None
     if plan:
         st.caption(plan.name)
-    with st.container(key="schedule_import_warning"):
-        st.html('<style>.st-key-schedule_import_warning [data-testid="stAlert"], '
-                '.st-key-schedule_import_warning [data-testid="stAlertContainer"] '
-                '{background-color:#ffedd5;color:#9a3412;border:1px solid #fb923c;}</style>')
-        st.warning(t("planning.csv_replace_warning", default=(
-            "Importing replaces this project's entire schedule. All existing tasks, dependency links "
-            "(including links to other projects), and project/task resource allocations will be deleted. "
-            "Project fields and useful web links are retained. Nothing is deleted until the template "
-            "passes validation and you click Replace project schedule."
-        )), icon="⚠️")
+    st.info("Import creates a new plan revision. Existing revisions are retained.")
+    version_name = st.text_input("Version name", key=f"import_version_name_{project_id}")
+    privileged = permissions.allows(Permission.SHARED) or permissions.allows(Permission.APPROVE, project_id)
+    status = (st.selectbox("Revision status", ["draft", "proposed", "approved", "rejected"],
+                          format_func=str.title) if privileged else "draft")
+    if not privileged:
+        st.caption("Revision status: Draft")
+    make_active = st.checkbox("Set import as the active plan", value=True)
     st.caption(t("planning.csv_dependency_help", default=(
         "Use preceding_step, dependency_type and dependency_lag. For multiple predecessors, "
         "separate each column's values with semicolons in matching order (1;2 / FS;SS / 0;2). "
@@ -2124,19 +2124,17 @@ def _schedule_csv_dialog(workspace: PlanningWorkspace, project_id: int, action: 
             "The preview shows the dates that will be saved."
         )),
     )
-    steps = (parse_template(content, date_format=date_format) if plan
-             else workspace.planning.validate_project_template(project_id, content, date_format=date_format))
+    steps = parse_template(content, date_format=date_format)
     steps_payload = list(csv.DictReader(io.StringIO(content.lstrip("\ufeff"))))
     for row, step in zip(steps_payload, steps, strict=True):
         row["start_date"] = step.values["start_date"]
         row["end_date"] = step.values["end_date"]
     st.dataframe(pd.DataFrame(steps_payload), width="stretch", hide_index=True)
-    if st.button(t("planning.csv_replace_button", default="Replace project schedule"), type="primary"):
-        if plan:
-            selected_plan(alternative_event, workspace)
-            workspace.plans.update_alternative(project_id, plan.id, plan.revision, template_content(steps))
-            count = len(steps)
-        else:
-            count = workspace.planning.replace_project_template(project_id, content, date_format=date_format)
-        st.toast(t("planning.csv_import_success", count=count, project_id=project_id))
+    if st.button("Import plan revision", type="primary", disabled=not version_name.strip()):
+        workspace.plans.import_revision(project_id, version_name, template_content(steps),
+                                        status=status, active=make_active)
+        if make_active:
+            from app.presentation.pages.planning_scenarios import close_alternative_view
+            close_alternative_view()
+        st.toast(f"Imported {len(steps)} tasks as a new plan revision.")
         st.rerun()

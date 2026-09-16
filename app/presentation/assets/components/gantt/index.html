@@ -1871,6 +1871,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       <div class="context-menu context-submenu">
         <button class="context-menu-item" onclick="setCurrentProjectBaseline()"><span id="ctx-project-baseline">Set current project plan as baseline</span></button>
         <button class="context-menu-item" onclick="createAlternativeScenario()"><span id="ctx-create-alternative">Create alternative scenario</span></button>
+        <button class="context-menu-item" onclick="toggleBaseline(!showBaseline)"><span id="ctx-show-baseline">Show baseline</span></button>
         <button class="context-menu-item danger" onclick="deleteProjectBaseline()"><span id="ctx-delete-baseline">Delete baseline</span></button>
         <button class="context-menu-item" onclick="chooseAlternativeScenario()">Display an alternative scenario</button>
         <button class="context-menu-item" onclick="hideAlternativeScenarios()"><span id="ctx-hide-alternative">Disable alternative scenario visualization</span></button>
@@ -2116,9 +2117,6 @@ button:not(.context-menu-item):disabled {opacity:.5;}
           📁 <span id="badge-projects-count-text">0 Projects</span>
         </div>
         <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;white-space:nowrap;">
-          <input type="checkbox" id="show-baseline" onchange="toggleBaseline(this.checked)">Show baseline
-        </label>
-        <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;white-space:nowrap;">
           <input type="checkbox" id="enable-edit" onchange="toggleEdit(this.checked)">Enable edit mode
         </label>
       </div>
@@ -2358,7 +2356,9 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     }
 
     function toggleBaseline(enabled) {
+      hideProjectContextMenu();
       showBaseline = enabled;
+      document.getElementById('ctx-show-baseline').textContent = enabled ? 'Hide baseline' : 'Show baseline';
       if (enabled) alternatives = {};
       document.body.classList.toggle('compare-scenario', comparingScenario());
       document.body.classList.toggle('show-baseline', enabled);
@@ -2488,7 +2488,8 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     function alternativeAction(operation, projectId, task=null, values={}) {
       if (!comparingScenario()) return false;
       const plan = alternatives[String(projectId)];
-      if (!plan || (operation !== 'export_csv_template' && !canEditProject(projectId))) return true;
+      if (!plan || (operation !== 'export_csv_template' &&
+          !(operation === 'import_csv_template' ? canImportProject(projectId) : canEditProject(projectId)))) return true;
       hideContextMenu(); hideProjectContextMenu(); hideDepContextMenu();
       Streamlit.setComponentValue({action:'alternative_action', operation, project_id:projectId,
         plan_id:plan.id, revision:plan.revision, ...(task ? {id:task.id} : {}),
@@ -3530,7 +3531,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       document.getElementById('diag-backdrop').style.display = 'flex';
     }
 
-    function openProjectDiagModal(projectId) {
+    function openProjectDiagModal(projectId, alternative = Boolean(alternatives[String(projectId || selectedContextMenuProjectId)])) {
       hideContextMenu();
       hideProjectContextMenu();
       hideDepContextMenu();
@@ -3538,14 +3539,17 @@ button:not(.context-menu-item):disabled {opacity:.5;}
 
       const targetPId = projectId || selectedContextMenuProjectId;
       if (!targetPId) return;
-      if (lazyProjects && !loadedProjectIds.has(String(targetPId))) {
+      if (!alternative && lazyProjects && !loadedProjectIds.has(String(targetPId))) {
         planningPendingDiagnostics = String(targetPId);
         planningForcedProjects.add(String(targetPId));
         if (renderedRowWindow) scheduleProjectLoads(renderedRowWindow.start, renderedRowWindow.end);
         return;
       }
 
-      const projTasks = tasksData.filter(t => String(t.project_id || currentProjectId) === String(targetPId));
+      const plan = alternative ? alternatives[String(targetPId)] : null;
+      const allowFix = canEditProject(targetPId) && (!comparingScenario() || alternative);
+      const projTasks = plan ? plan.tasks.map(task => scenarioTask({project_id:targetPId, alternativeTask:task}))
+        : tasksData.filter(t => String(t.project_id || currentProjectId) === String(targetPId));
       const violsList = [];
       projTasks.forEach(t => {
         if (t.violations && t.violations.length > 0) {
@@ -3580,7 +3584,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
             <div class="violation-card" style="margin-bottom:10px; background:#fff1f2; border:1px solid #fecdd3; border-left:4px solid #ef4444; border-radius:6px; padding:8px 10px;">
               <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
                 <span style="font-weight:700; color:#0f172a; font-size:12px;">📋 Step: ${escapeHtml(item.taskName)} <span style="color:#64748b;">(#${item.taskId})</span></span>
-                ${canEditProject(targetPId) ? `<button class="btn-mode" onclick="closeDiagModal(); openEditModalById('${item.taskId}');" style="font-size:11px; padding:2px 8px; background:#ffffff; border:1px solid #cbd5e1; border-radius:4px; cursor:pointer;">✏️ Fix</button>` : ''}
+                ${allowFix ? `<button class="btn-mode" onclick="editDiagnosticTask('${targetPId}', '${item.taskId}', ${alternative});" style="font-size:11px; padding:2px 8px; background:#ffffff; border:1px solid #cbd5e1; border-radius:4px; cursor:pointer;">✏️ Fix</button>` : ''}
               </div>
               <div style="color:#991b1b; font-size:11px; line-height:1.4;">
                 ${escapeHtml(item.violation)}
@@ -3592,18 +3596,17 @@ button:not(.context-menu-item):disabled {opacity:.5;}
 
       const fixBtn = document.querySelector('#diag-backdrop .modal-footer .btn-save');
       if (fixBtn) {
-        if (violsList.length > 0 && canEditProject(targetPId)) {
+        if (violsList.length > 0 && allowFix) {
           fixBtn.style.display = 'inline-block';
           fixBtn.onclick = function () {
-            closeDiagModal();
-            openEditModalById(violsList[0].taskId);
+            editDiagnosticTask(targetPId, violsList[0].taskId, alternative);
           };
         } else {
           fixBtn.style.display = 'none';
         }
       }
 
-      const projectIssues = projectDependencyIssues(targetPId);
+      const projectIssues = projectDependencyIssues(targetPId, alternative);
       if (projectIssues.length) {
         const block = document.createElement('div');
         const heading = document.createElement('strong');
@@ -3617,7 +3620,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         }
         if (!violsList.length) diagBody.replaceChildren();
         diagBody.prepend(block);
-        if (canEditProject(targetPId)) {
+        if (allowFix) {
           const button = document.createElement('button');
           button.className = 'btn-save';
           button.textContent = getT('context_menu.manage_dependencies', 'Manage dependencies');
@@ -3701,8 +3704,8 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     let modalAlternativeRevision = null;
     let addStepTargetProjectId = null;
 
-    function showContextMenu(e, task) {
-      task = scenarioTask(task);
+    function showContextMenu(e, task, useAlternative = true) {
+      if (useAlternative) task = scenarioTask(task);
       if (e) {
         e.preventDefault();
         e.stopPropagation();
@@ -3768,14 +3771,14 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       menu.style.top = `${posY}px`;
     }
 
-    function showContextMenuById(e, taskId) {
+    function showContextMenuById(e, taskId, useAlternative = true) {
       if (e) {
         e.preventDefault();
         e.stopPropagation();
       }
       const task = masterRenderItems.find(x=>String(x.task?.id)===String(taskId))?.task || (tasksData || []).find(x => String(x.id) === String(taskId));
       if (task) {
-        showContextMenu(e, task);
+        showContextMenu(e, task, useAlternative);
       }
     }
 
@@ -3789,7 +3792,9 @@ button:not(.context-menu-item):disabled {opacity:.5;}
 
     let selectedContextMenuProjectId = null;
 
-    function projectDependencyIssues(projectId) {
+    function projectDependencyIssues(projectId, alternative = false) {
+      if (alternative) return (alternatives[String(projectId)]?.dependencies || [])
+        .filter(d => d.task_id == null && (d.is_violated || !d.is_evaluable));
       const summary = projectSummariesData.find(p => String(p.id) === String(projectId));
       return (summary?.projectDependencies || []).filter(d => d.is_violated || !d.is_evaluable);
     }
@@ -3814,14 +3819,16 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       setMenuActionsVisible(['ctx-project-add-step', 'ctx-import-csv', 'ctx-label-project-tags',
         'ctx-label-project-pools', 'ctx-project-dependencies', 'ctx-project-log-event'], canEditProject(projectId));
       setMenuActionsVisible(['ctx-project-log-event'], canLogProject(projectId));
+      setMenuActionsVisible(['ctx-import-csv'], canImportProject(projectId));
       const menu = document.getElementById('project-context-menu');
       if (!menu) return;
 
       // Check for project violations
       const violBtn = document.getElementById('ctx-proj-violation-btn');
       const violLabel = document.getElementById('ctx-proj-violation-label');
-      const projTasks = tasksData.filter(t => String(t.project_id || currentProjectId) === String(projectId));
-      let totalViols = projectDependencyIssues(projectId).length;
+      const alternative = alternatives[String(projectId)];
+      const projTasks = alternative ? alternative.tasks : tasksData.filter(t => String(t.project_id || currentProjectId) === String(projectId));
+      let totalViols = projectDependencyIssues(projectId, Boolean(alternative)).length;
       projTasks.forEach(t => {
         if (t.violations && t.violations.length > 0) totalViols += t.violations.length;
       });
@@ -4448,10 +4455,24 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     }
 
 
+    function canImportProject(projectId) {
+      return editEnabled && (canEditProject(projectId) || baselineAll || approvableProjectIds.has(String(projectId)));
+    }
+
+    function editDiagnosticTask(projectId, taskId, alternative) {
+      closeDiagModal();
+      if (!alternative) return openEditModalById(taskId);
+      const task = alternatives[String(projectId)]?.tasks.find(row => String(row.stable_id) === String(taskId));
+      if (!task) return;
+      selectedContextMenuTask = scenarioTask({project_id:projectId, alternativeTask:task});
+      openEditModal();
+    }
+
     function triggerManageProjectTagsFromMenu(action = "manage_project_tags") {
       hideProjectContextMenu();
       if (!selectedContextMenuProjectId) return;
-      if (action !== 'export_csv_template' && !canEditProject(selectedContextMenuProjectId)) return;
+      if (action !== 'export_csv_template' && !(action === 'import_csv_template'
+          ? canImportProject(selectedContextMenuProjectId) : canEditProject(selectedContextMenuProjectId))) return;
       if (action !== 'manage_project_tags' && alternativeAction(action, selectedContextMenuProjectId)) return;
 
       Streamlit.setComponentValue({
@@ -6306,6 +6327,10 @@ button:not(.context-menu-item):disabled {opacity:.5;}
           const nameColW = Math.max(60, colWidths.name - 24);
           const cleanProjectName = item.project_name ? String(item.project_name).replace(/^[A-Za-z0-9_-]+\s*-\s*/, '') : '';
           const hasViol = Boolean(item.hasViolations);
+          const alternative = alternatives[String(item.project_id)];
+          const alternativeIssues = alternative?.tasks.some(task => task.violations?.length)
+            || projectDependencyIssues(item.project_id, true).length > 0;
+          const alternativeCount = alternative ? `<span class="alternative-project-count" title="Alternative scenario tasks" style="font-size:10px;padding:1px 6px;border-radius:10px;border:1px solid currentColor;flex-shrink:0;color:${alternative.new_scenario ? '#0284c7' : '#9333ea'};cursor:pointer" onclick="event.stopPropagation();openProjectDiagModal('${item.project_id}', true)">${alternativeIssues ? '⚠️ ' : ''}${alternative.tasks.length}</span>` : '';
           const badgeStyle = hasViol 
             ? 'background:#fee2e2; color:#dc2626; border:1px solid #ef4444; font-weight:700;' 
             : 'background:#e2e8f0; color:#475569; border:1px solid #cbd5e1;';
@@ -6322,7 +6347,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
                       onmouseenter="showProjectHoverTooltip(event, '${item.project_id}')"
                       onmousemove="moveTooltip(event)"
                       onmouseleave="hideTooltip()">${escapeHtml(cleanProjectName)}</span>
-                <span class="project-group-count" style="font-size:10px; padding:1px 6px; border-radius:10px; flex-shrink:0; cursor:${hasViol ? 'pointer' : 'default'}; ${badgeStyle}" ${hasViol ? `onclick="event.stopPropagation(); openProjectDiagModal('${item.project_id}');"` : ''}>${badgeIcon}${item.taskCount}</span>
+                <span class="project-group-count" title="Active scenario tasks" style="font-size:10px; padding:1px 6px; border-radius:10px; flex-shrink:0; cursor:${hasViol ? 'pointer' : 'default'}; ${badgeStyle}" ${hasViol ? `onclick="event.stopPropagation(); openProjectDiagModal('${item.project_id}', false);"` : ''}>${badgeIcon}${item.taskCount}</span>${alternativeCount}
               </div>
               <span class="task-date-cell" style="width:${colWidths.start}px; min-width:${colWidths.start}px; max-width:${colWidths.start}px; font-weight:600; color:#334155;">${formatMmmYy(item.start)}</span>
               <span class="task-date-cell" style="width:${colWidths.stop}px; min-width:${colWidths.stop}px; max-width:${colWidths.stop}px; font-weight:600; color:#334155;">${formatMmmYy(item.end)}</span>
@@ -6330,7 +6355,8 @@ button:not(.context-menu-item):disabled {opacity:.5;}
           `;
         } else if (item.task) {
           const t = item.task;
-          const hasViol = t.violations && t.violations.length > 0;
+          const hasViol = !t.alternativeOnly && t.violations?.length > 0;
+          const alternativeViol = scenarioTask(t).alternative && scenarioTask(t).violations?.length > 0;
           const hasDesc = Boolean(showDescriptions && t.description && t.description.trim());
           frozenHtml += `
             <div class="frozen-row ${item.isChild ? 'child-task-row' : ''} ${t.baselineOnly ? 'baseline-only' : ''} ${t.alternativeOnly ? 'alternative-only' : ''} ${t.alternativeTask && alternatives[String(t.project_id)]?.new_scenario ? 'new-scenario' : ''}" id="frozen-row-${t.id}"
@@ -6343,7 +6369,8 @@ button:not(.context-menu-item):disabled {opacity:.5;}
               <div class="task-name-col" style="width:${colWidths.name}px; min-width:${colWidths.name}px; max-width:${colWidths.name}px;">
                 <span class="task-title" style="width:100%;">
                   <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1;">${escapeHtml(t.name)}</span>
-                  ${hasViol ? `<span style="font-size:12px;cursor:pointer;margin-left:4px;flex-shrink:0;" onclick="showContextMenuById(event, '${t.id}')">⚠️</span>` : ''}
+                  ${hasViol ? `<span title="Active scenario constraint issues" style="font-size:12px;cursor:pointer;margin-left:4px;flex-shrink:0;" onclick="showContextMenuById(event, '${t.id}', false)">⚠️</span>` : ''}
+                  ${alternativeViol ? `<span title="Alternative scenario constraint issues" style="font-size:12px;cursor:pointer;margin-left:4px;flex-shrink:0;color:#9333ea;" onclick="showContextMenuById(event, '${t.id}')">⚠️</span>` : ''}
                 </span>
                 ${hasDesc ? `<span class="task-sub-desc">↳ ${escapeHtml(t.description)}</span>` : ''}
               </div>
@@ -7111,7 +7138,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         alternativeTaskChoices = args.alternative_task_choices || [];
         document.getElementById('enable-edit').checked = editEnabled;
         document.body.classList.toggle('compare-scenario', comparingScenario());
-        document.getElementById('show-baseline').checked = showBaseline;
+        document.getElementById('ctx-show-baseline').textContent = showBaseline ? 'Hide baseline' : 'Show baseline';
         document.body.classList.toggle('show-baseline', showBaseline);
         document.documentElement.style.setProperty('--row-height', rowHeight() + 'px');
         if ((args.filter_reset || 0) !== lastFilterReset) {

@@ -20,6 +20,33 @@ class ProjectPlanService:
         """Read accessible plan versions including archived history."""
         return self._gateway.run(lambda store: store.list_plans(project_id))
 
+    def import_revision(self, project_id: int, name: str, content: PlanContent,
+                        *, status: str = 'draft', active: bool = True) -> ProjectPlan:
+        """Create a named CSV revision and optionally activate it atomically.
+
+        Imports may become the working plan while still Draft. Only approvers
+        and business administrators may choose another non-deleted status.
+        """
+        def operation(store: PlanStore) -> ProjectPlan:
+            store.lock_project(project_id)
+            editor, approver, admin = store.permissions(project_id)
+            if not (editor or approver or admin):
+                raise AccessDenied()
+            if not name.strip():
+                raise ValueError('A version name is required.')
+            if status not in {'draft', 'proposed', 'approved', 'rejected'}:
+                raise ValueError('Choose a non-deleted revision status.')
+            if status != 'draft' and not (approver or admin):
+                raise AccessDenied('Only approvers and Business Admins may choose the import status.')
+            normalized = normalize_content(project_id, deepcopy(content))
+            store.validate_references(project_id, normalized)
+            normalized = store.reserve_identities(normalized)
+            saved = store.insert(project_id, name.strip(), status, None, normalized)
+            if active:
+                store.metadata(saved, 'current', 'true')
+            return next(plan for plan in store.list_plans(project_id) if plan.id == saved.id)
+        return self._gateway.run(operation, write=True)
+
     def baseline_tasks(self, project_ids: list[int]) -> dict[int, list[PlanTask]]:
         """Read only baseline task lanes for the visible portfolio selection."""
         return self._gateway.run(lambda store: store.baseline_tasks(project_ids))

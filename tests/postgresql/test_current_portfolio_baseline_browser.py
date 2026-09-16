@@ -35,8 +35,7 @@ def test_current_portfolio_drag_and_baseline_overlay(authorized, tmp_path):
             page.goto(server.origin)
             frame = page.frame_locator('iframe[title*="interactive_gantt"]')
             frame.get_by_role('checkbox', name='Enable edit mode', exact=True).check(timeout=40000)
-            checkbox = frame.get_by_role('checkbox', name='Show baseline', exact=True)
-            expect(checkbox).not_to_be_checked(timeout=40000)
+            expect(frame.get_by_role('checkbox', name='Show baseline', exact=True)).to_have_count(0)
             expect(frame.locator('#frozen-row-1')).to_be_visible()
             frame.locator('#frozen-row-1').click(button='right')
             for action in ['ctx-label-add-step', 'ctx-label-edit-step', 'ctx-label-task-tags',
@@ -65,7 +64,9 @@ def test_current_portfolio_drag_and_baseline_overlay(authorized, tmp_path):
             with psycopg.connect(authorized.setup.operator_url) as connection:
                 assert connection.execute('SELECT count(*) FROM eppm.project_plan WHERE project_id=1').fetchone() == (2,)
             links_before = frame.locator('#grid-links-group path').count()
-            checkbox.check()
+            frame.locator('#frozen-row-proj-1').click(button='right')
+            frame.get_by_text('Scenario management', exact=True).hover()
+            frame.locator('#ctx-show-baseline').click()
             expect(frame.locator('#timeline-row-1 .baseline-line')).to_have_attribute('title', 'Baseline: 2027-01-01 → 2027-01-05')
             former = frame.locator('#frozen-row-baseline-1--3')
             expect(former).to_contain_text('Former task')
@@ -81,7 +82,9 @@ def test_current_portfolio_drag_and_baseline_overlay(authorized, tmp_path):
             expect(frame.locator('#timeline-row-baseline-1--3 .gantt-bar-wrapper')).to_have_count(0)
             expect(frame.locator('#grid-links-group path')).to_have_count(links_before)
             page.screenshot(path=str(tmp_path / 'current-portfolio-baseline.png'), full_page=True)
-            checkbox.uncheck()
+            frame.locator('#frozen-row-proj-1').click(button='right')
+            frame.get_by_text('Scenario management', exact=True).hover()
+            frame.locator('#ctx-show-baseline').click()
             expect(former).to_have_count(0)
             expect(frame.locator('.baseline-line')).to_have_count(0)
             frame.locator('#frozen-row-proj-1').click(button='right')
@@ -109,7 +112,9 @@ def test_current_portfolio_drag_and_baseline_overlay(authorized, tmp_path):
                 }
                 return lastDataRevision !== previous;
             }''', before_revision)
-            checkbox.check()
+            frame.locator('#frozen-row-proj-1').click(button='right')
+            frame.get_by_text('Scenario management', exact=True).hover()
+            frame.locator('#ctx-show-baseline').click()
             expect(frame.locator('#timeline-row-1 .baseline-line')).to_have_attribute('title', 'Baseline: 2027-01-03 → 2027-01-07', timeout=30000)
             expect(former).to_have_count(0)
             with psycopg.connect(authorized.setup.operator_url) as connection:

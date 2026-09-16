@@ -100,14 +100,18 @@ def test_alternative_tooltips_project_dependencies_tags_and_csv_reuse_shared_pan
             expect(page.get_by_role('dialog')).to_contain_text('Schedule CSV')
             page.locator('input[type=file]').set_input_files(dict(name='replacement.csv', mimeType='text/csv',
                 buffer=b'step_number,task_name,start_date,end_date\n1,Imported scenario,09/01/2027,09/01/2027\n'))
-            expect(page.get_by_role('button', name='Replace project schedule', exact=True)).to_be_visible()
-            page.get_by_role('button', name='Replace project schedule', exact=True).click()
+            expect(page.get_by_role('button', name='Import plan revision', exact=True)).to_be_disabled()
+            page.get_by_role('textbox', name='Version name', exact=True).fill('CSV revision')
+            page.get_by_role('textbox', name='Version name', exact=True).press('Tab')
+            expect(page.get_by_role('checkbox', name='Set import as the active plan')).to_be_checked()
+            page.get_by_role('button', name='Import plan revision', exact=True).click()
             expect(page.get_by_role('dialog')).to_have_count(0)
-            expect(frame.locator('.alternative-only .task-title')).to_contain_text('Imported scenario')
+            expect(frame.locator('.task-title')).to_contain_text('Imported scenario')
             with psycopg.connect(authorized.setup.operator_url) as connection:
                 saved = read_plans(connection, [active.id, alternative.id])
             assert saved[active.id] == active.content
-            assert saved[alternative.id].tasks[0]['task_name'] == 'Imported scenario'
-            assert saved[alternative.id].assignments == []
+            assert saved[alternative.id].tasks[0]['task_name'] == 'Alternative build'
+            with psycopg.connect(authorized.setup.operator_url) as connection:
+                assert connection.execute("SELECT name,s.code FROM eppm.project_plan p JOIN eppm.plan_status s ON s.id=p.status_id WHERE p.project_id=1 AND is_current").fetchone() == ('CSV revision', 'draft')
         finally:
             browser.close()

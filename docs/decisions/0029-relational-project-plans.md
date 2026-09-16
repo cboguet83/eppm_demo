@@ -7,7 +7,8 @@ current/baseline behavior in [ADR 0028](0028-project-plans.md).
 
 Each project has at most one active plan and at most one designated baseline.
 Alternative scenarios are inactive until explicitly activated. Only Approved
-plans can be activated or designated as baseline. Lifecycle authorization,
+plans can be activated through scenario management or designated as baseline.
+CSV imports are an explicit exception: a newly imported Draft can be active. Lifecycle authorization,
 copying, activation, deletion and allocation cleanup run in Python services.
 PostgreSQL provides foreign keys, uniqueness, transactions and row security;
 no new database business functions are introduced.
@@ -38,7 +39,7 @@ view beside Clear all filters also closes comparison while retaining portfolio
 filters and edit mode. Activation retains the previous plan as inactive.
 Purple dependency links use the alternative
 schedule, including its added tasks. Contextual task, dependency, assignment,
-CSV and task-tag operations target the selected alternative and check its revision
+task-tag operations target the selected alternative and check its revision
 under the project lock. Deleted tasks release their scenario assignments.
 Project tags and project logs remain shared; logging is available independently
 of the Gantt edit checkbox, subject to project authorization.
@@ -68,10 +69,10 @@ new scenario in comparison. This newly opened view uses light-blue bars,
 blue dependency links and labels, and light-blue left-pane backgrounds.
 This color choice belongs to the view, not the plan status: selecting an existing
 scenario uses purple, even if it is still Draft. Closing comparison or leaving
-the page clears the new-scenario styling. Every newly created scenario starts as Draft,
+the page clears the new-scenario styling. Every copied scenario starts as Draft,
 including copies saved from the Project plans tab. Proposal and approval remain
 explicit later lifecycle changes. Baseline snapshots and initial active plans
-retain their separate creation rules.
+retain their separate creation rules. CSV imports follow the rules below.
 
 Plan management is a lazy Project plans tab immediately after Project log in the
 portfolio master-detail view. It uses the selected project without another project
@@ -169,3 +170,19 @@ a join instead of a per-task lookup through the edit-access graph. The task view
 retains its security barrier, hidden-endpoint redaction and SELECT-only runtime
 grant. Performance regressions cover 1,000 projects with inactive history and
 primary links, and repeated revision reads across 10,001 projects.
+
+## CSV revision imports and comparison diagnostics
+
+CSV import always creates a new revision with a mandatory version name, retaining
+all existing plans. Editors import Draft revisions; scoped approvers and business
+administrators may select Draft, Proposed, Approved or Rejected. Deleted is a
+lifecycle action, not an import status. The active-plan checkbox defaults to true;
+activation clears all previous current designations within the same project lock
+and transaction. Import works without a source plan. CSV tasks are new identities
+with no resource assignments. An active import closes comparison; an inactive
+import leaves the displayed plans unchanged.
+
+Baseline visibility is toggled in Scenario management immediately above Delete
+baseline. Dual-view project rows show both task counts, with the alternative count
+in its scenario color. Alternative constraint warnings open the shared diagnostics
+and step editor using that scenario's stable task identity. Row heights are retained.
