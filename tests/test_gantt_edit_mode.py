@@ -26,6 +26,18 @@ def test_gantt_mode_flags_require_real_booleans(action, enabled):
         validate_event(dict(action=action, enabled=enabled))
 
 
+def test_creating_alternative_requires_edit_mode(monkeypatch):
+    state = {}
+    monkeypatch.setattr(planning_scenarios.st, 'session_state', state)
+    event = validate_event(dict(action='create_alternative', project_id='1'))
+    with pytest.raises(ValueError, match='Enable edit mode'):
+        planning_scenarios.handle_scenario_event(event, None)
+    assert 'planning_create_scenario_project' not in state
+    state['planning_edit_enabled'] = True
+    planning_scenarios.handle_scenario_event(event, None)
+    assert state['planning_create_scenario_project'] == 1
+
+
 def test_alternative_actions_validate_plan_identity_and_operation():
     event = dict(action='alternative_action', operation='delete_step', project_id='1', plan_id='5', revision='2', id='3')
     assert validate_event(event)['plan_id'] == 5

@@ -28,7 +28,7 @@ def _discard(project_id: int) -> None:
 def _new_draft(plan: ProjectPlan, content: PlanContent | None = None) -> dict:
     source = content if content is not None else plan.content
     return dict(source=plan.id, revision=plan.revision, base=deepcopy(source),
-                content=deepcopy(source), epoch=0, name=f'{plan.name} alternative', status='proposed')
+                content=deepcopy(source), epoch=0, name=f'{plan.name} alternative')
 
 
 def _task_editor(project_id: int, draft: dict) -> list[dict]:
@@ -159,8 +159,6 @@ def _render_draft(project_id: int, draft: dict, pools: dict[int, str], tag_choic
                   projects: dict[int, str], external: dict[int, str]) -> None:
     with st.expander('Edit alternative · unsaved draft', expanded=True):
         draft['name'] = st.text_input('New plan name', value=draft['name'], key=f'plan_name_{project_id}_{draft["epoch"]}')
-        draft['status'] = st.selectbox('New plan status', ['proposed', 'draft'],
-            format_func=str.title, key=f'plan_new_status_{project_id}_{draft["epoch"]}')
         tasks_tab, dependencies_tab, resources_tab, tags_tab = st.tabs(['Tasks', 'Dependencies', 'Resource assignments', 'Task tags'])
         with tasks_tab:
             tasks = _task_editor(project_id, draft)
@@ -362,7 +360,7 @@ def render_project_plans(workspace: PlanningWorkspace, project_id: int) -> None:
     if drafts:
         st.warning('Unsaved changes are kept for this project. Save as a new plan or cancel the draft.')
         if st.button('Save as new plan' if len(drafts) == 1 else 'Save all as new plans', type='primary', key='save_project_plans'):
-            saved = service.save_many([(project_id, item['source'], item['revision'], item['name'], item['content'], item['status'])
+            saved = service.save_many([(project_id, item['source'], item['revision'], item['name'], item['content'], 'draft')
                                        for project_id, item in drafts.items()])
             st.session_state['plan_pending_selection'] = {plan.project_id: plan.id for plan in saved}
             drafts.clear()

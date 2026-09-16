@@ -38,6 +38,57 @@ def display_alternative(page, frame, name='Option A'):
     expect(frame.locator('.alternative-bar').first).to_be_visible()
 
 
+def test_create_named_draft_opens_light_blue_comparison_and_copies_allocations(authorized, tmp_path):
+    plans = service(authorized, 4)
+    initial = plans.initialize(1)
+    with psycopg.connect(authorized.setup.operator_url) as connection:
+        connection.execute("UPDATE eppm.project SET status='In Progress'")
+        connection.execute("INSERT INTO eppm.project_task(project_id,project_plan_id,task_name,start_date,end_date,progress_pct) VALUES(1,%s,'Build','2027-01-01','2027-01-05',35)", (initial.id,))
+        connection.execute("INSERT INTO eppm.resource_pool(id,name,capacity_fte) VALUES(1,'Pool',2)")
+        connection.execute('''INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,project_plan_id,fte_assigned)
+            VALUES(1,1,1,%s,0.5)''', (initial.id,))
+    initial = next(row for row in plans.list_plans(1) if row.is_current)
+    with native_server(authorized, tmp_path, _APP) as server, sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            page = server.new_page(browser, viewport={'width':1700, 'height':1200})
+            page.goto(server.origin)
+            frame = page.frame_locator('iframe[title*="interactive_gantt"]')
+            edit = frame.get_by_role('checkbox', name='Enable edit mode', exact=True)
+            expect(edit).not_to_be_checked(timeout=40000)
+            scenario_menu(frame)
+            expect(frame.locator('#ctx-create-alternative')).to_be_hidden()
+            frame.locator('#frozen-row-proj-1').click()
+            edit.check()
+            scenario_menu(frame)
+            frame.get_by_text('Create alternative scenario', exact=True).click()
+            name = page.get_by_role('textbox', name='Scenario name', exact=True)
+            expect(name).to_be_visible()
+            page.get_by_role('button', name='Create scenario', exact=True).click()
+            expect(page.get_by_text('Plan name is required.', exact=True)).to_be_visible()
+            name.fill('  Resource option  ')
+            page.get_by_role('button', name='Create scenario', exact=True).click()
+            expect(page.get_by_role('dialog')).to_have_count(0)
+            bar = frame.locator('#timeline-row-1 .alternative-bar')
+            expect(bar).to_be_visible()
+            assert bar.evaluate('(el)=>getComputedStyle(el).backgroundColor') == 'rgb(125, 211, 252)'
+            assert frame.locator('#frozen-row-1').evaluate('(el)=>getComputedStyle(el).backgroundColor') == 'rgb(224, 242, 254)'
+            expect(edit).to_be_checked()
+            expect(page.get_by_role('button', name='Close alternative view', exact=True)).to_be_visible()
+            with psycopg.connect(authorized.setup.operator_url) as connection:
+                alternative_id, status, source, active = connection.execute('''SELECT p.id,s.code,p.source_plan_id,p.is_current
+                    FROM eppm.project_plan p JOIN eppm.plan_status s ON s.id=p.status_id
+                    WHERE p.project_id=1 AND p.name='Resource option' ''').fetchone()
+                contents = read_plans(connection, [initial.id, alternative_id])
+                count = connection.execute('SELECT count(*) FROM eppm.project_plan WHERE project_id=1').fetchone()[0]
+            assert (status, source, active, count) == ('draft', initial.id, False, 2)
+            assert contents[initial.id] == contents[alternative_id] == initial.content
+            page.mouse.move(10, 700)
+            page.screenshot(path=str(tmp_path / 'created-alternative.png'), full_page=True)
+        finally:
+            browser.close()
+
+
 def test_opt_in_editing_and_alternative_lanes(authorized, tmp_path):
     plans = service(authorized, 4)
     initial = plans.initialize(1)
@@ -79,7 +130,7 @@ def test_opt_in_editing_and_alternative_lanes(authorized, tmp_path):
             expect(alt_bar).to_be_visible()
             expect(page.get_by_role('button', name='Close alternative view', exact=True)).to_be_visible()
             expect(frame.locator(f'#frozen-row-alternative-1-{extra}')).to_contain_text('Extra alternative step')
-            assert frame.locator(f'#frozen-row-alternative-1-{extra} .task-title').evaluate('(el)=>getComputedStyle(el).color') == 'rgb(147, 51, 234)'
+            assert frame.locator(f'#frozen-row-alternative-1-{extra} .task-title').evaluate('(el)=>getComputedStyle(el).color') == 'rgb(2, 132, 199)'
             assert alt_bar.bounding_box()['y'] > active_bar.bounding_box()['y'] + active_bar.bounding_box()['height']
             expect(frame.locator('#timeline-row-2 .alternative-bar')).to_have_count(0)
             drag(page, alt_bar)

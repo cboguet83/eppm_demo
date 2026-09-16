@@ -30,6 +30,7 @@ def test_plan_gantt_draft_save_preserves_reference_and_current(authorized):
     assert not app.exception and not app.error
     saved = plans.list_plans(1)
     assert len(saved) == 3 and saved[0].name == 'Option B'
+    assert saved[0].status == 'draft'
     assert saved[0].content == saved[1].content
     assert saved[-1].is_current and not saved[0].is_current
     assert app.selectbox(key='plan_alternative_1').value == saved[0].id

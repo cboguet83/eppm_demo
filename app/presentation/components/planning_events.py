@@ -13,7 +13,7 @@ def validate_event(event: dict[str, Any]) -> dict[str, Any]:
     """
     result = dict(event)
     if result.get('action') in {'load_project_dependencies', 'save_project_dependencies', 'log_project_event',
-                              'baseline_current_project', 'delete_project_baseline', 'choose_alternative', 'update_alternative_dates', 'activate_alternative', 'alternative_action'}:
+                              'baseline_current_project', 'delete_project_baseline', 'choose_alternative', 'create_alternative', 'update_alternative_dates', 'activate_alternative', 'alternative_action'}:
         result['project_id'] = positive_identity(result.get('project_id'))
     if result.get('action') in {'toggle_baseline', 'toggle_edit'} and type(result.get('enabled')) is not bool:
         raise ValueError('Invalid planning mode selection.')

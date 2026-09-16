@@ -24,8 +24,9 @@ The project context menu groups baseline creation, baseline soft deletion and
 alternative display under Scenario management. Baseline mutations require edit
 mode and existing approval privileges. Alternative selection excludes active,
 deleted and frozen baseline plans. Comparison and baseline display are mutually
-exclusive. Comparison uses half-height active bars above purple alternative bars,
-with purple labels for alternative-only tasks. In edit mode only alternative
+exclusive. Comparison uses half-height active bars above light-blue alternative
+bars, with light-blue left-pane backgrounds and blue labels for alternative rows.
+Baseline lanes retain their purple color. In edit mode only alternative
 bars can be dragged or resized; a revision-checked Python service updates that
 scenario's existing task rows and audits the date change. Active plans and the
 pool allocation grid remain unchanged.
@@ -35,12 +36,19 @@ opens the page again. Scenario management can explicitly hide comparison or
 activate the displayed approved alternative after confirmation. Close alternative
 view beside Clear all filters also closes comparison while retaining portfolio
 filters and edit mode. Activation retains the previous plan as inactive.
-Purple dependency links use the alternative
+Blue dependency links use the alternative
 schedule, including its added tasks. Contextual task, dependency, assignment,
 CSV and task-tag operations target the selected alternative and check its revision
 under the project lock. Deleted tasks release their scenario assignments.
 Project tags and project logs remain shared; logging is available independently
 of the Gantt edit checkbox, subject to project authorization.
+
+In edit mode, Create alternative scenario prompts for a nonempty name, copies
+the active plan including its resource assignments, and immediately opens the
+new scenario in comparison. Every newly created scenario starts as Draft,
+including copies saved from the Project plans tab. Proposal and approval remain
+explicit later lifecycle changes. Baseline snapshots and initial active plans
+retain their separate creation rules.
 
 Plan management is a lazy Project plans tab immediately after Project log in the
 portfolio master-detail view. It uses the selected project without another project

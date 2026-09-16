@@ -259,6 +259,7 @@ def _render_application_page(workspace: ApplicationWorkspace) -> None:
         st.session_state['planning_alternatives'] = {}
         st.session_state['planning_edit_enabled'] = False
         st.session_state.pop('planning_scenario_dialog_project', None)
+        st.session_state.pop('planning_create_scenario_project', None)
         st.session_state.pop('planning_alternative_editor', None)
         st.session_state['planning_last_page'] = page
     if page in ("settings:org_structure", "settings:param_def", "settings:project_configuration", "settings:tag_management"):

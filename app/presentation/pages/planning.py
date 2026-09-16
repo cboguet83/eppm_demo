@@ -69,7 +69,7 @@ from app.presentation.components.planning_transport import pack_pool_payloads
 from app.presentation.i18n import get_current_locale, get_section_catalog, t
 from app.presentation.navigation import PAGE_SETTINGS
 from app.presentation.pages.planning_scenarios import (
-    SCENARIO_ACTIONS, MUTATIONS, choose_alternative, close_alternative_view,
+    SCENARIO_ACTIONS, MUTATIONS, choose_alternative, close_alternative_view, create_alternative,
     handle_scenario_event, require_edit, scenario_payload,
 )
 
@@ -1643,6 +1643,9 @@ def _render_planning_chart(
     scenario_project = st.session_state.pop('planning_scenario_dialog_project', None)
     if scenario_project is not None:
         choose_alternative(scenario_project, workspace)
+    create_project = st.session_state.pop('planning_create_scenario_project', None)
+    if create_project is not None:
+        create_alternative(create_project, workspace)
     alternative_event = st.session_state.pop('planning_alternative_editor', None)
     if alternative_event is not None:
         from app.presentation.pages.planning_alternative_editor import edit_alternative

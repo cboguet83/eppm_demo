@@ -29,7 +29,7 @@ def test_plan_save_approve_adopt_baseline_and_soft_delete_are_independent(author
     content = deepcopy(initial.content)
     content.tasks.append(draft_task())
     proposed = editor.save(1, initial.id, initial.revision, 'Option A', content)
-    assert proposed.status == 'proposed' and not proposed.is_current
+    assert proposed.status == 'draft' and not proposed.is_current
     assert authorized.query('SELECT id FROM eppm.current_project_task') == []
     with pytest.raises(ValueError, match='approver'):
         editor.change(1, proposed.id, proposed.revision, 'status', 'approved')
@@ -66,9 +66,18 @@ def test_plan_scope_stale_metadata_and_atomic_multi_project_save(authorized):
         editor.save(1, first.id, first.revision, 'Stale', first.content)
     current = admin.list_plans(1)[0]
     with pytest.raises(ValueError, match='name'):
-        admin.save_many([(1, current.id, current.revision, 'Valid', current.content, 'proposed'),
-                         (2, second.id, second.revision, '', second.content, 'proposed')])
+        admin.save_many([(1, current.id, current.revision, 'Valid', current.content, 'draft'),
+                         (2, second.id, second.revision, '', second.content, 'draft')])
     assert len(admin.list_plans(1)) == len(admin.list_plans(2)) == 1
+
+
+@pytest.mark.parametrize('status', ['proposed', 'approved', 'rejected', 'deleted'])
+def test_new_scenarios_cannot_skip_draft_status(authorized, status):
+    plans = service(authorized, 4)
+    initial = plans.initialize(1)
+    with pytest.raises(ValueError, match='created as Draft'):
+        plans.save(1, initial.id, initial.revision, 'New option', status=status)
+    assert len(plans.list_plans(1)) == 1
 
 
 def test_runtime_cannot_rewrite_saved_plan_contents(authorized):

@@ -12,7 +12,7 @@ from app.presentation.components.planning_workspace import PlanningWorkspace
 
 SCENARIO_ACTIONS = frozenset({'toggle_edit', 'toggle_baseline', 'baseline_current_project',
                               'delete_project_baseline', 'choose_alternative', 'update_alternative_dates',
-                              'hide_alternatives', 'activate_alternative', 'alternative_action'})
+                              'hide_alternatives', 'activate_alternative', 'alternative_action', 'create_alternative'})
 MUTATIONS = frozenset({'update_dates', 'update_progress', 'create_step_full', 'update_task_full',
                        'delete_step', 'save_project_dependencies', 'import_csv_template',
                        'manage_task_tags', 'manage_task_pools', 'manage_project_tags',
@@ -32,6 +32,7 @@ def close_alternative_view() -> None:
     st.session_state['planning_alternatives'] = {}
     st.session_state.pop('planning_alternative_editor', None)
     st.session_state.pop('planning_scenario_dialog_project', None)
+    st.session_state.pop('planning_create_scenario_project', None)
 
 
 def handle_scenario_event(event: dict[str, Any], workspace: PlanningWorkspace) -> None:
@@ -55,6 +56,11 @@ def handle_scenario_event(event: dict[str, Any], workspace: PlanningWorkspace) -
         return
     if action == 'choose_alternative':
         st.session_state['planning_scenario_dialog_project'] = event['project_id']
+        return
+    if action == 'create_alternative':
+        require_edit(alternative=True)
+        st.session_state.pop(f'new_scenario_name_{event["project_id"]}', None)
+        st.session_state['planning_create_scenario_project'] = event['project_id']
         return
     if workspace.plans is None:
         return
@@ -86,6 +92,31 @@ def handle_scenario_event(event: dict[str, Any], workspace: PlanningWorkspace) -
             # Repaint from persisted dates after both success and a stale edit.
             st.session_state['planning_scenario_epoch'] = st.session_state.get('planning_scenario_epoch', 0) + 1
         st.toast('Alternative scenario dates updated.')
+
+
+@dialog('Create alternative scenario')
+def create_alternative(project_id: int, workspace: PlanningWorkspace) -> None:
+    """Name a draft copy of the active plan and immediately open comparison."""
+    if workspace.plans is None:
+        return
+    try:
+        require_edit(alternative=True)
+        current = next((plan for plan in workspace.plans.list_plans(project_id) if plan.is_current), None)
+        if current is None:
+            st.error('Activate a project plan before creating an alternative scenario.')
+            return
+        with st.form(f'create_alternative_{project_id}'):
+            name = st.text_input('Scenario name', key=f'new_scenario_name_{project_id}')
+            submitted = st.form_submit_button('Create scenario', type='primary')
+        if submitted:
+            saved = workspace.plans.save(project_id, current.id, current.revision, name)
+            st.session_state['planning_alternatives'] = {
+                **st.session_state.get('planning_alternatives', {}), project_id: saved.id}
+            st.session_state['planning_show_baseline'] = False
+            st.toast('Draft scenario created.')
+            st.rerun()
+    except (ValueError, PlanningStorageError) as error:
+        st.error(str(error))
 
 
 @dialog('Display an alternative scenario')

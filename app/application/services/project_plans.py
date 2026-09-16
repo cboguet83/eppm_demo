@@ -167,8 +167,8 @@ class ProjectPlanService:
         return self._gateway.run(operation, write=True)
 
     def save(self, project_id: int, source_id: int, revision: int, name: str,
-             content: PlanContent | None = None, status: str = 'proposed') -> ProjectPlan:
-        """Save a revision, copying the source schedule and allocations by default."""
+             content: PlanContent | None = None, status: str = 'draft') -> ProjectPlan:
+        """Create a draft revision, copying source tasks and allocations by default."""
         return self.save_many([(project_id, source_id, revision, name, content, status)])[0]
 
     def save_many(self, drafts: list[tuple[int, int, int, str, PlanContent | None, str]]) -> list[ProjectPlan]:
@@ -185,8 +185,8 @@ class ProjectPlanService:
                     raise AccessDenied()
                 if not isinstance(name, str) or not name.strip():
                     raise ValueError('Plan name is required.')
-                if status not in {'draft', 'proposed'}:
-                    raise ValueError('Save a new plan as Draft or Proposed before approval.')
+                if status != 'draft':
+                    raise ValueError('New scenarios must be created as Draft.')
                 source = self._find(store, project_id, source_id, revision)
                 if source.status == 'deleted':
                     raise ValueError('Restore the Deleted plan before copying it.')
