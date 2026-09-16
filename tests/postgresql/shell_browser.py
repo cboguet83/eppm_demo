@@ -33,7 +33,7 @@ def popup_server(authorized, tmp_path, request):
         ensure_reference_catalog(connection)
         install_schema_catalog(connection)
         connection.execute('DELETE FROM eppm.project WHERE id=3')
-        connection.execute("UPDATE eppm.project SET name='Project ' || lpad(id::text,4,'0'),project_type_id=(SELECT id FROM eppm.project_type WHERE is_general)")
+        connection.execute("UPDATE eppm.project SET name='Project ' || lpad(id::text,4,'0'),status='In Progress',project_type_id=(SELECT id FROM eppm.project_type WHERE is_general)")
         connection.execute("INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date,project_plan_id) VALUES (1,1,'First task','2026-01-01','2026-01-02',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(2,2,'Second task','2026-01-01','2026-01-02',(SELECT id FROM eppm.project_plan WHERE project_id=2 AND is_current))")
     with native_server(authorized, tmp_path, request.param) as server:
         yield server

@@ -11,7 +11,7 @@ from app.application.exceptions import PlanningStorageError
 from app.application.ports.planning import TaskChoice
 from app.application.services.business_access import BusinessAccess
 from app.domain.access.models import AccessDenied, Permission
-from app.domain.planning.plans import PlanContent, ProjectPlan, PlanTask
+from app.domain.planning.plans import ComparisonTask, PlanContent, ProjectPlan, PlanTask
 from app.domain.resources.hierarchy import PoolHierarchy
 from app.infrastructure.postgresql.access import PostgresAccessStore
 from app.infrastructure.postgresql.authorization import ServerRequestSigner
@@ -95,6 +95,24 @@ class PostgresPlanStore:
         """Read baseline presence under project RLS without loading snapshot content."""
         return [row[0] for row in self.connection.execute(
             'SELECT project_id FROM eppm.project_plan WHERE is_baseline ORDER BY project_id')]
+
+    def comparison_tasks(self, plan: ProjectPlan) -> list[ComparisonTask]:
+        """Align an alternative to active physical row IDs using stable identities."""
+        active = dict(self.connection.execute('''SELECT coalesce(stable_task_id,id),id
+            FROM eppm.current_project_task WHERE project_id=%s''', (plan.project_id,)))
+        return [ComparisonTask(**dict(task, id=active.get(task['id'], -task['id']), stable_id=task['id']))
+                for task in plan.content.tasks]
+
+    def reschedule_task(self, plan: ProjectPlan, task: PlanTask) -> None:
+        """Persist one validated scenario edit and increment its conflict token."""
+        self.connection.execute('''UPDATE eppm.project_task SET start_date=%s,end_date=%s
+            WHERE project_plan_id=%s AND coalesce(stable_task_id,id)=%s AND NOT is_deleted''',
+            (task['start_date'], task['end_date'], plan.id, task['id']))
+        self.connection.execute('UPDATE eppm.project_plan SET revision=revision+1 WHERE id=%s', (plan.id,))
+        old = next(row for row in plan.content.tasks if row['id'] == task['id'])
+        self._event(plan.project_id, plan.id, 'task_dates',
+                    f"{task['id']}:{old['start_date']}:{old['end_date']}",
+                    f"{task['id']}:{task['start_date']}:{task['end_date']}")
 
     def tag_choices(self) -> dict[int, str]:
         return dict(self.connection.execute('SELECT id,tag FROM eppm.tag_dictionnary ORDER BY tag,id'))

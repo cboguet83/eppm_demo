@@ -142,6 +142,12 @@ def create_project_workspace(resources: RuntimeResources, *, access: BusinessAcc
 
     collaboration = create_collaboration_service(resources, access=access)
 
+    def render_plans(project_id: int) -> None:
+        """Compose planning only when the selected project's plan tab is opened."""
+        from app.presentation.pages.project_plans import render_project_plans
+        from app.presentation.pages.planning import planning_errors
+        planning_errors(render_project_plans)(create_planning_workspace(resources, access=access), project_id)
+
     return ProjectWorkspace(
         create_project_service(resources, access=access),
         create_project_type_service(resources, access=access),
@@ -152,6 +158,7 @@ def create_project_workspace(resources: RuntimeResources, *, access: BusinessAcc
         partial(render_project_links, service=collaboration),
         partial(render_project_budget, service=create_dashboard_service(resources, access=access)),
         partial(open_project_event_dialog, service=collaboration),
+        render_plans,
     )
 
 

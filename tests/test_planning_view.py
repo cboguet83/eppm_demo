@@ -16,6 +16,9 @@ from app.presentation.pages.planning import (
 class TestPlanningGanttCallbacks(unittest.TestCase):
     """Verify Gantt mutations are persisted in the pre-rerun callback."""
 
+    def setUp(self) -> None:
+        st.session_state['planning_edit_enabled'] = True
+
     def tearDown(self) -> None:
         for key in list(st.session_state):
             if (
@@ -28,6 +31,7 @@ class TestPlanningGanttCallbacks(unittest.TestCase):
                     "ms_multi_projects",
                     "ms_planning_tag_filter",
                     "planning_last_flex_signature",
+                    "planning_edit_enabled",
                     "test_gantt",
                 }
             ):

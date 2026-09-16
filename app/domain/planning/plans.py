@@ -22,6 +22,12 @@ class PlanTask(TypedDict):
     description: str
 
 
+class ComparisonTask(PlanTask):
+    """Chart row identity paired with the stable identity used for scenario edits."""
+
+    stable_id: int
+
+
 class PlanDependency(TypedDict):
     """Incoming task/project dependency, addressed by stable endpoint IDs."""
 

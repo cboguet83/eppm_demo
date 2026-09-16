@@ -28,6 +28,7 @@ def planning_app(resources: RuntimeResources, access: BusinessAccess) -> None:
         _handle_gantt_component_change,
     )
 
+    st.session_state.setdefault('planning_edit_enabled', True)
     workspace = create_planning_workspace(resources, access=access)
     event = st.session_state.pop("before_event", None)
     if event:

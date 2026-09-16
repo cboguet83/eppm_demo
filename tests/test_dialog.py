@@ -53,4 +53,4 @@ def test_all_native_popup_modules_use_shared_completion():
             if isinstance(node, ast.FunctionDef):
                 dialogs += sum(isinstance(item, ast.Call) and isinstance(item.func, ast.Name)
                                and item.func.id == "dialog" for item in node.decorator_list)
-    assert dialogs == 42
+    assert dialogs == 43

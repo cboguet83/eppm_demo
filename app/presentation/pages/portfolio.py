@@ -277,6 +277,8 @@ def _project_detail_sections(proj_id: int, workspace: ProjectWorkspace) -> None:
               for label, _ in field_groups]
     labels += [t("dashboard.budget", default="Budget"), t("project_collaboration.contacts", default="Project Contacts"),
                t("project_collaboration.log", default="Project log")]
+    if workspace.render_plans is not None:
+        labels.append('Project plans')
     tabs = st.tabs(labels, key=f"project_details_tabs_{proj_id}", on_change="rerun")
     for tab, (group_label, fields) in zip(tabs, field_groups):
         if tab.open:
@@ -297,19 +299,23 @@ def _project_detail_sections(proj_id: int, workspace: ProjectWorkspace) -> None:
                     st.html('<div style="display:flex;flex-direction:column;gap:1rem">' + ''.join(rows) + '</div>')
                 if group_label.casefold() == "useful links" and workspace.render_links:
                     workspace.render_links(int(proj_id))
-    if tabs[-3].open:
+    budget_tab, contacts_tab, log_tab = tabs[len(field_groups):len(field_groups) + 3]
+    if budget_tab.open:
         from app.presentation.components.wbs_editor import render_wbs_rows
-        with tabs[-3]:
+        with budget_tab:
             st.subheader(t("dashboard.wbs_assignment", default="WBS assignment"))
             render_wbs_rows(workspace.projects.get_wbs_allocations(proj_id), workspace.projects.get_wbs_options(proj_id))
             if workspace.render_budget is not None:
                 workspace.render_budget(proj_id)
-    if tabs[-2].open:
-        with tabs[-2]:
+    if contacts_tab.open:
+        with contacts_tab:
             workspace.render_contacts(int(proj_id))
-    if tabs[-1].open:
-        with tabs[-1]:
+    if log_tab.open:
+        with log_tab:
             workspace.render_log(int(proj_id))
+    if workspace.render_plans is not None and tabs[-1].open:
+        with tabs[-1]:
+            workspace.render_plans(proj_id)
 
 @authorized_cache(ttl=60, max_entries=128, show_spinner=False)
 def _load_portfolio_page(revision: tuple, columns: list[dict], query: dict, offset: int,

@@ -7,10 +7,9 @@ from app.runtime import RuntimeResources
 
 SCREEN = '''
 import streamlit as st
-st.session_state.setdefault('planning_view_mode', 'Project plans')
 from app.main import create_planning_workspace
-from app.presentation.pages.planning import render_planning_milestones
-render_planning_milestones(create_planning_workspace(runtime, access=access))
+from app.presentation.pages.project_plans import render_project_plans
+render_project_plans(create_planning_workspace(runtime, access=access), 1)
 '''
 
 
@@ -23,7 +22,6 @@ def test_plan_gantt_draft_save_preserves_reference_and_current(authorized):
     app = native_screen(SCREEN, RuntimeResources(authorized.database, authorized.key), authorized.binding(4).access).run()
     assert not app.exception
     assert not app.error, [error.value for error in app.error]
-    app.multiselect(key='plan_projects').set_value([1]).run()
     app.selectbox(key='plan_alternative_1').set_value(alternative.id).run()
     app.button(key='plan_edit_1').click().run()
     assert not app.exception
@@ -42,7 +40,6 @@ def test_cancel_draft_does_not_create_a_version(authorized):
     plans.initialize(1)
     app = native_screen(SCREEN, RuntimeResources(authorized.database, authorized.key), authorized.binding(4).access).run()
     assert not app.error, [error.value for error in app.error]
-    app.multiselect(key='plan_projects').set_value([1]).run()
     app.button(key='plan_edit_1').click().run()
     app.button(key='plan_cancel_1').click().run()
     assert not app.exception

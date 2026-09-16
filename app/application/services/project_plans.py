@@ -7,7 +7,7 @@ from app.application.exceptions import PlanningConflictError
 from app.application.ports.planning import TaskChoice
 from app.application.ports.project_plans import PlanGateway, PlanStore
 from app.domain.access.models import AccessDenied
-from app.domain.planning.plans import PlanContent, ProjectPlan, PlanTask, normalize_content, validate_status_change
+from app.domain.planning.plans import ComparisonTask, PlanContent, ProjectPlan, PlanTask, normalize_content, validate_status_change
 
 
 class ProjectPlanService:
@@ -63,6 +63,53 @@ class ProjectPlanService:
         tasks = {dep['predecessor_task_id'] for content in contents for dep in content.dependencies
                  if dep['predecessor_task_id'] is not None}
         return self._gateway.run(lambda store: store.current_context(list(projects), list(tasks)))
+
+    @staticmethod
+    def _require_alternative(plan: ProjectPlan) -> None:
+        """Reject active schedules, frozen baselines and deleted scenarios."""
+        if plan.is_current or plan.is_baseline or plan.is_frozen or plan.status == 'deleted':
+            raise ValueError('Choose an alternative scenario that is neither active nor a baseline.')
+
+    def comparison(self, project_id: int, plan_id: int) -> tuple[ProjectPlan, list[ComparisonTask]]:
+        """Read a selected alternative with rows aligned to active task identities."""
+        def operation(store: PlanStore) -> tuple[ProjectPlan, list[ComparisonTask]]:
+            plan = next((row for row in store.list_plans(project_id) if row.id == plan_id), None)
+            if plan is None:
+                raise AccessDenied()
+            self._require_alternative(plan)
+            return plan, store.comparison_tasks(plan)
+        return self._gateway.run(operation)
+
+    def reschedule_alternative(self, project_id: int, plan_id: int, revision: int,
+                               task_id: int, start_date: str, end_date: str) -> None:
+        """Edit dates in the selected scenario without modifying active demand."""
+        def operation(store: PlanStore) -> None:
+            store.lock_project(project_id)
+            editor, _, admin = store.permissions(project_id)
+            if not (editor or admin):
+                raise AccessDenied()
+            plan = self._find(store, project_id, plan_id, revision)
+            self._require_alternative(plan)
+            content = deepcopy(plan.content)
+            task = next((row for row in content.tasks if row['id'] == task_id), None)
+            if task is None:
+                raise ValueError('The task is not part of the selected scenario.')
+            task.update(start_date=start_date, end_date=end_date)
+            normalized = normalize_content(project_id, content)
+            store.reschedule_task(plan, next(row for row in normalized.tasks if row['id'] == task_id))
+        self._gateway.run(operation, write=True)
+
+    def delete_baseline(self, project_id: int) -> None:
+        """Soft-delete the designated baseline, retaining its frozen audit history."""
+        def operation(store: PlanStore) -> None:
+            store.lock_project(project_id)
+            _, approver, admin = store.permissions(project_id)
+            if not (approver or admin):
+                raise AccessDenied()
+            baseline = next((row for row in store.list_plans(project_id) if row.is_baseline), None)
+            if baseline is not None:
+                store.metadata(baseline, 'status', 'deleted')
+        self._gateway.run(operation, write=True)
 
     def tag_choices(self) -> dict[int, str]:
         """Read existing tag names for plan task editing without catalog write rights."""

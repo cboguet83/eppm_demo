@@ -68,6 +68,9 @@ from app.presentation.components.planning_data import (
 from app.presentation.components.planning_transport import pack_pool_payloads
 from app.presentation.i18n import get_current_locale, get_section_catalog, t
 from app.presentation.navigation import PAGE_SETTINGS
+from app.presentation.pages.planning_scenarios import (
+    SCENARIO_ACTIONS, MUTATIONS, choose_alternative, handle_scenario_event, require_edit, scenario_payload,
+)
 
 
 def planning_errors[**P](function: Callable[P, None]) -> Callable[P, None]:
@@ -198,7 +201,7 @@ def _handle_gantt_component_change(widget_key: str, workspace: PlanningWorkspace
     gantt_event = st.session_state.get(widget_key)
     if not isinstance(gantt_event, dict) or not isinstance(gantt_event.get("action"), str):
         return
-    if gantt_event.get("action") not in {
+    if gantt_event.get("action") not in SCENARIO_ACTIONS | {
         "filter_project",
         "update_dates",
         "update_progress",
@@ -209,20 +212,20 @@ def _handle_gantt_component_change(widget_key: str, workspace: PlanningWorkspace
         "save_project_dependencies",
         "load_project_tasks",
         "initialize_planning",
-        "toggle_baseline",
-        "baseline_current_project",
     }:
         return
     nonce = _get_gantt_event_nonce(gantt_event)
     if nonce == st.session_state.get("last_gantt_nonce"):
         return
     st.session_state["last_gantt_nonce"] = nonce
+    if gantt_event['action'] in MUTATIONS:
+        require_edit()
     if gantt_event['action'] in {'load_project_dependencies', 'save_project_dependencies'}:
         _handle_project_dependency_event(gantt_event, workspace, nonce)
         return
     gantt_event = validate_event(gantt_event)
-    if gantt_event['action'] in {'toggle_baseline', 'baseline_current_project'}:
-        _handle_baseline_event(gantt_event, workspace)
+    if gantt_event['action'] in SCENARIO_ACTIONS:
+        handle_scenario_event(gantt_event, workspace)
     elif gantt_event.get("action") == "initialize_planning":
         st.session_state.pop("planning_chart_snapshot", None)
     elif gantt_event.get("action") == "load_project_tasks":
@@ -256,15 +259,6 @@ def _handle_gantt_component_change(widget_key: str, workspace: PlanningWorkspace
                 **gantt_event,
                 "before_revision": before,
             }
-
-
-def _handle_baseline_event(event: dict[str, Any], workspace: PlanningWorkspace) -> None:
-    """Apply baseline display preferences or explicitly freeze the current schedule."""
-    if event['action'] == 'toggle_baseline':
-        st.session_state['planning_show_baseline'] = event['enabled']
-    elif workspace.plans is not None:
-        workspace.plans.baseline_current(event['project_id'])
-        st.toast('Current project plan set as baseline.')
 
 
 def _handle_project_dependency_event(event: dict[str, Any], workspace: PlanningWorkspace, nonce: str) -> None:
@@ -1530,6 +1524,7 @@ def _render_planning_chart(
     pool_details_cache = snapshot["details"]
     permissions = workspace.projects.projects.permissions()
     args["task_revision"] = planning_revision_token(snapshot["revision"])
+    args.update(scenario_payload(workspace, list(ids)))
     show_baseline = bool(st.session_state.get('planning_show_baseline', False))
     args['show_baseline'] = show_baseline
     args['baseline_tasks'] = workspace.plans.baseline_tasks(list(ids)) if show_baseline and workspace.plans else {}
@@ -1553,8 +1548,10 @@ def _render_planning_chart(
             gantt_event = validate_event(gantt_event)
             action = gantt_event.get("action")
             step_id = gantt_event.get("id")
-            if action in {'toggle_baseline', 'baseline_current_project'}:
-                _handle_baseline_event(gantt_event, workspace)
+            if action in MUTATIONS:
+                require_edit()
+            if action in SCENARIO_ACTIONS:
+                handle_scenario_event(gantt_event, workspace)
                 st.rerun('planning_workspace')
             elif action == "filter_by_resource_pool":
                 _handle_filter_by_resource_pool(
@@ -1640,6 +1637,9 @@ def _render_planning_chart(
                 require_change(workspace.planning.delete_milestone(int(step_id)))
                 st.toast(t("planning.toast_step_deleted", id=step_id), icon="🗑️")
                 st.rerun()
+    scenario_project = st.session_state.pop('planning_scenario_dialog_project', None)
+    if scenario_project is not None:
+        choose_alternative(scenario_project, workspace)
     active_rf = st.session_state.get("active_resource_pool_filter")
     if active_rf and workspace.resources is not None:
         _render_filtered_active_allocations(
@@ -1651,17 +1651,7 @@ def _render_planning_chart(
 @planning_errors
 def render_planning_milestones(workspace: PlanningWorkspace) -> None:
     """Render planning filters and their interactive Gantt and capacity grids."""
-    if workspace.plans is not None:
-        if not st.session_state.get('plan_drafts') and any(key in st.session_state for key in (
-                'dashboard_planning_projects', 'pending_resource_pool_filter', 'target_planning_project_id')):
-            st.session_state['planning_view_mode'] = 'Current portfolio'
-        mode = st.segmented_control('Planning view', ['Project plans', 'Current portfolio'],
-            default='Current portfolio', key='planning_view_mode', disabled=bool(st.session_state.get('plan_drafts')))
-        if mode == 'Project plans':
-            from app.presentation.pages.project_plans import render_project_plans
-            render_project_plans(workspace)
-            return
-        st.caption('Drag tasks to update the active plan. Baselines and other scenarios keep their dates.')
+    st.caption('Enable edit mode to reschedule tasks. During comparison, only the alternative scenario can be edited.')
     st.html(
         """
         <style>

@@ -16,16 +16,15 @@ SCREEN = '''
 import streamlit as st
 from app.application.services.business_access import BusinessAccess
 from app.main import create_planning_workspace
-from app.presentation.pages.planning import render_planning_milestones
+from app.presentation.pages.project_plans import render_project_plans
 from app.runtime import process_runtime
 from tests.postgresql.browser import browser_access
 st.set_page_config(layout='wide')
-st.session_state.setdefault('planning_view_mode', 'Project plans')
 runtime=process_runtime()
 authentication=browser_access(runtime)
 actor=authentication.actor(st.context.cookies.get('eppm_session',''))
 access=BusinessAccess(actor,authentication.policy)
-render_planning_milestones(create_planning_workspace(runtime,access=access))
+render_project_plans(create_planning_workspace(runtime,access=access), 1)
 '''
 
 

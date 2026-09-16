@@ -22,7 +22,7 @@ def _label(plan: ProjectPlan) -> str:
 
 
 def _discard(project_id: int) -> None:
-    st.session_state['plan_drafts'].pop(project_id, None)
+    st.session_state[f'project_plan_drafts_{project_id}'].pop(project_id, None)
 
 
 def _new_draft(plan: ProjectPlan, content: PlanContent | None = None) -> dict:
@@ -216,23 +216,22 @@ def _actual_progress(workspace: PlanningWorkspace, current: ProjectPlan, editabl
             st.rerun()
 
 
-def render_project_plans(workspace: PlanningWorkspace) -> None:
-    """Select reference/alternative plans per project and save drafts atomically."""
+def render_project_plans(workspace: PlanningWorkspace, project_id: int) -> None:
+    """Manage plans for the authorized project selected in the master list."""
     service = workspace.plans
     if service is None:
         return
     permissions = workspace.projects.projects.permissions()
     catalog = workspace.projects.projects.get_planning_catalog()
     names = {row['id']: row['name'] for row in catalog}
-    drafts = st.session_state.setdefault('plan_drafts', {})
-    for project_id, identity in st.session_state.pop('plan_pending_selection', {}).items():
-        st.session_state[f'plan_alternative_{project_id}'] = identity
+    if project_id not in names:
+        return
+    drafts = st.session_state.setdefault(f'project_plan_drafts_{project_id}', {})
+    for owner, identity in st.session_state.pop('plan_pending_selection', {}).items():
+        st.session_state[f'plan_alternative_{owner}'] = identity
     st.markdown('### Project plans')
     st.caption('Compare reference and alternative schedules. Save creates a new scenario. Use Set current to activate it.')
-    initial = st.session_state.get('target_planning_project_id')
-    default = [initial] if initial in names else list(names)[:1]
-    selected = st.multiselect('Projects to compare', list(names), default=default,
-        format_func=names.get, key='plan_projects', disabled=bool(drafts))
+    selected = [project_id]
     pool_rows = workspace.resources.get_all_pools()
     parent_ids = {row.parent_pool_id for row in pool_rows}
     pools = {row.id: f'{row.name} [#{row.id}]' for row in pool_rows if row.id not in parent_ids}
@@ -350,7 +349,7 @@ def render_project_plans(workspace: PlanningWorkspace) -> None:
                     st.dataframe(pd.DataFrame([{'Pool': row.pool_name, 'Peak FTE': row.peak_assigned_fte,
                         'Peak excess FTE': row.peak_excess_fte} for row in values]), hide_index=True, width='stretch')
     if drafts:
-        st.warning('Unsaved alternative plans. Save as new plans or cancel drafts before changing projects.')
+        st.warning('Unsaved changes are kept for this project. Save as a new plan or cancel the draft.')
         if st.button('Save as new plan' if len(drafts) == 1 else 'Save all as new plans', type='primary', key='save_project_plans'):
             saved = service.save_many([(project_id, item['source'], item['revision'], item['name'], item['content'], item['status'])
                                        for project_id, item in drafts.items()])

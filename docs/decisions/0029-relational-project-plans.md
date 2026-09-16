@@ -12,12 +12,27 @@ copying, activation, deletion and allocation cleanup run in Python services.
 PostgreSQL provides foreign keys, uniqueness, transactions and row security;
 no new database business functions are introduced.
 
-The current portfolio is the default planning view. Editing or dragging a task
-updates the active plan's rows and revision; it does not create another plan.
+The current portfolio is the default planning view. Its edit checkbox starts
+unchecked and Python rejects Gantt mutations until it is enabled. Editing or
+dragging a task normally updates the active plan; it does not create another plan.
 All operational task, demand, capacity, filter and export reads select active
 plans. Explicit scenario comparison and baseline display select their requested
 plan IDs. A project without an active plan contributes no operational schedule
 or demand.
+
+The project context menu groups baseline creation, baseline soft deletion and
+alternative display under Scenario management. Baseline mutations require edit
+mode and existing approval privileges. Alternative selection excludes active,
+deleted and frozen baseline plans. Comparison and baseline display are mutually
+exclusive. Comparison uses half-height active bars above purple alternative bars,
+with purple labels for alternative-only tasks. In edit mode only alternative
+bars can be dragged or resized; a revision-checked Python service updates that
+scenario's existing task rows and audits the date change. Active plans and the
+pool allocation grid remain unchanged.
+
+Plan management is a lazy Project plans tab immediately after Project log in the
+portfolio master-detail view. It uses the selected project without another project
+selector. Unsaved drafts are kept separately for each project in session state.
 
 ## Storage
 

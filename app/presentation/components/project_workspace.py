@@ -26,3 +26,4 @@ class ProjectWorkspace:
     render_links: Callable[[int], None] | None = None
     render_budget: Callable[[int], None] | None = None
     open_event_dialog: Callable[[int], None] | None = None
+    render_plans: Callable[[int], None] | None = None

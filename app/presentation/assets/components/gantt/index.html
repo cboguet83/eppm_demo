@@ -608,6 +608,14 @@
     .show-baseline .project-summary-bar {height:9.8px; top:15.8px;}
     .show-baseline .milestone-diamond-wrapper {width:14px; height:14px; top:13.7px; margin-left:-7px;}
     .show-baseline .milestone-diamond-shape {width:12.6px; height:12.6px;}
+    .compare-scenario .gantt-bar-wrapper {height:14px; top:5px;}
+    .compare-scenario .project-summary-bar {height:7px; top:9px;}
+    .compare-scenario .milestone-diamond-wrapper {width:12px; height:12px; top:6px; margin-left:-6px;}
+    .compare-scenario .milestone-diamond-shape {width:11px; height:11px;}
+    .alternative-bar {position:absolute; top:23px; height:14px; border-radius:3px; background:#9333ea; z-index:7; cursor:grab;}
+    .alternative-bar.project-alternative {height:7px; top:27px; cursor:default;}
+    .alternative-only, .alternative-only .task-title, .alternative-only .task-id-cell,
+    .alternative-only .task-date-cell, .alternative-only .task-sub-desc {color:#9333ea !important;}
 
     /* Task Bar Rendering */
     .gantt-bar-wrapper {
@@ -1849,9 +1857,14 @@ button:not(.context-menu-item):disabled {opacity:.5;}
 
   <!-- Project Context Menu (Displayed when right-clicking a project row) -->
   <div class="context-menu" id="project-context-menu" style="display:none; min-width:210px;">
-    <button class="context-menu-item" onclick="setCurrentProjectBaseline()">
-      <span>◆</span><span id="ctx-project-baseline">Set current project plan as baseline</span>
-    </button>
+    <div class="context-menu-item context-submenu-parent" tabindex="0" onmouseenter="positionSubmenu(this)" onfocus="positionSubmenu(this)">
+      <span>◆</span><span>Scenario management</span><span>▸</span>
+      <div class="context-menu context-submenu">
+        <button class="context-menu-item" onclick="setCurrentProjectBaseline()"><span id="ctx-project-baseline">Set current project plan as baseline</span></button>
+        <button class="context-menu-item danger" onclick="deleteProjectBaseline()"><span id="ctx-delete-baseline">Delete baseline</span></button>
+        <button class="context-menu-item" onclick="chooseAlternativeScenario()">Display an alternative scenario</button>
+      </div>
+    </div>
     <div class="context-menu-item warning" id="ctx-proj-violation-btn" onclick="openProjectDiagModal()" style="display:none;">
       <span>⚠️</span>
       <span id="ctx-proj-violation-label">View Project Violations</span>
@@ -2093,6 +2106,9 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;white-space:nowrap;">
           <input type="checkbox" id="show-baseline" onchange="toggleBaseline(this.checked)">Show baseline
         </label>
+        <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;white-space:nowrap;">
+          <input type="checkbox" id="enable-edit" onchange="toggleEdit(this.checked)">Enable edit mode
+        </label>
       </div>
     </div>
 
@@ -2257,6 +2273,9 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     };
 
     let tasksData = [];
+    let editEnabled = false;
+    let alternatives = {};
+    const comparingScenario = () => Object.keys(alternatives).length > 0;
     let showBaseline = false;
     let baselineTasks = {};
     let baselineSignature = '';
@@ -2264,19 +2283,42 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     let baselineProjectIds = new Set();
     let approvableProjectIds = new Set();
     const rowHeight = () => 41.4;
-    const barCenter = () => 20.7;
+    const barCenter = () => comparingScenario() ? 12 : 20.7;
 
     function canRescheduleTask(task) {
-      return Boolean(task && !task.baselineOnly &&
+      return Boolean(editEnabled && task && !task.baselineOnly &&
+        (comparingScenario() ? task.alternative === true && alternatives[String(task.project_id)]?.editable : !task.alternative) &&
         (editAllProjects || editableProjectIds.has(String(task.project_id))));
     }
 
     function canBaselineProject(projectId) {
-      return baselineAll || approvableProjectIds.has(String(projectId));
+      return editEnabled && !comparingScenario() && (baselineAll || approvableProjectIds.has(String(projectId)));
+    }
+
+    function toggleEdit(enabled) {
+      editEnabled = enabled;
+      renderTimeline();
+      Streamlit.setComponentValue({action:'toggle_edit', enabled, nonce:Date.now()+'_edit_mode'});
+    }
+
+    function chooseAlternativeScenario() {
+      document.getElementById('project-context-menu').style.display = 'none';
+      Streamlit.setComponentValue({action:'choose_alternative', project_id:selectedContextMenuProjectId,
+        nonce:Date.now()+'_choose_alternative'});
+    }
+
+    function deleteProjectBaseline() {
+      if (!canBaselineProject(selectedContextMenuProjectId) || !baselineProjectIds.has(String(selectedContextMenuProjectId))) return;
+      if (!confirm('Delete this project’s baseline? Its frozen history will be retained.')) return;
+      document.getElementById('project-context-menu').style.display = 'none';
+      Streamlit.setComponentValue({action:'delete_project_baseline', project_id:selectedContextMenuProjectId,
+        nonce:Date.now()+'_delete_baseline'});
     }
 
     function toggleBaseline(enabled) {
       showBaseline = enabled;
+      if (enabled) alternatives = {};
+      document.body.classList.toggle('compare-scenario', comparingScenario());
       document.body.classList.toggle('show-baseline', enabled);
       document.documentElement.style.setProperty('--row-height', rowHeight() + 'px');
       renderTimeline();
@@ -2294,6 +2336,17 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     }
 
     function displayTasks(tasks, projectId) {
+      const alternative = alternatives[String(projectId)];
+      if (alternative && (!lazyProjects || loadedProjectIds.has(String(projectId)))) {
+        const byId = new Map(alternative.tasks.map(t => [String(t.id), t]));
+        const live = new Set(tasks.map(t => String(t.id)));
+        return tasks.map(t => ({...t, alternativeTask:byId.get(String(t.id))})).concat(
+          alternative.tasks.filter(t => !live.has(String(t.id))).map(t => ({
+            id:'alternative-'+projectId+'-'+t.stable_id, display_id:t.stable_id, project_id:String(projectId),
+            name:t.task_name, start:t.start_date, end:t.end_date, description:t.description || '',
+            alternativeTask:t, alternativeOnly:true
+          })));
+      }
       if (!showBaseline || (lazyProjects && !loadedProjectIds.has(String(projectId)))) return tasks;
       const baseline = baselineTasks[String(projectId)] || [];
       const oldById = new Map(baseline.map(t => [String(t.id), t]));
@@ -2316,6 +2369,23 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       row.appendChild(line);
     }
 
+    function appendAlternative(row, task, projectId, summary=false) {
+      const plan = alternatives[String(projectId)];
+      if (!task || !plan) return;
+      const bar = document.createElement('div');
+      bar.className = 'alternative-bar' + (summary ? ' project-alternative' : '');
+      bar.style.left = dateToX(parseDate(task.start_date)) + 'px';
+      bar.style.width = Math.max(6, endDateToX(parseDate(task.end_date))-dateToX(parseDate(task.start_date))) + 'px';
+      bar.title = plan.name + ': ' + task.start_date + ' → ' + task.end_date;
+      if (!summary) {
+        bar.innerHTML = '<div class="resize-handle left"></div><div class="resize-handle right"></div>';
+        bindDragEvents(bar, {id:task.stable_id, project_id:projectId, name:task.task_name,
+          start:task.start_date, end:task.end_date, alternative:true, plan_id:plan.id, revision:plan.revision},
+          task.start_date === task.end_date);
+      }
+      row.appendChild(bar);
+    }
+
     // Presentation hints only. Every server operation checks current stored grants.
     let editAllProjects = false;
     let editableProjectIds = new Set();
@@ -2331,12 +2401,12 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     }
 
     function canEditProject(projectId) {
-      return projectId != null
+      return editEnabled && !comparingScenario() && projectId != null
         && (editAllProjects || editableProjectIds.has(String(projectId)));
     }
 
     function canEditTask(task) {
-      return Boolean(task && canEditProject(task.project_id));
+      return Boolean(task && !task.baselineOnly && !task.alternativeOnly && canEditProject(task.project_id));
     }
 
     function canEditDependency(dependency) {
@@ -2434,7 +2504,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     }
 
     function updateLoadedProjectWindows(replaced) {
-      if (showBaseline) return false;
+      if (showBaseline || comparingScenario()) return false;
       const tasks = new Map();
       for (const task of tasksData) {
         const pid = String(task.project_id);
@@ -3632,6 +3702,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       selectedContextMenuProjectId = projectId;
       selectedContextMenuTask = null;
       setMenuActionsVisible(['ctx-project-baseline'], canBaselineProject(projectId));
+      setMenuActionsVisible(['ctx-delete-baseline'], canBaselineProject(projectId) && baselineProjectIds.has(String(projectId)));
       setMenuActionsVisible(['ctx-project-add-step', 'ctx-import-csv', 'ctx-label-project-tags',
         'ctx-label-project-pools', 'ctx-project-dependencies', 'ctx-project-log-event'], canEditProject(projectId));
       const menu = document.getElementById('project-context-menu');
@@ -4347,7 +4418,8 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     // --------------------------------------------------------------------------
     function computeTimelineBounds() {
       const boundsData = [...(lazyProjects ? projectSummariesData.filter(p => p.start && p.end) : tasksData),
-        ...(showBaseline ? Object.values(baselineTasks).flat().map(t => ({start:t.start_date, end:t.end_date})) : [])];
+        ...(showBaseline ? Object.values(baselineTasks).flat().map(t => ({start:t.start_date, end:t.end_date})) : []),
+        ...Object.values(alternatives).flatMap(plan => plan.tasks.map(t => ({start:t.start_date, end:t.end_date})))];
       if (!boundsData || boundsData.length === 0) {
         timelineStart = new Date();
         timelineEnd = addDays(timelineStart, 90);
@@ -6114,7 +6186,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
           const hasViol = t.violations && t.violations.length > 0;
           const hasDesc = Boolean(showDescriptions && t.description && t.description.trim());
           frozenHtml += `
-            <div class="frozen-row ${item.isChild ? 'child-task-row' : ''} ${t.baselineOnly ? 'baseline-only' : ''}" id="frozen-row-${t.id}"
+            <div class="frozen-row ${item.isChild ? 'child-task-row' : ''} ${t.baselineOnly ? 'baseline-only' : ''} ${t.alternativeOnly ? 'alternative-only' : ''}" id="frozen-row-${t.id}"
                  style="top: ${topPos}px; width: ${totalW}px; min-width: ${totalW}px;"
                  onmouseenter="highlightRow('${t.id}')" 
                  onmouseleave="unhighlightRow('${t.id}')"
@@ -6160,6 +6232,11 @@ button:not(.context-menu-item):disabled {opacity:.5;}
             rowEl.oncontextmenu = (e) => showProjectContextMenu(e, item.project_id);
 
             const projectBaseline = baselineTasks[String(item.project_id)] || [];
+            const projectAlternative = alternatives[String(item.project_id)]?.tasks || [];
+            if (projectAlternative.length) appendAlternative(rowEl, {
+              start_date:projectAlternative.map(t => t.start_date).sort()[0],
+              end_date:projectAlternative.map(t => t.end_date).sort().at(-1)
+            }, item.project_id, true);
             if (projectBaseline.length) appendBaseline(rowEl, {
               start_date:projectBaseline.map(t => t.start_date).sort()[0],
               end_date:projectBaseline.map(t => t.end_date).sort().at(-1)
@@ -6191,8 +6268,9 @@ button:not(.context-menu-item):disabled {opacity:.5;}
             rowEl.onmouseleave = () => unhighlightRow(t.id);
             rowEl.ondblclick = () => openEditModalById(t.id);
             appendBaseline(rowEl, t.baseline);
-            if (t.baselineOnly) {
-              rowEl.classList.add('baseline-only');
+            appendAlternative(rowEl, t.alternativeTask, t.project_id);
+            if (t.baselineOnly || t.alternativeOnly) {
+              rowEl.classList.add(t.baselineOnly ? 'baseline-only' : 'alternative-only');
               rowEl.ondblclick = null;
               rowsContainer.appendChild(rowEl);
               continue;
@@ -6755,7 +6833,8 @@ button:not(.context-menu-item):disabled {opacity:.5;}
             const finalEndStr = formatDate(finalEnd);
 
             Streamlit.setComponentValue({
-              action: "update_dates",
+              action: task.alternative ? 'update_alternative_dates' : 'update_dates',
+              ...(task.alternative ? {project_id:task.project_id, plan_id:task.plan_id, revision:task.revision} : {}),
               id: parseInt(task.id, 10),
               start_date: finalStartStr,
               end_date: finalEndStr,
@@ -6788,11 +6867,15 @@ button:not(.context-menu-item):disabled {opacity:.5;}
           planningTaskRevision = args.task_revision;
         }
         updatePermissionControls(args.permissions);
-        const nextBaselineSignature = JSON.stringify([args.show_baseline === true, args.baseline_tasks || {}]);
+        const nextBaselineSignature = JSON.stringify([args.show_baseline === true, args.baseline_tasks || {}, args.edit_enabled === true, args.alternatives || {}, args.scenario_epoch]);
         const baselineChanged = nextBaselineSignature !== baselineSignature;
         baselineSignature = nextBaselineSignature;
         showBaseline = args.show_baseline === true;
         baselineTasks = args.baseline_tasks || {};
+        editEnabled = args.edit_enabled === true;
+        alternatives = args.alternatives || {};
+        document.getElementById('enable-edit').checked = editEnabled;
+        document.body.classList.toggle('compare-scenario', comparingScenario());
         document.getElementById('show-baseline').checked = showBaseline;
         document.body.classList.toggle('show-baseline', showBaseline);
         document.documentElement.style.setProperty('--row-height', rowHeight() + 'px');

@@ -12,10 +12,14 @@ def validate_event(event: dict[str, Any]) -> dict[str, Any]:
     ranges, and dependency rules remain authoritative in application/domain code.
     """
     result = dict(event)
-    if result.get('action') in {'load_project_dependencies', 'save_project_dependencies', 'log_project_event', 'baseline_current_project'}:
+    if result.get('action') in {'load_project_dependencies', 'save_project_dependencies', 'log_project_event',
+                              'baseline_current_project', 'delete_project_baseline', 'choose_alternative', 'update_alternative_dates'}:
         result['project_id'] = positive_identity(result.get('project_id'))
-    if result.get('action') == 'toggle_baseline' and type(result.get('enabled')) is not bool:
-        raise ValueError('Invalid baseline display selection.')
+    if result.get('action') in {'toggle_baseline', 'toggle_edit'} and type(result.get('enabled')) is not bool:
+        raise ValueError('Invalid planning mode selection.')
+    if result.get('action') == 'update_alternative_dates':
+        for field in ('plan_id', 'revision', 'id'):
+            result[field] = positive_identity(result.get(field))
     for field in ("id", "task_id", "project_id", "pool_id", "group_id", "progress", "progress_pct"):
         value = result.get(field)
         if field not in result or value is None and field.endswith("id") or value == "":

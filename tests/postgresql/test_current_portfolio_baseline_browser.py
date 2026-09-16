@@ -34,6 +34,7 @@ def test_current_portfolio_drag_and_baseline_overlay(authorized, tmp_path):
             page.on('pageerror', lambda error: errors.append(str(error)))
             page.goto(server.origin)
             frame = page.frame_locator('iframe[title*="interactive_gantt"]')
+            frame.get_by_role('checkbox', name='Enable edit mode', exact=True).check(timeout=40000)
             checkbox = frame.get_by_role('checkbox', name='Show baseline', exact=True)
             expect(checkbox).not_to_be_checked(timeout=40000)
             expect(frame.locator('#frozen-row-1')).to_be_visible()
@@ -91,6 +92,7 @@ def test_current_portfolio_drag_and_baseline_overlay(authorized, tmp_path):
                 dialog.dismiss()
 
             page.once('dialog', cancel_replacement)
+            frame.get_by_text('Scenario management', exact=True).hover()
             frame.get_by_text('Set current project plan as baseline', exact=True).click()
             assert len(dialogs) == 1 and 'already has a baseline' in dialogs[0]
             with psycopg.connect(authorized.setup.operator_url) as connection:
@@ -98,6 +100,7 @@ def test_current_portfolio_drag_and_baseline_overlay(authorized, tmp_path):
                 assert connection.execute('SELECT count(*) FROM eppm.project_plan WHERE project_id=1').fetchone() == (2,)
             page.once('dialog', lambda dialog: dialog.accept())
             before_revision = frame.locator('body').evaluate('() => lastDataRevision')
+            frame.get_by_text('Scenario management', exact=True).hover()
             frame.get_by_text('Set current project plan as baseline', exact=True).click()
             assert frame.locator('body').evaluate('''async (_, previous) => {
                 const deadline = performance.now() + 30000;
