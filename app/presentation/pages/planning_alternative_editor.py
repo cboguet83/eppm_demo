@@ -98,7 +98,7 @@ def save_task_tag(event: dict, workspace: PlanningWorkspace, tag: dict | None = 
 
 
 def template_content(steps: list[TemplateStep]) -> PlanContent:
-    """Adapt the shared CSV preview into an alternative schedule replacement."""
+    """Adapt the shared CSV preview into a new revision with fresh task identities."""
     content = PlanContent()
     for step in steps:
         content.tasks.append(dict(id=-step.number, progress_pct=step.values.get('progress_pct', 0),

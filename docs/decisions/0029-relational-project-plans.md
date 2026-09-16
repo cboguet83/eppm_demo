@@ -8,7 +8,7 @@ current/baseline behavior in [ADR 0028](0028-project-plans.md).
 Each project has at most one active plan and at most one designated baseline.
 Alternative scenarios are inactive until explicitly activated. Only Approved
 plans can be activated through scenario management or designated as baseline.
-CSV imports are an explicit exception: a newly imported Draft can be active. Lifecycle authorization,
+Lifecycle authorization,
 copying, activation, deletion and allocation cleanup run in Python services.
 PostgreSQL provides foreign keys, uniqueness, transactions and row security;
 no new database business functions are introduced.
@@ -29,8 +29,8 @@ exclusive. Comparison uses half-height active bars above purple alternative
 bars, with purple labels for alternative-only rows. Baseline lanes also retain
 their purple color. In edit mode only alternative
 bars can be dragged or resized; a revision-checked Python service updates that
-scenario's existing task rows and audits the date change. Active plans and the
-pool allocation grid remain unchanged.
+scenario's existing task rows and audits the date change. Active plans remain unchanged. Resource consumption is compared in separate
+active and alternative rows using the shared demand rules.
 
 Comparison starts disabled on a new browser session and whenever navigation
 opens the page again. Scenario management can explicitly hide comparison or
@@ -176,13 +176,23 @@ primary links, and repeated revision reads across 10,001 projects.
 CSV import always creates a new revision with a mandatory version name, retaining
 all existing plans. Editors import Draft revisions; scoped approvers and business
 administrators may select Draft, Proposed, Approved or Rejected. Deleted is a
-lifecycle action, not an import status. The active-plan checkbox defaults to true;
-activation clears all previous current designations within the same project lock
-and transaction. Import works without a source plan. CSV tasks are new identities
-with no resource assignments. An active import closes comparison; an inactive
-import leaves the displayed plans unchanged.
+lifecycle action, not an import status. The active-plan checkbox is disabled and
+unchecked; Python rejects import activation too. Import works without a source
+plan and always leaves existing active designations unchanged. CSV tasks are new
+identities with no resource assignments. Activate a revision separately through
+scenario management after approval. Day and month may have one digit; two-digit
+years in slash-separated dates resolve to 2000–2099, preserving the selected
+DD/MM or MM/DD order and rejecting invalid calendar dates.
+
 
 Baseline visibility is toggled in Scenario management immediately above Delete
-baseline. Dual-view project rows show both task counts, with the alternative count
+baseline. Dual-view project rows show both task counts, with the active count above the alternative count
 in its scenario color. Alternative constraint warnings open the shared diagnostics
 and step editor using that scenario's stable task identity. Row heights are retained.
+
+In dual view, affected pools and containers have an alternative demand row below
+their active rows. Alternative-only pools remain visible with Hide unused pools.
+Python resolves assignment periods against each alternative schedule and reuses
+project/task demand deduplication; container rows sum their descendant pools.
+These rows retain the resource context menu with every action disabled. Closing
+comparison removes the alternative consumption rows without altering active demand.

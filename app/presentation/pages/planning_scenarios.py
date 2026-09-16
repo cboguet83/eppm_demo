@@ -8,6 +8,7 @@ from app.application.exceptions import PlanningStorageError
 from app.domain.access.models import Permission
 from app.domain.planning.project_dependencies import evaluate_project_dependencies
 from app.domain.planning.constraints import evaluate_constraints
+from app.domain.resources.scenario_demand import scenario_pool_demand
 from app.presentation.components.dialog import dialog
 from app.presentation.components.planning_workspace import PlanningWorkspace
 
@@ -165,9 +166,10 @@ def choose_alternative(project_id: int, workspace: PlanningWorkspace) -> None:
 
 
 def scenario_payload(workspace: PlanningWorkspace, project_ids: list[int]) -> dict:
-    """Read only selected visible alternatives; never feed them to pool demand."""
+    """Read visible alternatives and their separate resource consumption."""
     alternatives = {}
     contents = []
+    content_by_project = {}
     choices = st.session_state.setdefault('planning_alternatives', {})
     new_views = st.session_state.setdefault('planning_new_scenario_views', {})
     if workspace.plans is not None:
@@ -189,9 +191,11 @@ def scenario_payload(workspace: PlanningWorkspace, project_ids: list[int]) -> di
                 new_scenario=new_views.get(project_id) == plan.id,
                 editable=permissions.allows(Permission.EDIT, project_id))
             contents.append(plan.content)
+            content_by_project[project_id] = plan.content
     if alternatives:
         _enrich_comparisons(workspace, alternatives, contents)
     return dict(edit_enabled=bool(st.session_state.get('planning_edit_enabled', False)), alternatives=alternatives,
+                alternative_pool_usage=scenario_pool_demand(content_by_project),
                 alternative_endpoints=workspace.plans.comparison_endpoints(contents) if contents else {},
                 alternative_task_choices=workspace.plans.task_choices() if contents else [],
                 scenario_epoch=st.session_state.get('planning_scenario_epoch', 0))

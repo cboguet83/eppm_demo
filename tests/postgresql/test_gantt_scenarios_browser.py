@@ -45,6 +45,8 @@ def test_create_named_draft_opens_light_blue_comparison_and_copies_allocations(a
         connection.execute("UPDATE eppm.project SET status='In Progress'")
         connection.execute("INSERT INTO eppm.project_task(project_id,project_plan_id,task_name,start_date,end_date,progress_pct) VALUES(1,%s,'Build','2027-01-01','2027-01-05',35)", (initial.id,))
         connection.execute("INSERT INTO eppm.resource_pool(id,name,capacity_fte) VALUES(1,'Pool',2)")
+        connection.execute("INSERT INTO eppm.resource_pool(id,name,capacity_fte) VALUES(2,'Container',0)")
+        connection.execute('UPDATE eppm.resource_pool SET parent_pool_id=2 WHERE id=1')
         connection.execute('''INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,project_plan_id,fte_assigned)
             VALUES(1,1,1,%s,0.5)''', (initial.id,))
     initial = next(row for row in plans.list_plans(1) if row.is_current)
@@ -71,6 +73,19 @@ def test_create_named_draft_opens_light_blue_comparison_and_copies_allocations(a
             expect(page.get_by_role('dialog')).to_have_count(0)
             bar = frame.locator('#timeline-row-1 .alternative-bar')
             expect(bar).to_be_visible()
+            active_count = frame.locator('#frozen-row-proj-1 .project-group-count').bounding_box()
+            alternative_count = frame.locator('#frozen-row-proj-1 .alternative-project-count').bounding_box()
+            assert alternative_count['y'] >= active_count['y'] + active_count['height']
+            alternative_rows = frame.locator('#resource-left-body .alternative-resource-row')
+            expect(alternative_rows).to_have_count(2)
+            expect(alternative_rows.first).to_contain_text('Container')
+            expect(alternative_rows.last).to_contain_text('Pool')
+            expect(frame.locator('#resource-right-body .alternative-resource-row [data-demand="0.5"]').first).to_be_visible()
+            alternative_rows.last.click(button='right')
+            expect(frame.locator('#resource-cell-context-menu')).to_be_visible()
+            assert frame.locator('#resource-cell-context-menu .context-menu-item').evaluate_all(
+                "items => items.every(item => item.getAttribute('aria-disabled') === 'true')")
+            frame.locator('#btn-mode-day').click()
             assert bar.evaluate('(el)=>getComputedStyle(el).backgroundColor') == 'rgb(125, 211, 252)'
             assert frame.locator('#frozen-row-1').evaluate('(el)=>getComputedStyle(el).backgroundColor') == 'rgb(224, 242, 254)'
             expect(edit).to_be_checked()

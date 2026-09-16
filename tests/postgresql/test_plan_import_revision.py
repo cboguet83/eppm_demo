@@ -1,4 +1,4 @@
-"""CSV revisions retain history and activate atomically under scoped permissions."""
+"""CSV revisions retain history and remain inactive under scoped permissions."""
 
 import psycopg
 import pytest
@@ -9,11 +9,13 @@ from app.domain.planning.plans import PlanContent
 from tests.postgresql.test_project_plans import service, draft_task
 
 
-def test_editor_imports_active_draft_and_preserves_previous_revision(authorized):
+def test_editor_imports_inactive_draft_and_preserves_previous_revision(authorized):
     plans = service(authorized)
     previous = plans.initialize(1)
     saved = plans.import_revision(1, 'Imported', PlanContent(tasks=[draft_task()]))
-    assert saved.is_current and saved.status == 'draft'
+    assert not saved.is_current and saved.status == 'draft'
+    with pytest.raises(ValueError, match='remain inactive'):
+        plans.import_revision(1, 'Cannot activate', PlanContent(), active=True)
     history = plans.list_plans(1)
     assert sum(plan.is_current for plan in history) == 1
     assert next(plan for plan in history if plan.id == previous.id).content == previous.content
@@ -41,7 +43,7 @@ def test_import_creates_first_plan_when_project_has_none(authorized):
     with psycopg.connect(authorized.setup.operator_url) as connection:
         connection.execute('DELETE FROM eppm.project_plan WHERE project_id=1')
     saved = service(authorized).import_revision(1, 'First import', PlanContent(tasks=[draft_task()]))
-    assert saved.version == 1 and saved.is_current and saved.status == 'draft'
+    assert saved.version == 1 and not saved.is_current and saved.status == 'draft'
     assert len(saved.content.tasks) == 1
 
 

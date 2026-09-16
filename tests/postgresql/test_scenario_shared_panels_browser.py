@@ -103,15 +103,16 @@ def test_alternative_tooltips_project_dependencies_tags_and_csv_reuse_shared_pan
             expect(page.get_by_role('button', name='Import plan revision', exact=True)).to_be_disabled()
             page.get_by_role('textbox', name='Version name', exact=True).fill('CSV revision')
             page.get_by_role('textbox', name='Version name', exact=True).press('Tab')
-            expect(page.get_by_role('checkbox', name='Set import as the active plan')).to_be_checked()
+            expect(page.get_by_role('checkbox', name='Set import as the active plan')).not_to_be_checked()
+            expect(page.get_by_role('checkbox', name='Set import as the active plan')).to_be_disabled()
             page.get_by_role('button', name='Import plan revision', exact=True).click()
             expect(page.get_by_role('dialog')).to_have_count(0)
-            expect(frame.locator('.task-title')).to_contain_text('Imported scenario')
+            expect(frame.locator('#timeline-row-1 .alternative-bar')).to_be_visible()
             with psycopg.connect(authorized.setup.operator_url) as connection:
                 saved = read_plans(connection, [active.id, alternative.id])
             assert saved[active.id] == active.content
             assert saved[alternative.id].tasks[0]['task_name'] == 'Alternative build'
             with psycopg.connect(authorized.setup.operator_url) as connection:
-                assert connection.execute("SELECT name,s.code FROM eppm.project_plan p JOIN eppm.plan_status s ON s.id=p.status_id WHERE p.project_id=1 AND is_current").fetchone() == ('CSV revision', 'draft')
+                assert connection.execute("SELECT name,s.code FROM eppm.project_plan p JOIN eppm.plan_status s ON s.id=p.status_id WHERE p.project_id=1 AND p.name='CSV revision' AND NOT is_current").fetchone() == ('CSV revision', 'draft')
         finally:
             browser.close()

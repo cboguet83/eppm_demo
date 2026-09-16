@@ -21,10 +21,10 @@ class ProjectPlanService:
         return self._gateway.run(lambda store: store.list_plans(project_id))
 
     def import_revision(self, project_id: int, name: str, content: PlanContent,
-                        *, status: str = 'draft', active: bool = True) -> ProjectPlan:
-        """Create a named CSV revision and optionally activate it atomically.
+                        *, status: str = 'draft', active: bool = False) -> ProjectPlan:
+        """Create a named, inactive CSV revision atomically.
 
-        Imports may become the working plan while still Draft. Only approvers
+        Imports remain inactive until separately activated. Only approvers
         and business administrators may choose another non-deleted status.
         """
         def operation(store: PlanStore) -> ProjectPlan:
@@ -38,12 +38,12 @@ class ProjectPlanService:
                 raise ValueError('Choose a non-deleted revision status.')
             if status != 'draft' and not (approver or admin):
                 raise AccessDenied('Only approvers and Business Admins may choose the import status.')
+            if active:
+                raise ValueError('Imported revisions must remain inactive. Activate them through scenario management.')
             normalized = normalize_content(project_id, deepcopy(content))
             store.validate_references(project_id, normalized)
             normalized = store.reserve_identities(normalized)
             saved = store.insert(project_id, name.strip(), status, None, normalized)
-            if active:
-                store.metadata(saved, 'current', 'true')
             return next(plan for plan in store.list_plans(project_id) if plan.id == saved.id)
         return self._gateway.run(operation, write=True)
 

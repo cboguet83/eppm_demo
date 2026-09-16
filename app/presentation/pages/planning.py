@@ -2103,7 +2103,8 @@ def _schedule_csv_dialog(workspace: PlanningWorkspace, project_id: int, action: 
                           format_func=str.title) if privileged else "draft")
     if not privileged:
         st.caption("Revision status: Draft")
-    make_active = st.checkbox("Set import as the active plan", value=True)
+    st.checkbox("Set import as the active plan", value=False, disabled=True,
+                help="Imported revisions remain inactive. Use scenario management to activate a revision.")
     st.caption(t("planning.csv_dependency_help", default=(
         "Use preceding_step, dependency_type and dependency_lag. For multiple predecessors, "
         "separate each column's values with semicolons in matching order (1;2 / FS;SS / 0;2). "
@@ -2132,9 +2133,6 @@ def _schedule_csv_dialog(workspace: PlanningWorkspace, project_id: int, action: 
     st.dataframe(pd.DataFrame(steps_payload), width="stretch", hide_index=True)
     if st.button("Import plan revision", type="primary", disabled=not version_name.strip()):
         workspace.plans.import_revision(project_id, version_name, template_content(steps),
-                                        status=status, active=make_active)
-        if make_active:
-            from app.presentation.pages.planning_scenarios import close_alternative_view
-            close_alternative_view()
+                                        status=status)
         st.toast(f"Imported {len(steps)} tasks as a new plan revision.")
         st.rerun()

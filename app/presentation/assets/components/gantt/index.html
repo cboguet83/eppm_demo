@@ -1130,6 +1130,10 @@
     }
 
     /* Resource Pools Usage & Demand Grid */
+    .resource-left-row.alternative-resource-row,
+    .resource-right-row.alternative-resource-row {color:#9333ea;background:#faf5ff;}
+    .resource-right-row.alternative-resource-row .resource-demand-cell.cell-normal {color:#9333ea;background:#f3e8ff;}
+
     .resource-grid-container {
       background: #ffffff;
       border-top: 2px solid var(--border-dark);
@@ -2286,6 +2290,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     let editEnabled = false;
     let alternatives = {};
     let alternativeEndpoints = {};
+    let alternativePoolUsage = {};
     let alternativeTaskChoices = [];
     const comparingScenario = () => Object.keys(alternatives).length > 0;
     let showBaseline = false;
@@ -5012,7 +5017,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     function handlePoolRowContextMenu(e, el) {
       const poolId = parseInt(el.dataset.poolId, 10);
       const poolName = el.dataset.poolName || '';
-      openResourceCellContextMenu(e, poolId, poolName, '', '', '');
+      openResourceCellContextMenu(e, poolId, poolName, '', '', '', null, el.dataset.scope || 'total');
     }
 
     function handleCellMouseEnter(e, el) {
@@ -5020,7 +5025,8 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       const startStr = el.dataset.startDate || '';
       const endStr = el.dataset.endDate || '';
       const pool = getResourcePoolById(el.dataset.poolId);
-      const usage = el.dataset.scope === 'selected' ? pool?.selected_projects_daily_usage : pool?.daily_usage;
+      const usage = el.dataset.scope === 'alternative' ? pool?.alternative_daily_usage
+        : el.dataset.scope === 'selected' ? pool?.selected_projects_daily_usage : pool?.daily_usage;
       const status = pool ? getDemandCapacityStatusForPeriod(usage,
         Number(pool.displayed_assigned_capacity ?? pool.theoretical_capacity ?? pool.capacity ?? 0),
         pool.daily_assigned_capacity || EMPTY_DAILY_SERIES, startStr, endStr) : null;
@@ -5071,6 +5077,14 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         if (clearBtn) clearBtn.style.display = 'none';
       }
 
+      menu.querySelectorAll('.context-menu-item').forEach(item => {
+        const disabled = allocationScope === 'alternative';
+        item.setAttribute('aria-disabled', String(disabled));
+        item.style.pointerEvents = disabled ? 'none' : '';
+        item.style.opacity = disabled ? '.45' : '';
+        if (item.tagName === 'BUTTON') item.disabled = disabled;
+        if (item.classList.contains('context-submenu-parent')) item.tabIndex = disabled ? -1 : 0;
+      });
       menu.style.display = 'block';
 
       const menuWidth = menu.offsetWidth || 280;
@@ -5095,7 +5109,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
 
     function triggerGoToResourcePoolDetails(action = "go_to_pool_details") {
       hideResourceCellContextMenu();
-      if (!selectedResourceCellCtx) return;
+      if (!selectedResourceCellCtx || selectedResourceCellCtx.allocation_scope === 'alternative') return;
       if (action === 'go_to_pool_details' && !canManageSharedData) return;
       Streamlit.setComponentValue({
         action,
@@ -5111,7 +5125,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
 
     function triggerFilterResourcePool(clearOther, scope = 'this') {
       hideResourceCellContextMenu();
-      if (!selectedResourceCellCtx) return;
+      if (!selectedResourceCellCtx || selectedResourceCellCtx.allocation_scope === 'alternative') return;
       Streamlit.setComponentValue({
         action: "filter_by_resource_pool",
         filter_scope: scope,
@@ -5129,10 +5143,11 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     function handleGroupContextMenu(e) {
       const row = e.currentTarget;
       openResourceCellContextMenu(e, null, row.dataset.groupName,
-        row.dataset.start || '', row.dataset.end || '', '', Number(row.dataset.groupId));
+        row.dataset.start || '', row.dataset.end || '', '', Number(row.dataset.groupId), row.dataset.scope || 'total');
     }
 
     function triggerClearResourcePoolFilter(e) {
+      if (selectedResourceCellCtx?.allocation_scope === 'alternative' && e?.target.closest('#resource-cell-context-menu')) return;
       if (e) {
         e.stopPropagation();
         e.preventDefault();
@@ -5178,11 +5193,13 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     let onlyOverallocatedPools = false;
 
     function isResourcePoolVisible(pool) {
-      return (!hideUnusedPools || Boolean(pool.used_by_selected_projects)) &&
-        (!onlyOverallocatedPools || getDemandCapacityStatusForPeriod(
-          pool.daily_usage, pool.displayed_assigned_capacity ?? pool.capacity ?? 0,
+      const alternative = comparingScenario() ? alternativePoolUsage[String(pool.id)] : null;
+      const used = pool.used_by_selected_projects || (alternative && Object.keys(alternative).length);
+      return (!hideUnusedPools || used) && (!onlyOverallocatedPools ||
+        [pool.daily_usage, alternative || {}].some(usage => getDemandCapacityStatusForPeriod(
+          usage, pool.displayed_assigned_capacity ?? pool.capacity ?? 0,
           pool.daily_assigned_capacity || {}, formatDate(timelineStart), formatDate(timelineEnd)
-        ).isOverallocated);
+        ).isOverallocated));
     }
 
     function isResourceNodeVisible(node) {
@@ -5250,7 +5267,15 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       };
 
       hierarchy.forEach(node => visit(node, 0));
-      return rows;
+      if (!comparingScenario()) return rows;
+      return rows.flatMap((row, index) => {
+        if (rows[index + 1]?.nodeKey === row.nodeKey) return [row];
+        const usage = row.rowType === 'group_total'
+          ? aggregatePoolUsage(row.node.descendant_pool_ids || [], 'alternative_daily_usage')
+          : alternativePoolUsage[String(row.pool.id)];
+        if (!usage || !Object.keys(usage).length) return [row];
+        return [row, {...row, rowType:row.rowType === 'group_total' ? 'group_total' : 'alternative_demand', alternative:true, usage}];
+      });
     }
 
     function formatResourceValue(value) {
@@ -5258,7 +5283,8 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     }
 
     function renderResourceGrid(topCells, bottomCells) {
-      resourcePoolIndex = new Map((resourcePoolsData || []).map(pool => [Number(pool.id), pool]));
+      resourcePoolIndex = new Map((resourcePoolsData || []).map(pool => [Number(pool.id),
+        {...pool, alternative_daily_usage:alternativePoolUsage[String(pool.id)] || {}}]));
       if (topCells) {
         lastRenderedTopCells = topCells;
       } else {
@@ -5482,18 +5508,33 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         const indent = Math.max(0, Number(row.depth || 0)) * 16;
         const toggle = row.collapsed ? '&#9654;' : '&#9660;';
 
+        if (row.rowType === 'alternative_demand') {
+          const pool = row.pool;
+          const label = escapeHtml(pool.name);
+          leftHtml += `<div class="resource-left-row alternative-resource-row sub-row"
+            data-row-id="${escapeHtml(row.nodeKey)}-alternative" data-pool-id="${pool.id}"
+            data-pool-name="${label}" data-scope="alternative" oncontextmenu="handlePoolRowContextMenu(event, this)">
+            <div class="resource-pool-name" style="padding-left:${indent}px;color:#9333ea">
+              <span class="r-name-text">${label}</span><span class="r-badge">Alternative scenario</span>
+            </div></div>`;
+          const cells = renderDemandCells(pool, row.usage, 'alternative');
+          rightHtml += `<div class="resource-right-row alternative-resource-row sub-row"
+            style="width:${totalTimelineWidth}px;box-sizing:border-box;padding-left:${columnLeft}px;">${cells}</div>`;
+          return;
+        }
+
         if (row.rowType === 'group_total') {
           const group = row.node;
           const descendantIds = (group.descendant_pool_ids || []).filter(poolId => {
             const pool = getResourcePoolById(poolId);
             return pool && isResourcePoolVisible(pool);
           });
-          const groupUsage = aggregatePoolUsage(descendantIds, 'daily_usage');
+          const groupUsage = row.alternative ? row.usage : aggregatePoolUsage(descendantIds, 'daily_usage');
           leftHtml += `
-            <div class="resource-left-row resource-group-row"
+            <div class="resource-left-row resource-group-row ${row.alternative ? 'alternative-resource-row' : ''}" data-scope="${row.alternative ? 'alternative' : 'total'}"
                  data-group-id="${Number(group.group_id)}" data-group-name="${escapeHtml(group.name)}"
                  oncontextmenu="handleGroupContextMenu(event)"
-                 data-row-id="${escapeHtml(row.nodeKey)}"
+                 data-row-id="${escapeHtml(row.nodeKey)}${row.alternative ? '-alternative' : ''}"
                  title="${escapeHtml(groupAssignmentDetails(group, group.descendant_pool_ids || [], formatDate(timelineStart), formatDate(timelineEnd)))}">
               <div class="resource-pool-name" style="padding-left:${indent}px;">
                 <button class="resource-tree-toggle" type="button"
@@ -5501,7 +5542,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
                         onclick="toggleResourceNode('${row.nodeKey}')">${toggle}</button>
                 <span class="resource-tree-icon">📁</span>
                 <span class="r-name-text">${escapeHtml(group.name)}</span>
-                <span class="r-badge group-badge">Group total</span>
+                <span class="r-badge group-badge">${row.alternative ? 'Alternative scenario' : 'Group total'}</span>
               </div>
             </div>
           `;
@@ -5511,20 +5552,22 @@ button:not(.context-menu-item):disabled {opacity:.5;}
             const demand = getMaxDemandForPeriod(groupUsage, startStr, endStr);
             const isOver = descendantIds.some(poolId => {
               const childPool = getResourcePoolById(poolId);
-              return childPool && isDisplayedPoolPeriodOverallocated(childPool, startStr, endStr);
+              return childPool && (row.alternative ? getDemandCapacityStatusForPeriod(childPool.alternative_daily_usage,
+                childPool.displayed_assigned_capacity ?? childPool.capacity ?? 0, childPool.daily_assigned_capacity, startStr, endStr).isOverallocated
+                : isDisplayedPoolPeriodOverallocated(childPool, startStr, endStr));
             });
             const cellClass = demand > 0
               ? (isOver ? 'cell-overallocated' : 'cell-normal')
               : 'cell-empty';
             return `<div class="resource-demand-cell ${cellClass} resource-group-cell"
                          data-group-id="${Number(group.group_id)}" data-group-name="${escapeHtml(group.name)}"
-                         data-start="${startStr}" data-end="${endStr}" oncontextmenu="handleGroupContextMenu(event)"
+                         data-start="${startStr}" data-end="${endStr}" data-scope="${row.alternative ? 'alternative' : 'total'}" oncontextmenu="handleGroupContextMenu(event)"
                          style="width:${c.width}px;"
                          title="${escapeHtml(groupAssignmentDetails(group, group.descendant_pool_ids || [], startStr, endStr))}">
                       ${demand > 0 ? formatResourceValue(demand) : '—'}
                     </div>`;
           }).join('');
-          rightHtml += `<div class="resource-right-row resource-group-row"
+          rightHtml += `<div class="resource-right-row resource-group-row ${row.alternative ? 'alternative-resource-row' : ''}"
                             style="width:${totalTimelineWidth}px;box-sizing:border-box;padding-left:${columnLeft}px;">${groupCells}</div>`;
           return;
         }
@@ -6347,7 +6390,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
                       onmouseenter="showProjectHoverTooltip(event, '${item.project_id}')"
                       onmousemove="moveTooltip(event)"
                       onmouseleave="hideTooltip()">${escapeHtml(cleanProjectName)}</span>
-                <span class="project-group-count" title="Active scenario tasks" style="font-size:10px; padding:1px 6px; border-radius:10px; flex-shrink:0; cursor:${hasViol ? 'pointer' : 'default'}; ${badgeStyle}" ${hasViol ? `onclick="event.stopPropagation(); openProjectDiagModal('${item.project_id}', false);"` : ''}>${badgeIcon}${item.taskCount}</span>${alternativeCount}
+                <span style="display:flex;flex-direction:column;align-items:center;gap:1px;line-height:12px"><span class="project-group-count" title="Active scenario tasks" style="font-size:10px; padding:1px 6px; border-radius:10px; flex-shrink:0; cursor:${hasViol ? 'pointer' : 'default'}; ${badgeStyle}" ${hasViol ? `onclick="event.stopPropagation(); openProjectDiagModal('${item.project_id}', false);"` : ''}>${badgeIcon}${item.taskCount}</span>${alternativeCount}</span>
               </div>
               <span class="task-date-cell" style="width:${colWidths.start}px; min-width:${colWidths.start}px; max-width:${colWidths.start}px; font-weight:600; color:#334155;">${formatMmmYy(item.start)}</span>
               <span class="task-date-cell" style="width:${colWidths.stop}px; min-width:${colWidths.stop}px; max-width:${colWidths.stop}px; font-weight:600; color:#334155;">${formatMmmYy(item.end)}</span>
@@ -7136,6 +7179,8 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         alternatives = args.alternatives || {};
         alternativeEndpoints = args.alternative_endpoints || {};
         alternativeTaskChoices = args.alternative_task_choices || [];
+        alternativePoolUsage = args.alternative_pool_usage || {};
+        groupUsageCache.clear();
         document.getElementById('enable-edit').checked = editEnabled;
         document.body.classList.toggle('compare-scenario', comparingScenario());
         document.getElementById('ctx-show-baseline').textContent = showBaseline ? 'Hide baseline' : 'Show baseline';

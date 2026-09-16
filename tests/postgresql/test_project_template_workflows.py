@@ -190,7 +190,8 @@ def test_ambiguous_dates_follow_selected_format_and_invalid_dates_preserve_sched
     assert parse_template(content, date_format="MM/DD/YYYY")[0].values["start_date"] == "2026-02-01"
     service = create_planning_service(database, access=access)
     before = snapshot(authorized)
-    for bad in ("31/02/2026", "", "01/02/26"):
+    assert parse_template(content.replace("02/01/2026", "1/2/26"), date_format="DD/MM/YYYY")[0].values["start_date"] == "2026-02-01"
+    for bad in ("31/02/2026", "", "31/02/26"):
         with pytest.raises(ValueError, match="Row 2: Invalid start_date"):
             service.replace_project_template(1, content.replace("02/01/2026", bad), date_format="DD/MM/YYYY")
         assert snapshot(authorized) == before
@@ -283,8 +284,8 @@ _schedule_csv_dialog(create_planning_workspace(runtime, access=access), 1, "impo
 ''', database, access).run()
     assert not app.exception
     assert "Unknown predecessor" in app.error[0].value
-    assert "Nothing is deleted" in app.warning[0].value
-    assert not any(button.label == "Replace project schedule" for button in app.button)
+    assert "Existing revisions are retained" in app.info[0].value
+    assert not any(button.label == "Import plan revision" for button in app.button)
     assert snapshot(authorized) == before
 
 

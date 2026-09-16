@@ -72,6 +72,10 @@ def _dependencies(row: dict[str, str]) -> tuple[TemplateDependency, ...]:
 def _template_date(value: str, column: str, date_format: str) -> str:
     """Normalize an explicitly selected CSV date format to stored ISO dates."""
     formats = {"YYYY-MM-DD": "%Y-%m-%d", "DD/MM/YYYY": "%d/%m/%Y", "MM/DD/YYYY": "%m/%d/%Y"}
+    value = value.strip()
+    parts = value.split('/')
+    if date_format != 'YYYY-MM-DD' and len(parts) == 3 and len(parts[2]) == 2 and parts[2].isdigit():
+        value = '/'.join([*parts[:2], '20' + parts[2]])
     # Exported ISO dates remain valid even when only some cells were reformatted.
     for pattern in dict.fromkeys(("%Y-%m-%d", formats[date_format])):
         try:
