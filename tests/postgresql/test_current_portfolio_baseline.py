@@ -16,7 +16,9 @@ def test_drag_changes_live_dates_without_creating_plan_or_moving_baseline(author
     with psycopg.connect(authorized.setup.operator_url) as connection:
         connection.execute("INSERT INTO eppm.project_task(project_id,task_name,start_date,end_date) VALUES(1,'Task','2027-01-01','2027-01-05')")
     plans = service(authorized, 4)
+    assert plans.baseline_projects() == []
     baseline = plans.baseline_current(1)
+    assert plans.baseline_projects() == [1]
     editor = PlanningService(PostgresPlanningGateway(authorized.database, authorized.key, access=authorized.binding(1).access))
     assert editor.update_dates(1, '2027-02-01', '2027-02-05')
     saved = plans.list_plans(1)
@@ -50,3 +52,4 @@ def test_scoped_approver_can_capture_latest_dates_but_cannot_reschedule(authoriz
         approver.baseline_current(2)
     assert approver.baseline_tasks([1, 2]).keys() == {1}
     assert service(authorized, 2).baseline_tasks([1]) == {}
+    assert service(authorized, 2).baseline_projects() == []

@@ -2261,6 +2261,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     let baselineTasks = {};
     let baselineSignature = '';
     let baselineAll = false;
+    let baselineProjectIds = new Set();
     let approvableProjectIds = new Set();
     const rowHeight = () => 41.4;
     const barCenter = () => 20.7;
@@ -2284,6 +2285,8 @@ button:not(.context-menu-item):disabled {opacity:.5;}
 
     function setCurrentProjectBaseline() {
       if (!canBaselineProject(selectedContextMenuProjectId)) return;
+      if (baselineProjectIds.has(String(selectedContextMenuProjectId)) &&
+          !confirm('This project already has a baseline. Replace it with the current project plan? The previous saved plan will be kept.')) return;
       hideContextMenu();
       document.getElementById('project-context-menu').style.display = 'none';
       Streamlit.setComponentValue({action:'baseline_current_project', project_id:selectedContextMenuProjectId,
@@ -2325,6 +2328,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       versionedProjectIds = new Set((permissions?.versioned_projects || []).map(String));
       canManageSharedData = permissions?.manage_shared === true;
       baselineAll = permissions?.baseline_all === true;
+      baselineProjectIds = new Set((permissions?.baseline_projects || []).map(String));
       approvableProjectIds = new Set((permissions?.approvable_projects || []).map(String));
     }
 

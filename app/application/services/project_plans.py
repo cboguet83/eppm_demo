@@ -20,6 +20,10 @@ class ProjectPlanService:
         """Read only baseline task lanes for the visible portfolio selection."""
         return self._gateway.run(lambda store: store.baseline_tasks(project_ids))
 
+    def baseline_projects(self) -> list[int]:
+        """List visible projects with a baseline, even when its chart lane is hidden."""
+        return self._gateway.run(lambda store: store.baseline_projects())
+
     def current_content(self, project_id: int) -> PlanContent:
         """Read the current working schedule, including rescheduled live dates."""
         def operation(store: PlanStore) -> PlanContent:

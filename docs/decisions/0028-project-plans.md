@@ -58,7 +58,10 @@ The project menu's **Set current project plan as baseline** explicitly freezes t
 live schedule. If it differs from the saved current snapshot, this action appends
 an Approved snapshot and designates it current and baseline. Otherwise it marks
 the existing current plan. Approver/Business Admin permission remains required;
-migration 0044 permits scoped approvers to insert this explicit snapshot. Python
+the Gantt asks for confirmation before replacing an existing baseline, including
+when baseline lanes are hidden. Cancelling leaves the designation unchanged;
+confirming retains the previous immutable plan in history.
+Migration 0044 permits scoped approvers to insert this explicit snapshot. Python
 continues to prevent approvers from saving edited drafts without edit permission.
 
 **Show baseline** is initially unchecked. Enabling it keeps row heights unchanged

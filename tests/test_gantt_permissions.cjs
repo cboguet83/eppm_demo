@@ -31,6 +31,26 @@ function harness() {
   return {context, run, load, node, messages};
 }
 
+test('baseline replacement requires confirmation while first capture does not', () => {
+  const h = harness();
+  h.load('    function setCurrentProjectBaseline(', '    function displayTasks(');
+  h.context.selectedContextMenuProjectId = 1;
+  const prompts = [];
+  h.context.confirm = message => {prompts.push(message); return false;};
+  h.context.updatePermissionControls({approvable_projects: [1]});
+  h.context.setCurrentProjectBaseline();
+  assert.equal(prompts.length, 0);
+  assert.equal(h.messages.length, 1);
+  h.context.updatePermissionControls({approvable_projects: [1], baseline_projects: [1]});
+  h.context.setCurrentProjectBaseline();
+  assert.equal(prompts.length, 1);
+  assert.equal(h.messages.length, 1);
+  h.context.confirm = () => true;
+  h.context.setCurrentProjectBaseline();
+  assert.equal(h.messages.length, 2);
+  assert.equal(h.messages[1].action, 'baseline_current_project');
+});
+
 test('task and project menus default to read only and use the independent edit scope', () => {
   const h = harness();
   for (const permission of [undefined, {editable_projects: [1]}]) {

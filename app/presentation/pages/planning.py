@@ -1537,6 +1537,7 @@ def _render_planning_chart(
         **args,
         permissions={"edit_all": permissions.allows(Permission.EDIT),
                      "versioned_projects": workspace.plans.versioned_projects() if workspace.plans is not None else [],
+                     "baseline_projects": workspace.plans.baseline_projects() if workspace.plans is not None else [],
                      "editable_projects": sorted(permissions.project_permissions.get(Permission.EDIT, frozenset())),
                      "approvable_projects": sorted(permissions.project_permissions.get(Permission.APPROVE, frozenset())),
                      "baseline_all": permissions.allows(Permission.SHARED) or permissions.allows(Permission.APPROVE),

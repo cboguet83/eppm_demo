@@ -89,6 +89,11 @@ class PostgresPlanStore:
         return dict(self.connection.execute('''SELECT project_id,content->'tasks' FROM eppm.project_plan
             WHERE is_baseline AND project_id=ANY(%s::bigint[])''', (project_ids,)))
 
+    def baseline_projects(self) -> list[int]:
+        """Read baseline presence under project RLS without loading snapshot content."""
+        return [row[0] for row in self.connection.execute(
+            'SELECT project_id FROM eppm.project_plan WHERE is_baseline ORDER BY project_id')]
+
     def tag_choices(self) -> dict[int, str]:
         return dict(self.connection.execute('SELECT id,tag FROM eppm.tag_dictionnary ORDER BY tag,id'))
 

@@ -75,6 +75,19 @@ def test_current_portfolio_drag_and_baseline_overlay(authorized, tmp_path):
             expect(former).to_have_count(0)
             expect(frame.locator('.baseline-line')).to_have_count(0)
             frame.locator('#frozen-row-proj-1').click(button='right')
+            dialogs = []
+
+            def cancel_replacement(dialog):
+                dialogs.append(dialog.message)
+                dialog.dismiss()
+
+            page.once('dialog', cancel_replacement)
+            frame.get_by_text('Set current project plan as baseline', exact=True).click()
+            assert len(dialogs) == 1 and 'already has a baseline' in dialogs[0]
+            with psycopg.connect(authorized.setup.operator_url) as connection:
+                assert connection.execute('SELECT id FROM eppm.project_plan WHERE is_baseline').fetchone() == (baseline.id,)
+                assert connection.execute('SELECT count(*) FROM eppm.project_plan').fetchone() == (2,)
+            page.once('dialog', lambda dialog: dialog.accept())
             frame.get_by_text('Set current project plan as baseline', exact=True).click()
             checkbox.check()
             expect(frame.locator('#timeline-row-1 .baseline-line')).to_have_attribute('title', 'Baseline: 2027-01-03 → 2027-01-07')
