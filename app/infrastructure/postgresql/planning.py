@@ -92,6 +92,11 @@ class PostgresPlanningStore:
         """Read one project's visible tasks and primary predecessor labels."""
         return self._tasks('WHERE m.project_id=%s', (project_id,))
 
+    def get_task_correlation_ids(self, project_id: int) -> dict[int, int]:
+        """Read stable identities for the exported active plan in one scoped query."""
+        return dict(self.connection.execute('''SELECT id,coalesce(stable_task_id,id)
+            FROM eppm.current_project_task WHERE project_id=%s''', (project_id,)))
+
     def get_milestones_for_projects(self, project_ids: list[int]) -> list[TaskRow]:
         """Read only requested tasks using one bound native array."""
         if not project_ids:

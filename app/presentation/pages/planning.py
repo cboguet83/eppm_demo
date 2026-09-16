@@ -2093,13 +2093,18 @@ def _schedule_csv_dialog(workspace: PlanningWorkspace, project_id: int, action: 
         st.error("The selected project no longer exists.")
         return
     st.subheader(project.name)
-    from app.domain.planning.schedule_template import parse_template
-    from app.presentation.pages.planning_alternative_editor import selected_plan, template_content
+    from app.domain.planning.schedule_template import parse_template, template_content
+    from app.presentation.pages.planning_alternative_editor import selected_plan
 
     plan = selected_plan(alternative_event, workspace) if alternative_event else None
     if plan:
         st.caption(plan.name)
     st.info("Import creates a new plan revision. Existing revisions are retained.")
+    from app.domain.planning.csv_import import get_csv_template
+    st.download_button("Download import template", get_csv_template(),
+                       file_name="project_plan_import_template.csv", mime="text/csv")
+    st.caption("Keep task_correlation_id to match an existing task across revisions. "
+               "Leave it blank for new tasks. IDs must belong to this project.")
     version_name = st.text_input("Version name", key=f"import_version_name_{project_id}")
     privileged = permissions.allows(Permission.SHARED) or permissions.allows(Permission.APPROVE, project_id)
     status = (st.selectbox("Revision status", ["draft", "proposed", "approved", "rejected"],

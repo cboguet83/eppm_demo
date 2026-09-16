@@ -9,7 +9,7 @@ import streamlit as st
 
 from app.domain.access.models import Permission
 from app.domain.planning.plans import PlanContent, ProjectPlan, normalize_content
-from app.domain.planning.schedule_template import parse_template
+from app.domain.planning.schedule_template import parse_template, template_content
 from app.domain.planning.plan_comparison import dependency_warnings
 from app.domain.resources.models import PoolAssignment
 from app.presentation.components.plan_gantt import comparison_project, plan_gantt
@@ -167,15 +167,7 @@ def _render_draft(project_id: int, draft: dict, pools: dict[int, str], tag_choic
                 st.caption('Import replaces tasks in this draft. The saved source plan is preserved.')
                 if st.button('Import into draft', key=f'plan_import_{project_id}', disabled=uploaded is None):
                     steps = parse_template(uploaded.getvalue().decode('utf-8-sig'))
-                    imported = PlanContent()
-                    for step in steps:
-                        imported.tasks.append(dict(id=-step.number, progress_pct=step.values.get('progress_pct', 0), **{key: step.values.get(key, '') for key in
-                            ['task_name', 'phase', 'start_date', 'end_date', 'description']}))
-                        for dep in step.dependencies:
-                            imported.dependencies.append(dict(task_id=-step.number,
-                                predecessor_task_id=-dep.identity if dep.kind == 'step' else dep.identity if dep.kind == 'task' else None,
-                                predecessor_project_id=dep.identity if dep.kind == 'project' else None,
-                                link_type=dep.link_type, lag_days=dep.lag_days))
+                    imported = template_content(steps)
                     draft['base'] = draft['content'] = normalize_content(project_id, imported)
                     draft['epoch'] += 1
                     st.rerun()

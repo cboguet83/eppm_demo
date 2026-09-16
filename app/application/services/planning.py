@@ -106,7 +106,10 @@ class PlanningService:
         def operation(store: PlanningStore) -> str:
             if not store.project_exists(project_id):
                 raise ValueError("The selected project no longer exists.")
-            return export_template(store.get_milestones_by_project(project_id), store.get_dependencies_for_project(project_id))
+            correlations = store.get_task_correlation_ids(project_id)
+            tasks = [dict(task, task_correlation_id=correlations[task['id']])
+                     for task in store.get_milestones_by_project(project_id)]
+            return export_template(tasks, store.get_dependencies_for_project(project_id))
         return self._gateway.run(operation)
 
     @staticmethod

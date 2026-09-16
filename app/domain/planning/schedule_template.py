@@ -7,6 +7,7 @@ import io
 
 from app.domain.planning.records import DependencySchedule, TaskValues
 from app.domain.planning.rules import normalize_task
+from app.domain.planning.plans import PlanContent
 
 
 @dataclass(frozen=True)
@@ -26,6 +27,7 @@ class TemplateStep:
     number: int
     values: TaskValues
     dependencies: tuple[TemplateDependency, ...]
+    task_correlation_id: int | None = None
 
 
 def _positive_integer(value: str, label: str) -> int:
@@ -104,7 +106,9 @@ def _parse_step(row: dict[str, str], line: int, date_format: str) -> TemplateSte
             progress_pct=progress,
         ))
         dependencies = _dependencies(row)
-        return TemplateStep(number, values, dependencies)
+        correlation = (row.get('task_correlation_id') or '').strip()
+        return TemplateStep(number, values, dependencies,
+                            _positive_integer(correlation, 'Task correlation ID') if correlation else None)
     except ValueError as exc:
         raise ValueError(f"Row {line}: {exc}") from exc
 
@@ -135,7 +139,7 @@ def parse_template(content: str, *, date_format: str = "YYYY-MM-DD") -> list[Tem
         required = {"step_number", "task_name", "start_date", "end_date"}
         if missing := required - set(fields):
             raise ValueError("Missing required columns: " + ", ".join(sorted(missing)))
-        allowed = required | {"phase", "description", "progress_pct", "preceding_step", "dependency_type", "dependency_lag"}
+        allowed = required | {"phase", "description", "progress_pct", "preceding_step", "dependency_type", "dependency_lag", "task_correlation_id"}
         if len(fields) != len(set(fields)) or set(fields) - allowed:
             raise ValueError("Duplicate or unsupported columns in the project template.")
         rows = list(reader)
@@ -152,6 +156,9 @@ def parse_template(content: str, *, date_format: str = "YYYY-MM-DD") -> list[Tem
     numbers = {step.number for step in steps}
     if len(numbers) != len(steps):
         raise ValueError("Step numbers must be unique.")
+    correlations = [step.task_correlation_id for step in steps if step.task_correlation_id is not None]
+    if len(correlations) != len(set(correlations)):
+        raise ValueError('Task correlation IDs must be unique; leave the ID blank for a new task.')
     for step in steps:
         predecessors = {dep.identity for dep in step.dependencies if dep.kind == "step"}
         if predecessors - numbers:
@@ -160,6 +167,21 @@ def parse_template(content: str, *, date_format: str = "YYYY-MM-DD") -> list[Tem
             raise ValueError(f"Step {step.number}: A task cannot contain a self-link.")
     # Multi-task cycles remain diagnostic warnings under the existing scheduling rules.
     return steps
+
+
+def template_content(steps: list[TemplateStep]) -> PlanContent:
+    """Preserve supplied task identities and resolve numbered CSV dependencies."""
+    identities = {step.number: step.task_correlation_id or -step.number for step in steps}
+    content = PlanContent()
+    for step in steps:
+        content.tasks.append(dict(id=identities[step.number], progress_pct=step.values.get('progress_pct', 0),
+            **{key: step.values.get(key, '') for key in ['task_name', 'phase', 'start_date', 'end_date', 'description']}))
+        for dep in step.dependencies:
+            content.dependencies.append(dict(task_id=identities[step.number],
+                predecessor_task_id=identities[dep.identity] if dep.kind == 'step' else dep.identity if dep.kind == 'task' else None,
+                predecessor_project_id=dep.identity if dep.kind == 'project' else None,
+                link_type=dep.link_type, lag_days=dep.lag_days))
+    return content
 
 
 def export_template(tasks: list[TaskValues], dependencies: list[DependencySchedule]) -> str:
@@ -176,7 +198,7 @@ def export_template(tasks: list[TaskValues], dependencies: list[DependencySchedu
     output = io.StringIO(newline="")
     fields = ["task_name", "phase", "start_date", "end_date", "progress_pct", "description"]
     writer = csv.writer(output, lineterminator="\n")
-    writer.writerow(["step_number", *fields, "preceding_step", "dependency_type", "dependency_lag"])
+    writer.writerow(["step_number", "task_correlation_id", *fields, "preceding_step", "dependency_type", "dependency_lag"])
     for number, task in enumerate(tasks, 1):
         links = grouped.get(task.get("id"), []).copy()
         if not links and task.get("predecessor_id"):
@@ -186,5 +208,6 @@ def export_template(tasks: list[TaskValues], dependencies: list[DependencySchedu
         preceding = ";".join(parts[1] if parts[0] == "step" else ":".join(parts[:2]) for parts in split)
         types = ";".join(parts[2] for parts in split)
         lags = ";".join(parts[3] for parts in split)
-        writer.writerow([number, *(task.get(field, "") for field in fields), preceding, types, lags])
+        writer.writerow([number, task.get('task_correlation_id', task.get('id', '')),
+                         *(task.get(field, "") for field in fields), preceding, types, lags])
     return output.getvalue()

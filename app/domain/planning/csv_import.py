@@ -9,12 +9,12 @@ from app.domain.planning.rules import normalize_task
 
 
 def get_csv_template() -> str:
-    """Return the existing import columns and example milestones."""
+    """Return an import template with blank correlation IDs for new tasks."""
     return (
-        "step_number,task_name,phase,start_date,end_date,progress_pct,description,predecessor_id\n"
-        "1,Architecture Scoping,Phase 1 - Inception,2026-06-01,2026-06-15,100,Define system blueprint,\n"
-        "2,Architecture Milestone,Phase 1 - Inception,2026-06-15,2026-06-15,100,Sign-off on specs,1\n"
-        "3,Core Build,Phase 2 - Build,2026-06-16,2026-07-30,50,Core API services,2\n"
+        "step_number,task_correlation_id,task_name,phase,start_date,end_date,progress_pct,description,preceding_step,dependency_type,dependency_lag\n"
+        "1,,Architecture Scoping,Phase 1 - Inception,2026-06-01,2026-06-15,100,Define system blueprint,,,\n"
+        "2,,Architecture Milestone,Phase 1 - Inception,2026-06-15,2026-06-15,100,Sign-off on specs,1,FS,0\n"
+        "3,,Core Build,Phase 2 - Build,2026-06-16,2026-07-30,50,Core API services,2,FS,0\n"
     )
 
 

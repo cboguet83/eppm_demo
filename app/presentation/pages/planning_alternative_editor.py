@@ -5,7 +5,6 @@ from copy import deepcopy
 import streamlit as st
 
 from app.domain.planning.plans import PlanContent, ProjectPlan
-from app.domain.planning.schedule_template import TemplateStep
 from app.domain.planning.rules import normalize_dependency, normalize_task
 from app.presentation.components.planning_workspace import PlanningWorkspace
 
@@ -95,17 +94,3 @@ def save_task_tag(event: dict, workspace: PlanningWorkspace, tag: dict | None = 
     elif tag is not None:
         rows.append(tag)
     workspace.plans.update_alternative(plan.project_id, plan.id, plan.revision, content)
-
-
-def template_content(steps: list[TemplateStep]) -> PlanContent:
-    """Adapt the shared CSV preview into a new revision with fresh task identities."""
-    content = PlanContent()
-    for step in steps:
-        content.tasks.append(dict(id=-step.number, progress_pct=step.values.get('progress_pct', 0),
-            **{key: step.values.get(key, '') for key in ['task_name', 'phase', 'start_date', 'end_date', 'description']}))
-        for dep in step.dependencies:
-            content.dependencies.append(dict(task_id=-step.number,
-                predecessor_task_id=-dep.identity if dep.kind == 'step' else dep.identity if dep.kind == 'task' else None,
-                predecessor_project_id=dep.identity if dep.kind == 'project' else None,
-                link_type=dep.link_type, lag_days=dep.lag_days))
-    return content

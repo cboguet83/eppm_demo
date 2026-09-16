@@ -179,8 +179,13 @@ all existing plans. Editors import Draft revisions; scoped approvers and busines
 administrators may select Draft, Proposed, Approved or Rejected. Deleted is a
 lifecycle action, not an import status. The active-plan checkbox is disabled and
 unchecked; Python rejects import activation too. Import works without a source
-plan and always leaves existing active designations unchanged. CSV tasks are new
-identities with no resource assignments. Activate a revision separately through
+plan and always leaves existing active designations unchanged. CSV exports and
+the downloadable import template include `task_correlation_id`, the stable task
+identity shared across plan revisions. Imports preserve supplied IDs even when
+task names, dates or step numbers change. Blank IDs (or an absent column in older
+files) create new identities. Duplicate, unknown or other-project IDs are
+rejected. Step numbers still identify local CSV dependencies. CSV imports contain
+no resource assignments. Activate a revision separately through
 scenario management after approval. Day and month may have one digit; two-digit
 years in slash-separated dates resolve to 2000–2099, preserving the selected
 DD/MM or MM/DD order and rejecting invalid calendar dates. An unambiguous slash

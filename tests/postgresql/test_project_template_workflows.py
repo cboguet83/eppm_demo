@@ -3,6 +3,7 @@
 from tests.postgresql.pool_helpers import create_container
 
 import csv
+from dataclasses import replace
 from datetime import date
 import io
 from unittest.mock import patch
@@ -155,7 +156,12 @@ def test_export_round_trips_multiline_text_multiple_link_types_and_lags(database
     assert steps[1].values["description"] == "First line\nSecond line"
     assert {dep.kind for step in steps for dep in step.dependencies} == {"step", "task", "project"}
     service.replace_project_template(1, content)
-    assert service.export_project_template(1) == content
+    # Legacy destructive replacement creates new identities; revision import preserves them.
+    replaced = parse_template(service.export_project_template(1))
+    assert [replace(step, task_correlation_id=None) for step in replaced] == [
+        replace(step, task_correlation_id=None) for step in steps]
+    assert {step.task_correlation_id for step in replaced}.isdisjoint(
+        step.task_correlation_id for step in steps)
     assert service.get_milestone_by_id(task) is None
 
 
@@ -179,7 +185,10 @@ def test_spreadsheet_reformatted_export_preserves_dates_on_reimport(database: Ru
     preview = service.validate_project_template(1, edited, date_format=date_format)
     assert preview[0].values["start_date"] == "2026-01-01"
     service.replace_project_template(1, edited, date_format=date_format)
-    assert service.export_project_template(1) == exported.replace("Task 1", "Edited in spreadsheet")
+    expected = parse_template(exported.replace("Task 1", "Edited in spreadsheet"))
+    actual = parse_template(service.export_project_template(1))
+    assert [replace(step, task_correlation_id=None) for step in actual] == [
+        replace(step, task_correlation_id=None) for step in expected]
 
 
 def test_ambiguous_dates_follow_selected_format_and_invalid_dates_preserve_schedule(database: RuntimeResources, access: BusinessAccess, authorized: AuthorizedFixture) -> None:
