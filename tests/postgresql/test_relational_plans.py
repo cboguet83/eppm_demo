@@ -126,8 +126,15 @@ def test_baseline_replacement_retains_frozen_history_and_read_view_rejects_write
     assert saved[new.id].is_baseline and saved[new.id].is_frozen
     assert authorized.query('UPDATE eppm.project_task SET task_name=%s WHERE project_plan_id=%s RETURNING id',
         ('Changed', old.id), user_id=4, write=True) == []
-    with pytest.raises(psycopg.errors.InsufficientPrivilege):
-        authorized.query('UPDATE eppm.current_project_task SET task_name=%s', ('Changed',), user_id=4, write=True)
+    assert authorized.query("SELECT has_table_privilege(current_user,'eppm.current_project_task','UPDATE')",
+                            user_id=4) == [(False,)]
+    with psycopg.connect(authorized.setup.runtime_url) as connection:
+        connection.execute('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE')
+        authorized.binding(4)(connection)
+        # The join-based projection is intrinsically read-only, in addition to
+        # denying runtime UPDATE grants; PostgreSQL may reject it before ACLs.
+        with pytest.raises((psycopg.errors.InsufficientPrivilege, psycopg.errors.ObjectNotInPrerequisiteState)):
+            connection.execute("UPDATE eppm.current_project_task SET task_name='Changed'")
 
 
 def test_deleting_project_cascades_its_plans_and_frozen_children_atomically(authorized):

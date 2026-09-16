@@ -100,3 +100,10 @@ row replacement, single-active constraints, cross-plan assignment rejection,
 frozen history, deletion, protected dependencies, shared actuals and allocation
 inheritance/cleanup. Browser tests cover the current portfolio and explicit
 scenario comparison, baseline replacement confirmation and former-task lanes.
+
+Migration 0046 corrects a portfolio-scale read regression: signed permission
+scopes are evaluated once per statement and primary predecessor resolution uses
+a join instead of a per-task lookup through the edit-access graph. The task view
+retains its security barrier, hidden-endpoint redaction and SELECT-only runtime
+grant. Performance regressions cover 1,000 projects with inactive history and
+primary links, and repeated revision reads across 10,001 projects.
