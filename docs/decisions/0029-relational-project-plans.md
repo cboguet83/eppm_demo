@@ -24,9 +24,9 @@ The project context menu groups baseline creation, baseline soft deletion and
 alternative display under Scenario management. Baseline mutations require edit
 mode and existing approval privileges. Alternative selection excludes active,
 deleted and frozen baseline plans. Comparison and baseline display are mutually
-exclusive. Comparison uses half-height active bars above light-blue alternative
-bars, with light-blue left-pane backgrounds and blue labels for alternative rows.
-Baseline lanes retain their purple color. In edit mode only alternative
+exclusive. Comparison uses half-height active bars above purple alternative
+bars, with purple labels for alternative-only rows. Baseline lanes also retain
+their purple color. In edit mode only alternative
 bars can be dragged or resized; a revision-checked Python service updates that
 scenario's existing task rows and audits the date change. Active plans and the
 pool allocation grid remain unchanged.
@@ -36,7 +36,7 @@ opens the page again. Scenario management can explicitly hide comparison or
 activate the displayed approved alternative after confirmation. Close alternative
 view beside Clear all filters also closes comparison while retaining portfolio
 filters and edit mode. Activation retains the previous plan as inactive.
-Blue dependency links use the alternative
+Purple dependency links use the alternative
 schedule, including its added tasks. Contextual task, dependency, assignment,
 CSV and task-tag operations target the selected alternative and check its revision
 under the project lock. Deleted tasks release their scenario assignments.
@@ -45,7 +45,11 @@ of the Gantt edit checkbox, subject to project authorization.
 
 In edit mode, Create alternative scenario prompts for a nonempty name, copies
 the active plan including its resource assignments, and immediately opens the
-new scenario in comparison. Every newly created scenario starts as Draft,
+new scenario in comparison. This newly opened view uses light-blue bars,
+blue dependency links and labels, and light-blue left-pane backgrounds.
+This color choice belongs to the view, not the plan status: selecting an existing
+scenario uses purple, even if it is still Draft. Closing comparison or leaving
+the page clears the new-scenario styling. Every newly created scenario starts as Draft,
 including copies saved from the Project plans tab. Proposal and approval remain
 explicit later lifecycle changes. Baseline snapshots and initial active plans
 retain their separate creation rules.

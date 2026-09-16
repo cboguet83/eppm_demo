@@ -612,14 +612,15 @@
     .compare-scenario .project-summary-bar {height:7px; top:9px;}
     .compare-scenario .milestone-diamond-wrapper {width:12px; height:12px; top:6px; margin-left:-6px;}
     .compare-scenario .milestone-diamond-shape {width:11px; height:11px;}
-    .alternative-bar {position:absolute; top:23px; height:14px; border-radius:3px; background:#7dd3fc; z-index:7; cursor:grab;}
+    .alternative-bar {position:absolute; top:23px; height:14px; border-radius:3px; background:#9333ea; z-index:7; cursor:grab;}
+    .alternative-bar.new-scenario {background:#7dd3fc;}
     .alternative-bar.project-alternative {height:7px; top:27px; cursor:default;}
     .alternative-only, .alternative-only .task-title, .alternative-only .task-id-cell,
-    .alternative-only .task-date-cell, .alternative-only .task-sub-desc {color:#0284c7 !important;}
-    .frozen-row.alternative-compared {background:#e0f2fe;}
-    .alternative-compared .task-title, .alternative-compared .task-id-cell,
-    .alternative-compared .task-date-cell, .alternative-compared .task-sub-desc,
-    .alternative-compared .project-group-title {color:#0284c7 !important;}
+    .alternative-only .task-date-cell, .alternative-only .task-sub-desc {color:#9333ea !important;}
+    .frozen-row.new-scenario {background:#e0f2fe;}
+    .new-scenario .task-title, .new-scenario .task-id-cell,
+    .new-scenario .task-date-cell, .new-scenario .task-sub-desc,
+    .new-scenario .project-group-title {color:#0284c7 !important;}
 
     /* Task Bar Rendering */
     .gantt-bar-wrapper {
@@ -2409,7 +2410,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       const plan = alternatives[String(projectId)];
       if (!task || !plan) return;
       const bar = document.createElement('div');
-      bar.className = 'alternative-bar' + (summary ? ' project-alternative' : '');
+      bar.className = 'alternative-bar' + (summary ? ' project-alternative' : '') + (plan.new_scenario ? ' new-scenario' : '');
       bar.style.left = dateToX(parseDate(task.start_date)) + 'px';
       bar.style.width = Math.max(6, endDateToX(parseDate(task.end_date))-dateToX(parseDate(task.start_date))) + 'px';
       bar.title = plan.name + ': ' + task.start_date + ' → ' + task.end_date;
@@ -2421,7 +2422,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
           openEditModal();
         });
         const progress = Math.max(0, Math.min(100, Number(task.progress_pct) || 0));
-        bar.innerHTML = `<div style="height:100%;width:${progress}%;background:#38bdf8;border-radius:3px;pointer-events:none"></div><div class="resize-handle left"></div><div class="resize-handle right"></div>`;
+        bar.innerHTML = `<div style="height:100%;width:${progress}%;background:${plan.new_scenario ? '#38bdf8' : '#581c87'};border-radius:3px;pointer-events:none"></div><div class="resize-handle left"></div><div class="resize-handle right"></div>`;
         bindDragEvents(bar, {id:task.stable_id, project_id:projectId, name:task.task_name,
           start:task.start_date, end:task.end_date, alternative:true, plan_id:plan.id, revision:plan.revision},
           task.start_date === task.end_date);
@@ -6250,7 +6251,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
           const badgeIcon = hasViol ? '⚠️ ' : '';
 
           frozenHtml += `
-            <div class="frozen-row project-group-row ${hasViol ? 'has-violations' : ''} ${alternatives[String(item.project_id)] ? 'alternative-compared' : ''}" id="frozen-row-proj-${item.project_id}"
+            <div class="frozen-row project-group-row ${hasViol ? 'has-violations' : ''} ${alternatives[String(item.project_id)]?.new_scenario ? 'new-scenario' : ''}" id="frozen-row-proj-${item.project_id}"
                  style="top: ${topPos}px; width: ${totalW}px; min-width: ${totalW}px; cursor:default;"
                  oncontextmenu="showProjectContextMenu(event, '${item.project_id}')">
               <span class="task-id-cell" style="width:${colWidths.id}px; min-width:${colWidths.id}px; max-width:${colWidths.id}px; font-weight:700; color:#475569;">📁</span>
@@ -6271,7 +6272,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
           const hasViol = t.violations && t.violations.length > 0;
           const hasDesc = Boolean(showDescriptions && t.description && t.description.trim());
           frozenHtml += `
-            <div class="frozen-row ${item.isChild ? 'child-task-row' : ''} ${t.baselineOnly ? 'baseline-only' : ''} ${t.alternativeOnly ? 'alternative-only' : ''} ${t.alternativeTask ? 'alternative-compared' : ''}" id="frozen-row-${t.id}"
+            <div class="frozen-row ${item.isChild ? 'child-task-row' : ''} ${t.baselineOnly ? 'baseline-only' : ''} ${t.alternativeOnly ? 'alternative-only' : ''} ${t.alternativeTask && alternatives[String(t.project_id)]?.new_scenario ? 'new-scenario' : ''}" id="frozen-row-${t.id}"
                  style="top: ${topPos}px; width: ${totalW}px; min-width: ${totalW}px;"
                  onmouseenter="highlightRow('${t.id}')" 
                  onmouseleave="unhighlightRow('${t.id}')"
@@ -6437,6 +6438,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         }
       });
       for (const [projectId, plan] of Object.entries(alternatives)) {
+        const linkColor = plan.new_scenario ? '#0ea5e9' : '#9333ea';
         for (const dep of plan.dependencies || []) {
           const succ = dep.task_id == null ? projectPositions.get(projectId) : taskPositions.get(String(dep.task_id));
           if (!succ) continue;
@@ -6458,7 +6460,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
           const bend = type[0] === 'F' ? px+10 : px-10;
           const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
           path.setAttribute('d', `M ${px} ${py} H ${bend} V ${succ.centerY} H ${sx}`);
-          path.setAttribute('stroke','#0ea5e9'); path.setAttribute('stroke-width','2');
+          path.setAttribute('stroke',linkColor); path.setAttribute('stroke-width','2');
           path.setAttribute('fill','none'); path.setAttribute('pointer-events','stroke');
           path.classList.add('alternative-dependency');
           const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
@@ -6472,7 +6474,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
           const arrow = document.createElementNS('http://www.w3.org/2000/svg', 'path');
           const direction = sx >= bend ? -1 : 1;
           arrow.setAttribute('d',`M ${sx+direction*5} ${succ.centerY-3} L ${sx} ${succ.centerY} L ${sx+direction*5} ${succ.centerY+3}`);
-          arrow.setAttribute('stroke','#0ea5e9'); arrow.setAttribute('fill','none');
+          arrow.setAttribute('stroke',linkColor); arrow.setAttribute('fill','none');
           group.appendChild(arrow);
         }
       }

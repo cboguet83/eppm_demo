@@ -30,6 +30,7 @@ def require_edit(*, alternative: bool = False) -> None:
 def close_alternative_view() -> None:
     """Close all comparison lanes without changing plans or portfolio filters."""
     st.session_state['planning_alternatives'] = {}
+    st.session_state['planning_new_scenario_views'] = {}
     st.session_state.pop('planning_alternative_editor', None)
     st.session_state.pop('planning_scenario_dialog_project', None)
     st.session_state.pop('planning_create_scenario_project', None)
@@ -52,7 +53,7 @@ def handle_scenario_event(event: dict[str, Any], workspace: PlanningWorkspace) -
     if action == 'toggle_baseline':
         st.session_state['planning_show_baseline'] = event['enabled']
         if event['enabled']:
-            st.session_state['planning_alternatives'] = {}
+            close_alternative_view()
         return
     if action == 'choose_alternative':
         st.session_state['planning_scenario_dialog_project'] = event['project_id']
@@ -70,7 +71,7 @@ def handle_scenario_event(event: dict[str, Any], workspace: PlanningWorkspace) -
         if selected.get(event['project_id']) != event['plan_id']:
             raise ValueError('Select this alternative scenario before activating it.')
         workspace.plans.activate_alternative(event['project_id'], event['plan_id'], event['revision'])
-        st.session_state['planning_alternatives'] = {}
+        close_alternative_view()
         st.session_state.pop('planning_chart_snapshot', None)
         st.session_state.pop('planning_pending_change', None)
         st.toast('Alternative scenario is now the active plan.')
@@ -112,6 +113,8 @@ def create_alternative(project_id: int, workspace: PlanningWorkspace) -> None:
             saved = workspace.plans.save(project_id, current.id, current.revision, name)
             st.session_state['planning_alternatives'] = {
                 **st.session_state.get('planning_alternatives', {}), project_id: saved.id}
+            st.session_state['planning_new_scenario_views'] = {
+                **st.session_state.get('planning_new_scenario_views', {}), project_id: saved.id}
             st.session_state['planning_show_baseline'] = False
             st.toast('Draft scenario created.')
             st.rerun()
@@ -145,6 +148,7 @@ def choose_alternative(project_id: int, workspace: PlanningWorkspace) -> None:
                 choices[project_id] = identity
                 st.session_state['planning_show_baseline'] = False
             st.session_state['planning_alternatives'] = choices
+            st.session_state.get('planning_new_scenario_views', {}).pop(project_id, None)
             st.rerun()
     except (ValueError, PlanningStorageError) as error:
         st.error(str(error))
@@ -155,19 +159,23 @@ def scenario_payload(workspace: PlanningWorkspace, project_ids: list[int]) -> di
     alternatives = {}
     contents = []
     choices = st.session_state.setdefault('planning_alternatives', {})
+    new_views = st.session_state.setdefault('planning_new_scenario_views', {})
     if workspace.plans is not None:
         permissions = workspace.projects.projects.permissions()
         for project_id, plan_id in list(choices.items()):
             if project_id not in project_ids:
                 choices.pop(project_id)
+                new_views.pop(project_id, None)
                 continue
             try:
                 plan, tasks = workspace.plans.comparison(project_id, plan_id)
             except ValueError:
                 choices.pop(project_id)
+                new_views.pop(project_id, None)
                 continue
             alternatives[project_id] = dict(id=plan.id, revision=plan.revision, name=plan.name, tasks=tasks,
                 dependencies=plan.content.dependencies, status=plan.status,
+                new_scenario=new_views.get(project_id) == plan.id,
                 editable=permissions.allows(Permission.EDIT, project_id))
             contents.append(plan.content)
     return dict(edit_enabled=bool(st.session_state.get('planning_edit_enabled', False)), alternatives=alternatives,

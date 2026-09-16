@@ -257,6 +257,7 @@ def _render_application_page(workspace: ApplicationWorkspace) -> None:
     page = st.session_state.get("app_sidebar_nav")
     if st.session_state.get('planning_last_page') != page:
         st.session_state['planning_alternatives'] = {}
+        st.session_state['planning_new_scenario_views'] = {}
         st.session_state['planning_edit_enabled'] = False
         st.session_state.pop('planning_scenario_dialog_project', None)
         st.session_state.pop('planning_create_scenario_project', None)

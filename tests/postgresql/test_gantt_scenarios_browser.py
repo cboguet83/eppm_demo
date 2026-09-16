@@ -85,6 +85,13 @@ def test_create_named_draft_opens_light_blue_comparison_and_copies_allocations(a
             assert contents[initial.id] == contents[alternative_id] == initial.content
             page.mouse.move(10, 700)
             page.screenshot(path=str(tmp_path / 'created-alternative.png'), full_page=True)
+            page.get_by_role('button', name='Close alternative view', exact=True).click()
+            expect(frame.locator('.alternative-bar')).to_have_count(0)
+            display_alternative(page, frame, 'Resource option')
+            expect(bar).to_have_css('background-color', 'rgb(147, 51, 234)')
+            expect(bar.locator('div').first).to_have_css('background-color', 'rgb(88, 28, 135)')
+            expect(frame.locator('#frozen-row-1')).not_to_have_class(re.compile('new-scenario'))
+            page.screenshot(path=str(tmp_path / 'reopened-alternative.png'), full_page=True)
         finally:
             browser.close()
 
@@ -128,9 +135,10 @@ def test_opt_in_editing_and_alternative_lanes(authorized, tmp_path):
             page.get_by_role('button', name='Display scenario', exact=True).click()
             alt_bar = frame.locator('#timeline-row-1 .alternative-bar')
             expect(alt_bar).to_be_visible()
+            expect(alt_bar).to_have_css('background-color', 'rgb(147, 51, 234)')
             expect(page.get_by_role('button', name='Close alternative view', exact=True)).to_be_visible()
             expect(frame.locator(f'#frozen-row-alternative-1-{extra}')).to_contain_text('Extra alternative step')
-            assert frame.locator(f'#frozen-row-alternative-1-{extra} .task-title').evaluate('(el)=>getComputedStyle(el).color') == 'rgb(2, 132, 199)'
+            assert frame.locator(f'#frozen-row-alternative-1-{extra} .task-title').evaluate('(el)=>getComputedStyle(el).color') == 'rgb(147, 51, 234)'
             assert alt_bar.bounding_box()['y'] > active_bar.bounding_box()['y'] + active_bar.bounding_box()['height']
             expect(frame.locator('#timeline-row-2 .alternative-bar')).to_have_count(0)
             drag(page, alt_bar)
@@ -192,6 +200,7 @@ def test_alternative_context_edits_dependencies_hide_reload_and_confirm_activati
             page.get_by_role('dialog').get_by_role('button', name='Cancel', exact=True).click()
             frame.locator('#chk-internal-links').check()
             expect(frame.locator('.alternative-dependency')).to_have_count(1)
+            expect(frame.locator('.alternative-dependency')).to_have_attribute('stroke', '#9333ea')
             edit.check()
             frame.locator('#timeline-row-1 .alternative-bar').click(button='right')
             for identity in ['ctx-label-edit-step', 'ctx-label-add-step', 'ctx-label-delete-step', 'ctx-label-task-tags', 'ctx-label-task-pools']:

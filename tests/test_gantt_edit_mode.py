@@ -48,12 +48,14 @@ def test_alternative_actions_validate_plan_identity_and_operation():
 
 def test_logs_are_available_without_editing_and_hide_does_not_mutate_plans(monkeypatch):
     state = {'planning_alternatives': {1: 5}, 'planning_statuses': ['In Progress'],
+             'planning_new_scenario_views': {1: 5},
              'ms_multi_projects': [1], 'planning_edit_enabled': True,
              'planning_alternative_editor': {'plan_id': 5}}
     monkeypatch.setattr(planning_scenarios.st, 'session_state', state)
     assert 'log_project_event' not in planning_scenarios.MUTATIONS
     planning_scenarios.handle_scenario_event({'action': 'hide_alternatives'}, None)
     assert state['planning_alternatives'] == {}
+    assert state['planning_new_scenario_views'] == {}
     assert state['ms_multi_projects'] == [1]
     assert state['planning_statuses'] == ['In Progress']
     assert state['planning_edit_enabled'] is True
