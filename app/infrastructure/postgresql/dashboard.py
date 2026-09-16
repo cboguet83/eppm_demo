@@ -96,18 +96,20 @@ class PostgresDashboardReader:
             return {key: {quarter: float(value) for quarter, value in row[key].items()} for key in ('overallocation', 'capacity')}
         return self._run(operation, project_ids)
 
-    def resource_breakdown(self, project_ids: list[int], today: date, pool_id: int | None = None) -> ResourceBreakdown:
+    def resource_breakdown(self, project_ids: list[int], today: date, pool_id: int | None = None,
+                           *, statuses: list[str] | None = None, pool_ids: list[int] | None = None) -> ResourceBreakdown:
         """Read safe pool contributions while retaining competing-demand privacy."""
         def operation(connection: psycopg.Connection, ids: list[int], _security: PostgresAccessStore) -> ResourceBreakdown:
-            result = connection.execute('SELECT eppm.dashboard_resource_breakdown(%s::bigint[],%s,NULL,%s)',
-                                        (ids, today, pool_id)).fetchone()[0]
+            result = connection.execute("SELECT eppm.dashboard_resource_breakdown_scoped(%s::bigint[],%s,NULL,%s,'overallocation',%s::text[],%s::bigint[])",
+                                        (ids, today, pool_id, statuses, pool_ids)).fetchone()[0]
             return ResourceBreakdown(allocation=result['allocation'], overallocation=result['overallocation'],
                 capacity=result['capacity'], pools=result['pools'], peak_days=result.get('peak_days', {}),
                 overallocated_pools=result.get('overallocated_pools', []))
         return self._run(operation, project_ids)
 
     def consuming_projects(self, project_ids: list[int], quarter: str, today: date,
-                           pool_id: int | None = None, metric: str = 'overallocation') -> list[int]:
+                           pool_id: int | None = None, metric: str = 'overallocation',
+                           *, statuses: list[str] | None = None) -> list[int]:
         """Return only currently visible consumers of the quarter's responsible pools."""
         quarter_bounds(quarter, today.year)
         if pool_id is not None and (type(pool_id) is not int or pool_id <= 0):
@@ -115,8 +117,8 @@ class PostgresDashboardReader:
         if metric not in {'overallocation', 'allocation'}:
             raise ValueError('Select a valid resource metric.')
         return self._run(lambda connection, ids, _security: connection.execute(
-            'SELECT eppm.dashboard_resource_breakdown(%s::bigint[],%s,%s,%s,%s)',
-            (ids, today, quarter, pool_id, metric)).fetchone()[0]['consumers'], project_ids)
+            'SELECT eppm.dashboard_resource_breakdown_scoped(%s::bigint[],%s,%s,%s,%s,%s::text[],NULL)',
+            (ids, today, quarter, pool_id, metric, statuses)).fetchone()[0]['consumers'], project_ids)
 
     def issues(self, project_ids: list[int], locale: str) -> list[dict]:
         """Read localized active blockers with the established ISO date boundaries."""

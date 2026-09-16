@@ -7,8 +7,9 @@ import psycopg
 import pytest
 
 from app.domain.access.models import AccessDenied
+from app.domain.resources.capacity import calculate_capacity
 from tests.postgresql.test_dashboard import service
-from tests.postgresql.test_pool_capacity import staffing
+from tests.postgresql.test_pool_capacity import staffing, reference_inputs, DAY
 from tests.postgresql.test_project_plans import service as plan_service
 
 
@@ -61,3 +62,31 @@ def test_single_pool_filter_recalculates_own_peaks_capacity_and_rejects_unrelate
     for identity in (True, -1, '2'):
         with pytest.raises(ValueError):
             dashboard.resource_breakdown([1], identity)
+
+
+def test_status_filter_excludes_competing_demand_and_drill_through_consumers(staffing):
+    with psycopg.connect(staffing.setup.operator_url) as connection:
+        connection.execute("UPDATE eppm.project SET status=CASE id WHEN 1 THEN 'In Progress' WHEN 2 THEN 'Completed' ELSE 'Draft' END")
+        connection.execute('DELETE FROM eppm.resource_pool_mapping WHERE pool_id=1')
+        connection.execute('UPDATE eppm.resource_pool SET capacity_fte=1 WHERE id=1')
+    dashboard = service(staffing, 4)
+    active = dashboard.resource_breakdown([1], statuses=['In Progress'], pool_ids=[1])
+    completed = dashboard.resource_breakdown([1, 2], statuses=['In Progress', 'Completed'], pool_ids=[1])
+    all_statuses = dashboard.resource_breakdown([1], statuses=[], pool_ids=[1])
+    assert active['allocation']['2026-Q1'] == 1
+    assert completed['allocation']['2026-Q1'] == 1.5
+    assert all_statuses['allocation']['2026-Q1'] == 21.5
+    assert active['overallocation']['2026-Q1'] < completed['overallocation']['2026-Q1'] < all_statuses['overallocation']['2026-Q1']
+    inputs = reference_inputs(staffing, [1])[1]
+    for project_ids, chart in [({1}, active), ({1, 2}, completed), ({1, 2, 3}, all_statuses)]:
+        detail = calculate_capacity(replace(inputs, assignments=[row for row in inputs.assignments
+                                                                if row['project_id'] in project_ids]), DAY)
+        assert chart['allocation']['2026-Q1'] == max(detail.daily_usage.values())
+        assert chart['overallocation']['2026-Q1'] == max((row.excess_fte for row in detail.daily_overassignments), default=0)
+    assert dashboard.consuming_projects([1], '2026-Q1', 1, 'allocation', statuses=['In Progress']) == [1]
+    assert dashboard.consuming_projects([1], '2026-Q1', 1, 'allocation', statuses=['In Progress', 'Completed']) == [1, 2]
+    assert dashboard.resource_breakdown([2], statuses=['In Progress'])['pools'] == []
+    assert dashboard.resource_breakdown([1], statuses=['In Progress'], pool_ids=[])['pools'] == []
+    assert {pool['pool_id'] for pool in dashboard.resource_breakdown([1], statuses=['In Progress'], pool_ids=[1, 2])['pools']} == {1, 2}
+    with pytest.raises(ValueError, match='statuses'):
+        dashboard.resource_breakdown([1], statuses=['invalid'])

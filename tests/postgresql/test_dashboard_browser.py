@@ -152,6 +152,7 @@ def test_dashboard_charts_paging_and_read_only_issues_do_not_rerun_shell(popup_s
                 chart.locator('[data-quarter="2026-Q1"][data-pool-id="1"]').click(button='right')
                 page.get_by_role('menuitem', name='Filter on this pool', exact=True).click()
                 expect(page.get_by_text('Resource pool: Pool A', exact=True)).to_be_visible()
+                expect(page.locator('.st-key-dashboard_filter_pool')).to_contain_text('Pool A')
                 for filtered in (resource, allocation):
                     expect(filtered.locator('[data-pool-id="2"]')).to_have_count(0)
                     expect(filtered.locator('[data-pool-id="1"]').first).to_be_visible()
@@ -159,6 +160,7 @@ def test_dashboard_charts_paging_and_read_only_issues_do_not_rerun_shell(popup_s
                 expect(allocation.get_by_role('tooltip')).to_contain_text('Total capacity: 1.0')
                 expect(allocation.get_by_role('tooltip')).to_contain_text('Total allocation: 3.0')
                 page.get_by_role('button', name='Show all pools', exact=True).click()
+                expect(page.locator('.st-key-dashboard_filter_pool').get_by_role('button', name='Remove Pool A')).to_have_count(0)
                 expect(allocation.locator('[data-pool-id="2"]').first).to_be_visible()
                 expect(page.get_by_text('1 matching projects', exact=True)).to_be_visible()
                 expect(page.get_by_text('Shell runs: 1', exact=True)).to_be_visible()

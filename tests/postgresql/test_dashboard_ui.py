@@ -49,6 +49,33 @@ def table_data(app):
                            if item.proto.id.endswith('-dashboard_project_table')))
 
 
+def test_resource_charts_follow_status_and_top_pool_selections(business, authorized):
+    path, _, _, _, manager = business
+    with psycopg.connect(authorized.setup.operator_url) as connection:
+        connection.execute("UPDATE eppm.project SET status='Completed' WHERE id=2")
+        connection.execute('UPDATE eppm.resource_pool SET capacity_fte=1 WHERE id=1')
+    app = AppTest.from_function(screen, args=(path, manager.actor)).run()
+
+    def values(metric):
+        chart = json.loads(next(item.proto.json for item in app.get('bidi_component')
+                                if item.proto.id.endswith('-dashboard_resource_chart_' + metric)))
+        return next(row['value'] for row in chart['rows'] if row['quarter'] == '2026-Q1')
+
+    assert not app.exception and not app.error
+    assert (values('allocation'), values('overallocation')) == (1, 0)
+    app.multiselect(key='dashboard_filter_status').set_value(['In Progress', 'Completed']).run()
+    assert (values('allocation'), values('overallocation')) == (3, 2)
+    app.multiselect(key='dashboard_filter_status').set_value(['Completed']).run()
+    assert (values('allocation'), values('overallocation')) == (2, 1)
+    app.multiselect(key='dashboard_filter_status').set_value([]).run()
+    assert (values('allocation'), values('overallocation')) == (3, 2)
+    app.multiselect(key='dashboard_filter_pool').set_value(['1']).run()
+    assert not app.exception and not app.error
+    app.button(key='dashboard_clear_chart_pool').click().run()
+    assert app.multiselect(key='dashboard_filter_pool').value == []
+    assert (values('allocation'), values('overallocation')) == (3, 2)
+
+
 def test_dashboard_lazy_table_and_filters_cover_all_results(business, authorized):
     path,_,_,_,manager=business
     with psycopg.connect(authorized.setup.operator_url) as conn:

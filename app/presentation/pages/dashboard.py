@@ -37,8 +37,16 @@ def _report(_service: DashboardService, revision: tuple, ids: tuple[int, ...], s
 
 
 @authorized_cache(show_spinner=False, max_entries=64, ttl=300)
-def _shortages(_service: DashboardService, revision: tuple, ids: tuple[int, ...], pool_id: int | None = None):
-    return _service.resource_breakdown(list(ids), pool_id)
+def _shortages(_service: DashboardService, revision: tuple, ids: tuple[int, ...],
+               statuses: tuple[str, ...] = (), pool_ids: tuple[int, ...] | None = None):
+    return _service.resource_breakdown(list(ids), statuses=list(statuses),
+                                       pool_ids=list(pool_ids) if pool_ids is not None else None)
+
+
+def _queue_pool_filter(pool_ids: list[str]) -> None:
+    """Apply a chart selection before the top pool widget is rendered again."""
+    st.session_state['dashboard_pending_pool_filter'] = pool_ids
+    _reset_page()
 
 
 def _reset_page() -> None:
@@ -47,6 +55,7 @@ def _reset_page() -> None:
 
 
 def _clear() -> None:
+    st.session_state.pop('dashboard_pending_pool_filter', None)
     for key in list(st.session_state):
         if key.startswith('dashboard_filter_'):
             del st.session_state[key]
@@ -117,6 +126,8 @@ def _issues(service: DashboardService, ids: tuple[int, ...]) -> None:
 
 
 def _filters(service: DashboardService, catalog) -> tuple[dict[str, list[str]], bool]:
+    if 'dashboard_pending_pool_filter' in st.session_state:
+        st.session_state['dashboard_filter_pool'] = st.session_state.pop('dashboard_pending_pool_filter')
     fixed = ('status', 'level3', 'level4', 'team', 'manager', 'pool')
     st.session_state.setdefault('dashboard_filter_status', ['In Progress'])
     st.session_state['dashboard_filter_status'] = [
@@ -234,7 +245,8 @@ def _finance_chart(service: DashboardService, report, proposed) -> None:
 
 def _planning_jump(service: DashboardService, ids: tuple[int, ...], quarter: str,
                    pool_id: int | None = None, metric: str = 'overallocation') -> None:
-    projects = service.consuming_projects(list(ids), quarter, pool_id, metric)
+    projects = service.consuming_projects(list(ids), quarter, pool_id, metric,
+                                          statuses=st.session_state.get('dashboard_filter_status'))
     if not projects:
         st.info(_label('no_consumers'))
         return
@@ -271,7 +283,8 @@ def _pool_warning(pools: list[OverallocatedPool]) -> None:
 def _pool_details_jump(service: DashboardService, ids: tuple[int, ...], quarter: str,
                        pool_id: int, metric: str) -> None:
     """Reauthorize the selected chart pool before opening its existing details."""
-    service.consuming_projects(list(ids), quarter, pool_id, metric)
+    service.consuming_projects(list(ids), quarter, pool_id, metric,
+                               statuses=st.session_state.get('dashboard_filter_status'))
     st.session_state['settings_active_section'] = 'organization'
     st.session_state['rb_settings_section'] = 'org_structure'
     st.session_state['settings_active_tab'] = 'resource_pools'
@@ -329,19 +342,15 @@ def render_dashboard(service: DashboardService) -> None:
             st.markdown(f"{report.issue_count} {issue_label}")
         with finance:
             _finance_chart(service, report, proposed)
-            series = _shortages(service, revision, ids)
+            selected_pools = filters.get('pool', [])
+            chart_pools = tuple(int(value) for value in selected_pools if value.isdigit()) if selected_pools else None
+            series = _shortages(service, revision, ids, tuple(filters.get('status', [])), chart_pools)
             st.subheader(_label('resources_allocation'))
-            selected_pool = st.session_state.get('dashboard_filter_chart_pool')
             pool_names = {pool['pool_id']: pool['name'] for pool in series['pools']}
-            if selected_pool not in pool_names:
-                st.session_state.pop('dashboard_filter_chart_pool', None)
-                selected_pool = None
-            if selected_pool is not None:
-                st.caption(t('dashboard.filtered_pool', pool=pool_names[selected_pool]))
-                if st.button(_label('clear_pool_filter'), key='dashboard_clear_chart_pool'):
-                    del st.session_state['dashboard_filter_chart_pool']
-                    st.rerun(scope='fragment')
-                series = _shortages(service, revision, ids, selected_pool)
+            if selected_pools:
+                st.caption(t('dashboard.filtered_pool', pool=', '.join(pool_names.values())))
+                st.button(_label('clear_pool_filter'), key='dashboard_clear_chart_pool',
+                          on_click=_queue_pool_filter, args=([],))
             st.html('<style>.st-key-dashboard_resource_charts {gap:4px !important;}</style>')
             with st.container(key='dashboard_resource_charts'):
                 for metric in ('overallocation', 'allocation'):
@@ -362,7 +371,7 @@ def render_dashboard(service: DashboardService) -> None:
                         elif action == 'planning':
                             _planning_jump(service, ids, selection['quarter'], selection['pool_id'], metric)
                         elif action == 'filter_pool' and selection['pool_id'] in pool_names:
-                            st.session_state['dashboard_filter_chart_pool'] = selection['pool_id']
+                            _queue_pool_filter([str(selection['pool_id'])])
                             st.rerun(scope='fragment')
                         else:
                             raise ValueError('Invalid resource action.')

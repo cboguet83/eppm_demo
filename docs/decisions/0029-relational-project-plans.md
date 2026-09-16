@@ -179,9 +179,20 @@ active-plan assignments and task dates. Migration 0048 repairs the resource read
 omitted from the original source conversion, preserving its existing private
 competing-demand aggregate and calculation rules. Inactive alternatives, baselines,
 and deleted plans cannot contribute demand. Both resource chart context menus can
-filter to one pool; this recalculates its own quarterly peaks and capacity. The
-filter applies to both charts, leaves the project/finance selection unchanged, and
-can be removed with Show all pools or Clear all filters.
+filter to one pool; this recalculates its own quarterly peaks and capacity.
+The context action updates the top pool selector before it is rendered again.
+That selector controls the project list, finance scope and both resource charts;
+Show all pools clears it, as does Clear all filters. Multiple selected pools retain
+concurrent aggregate peaks rather than adding independent pool maxima.
+
+Migration 0049 adds bound status and pool read filters to the existing private
+aggregate, preserving its calculation and authorization rules. Python validates
+the status choices and treats an empty selection as all statuses, matching
+planning. Selected statuses restrict every demand contributor, including private
+competing demand, and consumer drill-through. The resource cache key includes
+statuses and pools even if the selected project IDs happen to remain unchanged.
+Charts show quarterly peaks; each pool's segment in an unfiltered stack is its
+contribution on the aggregate peak day, not necessarily its individual peak.
 
 ## CSV revision imports and comparison diagnostics
 
