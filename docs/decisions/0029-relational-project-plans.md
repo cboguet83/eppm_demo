@@ -48,6 +48,15 @@ resource assignment dialogs. Alternative dialogs read scenario-owned tasks and
 assignments and save through revision-checked Python plan services. Dependency
 selectors use stable task identities for alternative edits. Capacity warnings
 in these dialogs remain explicitly labelled as active-portfolio calculations.
+Task/project hover tooltips and dependency details use the same renderers for
+both lanes, supplied with each lane's dates, progress, tags, assignments and
+Python-evaluated dependency warnings. Right-clicking an alternative dependency
+opens the shared details card; its edit action targets the successor task's
+step editor or the project dependency editor. Project dependency saves retain
+stale drafts and use the same reload/error handling as the active-plan editor.
+Task tags, project details, CSV import and CSV download also reuse the existing
+interfaces. There is no separate alternative-scenario editing panel.
+Shared project properties stay read-only when opened from comparison.
 A task whose start and end dates are equal is a milestone, derived from its
 dates without a second stored flag. Active and alternative lanes render it as
 a diamond, including alternative-only tasks; the baseline uses a dotted diamond.

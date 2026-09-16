@@ -6,6 +6,8 @@ import streamlit as st
 
 from app.application.exceptions import PlanningStorageError
 from app.domain.access.models import Permission
+from app.domain.planning.project_dependencies import evaluate_project_dependencies
+from app.domain.planning.constraints import evaluate_constraints
 from app.presentation.components.dialog import dialog
 from app.presentation.components.planning_workspace import PlanningWorkspace
 
@@ -42,7 +44,15 @@ def handle_scenario_event(event: dict[str, Any], workspace: PlanningWorkspace) -
     if action == 'alternative_action':
         from app.presentation.pages.planning_alternative_editor import handle_alternative_action
 
-        handle_alternative_action(event, workspace)
+        if event.get('operation') == 'manage_dependencies':
+            response = dict(project_id=event['project_id'], nonce=event.get('nonce'), action='save_project_dependencies')
+            try:
+                handle_alternative_action(event, workspace)
+            except (ValueError, PlanningStorageError) as error:
+                response['error'] = str(error)
+            st.session_state['planning_project_dependency_response'] = response
+        else:
+            handle_alternative_action(event, workspace)
         return
     if action == 'hide_alternatives':
         close_alternative_view()
@@ -175,10 +185,64 @@ def scenario_payload(workspace: PlanningWorkspace, project_ids: list[int]) -> di
                 continue
             alternatives[project_id] = dict(id=plan.id, revision=plan.revision, name=plan.name, tasks=tasks,
                 dependencies=plan.content.dependencies, status=plan.status,
+                task_tags=plan.content.task_tags, assignments=plan.content.assignments,
                 new_scenario=new_views.get(project_id) == plan.id,
                 editable=permissions.allows(Permission.EDIT, project_id))
             contents.append(plan.content)
+    if alternatives:
+        _enrich_comparisons(workspace, alternatives, contents)
     return dict(edit_enabled=bool(st.session_state.get('planning_edit_enabled', False)), alternatives=alternatives,
                 alternative_endpoints=workspace.plans.comparison_endpoints(contents) if contents else {},
                 alternative_task_choices=workspace.plans.task_choices() if contents else [],
                 scenario_epoch=st.session_state.get('planning_scenario_epoch', 0))
+
+
+def _enrich_comparisons(workspace: PlanningWorkspace, alternatives: dict, contents: list) -> None:
+    """Supply the shared tooltip and dependency panels with scenario-owned values."""
+    context = workspace.plans.dependency_context(contents)
+    schedules = {identity: content.tasks for identity, content in context.items()}
+    schedules.update({identity: [dict(task, id=task['stable_id']) for task in plan['tasks']]
+                      for identity, plan in alternatives.items()})
+    tasks = {task['id']: dict(task, project_id=identity) for identity, rows in schedules.items() for task in rows}
+    bounds = {identity: (min((task['start_date'] for task in rows), default=None),
+                         max((task['end_date'] for task in rows), default=None)) for identity, rows in schedules.items()}
+    names = {row['id']: row['name'] for row in workspace.projects.projects.get_planning_catalog()}
+    tags = {row.id: row for row in workspace.tags.task_tag_choices()}
+    pools = {row.id: row.name for row in workspace.resources.get_all_pools()}
+    for identity, plan in alternatives.items():
+        dependencies = []
+        for index, dep in enumerate(plan['dependencies']):
+            successor = tasks.get(dep['task_id'])
+            predecessor = tasks.get(dep['predecessor_task_id'])
+            pred_project = predecessor['project_id'] if predecessor else dep['predecessor_project_id']
+            first, last = (successor['start_date'], successor['end_date']) if successor else bounds[identity]
+            pred_first, pred_last = ((predecessor['start_date'], predecessor['end_date']) if predecessor
+                                      else bounds.get(pred_project, (None, None)))
+            dependencies.append(dict(dep, id=index + 1, start_date=first, end_date=last,
+                predecessor_owner_id=pred_project, pred_start_date=pred_first, pred_end_date=pred_last,
+                predecessor_task_name=predecessor['task_name'] if predecessor else None,
+                predecessor_project_name=names.get(pred_project, str(pred_project or 'Unavailable'))))
+        task_links, _ = evaluate_constraints(list(tasks.values()), dependencies, bounds)
+        project_links = evaluate_project_dependencies([dep for dep in dependencies if dep['task_id'] is None])
+        evaluated = {dep['id']: dep for dep in task_links + project_links}
+        plan['dependencies'] = [dict(evaluated.get(dep['id'], dep),
+            is_evaluable=bool(dep['start_date'] and dep['end_date'] and dep['pred_start_date'] and dep['pred_end_date']))
+            for dep in dependencies]
+        tag_rows = plan.pop('task_tags')
+        pool_rows = {}
+        for row in plan.pop('assignments'):
+            pool_rows.setdefault(row.task_id, []).append(
+                dict(pool_name=pools.get(row.pool_id, str(row.pool_id)), fte=row.fte_assigned))
+        violations = {}
+        for dep in plan['dependencies']:
+            if dep.get('is_violated'):
+                violations.setdefault(dep['task_id'], []).append(dep['violation_text'])
+        plan['pools'] = pool_rows.get(None, [])
+        plan['start'], plan['end'] = bounds[identity]
+        for task in plan['tasks']:
+            task['project_name'] = names.get(identity, str(identity))
+            task['tags'] = [dict(row, tag_name=tags[row['tag_id']].tag if row['tag_id'] in tags else None,
+                                tag_group_name=tags[row['tag_id']].tag_group_name if row['tag_id'] in tags else None)
+                            for row in tag_rows.get(task['stable_id'], [])]
+            task['pools'] = pool_rows.get(task['stable_id'], [])
+            task['violations'] = violations.get(task['stable_id'], [])

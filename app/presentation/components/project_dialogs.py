@@ -324,6 +324,7 @@ def open_edit_project_dialog(
     project_id: int,
     workspace: ProjectWorkspace,
     read_only: bool = False,
+    allow_edit: bool = True,
 ) -> None:
     """Edit or delete one project without navigating to another page."""
     project = workspace.projects.get_project_by_id(project_id)
@@ -336,7 +337,7 @@ def open_edit_project_dialog(
     initial_type = st.session_state.get(f"edit_type_{project_id}", project.project_type_id)
     _dialog_parameters(references, int(initial_type), workspace)
     links = workspace.projects.get_links(project_id)
-    _edit_project_editor(project_id, workspace, project, references, links, read_only)
+    _edit_project_editor(project_id, workspace, project, references, links, read_only, allow_edit)
 
 
 @dialog("Project details", width="large", on_dismiss=_dismiss_project_dialog)
@@ -344,6 +345,7 @@ def open_edit_project_dialog(
 def _edit_project_editor(
     project_id: int, workspace: ProjectWorkspace, project: Project,
     references: ProjectDialogReferences, links: list[LinkValues], read_only: bool,
+    allow_edit: bool = True,
 ) -> None:
     """Retain the editable draft and references; authorize every dialog interaction."""
 
@@ -351,9 +353,9 @@ def _edit_project_editor(
     if not permissions.allows(Permission.READ, project_id):
         st.error(t("auth.no_access", default="Your account has no assigned application access. Contact an access administrator."))
         return
-    can_edit = permissions.allows(Permission.EDIT, project_id)
-    can_delete = permissions.allows(Permission.DELETE, project_id)
-    can_change_scope = permissions.allows(Permission.PROPERTIES, project_id)
+    can_edit = allow_edit and permissions.allows(Permission.EDIT, project_id)
+    can_delete = allow_edit and permissions.allows(Permission.DELETE, project_id)
+    can_change_scope = allow_edit and permissions.allows(Permission.PROPERTIES, project_id)
     if can_edit and read_only and st.session_state.get("project_fields_editing") != project_id:
         with st.container(horizontal=True, horizontal_alignment="right"):
             if st.button(t("project_collaboration.edit_project", default="Edit project"),

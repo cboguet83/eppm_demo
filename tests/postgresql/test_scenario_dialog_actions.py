@@ -9,6 +9,7 @@ from app.domain.planning.plans import PlanContent
 from app.domain.resources.models import PoolAssignment
 from app.presentation.pages import planning_scenarios
 from app.presentation.pages.planning_scenario_assignments import assignment_rows, save_assignment
+from app.presentation.pages.planning_alternative_editor import save_task_tag
 from tests.postgresql.test_project_plans import draft_task, service
 
 
@@ -41,4 +42,27 @@ def test_shared_assignment_form_rejects_wrong_task_and_stale_scenario(authorized
     state['planning_edit_enabled'] = False
     with pytest.raises(ValueError, match='Enable edit mode'):
         save_assignment(event | dict(revision=saved.revision), workspace, delete_id=rows[0]['id'])
+    assert plans.current_content(1) == active.content
+
+
+def test_shared_tag_form_deletes_only_the_selected_revision_tag(authorized, monkeypatch):
+    plans = service(authorized, 4)
+    active = plans.initialize(1)
+    alternative = plans.save(1, active.id, active.revision, 'Option',
+        PlanContent(tasks=[draft_task(-1, 'Gate', '2027-01-01', '2027-01-01')]))
+    task_id = alternative.content.tasks[0]['id']
+    monkeypatch.setattr(planning_scenarios.st, 'session_state',
+                        dict(planning_edit_enabled=True, planning_alternatives={1: alternative.id}))
+    workspace = SimpleNamespace(plans=plans)
+    event = dict(operation='manage_task_tags', project_id=1, plan_id=alternative.id,
+                 revision=alternative.revision, id=task_id)
+    save_task_tag(event, workspace, dict(tag_id=None, free_tag='Scenario tag'))
+    with pytest.raises(ValueError, match='plan changed'):
+        save_task_tag(event, workspace, delete_index=0)
+    saved, _ = plans.comparison(1, alternative.id)
+    with pytest.raises(ValueError, match='no longer exists'):
+        save_task_tag(event | dict(revision=saved.revision), workspace, delete_index=1)
+    save_task_tag(event | dict(revision=saved.revision), workspace, delete_index=0)
+    saved, _ = plans.comparison(1, alternative.id)
+    assert saved.content.task_tags.get(task_id, []) == []
     assert plans.current_content(1) == active.content

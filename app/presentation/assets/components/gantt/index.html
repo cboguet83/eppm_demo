@@ -2424,7 +2424,11 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       if (Number(task.progress_pct) >= 100) bar.classList.add('is-complete');
       bar.style.left = dateToX(parseDate(task.start_date)) + 'px';
       bar.style.width = Math.max(6, endDateToX(parseDate(task.end_date))-dateToX(parseDate(task.start_date))) + 'px';
-      bar.title = (isMilestone ? 'Milestone · ' : '') + plan.name + ': ' + task.start_date + ' → ' + task.end_date;
+      bar.dataset.scheduleLabel = (isMilestone ? 'Milestone · ' : '') + plan.name + ': ' + task.start_date + ' → ' + task.end_date;
+      bar.addEventListener('mouseenter', event => summary ? showProjectHoverTooltip(event, projectId, plan)
+        : showTaskHoverTooltip(event, scenarioTask({project_id:projectId, alternativeTask:task})));
+      bar.addEventListener('mousemove', moveTooltip);
+      bar.addEventListener('mouseleave', hideTooltip);
       bar.addEventListener('contextmenu', event => summary ? showProjectContextMenu(event, projectId)
         : showContextMenu(event, scenarioTask({id:task.id, project_id:projectId, alternativeTask:task})));
       if (!summary) {
@@ -2475,6 +2479,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       return row ? {id:row.stable_id, project_id:task.project_id, name:row.task_name,
         phase:row.phase, description:row.description, start:row.start_date, end:row.end_date,
         progress:row.progress_pct || 0,
+        project_name:row.project_name, tags:row.tags || [], pools:row.pools || [], violations:row.violations || [],
         dependenciesList:(plan.dependencies || []).filter(dep=>String(dep.task_id)===String(row.stable_id)).map(dep=>({
           ...dep, predecessor_owner_id:alternativeEndpoints[String(dep.predecessor_task_id)]?.project_id})),
         alternative:true, plan_id:plan.id, revision:plan.revision} : task;
@@ -2483,17 +2488,17 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     function alternativeAction(operation, projectId, task=null, values={}) {
       if (!comparingScenario()) return false;
       const plan = alternatives[String(projectId)];
-      if (!plan || (!['export_csv_template', 'view_project_details'].includes(operation) && !canEditProject(projectId))) return true;
+      if (!plan || (operation !== 'export_csv_template' && !canEditProject(projectId))) return true;
       hideContextMenu(); hideProjectContextMenu(); hideDepContextMenu();
       Streamlit.setComponentValue({action:'alternative_action', operation, project_id:projectId,
         plan_id:plan.id, revision:plan.revision, ...(task ? {id:task.id} : {}),
         ...values,
-        nonce:Date.now()+'_alternative_'+operation});
+        nonce:values.nonce || Date.now()+'_alternative_'+operation});
       return true;
     }
 
     function canEditDependency(dependency) {
-      if (comparingScenario()) return false;
+      if (comparingScenario()) return Boolean(dependency?.alternative && canEditProject(dependency.succProjectId));
       if (dependency?.projectDependency) return canEditProject(dependency.succProjectId);
       return Boolean(dependency && canEditProject(dependency.predProjectId)
         && canEditProject(dependency.succProjectId));
@@ -3169,10 +3174,12 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       }
     }
 
-    function showProjectHoverTooltip(e, projectId) {
+    function showProjectHoverTooltip(e, projectId, scenario=null) {
       if (!showHoverOverlay || !projectId) return;
-      const item = masterRenderItems.find(x => x.type === 'project_header' && String(x.project_id) === String(projectId));
+      let item = masterRenderItems.find(x => x.type === 'project_header' && String(x.project_id) === String(projectId));
       if (!item) return;
+      if (scenario) item = {...item, start:scenario.start, end:scenario.end, taskCount:scenario.tasks.length,
+        hasViolations:scenario.dependencies.some(dep=>dep.is_violated)};
 
       const pId = item.project_id;
       if (lazyProjects && !loadedProjectIds.has(String(pId))) {
@@ -3231,7 +3238,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
           </div>
           ${tagsHtml}
           ${(() => {
-            const pPools = (pMeta && pMeta.pools) ? pMeta.pools : [];
+            const pPools = scenario ? scenario.pools : (pMeta && pMeta.pools) ? pMeta.pools : [];
             if (!pPools || pPools.length === 0) return '';
             return `
               <div style="margin-top:6px; border-top:1px solid #334155; padding-top:5px;">
@@ -3286,7 +3293,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       if (viols.length > 0) {
         violHtml = `
           <div style="margin-top:6px; background:#450a0a; border:1px solid #ef4444; border-radius:4px; padding:4px 6px; color:#fca5b3; font-size:10.5px;">
-            <b>⚠️ Constraint Issue:</b><br>${viols.join('<br>')}
+            <b>⚠️ Constraint Issue:</b><br>${viols.map(escapeHtml).join('<br>')}
           </div>
         `;
       }
@@ -3367,9 +3374,10 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       if (!menu || !content) return;
 
       const isViol = depInfo.isViolated;
-      const isExt = Boolean(depInfo.isExternal || (depInfo.predProject && depInfo.succProject && depInfo.predProject !== depInfo.succProject));
+      const isExt = depInfo.isExternal ?? Boolean(depInfo.predProject && depInfo.succProject && depInfo.predProject !== depInfo.succProject);
 
-      const statusBadge = isViol
+      const statusBadge = depInfo.isEvaluable === false
+        ? '<span style="color:#64748b;font-weight:700">Dates unavailable</span>' : isViol
         ? `<span style="background:#fee2e2; color:#b91c1c; padding:2px 6px; border-radius:4px; font-weight:700; font-size:10px; border:1px solid #fecaca;">⚠️ VIOLATED</span>`
         : `<span style="background:#dcfce7; color:#15803d; padding:2px 6px; border-radius:4px; font-weight:700; font-size:10px; border:1px solid #bbf7d0;">✅ SATISFIED</span>`;
 
@@ -3467,6 +3475,15 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       if (!canEditDependency(selectedDependencyInfo)) return;
       if (selectedDependencyInfo.projectDependency) {
         openProjectDependencies(selectedDependencyInfo.succProjectId);
+        return;
+      }
+      if (selectedDependencyInfo.alternative) {
+        const plan = alternatives[String(selectedDependencyInfo.succProjectId)];
+        const task = plan?.tasks.find(row=>String(row.stable_id)===String(selectedDependencyInfo.succId));
+        if (task) {
+          selectedContextMenuTask = scenarioTask({project_id:selectedDependencyInfo.succProjectId, alternativeTask:task});
+          openEditModal();
+        }
         return;
       }
       const succTask = tasksData.find(x => String(x.id) === String(selectedDependencyInfo.succId));
@@ -3907,7 +3924,6 @@ button:not(.context-menu-item):disabled {opacity:.5;}
 
     function openProjectDependencies(projectId) {
       if (!canEditProject(projectId)) return;
-      if (alternativeAction('manage_dependencies', projectId)) return;
       hideContextMenu(); hideProjectContextMenu(); hideDepContextMenu(); hideTooltip();
       resetProjectDependencyMode();
       modalMode = 'project';
@@ -3920,6 +3936,13 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       document.getElementById('modal-label-deps').textContent = getT('modal.project_dependencies_header', 'Incoming project dependencies');
       document.getElementById('dep-rows-list').replaceChildren();
       document.getElementById('modal-backdrop').style.display = 'flex';
+      const alternative = alternatives[String(projectId)];
+      if (alternative) {
+        projectDependencyDraft.alternative = true;
+        receiveProjectDependencies({project_id:projectId, nonce, panel:{revision:alternative.revision,
+          dependencies:alternative.dependencies.filter(dep=>dep.task_id == null)}});
+        return;
+      }
       projectDependencyStatus(getT('modal.dependencies_loading', 'Loading dependencies…'), true);
       Streamlit.setComponentValue({action: 'load_project_dependencies', project_id: projectId, nonce});
     }
@@ -3964,6 +3987,15 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         if (!original || Object.keys(values).some(key => values[key] !== original[key])) upserts.push(original ? {...values, id} : values);
       }
       const deleted_ids = draft.baseline.filter(d => !retained.has(d.id)).map(d => d.id);
+      if (draft.alternative) {
+        const dependencies = draft.baseline.filter(dep=>retained.has(dep.id) && !upserts.some(row=>row.id===dep.id)).concat(upserts)
+          .map(dep=>({predecessor_task_id:dep.predecessor_task_id, predecessor_project_id:dep.predecessor_project_id,
+            link_type:dep.link_type, lag_days:dep.lag_days}));
+        draft.nonce = Date.now() + '_save_alternative_dependencies_' + Math.random();
+        projectDependencyStatus(getT('modal.dependencies_saving', 'Saving dependencies…'), true);
+        alternativeAction('manage_dependencies', draft.projectId, null, {revision:draft.revision, dependencies, nonce:draft.nonce});
+        return;
+      }
       draft.nonce = Date.now() + '_save_project_dependencies_' + Math.random();
       projectDependencyStatus(getT('modal.dependencies_saving', 'Saving dependencies…'), true);
       Streamlit.setComponentValue({action: 'save_project_dependencies', project_id: draft.projectId,
@@ -4455,7 +4487,6 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     function triggerEditProjectFromMenu() {
       hideProjectContextMenu();
       if (!selectedContextMenuProjectId) return;
-      if (alternativeAction('view_project_details', selectedContextMenuProjectId)) return;
 
       Streamlit.setComponentValue({
         action: "edit_project_details",
@@ -6455,6 +6486,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       group.id = 'alternative-links';
       document.getElementById('grid-links-group')?.appendChild(group);
       const taskPositions = new Map(), projectPositions = new Map();
+      const bundles = new Map();
       const position = (task, rowIdx) => ({startX:dateToX(parseDate(task.start_date)),
         endX:task.start_date === task.end_date ? dateToX(parseDate(task.start_date)) : endDateToX(parseDate(task.end_date)),
         centerY:rowIdx*rowHeight()+30, rowIdx});
@@ -6475,7 +6507,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
           const succ = dep.task_id == null ? projectPositions.get(projectId) : taskPositions.get(String(dep.task_id));
           if (!succ) continue;
           const external = alternativeEndpoints[String(dep.predecessor_task_id)];
-          const predProject = dep.predecessor_project_id == null ? external?.project_id : dep.predecessor_project_id;
+          const predProject = dep.predecessor_owner_id ?? external?.project_id;
           let pred = dep.predecessor_task_id == null
             ? projectPositions.get(String(predProject)) || allProjectPositions[String(predProject)]
             : taskPositions.get(String(dep.predecessor_task_id)) || allTaskPositions[String(external?.id)];
@@ -6495,18 +6527,37 @@ button:not(.context-menu-item):disabled {opacity:.5;}
           path.setAttribute('stroke',linkColor); path.setAttribute('stroke-width','2');
           path.setAttribute('fill','none'); path.setAttribute('pointer-events','stroke');
           path.classList.add('alternative-dependency');
-          const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
-          title.textContent = `${plan.name}: ${type}, lag ${dep.lag_days} days`;
-          path.appendChild(title);
-          path.addEventListener('contextmenu', event => {
-            event.preventDefault(); event.stopPropagation();
-            alternativeAction('manage_dependencies', projectId);
-          });
+          const getInfo = () => ({
+            alternative:true, projectDependency:dep.task_id == null,
+            predName:dep.predecessor_task_name || dep.predecessor_project_name,
+            predId:dep.predecessor_task_id, predProject:dep.predecessor_project_name, predProjectId:predProject,
+            predDates:dep.pred_start_date && dep.pred_end_date ? `${formatMmmYy(dep.pred_start_date)} ➔ ${formatMmmYy(dep.pred_end_date)}` : '-',
+            succId:dep.task_id, succProjectId:projectId, succProject:projectId,
+            linkType:type, linkTypeLabel:formatLinkTypeLabel(type), lagStr:`${dep.lag_days >= 0 ? '+' : ''}${dep.lag_days} day(s)`,
+            isViolated:dep.is_violated, isEvaluable:dep.is_evaluable, isExternal,
+            violationReason:dep.violation_text});
+          const member = {entry:{dep:{...dep, pred_task_name:dep.predecessor_task_name},
+            succTask:{name:plan.tasks.find(task=>task.stable_id===dep.task_id)?.task_name || 'Project'}}, getInfo};
+          const bundleKey = `${projectId}:${path.getAttribute('d')}:${type}:${dep.is_violated}`;
+          const existing = bundles.get(bundleKey);
+          if (existing) {existing.members.push(member); continue;}
+          const bundle = {members:[member]};
+          bundles.set(bundleKey, bundle);
+          const openDetails = event => showDependencyBundleMenu(event, bundle);
+          path.style.cursor = 'pointer';
+          if (dep.is_violated) path.setAttribute('stroke-dasharray', '4 2');
+          path.addEventListener('contextmenu', openDetails);
+          path.addEventListener('click', openDetails);
+          path.addEventListener('mouseenter', ()=>path.setAttribute('stroke-width','3.2'));
+          path.addEventListener('mouseleave', ()=>path.setAttribute('stroke-width','2'));
           group.appendChild(path);
           const arrow = document.createElementNS('http://www.w3.org/2000/svg', 'path');
           const direction = sx >= bend ? -1 : 1;
           arrow.setAttribute('d',`M ${sx+direction*5} ${succ.centerY-3} L ${sx} ${succ.centerY} L ${sx+direction*5} ${succ.centerY+3}`);
           arrow.setAttribute('stroke',linkColor); arrow.setAttribute('fill','none');
+          arrow.setAttribute('pointer-events','stroke');
+          arrow.addEventListener('contextmenu', openDetails);
+          arrow.addEventListener('click', openDetails);
           group.appendChild(arrow);
         }
       }

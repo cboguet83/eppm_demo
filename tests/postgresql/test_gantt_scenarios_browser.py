@@ -145,7 +145,7 @@ def test_opt_in_editing_and_alternative_lanes(authorized, tmp_path):
             edit.check()
             drag(page, active_bar)
             drag(page, alt_bar)
-            expect(alt_bar).to_have_attribute('title', 'Option A: 2027-01-03 → 2027-01-07', timeout=15000)
+            expect(alt_bar).to_have_attribute('data-schedule-label', 'Option A: 2027-01-03 → 2027-01-07', timeout=15000)
             with psycopg.connect(authorized.setup.operator_url) as connection:
                 saved = read_plans(connection, [initial.id, baseline.id, alternative.id])
             assert saved[initial.id] == initial.content
@@ -200,8 +200,8 @@ def test_milestones_and_shared_step_and_resource_dialogs_keep_alternative_isolat
             frame.locator('#btn-mode-day').click()
             extra_milestone = frame.locator(f'#timeline-row-alternative-1-{extra_id} .alternative-milestone')
             drag(page, extra_milestone)
-            expect(extra_milestone).not_to_have_attribute('title', 'Milestone · Option A: 2027-01-07 → 2027-01-07', timeout=15000)
-            expect(extra_milestone).to_have_attribute('title', re.compile(r'Milestone · Option A: (2027-01-\d{2}) → \1'))
+            expect(extra_milestone).not_to_have_attribute('data-schedule-label', 'Milestone · Option A: 2027-01-07 → 2027-01-07', timeout=15000)
+            expect(extra_milestone).to_have_attribute('data-schedule-label', re.compile(r'Milestone · Option A: (2027-01-\d{2}) → \1'))
             frame.locator('#frozen-row-2').dblclick()
             expect(frame.locator('#modal-task-name')).to_have_value('Build')
             expect(frame.locator('#modal-progress')).to_have_value('60')
@@ -267,7 +267,7 @@ def test_alternative_context_edits_dependencies_hide_reload_and_confirm_activati
     initial = next(row for row in plans.list_plans(1) if row.is_current)
     content = deepcopy(initial.content)
     content.tasks.append(draft_task(-1, 'Extra step', '2027-01-10', '2027-01-12'))
-    content.dependencies = [dict(task_id=-1, predecessor_task_id=1, predecessor_project_id=None, link_type='FS', lag_days=0)]
+    content.dependencies = [dict(task_id=-1, predecessor_task_id=1, predecessor_project_id=None, link_type='FS', lag_days=10)]
     alternative = plans.save(1, initial.id, initial.revision, 'Option A', content)
     plans.change(1, alternative.id, alternative.revision, 'status', 'approved')
     extra = alternative.content.tasks[1]['id']
@@ -288,7 +288,21 @@ def test_alternative_context_edits_dependencies_hide_reload_and_confirm_activati
             frame.locator('#chk-internal-links').check()
             expect(frame.locator('.alternative-dependency')).to_have_count(1)
             expect(frame.locator('.alternative-dependency')).to_have_attribute('stroke', '#9333ea')
+            frame.locator('.alternative-dependency').dispatch_event('contextmenu', {'clientX':600, 'clientY':300})
+            expect(frame.locator('#dep-ctx-content')).to_contain_text('Predecessor Details')
+            expect(frame.locator('#dep-ctx-content')).to_contain_text('Build')
+            expect(frame.locator('#dep-ctx-content')).to_contain_text('VIOLATED')
+            expect(frame.locator('#dep-ctx-content')).to_contain_text('2027-01-15')
+            page.screenshot(path=str(tmp_path / 'shared-dependency-panel.png'), full_page=True)
+            expect(frame.locator('#ctx-label-edit-dep')).to_be_hidden()
+            frame.locator('#btn-mode-day').click()
             edit.check()
+            frame.locator('.alternative-dependency').dispatch_event('contextmenu', {'clientX':600, 'clientY':300})
+            frame.locator('#ctx-label-edit-dep').click()
+            expect(frame.locator('#modal-task-name')).to_have_value('Extra step')
+            expect(frame.locator('.dep-target')).to_have_value('TASK:1')
+            expect(frame.locator('.dep-lag')).to_have_value('10')
+            frame.locator('#modal-btn-cancel').click()
             frame.locator('#timeline-row-1 .alternative-bar').click(button='right')
             for identity in ['ctx-label-edit-step', 'ctx-label-add-step', 'ctx-label-delete-step', 'ctx-label-task-tags', 'ctx-label-task-pools']:
                 expect(frame.locator('#'+identity)).to_be_visible()

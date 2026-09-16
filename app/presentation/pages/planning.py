@@ -583,15 +583,31 @@ def _manage_project_tags_dialog(
 
 @dialog(t("planning.dialog_task_tags_title", default="🏷️ Manage Task Tags"))
 @planning_errors
-def _manage_task_tags_dialog(task_id: int, task_name: str, workspace: PlanningWorkspace) -> None:
+def _manage_task_tags_dialog(task_id: int, task_name: str, workspace: PlanningWorkspace,
+                             alternative_event: dict | None = None) -> None:
     """Modal dialog for adding, editing, and deleting tags on a task."""
-    task = workspace.planning.get_milestone_by_id(task_id)
+    from app.application.ports.tag_records import TaskTagRow
+    from app.presentation.pages.planning_alternative_editor import selected_plan, save_task_tag
+
+    plan = selected_plan(alternative_event, workspace) if alternative_event else None
+    task = (dict(next(row for row in plan.content.tasks if row['id'] == task_id), project_id=plan.project_id)
+            if plan else workspace.planning.get_milestone_by_id(task_id))
     if task is None or not workspace.projects.projects.permissions().allows(Permission.EDIT, task["project_id"]):
         st.info(t("access.read_only", default="You have read-only access to this project."))
         return
     task_name = task["task_name"]
     st.markdown(f"#### 📋 {task_name} `[Task #{task_id}]`")
-    df_current_tags = get_task_tags_by_task_frame(workspace.tags.get_task_tags_by_task(task_id))
+    choices = workspace.tags.task_tag_choices()
+    by_id = {row.id: row for row in choices}
+    if plan:
+        st.caption(plan.name)
+        rows = [TaskTagRow(id=index, task_id=task_id, **row,
+                          tag_name=by_id[row['tag_id']].tag if row['tag_id'] in by_id else None,
+                          tag_group_name=by_id[row['tag_id']].tag_group_name if row['tag_id'] in by_id else None)
+                for index, row in enumerate(plan.content.task_tags.get(task_id, []))]
+    else:
+        rows = workspace.tags.get_task_tags_by_task(task_id)
+    df_current_tags = get_task_tags_by_task_frame(rows)
     st.markdown(f"##### {t('planning.current_tags', default='Current Assigned Tags')}")
     if df_current_tags.empty:
         st.info(
@@ -611,14 +627,17 @@ def _manage_task_tags_dialog(task_id: int, task_name: str, workspace: PlanningWo
             c_tag, c_del = st.columns([4, 1])
             c_tag.markdown(f"**{display_label}**")
             if c_del.button("🗑️", key=f"btn_del_tt_{tt_id}", help="Remove tag from task"):
-                require_change(workspace.tags.delete_task_tag(tt_id))
+                if plan:
+                    save_task_tag(alternative_event, workspace, delete_index=tt_id)
+                else:
+                    require_change(workspace.tags.delete_task_tag(tt_id))
                 st.toast(
                     t("planning.toast_task_tag_removed", default="Task tag removed!"), icon="🗑️"
                 )
                 st.rerun()
     st.divider()
     st.markdown(f"##### ➕ {t('planning.attach_new_task_tag', default='Attach New Tag to Task')}")
-    df_tags = get_task_tag_group_tags_frame(workspace.tags.task_tag_choices())
+    df_tags = get_task_tag_group_tags_frame(choices)
     tag_options = [
         (
             None,
@@ -655,13 +674,11 @@ def _manage_task_tags_dialog(task_id: int, task_name: str, workspace: PlanningWo
                     )
                 )
             else:
-                workspace.tags.create_task_tag(
-                    TaskTag(
-                        task_id=task_id,
-                        tag_id=selected_tag_id,
-                        free_tag=free_tag_input.strip() if free_tag_input.strip() else None,
-                    )
-                )
+                values = dict(tag_id=selected_tag_id, free_tag=free_tag_input.strip() or None)
+                if plan:
+                    save_task_tag(alternative_event, workspace, values)
+                else:
+                    workspace.tags.create_task_tag(TaskTag(task_id=task_id, **values))
                 st.toast(
                     t("planning.toast_task_tag_attached", default="Tag attached to task!"),
                     icon="🏷️",
@@ -1672,7 +1689,7 @@ def _render_planning_chart(
         create_alternative(create_project, workspace)
     alternative_event = st.session_state.pop('planning_alternative_editor', None)
     if alternative_event is not None:
-        from app.presentation.pages.planning_alternative_editor import edit_alternative
+        from app.presentation.pages.planning_alternative_editor import selected_plan
 
         if alternative_event['operation'] == 'manage_task_pools':
             _manage_task_resource_pools_dialog(alternative_event['id'], '', alternative_event['project_id'],
@@ -1682,8 +1699,17 @@ def _render_planning_chart(
             project_name = next((row['name'] for row in workspace.projects.projects.get_planning_catalog()
                                  if row['id'] == project_id), str(project_id))
             _manage_project_resource_pools_dialog(project_id, project_name, workspace, alternative_event)
-        else:
-            edit_alternative(alternative_event, workspace)
+        elif alternative_event['operation'] == 'manage_task_tags':
+            _manage_task_tags_dialog(alternative_event['id'], '', workspace, alternative_event)
+        elif alternative_event['operation'] == 'import_csv_template':
+            _schedule_csv_dialog(workspace, alternative_event['project_id'], 'import_csv_template', alternative_event)
+        elif alternative_event['operation'] == 'export_csv_template':
+            from app.domain.planning.schedule_template import export_template
+            from app.presentation.components.csv_download import download_project_csv
+
+            plan = selected_plan(alternative_event, workspace)
+            download_project_csv(plan.project_id, str(alternative_event.get('nonce', plan.revision)),
+                                 content=export_template(plan.content.tasks, plan.content.dependencies))
     active_rf = st.session_state.get("active_resource_pool_filter")
     if active_rf and workspace.resources is not None:
         _render_filtered_active_allocations(
@@ -2008,8 +2034,6 @@ def render_planning_milestones(workspace: PlanningWorkspace) -> None:
             workspace,
         )
     edit_project_modal_id = st.session_state.pop("modal_edit_project", None)
-    if edit_project_modal_id:
-        open_edit_project_dialog(int(edit_project_modal_id), workspace.projects, read_only=True)
     _render_planning_chart(
         workspace,
         selected_projects,
@@ -2022,6 +2046,9 @@ def render_planning_milestones(workspace: PlanningWorkspace) -> None:
             st.session_state.get("active_resource_pool_filter"),
         ),
     )
+    if edit_project_modal_id:
+        open_edit_project_dialog(int(edit_project_modal_id), workspace.projects, read_only=True,
+                                 allow_edit=not bool(st.session_state.get('planning_alternatives')))
 
 
 @dialog("Active Allocations on Projects & Tasks", width="large")
@@ -2050,7 +2077,8 @@ def _pool_allocations_dialog(pool_id: int, workspace: PlanningWorkspace, group_i
 
 @dialog("Schedule CSV", width="large")
 @planning_errors
-def _schedule_csv_dialog(workspace: PlanningWorkspace, project_id: int, action: str) -> None:
+def _schedule_csv_dialog(workspace: PlanningWorkspace, project_id: int, action: str,
+                         alternative_event: dict | None = None) -> None:
     """Load exports or validate an import only after its menu is invoked."""
     if not workspace.projects.projects.permissions().allows(Permission.EDIT, project_id):
         st.info(t("access.read_only", default="You have read-only access to this project."))
@@ -2060,6 +2088,12 @@ def _schedule_csv_dialog(workspace: PlanningWorkspace, project_id: int, action: 
         st.error("The selected project no longer exists.")
         return
     st.subheader(project.name)
+    from app.domain.planning.schedule_template import parse_template
+    from app.presentation.pages.planning_alternative_editor import selected_plan, template_content
+
+    plan = selected_plan(alternative_event, workspace) if alternative_event else None
+    if plan:
+        st.caption(plan.name)
     with st.container(key="schedule_import_warning"):
         st.html('<style>.st-key-schedule_import_warning [data-testid="stAlert"], '
                 '.st-key-schedule_import_warning [data-testid="stAlertContainer"] '
@@ -2090,13 +2124,19 @@ def _schedule_csv_dialog(workspace: PlanningWorkspace, project_id: int, action: 
             "The preview shows the dates that will be saved."
         )),
     )
-    steps = workspace.planning.validate_project_template(project_id, content, date_format=date_format)
+    steps = (parse_template(content, date_format=date_format) if plan
+             else workspace.planning.validate_project_template(project_id, content, date_format=date_format))
     steps_payload = list(csv.DictReader(io.StringIO(content.lstrip("\ufeff"))))
     for row, step in zip(steps_payload, steps, strict=True):
         row["start_date"] = step.values["start_date"]
         row["end_date"] = step.values["end_date"]
     st.dataframe(pd.DataFrame(steps_payload), width="stretch", hide_index=True)
     if st.button(t("planning.csv_replace_button", default="Replace project schedule"), type="primary"):
-        count = workspace.planning.replace_project_template(project_id, content, date_format=date_format)
+        if plan:
+            selected_plan(alternative_event, workspace)
+            workspace.plans.update_alternative(project_id, plan.id, plan.revision, template_content(steps))
+            count = len(steps)
+        else:
+            count = workspace.planning.replace_project_template(project_id, content, date_format=date_format)
         st.toast(t("planning.csv_import_success", count=count, project_id=project_id))
         st.rerun()
