@@ -53,7 +53,7 @@ test('baseline replacement requires confirmation while first capture does not', 
 
 test('task and project menus default to read only and use the independent edit scope', () => {
   const h = harness();
-  for (const permission of [undefined, {editable_projects: [1]}]) {
+  for (const permission of [undefined, {editable_projects: [1]}, {editable_projects: [1], versioned_projects: [1, 2]}]) {
     h.context.updatePermissionControls(permission);
     for (const projectId of [1, 2]) {
       h.context.showContextMenu(null, {id: 10, project_id: projectId});

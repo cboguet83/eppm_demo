@@ -26,7 +26,7 @@ from app.infrastructure.postgresql.project_dependencies import (
     read_project_dependencies, project_dependency_revision, write_project_dependencies,
 )
 from app.shared.logging import get_logger
-from app.infrastructure.postgresql.plan_guards import require_unversioned, require_reschedule
+from app.infrastructure.postgresql.plan_guards import require_current_edit, require_reschedule
 
 logger = get_logger(__name__)
 _TASK_COLUMNS = """m.id,m.project_id,m.task_name,m.phase,to_char(m.start_date,'YYYY-MM-DD') AS start_date,
@@ -66,7 +66,7 @@ class PostgresPlanningStore:
 
     def write_project_dependencies(self, project_id: int, upserts: list[ProjectDependencyInput], deleted_ids: list[int]) -> None:
         """Apply explicit link changes in the existing transaction."""
-        require_unversioned(self.connection, project_id=project_id)
+        require_current_edit(self.connection, project_id=project_id)
         write_project_dependencies(self.connection, project_id, upserts, deleted_ids)
 
     def _rows[Record](self, model: Callable[..., Record], source: str,
@@ -173,12 +173,12 @@ class PostgresPlanningStore:
 
     def create_task(self, project_id: int, values: TaskValues) -> int:
         """Create normalized native task fields without publishing before commit."""
-        require_unversioned(self.connection, project_id=project_id)
+        require_current_edit(self.connection, project_id=project_id)
         return self.connection.execute(_INSERT_TASK + ' RETURNING id', (project_id, *_task_params(values))).fetchone()[0]
 
     def update_task(self, task_id: int, values: TaskValues) -> bool:
         """Update task details with native old/new predecessor authorization."""
-        require_unversioned(self.connection, task_id=task_id)
+        require_current_edit(self.connection, task_id=task_id)
         previous = self.connection.execute('SELECT predecessor_id,predecessor_editable FROM eppm.plan_task_edit_access WHERE id=%s', (task_id,)).fetchone()
         predecessor = values.get('predecessor_id')
         if previous and not previous[1]:
@@ -196,12 +196,12 @@ class PostgresPlanningStore:
 
     def insert_dependency(self, task_id: int, dependency: DependencyInput) -> None:
         """Create one normalized link under endpoint ownership checks."""
-        require_unversioned(self.connection, task_id=task_id)
+        require_current_edit(self.connection, task_id=task_id)
         self.connection.execute(_INSERT_DEPENDENCY, _dependency_params(task_id, dependency))
 
     def replace_dependencies(self, task_id: int, dependencies: list[DependencyInput]) -> None:
         """Replace visible incoming links as one guarded, rollback-safe batch."""
-        require_unversioned(self.connection, task_id=task_id)
+        require_current_edit(self.connection, task_id=task_id)
         self.connection.execute('DELETE FROM eppm.task_dependencies WHERE task_id=%s', (task_id,))
         with self.connection.cursor() as cursor:
             cursor.executemany(_INSERT_DEPENDENCY, [_dependency_params(task_id, dependency) for dependency in dependencies])
@@ -222,14 +222,14 @@ class PostgresPlanningStore:
     def bulk_create_milestones(self, rows: list[TaskInput]) -> int:
         """Insert the whole validated import in the surrounding serializable save."""
         for project_id in {row['project_id'] for row in rows}:
-            require_unversioned(self.connection, project_id=project_id)
+            require_current_edit(self.connection, project_id=project_id)
         with self.connection.cursor() as cursor:
             cursor.executemany(_INSERT_TASK, [(row['project_id'], *_task_params(row)) for row in rows])
         return len(rows)
 
     def delete_milestone(self, milestone_id: int) -> bool:
         """Remove visible edges and primary references before deleting the owner."""
-        require_unversioned(self.connection, task_id=milestone_id)
+        require_current_edit(self.connection, task_id=milestone_id)
         self._require_removable([milestone_id])
         self.connection.execute('DELETE FROM eppm.task_dependencies WHERE task_id=%s OR predecessor_task_id=%s', (milestone_id, milestone_id))
         self.connection.execute('''UPDATE eppm.project_task SET predecessor_id=NULL WHERE id IN
@@ -250,7 +250,7 @@ class PostgresPlanningStore:
 
     def clear_project_schedule(self, project_id: int) -> None:
         """Remove schedule edges and all project/task allocations in one operation."""
-        require_unversioned(self.connection, project_id=project_id)
+        require_current_edit(self.connection, project_id=project_id)
         self._require_removable([row[0] for row in self.connection.execute(
             'SELECT id FROM eppm.project_task WHERE project_id=%s', (project_id,))])
         tasks = 'SELECT id FROM eppm.project_task WHERE project_id=%s'

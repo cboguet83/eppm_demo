@@ -39,6 +39,17 @@ def test_current_portfolio_drag_and_baseline_overlay(authorized, tmp_path):
             checkbox = frame.get_by_role('checkbox', name='Show baseline', exact=True)
             expect(checkbox).not_to_be_checked(timeout=40000)
             expect(frame.locator('#frozen-row-1')).to_be_visible()
+            frame.locator('#frozen-row-1').click(button='right')
+            for action in ['ctx-label-add-step', 'ctx-label-edit-step', 'ctx-label-task-tags',
+                           'ctx-label-task-pools', 'ctx-label-complete-step', 'ctx-label-delete-step']:
+                expect(frame.locator('#' + action)).to_be_visible()
+            frame.locator('#frozen-row-proj-1').click(button='right')
+            for action in ['ctx-project-add-step', 'ctx-label-project-tags',
+                           'ctx-label-project-pools', 'ctx-project-dependencies', 'ctx-project-log-event']:
+                expect(frame.locator('#' + action)).to_be_visible()
+            frame.get_by_text('Bulk actions', exact=True).hover()
+            expect(frame.locator('#ctx-import-csv')).to_be_visible()
+            frame.locator('#badge-projects-count').click()
             initial_height = frame.locator('#frozen-row-1').bounding_box()['height']
             expect(frame.locator('.baseline-line')).to_have_count(0)
             frame.locator('#btn-mode-day').click()

@@ -129,16 +129,54 @@ def test_plan_copy_preserves_hidden_dependencies_without_disclosing_endpoints(au
     assert admin.list_plans(1)[0].content.dependencies == first.content.dependencies
 
 
-def test_legacy_schedule_and_assignment_edits_cannot_mutate_current_plan(authorized):
+def test_current_menu_edits_preserve_saved_plan_and_baseline(authorized):
     from app.infrastructure.postgresql.planning import PostgresPlanningGateway
     from app.application.services.planning import PlanningService
     plans = service(authorized, 4)
-    plans.initialize(1)
+    initial = plans.baseline_current(1)
     planning = PlanningService(PostgresPlanningGateway(authorized.database, authorized.key,
         access=authorized.binding(4).access))
-    with pytest.raises(ValueError, match='versioned plans'):
-        planning.create_milestone(1, 'Bypass', 'General', '2027-01-01', '2027-01-02', 0)
+    task_id = planning.create_milestone(1, 'New task', 'General', '2027-01-01', '2027-01-02', 0)
+    assert planning.update_milestone(task_id, 'Edited task', 'General', '2027-01-02', '2027-01-03', 25)
+    assert plans.current_content(1).tasks[0]['task_name'] == 'Edited task'
+    saved = plans.list_plans(1)
+    assert len(saved) == 1 and saved[0].is_baseline
+    assert saved[0].content == initial.content
+    assert saved[0].revision > initial.revision
+    with pytest.raises(PlanningConflictError):
+        plans.save(1, initial.id, initial.revision, 'Stale draft', initial.content)
+    assert planning.delete_milestone(task_id)
+    assert plans.current_content(1).tasks == []
     assert authorized.query('SELECT id FROM eppm.project_task') == []
+
+
+def test_current_tags_and_allocations_remain_editable_with_baseline(authorized):
+    from dataclasses import replace
+    from app.domain.resources.models import PoolAssignment
+    from app.domain.tags.models import TaskTag
+    from tests.postgresql.test_resource_pools import service as pool_service
+    from tests.postgresql.test_tags import service as tag_service
+
+    with psycopg.connect(authorized.setup.operator_url) as connection:
+        connection.execute("INSERT INTO eppm.project_task(project_id,task_name,start_date,end_date) VALUES(1,'Task','2027-01-01','2027-01-05')")
+        connection.execute("INSERT INTO eppm.resource_pool(name,capacity_fte) VALUES('Delivery',5)")
+    plans = service(authorized, 4)
+    baseline = plans.baseline_current(1)
+    tags, pools = tag_service(authorized, 1), pool_service(authorized, 1)
+    tag_id = tags.create_task_tag(TaskTag(task_id=1, free_tag='Original'))
+    assert tags.update_task_tag(TaskTag(id=tag_id, task_id=1, free_tag='Changed'))
+    allocation = PoolAssignment(pool_id=1, project_id=1, task_id=1, fte_assigned=1)
+    allocation_id = pools.create_assignment(allocation)
+    assert pools.update_assignment(replace(allocation, id=allocation_id, fte_assigned=2))
+    working = plans.current_content(1)
+    assert working.task_tags[1][0]['free_tag'] == 'Changed'
+    assert working.assignments[0].fte_assigned == 2
+    assert plans.list_plans(1)[0].content == baseline.content
+    assert tags.delete_task_tag(tag_id)
+    assert pools.delete_assignment(allocation_id)
+    assert plans.current_content(1).task_tags == {}
+    assert plans.current_content(1).assignments == []
+    assert len(plans.list_plans(1)) == 1
 
 
 def test_removed_cross_project_predecessor_remains_an_unresolved_plan_link(authorized):

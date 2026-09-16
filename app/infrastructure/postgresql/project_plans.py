@@ -17,7 +17,7 @@ from app.infrastructure.postgresql.access import PostgresAccessStore
 from app.infrastructure.postgresql.authorization import ServerRequestSigner
 from app.infrastructure.postgresql.business import run_business
 from app.infrastructure.postgresql.errors import DatabaseUnavailableError, TransactionRetryError
-from app.infrastructure.postgresql.plan_content import capture_content, decode_content, encode_content
+from app.infrastructure.postgresql.plan_content import capture_content, capture_contents, decode_content, encode_content
 from app.infrastructure.postgresql.pool import Database
 from app.infrastructure.postgresql.resource_pools import PostgresResourcePoolStore
 from app.shared.logging import get_logger
@@ -102,20 +102,16 @@ class PostgresPlanStore:
         return [row[0] for row in self.connection.execute('SELECT project_id FROM eppm.project_plan WHERE is_current')]
 
     def current_context(self, project_ids: list[int], task_ids: list[int]) -> dict[int, PlanContent]:
-        """Resolve referenced external schedules in one scoped query."""
-        result = {identity: decode_content(content) for identity, content in self.connection.execute('''
-            SELECT project_id,content FROM eppm.project_plan WHERE is_current AND
+        """Resolve live schedules in scoped batches, including tasks edited through menus."""
+        owners = [row[0] for row in self.connection.execute('''
+            SELECT project_id FROM eppm.project_plan WHERE is_current AND
             (project_id=ANY(%s::bigint[]) OR project_id IN
                 (SELECT project_id FROM eppm.project_plan,
-                    jsonb_array_elements(content->'tasks') task WHERE (task->>'id')::bigint=ANY(%s::bigint[])))''', (project_ids, task_ids))}
+                    jsonb_array_elements(content->'tasks') task WHERE (task->>'id')::bigint=ANY(%s::bigint[]))
+                OR project_id IN (SELECT project_id FROM eppm.project_task WHERE id=ANY(%s::bigint[])))''', (project_ids, task_ids, task_ids))]
+        result = capture_contents(self.connection, owners)
         visibility = self._endpoint_visibility()
-        dates = {identity: (start, end) for identity, start, end in self.connection.execute('''
-            SELECT id,to_char(start_date,'YYYY-MM-DD'),to_char(end_date,'YYYY-MM-DD') FROM eppm.project_task
-            WHERE project_id=ANY(%s::bigint[])''', (list(result),))}
         for content in result.values():
-            for task in content.tasks:
-                if task['id'] in dates:
-                    task['start_date'], task['end_date'] = dates[task['id']]
             content.dependencies = [dep for dep in content.dependencies if self._dependency_visible(dep, content, visibility)]
         return result
 

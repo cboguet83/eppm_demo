@@ -41,14 +41,17 @@ it does not bypass another project's permissions.
 
 New projects receive an empty Approved current plan in their creation transaction.
 Legacy/operator-created projects can be initialized once from Project plans.
-Direct task-content/assignment/tag edits are rejected in Python for versioned projects.
+Current task, dependency, assignment and tag edits are allowed with project edit
+permission even when saved plans exist. They change the live schedule and advance
+the current revision without modifying saved snapshots or creating a plan.
 The current portfolio remains the default view, preserving existing drill-through
 filters; use Project plans to create alternatives. Actual progress has its own
 editor and never creates a plan version.
 
 ### Current portfolio rescheduling (2026-09-16)
 
-The user superseded the read-only current-portfolio date behavior. Current
+The user superseded the read-only current-portfolio behavior, including task and
+project context-menu actions. Current
 portfolio remains the default planning view. An editor can drag or resize live
 tasks without creating a plan or rewriting any saved snapshot. The current plan's
 revision advances to invalidate stale drafts. Date edits and baseline capture lock
@@ -68,7 +71,7 @@ continues to prevent approvers from saving edited drafts without edit permission
 and reduces current task and project bar heights by 30%, draws bold dotted purple baseline lines underneath, and adds
 purple rows for baseline-only tasks. Only current dependencies are rendered.
 Baseline lanes are read in one scoped batch and are independent of live capacity.
-The Project plans alternative editor uses live dates when its selection is current;
+The Project plans alternative editor reads the full live schedule in batches when its selection is current;
 saved reference plans and baseline dates remain immutable.
 
 Lifecycle and validation rules live in Python. No new PostgreSQL business

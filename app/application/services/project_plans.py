@@ -25,7 +25,7 @@ class ProjectPlanService:
         return self._gateway.run(lambda store: store.baseline_projects())
 
     def current_content(self, project_id: int) -> PlanContent:
-        """Read the current working schedule, including rescheduled live dates."""
+        """Read live tasks, dependencies, assignments and tags for the working schedule."""
         def operation(store: PlanStore) -> PlanContent:
             content = store.current_context([project_id], []).get(project_id)
             if content is None:
