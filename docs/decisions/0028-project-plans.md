@@ -61,8 +61,8 @@ the existing current plan. Approver/Business Admin permission remains required;
 migration 0044 permits scoped approvers to insert this explicit snapshot. Python
 continues to prevent approvers from saving edited drafts without edit permission.
 
-**Show baseline** is initially unchecked. Enabling it reduces task-row and current
-bar heights by 30%, draws bold dotted purple baseline lines underneath, and adds
+**Show baseline** is initially unchecked. Enabling it keeps row heights unchanged
+and reduces current task and project bar heights by 30%, draws bold dotted purple baseline lines underneath, and adds
 purple rows for baseline-only tasks. Only current dependencies are rendered.
 Baseline lanes are read in one scoped batch and are independent of live capacity.
 The Project plans alternative editor uses live dates when its selection is current;

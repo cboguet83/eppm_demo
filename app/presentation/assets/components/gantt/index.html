@@ -601,12 +601,12 @@
       pointer-events: none;
     }
 
-    .baseline-line {position:absolute; top:24px; height:0; border-top:4px dotted #9333ea; z-index:6; pointer-events:auto;}
+    .baseline-line {position:absolute; top:34px; height:0; border-top:4px dotted #9333ea; z-index:6; pointer-events:auto;}
     .baseline-only, .baseline-only .task-id-cell, .baseline-only .task-date-cell,
     .baseline-only .task-title, .baseline-only .task-sub-desc {color:#9333ea !important;}
-    .show-baseline .gantt-bar-wrapper {height:19.6px; top:2px;}
-    .show-baseline .project-summary-bar {height:9.8px; top:6.9px;}
-    .show-baseline .milestone-diamond-wrapper {width:14px; height:14px; top:4.8px; margin-left:-7px;}
+    .show-baseline .gantt-bar-wrapper {height:19.6px; top:10.9px;}
+    .show-baseline .project-summary-bar {height:9.8px; top:15.8px;}
+    .show-baseline .milestone-diamond-wrapper {width:14px; height:14px; top:13.7px; margin-left:-7px;}
     .show-baseline .milestone-diamond-shape {width:12.6px; height:12.6px;}
 
     /* Task Bar Rendering */
@@ -2262,8 +2262,8 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     let baselineSignature = '';
     let baselineAll = false;
     let approvableProjectIds = new Set();
-    const rowHeight = () => showBaseline ? 28.98 : 41.4;
-    const barCenter = () => showBaseline ? 11.8 : 20.7;
+    const rowHeight = () => 41.4;
+    const barCenter = () => 20.7;
 
     function canRescheduleTask(task) {
       return Boolean(task && !task.baselineOnly &&

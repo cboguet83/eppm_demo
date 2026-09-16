@@ -44,6 +44,9 @@ def test_current_portfolio_drag_and_baseline_overlay(authorized, tmp_path):
             frame.locator('#btn-mode-day').click()
             bar = frame.locator('#timeline-row-1 .gantt-bar-wrapper')
             box = bar.bounding_box()
+            project_bar = frame.locator('#timeline-row-proj-1 .project-summary-bar')
+            initial_project_bar_height = project_bar.bounding_box()['height']
+            initial_project_row_height = frame.locator('#frozen-row-proj-1').bounding_box()['height']
             page.mouse.move(box['x'] + box['width'] / 2, box['y'] + box['height'] / 2)
             page.mouse.down()
             page.mouse.move(box['x'] + box['width'] / 2 + 76, box['y'] + box['height'] / 2, steps=8)
@@ -58,7 +61,13 @@ def test_current_portfolio_drag_and_baseline_overlay(authorized, tmp_path):
             expect(former).to_contain_text('Former task')
             expect(former).to_have_class(re.compile('baseline-only'))
             assert former.locator('.task-title').evaluate('(el)=>getComputedStyle(el).color') == 'rgb(147, 51, 234)'
-            assert frame.locator('#frozen-row-1').bounding_box()['height'] == pytest.approx(initial_height * .7, abs=.1)
+            assert frame.locator('#frozen-row-1').bounding_box()['height'] == pytest.approx(initial_height, abs=.1)
+            assert frame.locator('#frozen-row-proj-1').bounding_box()['height'] == pytest.approx(initial_project_row_height, abs=.1)
+            assert bar.bounding_box()['height'] == pytest.approx(box['height'] * .7, abs=.1)
+            assert project_bar.bounding_box()['height'] == pytest.approx(initial_project_bar_height * .7, abs=.1)
+            baseline_box = frame.locator('#timeline-row-1 .baseline-line').bounding_box()
+            current_box = bar.bounding_box()
+            assert baseline_box['y'] > current_box['y'] + current_box['height']
             expect(frame.locator('#timeline-row-baseline-1-3 .gantt-bar-wrapper')).to_have_count(0)
             expect(frame.locator('#grid-links-group path')).to_have_count(links_before)
             page.screenshot(path=str(tmp_path / 'current-portfolio-baseline.png'), full_page=True)
