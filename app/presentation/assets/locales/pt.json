@@ -403,7 +403,8 @@
     "flex_filter_project_tags": "Tags do projeto",
     "csv_replace_warning": "A importação substitui todo o cronograma. As tarefas, dependências (incluindo outros projetos) e alocações de recursos do projeto e das tarefas serão excluídas. Os campos do projeto e links web serão mantidos. Nada será excluído antes da validação e do clique em Substituir cronograma do projeto.",
     "csv_replace_button": "Substituir cronograma do projeto",
-    "clear_all_filters": "Limpar todos os filtros"
+    "clear_all_filters": "Limpar todos os filtros",
+    "close_alternative_view": "Fechar vista alternativa"
   },
   "gantt": {
     "columns": {

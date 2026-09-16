@@ -403,7 +403,8 @@
     "flex_filter_project_tags": "Projekt-Tags",
     "csv_replace_warning": "Der Import ersetzt den gesamten Projektplan. Bestehende Aufgaben, Abhängigkeiten (auch zu anderen Projekten) und Ressourcenzuweisungen an Projekt und Aufgaben werden gelöscht. Projektfelder und Weblinks bleiben erhalten. Erst nach erfolgreicher Prüfung und Klick auf Projektplan ersetzen werden Daten geändert.",
     "csv_replace_button": "Projektplan ersetzen",
-    "clear_all_filters": "Alle Filter löschen"
+    "clear_all_filters": "Alle Filter löschen",
+    "close_alternative_view": "Alternative Ansicht schließen"
   },
   "gantt": {
     "columns": {

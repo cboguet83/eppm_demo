@@ -32,8 +32,10 @@ pool allocation grid remain unchanged.
 
 Comparison starts disabled on a new browser session and whenever navigation
 opens the page again. Scenario management can explicitly hide comparison or
-activate the displayed approved alternative after confirmation. Activation
-retains the previous plan as inactive. Purple dependency links use the alternative
+activate the displayed approved alternative after confirmation. Close alternative
+view beside Clear all filters also closes comparison while retaining portfolio
+filters and edit mode. Activation retains the previous plan as inactive.
+Purple dependency links use the alternative
 schedule, including its added tasks. Contextual task, dependency, assignment,
 CSV and task-tag operations target the selected alternative and check its revision
 under the project lock. Deleted tasks release their scenario assignments.

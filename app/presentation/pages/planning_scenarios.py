@@ -27,6 +27,13 @@ def require_edit(*, alternative: bool = False) -> None:
         raise ValueError('Only the displayed alternative scenario can be edited during comparison.')
 
 
+def close_alternative_view() -> None:
+    """Close all comparison lanes without changing plans or portfolio filters."""
+    st.session_state['planning_alternatives'] = {}
+    st.session_state.pop('planning_alternative_editor', None)
+    st.session_state.pop('planning_scenario_dialog_project', None)
+
+
 def handle_scenario_event(event: dict[str, Any], workspace: PlanningWorkspace) -> None:
     """Route validated component JSON; authorization remains in Python services."""
     action = event['action']
@@ -36,7 +43,7 @@ def handle_scenario_event(event: dict[str, Any], workspace: PlanningWorkspace) -
         handle_alternative_action(event, workspace)
         return
     if action == 'hide_alternatives':
-        st.session_state['planning_alternatives'] = {}
+        close_alternative_view()
         return
     if action == 'toggle_edit':
         st.session_state['planning_edit_enabled'] = event['enabled']

@@ -69,7 +69,8 @@ from app.presentation.components.planning_transport import pack_pool_payloads
 from app.presentation.i18n import get_current_locale, get_section_catalog, t
 from app.presentation.navigation import PAGE_SETTINGS
 from app.presentation.pages.planning_scenarios import (
-    SCENARIO_ACTIONS, MUTATIONS, choose_alternative, handle_scenario_event, require_edit, scenario_payload,
+    SCENARIO_ACTIONS, MUTATIONS, choose_alternative, close_alternative_view,
+    handle_scenario_event, require_edit, scenario_payload,
 )
 
 
@@ -226,6 +227,8 @@ def _handle_gantt_component_change(widget_key: str, workspace: PlanningWorkspace
     gantt_event = validate_event(gantt_event)
     if gantt_event['action'] in SCENARIO_ACTIONS:
         handle_scenario_event(gantt_event, workspace)
+        if gantt_event['action'] in {'hide_alternatives', 'activate_alternative', 'toggle_baseline'}:
+            st.rerun('planning_workspace')
     elif gantt_event.get("action") == "initialize_planning":
         st.session_state.pop("planning_chart_snapshot", None)
     elif gantt_event.get("action") == "load_project_tasks":
@@ -1656,7 +1659,6 @@ def _render_planning_chart(
 @planning_errors
 def render_planning_milestones(workspace: PlanningWorkspace) -> None:
     """Render planning filters and their interactive Gantt and capacity grids."""
-    st.caption('Enable edit mode to reschedule tasks. During comparison, only the alternative scenario can be edited.')
     st.html(
         """
         <style>
@@ -1809,7 +1811,10 @@ def render_planning_milestones(workspace: PlanningWorkspace) -> None:
                 if field_label in flex_filter_fields.values():
                     field_label = f"{param_name} ({param_id})"
                 flex_filter_fields[target_column] = field_label
-    top_flex_col, top_status_col, top_sel_col, top_clear_col = st.columns([1.2, 1.6, 3, 1.2], vertical_alignment="bottom")
+    comparing = bool(st.session_state.get('planning_alternatives'))
+    filter_columns = st.columns([1.2, 1.6, 2.4, 0.6, 1.2] if comparing else [1.2, 1.6, 3.6, 0.6],
+                                vertical_alignment="bottom")
+    top_flex_col, top_status_col, top_sel_col, top_clear_col = filter_columns[:4]
     with top_status_col:
         statuses = st.multiselect(t("dashboard.project_status", default="Project status"), PROJECT_STATUSES,
                                   default=["In Progress"], key="planning_statuses")
@@ -1823,7 +1828,11 @@ def render_planning_milestones(workspace: PlanningWorkspace) -> None:
     with top_clear_col:
         st.button(t("planning.clear_all_filters", default="Clear all filters"),
                   on_click=_clear_all_planning_filters, key="clear_all_planning_filters",
-                  width="stretch", icon=":material/filter_alt_off:")
+                  width="stretch")
+    if comparing:
+        with filter_columns[4]:
+            st.button(t('planning.close_alternative_view', default='Close alternative view'),
+                      on_click=close_alternative_view, key='close_alternative_view', width='stretch')
     active_flex_filters: dict[str, list[str]] = {}
     with top_flex_col:
         with st.popover(

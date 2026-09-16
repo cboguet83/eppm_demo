@@ -402,7 +402,8 @@
     "flex_filter_project_tags": "Project Tags",
     "csv_replace_warning": "Importing replaces this project's entire schedule. All existing tasks, dependency links (including links to other projects), and project/task resource allocations will be deleted. Project fields and useful web links are retained. Nothing is deleted until the template passes validation and you click Replace project schedule.",
     "csv_replace_button": "Replace project schedule",
-    "clear_all_filters": "Clear all filters"
+    "clear_all_filters": "Clear all filters",
+    "close_alternative_view": "Close alternative view"
   },
   "gantt": {
     "columns": {

@@ -403,7 +403,8 @@
     "flex_filter_project_tags": "Tags du projet",
     "csv_replace_warning": "L’import remplace tout le planning du projet. Les tâches, liens de dépendance (y compris avec les autres projets) et affectations de ressources au projet et aux tâches seront supprimés. Les champs du projet et les liens web utiles sont conservés. Aucune suppression avant validation du fichier et clic sur Remplacer le planning du projet.",
     "csv_replace_button": "Remplacer le planning du projet",
-    "clear_all_filters": "Effacer tous les filtres"
+    "clear_all_filters": "Effacer tous les filtres",
+    "close_alternative_view": "Fermer la vue alternative"
   },
   "gantt": {
     "columns": {
