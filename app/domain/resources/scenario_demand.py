@@ -60,3 +60,25 @@ def comparison_pool_demand(
             series[scope] = usage
         result[pool_id] = series
     return result
+
+
+def changed_comparison_scopes(
+    active_assignments: dict[int, list[CapacityAssignment]],
+    comparison: dict[int, dict[str, dict[str, float]]],
+    selected_projects: set[int],
+    included_projects: set[int],
+) -> dict[int, list[str]]:
+    """Identify differing daily consumption, treating missing dates as zero demand."""
+    changed = {}
+    for pool_id, series in comparison.items():
+        rows = [row for row in active_assignments.get(pool_id, []) if row['project_id'] in included_projects]
+        scopes = []
+        for scope, projects in [('total', None), ('selected', selected_projects)]:
+            active = demand_timeline(rows, projects)
+            alternative = series[scope]
+            if any(abs(active.get(day, 0) - alternative.get(day, 0)) > .0001
+                   for day in active.keys() | alternative.keys()):
+                scopes.append(scope)
+        if scopes:
+            changed[pool_id] = scopes
+    return changed

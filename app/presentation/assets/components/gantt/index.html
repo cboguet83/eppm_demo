@@ -2291,6 +2291,8 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     let alternatives = {};
     let alternativeEndpoints = {};
     let alternativePoolUsage = {};
+    let alternativePoolChanges = {};
+    let activePlanNames = {};
     let alternativeTaskChoices = [];
     const comparingScenario = () => Object.keys(alternatives).length > 0;
     let showBaseline = false;
@@ -3180,6 +3182,12 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       }
     }
 
+    function scenarioTooltip(projectId, alternative = false) {
+      if (!comparingScenario()) return '';
+      const name = alternative ? alternatives[String(projectId)]?.name : activePlanNames[String(projectId)];
+      return `<div class="scenario-tooltip-name" style="font-size:11px;color:#cbd5e1;margin-bottom:4px">Scenario: <b>${escapeHtml(name || 'Active scenario')}</b></div>`;
+    }
+
     function showProjectHoverTooltip(e, projectId, scenario=null) {
       if (!showHoverOverlay || !projectId) return;
       let item = masterRenderItems.find(x => x.type === 'project_header' && String(x.project_id) === String(projectId));
@@ -3231,6 +3239,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
 
       const tooltipContent = `
         <div style="font-family:inherit; min-width:200px; max-width:320px; text-align:left;">
+          ${scenarioTooltip(projectId, Boolean(scenario))}
           <div style="display:flex; align-items:center; justify-content:space-between; gap:6px; margin-bottom:4px; border-bottom:1px solid #334155; padding-bottom:4px;">
             <span style="font-weight:700; font-size:13px; color:#ffffff;">📁 ${escapeHtml(cleanPName)}</span>
             <span style="font-size:10px; font-weight:700; background:#1e293b; color:#93c5fd; padding:1px 5px; border-radius:4px; border:1px solid #3b82f6;">#${pId}</span>
@@ -3333,6 +3342,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
 
       const tooltipContent = `
         <div style="font-family:inherit; min-width:190px; max-width:320px; text-align:left;">
+          ${scenarioTooltip(task.project_id, Boolean(task.alternative))}
           <div style="display:flex; align-items:center; justify-content:space-between; gap:6px; margin-bottom:3px;">
             <span style="font-weight:700; font-size:12.5px; color:#ffffff;">${escapeHtml(task.name)}</span>
             <span style="font-size:10px; font-weight:700; background:#1e293b; color:#93c5fd; padding:1px 5px; border-radius:4px; border:1px solid #3b82f6;">#${task.id}</span>
@@ -5081,7 +5091,8 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       }
 
       menu.querySelectorAll('.context-menu-item').forEach(item => {
-        const disabled = allocationScope.startsWith('alternative');
+        const filterAction = item.closest('#ctx-res-filter-btn') || item.id === 'ctx-res-clear-btn';
+        const disabled = allocationScope.startsWith('alternative') && !filterAction;
         item.setAttribute('aria-disabled', String(disabled));
         item.style.pointerEvents = disabled ? 'none' : '';
         item.style.opacity = disabled ? '.45' : '';
@@ -5128,12 +5139,12 @@ button:not(.context-menu-item):disabled {opacity:.5;}
 
     function triggerFilterResourcePool(clearOther, scope = 'this') {
       hideResourceCellContextMenu();
-      if (!selectedResourceCellCtx || selectedResourceCellCtx.allocation_scope?.startsWith('alternative')) return;
+      if (!selectedResourceCellCtx) return;
       Streamlit.setComponentValue({
         action: "filter_by_resource_pool",
         filter_scope: scope,
         pool_id: selectedResourceCellCtx.pool_id,
-        allocation_scope: selectedResourceCellCtx.allocation_scope || 'total',
+        allocation_scope: (selectedResourceCellCtx.allocation_scope || 'total').replace('alternative_', ''),
         group_id: selectedResourceCellCtx.group_id,
         pool_name: selectedResourceCellCtx.pool_name,
         start_date: selectedResourceCellCtx.start_date,
@@ -5150,7 +5161,6 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     }
 
     function triggerClearResourcePoolFilter(e) {
-      if (selectedResourceCellCtx?.allocation_scope?.startsWith('alternative') && e?.target.closest('#resource-cell-context-menu')) return;
       if (e) {
         e.stopPropagation();
         e.preventDefault();
@@ -5277,7 +5287,15 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         const scopes = row.rowType === 'group_total'
           ? [...(showTotalRows ? ['total'] : []), ...(showSelectedRows ? ['selected'] : [])]
           : [row.rowType === 'pool_selected' ? 'selected' : 'total'];
-        const comparisonRows = scopes.map(scope => {
+        const comparisonRows = scopes.filter(scope => {
+          const poolIds = row.rowType === 'group_total' ? row.node.descendant_pool_ids || [] : [row.pool.id];
+          if (!poolIds.some(id => (alternativePoolChanges[String(id)] || []).includes(scope))) return false;
+          if (row.rowType !== 'group_total') return true;
+          const active = aggregatePoolUsage(poolIds, scope === 'selected' ? 'selected_projects_daily_usage' : 'daily_usage');
+          const comparison = aggregatePoolUsage(poolIds, `alternative_${scope}_daily_usage`);
+          return [...new Set([...Object.keys(active), ...Object.keys(comparison)])]
+            .some(day => Math.abs((active[day] || 0) - (comparison[day] || 0)) > .0001);
+        }).map(scope => {
           const usage = row.rowType === 'group_total'
             ? aggregatePoolUsage(row.node.descendant_pool_ids || [], `alternative_${scope}_daily_usage`)
             : alternativePoolUsage[String(row.pool.id)]?.[scope] || {};
@@ -6384,7 +6402,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
           const alternative = alternatives[String(item.project_id)];
           const alternativeIssues = alternative?.tasks.some(task => task.violations?.length)
             || projectDependencyIssues(item.project_id, true).length > 0;
-          const alternativeCount = alternative ? `<span class="alternative-project-count" title="Alternative scenario tasks" style="font-size:10px;padding:1px 6px;border-radius:10px;border:1px solid currentColor;flex-shrink:0;color:${alternative.new_scenario ? '#0284c7' : '#9333ea'};cursor:pointer" onclick="event.stopPropagation();openProjectDiagModal('${item.project_id}', true)">${alternativeIssues ? '⚠️ ' : ''}${alternative.tasks.length}</span>` : '';
+          const alternativeCount = alternative ? `<span class="alternative-project-count" title="Tasks in ${escapeHtml(alternative.name)}" style="font-size:10px;padding:1px 6px;border-radius:10px;border:1px solid currentColor;flex-shrink:0;color:${alternative.new_scenario ? '#0284c7' : '#9333ea'};cursor:pointer" onclick="event.stopPropagation();openProjectDiagModal('${item.project_id}', true)">${alternativeIssues ? '⚠️ ' : ''}${alternative.tasks.length}</span>` : '';
           const badgeStyle = hasViol 
             ? 'background:#fee2e2; color:#dc2626; border:1px solid #ef4444; font-weight:700;' 
             : 'background:#e2e8f0; color:#475569; border:1px solid #cbd5e1;';
@@ -6401,7 +6419,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
                       onmouseenter="showProjectHoverTooltip(event, '${item.project_id}')"
                       onmousemove="moveTooltip(event)"
                       onmouseleave="hideTooltip()">${escapeHtml(cleanProjectName)}</span>
-                <span style="display:flex;flex-direction:column;align-items:center;gap:1px;line-height:12px"><span class="project-group-count" title="Active scenario tasks" style="font-size:10px; padding:1px 6px; border-radius:10px; flex-shrink:0; cursor:${hasViol ? 'pointer' : 'default'}; ${badgeStyle}" ${hasViol ? `onclick="event.stopPropagation(); openProjectDiagModal('${item.project_id}', false);"` : ''}>${badgeIcon}${item.taskCount}</span>${alternativeCount}</span>
+                <span style="display:flex;flex-direction:column;align-items:center;gap:1px;line-height:12px"><span class="project-group-count" title="Tasks in ${escapeHtml(activePlanNames[String(item.project_id)] || 'Active scenario')}" style="font-size:10px; padding:1px 6px; border-radius:10px; flex-shrink:0; cursor:${hasViol ? 'pointer' : 'default'}; ${badgeStyle}" ${hasViol ? `onclick="event.stopPropagation(); openProjectDiagModal('${item.project_id}', false);"` : ''}>${badgeIcon}${item.taskCount}</span>${alternativeCount}</span>
               </div>
               <span class="task-date-cell" style="width:${colWidths.start}px; min-width:${colWidths.start}px; max-width:${colWidths.start}px; font-weight:600; color:#334155;">${formatMmmYy(item.start)}</span>
               <span class="task-date-cell" style="width:${colWidths.stop}px; min-width:${colWidths.stop}px; max-width:${colWidths.stop}px; font-weight:600; color:#334155;">${formatMmmYy(item.end)}</span>
@@ -6481,6 +6499,9 @@ button:not(.context-menu-item):disabled {opacity:.5;}
               pBar.style.width = `${pWidth}px`;
               pBar.title = `${cleanProjectName} (${item.taskCount} tasks)`;
               pBar.style.cursor = 'pointer';
+              pBar.onmouseenter = (event) => showProjectHoverTooltip(event, item.project_id);
+              pBar.onmousemove = moveTooltip;
+              pBar.onmouseleave = hideTooltip;
               pBar.ondblclick = (event) => toggleProjectCollapse(item.project_id, event);
 
               rowEl.appendChild(pBar);
@@ -6583,8 +6604,8 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         }
       });
       for (const [projectId, plan] of Object.entries(alternatives)) {
-        const linkColor = plan.new_scenario ? '#0ea5e9' : '#9333ea';
         for (const dep of plan.dependencies || []) {
+          const linkColor = dep.is_violated ? '#ef4444' : '#94a3b8';
           const succ = dep.task_id == null ? projectPositions.get(projectId) : taskPositions.get(String(dep.task_id));
           if (!succ) continue;
           const external = alternativeEndpoints[String(dep.predecessor_task_id)];
@@ -6629,8 +6650,14 @@ button:not(.context-menu-item):disabled {opacity:.5;}
           if (dep.is_violated) path.setAttribute('stroke-dasharray', '4 2');
           path.addEventListener('contextmenu', openDetails);
           path.addEventListener('click', openDetails);
-          path.addEventListener('mouseenter', ()=>path.setAttribute('stroke-width','3.2'));
-          path.addEventListener('mouseleave', ()=>path.setAttribute('stroke-width','2'));
+          path.addEventListener('mouseenter', ()=>{
+            path.setAttribute('stroke-width','3.2');
+            path.setAttribute('stroke', dep.is_violated ? '#dc2626' : '#2563eb');
+          });
+          path.addEventListener('mouseleave', ()=>{
+            path.setAttribute('stroke-width','2');
+            path.setAttribute('stroke', linkColor);
+          });
           group.appendChild(path);
           const arrow = document.createElementNS('http://www.w3.org/2000/svg', 'path');
           const direction = sx >= bend ? -1 : 1;
@@ -7191,6 +7218,8 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         alternativeEndpoints = args.alternative_endpoints || {};
         alternativeTaskChoices = args.alternative_task_choices || [];
         alternativePoolUsage = args.alternative_pool_usage || {};
+        alternativePoolChanges = args.alternative_pool_changes || {};
+        activePlanNames = args.active_plan_names || {};
         groupUsageCache.clear();
         document.getElementById('enable-edit').checked = editEnabled;
         document.body.classList.toggle('compare-scenario', comparingScenario());

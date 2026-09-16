@@ -50,6 +50,11 @@ class PostgresPlanStore:
                 allowed.append(False)
         return (*allowed, self.access.global_permission(self.security, Permission.SHARED))
 
+    def current_plan_names(self, project_ids: list[int]) -> dict[int, str]:
+        """Read active labels in one query under project row security."""
+        return dict(self.connection.execute('''SELECT project_id,name FROM eppm.project_plan
+            WHERE is_current AND project_id=ANY(%s::bigint[])''', (project_ids,)))
+
     def list_plans(self, project_id: int) -> list[ProjectPlan]:
         """Read explicit plan contents and metadata under project row security."""
         with self.connection.cursor(row_factory=dict_row) as cursor:

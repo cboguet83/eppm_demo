@@ -77,15 +77,7 @@ def test_create_named_draft_opens_light_blue_comparison_and_copies_allocations(a
             alternative_count = frame.locator('#frozen-row-proj-1 .alternative-project-count').bounding_box()
             assert alternative_count['y'] >= active_count['y'] + active_count['height']
             alternative_rows = frame.locator('#resource-left-body .alternative-resource-row')
-            expect(alternative_rows).to_have_count(4)
-            expect(alternative_rows.first).to_contain_text('Container')
-            expect(alternative_rows.last).to_contain_text('Pool')
-            expect(frame.locator('#resource-right-body .alternative-resource-row [data-demand="0.5"]').first).to_be_visible()
-            alternative_rows.last.click(button='right')
-            expect(frame.locator('#resource-cell-context-menu')).to_be_visible()
-            assert frame.locator('#resource-cell-context-menu .context-menu-item').evaluate_all(
-                "items => items.every(item => item.getAttribute('aria-disabled') === 'true')")
-            frame.locator('#btn-mode-day').click()
+            expect(alternative_rows).to_have_count(0)
             assert bar.evaluate('(el)=>getComputedStyle(el).backgroundColor') == 'rgb(125, 211, 252)'
             assert frame.locator('#frozen-row-1').evaluate('(el)=>getComputedStyle(el).backgroundColor') == 'rgb(224, 242, 254)'
             expect(edit).to_be_checked()
@@ -304,7 +296,7 @@ def test_alternative_context_edits_dependencies_hide_reload_and_confirm_activati
             page.get_by_role('dialog').get_by_role('button', name='Cancel', exact=True).click()
             frame.locator('#chk-internal-links').check()
             expect(frame.locator('.alternative-dependency')).to_have_count(1)
-            expect(frame.locator('.alternative-dependency')).to_have_attribute('stroke', '#9333ea')
+            expect(frame.locator('.alternative-dependency')).to_have_attribute('stroke', '#ef4444')
             frame.locator('#timeline-row-1 .gantt-bar-wrapper').click(button='right')
             expect(frame.locator('#ctx-violation-btn')).to_be_hidden()
             frame.locator('#timeline-row-proj-1 .project-summary-bar').click(button='right')

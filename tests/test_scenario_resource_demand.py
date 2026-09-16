@@ -5,7 +5,7 @@ import pytest
 from app.domain.planning.plans import PlanContent
 from app.domain.planning.schedule_template import parse_template
 from app.domain.resources.models import PoolAssignment
-from app.domain.resources.scenario_demand import scenario_pool_demand, comparison_pool_demand
+from app.domain.resources.scenario_demand import scenario_pool_demand, comparison_pool_demand, changed_comparison_scopes
 
 
 @pytest.mark.parametrize('value,format,expected', [
@@ -58,3 +58,13 @@ def test_scenario_demand_resolves_relative_dates_and_deduplicates_project_alloca
     assert usage[1] == {**{f'2027-01-0{day}': 1 for day in range(1, 6)}, '2027-01-06': 2, '2027-01-07': 2}
     assert usage[2] == {'2027-02-01': .5}
     assert scenario_pool_demand({}) == {}
+
+
+def test_comparison_rows_hide_identical_demand_but_keep_date_shifts_and_removals():
+    active = {1: [dict(project_id=1, task_id=None, start_date='2027-01-01', end_date='2027-01-01', fte_assigned=2)]}
+    comparison = {1: {'total': {'2027-01-01': 2, '2027-01-02': 0}, 'selected': {'2027-01-01': 2}}}
+    assert changed_comparison_scopes(active, comparison, {1}, {1}) == {}
+    comparison[1]['selected'] = {'2027-01-02': 2}
+    assert changed_comparison_scopes(active, comparison, {1}, {1}) == {1: ['selected']}
+    comparison[1]['total'] = {}
+    assert changed_comparison_scopes(active, comparison, {1}, {1}) == {1: ['total', 'selected']}

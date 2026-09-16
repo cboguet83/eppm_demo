@@ -8,7 +8,7 @@ from app.application.exceptions import PlanningStorageError
 from app.domain.access.models import Permission
 from app.domain.planning.project_dependencies import evaluate_project_dependencies
 from app.domain.planning.constraints import evaluate_constraints
-from app.domain.resources.scenario_demand import comparison_pool_demand
+from app.domain.resources.scenario_demand import comparison_pool_demand, changed_comparison_scopes
 from app.presentation.components.dialog import dialog
 from app.presentation.components.planning_workspace import PlanningWorkspace
 
@@ -195,11 +195,13 @@ def scenario_payload(workspace: PlanningWorkspace, project_ids: list[int], *,
             content_by_project[project_id] = plan.content
     if alternatives:
         _enrich_comparisons(workspace, alternatives, contents)
+    active_assignments = {pid: detail.assignments for pid, detail in (pool_details or {}).items()}
+    included = set(status_project_ids) if status_project_ids is not None else set(project_ids)
+    comparison = comparison_pool_demand(active_assignments, content_by_project, set(project_ids), included) if alternatives else {}
     return dict(edit_enabled=bool(st.session_state.get('planning_edit_enabled', False)), alternatives=alternatives,
-                alternative_pool_usage=comparison_pool_demand(
-                    {pid: detail.assignments for pid, detail in (pool_details or {}).items()},
-                    content_by_project, set(project_ids),
-                    set(status_project_ids) if status_project_ids is not None else set(project_ids)) if alternatives else {},
+                active_plan_names=workspace.plans.current_plan_names(project_ids) if workspace.plans else {},
+                alternative_pool_usage=comparison,
+                alternative_pool_changes=changed_comparison_scopes(active_assignments, comparison, set(project_ids), included),
                 alternative_endpoints=workspace.plans.comparison_endpoints(contents) if contents else {},
                 alternative_task_choices=workspace.plans.task_choices() if contents else [],
                 scenario_epoch=st.session_state.get('planning_scenario_epoch', 0))

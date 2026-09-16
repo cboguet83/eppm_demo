@@ -20,6 +20,10 @@ class ProjectPlanService:
         """Read accessible plan versions including archived history."""
         return self._gateway.run(lambda store: store.list_plans(project_id))
 
+    def current_plan_names(self, project_ids: list[int]) -> dict[int, str]:
+        """Read visible active scenario labels without loading revision contents."""
+        return self._gateway.run(lambda store: store.current_plan_names(project_ids))
+
     def import_revision(self, project_id: int, name: str, content: PlanContent,
                         *, status: str = 'draft', active: bool = False) -> ProjectPlan:
         """Create a named, inactive CSV revision atomically.

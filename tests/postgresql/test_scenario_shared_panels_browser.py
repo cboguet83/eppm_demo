@@ -41,11 +41,18 @@ def test_alternative_tooltips_project_dependencies_tags_and_csv_reuse_shared_pan
             bar = frame.locator('#timeline-row-1 .alternative-bar')
             bar.hover()
             tooltip = frame.locator('#gantt-tooltip')
-            for text in ['Alternative build', 'Scenario description', '65%', 'Scenario tag', 'Engineers', '1.25 FTE']:
+            for text in ['Scenario: Option A', 'Alternative build', 'Scenario description', '65%', 'Scenario tag', 'Engineers', '1.25 FTE']:
                 expect(tooltip).to_contain_text(text)
             page.screenshot(path=str(tmp_path / 'shared-scenario-tooltip.png'), full_page=True)
             frame.locator('#timeline-row-1 .gantt-bar-wrapper').hover()
             expect(tooltip).not_to_contain_text('Scenario description')
+            expect(tooltip).to_contain_text(f'Scenario: {active.name}')
+            frame.locator('#timeline-row-proj-1 .project-alternative').hover()
+            expect(tooltip).to_contain_text('Scenario: Option A')
+            frame.locator('#timeline-row-proj-1 .project-summary-bar').hover()
+            expect(tooltip).to_contain_text(f'Scenario: {active.name}')
+            expect(frame.locator('.project-group-count')).to_have_attribute('title', f'Tasks in {active.name}')
+            expect(frame.locator('.alternative-project-count')).to_have_attribute('title', 'Tasks in Option A')
             frame.get_by_role('checkbox', name='Enable edit mode', exact=True).check()
             frame.locator('#frozen-row-proj-1').click(button='right')
             frame.locator('#ctx-project-dependencies').click()
@@ -107,6 +114,7 @@ def test_alternative_tooltips_project_dependencies_tags_and_csv_reuse_shared_pan
             expect(page.get_by_role('checkbox', name='Set import as the active plan')).to_be_disabled()
             page.get_by_role('button', name='Import plan revision', exact=True).click()
             expect(page.get_by_role('dialog')).to_have_count(0)
+            expect(page.get_by_text('Import successful. Imported scenario is now available in the scenarios list.', exact=True)).to_be_visible()
             expect(frame.locator('#timeline-row-1 .alternative-bar')).to_be_visible()
             with psycopg.connect(authorized.setup.operator_url) as connection:
                 saved = read_plans(connection, [active.id, alternative.id])

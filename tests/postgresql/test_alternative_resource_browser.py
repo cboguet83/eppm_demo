@@ -53,5 +53,12 @@ def test_alternative_only_pool_and_container_demand_are_separate(authorized, tmp
             api.expect(rows).to_have_count(0)
             api.expect(frame.locator('#resource-left-body')).not_to_contain_text('Alternative pool')
             api.expect(active_cells.first).to_be_visible()
+            display_alternative(page, frame)
+            frame.locator('[data-pool-id="2"][data-scope="alternative_total"][data-demand="3.5"]').first.click(button='right')
+            api.expect(frame.locator('#ctx-res-filter-btn')).to_have_attribute('aria-disabled', 'false')
+            frame.locator('#ctx-res-filter-btn').hover()
+            frame.locator('[data-resource-filter="consuming"]').click()
+            api.expect(frame.locator('#frozen-row-proj-2')).to_be_visible(timeout=20000)
+            api.expect(frame.locator('#frozen-row-proj-1')).to_have_count(0)
         finally:
             browser.close()

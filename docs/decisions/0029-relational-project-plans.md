@@ -37,7 +37,7 @@ opens the page again. Scenario management can explicitly hide comparison or
 activate the displayed approved alternative after confirmation. Close alternative
 view beside Clear all filters also closes comparison while retaining portfolio
 filters and edit mode. Activation retains the previous plan as inactive.
-Purple dependency links use the alternative
+Alternative dependency links use the alternative
 schedule, including its added tasks. Contextual task, dependency, assignment,
 task-tag operations target the selected alternative and check its revision
 under the project lock. Deleted tasks release their scenario assignments.
@@ -66,7 +66,8 @@ Milestones can move while retaining their one-day date range.
 In edit mode, Create alternative scenario prompts for a nonempty name, copies
 the active plan including its resource assignments, and immediately opens the
 new scenario in comparison. This newly opened view uses light-blue bars,
-blue dependency links and labels, and light-blue left-pane backgrounds.
+blue labels and light-blue left-pane backgrounds. Dependency colors retain the
+shared satisfied/violated conventions in both lanes.
 This color choice belongs to the view, not the plan status: selecting an existing
 scenario uses purple, even if it is still Draft. Closing comparison or leaving
 the page clears the new-scenario styling. Every copied scenario starts as Draft,
@@ -201,9 +202,18 @@ project/task demand deduplication. Displayed alternatives replace their projects
 active allocations; all other projects retain active allocations. Status exclusions
 apply to both plans, and Selected Projects additionally applies the portfolio
 selection. Container rows sum their descendant pools.
-These rows retain the resource context menu with every action disabled. Closing
+Comparison demand rows appear only when daily consumption differs from the active
+scope; zero/missing dates are equivalent and date shifts count as differences.
+Unchanged container totals are hidden even if children offset each other's changes.
+These rows retain the resource context menu: filters use active assignments with
+the matching Total or Selected Projects scope, while allocation and edit actions
+remain disabled. Closing
 comparison removes the alternative consumption rows without altering active demand.
 
 Task and project bar context menus inspect the clicked lane. Active bars never
 inherit alternative constraint warnings or editing actions; alternative bars retain
 their scenario-owned diagnostics. Project exports also follow the clicked lane.
+In dual view, project and task tooltips identify the scenario by its saved name;
+task-count tooltips read "Tasks in <scenario name>". Alternative dependencies use
+the same neutral, violated and hover colors as active dependencies. Successful CSV
+imports display a success banner confirming availability in the scenarios list.

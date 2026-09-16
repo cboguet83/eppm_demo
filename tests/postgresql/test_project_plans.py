@@ -22,6 +22,14 @@ def draft_task(identity=-1, name='Design', start='2027-01-01', end='2027-01-05')
                     end_date=end, description='')
 
 
+def test_current_plan_labels_are_scoped_and_exclude_alternatives(authorized):
+    plans = service(authorized)
+    active = plans.initialize(1)
+    plans.save(1, active.id, active.revision, 'Alternative name')
+    assert plans.current_plan_names([1]) == {1: active.name}
+    assert service(authorized, 2).current_plan_names([1]) == {}
+
+
 def test_plan_save_approve_adopt_baseline_and_soft_delete_are_independent(authorized):
     editor, admin = service(authorized), service(authorized, 4)
     initial = editor.initialize(1)

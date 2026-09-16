@@ -1722,6 +1722,8 @@ def _render_planning_chart(
 @planning_errors
 def render_planning_milestones(workspace: PlanningWorkspace) -> None:
     """Render planning filters and their interactive Gantt and capacity grids."""
+    if message := st.session_state.pop('planning_import_success', None):
+        st.success(message)
     st.html(
         """
         <style>
@@ -2137,5 +2139,7 @@ def _schedule_csv_dialog(workspace: PlanningWorkspace, project_id: int, action: 
     if st.button("Import plan revision", type="primary", disabled=not version_name.strip()):
         workspace.plans.import_revision(project_id, version_name, template_content(steps),
                                         status=status)
-        st.toast(f"Imported {len(steps)} tasks as a new plan revision.")
+        st.session_state['planning_import_success'] = (
+            'Import successful. Imported scenario is now available in the scenarios list.'
+        )
         st.rerun()
