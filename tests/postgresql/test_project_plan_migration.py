@@ -15,7 +15,7 @@ def test_existing_schedule_becomes_approved_current_with_primary_link_and_tags(e
         connection.execute("INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date,progress_pct) VALUES(1,1,'First','2027-01-01','2027-01-02',65),(2,1,'Second','2027-01-03','2027-01-04',NULL)")
         connection.execute('UPDATE eppm.project_task SET predecessor_id=1 WHERE id=2')
         connection.execute("INSERT INTO eppm.task_tag(task_id,free_tag) VALUES(2,'Critical')")
-    assert len(migrate(empty_database.operator_url)) == 3
+    assert migrate(empty_database.operator_url) == tuple(item.name for item in discover_migrations()[40:])
     with psycopg.connect(empty_database.operator_url) as connection:
         check_schema(connection)
         status, current, baseline, content = connection.execute('''SELECT status_id,is_current,is_baseline,content

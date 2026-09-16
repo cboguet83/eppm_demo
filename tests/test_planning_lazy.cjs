@@ -114,7 +114,8 @@ for (const sameSelection of [true,false]) test(`new chart data preserves the vie
   const h=harness(), viewport={scrollTop:12000,scrollLeft:750}; let render;
   Object.assign(h.context,{
     window:{addEventListener(type,listener){render=listener;}},
-    document:{getElementById:()=>viewport}, updatePermissionControls(){},
+    document:{getElementById:id=>id==='show-baseline'?{}:viewport,
+      body:{classList:{toggle(){}}},documentElement:{style:{setProperty(){}}}}, updatePermissionControls(){},
     lastFilterReset:0,hasInitializedCollapse:true,collapsedProjects:new Set(['2']),
     renderTimeline(){viewport.scrollTop=0;viewport.scrollLeft=0;},
   });

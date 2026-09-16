@@ -41,10 +41,32 @@ it does not bypass another project's permissions.
 
 New projects receive an empty Approved current plan in their creation transaction.
 Legacy/operator-created projects can be initialized once from Project plans.
-Direct schedule/assignment/tag edits are rejected in Python for versioned projects.
+Direct task-content/assignment/tag edits are rejected in Python for versioned projects.
 The current portfolio remains the default view, preserving existing drill-through
 filters; use Project plans to create alternatives. Actual progress has its own
 editor and never creates a plan version.
+
+### Current portfolio rescheduling (2026-09-16)
+
+The user superseded the read-only current-portfolio date behavior. Current
+portfolio remains the default planning view. An editor can drag or resize live
+tasks without creating a plan or rewriting any saved snapshot. The current plan's
+revision advances to invalidate stale drafts. Date edits and baseline capture lock
+the same project row and run in serializable transactions.
+
+The project menu's **Set current project plan as baseline** explicitly freezes the
+live schedule. If it differs from the saved current snapshot, this action appends
+an Approved snapshot and designates it current and baseline. Otherwise it marks
+the existing current plan. Approver/Business Admin permission remains required;
+migration 0044 permits scoped approvers to insert this explicit snapshot. Python
+continues to prevent approvers from saving edited drafts without edit permission.
+
+**Show baseline** is initially unchecked. Enabling it reduces task-row and current
+bar heights by 30%, draws bold dotted purple baseline lines underneath, and adds
+purple rows for baseline-only tasks. Only current dependencies are rendered.
+Baseline lanes are read in one scoped batch and are independent of live capacity.
+The Project plans alternative editor uses live dates when its selection is current;
+saved reference plans and baseline dates remain immutable.
 
 Lifecycle and validation rules live in Python. No new PostgreSQL business
 functions are introduced. Existing authenticated row-security predicates enforce
@@ -98,3 +120,5 @@ stale metadata and atomic multi-project rollback. Additional tests cover populat
 migrations, preserved actual progress, hidden and unresolved dependencies, new
 project initialization, live capacity exceptions and relative assignment dates.
 Streamlit and browser tests verify save/cancel and alternative-only Gantt editing.
+Additional browser and PostgreSQL tests verify live drag without version creation,
+explicit baseline capture, reduced row geometry and read-only baseline-only rows.

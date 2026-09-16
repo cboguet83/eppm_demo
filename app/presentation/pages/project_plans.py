@@ -25,9 +25,10 @@ def _discard(project_id: int) -> None:
     st.session_state['plan_drafts'].pop(project_id, None)
 
 
-def _new_draft(plan: ProjectPlan) -> dict:
-    return dict(source=plan.id, revision=plan.revision, base=deepcopy(plan.content),
-                content=deepcopy(plan.content), epoch=0, name=f'{plan.name} alternative', status='proposed')
+def _new_draft(plan: ProjectPlan, content: PlanContent | None = None) -> dict:
+    source = content if content is not None else plan.content
+    return dict(source=plan.id, revision=plan.revision, base=deepcopy(source),
+                content=deepcopy(source), epoch=0, name=f'{plan.name} alternative', status='proposed')
 
 
 def _task_editor(project_id: int, draft: dict) -> list[dict]:
@@ -258,9 +259,10 @@ def render_project_plans(workspace: PlanningWorkspace) -> None:
         alternative_id = alternative_col.selectbox('Alternative plan', list(by_id), index=list(by_id).index(current.id),
             format_func=lambda identity: _label(by_id[identity]), key=f'plan_alternative_{project_id}', disabled=project_id in drafts)
         alternative, reference = by_id[alternative_id], by_id[reference_id]
+        alternative_content = service.current_content(project_id) if alternative.is_current else alternative.content
         with st.container(horizontal=True):
             if st.button('Edit alternative', key=f'plan_edit_{project_id}', disabled=not editable or project_id in drafts):
-                drafts[project_id] = _new_draft(alternative)
+                drafts[project_id] = _new_draft(alternative, alternative_content)
                 st.rerun()
             status = st.selectbox('Plan status', ['draft', 'proposed', 'approved', 'rejected', 'deleted'],
                 index=['draft', 'proposed', 'approved', 'rejected', 'deleted'].index(alternative.status),
@@ -292,13 +294,13 @@ def render_project_plans(workspace: PlanningWorkspace) -> None:
                         for row in workspace.planning.get_all_milestones() if row['project_id'] != project_id}
             _render_draft(project_id, drafts[project_id], pools, service.tag_choices(), names, external)
         _actual_progress(workspace, current, editable)
-        content = drafts[project_id]['content'] if project_id in drafts else alternative.content
+        content = drafts[project_id]['content'] if project_id in drafts else alternative_content
         if project_id in drafts:
             try:
                 content = normalize_content(project_id, content)
             except ValueError as error:
                 st.info(f'Complete the draft to preview it: {error}')
-                content = alternative.content
+                content = alternative_content
         reference_plans[project_id], alternative_plans[project_id] = reference.content, content
         transport.append(comparison_project(project_id, names[project_id], reference.content, content,
             _label(reference), _label(alternative), editable=project_id in drafts))

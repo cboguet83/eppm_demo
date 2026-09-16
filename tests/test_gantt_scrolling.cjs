@@ -165,6 +165,7 @@ function dependencyWindow() {
     showDependencyBundleMenu: (event, bundle) => {context.clickedBundle = bundle;},
   });
   const run = code => vm.runInContext(code, context);
+  run(script.slice(script.indexOf('    let tasksData ='), script.indexOf('    function canRescheduleTask(')).replace('let tasksData = [];', ''));
   run(script.slice(script.indexOf('    const renderedDependencyLinks ='), script.indexOf('    function highlightRow(')));
   run(script.slice(script.indexOf('    function buildDependencyIndex('), script.indexOf('    function renderTimeline(')));
   run('buildDependencyIndex()');
@@ -275,6 +276,7 @@ function virtualWindow() {
     scheduleProjectLoads: () => {},
     requestAnimationFrame: callback => { frames.push(callback); return frames.length; },
   });
+  vm.runInContext(script.slice(script.indexOf('    let tasksData ='), script.indexOf('    function canRescheduleTask(')), context);
   vm.runInContext(script.slice(script.indexOf('    const renderedDependencyLinks ='),
     script.indexOf('    function highlightRow(')), context);
   return { context, scroller, frames, writes: () => writes,

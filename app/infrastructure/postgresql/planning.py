@@ -26,7 +26,7 @@ from app.infrastructure.postgresql.project_dependencies import (
     read_project_dependencies, project_dependency_revision, write_project_dependencies,
 )
 from app.shared.logging import get_logger
-from app.infrastructure.postgresql.plan_guards import require_unversioned
+from app.infrastructure.postgresql.plan_guards import require_unversioned, require_reschedule
 
 logger = get_logger(__name__)
 _TASK_COLUMNS = """m.id,m.project_id,m.task_name,m.phase,to_char(m.start_date,'YYYY-MM-DD') AS start_date,
@@ -207,10 +207,13 @@ class PostgresPlanningStore:
             cursor.executemany(_INSERT_DEPENDENCY, [_dependency_params(task_id, dependency) for dependency in dependencies])
 
     def update_dates(self, milestone_id: int, start_date: str, end_date: str) -> bool:
-        """Store one normalized drag command using native date parameters."""
-        require_unversioned(self.connection, task_id=milestone_id)
-        return self.connection.execute('UPDATE eppm.project_task SET start_date=%s,end_date=%s WHERE id=%s',
-                                       (date.fromisoformat(start_date), date.fromisoformat(end_date), milestone_id)).rowcount > 0
+        """Reschedule the live task without changing snapshots or creating a plan."""
+        project_id = require_reschedule(self.connection, milestone_id)
+        changed = self.connection.execute('UPDATE eppm.project_task SET start_date=%s,end_date=%s WHERE id=%s',
+            (date.fromisoformat(start_date), date.fromisoformat(end_date), milestone_id)).rowcount > 0
+        if changed:
+            self.connection.execute('UPDATE eppm.project_plan SET revision=revision+1 WHERE project_id=%s AND is_current', (project_id,))
+        return changed
 
     def update_progress(self, milestone_id: int, progress_pct: int) -> bool:
         """Store the existing domain-clamped progress value."""

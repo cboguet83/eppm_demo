@@ -3,7 +3,7 @@
 from app.application.exceptions import PlanningConflictError
 from app.application.ports.project_plans import PlanGateway, PlanStore
 from app.domain.access.models import AccessDenied
-from app.domain.planning.plans import PlanContent, ProjectPlan, normalize_content, validate_status_change
+from app.domain.planning.plans import PlanContent, ProjectPlan, PlanTask, normalize_content, validate_status_change
 
 
 class ProjectPlanService:
@@ -15,6 +15,38 @@ class ProjectPlanService:
     def list_plans(self, project_id: int) -> list[ProjectPlan]:
         """Read accessible plan versions including archived history."""
         return self._gateway.run(lambda store: store.list_plans(project_id))
+
+    def baseline_tasks(self, project_ids: list[int]) -> dict[int, list[PlanTask]]:
+        """Read only baseline task lanes for the visible portfolio selection."""
+        return self._gateway.run(lambda store: store.baseline_tasks(project_ids))
+
+    def current_content(self, project_id: int) -> PlanContent:
+        """Read the current working schedule, including rescheduled live dates."""
+        def operation(store: PlanStore) -> PlanContent:
+            content = store.current_context([project_id], []).get(project_id)
+            if content is None:
+                raise AccessDenied()
+            return content
+        return self._gateway.run(operation)
+
+    def baseline_current(self, project_id: int) -> ProjectPlan:
+        """Freeze the live schedule on an explicit baseline action, never on drag."""
+        def operation(store: PlanStore) -> ProjectPlan:
+            store.lock_project(project_id)
+            _, approver, admin = store.permissions(project_id)
+            if not (approver or admin):
+                raise AccessDenied()
+            current = next((plan for plan in store.list_plans(project_id) if plan.is_current), None)
+            content = store.snapshot(project_id)
+            if current is None or content != current.content:
+                saved = store.insert(project_id, 'Current schedule baseline', 'approved',
+                                     current.id if current else None, content)
+                store.metadata(saved, 'current', 'true')
+            else:
+                saved = current
+            store.metadata(saved, 'baseline', 'true')
+            return next(plan for plan in store.list_plans(project_id) if plan.id == saved.id)
+        return self._gateway.run(operation, write=True)
 
     def dependency_context(self, contents: list[PlanContent]) -> dict[int, PlanContent]:
         """Batch-load only external predecessor projects' current schedules."""

@@ -11,7 +11,7 @@ from psycopg.types.json import Jsonb
 from app.application.exceptions import PlanningStorageError
 from app.application.services.business_access import BusinessAccess
 from app.domain.access.models import AccessDenied, Permission
-from app.domain.planning.plans import PlanContent, ProjectPlan
+from app.domain.planning.plans import PlanContent, ProjectPlan, PlanTask
 from app.domain.resources.hierarchy import PoolHierarchy
 from app.infrastructure.postgresql.access import PostgresAccessStore
 from app.infrastructure.postgresql.authorization import ServerRequestSigner
@@ -84,6 +84,11 @@ class PostgresPlanStore:
     def snapshot(self, project_id: int) -> PlanContent:
         return capture_content(self.connection, project_id)
 
+    def baseline_tasks(self, project_ids: list[int]) -> dict[int, list[PlanTask]]:
+        """Batch-load baseline tasks under project RLS without returning dependencies."""
+        return dict(self.connection.execute('''SELECT project_id,content->'tasks' FROM eppm.project_plan
+            WHERE is_baseline AND project_id=ANY(%s::bigint[])''', (project_ids,)))
+
     def tag_choices(self) -> dict[int, str]:
         return dict(self.connection.execute('SELECT id,tag FROM eppm.tag_dictionnary ORDER BY tag,id'))
 
@@ -99,7 +104,13 @@ class PostgresPlanStore:
                 (SELECT project_id FROM eppm.project_plan,
                     jsonb_array_elements(content->'tasks') task WHERE (task->>'id')::bigint=ANY(%s::bigint[])))''', (project_ids, task_ids))}
         visibility = self._endpoint_visibility()
+        dates = {identity: (start, end) for identity, start, end in self.connection.execute('''
+            SELECT id,to_char(start_date,'YYYY-MM-DD'),to_char(end_date,'YYYY-MM-DD') FROM eppm.project_task
+            WHERE project_id=ANY(%s::bigint[])''', (list(result),))}
         for content in result.values():
+            for task in content.tasks:
+                if task['id'] in dates:
+                    task['start_date'], task['end_date'] = dates[task['id']]
             content.dependencies = [dep for dep in content.dependencies if self._dependency_visible(dep, content, visibility)]
         return result
 

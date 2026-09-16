@@ -8,7 +8,8 @@
 
 Update: [ADR 0028](0028-project-plans.md) adds Project plans with a paired
 reference/alternative Gantt. Current portfolio remains the default for existing
-filters and drill-through; its versioned schedules are read-only.
+filters and drill-through. Current task dates can be rescheduled directly without
+creating versions; saved baselines remain immutable and can be overlaid.
 
 The Gantt screen still constructed repositories, loaded caches through database
 paths, and called legacy capacity helpers. Its project filters mixed DataFrame

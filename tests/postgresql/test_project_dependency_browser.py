@@ -31,6 +31,8 @@ render_planning_milestones(create_planning_workspace(runtime, access=access))
 
 
 def test_project_menu_panel_saves_cancels_and_retains_stale_drafts_without_step_fields(links, tmp_path):
+    with psycopg.connect(links.setup.operator_url) as connection:
+        connection.execute("UPDATE eppm.project SET status='In Progress'")
     with native_server(links, tmp_path, _APP, user_id=1) as server, sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:

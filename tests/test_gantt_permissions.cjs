@@ -22,6 +22,7 @@ function harness() {
   });
   const run = code => vm.runInContext(code, context);
   const load = (start, end) => run(script.slice(script.indexOf(start), script.indexOf(end)));
+  load('    let tasksData =', '    function toggleBaseline(');
   load('    let editAllProjects =', '    let allProjectsData =');
   load('    function showContextMenu(', '    function showContextMenuById(');
   load('    function projectDependencyIssues(', '    function hideResourceCellContextMenu(');
@@ -101,6 +102,16 @@ test('dependency editing needs both projects and shared pool details need busine
   assert.equal(h.context.canEditTask({id: 10}), false);
   h.context.triggerGoToResourcePoolDetails();
   assert.equal(h.messages[1].action, 'go_to_pool_details');
+});
+
+test('current versioned tasks can reschedule but baseline-only rows cannot', () => {
+  const h = harness();
+  h.context.updatePermissionControls({editable_projects: [1], versioned_projects: [1], approvable_projects: [2]});
+  assert.equal(h.context.canRescheduleTask({id: 10, project_id: 1}), true);
+  assert.equal(h.context.canRescheduleTask({id: 10, project_id: 1, baselineOnly: true}), false);
+  assert.equal(h.context.canRescheduleTask({id: 20, project_id: 2}), false);
+  assert.equal(h.context.canBaselineProject(1), false);
+  assert.equal(h.context.canBaselineProject(2), true);
 });
 
 test('read-only task bars hide resize handles and register no drag action', () => {

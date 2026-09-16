@@ -209,6 +209,8 @@ def _handle_gantt_component_change(widget_key: str, workspace: PlanningWorkspace
         "save_project_dependencies",
         "load_project_tasks",
         "initialize_planning",
+        "toggle_baseline",
+        "baseline_current_project",
     }:
         return
     nonce = _get_gantt_event_nonce(gantt_event)
@@ -219,7 +221,9 @@ def _handle_gantt_component_change(widget_key: str, workspace: PlanningWorkspace
         _handle_project_dependency_event(gantt_event, workspace, nonce)
         return
     gantt_event = validate_event(gantt_event)
-    if gantt_event.get("action") == "initialize_planning":
+    if gantt_event['action'] in {'toggle_baseline', 'baseline_current_project'}:
+        _handle_baseline_event(gantt_event, workspace)
+    elif gantt_event.get("action") == "initialize_planning":
         st.session_state.pop("planning_chart_snapshot", None)
     elif gantt_event.get("action") == "load_project_tasks":
         st.session_state["planning_pending_change"] = dict(gantt_event)
@@ -252,6 +256,15 @@ def _handle_gantt_component_change(widget_key: str, workspace: PlanningWorkspace
                 **gantt_event,
                 "before_revision": before,
             }
+
+
+def _handle_baseline_event(event: dict[str, Any], workspace: PlanningWorkspace) -> None:
+    """Apply baseline display preferences or explicitly freeze the current schedule."""
+    if event['action'] == 'toggle_baseline':
+        st.session_state['planning_show_baseline'] = event['enabled']
+    elif workspace.plans is not None:
+        workspace.plans.baseline_current(event['project_id'])
+        st.toast('Current project plan set as baseline.')
 
 
 def _handle_project_dependency_event(event: dict[str, Any], workspace: PlanningWorkspace, nonce: str) -> None:
@@ -1517,11 +1530,16 @@ def _render_planning_chart(
     pool_details_cache = snapshot["details"]
     permissions = workspace.projects.projects.permissions()
     args["task_revision"] = planning_revision_token(snapshot["revision"])
+    show_baseline = bool(st.session_state.get('planning_show_baseline', False))
+    args['show_baseline'] = show_baseline
+    args['baseline_tasks'] = workspace.plans.baseline_tasks(list(ids)) if show_baseline and workspace.plans else {}
     gantt_event = _interactive_gantt(
         **args,
         permissions={"edit_all": permissions.allows(Permission.EDIT),
                      "versioned_projects": workspace.plans.versioned_projects() if workspace.plans is not None else [],
                      "editable_projects": sorted(permissions.project_permissions.get(Permission.EDIT, frozenset())),
+                     "approvable_projects": sorted(permissions.project_permissions.get(Permission.APPROVE, frozenset())),
+                     "baseline_all": permissions.allows(Permission.SHARED) or permissions.allows(Permission.APPROVE),
                      "manage_shared": permissions.allows(Permission.SHARED)},
         filter_reset=st.session_state.get("planning_filter_reset", 0),
         key=widget_key,
@@ -1535,7 +1553,10 @@ def _render_planning_chart(
             gantt_event = validate_event(gantt_event)
             action = gantt_event.get("action")
             step_id = gantt_event.get("id")
-            if action == "filter_by_resource_pool":
+            if action in {'toggle_baseline', 'baseline_current_project'}:
+                _handle_baseline_event(gantt_event, workspace)
+                st.rerun('planning_workspace')
+            elif action == "filter_by_resource_pool":
                 _handle_filter_by_resource_pool(
                     gantt_event=gantt_event,
                     pool_details_cache=pool_details_cache,
@@ -1640,7 +1661,7 @@ def render_planning_milestones(workspace: PlanningWorkspace) -> None:
             from app.presentation.pages.project_plans import render_project_plans
             render_project_plans(workspace)
             return
-        st.caption('Versioned schedules are read-only here. Open Project plans to edit an alternative or update actual progress.')
+        st.caption('Drag tasks to reschedule the current portfolio. Saved plans and baselines keep their dates.')
     st.html(
         """
         <style>
