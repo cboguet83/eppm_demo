@@ -39,6 +39,7 @@ from app.domain.resources.capacity_rules import (
     project_pool_status,
 )
 from app.domain.planning.rules import normalize_progress
+from app.domain.planning.plans import ProjectPlan
 from app.presentation.components.property_labels import property_label
 from app.presentation.components.planning_events import validate_event
 from app.presentation.components.planning_workspace import PlanningWorkspace
@@ -673,11 +674,18 @@ def _manage_task_tags_dialog(task_id: int, task_name: str, workspace: PlanningWo
 
 
 @authorized_cache(show_spinner=False, max_entries=64, ttl=300)
-def _project_pool_dialog_data(_workspace: PlanningWorkspace, revision: tuple, project_id: int):
+def _project_pool_dialog_data(_workspace: PlanningWorkspace, revision: tuple, project_id: int,
+                              plan: ProjectPlan | None = None) -> tuple:
     """Load popup references once and calculate only assigned or undefined pools."""
-    bounds = _workspace.planning.get_all_project_date_bounds().get(project_id, (None, None))
-    assignments = assignments_frame(_workspace.resources.get_assignments(project_id=project_id, only_project_level=True))
     pools = pools_frame(_workspace.resources.pool_choices())
+    if plan is not None:
+        from app.presentation.pages.planning_scenario_assignments import assignment_rows
+
+        bounds, rows = assignment_rows(plan, None, {row['id']: row['name'] for row in pools.to_dict('records')})
+        assignments = assignments_frame(rows)
+    else:
+        bounds = _workspace.planning.get_all_project_date_bounds().get(project_id, (None, None))
+        assignments = assignments_frame(_workspace.resources.get_assignments(project_id=project_id, only_project_level=True))
     assigned_ids = sorted(set(assignments['pool_id'].astype(int))) if not assignments.empty else []
     statuses = {detail.pool_id: project_pool_status(project_id, detail)
                 for detail in _workspace.pool_details(assigned_ids)} if assigned_ids else {}
@@ -716,14 +724,20 @@ def _relative_assignment_controls(key: str, start: str | None, end: str | None) 
 @dialog(t("planning.dialog_project_pools_title", default="🏊 Manage Project Resource Pools"))
 @planning_errors
 def _manage_project_resource_pools_dialog(
-    project_id: int, project_name: str, workspace: PlanningWorkspace
+    project_id: int, project_name: str, workspace: PlanningWorkspace, alternative_event: dict | None = None
 ) -> None:
     """Modal dialog for viewing, allocating, and unassigning resource pools at project level."""
     if not workspace.projects.projects.permissions().allows(Permission.EDIT, project_id):
         st.info(t("access.read_only", default="You have read-only access to this project."))
         return
     st.markdown(f"#### 📁 {project_name} `[Project #{project_id}]`")
-    (p_start_str, p_end_str), df_current_assigns, statuses, pool_choices = _project_pool_dialog_data(workspace, workspace.revision(), project_id)
+    from app.presentation.pages.planning_alternative_editor import selected_plan
+    from app.presentation.pages.planning_scenario_assignments import save_assignment
+
+    plan = selected_plan(alternative_event, workspace) if alternative_event else None
+    if plan:
+        st.caption(f'{plan.name} · Capacity warnings reflect the active portfolio.')
+    (p_start_str, p_end_str), df_current_assigns, statuses, pool_choices = _project_pool_dialog_data(workspace, workspace.revision(), project_id, plan)
     if p_start_str and p_end_str:
         st.caption(f"Project Timeline: {p_start_str} → {p_end_str}")
     st.markdown(f"##### {t('planning.current_pools', default='Current Assigned Resource Pools')}")
@@ -777,7 +791,7 @@ def _manage_project_resource_pools_dialog(
                     key=f"btn_del_assign_proj_{assign_id}",
                     help=t("planning.btn_unassign_pool", default="Remove pool assignment"),
                 ):
-                    require_change(workspace.resources.delete_assignment(assign_id))
+                    save_assignment(alternative_event, workspace, delete_id=assign_id)
                     st.toast(
                         t(
                             "planning.toast_pool_unassigned_proj",
@@ -895,7 +909,7 @@ def _manage_project_resource_pools_dialog(
                         notes=notes_input.strip(),
                         schedule_anchor=anchor, offset_days=offset, duration_days=duration,
                     )
-                    workspace.resources.create_assignment(new_assignment)
+                    save_assignment(alternative_event, workspace, new_assignment)
                     st.toast(
                         t(
                             "planning.toast_pool_assigned_proj",
@@ -916,22 +930,32 @@ def _manage_project_resource_pools_dialog(
 @dialog(t("planning.dialog_task_pools_title", default="🏊 Manage Task Resource Pools"))
 @planning_errors
 def _manage_task_resource_pools_dialog(
-    task_id: int, task_name: str, project_id: int | str, workspace: PlanningWorkspace
+    task_id: int, task_name: str, project_id: int | str, workspace: PlanningWorkspace,
+    alternative_event: dict | None = None,
 ) -> None:
     """Manage task assignments using cached summaries, not full pool timelines."""
-    step_info = workspace.planning.get_milestone_by_id(task_id)
+    from app.presentation.pages.planning_alternative_editor import selected_plan
+    from app.presentation.pages.planning_scenario_assignments import assignment_rows, save_assignment
+
+    plan = selected_plan(alternative_event, workspace) if alternative_event else None
+    step_info = (dict(next(row for row in plan.content.tasks if row['id'] == task_id), project_id=plan.project_id)
+                 if plan else workspace.planning.get_milestone_by_id(task_id))
     if step_info is None or not workspace.projects.projects.permissions().allows(Permission.EDIT, step_info["project_id"]):
         st.info(t("access.read_only", default="You have read-only access to this project."))
         return
     project_id, task_name = step_info["project_id"], step_info["task_name"]
     st.markdown(f"#### 📋 {task_name} `[Task #{task_id}]` (Project #{project_id})")
+    if plan:
+        st.caption(f'{plan.name} · Capacity warnings reflect the active portfolio.')
     task_start_str = step_info.get("start_date") if step_info else None
     task_end_str = step_info.get("end_date") if step_info else None
     if task_start_str and task_end_str:
         st.caption(f"📅 **Task Schedule:** `{task_start_str}` ➔ `{task_end_str}`")
-    df_current_assigns = assignments_frame(workspace.resources.get_assignments(task_id=task_id))
     df_all_pools = pools_frame(workspace.resources.pool_choices())
     pool_rows = df_all_pools.to_dict("records")
+    records = (assignment_rows(plan, task_id, {row['id']: row['name'] for row in pool_rows})[1]
+               if plan else workspace.resources.get_assignments(task_id=task_id))
+    df_current_assigns = assignments_frame(records)
     summary_ids = set(df_current_assigns["pool_id"].astype(int))
     summary_ids.update((int(row["id"]) for row in pool_rows if pd.isna(row["capacity_fte"])))
     summaries = (
@@ -990,7 +1014,7 @@ def _manage_task_resource_pools_dialog(
                     key=f"btn_del_assign_task_{assign_id}",
                     help=t("planning.btn_unassign_pool", default="Remove pool assignment"),
                 ):
-                    require_change(workspace.resources.delete_assignment(assign_id))
+                    save_assignment(alternative_event, workspace, delete_id=assign_id)
                     st.toast(
                         t("planning.toast_pool_unassigned", default="Pool assignment removed!"),
                         icon="🗑️",
@@ -1120,7 +1144,7 @@ def _manage_task_resource_pools_dialog(
                         notes=notes_input.strip(),
                         schedule_anchor=anchor, offset_days=offset, duration_days=duration,
                     )
-                    workspace.resources.create_assignment(new_assignment)
+                    save_assignment(alternative_event, workspace, new_assignment)
                     st.toast(
                         t("planning.toast_pool_assigned", default="Resource pool assigned to task!"),
                         icon="🏊",
@@ -1650,7 +1674,16 @@ def _render_planning_chart(
     if alternative_event is not None:
         from app.presentation.pages.planning_alternative_editor import edit_alternative
 
-        edit_alternative(alternative_event, workspace)
+        if alternative_event['operation'] == 'manage_task_pools':
+            _manage_task_resource_pools_dialog(alternative_event['id'], '', alternative_event['project_id'],
+                                              workspace, alternative_event)
+        elif alternative_event['operation'] == 'manage_project_pools':
+            project_id = alternative_event['project_id']
+            project_name = next((row['name'] for row in workspace.projects.projects.get_planning_catalog()
+                                 if row['id'] == project_id), str(project_id))
+            _manage_project_resource_pools_dialog(project_id, project_name, workspace, alternative_event)
+        else:
+            edit_alternative(alternative_event, workspace)
     active_rf = st.session_state.get("active_resource_pool_filter")
     if active_rf and workspace.resources is not None:
         _render_filtered_active_allocations(

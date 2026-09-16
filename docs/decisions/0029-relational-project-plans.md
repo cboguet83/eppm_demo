@@ -43,6 +43,16 @@ under the project lock. Deleted tasks release their scenario assignments.
 Project tags and project logs remain shared; logging is available independently
 of the Gantt edit checkbox, subject to project authorization.
 
+Active and alternative scenarios share the Gantt step editor and the task/project
+resource assignment dialogs. Alternative dialogs read scenario-owned tasks and
+assignments and save through revision-checked Python plan services. Dependency
+selectors use stable task identities for alternative edits. Capacity warnings
+in these dialogs remain explicitly labelled as active-portfolio calculations.
+A task whose start and end dates are equal is a milestone, derived from its
+dates without a second stored flag. Active and alternative lanes render it as
+a diamond, including alternative-only tasks; the baseline uses a dotted diamond.
+Milestones can move while retaining their one-day date range.
+
 In edit mode, Create alternative scenario prompts for a nonempty name, copies
 the active plan including its resource assignments, and immediately opens the
 new scenario in comparison. This newly opened view uses light-blue bars,

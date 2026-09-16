@@ -1,7 +1,6 @@
 """Contextual editors for explicitly selected, plan-owned scenario content."""
 
 from copy import deepcopy
-from datetime import date
 
 import pandas as pd
 import streamlit as st
@@ -9,9 +8,10 @@ import streamlit as st
 from app.application.exceptions import PlanningStorageError
 from app.domain.planning.plans import PlanContent, ProjectPlan
 from app.domain.planning.schedule_template import export_template, parse_template
+from app.domain.planning.rules import normalize_dependency, normalize_task
 from app.presentation.components.dialog import dialog
 from app.presentation.components.planning_workspace import PlanningWorkspace
-from app.presentation.pages.project_plans import _assignment_editor, _dependency_editor
+from app.presentation.pages.project_plans import _dependency_editor
 
 
 OPERATIONS = frozenset({'create_step_full', 'update_task_full', 'delete_step', 'manage_dependencies',
@@ -39,12 +39,34 @@ def selected_plan(event: dict, workspace: PlanningWorkspace) -> ProjectPlan:
     return plan
 
 
+def _apply_step_fields(content: PlanContent, event: dict) -> None:
+    """Decode the shared Gantt editor into one scenario's task and incoming links."""
+    task_id = event.get('id', -1)
+    values = normalize_task(event)
+    values.pop('predecessor_id', None)
+    task = dict(id=task_id, **values)
+    if event['operation'] == 'create_step_full':
+        content.tasks.append(task)
+    else:
+        content.tasks = [task if row['id'] == task_id else row for row in content.tasks]
+    dependencies = []
+    for row in event.get('dependencies', []):
+        dep = normalize_dependency(task_id, row)
+        if dep:
+            if dep['predecessor_task_id'] is not None:
+                dep['predecessor_project_id'] = None
+            dependencies.append(dict(task_id=task_id, **dep))
+    content.dependencies = [row for row in content.dependencies if row['task_id'] != task_id] + dependencies
+
+
 def handle_alternative_action(event: dict, workspace: PlanningWorkspace) -> None:
-    """Delete directly after component confirmation, or schedule a native editor."""
+    """Apply shared step commands or open an editor for the selected scenario."""
     plan = selected_plan(event, workspace)
-    if event['operation'] in {'delete_step', 'update_progress'}:
+    if event['operation'] in {'create_step_full', 'update_task_full', 'delete_step', 'update_progress'}:
         content = deepcopy(plan.content)
-        if event['operation'] == 'delete_step':
+        if event['operation'] in {'create_step_full', 'update_task_full'}:
+            _apply_step_fields(content, event)
+        elif event['operation'] == 'delete_step':
             content.tasks = [task for task in content.tasks if task['id'] != event['id']]
         else:
             next(task for task in content.tasks if task['id'] == event['id'])['progress_pct'] = 100
@@ -67,23 +89,6 @@ def _dependencies(content: PlanContent, draft: dict, project_id: int, task_id: i
     if any(row['task_id'] != task_id for row in rows):
         raise ValueError('Keep the successor set to this step (or empty for project dependencies).')
     return [row for row in content.dependencies if row['task_id'] != task_id] + rows
-
-
-def _task_fields(content: PlanContent, event: dict) -> int:
-    task_id = event.get('id', -1)
-    task = next((row for row in content.tasks if row['id'] == task_id), None)
-    if task is None:
-        task = dict(id=task_id, task_name='', phase='General', description='',
-                    start_date=date.today().isoformat(), end_date=date.today().isoformat())
-        content.tasks.append(task)
-    task['task_name'] = st.text_input('Step name', task['task_name'])
-    task['phase'] = st.text_input('Phase', task['phase'])
-    start, end = st.columns(2)
-    task['start_date'] = start.date_input('Start date', date.fromisoformat(task['start_date'])).isoformat()
-    task['end_date'] = end.date_input('End date', date.fromisoformat(task['end_date'])).isoformat()
-    task['description'] = st.text_area('Description', task['description'])
-    task['progress_pct'] = st.slider('Progress (%)', 0, 100, task.get('progress_pct', 0))
-    return task_id
 
 
 def _tags(content: PlanContent, task_id: int, workspace: PlanningWorkspace, key: str) -> None:
@@ -132,23 +137,10 @@ def edit_alternative(event: dict, workspace: PlanningWorkspace) -> None:
                 file_name=f'project_{plan.project_id}_plan_{plan.id}.csv', mime='text/csv')
             return
         draft = dict(base=deepcopy(content), epoch=f'alternative_{plan.id}_{plan.revision}_{operation}_{task_id}')
-        if operation in {'create_step_full', 'update_task_full'}:
-            task_id = _task_fields(content, event)
-            with st.expander('Dependencies'):
-                content.dependencies = _dependencies(content, draft, plan.project_id, task_id, workspace)
-        elif operation == 'manage_dependencies':
+        if operation == 'manage_dependencies':
             content.dependencies = _dependencies(content, draft, plan.project_id, None, workspace)
         elif operation == 'manage_task_tags':
             _tags(content, task_id, workspace, draft['epoch'])
-        elif operation in {'manage_task_pools', 'manage_project_pools'}:
-            rows = workspace.resources.get_all_pools()
-            parents = {row.parent_pool_id for row in rows}
-            pools = {row.id: f'{row.name} [#{row.id}]' for row in rows if row.id not in parents}
-            draft['base'].assignments = [row for row in content.assignments if row.task_id == task_id]
-            assignments = _assignment_editor(plan.project_id, draft, content.tasks, pools, fixed_task=True, task_id=task_id)
-            if any(row.task_id != task_id for row in assignments):
-                raise ValueError('Keep each assignment on this step (or leave Task empty for project demand).')
-            content.assignments = [row for row in content.assignments if row.task_id != task_id] + assignments
         elif operation == 'import_csv_template':
             content = _import_csv()
         if st.button('Save alternative', type='primary', disabled=content is None):

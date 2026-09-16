@@ -602,6 +602,7 @@
     }
 
     .baseline-line {position:absolute; top:34px; height:0; border-top:4px dotted #9333ea; z-index:6; pointer-events:auto;}
+    .baseline-line.baseline-milestone {width:9px !important; height:9px; top:29px; margin-left:-5px; border:2px dotted #9333ea; transform:rotate(45deg);}
     .baseline-only, .baseline-only .task-id-cell, .baseline-only .task-date-cell,
     .baseline-only .task-title, .baseline-only .task-sub-desc {color:#9333ea !important;}
     .show-baseline .gantt-bar-wrapper {height:19.6px; top:10.9px;}
@@ -614,6 +615,9 @@
     .compare-scenario .milestone-diamond-shape {width:11px; height:11px;}
     .alternative-bar {position:absolute; top:23px; height:14px; border-radius:3px; background:#9333ea; z-index:7; cursor:grab;}
     .alternative-bar.new-scenario {background:#7dd3fc;}
+    .alternative-bar.alternative-milestone {width:12px !important; height:12px; top:24px; margin-left:-6px; border-radius:0; transform:rotate(45deg);}
+    .alternative-milestone.is-complete {background:#581c87;}
+    .alternative-milestone.new-scenario.is-complete {background:#38bdf8;}
     .alternative-bar.project-alternative {height:7px; top:27px; cursor:default;}
     .alternative-only, .alternative-only .task-title, .alternative-only .task-id-cell,
     .alternative-only .task-date-cell, .alternative-only .task-sub-desc {color:#9333ea !important;}
@@ -2284,6 +2288,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     let editEnabled = false;
     let alternatives = {};
     let alternativeEndpoints = {};
+    let alternativeTaskChoices = [];
     const comparingScenario = () => Object.keys(alternatives).length > 0;
     let showBaseline = false;
     let baselineTasks = {};
@@ -2401,6 +2406,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       const right = endDateToX(parseDate(baseline.end_date));
       const line = document.createElement('div');
       line.className = 'baseline-line';
+      if (baseline.start_date === baseline.end_date) line.classList.add('baseline-milestone');
       line.style.left = left + 'px'; line.style.width = Math.max(6, right-left) + 'px';
       line.title = 'Baseline: ' + baseline.start_date + ' → ' + baseline.end_date;
       row.appendChild(line);
@@ -2410,10 +2416,15 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       const plan = alternatives[String(projectId)];
       if (!task || !plan) return;
       const bar = document.createElement('div');
+      const isMilestone = !summary && task.start_date === task.end_date;
       bar.className = 'alternative-bar' + (summary ? ' project-alternative' : '') + (plan.new_scenario ? ' new-scenario' : '');
+      if (isMilestone) bar.classList.add('alternative-milestone');
+      bar.dataset.milestone = String(isMilestone);
+      bar.dataset.planRevision = String(plan.revision);
+      if (Number(task.progress_pct) >= 100) bar.classList.add('is-complete');
       bar.style.left = dateToX(parseDate(task.start_date)) + 'px';
       bar.style.width = Math.max(6, endDateToX(parseDate(task.end_date))-dateToX(parseDate(task.start_date))) + 'px';
-      bar.title = plan.name + ': ' + task.start_date + ' → ' + task.end_date;
+      bar.title = (isMilestone ? 'Milestone · ' : '') + plan.name + ': ' + task.start_date + ' → ' + task.end_date;
       bar.addEventListener('contextmenu', event => summary ? showProjectContextMenu(event, projectId)
         : showContextMenu(event, scenarioTask({id:task.id, project_id:projectId, alternativeTask:task})));
       if (!summary) {
@@ -2422,7 +2433,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
           openEditModal();
         });
         const progress = Math.max(0, Math.min(100, Number(task.progress_pct) || 0));
-        bar.innerHTML = `<div style="height:100%;width:${progress}%;background:${plan.new_scenario ? '#38bdf8' : '#581c87'};border-radius:3px;pointer-events:none"></div><div class="resize-handle left"></div><div class="resize-handle right"></div>`;
+        if (!isMilestone) bar.innerHTML = `<div style="height:100%;width:${progress}%;background:${plan.new_scenario ? '#38bdf8' : '#581c87'};border-radius:3px;pointer-events:none"></div><div class="resize-handle left"></div><div class="resize-handle right"></div>`;
         bindDragEvents(bar, {id:task.stable_id, project_id:projectId, name:task.task_name,
           start:task.start_date, end:task.end_date, alternative:true, plan_id:plan.id, revision:plan.revision},
           task.start_date === task.end_date);
@@ -2463,16 +2474,20 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       const row = task.alternativeTask || plan?.tasks.find(t=>String(t.id)===String(task.id));
       return row ? {id:row.stable_id, project_id:task.project_id, name:row.task_name,
         phase:row.phase, description:row.description, start:row.start_date, end:row.end_date,
+        progress:row.progress_pct || 0,
+        dependenciesList:(plan.dependencies || []).filter(dep=>String(dep.task_id)===String(row.stable_id)).map(dep=>({
+          ...dep, predecessor_owner_id:alternativeEndpoints[String(dep.predecessor_task_id)]?.project_id})),
         alternative:true, plan_id:plan.id, revision:plan.revision} : task;
     }
 
-    function alternativeAction(operation, projectId, task=null) {
+    function alternativeAction(operation, projectId, task=null, values={}) {
       if (!comparingScenario()) return false;
       const plan = alternatives[String(projectId)];
       if (!plan || (!['export_csv_template', 'view_project_details'].includes(operation) && !canEditProject(projectId))) return true;
       hideContextMenu(); hideProjectContextMenu(); hideDepContextMenu();
       Streamlit.setComponentValue({action:'alternative_action', operation, project_id:projectId,
         plan_id:plan.id, revision:plan.revision, ...(task ? {id:task.id} : {}),
+        ...values,
         nonce:Date.now()+'_alternative_'+operation});
       return true;
     }
@@ -3666,6 +3681,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     // CONTEXT MENU
     // --------------------------------------------------------------------------
     let modalMode = 'edit';
+    let modalAlternativeRevision = null;
     let addStepTargetProjectId = null;
 
     function showContextMenu(e, task) {
@@ -3961,7 +3977,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       resetProjectDependencyMode();
       addStepTargetProjectId = targetProjectId || (selectedContextMenuTask ? selectedContextMenuTask.project_id : currentProjectId);
       if (!canEditProject(addStepTargetProjectId)) return;
-      if (alternativeAction('create_step_full', addStepTargetProjectId)) return;
+      modalAlternativeRevision = alternatives[String(addStepTargetProjectId)]?.revision ?? null;
 
       const pId = addStepTargetProjectId || "General";
       const tmpl = getT('modal.add_title', '➕ Add New Step ({project_id})');
@@ -3971,7 +3987,9 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       document.getElementById('modal-task-desc').value = '';
 
       let baseStart = '';
-      const projectTasks = (tasksData || []).filter(task => String(task.project_id || currentProjectId) === String(addStepTargetProjectId));
+      const projectTasks = alternatives[String(addStepTargetProjectId)]
+        ? alternatives[String(addStepTargetProjectId)].tasks.map(task=>({end:task.end_date}))
+        : (tasksData || []).filter(task => String(task.project_id || currentProjectId) === String(addStepTargetProjectId));
       if (selectedContextMenuTask && selectedContextMenuTask.end) {
         baseStart = selectedContextMenuTask.end;
       } else if (projectTasks.length > 0) {
@@ -4012,7 +4030,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       resetProjectDependencyMode();
       if (!canEditTask(selectedContextMenuTask)) return;
       addStepTargetProjectId = selectedContextMenuTask.project_id || currentProjectId;
-      if (alternativeAction('update_task_full', addStepTargetProjectId, selectedContextMenuTask)) return;
+      modalAlternativeRevision = selectedContextMenuTask.alternative ? selectedContextMenuTask.revision : null;
 
       const t = selectedContextMenuTask;
       const editTmpl = getT('modal.edit_title', '✏️ Edit: {name}');
@@ -4065,7 +4083,8 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       if (modalMode === 'project' && initialData.id) rowDiv.dataset.dependencyId = initialData.id;
 
       const activeProjId = getActiveModalProjectId();
-      const isExt = modalMode === 'project' || Boolean(initialData.predecessor_project_id && String(initialData.predecessor_project_id) !== String(activeProjId));
+      const predecessorProject = initialData.predecessor_owner_id || initialData.predecessor_project_id;
+      const isExt = modalMode === 'project' || Boolean(predecessorProject && String(predecessorProject) !== String(activeProjId));
       const otherProjects = (allProjectsData || []).filter(p => String(p.id) !== String(activeProjId));
       const selectedExtProj = initialData.predecessor_owner_id || initialData.predecessor_project_id || (otherProjects[0] ? String(otherProjects[0].id) : '');
 
@@ -4206,7 +4225,9 @@ button:not(.context-menu-item):disabled {opacity:.5;}
 
         // Options 2..N: Steps in external project
         let extTasks = [];
-        if (externalTasksData && externalTasksData[selectedProj]) {
+        if (alternatives[activeProjId]) {
+          extTasks = alternativeTaskChoices.filter(task=>String(task.project_id)===selectedProj);
+        } else if (externalTasksData && externalTasksData[selectedProj]) {
           extTasks = externalTasksData[selectedProj];
         } else {
           extTasks = (tasksData || []).filter(t => String(t.project_id || currentProjectId) === String(selectedProj)).map(t => ({
@@ -4219,7 +4240,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         }
 
         extTasks.forEach(item => {
-          if (selectedContextMenuTask && selectedContextMenuTask.id && String(item.id) === String(selectedContextMenuTask.id)) {
+          if (modalMode === 'edit' && selectedContextMenuTask && selectedContextMenuTask.id && String(item.id) === String(selectedContextMenuTask.id)) {
             return; // cannot link to itself
           }
           const opt = document.createElement('option');
@@ -4242,7 +4263,9 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         targetSelect.appendChild(optPlaceholder);
 
         let internalTasks = [];
-        if (externalTasksData && externalTasksData[activeProjId]) {
+        if (alternatives[activeProjId]) {
+          internalTasks = alternatives[activeProjId].tasks.map(task=>({...task, id:task.stable_id}));
+        } else if (externalTasksData && externalTasksData[activeProjId]) {
           internalTasks = externalTasksData[activeProjId];
         } else {
           internalTasks = (tasksData || []).filter(item => {
@@ -4256,7 +4279,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         }
 
         internalTasks.forEach(item => {
-          if (selectedContextMenuTask && selectedContextMenuTask.id && String(item.id) === String(selectedContextMenuTask.id)) {
+          if (modalMode === 'edit' && selectedContextMenuTask && selectedContextMenuTask.id && String(item.id) === String(selectedContextMenuTask.id)) {
             return; // cannot be predecessor of itself
           }
           const opt = document.createElement('option');
@@ -4325,6 +4348,13 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       });
 
       closeEditModal();
+
+      const projectId = getActiveModalProjectId();
+      if (alternativeAction(modalMode === 'add' ? 'create_step_full' : 'update_task_full', projectId,
+          modalMode === 'add' ? null : selectedContextMenuTask,
+          {task_name:name, phase:phase || 'General', description:desc, start_date:start, end_date:end,
+           progress_pct:Math.max(0, Math.min(100, prog)), dependencies,
+           ...(modalAlternativeRevision == null ? {} : {revision:modalAlternativeRevision})})) return;
 
       if (modalMode === 'add') {
         const pId = addStepTargetProjectId || (selectedContextMenuTask && selectedContextMenuTask.project_id) || currentProjectId;
@@ -6375,10 +6405,11 @@ button:not(.context-menu-item):disabled {opacity:.5;}
             if (isMilestone) {
               const mWrapper = document.createElement('div');
               mWrapper.className = `milestone-diamond-wrapper${isComplete ? ' is-complete' : ''}`;
+              mWrapper.dataset.milestone = 'true';
               mWrapper.style.left = `${startX}px`;
               mWrapper.innerHTML = `
                 ${hasViol ? `<div class="violation-warning-badge">⚠️</div>` : ''}
-                <div class="milestone-diamond-shape" title="${escapeHtml(t.name)}"></div>
+                <div class="milestone-diamond-shape" title="Milestone: ${escapeHtml(t.name)}"></div>
               `;
               mWrapper.oncontextmenu = (e) => showContextMenu(e, t);
               mWrapper.ondblclick = () => openEditModalById(t.id);
@@ -6425,7 +6456,8 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       document.getElementById('grid-links-group')?.appendChild(group);
       const taskPositions = new Map(), projectPositions = new Map();
       const position = (task, rowIdx) => ({startX:dateToX(parseDate(task.start_date)),
-        endX:endDateToX(parseDate(task.end_date)), centerY:rowIdx*rowHeight()+30, rowIdx});
+        endX:task.start_date === task.end_date ? dateToX(parseDate(task.start_date)) : endDateToX(parseDate(task.end_date)),
+        centerY:rowIdx*rowHeight()+30, rowIdx});
       masterRenderItems.forEach((item, index) => {
         const plan = alternatives[String(item.project_id || item.task?.project_id)];
         if (!plan) return;
@@ -7025,6 +7057,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         editEnabled = args.edit_enabled === true;
         alternatives = args.alternatives || {};
         alternativeEndpoints = args.alternative_endpoints || {};
+        alternativeTaskChoices = args.alternative_task_choices || [];
         document.getElementById('enable-edit').checked = editEnabled;
         document.body.classList.toggle('compare-scenario', comparingScenario());
         document.getElementById('show-baseline').checked = showBaseline;

@@ -180,4 +180,5 @@ def scenario_payload(workspace: PlanningWorkspace, project_ids: list[int]) -> di
             contents.append(plan.content)
     return dict(edit_enabled=bool(st.session_state.get('planning_edit_enabled', False)), alternatives=alternatives,
                 alternative_endpoints=workspace.plans.comparison_endpoints(contents) if contents else {},
+                alternative_task_choices=workspace.plans.task_choices() if contents else [],
                 scenario_epoch=st.session_state.get('planning_scenario_epoch', 0))

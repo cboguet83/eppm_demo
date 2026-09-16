@@ -167,6 +167,93 @@ def test_opt_in_editing_and_alternative_lanes(authorized, tmp_path):
             browser.close()
 
 
+def test_milestones_and_shared_step_and_resource_dialogs_keep_alternative_isolated(authorized, tmp_path):
+    plans = service(authorized, 4)
+    active = plans.initialize(1)
+    with psycopg.connect(authorized.setup.operator_url) as connection:
+        connection.execute("UPDATE eppm.project SET status='In Progress'")
+        connection.execute("INSERT INTO eppm.project_task(project_id,project_plan_id,task_name,start_date,end_date,progress_pct) VALUES(1,%s,'Gate','2027-01-01','2027-01-01',35),(1,%s,'Build','2027-01-03','2027-01-05',60)", (active.id, active.id))
+        connection.execute("INSERT INTO eppm.resource_pool(id,name,capacity_fte) VALUES(1,'Engineers',2)")
+        connection.execute('INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,project_plan_id,fte_assigned) VALUES(1,1,1,%s,0.25)', (active.id,))
+    baseline = plans.baseline_current(1)
+    active = next(row for row in plans.list_plans(1) if row.is_current)
+    content = deepcopy(active.content)
+    content.tasks.append(draft_task(-1, 'Extra gate', '2027-01-07', '2027-01-07'))
+    content.dependencies = [dict(task_id=2, predecessor_task_id=1, predecessor_project_id=None, link_type='FS', lag_days=2)]
+    alternative = plans.save(1, active.id, active.revision, 'Option A', content)
+    extra_id = alternative.content.tasks[-1]['id']
+    with native_server(authorized, tmp_path, _APP) as server, sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            page = server.new_page(browser, viewport={'width':1700, 'height':1200})
+            page.goto(server.origin)
+            frame = page.frame_locator('iframe[title*="interactive_gantt"]')
+            expect(frame.locator('#timeline-row-1 .milestone-diamond-wrapper')).to_be_visible(timeout=40000)
+            frame.get_by_role('checkbox', name='Show baseline', exact=True).check()
+            expect(frame.locator('#timeline-row-1 .baseline-milestone')).to_be_visible()
+            display_alternative(page, frame)
+            milestone = frame.locator('#timeline-row-1 .alternative-milestone')
+            expect(milestone).to_be_visible()
+            expect(milestone.locator('.resize-handle')).to_have_count(0)
+            expect(frame.locator(f'#timeline-row-alternative-1-{extra_id} .alternative-milestone')).to_be_visible()
+            frame.get_by_role('checkbox', name='Enable edit mode', exact=True).check()
+            frame.locator('#btn-mode-day').click()
+            extra_milestone = frame.locator(f'#timeline-row-alternative-1-{extra_id} .alternative-milestone')
+            drag(page, extra_milestone)
+            expect(extra_milestone).not_to_have_attribute('title', 'Milestone · Option A: 2027-01-07 → 2027-01-07', timeout=15000)
+            expect(extra_milestone).to_have_attribute('title', re.compile(r'Milestone · Option A: (2027-01-\d{2}) → \1'))
+            frame.locator('#frozen-row-2').dblclick()
+            expect(frame.locator('#modal-task-name')).to_have_value('Build')
+            expect(frame.locator('#modal-progress')).to_have_value('60')
+            expect(frame.locator('.dep-target')).to_have_value('TASK:1')
+            expect(frame.locator('.dep-lag')).to_have_value('2')
+            frame.locator('#modal-end-date').fill('2027-01-03')
+            frame.locator('#modal-btn-save').click()
+            expect(frame.locator('#timeline-row-2 .alternative-milestone')).to_be_visible()
+            frame.locator('#frozen-row-2').dblclick()
+            frame.locator('#modal-end-date').fill('2027-01-06')
+            frame.locator('#modal-btn-save').click()
+            expect(frame.locator('#timeline-row-2 .alternative-milestone')).to_have_count(0)
+            expect(frame.locator('#timeline-row-2 .alternative-bar .resize-handle')).to_have_count(2)
+            frame.locator('#frozen-row-1').click(button='right')
+            frame.locator('#ctx-label-task-pools').click()
+            expect(page.get_by_role('dialog')).to_contain_text('Manage Task Resource Pools')
+            expect(page.locator('.st-key-rb_assign_task_period_mode')).to_be_visible()
+            page.locator('.st-key-rb_assign_task_period_mode label').filter(has=page.get_by_role('radio')).nth(2).click()
+            page.locator('.st-key-assign_task_offset input').fill('2')
+            page.locator('.st-key-assign_task_duration input').fill('3')
+            page.locator('.st-key-ni_assign_task_fte input').fill('0.5')
+            page.screenshot(path=str(tmp_path / 'shared-alternative-resources.png'), full_page=True)
+            page.locator('.st-key-btn_confirm_assign_task_pool button').click()
+            expect(page.get_by_role('dialog')).to_have_count(0)
+            with psycopg.connect(authorized.setup.operator_url) as connection:
+                changed = read_plans(connection, [alternative.id])[alternative.id]
+            added = next(row for row in changed.assignments if row.schedule_anchor)
+            assert (added.task_id, added.fte_assigned, added.offset_days, added.duration_days) == (1, 0.5, 2, 3)
+            frame.locator('#frozen-row-1').click(button='right')
+            frame.locator('#ctx-label-task-pools').click()
+            expect(page.get_by_role('dialog')).to_contain_text('2027-01-03 → 2027-01-05')
+            page.locator(f'.st-key-btn_del_assign_task_{added.id} button').filter(visible=True).first.click()
+            expect(page.get_by_role('dialog')).to_have_count(0)
+            frame.locator('#frozen-row-proj-1').click(button='right')
+            frame.locator('#ctx-label-project-pools').click()
+            expect(page.get_by_role('dialog')).to_contain_text('Manage Project Resource Pools')
+            page.locator('.st-key-ni_assign_proj_fte input').fill('0.7')
+            page.locator('.st-key-btn_confirm_assign_proj_pool button').click()
+            expect(page.get_by_role('dialog')).to_have_count(0)
+            with psycopg.connect(authorized.setup.operator_url) as connection:
+                changed = read_plans(connection, [alternative.id])[alternative.id]
+                unchanged = read_plans(connection, [active.id, baseline.id])
+            assert [row.fte_assigned for row in changed.assignments if row.task_id is None] == [0.7]
+            assert [row.fte_assigned for row in changed.assignments if row.task_id == 1] == [0.25]
+            assert changed.dependencies == alternative.content.dependencies
+            assert changed.tasks[1]['progress_pct'] == 60
+            assert unchanged[active.id] == active.content
+            assert unchanged[baseline.id] == baseline.content
+        finally:
+            browser.close()
+
+
 def test_alternative_context_edits_dependencies_hide_reload_and_confirm_activation(authorized, tmp_path):
     from app.application.services.collaboration import CollaborationService
     from tests.postgresql.test_collaboration import gateway
@@ -206,13 +293,14 @@ def test_alternative_context_edits_dependencies_hide_reload_and_confirm_activati
             for identity in ['ctx-label-edit-step', 'ctx-label-add-step', 'ctx-label-delete-step', 'ctx-label-task-tags', 'ctx-label-task-pools']:
                 expect(frame.locator('#'+identity)).to_be_visible()
             frame.locator('#ctx-label-edit-step').click()
-            page.get_by_role('textbox', name='Step name', exact=True).fill('Alternative build')
-            page.get_by_role('button', name='Save alternative', exact=True).click()
-            expect(page.get_by_role('dialog')).to_have_count(0)
+            frame.locator('#modal-task-name').fill('Alternative build')
+            frame.locator('#modal-btn-save').click()
+            expect(frame.locator('#modal-backdrop')).to_be_hidden()
+            expect(frame.locator('#timeline-row-1 .alternative-bar')).to_have_attribute('data-plan-revision', str(alternative.revision + 2))
             frame.locator('#frozen-row-proj-1').click(button='right')
             frame.locator('#ctx-project-add-step').click()
-            page.get_by_role('textbox', name='Step name', exact=True).fill('New scenario step')
-            page.get_by_role('button', name='Save alternative', exact=True).click()
+            frame.locator('#modal-task-name').fill('New scenario step')
+            frame.locator('#modal-btn-save').click()
             expect(frame.locator('.alternative-only .task-title', has_text='New scenario step')).to_be_visible()
             frame.locator(f'#frozen-row-alternative-1-{extra}').click(button='right')
             page.once('dialog', lambda dialog: dialog.accept())
