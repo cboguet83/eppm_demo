@@ -25,13 +25,13 @@ function setup(){
     DOMPoint:class {constructor(x,y){this.x=x;this.y=y;}matrixTransform(){return this;}},
     CustomEvent:class {constructor(type,options){this.type=type;this.detail=options.detail;}}});
   vm.runInContext(js,context);
-  const build=(metric,capacity=7)=>{
+  const build=(metric,capacity=7,extraPools=[])=>{
     const root=new Element('root'),events=[];
     const cleanup=context.render({parentElement:{querySelector:()=>root},setTriggerValue(name,value){events.push({name,...value});},data:{
       palette:['#000000','#399df4','#09703e','#b1343b','#de00c3','#ffd700','#848486','#0000f0','#fa8775','#8800d2','#ffb14e','#ea5f94','#f10d0d','#0ccd66','#27e0e0'],
       budgetSeries:metric==='finance'?[{name:'Approved',points:[{date:'2026-01-01',value:100},{date:'2026-04-01',value:null},{date:'2026-07-01',value:80}]},{name:'Proposed',points:[{date:'2026-01-01',value:120}]}]:[],
       metric,locale:'en',rows:metric==='finance'?[]:[{quarter:'2026-Q1',value:metric==='allocation'?10:3,capacity}],
-      pools:[{pool_id:1,name:'Pool X',allocation:{'2026-Q1':10},overallocation:{'2026-Q1':3},available:{'2026-Q1':-3}}],
+      pools:[{pool_id:1,name:'Pool X',allocation:{'2026-Q1':10},overallocation:{'2026-Q1':3},available:{'2026-Q1':-3}},...extraPools],
       totalLabel:'Total',allocatedLabel:'Allocation',availableLabel:'Available',goTo:'Planning',poolDetails:'Pool details',filterPool:'Filter on this pool',
       totalValueLabel:metric==='allocation'?'Total allocation':'Total overallocation',totalCapacityLabel:'Total capacity',
       valueLabel:metric==='overallocation'?'Overallocation':'Allocation',capacityLabel:'Total pools capacity',today:'2026-01-01',start:'2026-01-01',end:'2027-01-01'}});
@@ -143,4 +143,16 @@ test('both resource menus navigate to the selected pool or its consuming project
     }
     chart.cleanup();
   }
+});
+
+test('individual pool bars are side by side and hide the summed capacity line',()=>{
+  const {build}=setup();
+  const chart=build('allocation',100,[{pool_id:2,name:'Pool Y',allocation:{'2026-Q1':8},overallocation:{'2026-Q1':1},available:{'2026-Q1':2}}]);
+  const bars=chart.svg.children.filter(e=>e.tag==='rect');
+  assert.equal(bars.length,2);
+  assert.ok(Number(bars[0].attrs.x)+Number(bars[0].attrs.width)<Number(bars[1].attrs.x));
+  assert.equal(Number(bars[0].attrs.y)+Number(bars[0].attrs.height),248);
+  assert.equal(Number(bars[1].attrs.y)+Number(bars[1].attrs.height),248);
+  assert.equal(chart.svg.children.filter(e=>e.tag==='path').length,0);
+  chart.cleanup();
 });

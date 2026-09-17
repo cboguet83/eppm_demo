@@ -870,6 +870,8 @@
     "go_to_consumers": "Planung und Meilensteine: nutzende Projekte",
     "pool_details": "Pooldetails",
     "filter_pool": "Nach diesem Pool filtern",
+    "simultaneous_peak": "Gleichzeitige Portfoliospitze",
+    "individual_pool_peaks": "Jeder Balken zeigt den Quartalshöchstwert eines Pools.",
     "clear_pool_filter": "Alle Pools anzeigen",
     "filtered_pool": "Ressourcenpool: {pool}",
     "loading": "Wird geladen…",

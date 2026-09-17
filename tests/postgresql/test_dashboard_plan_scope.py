@@ -90,3 +90,22 @@ def test_status_filter_excludes_competing_demand_and_drill_through_consumers(sta
     assert {pool['pool_id'] for pool in dashboard.resource_breakdown([1], statuses=['In Progress'], pool_ids=[1, 2])['pools']} == {1, 2}
     with pytest.raises(ValueError, match='statuses'):
         dashboard.resource_breakdown([1], statuses=['invalid'])
+
+
+def test_individual_pool_peaks_keep_distinct_dates_without_summing_them(staffing):
+    with psycopg.connect(staffing.setup.operator_url) as connection:
+        connection.execute('DELETE FROM eppm.resource_pool_assignment')
+        connection.execute('DELETE FROM eppm.resource_pool_mapping')
+        connection.execute('UPDATE eppm.resource_pool SET capacity_fte=2')
+        connection.execute("""INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,fte_assigned,start_date,end_date,project_plan_id)
+            SELECT pool_id,1,fte,day,day,(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)
+            FROM (VALUES(1,10,'2026-01-01'::date),(2,8,'2026-02-01'::date)) rows(pool_id,fte,day)""")
+    result = service(staffing, 4).resource_breakdown([1])
+    assert result['allocation']['2026-Q1'] == 10
+    assert result['overallocation']['2026-Q1'] == 8
+    first, second = result['individual_pools']
+    assert first['allocation']['2026-Q1'] == 10
+    assert second['allocation']['2026-Q1'] == 8
+    assert second['overallocation']['2026-Q1'] == 6
+    assert second['available']['2026-Q1'] == -6
+    assert second['capacity']['2026-Q1'] == 2

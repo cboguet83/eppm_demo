@@ -20,7 +20,7 @@ def test_alternative_only_pool_and_container_demand_are_separate(authorized, tmp
     with psycopg.connect(authorized.setup.operator_url) as connection:
         connection.execute("UPDATE eppm.project SET status='In Progress' WHERE id IN (1,2)")
         connection.execute("INSERT INTO eppm.project_task(project_plan_id,project_id,task_name,start_date,end_date) VALUES(%s,1,'Task','2027-01-01','2027-01-05')", (active.id,))
-        connection.execute("INSERT INTO eppm.resource_pool(id,name,capacity_fte) VALUES(1,'Active pool',4),(2,'Alternative pool',4),(3,'Container',0)")
+        connection.execute("INSERT INTO eppm.resource_pool(id,name,capacity_fte) VALUES(1,'Active pool',4),(2,'Alternative pool',2),(3,'Container',0)")
         connection.execute('UPDATE eppm.resource_pool SET parent_pool_id=3 WHERE id=2')
         connection.execute('INSERT INTO eppm.resource_pool_assignment(project_plan_id,project_id,pool_id,fte_assigned) VALUES(%s,1,1,1)', (active.id,))
         connection.execute('''INSERT INTO eppm.resource_pool_assignment(project_plan_id,project_id,pool_id,fte_assigned,start_date,end_date)
@@ -44,6 +44,14 @@ def test_alternative_only_pool_and_container_demand_are_separate(authorized, tmp
             api.expect(frame.locator('[data-pool-id="2"][data-scope="alternative_total"][data-demand="3.5"]').first).to_be_visible()
             cells = frame.locator('[data-pool-id="2"][data-scope="alternative_selected"][data-demand="2.5"]')
             api.expect(cells.first).to_be_visible()
+            container = frame.locator('#resource-left-body .resource-group-row').first
+            api.expect(container).not_to_contain_text('Group total')
+            api.expect(frame.locator('#resource-left-body')).not_to_contain_text('🏊')
+            assert abs(container.bounding_box()['height'] - 23.8) < .1
+            warning = frame.locator('.resource-group-cell.cell-overallocated[data-scope="alternative_total"]').first
+            api.expect(warning).to_be_visible()
+            assert warning.inner_text().strip() == ''
+            api.expect(warning).to_have_css('background-color', 'rgb(254, 226, 226)')
             active_cells = frame.locator('[data-pool-id="1"][data-scope="total"][data-demand="1"]')
             api.expect(active_cells.first).to_be_visible()
             cells.first.click(button='right')

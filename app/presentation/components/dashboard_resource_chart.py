@@ -11,7 +11,7 @@ PALETTE = ['#000000', '#399df4', '#09703e', '#b1343b', '#de00c3',
            '#ffb14e', '#ea5f94', '#f10d0d', '#0ccd66', '#27e0e0']
 
 _CSS = """
-.resource-chart {position:relative;display:grid;grid-template-columns:minmax(0,1fr);align-items:center;gap:0;color:var(--st-text-color);font:12px var(--st-font)}
+.resource-chart {position:relative;display:grid;grid-template-columns:minmax(0,1fr);align-items:center;gap:0;overflow-x:auto;color:var(--st-text-color);font:12px var(--st-font)}
 svg {grid-column:1;grid-row:1;display:block;width:100%;height:300px;overflow:visible}
 .legend {grid-column:1;grid-row:2;display:flex;flex-wrap:wrap;gap:16px;justify-content:center;margin:0;padding:0 0 8px}
 .pool-swatch {display:inline-block;width:10px;height:10px;margin-right:6px;background:var(--series)}
@@ -29,7 +29,9 @@ export default function({data,parentElement,setTriggerValue}) {
     const color=id=>palette[1+(Math.abs(Number(id)-1)%(palette.length-1))];
     const budgetSeries=data.budgetSeries||[];
     const pools=data.pools.filter(pool=>data.rows.some(row=>Number(pool[data.metric][row.quarter])>0));
-    const showCapacity=data.metric==='allocation';
+    if(pools.length>1)svg.style.minWidth=(pools.length*data.rows.length*6)+'px';
+    const showCapacity=data.metric==='allocation' && pools.length===1;
+    const capacity=row=>Number(pools[0]?.capacity?.[row.quarter] ?? row.capacity);
     for(const [label,tint] of budgetSeries.map((series,i)=>[series.name,palette[i]])){
         const item=document.createElement('span');item.textContent=label;item.style.setProperty('--series',tint);legend.appendChild(item);
     }
@@ -37,7 +39,7 @@ export default function({data,parentElement,setTriggerValue}) {
     const add=(kind,attrs,text)=>{const node=document.createElementNS(ns,kind);for(const [key,value] of Object.entries(attrs))node.setAttribute(key,value);if(text!==undefined)node.textContent=text;svg.appendChild(node);return node;};
     const left=68,right=1025,top=25,bottom=248,width=right-left,height=bottom-top,n=data.rows.length;
     const axis=maximum=>{const step=Math.max(1,Math.ceil(maximum/4)),count=Math.max(1,Math.ceil(maximum/step));return {step,count,max:step*count};};
-    const valueAxis=axis(Math.max(0,...data.rows.map(row=>Math.max(row.value,showCapacity?row.capacity:0)),...budgetSeries.flatMap(series=>series.points.map(point=>point.value||0))));
+    const valueAxis=axis(Math.max(0,...data.rows.map(row=>Math.max(...pools.map(pool=>Number(pool[data.metric][row.quarter]||0)),showCapacity?capacity(row):0)),...budgetSeries.flatMap(series=>series.points.map(point=>point.value||0))));
     const fmt=value=>Number(value).toLocaleString(data.locale,{minimumFractionDigits:1,maximumFractionDigits:1});
     const money=value=>Number(value).toLocaleString(data.locale,{minimumFractionDigits:2,maximumFractionDigits:2});
     const tick=value=>Number(value).toLocaleString(data.locale,{maximumFractionDigits:0});
@@ -79,26 +81,25 @@ export default function({data,parentElement,setTriggerValue}) {
         const [year,quarter]=row.quarter.split('-Q').map(Number);
         const quarterStart=Date.UTC(year,(quarter-1)*3,1),quarterEnd=Date.UTC(year,quarter*3,1);
         const x=left+width*((quarterStart+quarterEnd)/2-first)/(last-first);
-        let cumulative=0;
-        for(const pool of pools){
+        for(const [poolIndex,pool] of pools.entries()){
             const value=Number(pool[data.metric][row.quarter]||0);if(value<=0)continue;
-            const barHeight=height*value/valueAxis.max;cumulative+=value;
-            const bar=add('rect',{x:x-width/n*.36,y:bottom-height*cumulative/valueAxis.max,width:width/n*.72,height:barHeight,
+            const barHeight=height*value/valueAxis.max,barWidth=width/n*.72/Math.max(1,pools.length);
+            const bar=add('rect',{x:x-width/n*.36+poolIndex*barWidth,y:bottom-barHeight,width:barWidth*.9,height:barHeight,
                 fill:color(pool.pool_id),tabindex:0,role:'button','data-quarter':row.quarter,'data-pool-id':pool.pool_id,
                 'aria-label':pool.name+', '+row.quarter+': '+data.valueLabel+' '+fmt(value)});
             bar.onpointermove=event=>{if(menu)return;
                 showTip(data.metric==='overallocation'
-                    ? [[row.quarter],[data.valueLabel],[data.totalLabel+': '+fmt(row.value)+' FTE'],
+                    ? [[row.quarter],[data.valueLabel],[(data.portfolioPeakLabel||data.totalLabel)+': '+fmt(row.value)+' FTE'],
                        [pool.name+': '+fmt(value)+' FTE',color(pool.pool_id)]]
-                    : [[row.quarter],[data.totalCapacityLabel+': '+fmt(row.capacity)+' FTE'],
-                       [data.totalValueLabel+': '+fmt(row.value)+' FTE'],
+                    : [[row.quarter],...(showCapacity?[[data.totalCapacityLabel+': '+fmt(capacity(row))+' FTE']]:[]),
+                       [(data.portfolioPeakLabel||data.totalValueLabel)+': '+fmt(row.value)+' FTE'],
                        [pool.name+' — '+data.allocatedLabel+': '+fmt(value)+' FTE',color(pool.pool_id)],
                        [pool.name+' — '+data.availableLabel+': '+fmt(pool.available[row.quarter])+' FTE',color(pool.pool_id)]],event);};
             bar.onpointerleave=closeTip;
             bar.oncontextmenu=event=>{event.preventDefault();showMenu(row,pool,event.clientX,event.clientY);};
             bar.onkeydown=event=>{if(event.key==='ContextMenu'||event.key==='Enter'||(event.shiftKey&&event.key==='F10')){event.preventDefault();const rect=bar.getBoundingClientRect();showMenu(row,pool,rect.left,rect.top+20);}};
         }
-        if(showCapacity)path.push((index?'L':'M')+x+','+(bottom-height*row.capacity/valueAxis.max));
+        if(showCapacity)path.push((index?'L':'M')+x+','+(bottom-height*capacity(row)/valueAxis.max));
     });
     if(showCapacity)add('path',{d:path.join(' '),fill:'none',stroke:'#f10d0d','stroke-width':2,'stroke-dasharray':'6 4','pointer-events':'none'});
     for(let year=Number(data.start.slice(0,4));year<Number(data.end.slice(0,4));year++){
@@ -156,7 +157,7 @@ def resource_chart(series: ResourceBreakdown, *, today: str, year: int,
         html='<div class="resource-chart"></div>', css=_CSS + CONTEXT_MENU_CSS, js=_JS)
     rows = [{'quarter': key, 'value': float(value), 'capacity': float(series['capacity'][key])}
             for key, value in sorted(series[metric].items()) if year - 2 <= int(key[:4]) <= year + 9]
-    result = component(data={'rows': rows, 'pools': series['pools'], 'metric': metric,
+    result = component(data={'rows': rows, 'pools': series.get('individual_pools', series['pools']), 'metric': metric,
                              'today': today, 'start': f'{year-2}-01-01', 'end': f'{year+10}-01-01',
                              'locale': locale, 'palette': PALETTE, **labels}, key='dashboard_resource_chart_' + metric,
                        on_selection_change=lambda: None, height='content')

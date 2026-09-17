@@ -12,6 +12,7 @@ from app.application.ports.dashboard import DashboardCatalog, DashboardData, Res
 from app.application.services.business_access import BusinessAccess
 from app.domain.access.models import AccessDenied, Actor
 from app.domain.dashboard import WbsShare, quarter_bounds
+from app.application.services.dashboard_resource_peaks import individual_pool_peaks
 from app.infrastructure.postgresql.access import PostgresAccessStore
 from app.infrastructure.postgresql.authorization import ActorBinding, ServerRequestSigner
 from app.infrastructure.postgresql.dashboard_catalog import read_catalog
@@ -104,6 +105,8 @@ class PostgresDashboardReader:
                                         (ids, today, pool_id, statuses, pool_ids)).fetchone()[0]
             return ResourceBreakdown(allocation=result['allocation'], overallocation=result['overallocation'],
                 capacity=result['capacity'], pools=result['pools'], peak_days=result.get('peak_days', {}),
+                individual_pools=individual_pool_peaks(result['pools'], result.get('pool_days', []),
+                                                       result.get('pool_staffing', []), today.year),
                 overallocated_pools=result.get('overallocated_pools', []))
         return self._run(operation, project_ids)
 

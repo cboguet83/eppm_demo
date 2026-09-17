@@ -1398,6 +1398,7 @@
 
     .resource-left-row.resource-group-row,
     .resource-right-row.resource-group-row {
+      height: 23.8px;
       background: #e8eef6;
       border-bottom-color: #cbd5e1;
       font-weight: 700;
@@ -2721,7 +2722,6 @@ button:not(.context-menu-item):disabled {opacity:.5;}
             getDemandCapacityStatusForPeriod(pool.daily_usage, pool.displayed_assigned_capacity,
               pool.daily_assigned_capacity, assignment.start_date || task.start, assignment.end_date || task.end).isOverallocated;
         }
-        groupUsageCache.clear();
       }
       if (patch.project_summaries || patch.resource_pools || !updateLoadedProjectWindows(replaced)) {
         renderTimeline({resourcesChanged:Boolean(patch.resource_pools)});
@@ -4861,7 +4861,6 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     let capacityPeriodCache = new WeakMap();
     let demandPeriodCache = new WeakMap();
     let resourcePoolIndex = new Map();
-    let groupUsageCache = new Map();
 
     function getDailySeries(data) {
       data = data || EMPTY_DAILY_SERIES;
@@ -4941,12 +4940,6 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       if (range.min < defined - .0001) badges += `<span class="r-badge underassignment-badge">${getT('resource_grid.underassignment', 'Underassignment')}</span>`;
       if (range.max > defined + .0001) badges += `<span class="r-badge overassignment-badge">${getT('resource_grid.overassignment', 'Overassignment')}</span>`;
       return badges;
-    }
-
-    function groupAssignmentDetails(group, poolIds, start, end) {
-      return [group.name, ...poolIds.map(id => getResourcePoolById(id)).filter(Boolean)
-        .map(pool => ({pool, details: poolAssignmentDetails(pool, start, end)}))
-        .filter(({pool, details}) => details !== pool.name).map(({details}) => details)].join('\n\n');
     }
 
     function getDemandCapacityStatusForPeriod(dailyUsage, baseCapacity, dailyCapacity, startStr, endStr) {
@@ -5223,21 +5216,6 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       return Boolean(pool && isResourcePoolVisible(pool));
     }
 
-    function aggregatePoolUsage(poolIds, fieldName) {
-      const key = fieldName + ':' + [...new Set(poolIds || [])].sort((a,b) => a-b).join(',');
-      if (groupUsageCache.has(key)) return groupUsageCache.get(key);
-      const result = {};
-      [...new Set(poolIds || [])].forEach(poolId => {
-        const pool = getResourcePoolById(poolId);
-        const usage = pool ? (pool[fieldName] || {}) : {};
-        Object.entries(usage).forEach(([dateStr, rawValue]) => {
-          result[dateStr] = Number(result[dateStr] || 0) + Number(rawValue || 0);
-        });
-      });
-      groupUsageCache.set(key, result);
-      return result;
-    }
-
     function getResourceDisplayRows() {
       const hierarchy = resourcePoolHierarchy && resourcePoolHierarchy.length
         ? resourcePoolHierarchy
@@ -5290,14 +5268,10 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         const comparisonRows = scopes.filter(scope => {
           const poolIds = row.rowType === 'group_total' ? row.node.descendant_pool_ids || [] : [row.pool.id];
           if (!poolIds.some(id => (alternativePoolChanges[String(id)] || []).includes(scope))) return false;
-          if (row.rowType !== 'group_total') return true;
-          const active = aggregatePoolUsage(poolIds, scope === 'selected' ? 'selected_projects_daily_usage' : 'daily_usage');
-          const comparison = aggregatePoolUsage(poolIds, `alternative_${scope}_daily_usage`);
-          return [...new Set([...Object.keys(active), ...Object.keys(comparison)])]
-            .some(day => Math.abs((active[day] || 0) - (comparison[day] || 0)) > .0001);
+          return true;
         }).map(scope => {
           const usage = row.rowType === 'group_total'
-            ? aggregatePoolUsage(row.node.descendant_pool_ids || [], `alternative_${scope}_daily_usage`)
+            ? {}
             : alternativePoolUsage[String(row.pool.id)]?.[scope] || {};
           return {...row, rowType:row.rowType === 'group_total' ? 'group_total' : 'alternative_demand',
             alternative:true, comparisonScope:scope, usage};
@@ -5308,6 +5282,12 @@ button:not(.context-menu-item):disabled {opacity:.5;}
 
     function formatResourceValue(value) {
       return value >= 100 ? String(Math.trunc(value)) : value.toFixed(1);
+    }
+
+    function resourceRowOffsets(rows) {
+      const offsets = [0];
+      for (const row of rows) offsets.push(offsets.at(-1) + (row.rowType === 'group_total' ? 23.8 : 34));
+      return offsets;
     }
 
     function renderResourceGrid(topCells, bottomCells) {
@@ -5344,7 +5324,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
 
       const pools = (resourcePoolsData || []).filter(isResourcePoolVisible);
       const displayRows = getResourceDisplayRows();
-      const resourceContentHeight = Math.max(1, displayRows.length) * 34 + 16;
+      const resourceContentHeight = Math.max(34, resourceRowOffsets(displayRows).at(-1)) + 16;
       if (resourceMain) {
         resourceMain.style.setProperty('--resource-content-height', `${resourceContentHeight}px`);
         resourceMain.style.height = `${Math.min(324, resourceContentHeight)}px`;
@@ -5459,8 +5439,11 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       const leftBody = document.getElementById('resource-left-body');
       const rightBody = document.getElementById('resource-right-body');
       if (!main || !right || !leftBody || !rightBody) return;
-      const first = Math.max(0, Math.min(displayRows.length - 1, Math.floor(main.scrollTop / 34)));
-      const last = Math.min(displayRows.length - 1, first + Math.ceil((main.clientHeight || 380) / 34));
+      const offsets = resourceRowOffsets(displayRows);
+      const rowAt = y => {let low=0, high=displayRows.length; while(low<high){const mid=(low+high)>>>1;
+        if(offsets[mid+1]<=y) low=mid+1; else high=mid;} return Math.min(displayRows.length-1,low);};
+      const first = Math.max(0, rowAt(main.scrollTop));
+      const last = Math.max(first, rowAt(main.scrollTop + (main.clientHeight || 380)));
       const left = right.scrollLeft, width = right.clientWidth || 900;
       const colFirst = Math.max(0, bottomCells.findIndex(c => c.startX + c.width > left));
       let colLast = bottomCells.findIndex(c => c.startX > left + width);
@@ -5474,8 +5457,8 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       const visibleCells = bottomCells.slice(startCol, endCol + 1);
       const columnLeft = visibleCells[0]?.startX || 0;
       for (const element of [leftBody, rightBody]) {
-        element.style.paddingTop = (startRow * 34) + 'px';
-        element.style.paddingBottom = (Math.max(0, displayRows.length - endRow - 1) * 34) + 'px';
+        element.style.paddingTop = offsets[startRow] + 'px';
+        element.style.paddingBottom = (offsets.at(-1) - offsets[endRow+1]) + 'px';
       }
       // 3. Render Left rows & Right rows (Assigned Capacity + demand rows)
       let leftHtml = '';
@@ -5558,42 +5541,37 @@ button:not(.context-menu-item):disabled {opacity:.5;}
             const pool = getResourcePoolById(poolId);
             return pool && isResourcePoolVisible(pool);
           });
-          const groupUsage = row.alternative ? row.usage : aggregatePoolUsage(descendantIds, 'daily_usage');
           leftHtml += `
             <div class="resource-left-row resource-group-row ${row.alternative ? 'alternative-resource-row' : ''}" data-scope="${row.alternative ? 'alternative_' + row.comparisonScope : 'total'}"
                  data-group-id="${Number(group.group_id)}" data-group-name="${escapeHtml(group.name)}"
                  oncontextmenu="handleGroupContextMenu(event)"
                  data-row-id="${escapeHtml(row.nodeKey)}${row.alternative ? '-alternative-' + row.comparisonScope : ''}"
-                 title="${escapeHtml(groupAssignmentDetails(group, group.descendant_pool_ids || [], formatDate(timelineStart), formatDate(timelineEnd)))}">
+                 title="${escapeHtml(group.name)}">
               <div class="resource-pool-name" style="padding-left:${indent}px;">
                 <button class="resource-tree-toggle" type="button"
                         aria-label="${row.collapsed ? 'Expand' : 'Collapse'} ${escapeHtml(group.name)}"
                         onclick="toggleResourceNode('${row.nodeKey}')">${toggle}</button>
                 <span class="resource-tree-icon">📁</span>
                 <span class="r-name-text">${escapeHtml(group.name)}</span>
-                <span class="r-badge group-badge">${row.alternative ? (row.comparisonScope === 'selected' ? 'Alternative Selected Projects' : 'Alternative Total Assignments') : 'Group total'}</span>
+                ${row.alternative ? `<span class="r-badge">Alternative ${row.comparisonScope === 'selected' ? 'Selected Projects' : 'Total Assignments'}</span>` : ''}
               </div>
             </div>
           `;
           const groupCells = visibleCells.map(c => {
             const startStr = formatDate(c.startDate);
             const endStr = formatDate(c.endDate);
-            const demand = getMaxDemandForPeriod(groupUsage, startStr, endStr);
             const isOver = descendantIds.some(poolId => {
               const childPool = getResourcePoolById(poolId);
               return childPool && (row.alternative ? getDemandCapacityStatusForPeriod(childPool['alternative_' + row.comparisonScope + '_daily_usage'],
                 childPool.displayed_assigned_capacity ?? childPool.capacity ?? 0, childPool.daily_assigned_capacity, startStr, endStr).isOverallocated
                 : isDisplayedPoolPeriodOverallocated(childPool, startStr, endStr));
             });
-            const cellClass = demand > 0
-              ? (isOver ? 'cell-overallocated' : 'cell-normal')
-              : 'cell-empty';
+            const cellClass = isOver ? 'cell-overallocated' : 'cell-empty';
             return `<div class="resource-demand-cell ${cellClass} resource-group-cell"
                          data-group-id="${Number(group.group_id)}" data-group-name="${escapeHtml(group.name)}"
                          data-start="${startStr}" data-end="${endStr}" data-scope="${row.alternative ? 'alternative_' + row.comparisonScope : 'total'}" oncontextmenu="handleGroupContextMenu(event)"
                          style="width:${c.width}px;"
-                         title="${escapeHtml(groupAssignmentDetails(group, group.descendant_pool_ids || [], startStr, endStr))}">
-                      ${demand > 0 ? formatResourceValue(demand) : '—'}
+                         title="${isOver ? escapeHtml(getT('resource_grid.period_overallocated', 'Overallocated during this period')) : escapeHtml(group.name)}">
                     </div>`;
           }).join('');
           rightHtml += `<div class="resource-right-row resource-group-row ${row.alternative ? 'alternative-resource-row' : ''}"
@@ -5624,7 +5602,6 @@ button:not(.context-menu-item):disabled {opacity:.5;}
                 <button class="resource-tree-toggle" type="button"
                         aria-label="Collapse ${escapeHtml(pool.name)}"
                         onclick="toggleResourceNode('${row.nodeKey}')">${toggle}</button>
-                <span class="resource-tree-icon">🏊</span>
                 <span class="r-name-text">${escapeHtml(pool.name)}</span>
                 ${poolAssignmentBadges(pool, visibleCapacity, poolCap)}
                 <span class="r-badge assigned-badge ${assignedState}">${getT('resource_grid.assigned_capacity', 'Capacity')}</span>
@@ -5667,7 +5644,6 @@ button:not(.context-menu-item):disabled {opacity:.5;}
               ${isCollapsedPool
                 ? `<button class="resource-tree-toggle" type="button" aria-label="Expand ${escapeHtml(pool.name)}"
                            onclick="toggleResourceNode('${row.nodeKey}')">${toggle}</button>
-                   <span class="resource-tree-icon">🏊</span>
                    <span class="r-name-text">${escapeHtml(pool.name)}</span>`
                 : `<span class="resource-tree-branch">↳</span>
                    <span class="r-name-text">${rowLabel}</span>`}
@@ -5699,8 +5675,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
 
       let resH = 34; // Header bar
       if (!isResourceGridCollapsed) {
-        const activeRowCount = getResourceDisplayRows().length;
-        const poolRowsH = Math.max(1, activeRowCount) * 34 + 16;
+        const poolRowsH = Math.max(34, resourceRowOffsets(getResourceDisplayRows()).at(-1)) + 16;
         resH += 56 + Math.min(324, poolRowsH);
       }
 
@@ -7220,7 +7195,6 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         alternativePoolUsage = args.alternative_pool_usage || {};
         alternativePoolChanges = args.alternative_pool_changes || {};
         activePlanNames = args.active_plan_names || {};
-        groupUsageCache.clear();
         document.getElementById('enable-edit').checked = editEnabled;
         document.body.classList.toggle('compare-scenario', comparingScenario());
         document.getElementById('ctx-show-baseline').textContent = showBaseline ? 'Hide baseline' : 'Show baseline';
@@ -7270,7 +7244,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
           if (args.resource_pools) {
             resourcePoolsData = args.resource_pools.map(unpackPoolData);
             dailySeriesIndex = new WeakMap(); capacityPeriodCache = new WeakMap();
-            demandPeriodCache = new WeakMap(); groupUsageCache = new Map();
+            demandPeriodCache = new WeakMap();
           }
           if (args.resource_pool_hierarchy) resourcePoolHierarchy = args.resource_pool_hierarchy;
           if (args.active_resource_filter !== undefined) activeResourceFilter = args.active_resource_filter || null;

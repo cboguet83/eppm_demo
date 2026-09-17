@@ -52,7 +52,7 @@ test('resource grid rounds small values and truncates values from 100', () => {
     [100, '100'], [100.99, '100'], [999.99, '999']]) {
     assert.equal(context.formatResourceValue(value), expected);
   }
-  assert.match(script, /Math\.max\(1, displayRows\.length\) \* 34 \+ 16/);
+  assert.deepEqual([...context.resourceRowOffsets([{rowType:'group_total'}, {rowType:'pool_total'}, {rowType:'group_total'}])], [0,23.8,57.8,81.6]);
   assert.match(html, /button:not\(\.context-menu-item\):not\(\.resource-tree-toggle\)/);
   assert.doesNotMatch(html, /<span>🏊<\/span>/);
 });
@@ -87,7 +87,7 @@ test('hide-unused pools preserves ancestors, respects collapsed groups, and upda
   ]}];
   const context = vm.createContext({resourcePoolIndex: new Map(pools.map(p => [p.id, p])),
     resourcePoolsData: pools, resourcePoolHierarchy: hierarchy, collapsedResourceNodes: new Set(),
-    showTotalRows: true, showSelectedRows: true, groupUsageCache: new Map()});
+    showTotalRows: true, showSelectedRows: true, groupUsageCache: new Map(), comparingScenario:()=>false});
   const run = code => vm.runInContext(code, context);
   run(script.slice(script.indexOf('    function getResourcePoolById('), script.indexOf('    function renderResourceGrid(')));
   assert.equal(run('hideUnusedPools'), true);
@@ -121,7 +121,7 @@ test('overallocation filter uses daily capacity and composes with the selected-p
   const context = vm.createContext({resourcePoolIndex:new Map(pools.map(p=>[p.id,p])),
     resourcePoolHierarchy:[{key:'group',node_type:'group',children:pools.map(p=>({key:'pool:'+p.id,node_type:'pool',pool_id:p.id}))}],
     resourcePoolsData:pools, collapsedResourceNodes:new Set(), groupUsageCache:new Map(),
-    showTotalRows:true, showSelectedRows:true, timelineStart:'2026-01-01',timelineEnd:'2026-01-03',formatDate:d=>d});
+    showTotalRows:true, showSelectedRows:true, timelineStart:'2026-01-01',timelineEnd:'2026-01-03',formatDate:d=>d, comparingScenario:()=>false});
   const run = code=>vm.runInContext(code,context);
   run(script.slice(script.indexOf('    const EMPTY_DAILY_SERIES ='),script.indexOf('    function isDisplayedPoolPeriodOverallocated(')));
   run(script.slice(script.indexOf('    function getResourcePoolById('),script.indexOf('    function renderResourceGrid(')));
@@ -328,7 +328,7 @@ test('dependency editor finds tasks from both chart data and off-screen projects
     currentProjectId: '1',
     allProjectsData: [{ id: '1' }, { id: '2' }, { id: '3' }],
     externalTasksData: { '3': [{ id: '31', task_name: 'Hidden external predecessor' }] },
-    selectedContextMenuTask: { id: '11' },
+    selectedContextMenuTask: { id: '11' }, alternatives: {}, modalMode: 'edit',
     getActiveModalProjectId: () => '1',
     getT: (key, fallback) => fallback,
     document: { createElement: () => ({}) },

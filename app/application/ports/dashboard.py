@@ -34,6 +34,7 @@ class PoolResourceSeries(TypedDict):
     allocation: dict[str, float]
     overallocation: dict[str, float]
     available: dict[str, float]
+    capacity: NotRequired[dict[str, float]]
 
 
 class OverallocatedPool(TypedDict):
@@ -50,6 +51,7 @@ class ResourceBreakdown(TypedDict):
     overallocation: dict[str, float]
     capacity: dict[str, float]
     pools: list[PoolResourceSeries]
+    individual_pools: NotRequired[list[PoolResourceSeries]]
     peak_days: dict[str, dict[str, str | None]]
     overallocated_pools: NotRequired[list[OverallocatedPool]]
 

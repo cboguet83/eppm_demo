@@ -346,6 +346,7 @@ def render_dashboard(service: DashboardService) -> None:
             chart_pools = tuple(int(value) for value in selected_pools if value.isdigit()) if selected_pools else None
             series = _shortages(service, revision, ids, tuple(filters.get('status', [])), chart_pools)
             st.subheader(_label('resources_allocation'))
+            st.caption(_label('individual_pool_peaks'))
             pool_names = {pool['pool_id']: pool['name'] for pool in series['pools']}
             if selected_pools:
                 st.caption(t('dashboard.filtered_pool', pool=', '.join(pool_names.values())))
@@ -361,7 +362,8 @@ def render_dashboard(service: DashboardService) -> None:
                             'totalLabel': _label('total'), 'allocatedLabel': _label('allocation'),
                             'availableLabel': t('planning.resource_grid.available_value', default='Available'),
                             'capacityLabel': _label('total_capacity'), 'goTo': _label('go_to_consumers'),
-                            'poolDetails': _label('pool_details'), 'filterPool': _label('filter_pool')})
+                            'poolDetails': _label('pool_details'), 'filterPool': _label('filter_pool'),
+                            'portfolioPeakLabel': _label('simultaneous_peak')})
                     if isinstance(selection, dict) and selection.get('metric') == metric:
                         if type(selection.get('pool_id')) is not int or not isinstance(selection.get('quarter'), str):
                             raise ValueError('Invalid resource selection.')

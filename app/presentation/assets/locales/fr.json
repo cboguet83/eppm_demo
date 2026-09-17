@@ -893,6 +893,8 @@
     "go_to_consumers": "Planning et jalons : projets consommateurs",
     "pool_details": "Détails du pool",
     "filter_pool": "Filtrer sur ce pool",
+    "simultaneous_peak": "Pic simultané du portefeuille",
+    "individual_pool_peaks": "Chaque barre représente le pic trimestriel d'un pool.",
     "clear_pool_filter": "Afficher tous les pools",
     "filtered_pool": "Pool de ressources : {pool}",
     "loading": "Chargement…",

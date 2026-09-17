@@ -869,6 +869,8 @@
     "go_to_consumers": "Planning & milestones: consuming projects",
     "pool_details": "Pool details",
     "filter_pool": "Filter on this pool",
+    "simultaneous_peak": "Portfolio simultaneous peak",
+    "individual_pool_peaks": "Each bar shows one pool's quarterly peak.",
     "clear_pool_filter": "Show all pools",
     "filtered_pool": "Resource pool: {pool}",
     "loading": "Loading…",

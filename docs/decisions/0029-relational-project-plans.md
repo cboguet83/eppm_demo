@@ -191,8 +191,18 @@ the status choices and treats an empty selection as all statuses, matching
 planning. Selected statuses restrict every demand contributor, including private
 competing demand, and consumer drill-through. The resource cache key includes
 statuses and pools even if the selected project IDs happen to remain unchanged.
-Charts show quarterly peaks; each pool's segment in an unfiltered stack is its
-contribution on the aggregate peak day, not necessarily its individual peak.
+Charts show independent quarterly pool peaks as separate bars, aligned with the
+planning grid for the same period and status scope. Python reduces safe pool-level
+change points supplied by migration 0050; source projects and employees remain
+private. The simultaneous portfolio peak remains a separately labelled tooltip
+metric, and is never calculated by adding independent pool maxima. The allocation
+capacity line is shown only when one pool is visible.
+
+In the planning resource grid, containers are structural rows with no aggregate
+capacity or demand values. Their cells stay red when any visible descendant pool
+is over capacity in that period, including alternative scenario rows. Containers
+are 23.8 pixels high (30% below the 34-pixel pool rows); virtual scrolling uses
+cumulative row heights. Container total badges and pool swimmer icons are removed.
 
 ## CSV revision imports and comparison diagnostics
 
