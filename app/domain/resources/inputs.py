@@ -32,3 +32,4 @@ class CapacityInputs:
     project_bounds: dict[int, tuple[str | None, str | None]] = field(default_factory=dict)
     staffing: CapacityStaffing | None = None
     capacity_exceptions: list[PoolCapacityException] = field(default_factory=list)
+    direct_employee_totals: dict[int, float] | None = None

@@ -39,6 +39,10 @@ class MappingAllocations:
                     result.setdefault(pool, []).append(self.warning(key))
         return {pool: '\n'.join(messages) for pool, messages in result.items()}
 
+    def increased_overallocations(self, before: MappingAllocations) -> set[ResourceKey]:
+        """Identify newly excessive or worsened totals, allowing existing repairs."""
+        return {key for key in self.overallocated if self.total(key) > before.total(key)}
+
 
 @dataclass
 class MappingCatalog:
@@ -47,21 +51,32 @@ class MappingCatalog:
     pools: list[ResourcePool]
     sources: CapacityInputs
 
+    def capacity_inputs(self, mappings: list[PoolMapping] | None = None) -> dict[int, CapacityInputs]:
+        """Build pool snapshots with one global direct-allocation context."""
+        pools = {pool.id: pool for pool in self.pools if not pool.deleted_flag}
+        live_employees = {person.employee_id for person in self.sources.employees if not person.deleted_flag}
+        grouped: dict[int, list[PoolMapping]] = {}
+        totals: dict[int, float] = {}
+        for row in self.sources.mappings if mappings is None else mappings:
+            if row.pool_id not in pools:
+                continue
+            grouped.setdefault(row.pool_id, []).append(row)
+            if row.target_type == 'employee' and row.target_id in live_employees:
+                totals[row.target_id] = totals.get(row.target_id, 0) + row.allocation_pct
+        return {identity: replace(self.sources, pool_id=identity, pool=pool,
+                    mappings=grouped.get(identity, []), direct_employee_totals=totals)
+                for identity, pool in pools.items()}
+
     def allocations(self, mappings: list[PoolMapping] | None = None) -> MappingAllocations:
         """Sum teams and deduplicated employees across live pools in Python."""
         pools = {pool.id: pool for pool in self.pools if not pool.deleted_flag}
         teams = {team.team_id: team.team_name for team in self.sources.teams if not team.deleted_flag}
         names: dict[ResourceKey, str] = {('team', identity): name for identity, name in teams.items()}
         usage: dict[ResourceKey, dict[int, float]] = {}
-        grouped: dict[int, list[PoolMapping]] = {}
-        for mapping in self.sources.mappings if mappings is None else mappings:
-            if mapping.pool_id in pools:
-                grouped.setdefault(mapping.pool_id, []).append(mapping)
-        for pool_id, rows in grouped.items():
-            for row in rows:
+        for pool_id, inputs in self.capacity_inputs(mappings).items():
+            for row in inputs.mappings:
                 if row.target_type == 'team' and row.target_id in teams:
                     usage.setdefault(('team', row.target_id), {})[pool_id] = row.allocation_pct
-            inputs = replace(self.sources, pool_id=pool_id, pool=pools[pool_id], mappings=rows)
             for item in resource_contributions(inputs):
                 if item.employee_id is not None:
                     key = ('employee', item.employee_id)
@@ -71,21 +86,24 @@ class MappingCatalog:
 
     def remaining(self, pool_id: int, kind: str, identity: int,
                   draft: list[PoolMapping] | None = None,
-                  outside: MappingAllocations | None = None) -> float:
+                  baseline: MappingAllocations | None = None) -> float:
         """Return the maximum replacement percentage, accounting for team members.
 
-        The edited pool's existing mapping is replaced, not added again. Other
-        mappings in that pool retain direct-employee and team deduplication rules.
+        The edited pool's existing mapping is replaced, not added again.
+        Evaluate the whole catalog because direct changes affect other pools.
         """
-        outside = outside if outside is not None else self.allocations([
-            row for row in self.sources.mappings if row.pool_id != pool_id])
-        rows = self.sources.mappings if draft is None else draft
-        retained = [row for row in rows if row.pool_id == pool_id and
-                    (row.target_type, row.target_id) != (kind, identity)]
-        low = self.allocations(retained + [PoolMapping(pool_id, kind, identity, 0)])
+        baseline = baseline if baseline is not None else self.allocations()
+        rows = self.sources.mappings if draft is None else [
+            row for row in self.sources.mappings if row.pool_id != pool_id or row.target_type == 'function'] + draft
+        retained = [row for row in rows if (row.pool_id, row.target_type, row.target_id) != (pool_id, kind, identity)]
+        if kind == 'employee':
+            active_pools = {pool.id for pool in self.pools if not pool.deleted_flag}
+            used = sum(row.allocation_pct for row in retained if row.pool_id in active_pools
+                       and row.target_type == 'employee' and row.target_id == identity)
+            return max(0, int(round((100 - used) * 1000, 6)) / 1000)
         def permitted(percentage: float) -> bool:
             candidate = self.allocations(retained + [PoolMapping(pool_id, kind, identity, percentage)])
-            return all(candidate.total(key) <= max(100 - outside.total(key), low.total(key)) + 1e-9
+            return all(candidate.total(key) <= max(100, baseline.total(key)) + 1e-9
                        for key in candidate.usage)
         if permitted(100):
             return 100.0
@@ -99,15 +117,14 @@ class MappingCatalog:
         return lower / 1000
 
     def limits(self, pool_id: int, draft: list[PoolMapping] | None = None) -> dict[ResourceKey, float]:
-        """Calculate dropdown limits with one shared outside-pool projection."""
-        outside = self.allocations([row for row in self.sources.mappings if row.pool_id != pool_id])
+        """Calculate dropdown limits against one shared committed baseline."""
+        baseline = self.allocations()
         keys = [('team', team.team_id) for team in self.sources.teams if not team.deleted_flag]
         keys += [('employee', person.employee_id) for person in self.sources.employees if not person.deleted_flag]
-        return {key: self.remaining(pool_id, *key, draft=draft, outside=outside) for key in keys}
+        return {key: self.remaining(pool_id, *key, draft=draft, baseline=baseline) for key in keys}
 
     def validate(self, mappings: list[PoolMapping]) -> None:
         """Reject new or increased overallocation; allow repairing restored pools."""
         before, after = self.allocations(), self.allocations(mappings)
-        for key in sorted(after.overallocated):
-            if after.total(key) > before.total(key):
-                raise ValueError('Allocation cannot exceed 100% across active pools. ' + after.warning(key))
+        for key in sorted(after.increased_overallocations(before)):
+            raise ValueError('Allocation cannot exceed 100% across active pools. ' + after.warning(key))

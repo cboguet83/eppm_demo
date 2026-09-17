@@ -279,7 +279,7 @@ def _remove_mapping_row(pool_id: int, kind: str, identity: int) -> None:
     st.session_state.pop(f'mapping_pct_{pool_id}_{kind}_{identity}', None)
 
 
-@dialog(t("settings.dialog_add_mapping", default="Assign Team or Employee to Pool"), width="large")
+@dialog(t("settings.dialog_add_mapping", default="Assign Team or Employee to Pool"), width="large", on_dismiss='rerun')
 @pool_errors
 def _open_add_pool_mapping_dialog(
     service: ResourcePoolService, pool_id: int, df_teams: pd.DataFrame, df_employees: pd.DataFrame
@@ -290,6 +290,12 @@ def _open_add_pool_mapping_dialog(
         (row.target_type, row.target_id): row
         for row in service.get_mappings_by_pool(pool_id)
     }
+    mode_key = f'direct_employee_mapping_mode_{pool_id}'
+    employee_draft_key = f'employee_mapping_selection_draft_{pool_id}'
+    if mode_key not in st.session_state:
+        st.session_state[employee_draft_key] = [identity for kind, identity in existing if kind == 'employee']
+    direct_mode = st.checkbox('direct employee mapping mode', value=False, key=mode_key,
+        help='Use direct employee mappings as exceptions. They consume capacity before team mappings across all active pools.')
     catalog = service.mapping_catalog()
     limits = catalog.limits(pool_id)
     teams = {int(row.team_id): row.team_name for row in df_teams.itertuples()}
@@ -312,21 +318,25 @@ def _open_add_pool_mapping_dialog(
         'Edit allocations or remove rows below. Save applies all changes together.'
     )
     st.caption(
-        'If a team is unavailable for mapping, check that it is not already fully assigned '
-        'and that none of its members are fully assigned across other active pools.'
+        'Direct employee mappings take priority across active pools. Teams use the remaining employee capacity. '
+        'A fully directly assigned member contributes zero; other members can still contribute. '
+        'An unavailable team may already be fully assigned or have conflicting team memberships.'
     )
     selected_teams = st.multiselect(
         'Teams', list(teams),
         default=[identity for kind, identity in existing if kind == 'team' and identity in teams],
         format_func=lambda identity: f'{teams[identity]} [#{identity}] — {limits["team", identity]:g}% available',
         key=f'mapping_teams_{pool_id}',
+        disabled=direct_mode,
     )
-    selected_employees = st.multiselect(
-        'Employees', list(employees),
-        default=[identity for kind, identity in existing if kind == 'employee' and identity in employees],
-        format_func=lambda identity: f'{employees[identity]} [#{identity}] — {limits["employee", identity]:g}% available',
-        key=f'mapping_employees_{pool_id}',
-    )
+    selected_employees = [identity for identity in st.session_state[employee_draft_key] if identity in employees]
+    if direct_mode:
+        selected_employees = st.multiselect(
+            'Employees', list(employees), default=selected_employees,
+            format_func=lambda identity: f'{employees[identity]} [#{identity}] — {limits["employee", identity]:g}% available',
+            key=f'mapping_employees_{pool_id}',
+        )
+        st.session_state[employee_draft_key] = selected_employees
     desired: list[PoolMapping] = []
     draft = [PoolMapping(pool_id, kind, identity, st.session_state.get(
         f'mapping_pct_{pool_id}_{kind}_{identity}',
@@ -343,6 +353,7 @@ def _open_add_pool_mapping_dialog(
             ('team', selected_teams, teams), ('employee', selected_employees, employees)
         ]:
             for identity in identities:
+                editable = (kind == 'employee') == direct_mode
                 current = existing.get((kind, identity))
                 type_cell, name_cell, allocation_cell, action_cell = st.columns(
                     widths, vertical_alignment='center', wrap=False,
@@ -352,20 +363,25 @@ def _open_add_pool_mapping_dialog(
                 maximum = limits[kind, identity]
                 state_key = f'mapping_pct_{pool_id}_{kind}_{identity}'
                 previous = st.session_state.get(state_key, float(current.allocation_pct) if current else maximum)
-                if previous > maximum:
+                if previous > maximum and editable:
                     allocation_cell.warning(f'Only {maximum:g}% remains across active pools.')
                     st.session_state[state_key] = maximum
+                if not editable:
+                    maximum = max(maximum, previous)
                 percentage = allocation_cell.number_input(
                     f'{kind.title()}: {labels[identity]} - Allocation (%)',
                     min_value=0.0, max_value=float(maximum),
                     value=min(float(current.allocation_pct), maximum) if current else maximum,
                     step=5.0, key=state_key,
-                    help='Maximum remaining allocation across active pools, including employees mapped through teams.',
+                    help=('Remaining direct allocation across active pools. Direct mappings reduce capacity available through teams.'
+                          if kind == 'employee' else 'Available team mapping percentage. Members contribute their remaining capacity after direct mappings.'),
                     label_visibility='collapsed',
+                    disabled=not editable,
                 )
                 action_cell.button(
                     'Remove', key=f'remove_mapping_{pool_id}_{kind}_{identity}',
                     on_click=_remove_mapping_row, args=(pool_id, kind, identity),
+                    disabled=not editable,
                 )
                 desired.append(PoolMapping(pool_id, kind, identity, percentage))
     save, cancel = st.columns(2)

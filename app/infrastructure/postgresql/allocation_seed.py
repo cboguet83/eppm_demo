@@ -195,6 +195,13 @@ def prepare_allocation_plan(
     capacities, updates, mappings, mappings_removed = _staffing(
         inputs, previous, unstaffed, eligible, rng,
     )
+    totals: dict[int, float] = {}
+    for values in inputs.values():
+        for mapping in values.mappings:
+            if mapping.target_type == 'employee':
+                totals[mapping.target_id] = totals.get(mapping.target_id, 0) + mapping.allocation_pct
+    for values in inputs.values():
+        values.direct_employee_totals = totals
     details = {identity: calculate_capacity(values, today)
                for identity, values in inputs.items()}
     tasks = connection.execute(
@@ -271,4 +278,6 @@ def apply_allocation_plan(
         )
     for assignment in plan.assignments:
         assignment.apply(connection)
+    from app.infrastructure.postgresql.staffing_projection import refresh_staffing
+    refresh_staffing(connection)
     return plan.report(applied=True)

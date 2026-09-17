@@ -8,6 +8,8 @@ from app.application.ports.resource_pools import ResourcePoolStore
 from app.domain.resources.hierarchy import PoolHierarchy
 from app.domain.resources.models import ResourcePool
 from app.domain.resources.rules import normalize_pool
+from app.application.services.pool_restoration import PoolRestoreWarning
+from app.domain.resources.mapping_allocation import MappingAllocations
 
 CSV_COLUMNS = ('pool_id', 'name', 'description', 'capacity_fte', 'parent_pool_id',
                'pool_type_id', 'hierarchy_type_id', 'deleted_flag')
@@ -20,6 +22,8 @@ class PoolImportResult:
     created: int
     updated: int
     deactivated: int = 0
+    blocked_restorations: tuple[PoolRestoreWarning, ...] = ()
+    allocation_warnings: tuple[str, ...] = ()
 
 
 def export_pools(pools: list[ResourcePool]) -> str:
@@ -111,6 +115,7 @@ def import_pools(store: ResourcePoolStore, pools: list[ResourcePool], *, delete_
     Any failure rolls back every catalog write, including provisional new rows.
     """
     existing = {pool.id: pool for pool in store.get_all_pools(include_deleted=True)}
+    before = store.mapping_catalog().allocations()
     source_ids = set(existing) | {pool.id for pool in pools if pool.id is not None}
     if any(pool.parent_pool_id is not None and pool.parent_pool_id not in source_ids for pool in pools):
         raise ValueError('A parent_pool_id is unknown: use an existing pool ID or a pool_id from this CSV.')
@@ -142,6 +147,8 @@ def import_pools(store: ResourcePoolStore, pools: list[ResourcePool], *, delete_
     for identity, pool in final.items():
         if pool != existing.get(identity):
             store.write_imported_pool(pool)
+    blocked, allocation_warnings = _keep_conflicting_restorations_deleted(store, existing, final, before)
+    active = PoolHierarchy(pool for pool in final.values() if not pool.deleted_flag)
     occupied = store.assigned_pool_ids()
     mapped = {mapping.pool_id for mapping in store.get_all_mappings()}
     containers = [identity for identity, children in active.children.items() if children]
@@ -156,4 +163,31 @@ def import_pools(store: ResourcePoolStore, pools: list[ResourcePool], *, delete_
     for identity in former_parents - {None}:
         if final[identity] == existing[identity]:
             store.write_imported_pool(final[identity])
-    return PoolImportResult(created, len(pools) - created, len(omitted))
+    return PoolImportResult(created, len(pools) - created, len(omitted), blocked, allocation_warnings)
+
+
+def _keep_conflicting_restorations_deleted(
+    store: ResourcePoolStore, existing: dict[int, ResourcePool], final: dict[int, ResourcePool],
+    before: MappingAllocations,
+) -> tuple[tuple[PoolRestoreWarning, ...], tuple[str, ...]]:
+    """Reject conflicting reactivations together, then recheck their dependents."""
+    candidates = {identity for identity, pool in existing.items() if pool.deleted_flag and not final[identity].deleted_flag}
+    blocked: dict[int, PoolRestoreWarning] = {}
+    while True:
+        after = store.mapping_catalog().allocations()
+        conflicts = after.increased_overallocations(before)
+        reasons = {identity: tuple(after.warning(key) for key in sorted(conflicts)
+                                  if after.usage[key].get(identity, 0) > 0)
+                   for identity in candidates - blocked.keys()}
+        newly_blocked = {identity: messages for identity, messages in reasons.items() if messages}
+        for identity, pool in final.items():
+            if not pool.deleted_flag and pool.parent_pool_id in blocked:
+                newly_blocked[identity] = (f'Parent pool {final[pool.parent_pool_id].name} could not be restored.',)
+        if not newly_blocked:
+            return tuple(blocked[identity] for identity in sorted(blocked)), tuple(
+                after.warning(key) for key in sorted(conflicts))
+        for identity, messages in newly_blocked.items():
+            pool = final[identity]
+            blocked[identity] = PoolRestoreWarning(identity, pool.name, messages)
+            final[identity] = replace(pool, deleted_flag=True)
+            store.write_imported_pool(final[identity])

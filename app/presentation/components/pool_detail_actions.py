@@ -10,6 +10,18 @@ from app.presentation.components.dialog import dialog
 from app.presentation.components.resource_pool_dialogs import pool_errors, require_change
 from app.presentation.components.organization_dialogs import _open_edit_employee_dialog
 from app.presentation.components.organization_frames import functions_frame
+from app.application.services.pool_restoration import PoolRestoreWarning
+
+
+@dialog('Pool cannot be restored')
+def restoration_blocked(warning: PoolRestoreWarning) -> None:
+    """Explain the rejected transaction without offering an unsafe override."""
+    st.error(f'{warning.pool_name} remains deleted because restoration would overallocate resources.')
+    for reason in warning.reasons:
+        st.write(reason)
+    st.caption('Reduce the conflicting mappings in the active pools before trying again.')
+    if st.button('Close', key='close_pool_restoration_warning'):
+        st.rerun()
 
 
 @dialog('Unmap resource from pool')

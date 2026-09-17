@@ -22,16 +22,16 @@ def catalog(rows):
 def test_remaining_counts_team_members_and_deduplicates_within_each_pool():
     source = catalog([PoolMapping(1, 'team', 1, 60), PoolMapping(1, 'team', 2, 40)])
     assert source.allocations().total(('employee', 1)) == 60
-    assert source.remaining(2, 'employee', 1) == 40
+    assert source.remaining(2, 'employee', 1) == 100
     assert source.remaining(2, 'team', 1) == 40
     assert source.remaining(2, 'team', 2) == 40
     assert source.remaining(1, 'team', 1) == 100
 
 
-def test_direct_override_and_draft_values_use_existing_capacity_precedence():
+def test_direct_priority_uses_remaining_capacity_and_prevents_duplicate_team_shares():
     source = catalog([PoolMapping(1, 'team', 1, 100), PoolMapping(1, 'employee', 1, 20)])
     assert source.remaining(2, 'employee', 1) == 80
-    assert source.remaining(2, 'team', 2) == 80
+    assert source.remaining(2, 'team', 2) == 0
     source.validate(source.sources.mappings + [PoolMapping(2, 'employee', 1, 80)])
     with pytest.raises(ValueError, match='cannot exceed 100%'):
         source.validate(source.sources.mappings + [PoolMapping(2, 'employee', 1, 81)])
@@ -78,7 +78,7 @@ def test_empty_team_still_has_its_own_allocation_limit():
 def test_remaining_team_percentage_accounts_for_partial_employee_function_share():
     source = catalog([PoolMapping(1, 'employee', 1, 60)])
     source.sources.employees[0].function_assignments = [EmployeeFunction(1, 60)]
-    assert source.remaining(2, 'team', 2) == 66.666
-    source.validate(source.sources.mappings + [PoolMapping(2, 'team', 2, 66.666)])
-    with pytest.raises(ValueError, match='cannot exceed 100%'):
-        source.validate(source.sources.mappings + [PoolMapping(2, 'team', 2, 66.667)])
+    assert source.remaining(2, 'team', 2) == 100
+    rows = source.sources.mappings + [PoolMapping(2, 'team', 2, 100)]
+    source.validate(rows)
+    assert source.allocations(rows).total(('employee', 1)) == 84

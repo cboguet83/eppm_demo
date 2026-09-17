@@ -6,6 +6,7 @@ import psycopg
 
 from app.domain.organization.models import EmployeeCalendarException
 from app.domain.resources.inputs import CapacityInputs
+from app.domain.resources.mapping_allocation import MappingCatalog
 from app.infrastructure.postgresql.organization import PostgresOrganizationStore
 from app.infrastructure.postgresql.resource_pools import PostgresResourcePoolStore
 
@@ -42,11 +43,15 @@ def read_operator_capacity_inputs(
         )
     }
     pools = {pool.id: pool for pool in store.get_all_pools()}
+    catalog = MappingCatalog(list(pools.values()), CapacityInputs(0, employees=employees,
+                            mappings=store.get_all_mappings()))
+    global_inputs = catalog.capacity_inputs()
     result = {
         identity: CapacityInputs(
             identity, pool=pools.get(identity), functions=functions, teams=teams,
             employees=employees, exceptions=exceptions,
             team_functions=memberships, project_bounds=bounds,
+            direct_employee_totals=global_inputs[identity].direct_employee_totals if identity in global_inputs else {},
         )
         for identity in pool_ids
     }

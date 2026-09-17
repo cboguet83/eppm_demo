@@ -19,14 +19,10 @@ def refresh_staffing(connection: psycopg.Connection) -> None:
     exceptions = [EmployeeCalendarException(row.employee_id, date.fromisoformat(row.start_date),
         date.fromisoformat(row.end_date), row.occupation_percentage)
         for row in PostgresOrganizationStore(connection).get_employee_calendar_exceptions()]
-    grouped = {}
-    for mapping in catalog.sources.mappings:
-        grouped.setdefault(mapping.pool_id, []).append(mapping)
     records = []
-    for pool in catalog.pools:
-        staffing = calculate_staffing(replace(catalog.sources, pool_id=pool.id, pool=pool,
-            mappings=grouped.get(pool.id, []), exceptions=exceptions))
-        records.append((pool.id, staffing.assigned_capacity_fte, staffing.has_assigned_resources,
+    for identity, inputs in catalog.capacity_inputs().items():
+        staffing = calculate_staffing(replace(inputs, exceptions=exceptions))
+        records.append((identity, staffing.assigned_capacity_fte, staffing.has_assigned_resources,
                         Jsonb(staffing.daily_assigned_capacity), Jsonb([asdict(item) for item in staffing.contributing_resources])))
     with connection.cursor() as cursor:
         cursor.executemany('''INSERT INTO eppm.pool_staffing_projection VALUES (%s,%s,%s,%s,%s)

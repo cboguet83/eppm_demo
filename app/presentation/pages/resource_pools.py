@@ -23,6 +23,7 @@ from app.presentation.components.organization_frames import teams_frame, employe
 from app.presentation.i18n import get_current_locale, t
 from app.domain.resources.overallocation import overallocation_periods
 from app.presentation.components.action_table import TableAction
+from app.application.services.pool_restoration import PoolRestorationError
 
 
 @pool_errors
@@ -115,9 +116,13 @@ def render_resource_pools(
             elif event['action'] == 'delete':
                 _open_delete_pool_dialog(service, selected_pool_id, hierarchy.pools[selected_pool_id].name)
             elif event['action'] == 'undelete':
-                if service.undelete_pool(selected_pool_id):
-                    st.toast('Resource pool restored.')
-                    st.rerun()
+                try:
+                    if service.undelete_pool(selected_pool_id):
+                        st.toast('Resource pool restored.')
+                        st.rerun()
+                except PoolRestorationError as error:
+                    from app.presentation.components.pool_detail_actions import restoration_blocked
+                    restoration_blocked(error.warning)
             elif event['action'] == 'edit':
                 _open_edit_pool_dialog(service, selected_pool_id)
             elif event['action'] == 'gantt':

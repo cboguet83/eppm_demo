@@ -15,6 +15,8 @@ def _import_dialog(service: ResourcePoolService) -> None:
     """Preview catalog rows and apply them only on explicit submission."""
     st.caption('Known pool IDs are updated. Missing or unknown IDs create pools with automatically generated IDs. '
                'Parent IDs may refer to another row in this file. The whole import succeeds or is rolled back.')
+    st.caption('Pools whose restoration would overallocate resources stay deleted. Other valid updates are imported, '
+               'with detailed warnings for blocked restorations.')
     delete_missing = st.checkbox('Delete pools missing from the uploaded CSV', value=False,
         help='Unchecked: keep existing pools that are absent from the file. Checked: mark absent active pools as deleted, retaining their history and mappings. Include all pools you want to keep and their parent containers.',
         key='pool_csv_delete_missing')
@@ -35,6 +37,9 @@ def _import_dialog(service: ResourcePoolService) -> None:
         result = service.import_csv(upload.encode('utf-8'), delete_missing=delete_missing)
         st.session_state['pool_csv_success'] = (f'Import successful: {result.created} pools created, '
                                                f'{result.updated} updated, {result.deactivated} marked deleted.')
+        st.session_state['pool_csv_warnings'] = [
+            f'{item.pool_name} (#{item.pool_id}) remains deleted: ' + ' '.join(item.reasons)
+            for item in result.blocked_restorations] + list(result.allocation_warnings)
         st.rerun()
 
 
@@ -43,6 +48,8 @@ def pool_csv_controls(service: ResourcePoolService, *, show_deleted: bool = Fals
     message = st.session_state.pop('pool_csv_success', None)
     if message:
         st.success(message)
+    for warning in st.session_state.pop('pool_csv_warnings', []):
+        st.warning(warning)
     with st.container(horizontal=True):
         st.link_button('Export CSV',
                        f'/downloads/resource-pools/pools.csv?include_deleted={str(show_deleted).lower()}',

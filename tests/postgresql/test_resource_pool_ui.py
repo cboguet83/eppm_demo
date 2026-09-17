@@ -148,17 +148,20 @@ def test_mapping_dialog_preserves_team_and_employee_choices(database: RuntimeRes
     second_employee = org.create_employee(Employee("Grace", "Hopper", "grace@example.invalid", "GRACE"))
     app = dialog(database, access, f"_open_add_pool_mapping_dialog(service, {pool}, teams, employees)")
     app.multiselect(key=f'mapping_teams_{pool}').set_value([team, second_team]).run()
+    app.number_input(key=f'mapping_pct_{pool}_team_{team}').set_value(50).run()
+    app.checkbox(key=f'direct_employee_mapping_mode_{pool}').check().run()
     app.multiselect(key=f'mapping_employees_{pool}').set_value([employee, second_employee]).run()
-    assert all(widget.value == 100 for widget in app.number_input)
-    app.number_input(key=f'mapping_pct_{pool}_team_{team}').set_value(50)
+    assert app.number_input(key=f'mapping_pct_{pool}_employee_{employee}').value == 100
     app.number_input(key=f'mapping_pct_{pool}_employee_{employee}').set_value(25)
     next(button for button in app.button if button.label == 'Save mappings').click().run()
     assert not app.exception
     before = {(row.target_type, row.target_id): row for row in service.get_mappings_by_pool(pool)}
     assert len(before) == 4
     assert before['team', team].allocation_pct == 50 and before['employee', employee].allocation_pct == 25
+    app.checkbox(key=f'direct_employee_mapping_mode_{pool}').uncheck().run()
     app.button(key=f'remove_mapping_{pool}_team_{team}').click().run()
     app.button(key=f'remove_mapping_{pool}_team_{second_team}').click().run()
+    app.checkbox(key=f'direct_employee_mapping_mode_{pool}').check().run()
     app.button(key=f'remove_mapping_{pool}_employee_{second_employee}').click().run()
     assert app.multiselect(key=f'mapping_teams_{pool}').value == []
     assert app.multiselect(key=f'mapping_employees_{pool}').value == [employee]

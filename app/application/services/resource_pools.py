@@ -5,6 +5,7 @@ from datetime import date
 from math import isfinite
 
 from app.application.services.resource_pool_csv import PoolImportResult, export_pools, import_pools, parse_pools
+from app.application.services.pool_restoration import PoolRestorationError, PoolRestoreWarning
 
 from app.domain.access.models import Permission
 from app.domain.hierarchy import HierarchyType
@@ -214,7 +215,14 @@ class ResourcePoolService:
             if pool.parent_pool_id is not None and pool.parent_pool_id not in active:
                 raise ValueError('Undelete the parent pool before restoring this pool.')
             self._validate_pool_save(store, replace(pool, deleted_flag=False))
-            return store.undelete_pool(pool_id)
+            before = store.mapping_catalog().allocations()
+            changed = store.undelete_pool(pool_id)
+            after = store.mapping_catalog().allocations()
+            conflicts = after.increased_overallocations(before)
+            if conflicts:
+                raise PoolRestorationError(PoolRestoreWarning(pool_id, pool.name,
+                    tuple(after.warning(key) for key in sorted(conflicts))))
+            return changed
         return self._gateway.run(operation, write=True, permission=Permission.SHARED)
 
     def get_all_hierarchy_types(self) -> list[HierarchyType]:

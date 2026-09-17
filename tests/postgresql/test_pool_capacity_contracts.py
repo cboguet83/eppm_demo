@@ -65,7 +65,7 @@ def database(runtime: RuntimeResources, authorized: AuthorizedFixture) -> Runtim
     return runtime
 
 
-def test_direct_override_zero_capacity_and_vacant_function_fallback() -> None:
+def test_zero_direct_share_retains_indirect_capacity_and_vacant_function_fallback() -> None:
     inputs = CapacityInputs(
         1,
         pool=ResourcePool("Pool", capacity_fte=10),
@@ -89,13 +89,13 @@ def test_direct_override_zero_capacity_and_vacant_function_fallback() -> None:
         exceptions=[EmployeeCalendarException(99, DAY, DAY, 0)],
     )
     contributions = resource_contributions(inputs)
-    assert [(item.resource_id, item.effective_fte) for item in contributions] == [(1, 0), (2, 1)]
+    assert [(item.resource_id, item.effective_fte) for item in contributions] == [(1, .2), (2, 1)]
     assert (
         contributions[0].is_deduplicated
-        and contributions[0].source_name == "Direct Employee Mapping"
+        and 'Direct Employee Mapping' in contributions[0].source_name
     )
     detail = calculate_capacity(inputs, DAY)
-    assert detail.total_capacity_fte == 10 and detail.effective_capacity_fte == 1
+    assert detail.total_capacity_fte == 10 and detail.effective_capacity_fte == 1.2
     inputs.mappings = [PoolMapping(1, "employee", 1, 0)]
     detail = calculate_capacity(inputs, DAY)
     assert detail.has_assigned_resources and detail.effective_capacity_fte == 0

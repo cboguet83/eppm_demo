@@ -78,10 +78,14 @@ def reference_inputs(authorized, pool_ids):
         bounds = {identity: (start.isoformat(), end.isoformat()) for identity, start, end in connection.execute(
             'SELECT project_id,min(start_date),max(end_date) FROM eppm.project_task GROUP BY project_id')}
         mappings, assignments = pools.get_all_mappings(), pools.get_assignments(pool_ids=pool_ids)
+        totals = {}
+        for mapping in mappings:
+            if mapping.target_type == 'employee':
+                totals[mapping.target_id] = totals.get(mapping.target_id, 0) + mapping.allocation_pct
         return {pool_id: CapacityInputs(pool_id, pools.get_pool_by_id(pool_id), functions, teams, employees, exceptions,
                 [mapping for mapping in mappings if mapping.pool_id == pool_id], members,
                 [assignment for assignment in assignments if assignment['pool_id'] == pool_id], bounds,
-                capacity_exceptions=pools.capacity_exceptions([pool_id]))
+                capacity_exceptions=pools.capacity_exceptions([pool_id]), direct_employee_totals=totals)
                 for pool_id in pool_ids}
 
 
