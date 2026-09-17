@@ -5,8 +5,12 @@
 The dashboard starts with a reusable organization filter panel. Services are framed horizontal multiselect buttons without a visible heading.
 Division, Team, and Project managers frames start collapsed. Frame gaps are 8px
 (half the standard gap), and collapsed frames are 24px tall (40% shorter). Buttons wrap so every available service is visible.
-An ordinary click, Ctrl-click, or keyboard activation toggles an option without
-clearing the other selections. Multiple values within a facet use OR; facets
+An ordinary click selects only that option (or clears it when it is the sole
+selection). Ctrl-click toggles an option without clearing the other selections;
+Command-click is also supported. Buttons display the Ctrl-click hint on hover.
+A small CCv2 button component captures modifiers while Python applies selection
+and cascading rules. Frame content has 8px vertical padding, half the original,
+and dashboard top padding is reduced from 0.25rem to 0.05rem. Multiple values within a facet use OR; facets
 combine with AND. No organization selection imposes no organization restriction.
 The existing **In Progress** default and Clear all filters behavior are retained.
 

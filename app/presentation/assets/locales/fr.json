@@ -4,7 +4,8 @@
     "divisions": "Divisions",
     "teams": "Équipes",
     "managers": "Chefs de projet",
-    "unassigned": "Non affecté"
+    "unassigned": "Non affecté",
+    "multiselect_hint": "Ctrl+clic pour sélectionner plusieurs options."
   },
   "pool_types": {
     "title": "Types de ressources",

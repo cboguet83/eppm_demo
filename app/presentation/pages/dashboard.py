@@ -303,7 +303,7 @@ def _pool_details_jump(service: DashboardService, ids: tuple[int, ...], quarter:
 def render_dashboard(service: DashboardService) -> None:
     """Update filters, five-row pages and charts independently of the application shell."""
     st.html("""<style>
-    .stMainBlockContainer:has(.st-key-dashboard_filter_pool){padding-top:.25rem!important}
+    .stMainBlockContainer:has(.st-key-dashboard_filter_pool){padding-top:.05rem!important}
     .st-key-dashboard_issue_count button{background:transparent!important;border:0!important;color:var(--issue-icon)!important;min-height:90px;width:100%;justify-content:center}
     .st-key-dashboard_issue_count button > div{justify-content:center!important;width:100%}
     .st-key-dashboard_issue_count button [data-testid=stMarkdownContainer]{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}

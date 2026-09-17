@@ -4,7 +4,8 @@
     "divisions": "Divisiounen",
     "teams": "Ekippen",
     "managers": "Projetmanager",
-    "unassigned": "Net zougedeelt"
+    "unassigned": "Net zougedeelt",
+    "multiselect_hint": "Ctrl+Klick fir méi Optiounen ze wielen."
   },
   "pool_types": {
     "title": "Pool-Typen",

@@ -4,7 +4,8 @@
     "divisions": "Divisões",
     "teams": "Equipas",
     "managers": "Gestores de projeto",
-    "unassigned": "Não atribuído"
+    "unassigned": "Não atribuído",
+    "multiselect_hint": "Ctrl+clique para selecionar várias opções."
   },
   "pool_types": {
     "title": "Tipos de pool",

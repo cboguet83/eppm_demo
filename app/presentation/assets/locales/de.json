@@ -4,7 +4,8 @@
     "divisions": "Abteilungen",
     "teams": "Teams",
     "managers": "Projektleiter",
-    "unassigned": "Nicht zugewiesen"
+    "unassigned": "Nicht zugewiesen",
+    "multiselect_hint": "Strg+Klick, um mehrere Optionen auszuwählen."
   },
   "pool_types": {
     "title": "Pool-Typen",

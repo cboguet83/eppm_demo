@@ -4,7 +4,8 @@
     "divisions": "Divisions",
     "teams": "Teams",
     "managers": "Project managers",
-    "unassigned": "Not assigned"
+    "unassigned": "Not assigned",
+    "multiselect_hint": "Ctrl+click to select multiple options."
   },
   "pool_types": {
     "title": "Pool Types",
