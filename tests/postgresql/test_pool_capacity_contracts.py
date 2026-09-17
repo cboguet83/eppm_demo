@@ -81,6 +81,7 @@ def test_direct_override_zero_capacity_and_vacant_function_fallback() -> None:
         mappings=[
             PoolMapping(1, "team", 1, 50),
             PoolMapping(1, "function", 1, 20),
+            PoolMapping(1, "function", 2, 50),
             PoolMapping(1, "employee", 1, 0),
             PoolMapping(1, "employee", 99),
             PoolMapping(1, "function", 99),

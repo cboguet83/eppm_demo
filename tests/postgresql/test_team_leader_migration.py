@@ -18,7 +18,7 @@ def test_remove_leader_preserves_manager_membership_and_invalidates_capacity(emp
         assert connection.execute('SELECT function_id FROM eppm.capacity_contributions(ARRAY[1]::bigint[])').fetchall() == [(2,)]
         revision = connection.execute('SELECT revision FROM eppm.catalog_cache_revision').fetchone()[0]
 
-    assert migrate(empty_database.operator_url) == ('0051_remove_team_leader.sql',)
+    assert migrate(empty_database.operator_url) == tuple(item.name for item in discover_migrations()[50:])
     with psycopg.connect(empty_database.operator_url) as connection:
         check_schema(connection)
         assert connection.execute("SELECT count(*) FROM information_schema.columns WHERE table_schema='eppm' AND table_name='team' AND column_name='leader_function_id'").fetchone() == (0,)
@@ -26,5 +26,5 @@ def test_remove_leader_preserves_manager_membership_and_invalidates_capacity(emp
         assert connection.execute('SELECT team_id,function_id FROM eppm.team_function').fetchall() == [(2, 2)]
         assert connection.execute('SELECT count(*) FROM eppm.function').fetchone() == (2,)
         assert connection.execute('SELECT function_id FROM eppm.capacity_contributions(ARRAY[1]::bigint[])').fetchall() == []
-        assert connection.execute('SELECT revision FROM eppm.catalog_cache_revision').fetchone()[0] == revision + 1
+        assert connection.execute('SELECT revision FROM eppm.catalog_cache_revision').fetchone()[0] == revision + 2
     assert migrate(empty_database.operator_url) == ()

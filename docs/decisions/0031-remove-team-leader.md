@@ -15,8 +15,11 @@ manager nor functions reporting to that manager are automatically included. The
 former sparse-team fallback is removed. A manager contributes through the same
 explicit membership route as any other function. `parent_team_id` remains a
 hierarchy link and does not implicitly add members from child teams.
-The existing theoretical-FTE fallback for explicitly assigned vacant functions
-is retained; this decision removes inferred membership, not vacant-position capacity.
+Migration 0052 makes explicitly assigned vacant functions contribute zero team
+capacity. Only employees occupying explicitly assigned functions contribute.
+A valid team mapping with no employees still selects staffing capacity (zero),
+rather than falling back to the pool's defined capacity. Direct function mappings
+retain their existing behavior; this decision changes team mappings only.
 
 The migration updates the existing private PostgreSQL staffing reader to stop
 referencing the dropped column and advances the catalog revision to invalidate

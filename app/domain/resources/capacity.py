@@ -37,7 +37,7 @@ def _team_resources(
         members = list(inputs.team_functions.get(mapping.target_id, []))
         name = team.team_name if team else f"Team #{mapping.target_id}"
         for fid in set(members) & functions.keys():
-            keys = [("employee", eid) for eid in occupants.get(fid, [])] or [("function", fid)]
+            keys = [("employee", eid) for eid in occupants.get(fid, [])]
             for key in keys:
                 occurrences[key] = occurrences.get(key, 0) + 1
                 if key not in resources or mapping.allocation_pct > resources[key][1]:
@@ -69,7 +69,7 @@ def _direct_resources(
 
 
 def resource_contributions(inputs: CapacityInputs) -> list[PoolResourceContribution]:
-    """Count each employee once, falling back to vacant legacy functions."""
+    """Deduplicate employees; only direct function mappings retain vacant FTE."""
     functions = {function.function_id: function for function in inputs.functions}
     employees = {employee.employee_id: employee for employee in inputs.employees}
     occupants: dict[int, list[int]] = {}
@@ -186,8 +186,12 @@ def calculate_staffing(inputs: CapacityInputs) -> CapacityStaffing:
     for contribution in contributions:
         assigned += contribution.effective_fte
     assigned = round(assigned, 3)
+    team_ids = {team.team_id for team in inputs.teams}
+    has_team_mapping = any(mapping.target_type == 'team' and mapping.target_id in team_ids
+                           for mapping in inputs.mappings)
     return CapacityStaffing(
-        assigned, bool(contributions), _calendar_capacity(inputs, contributions, assigned), contributions,
+        assigned, bool(contributions) or has_team_mapping,
+        _calendar_capacity(inputs, contributions, assigned), contributions,
     )
 
 
