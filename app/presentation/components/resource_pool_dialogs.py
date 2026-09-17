@@ -311,6 +311,10 @@ def _open_add_pool_mapping_dialog(
         'Deleted pools do not consume allocation. Existing mappings remain available for correction. '
         'Edit allocations or remove rows below. Save applies all changes together.'
     )
+    st.caption(
+        'If a team is unavailable for mapping, check that it is not already fully assigned '
+        'and that none of its members are fully assigned across other active pools.'
+    )
     selected_teams = st.multiselect(
         'Teams', list(teams),
         default=[identity for kind, identity in existing if kind == 'team' and identity in teams],

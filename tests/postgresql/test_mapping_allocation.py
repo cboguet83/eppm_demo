@@ -74,6 +74,19 @@ def test_removing_direct_override_cannot_expose_excess_team_allocation(database,
     assert service.mapping_catalog().allocations().total(('employee', employee)) == 100
 
 
+def test_employee_at_80_percent_leaves_20_percent_for_team_in_another_pool(database, access):
+    service, first, second, team, employee = setup_resources(database, access)
+    service.create_mapping(PoolMapping(first, 'employee', employee, 80))
+    app = dialog(database, access, f'_open_add_pool_mapping_dialog(service, {second}, teams, employees)')
+    assert any('none of its members are fully assigned' in caption.value for caption in app.caption)
+    app.multiselect(key=f'mapping_teams_{second}').set_value([team]).run()
+    widget = app.number_input(key=f'mapping_pct_{second}_team_{team}')
+    assert widget.value == widget.max == 20
+    next(button for button in app.button if button.label == 'Save mappings').click().run()
+    assert not app.exception and not app.error
+    assert service.mapping_catalog().allocations().total(('employee', employee)) == 100
+
+
 def test_concurrent_allocations_cannot_both_consume_same_remaining_capacity(database, access, monkeypatch):
     service, first, second, _, employee = setup_resources(database, access)
     barrier, state = Barrier(2), local()
