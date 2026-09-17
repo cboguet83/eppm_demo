@@ -14,6 +14,31 @@ from tests.postgresql.test_resource_pools import service
 playwright_api = pytest.importorskip('playwright.sync_api')
 expect, sync_playwright = playwright_api.expect, playwright_api.sync_playwright
 
+SECURED_LAUNCHER = '''
+from pathlib import Path
+from secrets import token_urlsafe
+import streamlit as st
+from starlette.middleware import Middleware
+from app.application.services.business_access import BusinessAccess
+from app.infrastructure.authentication.downloads import DownloadRoutes
+from app.infrastructure.authentication.session_middleware import ApplicationSessionMiddleware
+from app.main import create_resource_pool_service
+from app.runtime import process_runtime
+from app.shared.config.authentication import AuthenticationConfig
+from tests.postgresql.browser import browser_access
+
+resources = process_runtime()
+access = browser_access(resources)
+settings = AuthenticationConfig('development', 'http://localhost:8080/realms/eppm',
+    'test-client', token_urlsafe(32), 'http://localhost:8501', token_urlsafe(48), local_http=True)
+def export(actor, include_deleted, template):
+    return create_resource_pool_service(resources, access=BusinessAccess(actor, access.policy)).export_csv(
+        include_deleted=include_deleted, template=template)
+app = st.App(Path(__file__).with_name('screen.py'), lifespan=resources.lifespan,
+    routes=DownloadRoutes(access, lambda actor, project: '', export_pools=export).routes(),
+    middleware=[Middleware(ApplicationSessionMiddleware, access=access, config=settings)])
+'''
+
 
 def test_csv_export_respects_deleted_toggle_and_import_updates_the_hierarchy(authorized, tmp_path):
     pools = service(authorized)
@@ -23,15 +48,17 @@ def test_csv_export_respects_deleted_toggle_and_import_updates_the_hierarchy(aut
     with psycopg.connect(authorized.setup.operator_url) as connection:
         connection.execute("INSERT INTO eppm.team(team_id,team_name) VALUES (1,'Mapped team')")
         connection.execute("INSERT INTO eppm.resource_pool_mapping(pool_id,target_type,target_id) VALUES (%s,'team',1)", (identity,))
-    with native_server(authorized, tmp_path, SCREEN) as server, sync_playwright() as playwright:
+    with native_server(authorized, tmp_path, SCREEN, launcher=SECURED_LAUNCHER) as server, sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
             page = server.new_page(browser, viewport={'width': 1500, 'height': 1000})
             page.goto(server.origin)
-            export = page.get_by_role('button', name='Export CSV')
+            assert page.request.get(server.origin + '/media/native-download.csv').status == 403
+            export = page.get_by_role('link', name='Export CSV')
             expect(export).to_be_visible(timeout=30000)
             with page.expect_download() as download:
                 export.click()
+            assert download.value.suggested_filename == 'resource_pools.csv'
             assert [row.name for row in parse_pools(Path(download.value.path()).read_bytes())] == ['Original']
             page.get_by_text('Show deleted pools', exact=True).click()
             expect(page.get_by_role('treeitem', name='Hidden (Deleted)', exact=True)).to_be_visible()
@@ -40,7 +67,10 @@ def test_csv_export_respects_deleted_toggle_and_import_updates_the_hierarchy(aut
             assert {row.name for row in parse_pools(Path(download.value.path()).read_bytes())} == {'Original', 'Hidden'}
             page.get_by_role('button', name='Import CSV').click()
             dialog = page.get_by_role('dialog')
-            expect(dialog.get_by_role('button', name='Download CSV template')).to_be_visible()
+            with page.expect_download() as template_download:
+                dialog.get_by_role('link', name='Download CSV template').click()
+            assert template_download.value.suggested_filename == 'resource_pools_template.csv'
+            assert Path(template_download.value.path()).read_bytes().startswith(b'\xef\xbb\xbfpool_id,name,')
             dialog.locator('input[type="file"]').set_input_files({
                 'name': 'pools.csv', 'mimeType': 'text/csv',
                 'buffer': f'pool_id,name,capacity_fte,deleted_flag\n{identity},Updated,4,false\n999999,New pool,3,false\n'.encode(),

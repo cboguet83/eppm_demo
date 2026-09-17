@@ -18,17 +18,44 @@ class DownloadRoutes:
     """Use the browser's server-verified session; URLs never carry credentials or data."""
 
     def __init__(self, access: AccessService, export_template: Callable[[Actor, int], str], *,
-                 export_organization: Callable[[Actor, str], str] | None = None) -> None:
+                 export_organization: Callable[[Actor, str], str] | None = None,
+                 export_pools: Callable[[Actor, bool, bool], str] | None = None) -> None:
         """Bind authenticated project and optional organization exporters."""
         self.access, self.export_template = access, export_template
         self.export_organization = export_organization
+        self.export_pools = export_pools
 
     def routes(self) -> list[Route]:
         """Expose a fixed attachment endpoint without cached or static media URLs."""
         routes = [Route("/downloads/projects/{project_id:int}/template.csv", self.project_template)]
         if self.export_organization is not None:
             routes.append(Route('/downloads/organization/{catalog:str}.csv', self.organization_catalog))
+        if self.export_pools is not None:
+            routes.append(Route('/downloads/resource-pools/{catalog:str}.csv', self.pool_catalog))
         return routes
+
+    async def pool_catalog(self, request: Request) -> Response:
+        """Deliver pool CSV through current session and shared-management checks."""
+        reference = token_urlsafe(16)
+        try:
+            actor = await run_in_threadpool(self.access.actor, request.cookies.get(SESSION_COOKIE, ''))
+            catalog = request.path_params['catalog']
+            visibility = request.query_params.get('include_deleted', 'false')
+            if catalog not in {'pools', 'template'} or visibility not in {'true', 'false'} or self.export_pools is None:
+                raise ValueError('Unknown resource-pool export.')
+            content = await run_in_threadpool(self.export_pools, actor, visibility == 'true', catalog == 'template')
+        except (AccessDenied, ValueError):
+            return JSONResponse({'error': {'code': 'download_denied', 'reference': reference}},
+                                status_code=403, headers={'Cache-Control': 'no-store'})
+        except Exception:
+            # Deliberate HTTP boundary: return no storage or catalog details.
+            get_logger(__name__).error('pool_download.failed reference=%s', reference)
+            return JSONResponse({'error': {'code': 'download_failed', 'reference': reference}},
+                                status_code=503, headers={'Cache-Control': 'no-store'})
+        filename = 'resource_pools_template.csv' if catalog == 'template' else 'resource_pools.csv'
+        return Response(('\ufeff' + content).encode('utf-8'), media_type='text/csv; charset=utf-8',
+                        headers={'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff',
+                                 'Content-Disposition': f'attachment; filename="{filename}"'})
 
     async def organization_catalog(self, request: Request) -> Response:
         """Reauthorize each organization attachment, including employee information."""

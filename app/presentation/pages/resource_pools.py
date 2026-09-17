@@ -39,7 +39,7 @@ def render_resource_pools(
     with deleted_filter:
         show_deleted = st.checkbox('Show deleted pools', value=False, key='pool_show_deleted')
     pool_records = service.get_all_pools(include_deleted=show_deleted)
-    pool_csv_controls(service, pool_records)
+    pool_csv_controls(service, show_deleted=show_deleted)
     hierarchy = PoolHierarchy(pool_records)
     active_hierarchy = PoolHierarchy([pool for pool in pool_records if not pool.deleted_flag])
     project_ids = service.project_ids_for_statuses(statuses)

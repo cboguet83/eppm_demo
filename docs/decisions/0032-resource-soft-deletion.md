@@ -64,6 +64,13 @@ file so parent relationships can be round-tripped, although they are excluded
 from the Total Pools metric. The import dialog provides an empty CSV template
 and previews records before submission.
 
+Downloads use authenticated `/downloads/resource-pools/` routes, rechecking the
+current session and shared-management permission on each request. Responses are
+uncached UTF-8 CSV attachments with a BOM. The upload reuses the bounded CSV
+component over the authenticated WebSocket. Native Streamlit media and upload
+endpoints remain blocked by application security middleware. Browser regression
+tests run with this middleware enabled.
+
 Columns are `pool_id`, `name`, `description`, `capacity_fte`, `parent_pool_id`,
 `pool_type_id`, `hierarchy_type_id`, and `deleted_flag`. Only `name` is required.
 Blank optional fields clear their values; a blank capacity is unspecified,

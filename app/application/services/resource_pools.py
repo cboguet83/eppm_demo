@@ -166,9 +166,11 @@ class ResourcePoolService:
         return self._gateway.run(lambda store: store.get_all_pools(include_deleted=True)
                                  if include_deleted else store.get_all_pools(), permission=Permission.SHARED)
 
-    def export_csv(self, *, include_deleted: bool = False) -> str:
+    def export_csv(self, *, include_deleted: bool = False, template: bool = False) -> str:
         """Export catalog attributes using the page's deleted-row visibility."""
-        return export_pools(self.get_all_pools(include_deleted=include_deleted))
+        return self._gateway.run(lambda store: export_pools(
+            [] if template else store.get_all_pools(include_deleted=include_deleted)),
+            permission=Permission.SHARED)
 
     def import_csv(self, content: bytes) -> PoolImportResult:
         """Validate and atomically upsert a CSV catalog with generated new IDs."""
