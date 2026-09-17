@@ -18,6 +18,7 @@ from app.presentation.components.resource_pool_dialogs import (
     _render_pool_assignments_table,
 )
 from app.presentation.components.resource_pool_tree import resource_pool_tree
+from app.presentation.components.resource_pool_csv import pool_csv_controls
 from app.presentation.components.organization_frames import teams_frame, employees_frame
 from app.presentation.i18n import get_current_locale, t
 from app.domain.resources.overallocation import overallocation_periods
@@ -38,6 +39,7 @@ def render_resource_pools(
     with deleted_filter:
         show_deleted = st.checkbox('Show deleted pools', value=False, key='pool_show_deleted')
     pool_records = service.get_all_pools(include_deleted=show_deleted)
+    pool_csv_controls(service, pool_records)
     hierarchy = PoolHierarchy(pool_records)
     active_hierarchy = PoolHierarchy([pool for pool in pool_records if not pool.deleted_flag])
     project_ids = service.project_ids_for_statuses(statuses)
@@ -49,7 +51,7 @@ def render_resource_pools(
         mapping_types.setdefault(mapping.pool_id, set()).add(mapping.target_type)
     current_capacities = capacity.current_capacities(active_hierarchy, all_pool_details,
                                                     set(mapping_types), include_containers=False)
-    total_pools = len(active_hierarchy.pools)
+    total_pools = len(leaf_ids)
     overassigned_pools_count = sum(1 for pool in all_pool_details if pool.is_overassigned)
     unassigned_pools_count = sum(not (mapping_types.get(identity, set()) & {'employee', 'team'})
                                  for identity in leaf_ids)
@@ -68,7 +70,7 @@ def render_resource_pools(
     else:
         kpi2.metric(t("settings.kpi_overassigned_pools", default="Overassigned Pools"), "0")
     st.divider()
-    st.caption("Only active leaf pools have capacity and demand values. Containers organize the hierarchy; summary counts exclude deleted pools.")
+    st.caption("Only active leaf pools have capacity and demand values. Summary counts exclude containers and deleted pools.")
     st.caption("Pools have a defined capacity (FTE) and can be assigned to projects and tasks.")
     st.caption("Employees defined in the system can be mapped to pools via their team memberships or directly, and their effective allocation is counted towards the pool’s assigned capacity.")
     if not pool_records:

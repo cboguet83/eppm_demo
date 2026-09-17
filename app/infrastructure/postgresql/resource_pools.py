@@ -141,6 +141,14 @@ class PostgresResourcePoolStore:
         return self.connection.execute('UPDATE eppm.resource_pool SET name=%s,description=%s,capacity_fte=%s,hierarchy_type_id=%s,pool_type_id=%s,parent_pool_id=%s WHERE id=%s AND NOT deleted_flag',
                                        (pool.name, pool.description, pool.capacity_fte, pool.hierarchy_type_id, pool.pool_type_id, pool.parent_pool_id, pool.id)).rowcount > 0
 
+    def write_imported_pool(self, pool: ResourcePool) -> None:
+        """Persist a service-validated catalog row, including its deletion flag."""
+        require_live_reference(self.connection, 'hierarchy_type', pool.hierarchy_type_id)
+        self.connection.execute('''UPDATE eppm.resource_pool SET name=%s,description=%s,
+            capacity_fte=%s,hierarchy_type_id=%s,pool_type_id=%s,parent_pool_id=%s,deleted_flag=%s
+            WHERE id=%s''', (pool.name, pool.description, pool.capacity_fte, pool.hierarchy_type_id,
+                            pool.pool_type_id, pool.parent_pool_id, pool.deleted_flag, pool.id))
+
     def delete_pool(self, pool_id: int) -> bool:
         """Flag the pool while retaining its mappings, tags and demand."""
         return self.connection.execute('UPDATE eppm.resource_pool SET deleted_flag=true WHERE id=%s AND NOT deleted_flag', (pool_id,)).rowcount > 0

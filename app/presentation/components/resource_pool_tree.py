@@ -165,7 +165,7 @@ export default function({data, parentElement, setTriggerValue, setStateValue}) {
         menu.style.top = Math.max(10,Math.min(rect.bottom,window.innerHeight-menu.offsetHeight-10))+'px';
         search.focus();
     };
-    for (const [index,text] of ['Pool','Pool type','Hierarchy type','Tags','Pool Capacity (FTE)','Current Capacity (FTE)','Mappings','Future Peak Demand (FTE)'].entries()) {
+    for (const [index,text] of ['Pool','Pool type','Hierarchy type','Tags','Pool Capacity (FTE)','Current Capacity (FTE)','Has Mappings','Future Peak Demand (FTE)'].entries()) {
         const cell = document.createElement('span');
         const button = document.createElement('button'); button.className = 'context-menu-item filter-button';
         button.setAttribute('aria-label',`Filter ${text}`); button.setAttribute('aria-haspopup','dialog');
@@ -230,6 +230,7 @@ export default function({data, parentElement, setTriggerValue, setStateValue}) {
                 cell.classList.add('capacity-exceeded');
             }
             if (index === 2) {cell.classList.add('pool-tags'); cell.title = value;}
+            if (index === 5) {cell.style.fontWeight = '900';}
             cell.textContent = value; item.appendChild(cell);
         }
         item.children[5].title = "Today's capacity after employee availability exceptions, or pool capacity exceptions when unmapped.";

@@ -51,10 +51,40 @@ periods. A deleted child does not make its active parent a capacity container;
 the historical child can still be expanded when deleted rows are visible.
 
 The summary keeps Total Pools and Overassigned Pools, and adds Pools with no
-assignment. Total Pools retains the active catalog count, including containers;
-the other counts include active leaves only. A pool has no assignment for this
+assignment. All three counts include active leaves only, excluding containers
+and deleted pools. A pool has no assignment for this
 summary when no active employee or team is mapped, regardless of project demand.
 Showing deleted rows does not change these active summary counts.
+
+## Resource-pool CSV transfer
+
+The resource-pool page exports its catalog to UTF-8 CSV. Deleted pools are
+included only when **Show deleted pools** is checked. Containers remain in the
+file so parent relationships can be round-tripped, although they are excluded
+from the Total Pools metric. The import dialog provides an empty CSV template
+and previews records before submission.
+
+Columns are `pool_id`, `name`, `description`, `capacity_fte`, `parent_pool_id`,
+`pool_type_id`, `hierarchy_type_id`, and `deleted_flag`. Only `name` is required.
+Blank optional fields clear their values; a blank capacity is unspecified,
+pool type defaults to 1, and the deleted flag defaults to false. Booleans accept
+`true`/`false` and `1`/`0`. Comma and semicolon delimiters are accepted.
+Mappings, tags, creation timestamps and capacity exceptions are not transferred
+or modified by CSV import.
+
+An ID matching an existing record (including a deleted record) updates that
+record. Missing or unknown IDs create new records using the database identity
+sequence, never the supplied ID. Unknown source IDs serve only as aliases for
+parent references within the same file; parent/child row order is immaterial.
+Duplicate source IDs, unknown parents and circular hierarchies are rejected.
+
+The Python application service validates and writes the whole import in one
+authorized transaction. Any invalid row or persistence failure rolls back the
+entire batch. Setting `deleted_flag` changes visibility without deleting
+history. Active children require active parents; a complete deleted hierarchy
+can be restored or deleted in one file. Live containers have zero defined
+capacity and cannot hold direct assignments, mappings or capacity exceptions.
+An unchanged export can be imported without creating duplicate records.
 
 ## Implementation
 

@@ -4,6 +4,8 @@ from dataclasses import replace
 from datetime import date
 from math import isfinite
 
+from app.application.services.resource_pool_csv import PoolImportResult, export_pools, import_pools, parse_pools
+
 from app.domain.access.models import Permission
 from app.domain.hierarchy import HierarchyType
 from app.domain.resources.pool_types import PoolType, normalize_pool_type
@@ -163,6 +165,16 @@ class ResourcePoolService:
         """Read active pools, optionally including deleted rows for administration."""
         return self._gateway.run(lambda store: store.get_all_pools(include_deleted=True)
                                  if include_deleted else store.get_all_pools(), permission=Permission.SHARED)
+
+    def export_csv(self, *, include_deleted: bool = False) -> str:
+        """Export catalog attributes using the page's deleted-row visibility."""
+        return export_pools(self.get_all_pools(include_deleted=include_deleted))
+
+    def import_csv(self, content: bytes) -> PoolImportResult:
+        """Validate and atomically upsert a CSV catalog with generated new IDs."""
+        pools = parse_pools(content)
+        return self._gateway.run(lambda store: import_pools(store, pools),
+                                 write=True, permission=Permission.SHARED)
 
     def undelete_pool(self, pool_id: int) -> bool:
         """Restore one pool after validating its parent and leaf-only rules.

@@ -295,7 +295,7 @@ render_resource_pools(create_resource_pool_service(runtime, access=access),
     assert app.dataframe[0].value.iloc[0]['Effective FTE'] == 0.5
     assert not any(button.key == f'btn_add_map_{parent}' for button in app.button)
     assert {metric.label: metric.value for metric in app.metric} == {
-        'Total Pools': '2', 'Overassigned Pools': '0', 'Pools with no assignment': '0'}
+        'Total Pools': '1', 'Overassigned Pools': '0', 'Pools with no assignment': '0'}
 
 
 def test_deleted_visibility_and_summary_calculate_only_active_leaves(database, access):
@@ -325,4 +325,4 @@ render_resource_pools(create_resource_pool_service(runtime, access=access),
         assert set(tree.call_args.args[0].pools) == {parent, leaf, deleted}
         assert set(tree.call_args.args[1]) == {leaf}
         assert {metric.label: metric.value for metric in app.metric} == {
-            'Total Pools': '2', 'Overassigned Pools': '0', 'Pools with no assignment': '1'}
+            'Total Pools': '1', 'Overassigned Pools': '0', 'Pools with no assignment': '1'}
