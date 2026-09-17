@@ -71,6 +71,19 @@ Retained pool exceptions are hidden in the mapped pool editor and resume applyin
 if all resource mappings are removed. Derived cache format version 2 invalidates
 capacity results computed with the former combined-exception rule.
 
+Dashboard charts, peak dates, pool warnings and consumer drill-through use the
+same Python `calculate_capacity` rule as the pool capacity reader. Migration
+`0054_dashboard_python_capacity.sql` adds an input boundary for these calculated
+pool-level calendars to the existing private demand aggregation. It adds no
+capacity-source business rule in PostgreSQL. Raw employee records and hidden
+project assignments remain behind the existing authorization boundaries.
+
+Capacity-source selection remains derived from live mappings, read in a batch;
+there is no persisted flag to synchronize. A zero-percent mapping, or an active
+team mapping with no employee occupants, selects zero staffing capacity. Deleting
+or removing the last live mapping target restores nominal pool capacity and its
+retained exceptions automatically. Restoring a target selects staffing again.
+
 ## Resource-pool CSV transfer
 
 The resource-pool page exports its catalog to UTF-8 CSV. Deleted pools are

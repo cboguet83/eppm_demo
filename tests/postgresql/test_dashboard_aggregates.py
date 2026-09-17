@@ -39,8 +39,8 @@ def assert_resources_match_domain(authorized, selected, day=DAY):
     return actual
 
 
-def test_pool_reductions_combine_with_staffed_calendars_and_match_dashboard(staffing):
-    """Absolute overlapping reductions preserve SQL/Python staffing parity."""
+def test_pool_reductions_apply_only_to_unstaffed_pools_and_match_dashboard(staffing):
+    """Mapped pools use employee calendars; unmapped pools use pool reductions."""
     with psycopg.connect(staffing.setup.operator_url) as connection:
         connection.execute("""INSERT INTO eppm.resource_pool_capacity_exception
             (pool_id,start_date,end_date,reduction_fte) VALUES

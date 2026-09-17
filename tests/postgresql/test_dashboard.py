@@ -46,7 +46,8 @@ def test_private_competing_demand_and_calendars_match_the_existing_domain_aggreg
     assert actual == {'overallocation': quarterly_shortfall(expected, {1}, DAY.year),
                       'capacity': quarterly_capacity(expected, DAY.year)}
     assert restricted.shortages([1]) == actual['overallocation']
-    assert actual['overallocation']['2026-Q1'] == 19.985  # Includes hidden project 3's competing demand.
+    # Hidden project 3 still counts; vacant team functions no longer supply FTE.
+    assert actual['overallocation']['2026-Q1'] == 21.485
     assert len(actual['overallocation']) == len(actual['capacity']) == 80
     assert set(actual) == {'overallocation', 'capacity'}
     start, end = quarter_bounds('2026-Q1', DAY.year)

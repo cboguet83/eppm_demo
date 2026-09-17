@@ -108,7 +108,7 @@ def test_migration_backfills_false_and_rejects_null_flags(empty_database, tmp_pa
         connection.execute("INSERT INTO eppm.resource_pool(name) VALUES ('Existing')")
         connection.execute("INSERT INTO eppm.function_type(function_type) VALUES ('Existing')")
         connection.execute("INSERT INTO eppm.hierarchy_type(code) VALUES ('existing')")
-    assert migrate(empty_database.operator_url) == ('0053_resource_soft_deletion.sql',)
+    assert migrate(empty_database.operator_url) == tuple(item.name for item in discover_migrations()[52:])
     with psycopg.connect(empty_database.operator_url) as connection:
         check_schema(connection)
         for table in ('team', 'function', 'employee', 'resource_pool', 'function_type', 'hierarchy_type'):

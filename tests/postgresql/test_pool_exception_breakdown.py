@@ -1,6 +1,7 @@
 """Effective exceptions follow explicit mappings and preserve historical periods."""
 
 import psycopg
+import pytest
 
 from app.application.services.organization import OrganizationService
 from app.application.services.pool_capacity_exceptions import capacity_exception_breakdown
@@ -9,6 +10,7 @@ from app.infrastructure.postgresql.organization import PostgresOrganizationGatew
 from tests.postgresql.test_resource_soft_deletion import mapped_team
 from tests.postgresql.test_pool_hierarchy import capacity_service
 from tests.postgresql.test_resource_pools import service
+from tests.postgresql.test_dashboard import service as dashboard_service
 
 
 def test_team_employee_exceptions_override_pool_exceptions_and_deduplicate(mapped_team):
@@ -58,3 +60,66 @@ def test_import_soft_deletes_omitted_active_pools_and_keeps_history(mapped_team)
         assert connection.execute('SELECT deleted_flag FROM eppm.resource_pool WHERE id=1').fetchone()[0]
         assert connection.execute('SELECT count(*) FROM eppm.resource_pool_mapping WHERE pool_id=1').fetchone()[0] == 1
         assert connection.execute('SELECT count(*) FROM eppm.resource_pool_assignment WHERE pool_id=1').fetchone()[0] == 1
+
+
+@pytest.mark.parametrize('user_id', [1, 4])
+def test_dashboard_uses_employee_exceptions_and_ignores_mapped_pool_exceptions(mapped_team, user_id):
+    """Charts, warning badges and drill-through share the grid's capacity source."""
+    pools = service(mapped_team)
+    pools.save_capacity_exception(PoolCapacityException(1, '2026-01-01', '2026-03-31', 100))
+    dashboard = dashboard_service(mapped_team, user_id)
+    with psycopg.connect(mapped_team.setup.operator_url) as connection:
+        connection.execute('UPDATE eppm.resource_pool_assignment SET fte_assigned=.75 WHERE pool_id=1')
+    detail = capacity_service(mapped_team).get_details([1])[0]
+    assert detail.capacity_calendar['2026-01-01'] == .5
+    result = dashboard.resource_breakdown([1])
+    assert result['overallocation']['2026-Q1'] == .25
+    assert result['capacity']['2026-Q1'] == 1
+    assert result['individual_pools'][0]['overallocation']['2026-Q1'] == .25
+    assert result['peak_days']['overallocation']['2026-Q1'] == '2026-01-01'
+    assert result['overallocated_pools'] == [{'pool_id': 1, 'name': 'Mapped'}]
+    assert dashboard.resources([1])['overallocation']['2026-Q1'] == .25
+    assert dashboard.consuming_projects([1], '2026-Q1') == [1]
+    with psycopg.connect(mapped_team.setup.operator_url) as connection:
+        connection.execute('DELETE FROM eppm.employee_calendar_exception')
+    result = dashboard.resource_breakdown([1])
+    assert result['overallocation']['2026-Q1'] == 0
+    assert result['overallocated_pools'] == []
+    assert dashboard.consuming_projects([1], '2026-Q1') == []
+
+
+def test_dashboard_and_grid_switch_sources_when_last_live_mapping_disappears(mapped_team):
+    """Deleted targets cease selecting staffing; restoring them restores staffing."""
+    pools = service(mapped_team)
+    pools.save_capacity_exception(PoolCapacityException(1, '2026-01-01', '2026-03-31', .5))
+    dashboard = dashboard_service(mapped_team, 4)
+    with psycopg.connect(mapped_team.setup.operator_url) as connection:
+        connection.execute('UPDATE eppm.resource_pool SET capacity_fte=3 WHERE id=1')
+    for deleted, expected_capacity, expected_excess in [(False, 1, 1.5), (True, 2.5, 0), (False, 1, 1.5)]:
+        with psycopg.connect(mapped_team.setup.operator_url) as connection:
+            connection.execute('UPDATE eppm.team SET deleted_flag=%s WHERE team_id=1', (deleted,))
+        result = dashboard.resource_breakdown([1])
+        assert result['capacity']['2026-Q1'] == expected_capacity
+        assert result['overallocation']['2026-Q1'] == expected_excess
+        detail = capacity_service(mapped_team).get_details([1])[0]
+        assert detail.capacity_calendar['2026-01-01'] == (.5 if not deleted else 2.5)
+
+
+def test_deleted_direct_employee_and_removed_mapping_restore_pool_exceptions(mapped_team):
+    pools = service(mapped_team)
+    pools.delete_mapping(pools.get_mappings_by_pool(1)[0].id)
+    mapping = pools.create_mapping(PoolMapping(1, 'employee', 1, 0))
+    pools.save_capacity_exception(PoolCapacityException(1, '2026-01-01', '2026-03-31', .5))
+    dashboard = dashboard_service(mapped_team, 4)
+    with psycopg.connect(mapped_team.setup.operator_url) as connection:
+        connection.execute('UPDATE eppm.resource_pool SET capacity_fte=3 WHERE id=1')
+    # A live mapping with zero allocation must not fall back to nominal capacity.
+    assert dashboard.resources([1])['capacity']['2026-Q1'] == 0
+    with psycopg.connect(mapped_team.setup.operator_url) as connection:
+        connection.execute('UPDATE eppm.employee SET deleted_flag=true WHERE employee_id=1')
+    assert dashboard.resources([1])['capacity']['2026-Q1'] == 2.5
+    with psycopg.connect(mapped_team.setup.operator_url) as connection:
+        connection.execute('UPDATE eppm.employee SET deleted_flag=false WHERE employee_id=1')
+    assert dashboard.resources([1])['capacity']['2026-Q1'] == 0
+    pools.delete_mapping(mapping)
+    assert dashboard.resources([1])['capacity']['2026-Q1'] == 2.5

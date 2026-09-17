@@ -6,12 +6,14 @@ import json
 
 import psycopg
 from psycopg.rows import dict_row
+from psycopg.types.json import Jsonb
 
 from app.application.exceptions import ProjectStorageError
 from app.application.ports.dashboard import DashboardCatalog, DashboardData, ResourceBreakdown
 from app.application.services.business_access import BusinessAccess
 from app.domain.access.models import AccessDenied, Actor
 from app.domain.dashboard import WbsShare, quarter_bounds
+from app.domain.resources.capacity import calculate_capacity
 from app.application.services.dashboard_resource_peaks import individual_pool_peaks
 from app.infrastructure.postgresql.access import PostgresAccessStore
 from app.infrastructure.postgresql.authorization import ActorBinding, ServerRequestSigner
@@ -19,6 +21,8 @@ from app.infrastructure.postgresql.dashboard_catalog import read_catalog
 from app.infrastructure.postgresql.errors import DatabaseUnavailableError, TransactionRetryError
 from app.infrastructure.postgresql.finance import PostgresFinanceStore
 from app.infrastructure.postgresql.pool import Database
+from app.infrastructure.postgresql.pool_capacity import read_capacity_sources
+from app.infrastructure.postgresql.resource_pools import PostgresResourcePoolStore
 from app.shared.logging import get_logger
 
 
@@ -28,6 +32,29 @@ _LATEST = '''SELECT s.id FROM eppm.finance_snapshot s WHERE s.sealed AND s.statu
 _BLOCKERS = '''FROM eppm.project_log_event e JOIN eppm.project p ON p.id=e.project_id
     JOIN eppm.project_event_type t ON t.id=e.event_type_id WHERE t.system_code='blocking_point'
     AND e.status='active' AND e.project_id=ANY(%s::bigint[])'''
+
+
+def _resource_breakdown(connection: psycopg.Connection, ids: list[int], today: date,
+                        quarter: str | None = None, pool_id: int | None = None,
+                        metric: str = 'overallocation', statuses: list[str] | None = None,
+                        pool_ids: list[int] | None = None) -> dict:
+    """Supply shared Python capacity rules to the private demand aggregate reader.
+
+    Staffing is fetched in one batch through its existing privacy boundary.
+    Employee records and hidden project assignments are never loaded here.
+    """
+    selected = [row[0] for row in connection.execute(
+        'SELECT DISTINCT pool_id FROM eppm.active_pool_assignment '
+        'WHERE project_id=ANY(%s::bigint[]) AND fte_assigned>0', (ids,))]
+    sources = read_capacity_sources(PostgresResourcePoolStore(connection), selected) if selected else {}
+    capacities = []
+    for source in sources.values():
+        detail = calculate_capacity(source, today)
+        capacities.append({'pool_id': detail.pool_id, 'base': detail.effective_capacity_fte,
+                           'calendar': detail.capacity_calendar})
+    return connection.execute(
+        'SELECT eppm.dashboard_resource_breakdown_with_capacity(%s,%s::bigint[],%s,%s,%s,%s,%s::text[],%s::bigint[])',
+        (Jsonb(capacities), ids, today, quarter, pool_id, metric, statuses, pool_ids)).fetchone()[0]
 
 
 class PostgresDashboardReader:
@@ -66,7 +93,8 @@ class PostgresDashboardReader:
 
     def revision(self) -> tuple:
         """Hash visible sources, relevant competing demand and latest finance statuses."""
-        return self._run(lambda connection, _ids, _security: (connection.execute('SELECT eppm.dashboard_revision()').fetchone()[0],))
+        return self._run(lambda connection, _ids, _security: (
+            connection.execute('SELECT eppm.dashboard_revision()').fetchone()[0], 'python-capacity-v1'))
 
     def catalog(self) -> DashboardCatalog:
         """Read current project/filter fields without exposing unrelated labels."""
@@ -93,7 +121,7 @@ class PostgresDashboardReader:
     def resources(self, project_ids: list[int], today: date) -> dict[str, dict[str, float]]:
         """Receive only quarterly totals from the privileged aggregate boundary."""
         def operation(connection: psycopg.Connection, ids: list[int], _security: PostgresAccessStore) -> dict[str, dict[str, float]]:
-            row = connection.execute('SELECT eppm.dashboard_resources(%s::bigint[],%s)', (ids, today)).fetchone()[0]
+            row = _resource_breakdown(connection, ids, today)
             return {key: {quarter: float(value) for quarter, value in row[key].items()} for key in ('overallocation', 'capacity')}
         return self._run(operation, project_ids)
 
@@ -101,8 +129,7 @@ class PostgresDashboardReader:
                            *, statuses: list[str] | None = None, pool_ids: list[int] | None = None) -> ResourceBreakdown:
         """Read safe pool contributions while retaining competing-demand privacy."""
         def operation(connection: psycopg.Connection, ids: list[int], _security: PostgresAccessStore) -> ResourceBreakdown:
-            result = connection.execute("SELECT eppm.dashboard_resource_breakdown_scoped(%s::bigint[],%s,NULL,%s,'overallocation',%s::text[],%s::bigint[])",
-                                        (ids, today, pool_id, statuses, pool_ids)).fetchone()[0]
+            result = _resource_breakdown(connection, ids, today, pool_id=pool_id, statuses=statuses, pool_ids=pool_ids)
             return ResourceBreakdown(allocation=result['allocation'], overallocation=result['overallocation'],
                 capacity=result['capacity'], pools=result['pools'], peak_days=result.get('peak_days', {}),
                 individual_pools=individual_pool_peaks(result['pools'], result.get('pool_days', []),
@@ -119,9 +146,8 @@ class PostgresDashboardReader:
             raise ValueError('Select a valid resource pool.')
         if metric not in {'overallocation', 'allocation'}:
             raise ValueError('Select a valid resource metric.')
-        return self._run(lambda connection, ids, _security: connection.execute(
-            'SELECT eppm.dashboard_resource_breakdown_scoped(%s::bigint[],%s,%s,%s,%s,%s::text[],NULL)',
-            (ids, today, quarter, pool_id, metric, statuses)).fetchone()[0]['consumers'], project_ids)
+        return self._run(lambda connection, ids, _security: _resource_breakdown(
+            connection, ids, today, quarter, pool_id, metric, statuses)['consumers'], project_ids)
 
     def issues(self, project_ids: list[int], locale: str) -> list[dict]:
         """Read localized active blockers with the established ISO date boundaries."""

@@ -34,8 +34,8 @@ class PostgresCapacityReader:
         return self._gateway.run(operation)
 
 
-def read_capacity_inputs(store: PostgresResourcePoolStore, pool_ids: list[int]) -> dict[int, CapacityInputs]:
-    """Collect safe staffing and visible demand on an already authorized connection.
+def read_capacity_sources(store: PostgresResourcePoolStore, pool_ids: list[int]) -> dict[int, CapacityInputs]:
+    """Collect safe staffing and pool exceptions on an authorized connection.
 
     The bounded staffing function supplies aggregates to project readers and
     individual contributions only to shared administrators. Raw employee and
@@ -55,9 +55,15 @@ def read_capacity_inputs(store: PostgresResourcePoolStore, pool_ids: list[int]) 
         inputs[identity].staffing = CapacityStaffing(
             assigned, has_resources, days, [PoolResourceContribution(**row) for row in people],
         )
-    assignments = store.get_assignments(pool_ids=pool_ids)
     for exception in store.capacity_exceptions(pool_ids):
         inputs[exception.pool_id].capacity_exceptions.append(exception)
+    return inputs
+
+
+def read_capacity_inputs(store: PostgresResourcePoolStore, pool_ids: list[int]) -> dict[int, CapacityInputs]:
+    """Extend the shared capacity sources with visible project demand."""
+    inputs = read_capacity_sources(store, pool_ids)
+    assignments = store.get_assignments(pool_ids=list(inputs))
     project_ids = sorted({assignment['project_id'] for assignment in assignments})
     bounds = {
         project_id: (start, end) for project_id, start, end in store.connection.execute(
