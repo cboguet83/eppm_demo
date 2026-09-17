@@ -204,7 +204,9 @@ capacity or demand values. Their cells stay red when any visible descendant pool
 is over capacity in that period, including alternative scenario rows. Containers
 are 23.8 pixels high (30% below the 34-pixel pool rows); virtual scrolling uses
 cumulative row heights. Container total badges and pool swimmer icons are removed.
-Only root containers and root pools start expanded; deeper nodes start collapsed.
+Only root containers start expanded; deeper containers start collapsed. Leaf pools
+cannot collapse: every visible pool shows Pool capacity, Pool total assignments,
+and Active view pool assignment, plus any differing alternative assignment rows.
 Double-clicking either side of a container row toggles it. The shared Expand All
 control expands projects and all resource nodes; Collapse All collapses projects
 and restores the resource tree to root-only expansion. Edit mode uses the same

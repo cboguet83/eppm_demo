@@ -1404,11 +1404,6 @@
       font-weight: 700;
     }
 
-    .resource-left-row.pool-collapsed-row,
-    .resource-right-row.pool-collapsed-row {
-      background: #f8fafc;
-    }
-
     .resource-tree-toggle {
       align-items: center;
       background: transparent;
@@ -2214,14 +2209,6 @@ button:not(.context-menu-item):disabled {opacity:.5;}
             <input type="checkbox" id="chk-hide-unused-pools" checked onchange="onToggleResourceRows()">
             <span id="lbl-hide-unused-pools">Hide pools unused by selected projects</span>
           </label>
-          <label class="resource-option-checkbox">
-            <input type="checkbox" id="chk-show-total-demand" checked onchange="onToggleResourceRows()">
-            <span id="lbl-show-total">Total Assignments</span>
-          </label>
-          <label class="resource-option-checkbox">
-            <input type="checkbox" id="chk-show-selected-demand" checked onchange="onToggleResourceRows()">
-            <span id="lbl-show-selected">Selected Projects</span>
-          </label>
         </div>
         <div class="resource-panel-legend">
           <span class="legend-item"><span class="legend-box normal"></span> <span id="lbl-within-cap">Within Capacity</span></span>
@@ -2740,8 +2727,6 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     let resourcePoolHierarchy = [];
     let collapsedResourceNodes = new Set();
     let isResourceGridCollapsed = false;
-    let showTotalRows = true;
-    let showSelectedRows = true;
     let activeResourceFilter = null;
     let selectedResourceCellCtx = null;
     let lastRenderedTopCells = [];
@@ -2777,9 +2762,9 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         capacity: "Capacity",
         theoretical_capacity: "Theoretical Capacity",
         effective_capacity: "Minimum Effective Capacity",
-        assigned_capacity: "Assigned Capacity",
-        show_total: "Total Assignments",
-        show_selected: "Selected Projects",
+        assigned_capacity: "Pool capacity",
+        show_total: "Pool total assignments",
+        show_selected: "Active view pool assignment",
         filter_consuming_projects: "Filter on consuming projects",
         clear_filter: "Clear Resource Pool Filter",
         active_filter: "Filter Active"
@@ -2868,10 +2853,6 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       if (elWithin) elWithin.innerText = getT('resource_grid.within_capacity', 'Within Capacity');
       const elOver = document.getElementById('lbl-overallocated');
       if (elOver) elOver.innerText = getT('resource_grid.overallocated', 'Overallocated');
-      const elShowTotal = document.getElementById('lbl-show-total');
-      if (elShowTotal) elShowTotal.innerText = getT('resource_grid.show_total', 'Total Assignments');
-      const elShowSelected = document.getElementById('lbl-show-selected');
-      if (elShowSelected) elShowSelected.innerText = getT('resource_grid.show_selected', 'Selected Projects');
       for (const [id, key, fallback] of [
         ['ctx-filter-menu', 'context_menu.filter', 'Filter'],
         ['ctx-filter-this', 'context_menu.filter_this', 'This project'],
@@ -4981,10 +4962,10 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       const hasAssignedResources = Boolean(pool.has_assigned_resources);
       const assignedCapacity = Number(pool.displayed_assigned_capacity ?? theoreticalCapacity);
       const dailyAssignedCapacity = pool.daily_assigned_capacity || EMPTY_DAILY_SERIES;
-      const totalIsOver = showTotalRows && getDemandCapacityStatusForPeriod(
+      const totalIsOver = getDemandCapacityStatusForPeriod(
         pool.daily_usage, assignedCapacity, dailyAssignedCapacity, startStr, endStr
       ).isOverallocated;
-      const selectedIsOver = showSelectedRows && getDemandCapacityStatusForPeriod(
+      const selectedIsOver = getDemandCapacityStatusForPeriod(
         pool.selected_projects_daily_usage,
         assignedCapacity,
         dailyAssignedCapacity,
@@ -5172,10 +5153,6 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     function onToggleResourceRows() {
       hideUnusedPools = Boolean(document.getElementById('chk-hide-unused-pools')?.checked);
       onlyOverallocatedPools = Boolean(document.getElementById('chk-only-overallocated-pools')?.checked);
-      const chkTotal = document.getElementById('chk-show-total-demand');
-      const chkSelected = document.getElementById('chk-show-selected-demand');
-      showTotalRows = chkTotal ? chkTotal.checked : true;
-      showSelectedRows = chkSelected ? chkSelected.checked : true;
 
       renderResourceGrid();
       updateComponentFrameHeight();
@@ -5221,7 +5198,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       const visit = (node, depth) => {
         const key = String(node.key || `${node.node_type}:${node.group_id || node.pool_id}`);
         if (reset || !knownResourceNodes.has(key)) {
-          if (depth > 0) collapsedResourceNodes.add(key); else collapsedResourceNodes.delete(key);
+          if (depth > 0 && node.node_type === 'group') collapsedResourceNodes.add(key); else collapsedResourceNodes.delete(key);
           knownResourceNodes.add(key);
         }
         (node.children || []).forEach(child => visit(child, depth + 1));
@@ -5267,17 +5244,9 @@ button:not(.context-menu-item):disabled {opacity:.5;}
 
         const pool = getResourcePoolById(node.pool_id);
         if (!pool) return;
-        if (collapsed) {
-          rows.push({ rowType: 'pool_total', node, nodeKey, pool, depth, collapsed: true });
-          return;
-        }
         rows.push({ rowType: 'pool_assigned', node, nodeKey, pool, depth, collapsed: false });
-        if (showTotalRows) {
-          rows.push({ rowType: 'pool_total', node, nodeKey, pool, depth: depth + 1, collapsed: false });
-        }
-        if (showSelectedRows) {
-          rows.push({ rowType: 'pool_selected', node, nodeKey, pool, depth: depth + 1, collapsed: false });
-        }
+        rows.push({ rowType: 'pool_total', node, nodeKey, pool, depth: depth + 1, collapsed: false });
+        rows.push({ rowType: 'pool_selected', node, nodeKey, pool, depth: depth + 1, collapsed: false });
       };
 
       hierarchy.forEach(node => visit(node, 0));
@@ -5285,7 +5254,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       return rows.flatMap(row => {
         if (row.rowType === 'pool_assigned') return [row];
         const scopes = row.rowType === 'group_total'
-          ? [...(showTotalRows ? ['total'] : []), ...(showSelectedRows ? ['selected'] : [])]
+          ? ['total', 'selected']
           : [row.rowType === 'pool_selected' ? 'selected' : 'total'];
         const comparisonRows = scopes.filter(scope => {
           const poolIds = row.rowType === 'group_total' ? row.node.descendant_pool_ids || [] : [row.pool.id];
@@ -5623,12 +5592,9 @@ button:not(.context-menu-item):disabled {opacity:.5;}
             <div class="resource-left-row assigned-capacity-row ${assignedState} ${isFilterActive ? 'active-filter-row' : ''}"
                  data-row-id="pool-${pool.id}-assigned" ${rowContext}>
               <div class="resource-pool-name" style="padding-left:${indent}px;">
-                <button class="resource-tree-toggle" type="button"
-                        aria-label="Collapse ${escapeHtml(pool.name)}"
-                        onclick="toggleResourceNode('${row.nodeKey}')">${toggle}</button>
                 <span class="r-name-text">${escapeHtml(pool.name)}</span>
                 ${poolAssignmentBadges(pool, visibleCapacity, poolCap)}
-                <span class="r-badge assigned-badge ${assignedState}">${getT('resource_grid.assigned_capacity', 'Capacity')}</span>
+                <span class="r-badge assigned-badge ${assignedState}">${getT('resource_grid.assigned_capacity', 'Pool capacity')}</span>
                 ${isFilterActive ? `<span class="active-filter-badge">🔍 ${getT('resource_grid.active_filter', 'Filter Active')}</span>` : ''}
               </div>
             </div>
@@ -5655,30 +5621,22 @@ button:not(.context-menu-item):disabled {opacity:.5;}
           return;
         }
 
-        const isCollapsedPool = Boolean(row.collapsed);
         const isSelected = row.rowType === 'pool_selected';
         const rowLabel = isSelected
-          ? getT('resource_grid.show_selected', 'Selected Projects')
-          : getT('resource_grid.show_total', 'Total Assignments');
+          ? getT('resource_grid.show_selected', 'Active view pool assignment')
+          : getT('resource_grid.show_total', 'Pool total assignments');
         const usage = isSelected ? pool.selected_projects_daily_usage : pool.daily_usage;
         leftHtml += `
-          <div class="resource-left-row ${isCollapsedPool ? 'pool-collapsed-row' : 'sub-row'} ${isFilterActive ? 'active-filter-row' : ''}"
+          <div class="resource-left-row sub-row ${isFilterActive ? 'active-filter-row' : ''}"
                data-row-id="pool-${pool.id}-${isSelected ? 'selected' : 'total'}" ${rowContext}>
             <div class="resource-pool-name" style="padding-left:${indent}px;">
-              ${isCollapsedPool
-                ? `<button class="resource-tree-toggle" type="button" aria-label="Expand ${escapeHtml(pool.name)}"
-                           onclick="toggleResourceNode('${row.nodeKey}')">${toggle}</button>
-                   <span class="r-name-text">${escapeHtml(pool.name)}</span>`
-                : `<span class="resource-tree-branch">↳</span>
-                   <span class="r-name-text">${rowLabel}</span>`}
-              ${isCollapsedPool ? poolAssignmentBadges(pool, visibleCapacity, poolCap) : ''}
-              <span class="r-badge ${isSelected ? 'scope-badge' : 'total-badge'}">${isSelected ? 'Selected' : 'Total'}</span>
-              ${isCollapsedPool && isFilterActive ? `<span class="active-filter-badge">🔍 ${getT('resource_grid.active_filter', 'Filter Active')}</span>` : ''}
+              <span class="resource-tree-branch">↳</span>
+              <span class="r-badge ${isSelected ? 'scope-badge' : 'total-badge'}">${rowLabel}</span>
             </div>
           </div>
         `;
         const demandCells = renderDemandCells(pool, usage, isSelected ? 'selected' : 'total');
-        rightHtml += `<div class="resource-right-row ${isCollapsedPool ? 'pool-collapsed-row' : 'sub-row'} ${isFilterActive ? 'active-filter-row' : ''}"
+        rightHtml += `<div class="resource-right-row sub-row ${isFilterActive ? 'active-filter-row' : ''}"
                           style="width:${totalTimelineWidth}px;box-sizing:border-box;padding-left:${columnLeft}px;">${demandCells}</div>`;
       });
 

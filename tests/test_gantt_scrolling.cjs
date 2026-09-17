@@ -95,6 +95,9 @@ test('hide-unused pools preserves ancestors, respects collapsed groups, and upda
   run('collapsedResourceNodes.clear()');
   assert.deepEqual([...run('getResourceDisplayRows().map(row => row.nodeKey)')],
     ['root', 'nested', 'pool:1', 'pool:1', 'pool:1']);
+  run("collapsedResourceNodes.add('pool:1')");
+  assert.deepEqual([...run('getResourceDisplayRows().filter(row => row.pool).map(row => row.rowType)')],
+    ['pool_assigned', 'pool_total', 'pool_selected']);
   run("collapsedResourceNodes.add('nested')");
   assert.equal(run('getResourceDisplayRows().length'), 2);
   pools[0].used_by_selected_projects = false;
