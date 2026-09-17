@@ -1,3 +1,5 @@
 # Migration checksums are identical on Windows and Linux.
 app/infrastructure/postgresql/migrations/*.sql text eol=lf
 app/infrastructure/postgresql/relational_plan_migration.py text eol=lf
+app/infrastructure/postgresql/pool_hierarchy_migration.py text eol=lf
+app/infrastructure/postgresql/project_plan_migration.py text eol=lf

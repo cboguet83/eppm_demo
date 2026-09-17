@@ -15,7 +15,7 @@ from app.infrastructure.postgresql.errors import (
     DatabaseUnavailableError, MigrationError, SchemaCompatibilityError, TransactionRetryError,
 )
 from app.infrastructure.postgresql.migration import (
-    check_schema, discover_migrations, migrate,
+    MIGRATION_DIRECTORY, check_schema, discover_migrations, migrate,
 )
 from app.infrastructure.postgresql.pool import Database
 from app.shared.config.database import DatabaseConfig, validate_database_url
@@ -69,6 +69,17 @@ def test_migration_discovery_rejects_empty_packages_and_duplicate_versions(tmp_p
     (tmp_path / "0001_duplicate.sql").write_text("SELECT 2", encoding="utf-8")
     with pytest.raises(MigrationError, match="unique"):
         discover_migrations(tmp_path)
+
+
+@pytest.mark.parametrize('helper', [
+    'pool_hierarchy_migration.py', 'project_plan_migration.py', 'relational_plan_migration.py',
+])
+def test_checksummed_python_migrations_preserve_lf_bytes_on_every_platform(helper):
+    source = MIGRATION_DIRECTORY.parent / helper
+    assert b'\r' not in source.read_bytes()
+    repository = MIGRATION_DIRECTORY.parents[3]
+    rule = f'{source.relative_to(repository).as_posix()} text eol=lf'
+    assert rule in (repository / '.gitattributes').read_text().splitlines()
 
 
 def test_migrations_initialize_once_and_runtime_cannot_modify_the_ledger(pg_database, database):

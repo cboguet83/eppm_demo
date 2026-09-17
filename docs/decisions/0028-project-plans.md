@@ -91,6 +91,9 @@ those protected links internally. Legacy destructive scheduling operations retai
 their existing checks for references outside the actor's edit scope. The migration
 backfill is a frozen Python helper covered by the migration checksum; runtime
 codec changes do not alter an applied migration's checksum.
+Git enforces LF line endings for all checksummed Python migration helpers as well
+as SQL files. Windows checkouts must preserve those bytes to match the applied
+ledger; line-ending drift is repaired in the checkout, never in the ledger.
 
 ## Workflow
 
