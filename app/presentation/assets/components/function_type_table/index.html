@@ -567,7 +567,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       <div class="toolbar-left">
         <div class="search-input-wrapper">
 
-          <input type="text" id="search-box" class="search-input" placeholder="Quick search..." oninput="onGlobalSearch(this.value)" />
+          <input aria-label="Search function types" type="text" id="search-box" class="search-input" placeholder="Quick search..." oninput="onGlobalSearch(this.value)" />
         </div>
         <button type="button" id="btn-clear" class="btn-reset-filters" onclick="clearAllFilters()" style="display:none;">
           <span id="lbl-clear">Clear Filters</span>
@@ -583,19 +583,19 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       <table id="types-table">
         <thead>
           <tr>
-            <th class="sortable col-id" onclick="sortTable('function_type_id')">ID <span id="sort-function_type_id"></span></th>
-            <th class="sortable col-name" onclick="sortTable('function_type')"><span id="th-name">Function Type Name</span> <span id="sort-function_type"></span></th>
-            <th class="parent-column sortable" style="display:none" onclick="sortTable('parent_name')"><span id="th-parent">Parent pool type</span><span id="sort-parent_name"></span></th>
+            <th scope="col" id="column-function_type_id" class="sortable col-id" onclick="sortTable('function_type_id')">ID <span aria-hidden="true" id="sort-function_type_id"></span></th>
+            <th scope="col" id="column-function_type" class="sortable col-name" onclick="sortTable('function_type')"><span id="th-name">Function Type Name</span> <span aria-hidden="true" id="sort-function_type"></span></th>
+            <th scope="col" id="column-parent_name" class="parent-column sortable" style="display:none" onclick="sortTable('parent_name')"><span id="th-parent">Parent pool type</span><span aria-hidden="true" id="sort-parent_name"></span></th>
           </tr>
           <tr class="filter-row">
-            <th><input type="text" class="col-filter-input" id="flt-id" placeholder="#" oninput="setColFilter('function_type_id', this.value)" /></th>
-            <th>
+            <th scope="col"><input aria-labelledby="column-function_type_id" type="text" class="col-filter-input" id="flt-id" placeholder="#" oninput="setColFilter('function_type_id', this.value)" /></th>
+            <th scope="col">
               <div class="excel-trigger" id="trigger-flt-type" onclick="openExcelFilter('function_type', translations.col_type_name || 'Function Type', event)">
                 <span class="excel-trigger-text" id="label-flt-type">All</span>
                 <span class="excel-trigger-icon">▼</span>
               </div>
             </th>
-            <th class="parent-column" style="display:none"><input class="col-filter-input" id="flt-parent" placeholder="Filter..." oninput="setColFilter('parent_name', this.value)" /></th>
+            <th scope="col" class="parent-column" style="display:none"><input aria-labelledby="column-parent_name" class="col-filter-input" id="flt-parent" placeholder="Filter..." oninput="setColFilter('parent_name', this.value)" /></th>
           </tr>
         </thead>
         <tbody id="table-body">
@@ -611,7 +611,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       <span class="excel-popup-title" id="excel-popup-title">Filter Options</span>
       <button type="button" class="excel-popup-close" onclick="closeExcelPopup()">&times;</button>
     </div>
-    <input type="text" class="excel-popup-search-box" id="excel-popup-search" placeholder="Search values..." oninput="onExcelPopupSearch(this.value)" />
+    <input aria-label="Search filter values" type="text" class="excel-popup-search-box" id="excel-popup-search" placeholder="Search values..." oninput="onExcelPopupSearch(this.value)" />
     <div class="excel-popup-actions">
       <button type="button" class="excel-link-action" onclick="excelSelectAll(true)" id="lbl-select-all">Select All</button>
       <button type="button" class="excel-link-action" onclick="excelSelectAll(false)" id="lbl-clear-opts">Clear</button>
@@ -699,6 +699,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       title.innerText = `${translations.col_filter_ph ? translations.col_filter_ph.replace('...', '') : 'Filter'}: ${displayName}`;
       searchBox.value = '';
       searchBox.placeholder = translations.search_values || 'Search values...';
+      searchBox.ariaLabel = searchBox.placeholder;
 
       const distinctVals = Array.from(new Set(typesData.map(d => {
         const v = d[colKey];
@@ -1066,6 +1067,8 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     }
 
     function updateTranslations() {
+      const searchInput = document.getElementById('search-box');
+      if (translations.search_placeholder) searchInput.ariaLabel = translations.search_placeholder;
       if (translations.col_type_name) document.getElementById('th-name').innerText = translations.col_type_name;
       if (translations.action_add) document.getElementById('ctx-add-label').innerText = `${translations.action_add} ${translations.entity_name || "Function Type"}`;
       if (translations.action_edit) document.getElementById('ctx-edit-label').innerText = `${translations.action_edit} ${translations.entity_name || "Function Type"}`;

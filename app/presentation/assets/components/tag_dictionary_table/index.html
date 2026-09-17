@@ -356,7 +356,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       <div class="toolbar-left">
         <div class="search-input-wrapper">
 
-          <input type="text" id="search-box" class="search-input" placeholder="Search dictionary tags..." oninput="handleGlobalSearch()" />
+          <input aria-label="Search dictionary tags" type="text" id="search-box" class="search-input" placeholder="Search dictionary tags..." oninput="handleGlobalSearch()" />
         </div>
         <button class="btn-reset-filters" id="btn-reset" onclick="resetAllFilters()">
           <span>↺</span> <span id="lbl-clear">Clear Filters</span>
@@ -376,30 +376,30 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       <table id="tags-table">
         <thead>
           <tr>
-            <th class="sortable" style="width: 80px;" onclick="handleSort('id')">
-              ID <span id="sort-id">↕</span>
+            <th scope="col" id="column-id" class="sortable" style="width: 80px;" onclick="handleSort('id')">
+              ID <span aria-hidden="true" id="sort-id">↕</span>
             </th>
-            <th class="sortable" onclick="handleSort('tag')">
-              <span id="th-tag">Tag Name</span> <span id="sort-tag">↕</span>
+            <th scope="col" id="column-tag" class="sortable" onclick="handleSort('tag')">
+              <span id="th-tag">Tag Name</span> <span aria-hidden="true" id="sort-tag">↕</span>
             </th>
-            <th class="sortable" onclick="handleSort('tag_group_name')">
-              <span id="th-group">Tag Group</span> <span id="sort-tag_group_name">↕</span>
+            <th scope="col" id="column-tag_group_name" class="sortable" onclick="handleSort('tag_group_name')">
+              <span id="th-group">Tag Group</span> <span aria-hidden="true" id="sort-tag_group_name">↕</span>
             </th>
-            <th class="sortable" style="width: 120px;" onclick="handleSort('usage_count')">
-              <span id="th-usage">Usages</span> <span id="sort-usage_count">↕</span>
+            <th scope="col" id="column-usage_count" class="sortable" style="width: 120px;" onclick="handleSort('usage_count')">
+              <span id="th-usage">Usages</span> <span aria-hidden="true" id="sort-usage_count">↕</span>
             </th>
           </tr>
           <tr class="filter-row">
-            <th>
-              <input type="text" id="filter-id" class="col-filter-input" placeholder="ID..." oninput="handleColFilter('id')" />
+            <th scope="col">
+              <input aria-labelledby="column-id" type="text" id="filter-id" class="col-filter-input" placeholder="ID..." oninput="handleColFilter('id')" />
             </th>
-            <th>
-              <input type="text" id="filter-tag" class="col-filter-input" placeholder="Filter tag name..." oninput="handleColFilter('tag')" />
+            <th scope="col">
+              <input aria-labelledby="column-tag" type="text" id="filter-tag" class="col-filter-input" placeholder="Filter tag name..." oninput="handleColFilter('tag')" />
             </th>
-            <th>
-              <input type="text" id="filter-group" class="col-filter-input" placeholder="Filter group..." oninput="handleColFilter('tag_group_name')" />
+            <th scope="col">
+              <input aria-labelledby="column-tag_group_name" type="text" id="filter-group" class="col-filter-input" placeholder="Filter group..." oninput="handleColFilter('tag_group_name')" />
             </th>
-            <th></th>
+            <th scope="col"></th>
           </tr>
         </thead>
         <tbody id="table-body"></tbody>
@@ -706,6 +706,8 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     }
 
     function updateTranslations() {
+      const searchInput = document.getElementById('search-box');
+      if (translations.search_placeholder) searchInput.ariaLabel = translations.search_placeholder;
       if (translations.col_tag) document.getElementById('th-tag').innerText = translations.col_tag;
       if (translations.col_group_name) document.getElementById('th-group').innerText = translations.col_group_name;
       if (translations.col_usages) document.getElementById('th-usage').innerText = translations.col_usages;

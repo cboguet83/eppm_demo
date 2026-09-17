@@ -369,7 +369,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       <div class="toolbar-left">
         <div class="search-input-wrapper">
 
-          <input type="text" id="search-box" class="search-input" placeholder="Search task tags..." oninput="handleGlobalSearch()" />
+          <input aria-label="Search task tags" type="text" id="search-box" class="search-input" placeholder="Search task tags..." oninput="handleGlobalSearch()" />
         </div>
         <button class="btn-reset-filters" id="btn-reset" onclick="resetAllFilters()">
           <span>↺</span> <span id="lbl-clear">Clear Filters</span>
@@ -389,43 +389,43 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       <table id="task-tags-table">
         <thead>
           <tr>
-            <th class="sortable" style="width: 80px;" onclick="handleSort('id')">
-              ID <span id="sort-id">↕</span>
+            <th scope="col" id="column-id" class="sortable" style="width: 80px;" onclick="handleSort('id')">
+              ID <span aria-hidden="true" id="sort-id">↕</span>
             </th>
-            <th class="sortable" onclick="handleSort('task_name')">
-              <span id="th-task">Task</span> <span id="sort-task_name">↕</span>
+            <th scope="col" id="column-task_name" class="sortable" onclick="handleSort('task_name')">
+              <span id="th-task">Task</span> <span aria-hidden="true" id="sort-task_name">↕</span>
             </th>
-            <th class="sortable" onclick="handleSort('project_name')">
-              <span id="th-proj">Project</span> <span id="sort-project_name">↕</span>
+            <th scope="col" id="column-project_name" class="sortable" onclick="handleSort('project_name')">
+              <span id="th-proj">Project</span> <span aria-hidden="true" id="sort-project_name">↕</span>
             </th>
-            <th class="sortable" onclick="handleSort('tag_name')">
-              <span id="th-tag">Dictionary Tag</span> <span id="sort-tag_name">↕</span>
+            <th scope="col" id="column-tag_name" class="sortable" onclick="handleSort('tag_name')">
+              <span id="th-tag">Dictionary Tag</span> <span aria-hidden="true" id="sort-tag_name">↕</span>
             </th>
-            <th class="sortable" onclick="handleSort('tag_group_name')">
-              <span id="th-group">Tag Group</span> <span id="sort-tag_group_name">↕</span>
+            <th scope="col" id="column-tag_group_name" class="sortable" onclick="handleSort('tag_group_name')">
+              <span id="th-group">Tag Group</span> <span aria-hidden="true" id="sort-tag_group_name">↕</span>
             </th>
-            <th class="sortable" onclick="handleSort('free_tag')">
-              <span id="th-free">Free Tag</span> <span id="sort-free_tag">↕</span>
+            <th scope="col" id="column-free_tag" class="sortable" onclick="handleSort('free_tag')">
+              <span id="th-free">Free Tag</span> <span aria-hidden="true" id="sort-free_tag">↕</span>
             </th>
           </tr>
           <tr class="filter-row">
-            <th>
-              <input type="text" id="filter-id" class="col-filter-input" placeholder="ID..." oninput="handleColFilter('id')" />
+            <th scope="col">
+              <input aria-labelledby="column-id" type="text" id="filter-id" class="col-filter-input" placeholder="ID..." oninput="handleColFilter('id')" />
             </th>
-            <th>
-              <input type="text" id="filter-task" class="col-filter-input" placeholder="Filter task..." oninput="handleColFilter('task_name')" />
+            <th scope="col">
+              <input aria-labelledby="column-task_name" type="text" id="filter-task" class="col-filter-input" placeholder="Filter task..." oninput="handleColFilter('task_name')" />
             </th>
-            <th>
-              <input type="text" id="filter-proj" class="col-filter-input" placeholder="Filter project..." oninput="handleColFilter('project_name')" />
+            <th scope="col">
+              <input aria-labelledby="column-project_name" type="text" id="filter-proj" class="col-filter-input" placeholder="Filter project..." oninput="handleColFilter('project_name')" />
             </th>
-            <th>
-              <input type="text" id="filter-tag" class="col-filter-input" placeholder="Filter tag..." oninput="handleColFilter('tag_name')" />
+            <th scope="col">
+              <input aria-labelledby="column-tag_name" type="text" id="filter-tag" class="col-filter-input" placeholder="Filter tag..." oninput="handleColFilter('tag_name')" />
             </th>
-            <th>
-              <input type="text" id="filter-group" class="col-filter-input" placeholder="Filter group..." oninput="handleColFilter('tag_group_name')" />
+            <th scope="col">
+              <input aria-labelledby="column-tag_group_name" type="text" id="filter-group" class="col-filter-input" placeholder="Filter group..." oninput="handleColFilter('tag_group_name')" />
             </th>
-            <th>
-              <input type="text" id="filter-free" class="col-filter-input" placeholder="Filter free tag..." oninput="handleColFilter('free_tag')" />
+            <th scope="col">
+              <input aria-labelledby="column-free_tag" type="text" id="filter-free" class="col-filter-input" placeholder="Filter free tag..." oninput="handleColFilter('free_tag')" />
             </th>
           </tr>
         </thead>
@@ -790,6 +790,8 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     }
 
     function updateTranslations() {
+      const searchInput = document.getElementById('search-box');
+      if (translations.search_placeholder) searchInput.ariaLabel = translations.search_placeholder;
       if (translations.col_task) document.getElementById('th-task').innerText = translations.col_task;
       if (translations.col_project) document.getElementById('th-proj').innerText = translations.col_project;
       if (translations.col_tag) document.getElementById('th-tag').innerText = translations.col_tag;

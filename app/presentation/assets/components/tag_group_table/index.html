@@ -343,7 +343,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       <div class="toolbar-left">
         <div class="search-input-wrapper">
 
-          <input type="text" id="search-box" class="search-input" placeholder="Search tag groups..." oninput="handleGlobalSearch()" />
+          <input aria-label="Search tag groups" type="text" id="search-box" class="search-input" placeholder="Search tag groups..." oninput="handleGlobalSearch()" />
         </div>
         <button class="btn-reset-filters" id="btn-reset" onclick="resetAllFilters()">
           <span>↺</span> <span id="lbl-clear">Clear Filters</span>
@@ -363,24 +363,24 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       <table id="groups-table">
         <thead>
           <tr>
-            <th class="sortable" style="width: 80px;" onclick="handleSort('id')">
-              ID <span id="sort-id">↕</span>
+            <th scope="col" id="column-id" class="sortable" style="width: 80px;" onclick="handleSort('id')">
+              ID <span aria-hidden="true" id="sort-id">↕</span>
             </th>
-            <th class="sortable" onclick="handleSort('tag_group_name')">
-              <span id="th-name">Tag Group Name</span> <span id="sort-tag_group_name">↕</span>
+            <th scope="col" id="column-tag_group_name" class="sortable" onclick="handleSort('tag_group_name')">
+              <span id="th-name">Tag Group Name</span> <span aria-hidden="true" id="sort-tag_group_name">↕</span>
             </th>
-            <th class="sortable" style="width: 120px;" onclick="handleSort('tag_count')">
-              <span id="th-count">Tags Count</span> <span id="sort-tag_count">↕</span>
+            <th scope="col" id="column-tag_count" class="sortable" style="width: 120px;" onclick="handleSort('tag_count')">
+              <span id="th-count">Tags Count</span> <span aria-hidden="true" id="sort-tag_count">↕</span>
             </th>
           </tr>
           <tr class="filter-row">
-            <th>
-              <input type="text" id="filter-id" class="col-filter-input" placeholder="ID..." oninput="handleColFilter('id')" />
+            <th scope="col">
+              <input aria-labelledby="column-id" type="text" id="filter-id" class="col-filter-input" placeholder="ID..." oninput="handleColFilter('id')" />
             </th>
-            <th>
-              <input type="text" id="filter-name" class="col-filter-input" placeholder="Filter group name..." oninput="handleColFilter('tag_group_name')" />
+            <th scope="col">
+              <input aria-labelledby="column-tag_group_name" type="text" id="filter-name" class="col-filter-input" placeholder="Filter group name..." oninput="handleColFilter('tag_group_name')" />
             </th>
-            <th></th>
+            <th scope="col"></th>
           </tr>
         </thead>
         <tbody id="table-body"></tbody>
@@ -675,6 +675,8 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     }
 
     function updateTranslations() {
+      const searchInput = document.getElementById('search-box');
+      if (translations.search_placeholder) searchInput.ariaLabel = translations.search_placeholder;
       if (translations.col_group_name) document.getElementById('th-name').innerText = translations.col_group_name;
       if (translations.col_tag_count) document.getElementById('th-count').innerText = translations.col_tag_count;
       if (translations.action_add) {

@@ -591,7 +591,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       <div class="toolbar-left">
         <div class="search-input-wrapper">
 
-          <input type="text" id="search-box" class="search-input" placeholder="Quick search..." oninput="onGlobalSearch(this.value)" />
+          <input aria-label="Search employees" type="text" id="search-box" class="search-input" placeholder="Quick search..." oninput="onGlobalSearch(this.value)" />
         </div>
         <button type="button" id="btn-clear" class="btn-reset-filters" onclick="clearAllFilters()" style="display:none;">
           <span id="lbl-clear">Clear Filters</span>
@@ -607,41 +607,41 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       <table id="employees-table">
         <thead>
           <tr>
-            <th class="sortable col-code" onclick="sortTable('employee_code')"><span id="th-code">Code</span> <span id="sort-employee_code"></span></th>
-            <th class="sortable col-name" onclick="sortTable('full_name')"><span id="th-name">Full Name</span> <span id="sort-full_name"></span></th>
-            <th class="sortable" onclick="sortTable('email')">Email <span id="sort-email"></span></th>
-            <th class="sortable" onclick="sortTable('mobile')"><span id="th-mobile">Mobile</span> <span id="sort-mobile"></span></th>
-            <th class="sortable" onclick="sortTable('landline')"><span id="th-landline">Landline</span> <span id="sort-landline"></span></th>
-            <th class="sortable" onclick="sortTable('sigle')"><span id="th-sigle">Sigle</span> <span id="sort-sigle"></span></th>
-            <th class="sortable" onclick="sortTable('function_name')"><span id="th-func">Function</span> <span id="sort-function_name"></span></th>
-            <th class="sortable" onclick="sortTable('occupation_percentage')"><span id="th-occupation">Occupation %</span> <span id="sort-occupation_percentage"></span></th>
-            <th class="sortable" onclick="sortTable('function_type_name')"><span id="th-type">Type</span> <span id="sort-function_type_name"></span></th>
+            <th scope="col" id="column-employee_code" class="sortable col-code" onclick="sortTable('employee_code')"><span id="th-code">Code</span> <span aria-hidden="true" id="sort-employee_code"></span></th>
+            <th scope="col" id="column-full_name" class="sortable col-name" onclick="sortTable('full_name')"><span id="th-name">Full Name</span> <span aria-hidden="true" id="sort-full_name"></span></th>
+            <th scope="col" id="column-email" class="sortable" onclick="sortTable('email')">Email <span aria-hidden="true" id="sort-email"></span></th>
+            <th scope="col" id="column-mobile" class="sortable" onclick="sortTable('mobile')"><span id="th-mobile">Mobile</span> <span aria-hidden="true" id="sort-mobile"></span></th>
+            <th scope="col" id="column-landline" class="sortable" onclick="sortTable('landline')"><span id="th-landline">Landline</span> <span aria-hidden="true" id="sort-landline"></span></th>
+            <th scope="col" id="column-sigle" class="sortable" onclick="sortTable('sigle')"><span id="th-sigle">Sigle</span> <span aria-hidden="true" id="sort-sigle"></span></th>
+            <th scope="col" id="column-function_name" class="sortable" onclick="sortTable('function_name')"><span id="th-func">Function</span> <span aria-hidden="true" id="sort-function_name"></span></th>
+            <th scope="col" id="column-occupation_percentage" class="sortable" onclick="sortTable('occupation_percentage')"><span id="th-occupation">Occupation %</span> <span aria-hidden="true" id="sort-occupation_percentage"></span></th>
+            <th scope="col" id="column-function_type_name" class="sortable" onclick="sortTable('function_type_name')"><span id="th-type">Type</span> <span aria-hidden="true" id="sort-function_type_name"></span></th>
           </tr>
           <tr class="filter-row">
-            <th><input type="text" class="col-filter-input" id="flt-code" placeholder="Code..." oninput="setColFilter('employee_code', this.value)" /></th>
-            <th>
+            <th scope="col"><input aria-labelledby="column-employee_code" type="text" class="col-filter-input" id="flt-code" placeholder="Code..." oninput="setColFilter('employee_code', this.value)" /></th>
+            <th scope="col">
               <div class="excel-trigger" id="trigger-flt-name" onclick="openExcelFilter('full_name', 'Full Name', event)">
                 <span class="excel-trigger-text" id="label-flt-name">All</span>
                 <span class="excel-trigger-icon">▼</span>
               </div>
             </th>
-            <th><input type="text" class="col-filter-input" id="flt-email" placeholder="Email..." oninput="setColFilter('email', this.value)" /></th>
-            <th><input type="text" class="col-filter-input" id="flt-mobile" placeholder="Mobile..." oninput="setColFilter('mobile', this.value)" /></th>
-            <th><input type="text" class="col-filter-input" id="flt-landline" placeholder="Landline..." oninput="setColFilter('landline', this.value)" /></th>
-            <th>
+            <th scope="col"><input aria-labelledby="column-email" type="text" class="col-filter-input" id="flt-email" placeholder="Email..." oninput="setColFilter('email', this.value)" /></th>
+            <th scope="col"><input aria-labelledby="column-mobile" type="text" class="col-filter-input" id="flt-mobile" placeholder="Mobile..." oninput="setColFilter('mobile', this.value)" /></th>
+            <th scope="col"><input aria-labelledby="column-landline" type="text" class="col-filter-input" id="flt-landline" placeholder="Landline..." oninput="setColFilter('landline', this.value)" /></th>
+            <th scope="col">
               <div class="excel-trigger" id="trigger-flt-sigle" onclick="openExcelFilter('sigle', 'Sigle', event)">
                 <span class="excel-trigger-text" id="label-flt-sigle">All</span>
                 <span class="excel-trigger-icon">▼</span>
               </div>
             </th>
-            <th>
+            <th scope="col">
               <div class="excel-trigger" id="trigger-flt-func" onclick="openExcelFilter('function_name', 'Function', event)">
                 <span class="excel-trigger-text" id="label-flt-func">All</span>
                 <span class="excel-trigger-icon">▼</span>
               </div>
             </th>
-            <th><input type="text" class="col-filter-input" id="flt-occupation" placeholder="%..." oninput="setColFilter('occupation_percentage', this.value)" /></th>
-            <th>
+            <th scope="col"><input aria-labelledby="column-occupation_percentage" type="text" class="col-filter-input" id="flt-occupation" placeholder="%..." oninput="setColFilter('occupation_percentage', this.value)" /></th>
+            <th scope="col">
               <div class="excel-trigger" id="trigger-flt-type" onclick="openExcelFilter('function_type_name', 'Type', event)">
                 <span class="excel-trigger-text" id="label-flt-type">All</span>
                 <span class="excel-trigger-icon">▼</span>
@@ -662,7 +662,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       <span class="excel-popup-title" id="excel-popup-title">Filter Options</span>
       <button type="button" class="excel-popup-close" onclick="closeExcelPopup()">&times;</button>
     </div>
-    <input type="text" class="excel-popup-search-box" id="excel-popup-search" placeholder="Search values..." oninput="onExcelPopupSearch(this.value)" />
+    <input aria-label="Search filter values" type="text" class="excel-popup-search-box" id="excel-popup-search" placeholder="Search values..." oninput="onExcelPopupSearch(this.value)" />
     <div class="excel-popup-actions">
       <button type="button" class="excel-link-action" onclick="excelSelectAll(true)" id="lbl-select-all">Select All</button>
       <button type="button" class="excel-link-action" onclick="excelSelectAll(false)" id="lbl-clear-opts">Clear</button>
@@ -755,6 +755,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       title.innerText = `${translations.col_filter_ph ? translations.col_filter_ph.replace('...', '') : 'Filter'}: ${displayName}`;
       searchBox.value = '';
       searchBox.placeholder = translations.search_values || 'Search values...';
+      searchBox.ariaLabel = searchBox.placeholder;
 
       const distinctVals = Array.from(new Set(empsData.map(d => {
         const v = d[colKey];
@@ -1153,6 +1154,8 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     }
 
     function updateTranslations() {
+      const searchInput = document.getElementById('search-box');
+      if (translations.search_placeholder) searchInput.ariaLabel = translations.search_placeholder;
       if (translations.col_emp_code) document.getElementById('th-code').innerText = translations.col_emp_code;
       if (translations.col_full_name) document.getElementById('th-name').innerText = translations.col_full_name;
       if (translations.col_landline) document.getElementById('th-landline').innerText = translations.col_landline;

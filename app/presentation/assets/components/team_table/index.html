@@ -567,7 +567,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       <div class="toolbar-left">
         <div class="search-input-wrapper">
 
-          <input type="text" id="search-box" class="search-input" placeholder="Quick search..." oninput="onGlobalSearch(this.value)" />
+          <input aria-label="Search teams" type="text" id="search-box" class="search-input" placeholder="Quick search..." oninput="onGlobalSearch(this.value)" />
         </div>
         <button type="button" id="btn-clear" class="btn-reset-filters" onclick="clearAllFilters()" style="display:none;">
           <span id="lbl-clear">Clear Filters</span>
@@ -583,35 +583,35 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       <table id="teams-table">
         <thead>
           <tr>
-            <th class="sortable col-id" onclick="sortTable('team_id')">ID <span id="sort-team_id"></span></th>
-            <th class="sortable col-name" onclick="sortTable('team_name')"><span id="th-name">Team Name</span> <span id="sort-team_name"></span></th>
-            <th class="sortable" onclick="sortTable('manager_function_name')"><span id="th-mgr">Manager Function</span> <span id="sort-manager_function_name"></span></th>
-            <th class="sortable" onclick="sortTable('leader_function_name')"><span id="th-leader">Team Leader</span> <span id="sort-leader_function_name"></span></th>
-            <th class="sortable" onclick="sortTable('hierarchy_type')"><span id="th-hierarchy">Hierarchy type</span> <span id="sort-hierarchy_type"></span></th>
-            <th class="sortable" onclick="sortTable('parent_team_name')"><span id="th-parent">Parent team</span> <span id="sort-parent_team_name"></span></th>
+            <th scope="col" id="column-team_id" class="sortable col-id" onclick="sortTable('team_id')">ID <span aria-hidden="true" id="sort-team_id"></span></th>
+            <th scope="col" id="column-team_name" class="sortable col-name" onclick="sortTable('team_name')"><span id="th-name">Team Name</span> <span aria-hidden="true" id="sort-team_name"></span></th>
+            <th scope="col" id="column-manager_function_name" class="sortable" onclick="sortTable('manager_function_name')"><span id="th-mgr">Manager Function</span> <span aria-hidden="true" id="sort-manager_function_name"></span></th>
+            <th scope="col" id="column-leader_function_name" class="sortable" onclick="sortTable('leader_function_name')"><span id="th-leader">Team Leader</span> <span aria-hidden="true" id="sort-leader_function_name"></span></th>
+            <th scope="col" id="column-hierarchy_type" class="sortable" onclick="sortTable('hierarchy_type')"><span id="th-hierarchy">Hierarchy type</span> <span aria-hidden="true" id="sort-hierarchy_type"></span></th>
+            <th scope="col" id="column-parent_team_name" class="sortable" onclick="sortTable('parent_team_name')"><span id="th-parent">Parent team</span> <span aria-hidden="true" id="sort-parent_team_name"></span></th>
           </tr>
           <tr class="filter-row">
-            <th><input type="text" class="col-filter-input" id="flt-id" placeholder="#" oninput="setColFilter('team_id', this.value)" /></th>
-            <th>
+            <th scope="col"><input aria-labelledby="column-team_id" type="text" class="col-filter-input" id="flt-id" placeholder="#" oninput="setColFilter('team_id', this.value)" /></th>
+            <th scope="col">
               <div class="excel-trigger" id="trigger-flt-name" onclick="openExcelFilter('team_name', 'Team Name', event)">
                 <span class="excel-trigger-text" id="label-flt-name">All</span>
                 <span class="excel-trigger-icon">▼</span>
               </div>
             </th>
-            <th>
+            <th scope="col">
               <div class="excel-trigger" id="trigger-flt-mgr" onclick="openExcelFilter('manager_function_name', 'Manager Function', event)">
                 <span class="excel-trigger-text" id="label-flt-mgr">All</span>
                 <span class="excel-trigger-icon">▼</span>
               </div>
             </th>
-            <th>
+            <th scope="col">
               <div class="excel-trigger" id="trigger-flt-leader" onclick="openExcelFilter('leader_function_name', 'Team Leader', event)">
                 <span class="excel-trigger-text" id="label-flt-leader">All</span>
                 <span class="excel-trigger-icon">▼</span>
               </div>
             </th>
-            <th></th>
-            <th><input type="text" class="col-filter-input" id="flt-parent" oninput="setColFilter('parent_team_name', this.value)" /></th>
+            <th scope="col"></th>
+            <th scope="col"><input aria-labelledby="column-parent_team_name" type="text" class="col-filter-input" id="flt-parent" oninput="setColFilter('parent_team_name', this.value)" /></th>
           </tr>
         </thead>
         <tbody id="table-body">
@@ -627,7 +627,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       <span class="excel-popup-title" id="excel-popup-title">Filter Options</span>
       <button type="button" class="excel-popup-close" onclick="closeExcelPopup()">&times;</button>
     </div>
-    <input type="text" class="excel-popup-search-box" id="excel-popup-search" placeholder="Search values..." oninput="onExcelPopupSearch(this.value)" />
+    <input aria-label="Search filter values" type="text" class="excel-popup-search-box" id="excel-popup-search" placeholder="Search values..." oninput="onExcelPopupSearch(this.value)" />
     <div class="excel-popup-actions">
       <button type="button" class="excel-link-action" onclick="excelSelectAll(true)" id="lbl-select-all">Select All</button>
       <button type="button" class="excel-link-action" onclick="excelSelectAll(false)" id="lbl-clear-opts">Clear</button>
@@ -718,6 +718,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       title.innerText = `${translations.col_filter_ph ? translations.col_filter_ph.replace('...', '') : 'Filter'}: ${displayName}`;
       searchBox.value = '';
       searchBox.placeholder = translations.search_values || 'Search values...';
+      searchBox.ariaLabel = searchBox.placeholder;
 
       const distinctVals = Array.from(new Set(teamsData.map(d => {
         const v = d[colKey];
@@ -1103,6 +1104,8 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     }
 
     function updateTranslations() {
+      const searchInput = document.getElementById('search-box');
+      if (translations.search_placeholder) searchInput.ariaLabel = translations.search_placeholder;
       if (translations.col_team_name) document.getElementById('th-name').innerText = translations.col_team_name;
       if (translations.col_team_mgr) document.getElementById('th-mgr').innerText = translations.col_team_mgr;
       if (translations.col_team_leader) document.getElementById('th-leader').innerText = translations.col_team_leader;

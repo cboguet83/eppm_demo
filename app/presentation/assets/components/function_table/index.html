@@ -642,7 +642,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       <div class="toolbar-left">
         <div class="search-input-wrapper">
 
-          <input type="text" id="search-box" class="search-input" placeholder="Quick search..." oninput="onGlobalSearch(this.value)" />
+          <input aria-label="Search functions" type="text" id="search-box" class="search-input" placeholder="Quick search..." oninput="onGlobalSearch(this.value)" />
         </div>
         <button type="button" id="btn-clear" class="btn-reset-filters" onclick="clearAllFilters()" style="display:none;">
           <span id="lbl-clear">Clear Filters</span>
@@ -660,59 +660,59 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         <thead>
           <!-- Header Sorting Row -->
           <tr>
-            <th class="sortable col-id" onclick="sortTable('function_id')">ID <span id="sort-function_id"></span></th>
-            <th class="sortable col-name" onclick="sortTable('name')"><span id="th-name">Function Title</span> <span id="sort-name"></span></th>
-            <th class="sortable col-level" onclick="sortTable('hierarchy_level')"><span id="th-level">Level</span> <span id="sort-hierarchy_level"></span></th>
-            <th class="sortable" onclick="sortTable('has_reports')"><span id="th-reports">Has Reports</span> <span id="sort-has_reports"></span></th>
-            <th class="sortable" onclick="sortTable('function_type_name')"><span id="th-type">Function Type</span> <span id="sort-function_type_name"></span></th>
-            <th class="sortable" onclick="sortTable('manager_function_name')"><span id="th-mgr">Primary Manager</span> <span id="sort-manager_function_name"></span></th>
-            <th class="sortable" onclick="sortTable('dual_manager_function_name')"><span id="th-dual">Dual Manager</span> <span id="sort-dual_manager_function_name"></span></th>
-            <th class="sortable col-fte" onclick="sortTable('fte_percentage')"><span id="th-fte">Equivalent FTE</span> <span id="sort-fte_percentage"></span></th>
+            <th scope="col" id="column-function_id" class="sortable col-id" onclick="sortTable('function_id')">ID <span aria-hidden="true" id="sort-function_id"></span></th>
+            <th scope="col" id="column-name" class="sortable col-name" onclick="sortTable('name')"><span id="th-name">Function Title</span> <span aria-hidden="true" id="sort-name"></span></th>
+            <th scope="col" id="column-hierarchy_level" class="sortable col-level" onclick="sortTable('hierarchy_level')"><span id="th-level">Level</span> <span aria-hidden="true" id="sort-hierarchy_level"></span></th>
+            <th scope="col" id="column-has_reports" class="sortable" onclick="sortTable('has_reports')"><span id="th-reports">Has Reports</span> <span aria-hidden="true" id="sort-has_reports"></span></th>
+            <th scope="col" id="column-function_type_name" class="sortable" onclick="sortTable('function_type_name')"><span id="th-type">Function Type</span> <span aria-hidden="true" id="sort-function_type_name"></span></th>
+            <th scope="col" id="column-manager_function_name" class="sortable" onclick="sortTable('manager_function_name')"><span id="th-mgr">Primary Manager</span> <span aria-hidden="true" id="sort-manager_function_name"></span></th>
+            <th scope="col" id="column-dual_manager_function_name" class="sortable" onclick="sortTable('dual_manager_function_name')"><span id="th-dual">Dual Manager</span> <span aria-hidden="true" id="sort-dual_manager_function_name"></span></th>
+            <th scope="col" id="column-fte_percentage" class="sortable col-fte" onclick="sortTable('fte_percentage')"><span id="th-fte">Equivalent FTE</span> <span aria-hidden="true" id="sort-fte_percentage"></span></th>
           </tr>
           <!-- Column Filter Row with Excel-style multi-select triggers -->
           <tr class="filter-row">
-            <th><input type="text" class="col-filter-input" id="flt-id" placeholder="#" oninput="setColFilter('function_id', this.value)" /></th>
+            <th scope="col"><input aria-labelledby="column-function_id" type="text" class="col-filter-input" id="flt-id" placeholder="#" oninput="setColFilter('function_id', this.value)" /></th>
             <!-- Excel-style filter for Title -->
-            <th>
+            <th scope="col">
               <div class="excel-trigger" id="trigger-flt-name" onclick="openExcelFilter('name', 'Function Title', event)">
                 <span class="excel-trigger-text" id="label-flt-name">All</span>
                 <span class="excel-trigger-icon">▼</span>
               </div>
             </th>
-            <th>
-              <select class="col-filter-select" id="flt-level" onchange="setColFilter('hierarchy_level', this.value)">
+            <th scope="col">
+              <select aria-labelledby="column-hierarchy_level" class="col-filter-select" id="flt-level" onchange="setColFilter('hierarchy_level', this.value)">
                 <option value="">All</option>
               </select>
             </th>
-            <th>
-              <select class="col-filter-select" id="flt-reports" onchange="setColFilter('has_reports', this.value)">
+            <th scope="col">
+              <select aria-labelledby="column-has_reports" class="col-filter-select" id="flt-reports" onchange="setColFilter('has_reports', this.value)">
                 <option value="">All</option>
                 <option value="true">Yes</option>
                 <option value="false">No</option>
               </select>
             </th>
             <!-- Excel-style filter for Type -->
-            <th>
+            <th scope="col">
               <div class="excel-trigger" id="trigger-flt-type" onclick="openExcelFilter('function_type_name', 'Type', event)">
                 <span class="excel-trigger-text" id="label-flt-type">All</span>
                 <span class="excel-trigger-icon">▼</span>
               </div>
             </th>
             <!-- Excel-style filter for Primary Manager -->
-            <th>
+            <th scope="col">
               <div class="excel-trigger" id="trigger-flt-mgr" onclick="openExcelFilter('manager_function_name', 'Manager', event)">
                 <span class="excel-trigger-text" id="label-flt-mgr">All</span>
                 <span class="excel-trigger-icon">▼</span>
               </div>
             </th>
             <!-- Excel-style filter for Dual Manager -->
-            <th>
+            <th scope="col">
               <div class="excel-trigger" id="trigger-flt-dual" onclick="openExcelFilter('dual_manager_function_name', 'Dual Manager', event)">
                 <span class="excel-trigger-text" id="label-flt-dual">All</span>
                 <span class="excel-trigger-icon">▼</span>
               </div>
             </th>
-            <th><input type="text" class="col-filter-input" id="flt-fte" placeholder="FTE %..." oninput="setColFilter('fte_percentage', this.value)" /></th>
+            <th scope="col"><input aria-labelledby="column-fte_percentage" type="text" class="col-filter-input" id="flt-fte" placeholder="FTE %..." oninput="setColFilter('fte_percentage', this.value)" /></th>
           </tr>
         </thead>
         <tbody id="table-body">
@@ -728,7 +728,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       <span class="excel-popup-title" id="excel-popup-title">Filter Options</span>
       <button type="button" class="excel-popup-close" onclick="closeExcelPopup()">&times;</button>
     </div>
-    <input type="text" class="excel-popup-search-box" id="excel-popup-search" placeholder="Search values..." oninput="onExcelPopupSearch(this.value)" />
+    <input aria-label="Search filter values" type="text" class="excel-popup-search-box" id="excel-popup-search" placeholder="Search values..." oninput="onExcelPopupSearch(this.value)" />
     <div class="excel-popup-actions">
       <button type="button" class="excel-link-action" onclick="excelSelectAll(true)" id="lbl-select-all">Select All</button>
       <button type="button" class="excel-link-action" onclick="excelSelectAll(false)" id="lbl-clear-opts">Clear</button>
@@ -838,6 +838,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       title.innerText = `${translations.col_filter_ph ? translations.col_filter_ph.replace('...', '') : 'Filter'}: ${displayName}`;
       searchBox.value = '';
       searchBox.placeholder = translations.search_values || 'Search values...';
+      searchBox.ariaLabel = searchBox.placeholder;
 
       // Get distinct values in whole dataset for this column
       const distinctVals = Array.from(new Set(functionsData.map(fn => {
@@ -1322,6 +1323,8 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     }
 
     function updateTranslations() {
+      const searchInput = document.getElementById('search-box');
+      if (translations.search_placeholder) searchInput.ariaLabel = translations.search_placeholder;
       if (translations.col_func_name) document.getElementById('th-name').innerText = translations.col_func_name;
       if (translations.col_level) document.getElementById('th-level').innerText = translations.col_level;
       if (translations.col_has_reports) document.getElementById('th-reports').innerText = translations.col_has_reports;
