@@ -53,13 +53,37 @@ def test_import_soft_deletes_omitted_active_pools_and_keeps_history(mapped_team)
     pools = service(mapped_team)
     with psycopg.connect(mapped_team.setup.operator_url) as connection:
         connection.execute("SELECT setval(pg_get_serial_sequence('eppm.resource_pool','id'),1)")
-    result = pools.import_csv(b'name,capacity_fte\nReplacement,2\n')
+    result = pools.import_csv(b'name,capacity_fte\nReplacement,2\n', delete_missing=True)
     assert result.deactivated == 1
     assert [pool.name for pool in pools.get_all_pools()] == ['Replacement']
     with psycopg.connect(mapped_team.setup.operator_url) as connection:
         assert connection.execute('SELECT deleted_flag FROM eppm.resource_pool WHERE id=1').fetchone()[0]
         assert connection.execute('SELECT count(*) FROM eppm.resource_pool_mapping WHERE pool_id=1').fetchone()[0] == 1
         assert connection.execute('SELECT count(*) FROM eppm.resource_pool_assignment WHERE pool_id=1').fetchone()[0] == 1
+
+
+def test_import_keeps_omitted_pools_by_default(mapped_team):
+    pools = service(mapped_team)
+    with psycopg.connect(mapped_team.setup.operator_url) as connection:
+        connection.execute("SELECT setval(pg_get_serial_sequence('eppm.resource_pool','id'),1)")
+    result = pools.import_csv(b'name\nAdditional\n')
+    assert result.deactivated == 0
+    assert {pool.name for pool in pools.get_all_pools()} == {'Mapped', 'Additional'}
+
+
+def test_exception_grid_changes_are_atomic_and_reject_mapped_pools(mapped_team):
+    pools = service(mapped_team)
+    with pytest.raises(ValueError, match='Mapped pools'):
+        pools.replace_capacity_exceptions(1, [PoolCapacityException(1, '2026-01-01', '2026-01-02', .5)])
+    pools.delete_mapping(pools.get_mappings_by_pool(1)[0].id)
+    pools.replace_capacity_exceptions(1, [PoolCapacityException(1, '2026-01-01', '2026-01-02', .5),
+                                          PoolCapacityException(1, '2026-02-01', '2026-02-02', .25)])
+    before = pools.capacity_exceptions(1)
+    with pytest.raises(ValueError):
+        pools.replace_capacity_exceptions(1, [before[0], PoolCapacityException(1, '2026-03-02', '2026-03-01', .5)])
+    assert pools.capacity_exceptions(1) == before
+    pools.replace_capacity_exceptions(1, [before[1]])
+    assert pools.capacity_exceptions(1) == [before[1]]
 
 
 @pytest.mark.parametrize('user_id', [1, 4])

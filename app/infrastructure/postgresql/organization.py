@@ -4,7 +4,7 @@ from collections.abc import Callable, Collection, Sequence
 from datetime import date
 
 import psycopg
-from psycopg.rows import class_row
+from psycopg.rows import class_row, dict_row
 
 from app.application.exceptions import OrganizationConflictError, OrganizationStorageError
 from app.application.ports.organization import CalendarExceptionRow, OrganizationStore
@@ -149,10 +149,35 @@ class PostgresOrganizationStore:
         require_live_reference(self.connection, 'team', team.parent_team_id)
         require_live_reference(self.connection, 'function', team.manager_function_id)
 
-    def get_all_teams(self) -> list[Team]:
+    def get_all_teams(self, *, include_deleted: bool = False) -> list[Team]:
         """Read optional hierarchy assignments in the existing name order."""
-        return self._rows(Team, 'SELECT team_id,team_name,manager_function_id,hierarchy_type_id,parent_team_id '
-                          'FROM eppm.active_team ORDER BY team_name COLLATE "C"')
+        source = 'eppm.team' if include_deleted else 'eppm.active_team'
+        return self._rows(Team, 'SELECT team_id,team_name,manager_function_id,hierarchy_type_id,parent_team_id,deleted_flag '
+                          f'FROM {source} ORDER BY team_name COLLATE "C"')
+
+    def write_imported_team(self, team: Team) -> None:
+        """Write validated catalog fields, retaining memberships and history."""
+        if not team.deleted_flag:
+            require_live_reference(self.connection, 'hierarchy_type', team.hierarchy_type_id)
+            require_live_reference(self.connection, 'function', team.manager_function_id)
+        self.connection.execute('UPDATE eppm.team SET team_name=%s,manager_function_id=%s,hierarchy_type_id=%s,'
+            'parent_team_id=%s,deleted_flag=%s WHERE team_id=%s',
+            (team.team_name, team.manager_function_id, team.hierarchy_type_id,
+             team.parent_team_id, team.deleted_flag, team.team_id))
+
+    def all_team_functions(self) -> dict[int, list[int]]:
+        """Read live explicit memberships in one batch."""
+        result: dict[int, list[int]] = {}
+        for team_id, function_id in self.connection.execute('SELECT team_id,function_id FROM eppm.active_team_function'):
+            result.setdefault(team_id, []).append(function_id)
+        return result
+
+    def team_pool_mappings(self) -> list[dict]:
+        """Read live team-to-pool mappings without loading project allocations."""
+        with self.connection.cursor(row_factory=dict_row) as cursor:
+            return cursor.execute("SELECT m.target_id AS team_id,p.id AS pool_id,p.name AS pool_name,m.allocation_pct "
+                "FROM eppm.active_pool_mapping m JOIN eppm.active_resource_pool p ON p.id=m.pool_id "
+                "WHERE m.target_type='team' ORDER BY p.name,p.id").fetchall()
 
     def get_team_by_id(self, team_id: int) -> Team | None:
         """Find a team without loading or altering its members."""

@@ -219,27 +219,32 @@ def _parent_pool_selector(service: ResourcePoolService, *, current: int | None =
 
 
 def _capacity_exceptions_editor(service: ResourcePoolService, pool_id: int) -> None:
-    """Create, edit, or delete inclusive absolute reductions for one pool."""
-    items = {item.id: item for item in service.capacity_exceptions(pool_id)}
-    selected = st.selectbox(t('pool_exceptions.select', default='Exception'), [None, *items],
-        format_func=lambda value: t('pool_exceptions.new', default='New exception') if value is None else
-        f'{items[value].start_date} - {items[value].end_date}: -{items[value].reduction_fte:g} FTE', key=f'pool_exception_select_{pool_id}')
-    item = items.get(selected)
-    prefix = f'pool_exception_{pool_id}_{selected}'
+    """Edit, append or remove exception rows and save the whole grid atomically."""
+    items = service.capacity_exceptions(pool_id)
+    frame = pd.DataFrame([{'id': item.id, 'Start date': date.fromisoformat(item.start_date),
+        'End date': date.fromisoformat(item.end_date), 'Capacity reduction (FTE)': item.reduction_fte,
+        'Reason': item.reason} for item in items],
+        columns=['id', 'Start date', 'End date', 'Capacity reduction (FTE)', 'Reason'])
     st.caption(t('pool_exceptions.help', default='Reductions are in FTE, not percentages. Overlapping reductions add together; effective capacity cannot fall below zero. Both dates are included.'))
-    with st.form(prefix):
-        first = st.date_input(t('pool_exceptions.start', default='Start date'), value=date.fromisoformat(item.start_date) if item else date.today(), key=prefix+'_start')
-        last = st.date_input(t('pool_exceptions.end', default='End date'), value=date.fromisoformat(item.end_date) if item else date.today(), key=prefix+'_end')
-        reduction = st.number_input(t('pool_exceptions.reduction', default='Capacity reduction (FTE)'), min_value=0.001,
-            value=float(item.reduction_fte) if item else 0.5, step=0.25, format='%.3f', key=prefix+'_reduction')
-        reason = st.text_input(t('pool_exceptions.reason', default='Reason'), value=item.reason if item else '', key=prefix+'_reason')
-        save = st.form_submit_button(t('pool_exceptions.save', default='Save exception'), key=prefix+'_save')
-        remove = st.form_submit_button(t('pool_exceptions.delete', default='Delete exception'), disabled=item is None, key=prefix+'_delete')
-    if save:
-        service.save_capacity_exception(PoolCapacityException(pool_id, first.isoformat(), last.isoformat(), reduction, reason, selected))
-        st.rerun()
-    if remove and selected is not None:
-        require_change(service.delete_capacity_exception(selected))
+    st.caption('Add rows at the bottom. Select rows to delete them. Save exceptions applies all grid changes together.')
+    edited = st.data_editor(frame, num_rows='dynamic', hide_index=True, width='stretch',
+        key=f'pool_exception_grid_{pool_id}', disabled=['id'], column_config={
+            'id': None,
+            'Start date': st.column_config.DateColumn(required=True, default=date.today()),
+            'End date': st.column_config.DateColumn(required=True, default=date.today()),
+            'Capacity reduction (FTE)': st.column_config.NumberColumn(required=True, min_value=.001, default=.5, format='%.3f'),
+            'Reason': st.column_config.TextColumn(default=''),
+        })
+    if st.button('Save exceptions', type='primary', key=f'pool_exception_grid_save_{pool_id}'):
+        rows = []
+        for record in edited.to_dict('records'):
+            if any(pd.isna(record[column]) for column in ('Start date', 'End date', 'Capacity reduction (FTE)')):
+                raise ValueError('Each exception needs a start date, end date and capacity reduction.')
+            rows.append(PoolCapacityException(pool_id, record['Start date'].isoformat(), record['End date'].isoformat(),
+                float(record['Capacity reduction (FTE)']), '' if pd.isna(record['Reason']) else str(record['Reason']),
+                None if pd.isna(record['id']) else int(record['id'])))
+        service.replace_capacity_exceptions(pool_id, rows)
+        st.toast('Capacity exceptions saved.')
         st.rerun()
 
 

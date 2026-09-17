@@ -60,10 +60,13 @@ def test_organization_download_checks_permissions_and_revoked_sessions(pg_access
             access=BusinessAccess(current, access.policy)))
 
     routes = DownloadRoutes(access, lambda actor, project: '',
-                            export_organization=lambda actor, catalog: service(actor).export_csv(catalog))
+                            export_organization=lambda actor, catalog: service(actor).export_csv(catalog),
+                            export_teams=lambda actor, deleted, template: service(actor).export_csv(
+                                'teams', include_deleted=deleted, template=template))
     with TestClient(Starlette(routes=routes.routes())) as browser:
         url = '/downloads/organization/employees.csv'
         assert browser.get(url).status_code == 403
+        assert browser.get('/downloads/teams/teams.csv').status_code == 403
         browser.cookies.set('eppm_session', cookie)
         assert browser.get(url).status_code == 403
         with pytest.raises(AccessDenied):
@@ -76,9 +79,17 @@ def test_organization_download_checks_permissions_and_revoked_sessions(pg_access
             assert response.headers['content-disposition'] == f'attachment; filename="{catalog}.csv"'
             assert response.headers['cache-control'] == 'no-store'
         assert browser.head(url).status_code == 200
+        hidden = service(actor).create_team(Team('Hidden team'))
+        service(actor).delete_team(hidden)
+        team_url = '/downloads/teams/teams.csv'
+        assert len(list(csv.DictReader(io.StringIO(browser.get(team_url).text.lstrip('\ufeff'))))) == 0
+        assert len(list(csv.DictReader(io.StringIO(browser.get(team_url + '?include_deleted=true').text.lstrip('\ufeff'))))) == 1
+        assert browser.get('/downloads/teams/template.csv').status_code == 200
+        assert browser.get(team_url + '?include_deleted=invalid').status_code == 403
         assert browser.get('/downloads/organization/app_users.csv').status_code == 403
         access.revoke(admin, grant)
         assert browser.get(url).status_code == 403
+        assert browser.get(team_url).status_code == 403
         access.set_status(admin, actor.user_id, 'disabled')
         assert browser.head(url).status_code == 403
 

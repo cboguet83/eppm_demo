@@ -103,7 +103,7 @@ def parse_pools(content: bytes) -> list[ResourcePool]:
     return result
 
 
-def import_pools(store: ResourcePoolStore, pools: list[ResourcePool]) -> PoolImportResult:
+def import_pools(store: ResourcePoolStore, pools: list[ResourcePool], *, delete_missing: bool = False) -> PoolImportResult:
     """Apply a complete batch inside the caller's authorized transaction.
 
     Unknown source IDs are aliases only: the database sequence supplies new IDs.
@@ -126,7 +126,8 @@ def import_pools(store: ResourcePoolStore, pools: list[ResourcePool]) -> PoolImp
             aliases[pool.id] = identity
         resolved.append(replace(pool, id=identity))
     included = {pool.id for pool in resolved}
-    omitted = {identity for identity, pool in existing.items() if identity not in included and not pool.deleted_flag}
+    omitted = {identity for identity, pool in existing.items()
+               if delete_missing and identity not in included and not pool.deleted_flag}
     final = {identity: replace(pool, deleted_flag=True) if identity in omitted else pool
              for identity, pool in existing.items()}
     for pool in resolved:

@@ -107,11 +107,37 @@ pool type defaults to 1, and the deleted flag defaults to false. Booleans accept
 Mappings, tags, creation timestamps and capacity exceptions are not transferred
 or modified by CSV import.
 
-Imports synchronize the active catalog: active pools omitted from the file are
-marked deleted in the same transaction, retaining mappings and history. The dialog
-warns before submission and reports the number marked deleted. Include all active
-parent containers in the file; retaining an active child while omitting its parent
-fails validation and rolls back the entire import. An empty file is rejected.
+Imports keep omitted pools by default. The unchecked **Delete pools missing from
+the uploaded CSV** option explains its behavior in a tooltip. Selecting it marks
+omitted active pools deleted in the same transaction, retaining mappings and
+history. In this mode include all active parent containers; retaining an active
+child while omitting its parent fails validation and rolls back the import.
+An empty file is rejected.
+
+Pool exception editing uses a dynamic grid for adding, changing and removing
+multiple periods. **Save exceptions** validates the complete grid and commits it
+atomically. The editor remains hidden for containers and mapped pools; the save
+service rechecks that the pool is still an unmapped leaf.
+
+## Team administration
+
+The Teams page reuses the pool hierarchy renderer, header filters and contextual
+menus. It offers create, edit, delete and undelete, optional deleted-row visibility,
+and authenticated CSV export/import with the same keep-missing default. Team CSV
+contains catalog attributes and the deleted flag; existing function memberships
+are retained. Unknown CSV IDs create sequence-generated identities. Python
+validates the entire final hierarchy before committing. Deleted parents must be
+restored before their children. Export omits deleted teams unless requested.
+
+The summary counts active teams, teams with employee occupants, and teams with an
+employee exception ending today or later. The mapping check mark identifies
+explicit function memberships, including vacant functions. Current FTE, detailed
+function/employee mappings, and employee exceptions count each active employee
+once. Vacancies contribute zero. Team ancestry and manager functions do not imply
+membership; parent-team values reflect their own direct memberships, not child
+teams. The final detail grid lists active pools to which the selected team is
+mapped, with its allocation percentage. All calculations run in Python from
+batched reads in one authorized snapshot. No schema migration is required.
 
 An ID matching an existing record (including a deleted record) updates that
 record. Missing or unknown IDs create new records using the database identity

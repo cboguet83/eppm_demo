@@ -52,7 +52,11 @@ export default function({data, parentElement, setTriggerValue, setStateValue}) {
     const collapsed = new Set(data.collapsed || []);
     const filters = data.filters || {};
     const activeFilters = Object.values(filters).some(value => Array.isArray(value));
-    const fields = ['name','pool_type','hierarchy_type','tags','capacity','assigned_capacity','mappings','peak_demand','future_exceptions'];
+    const isTeam = data.kind === 'team';
+    const noun = isTeam ? 'team' : 'pool';
+    const treeLabel = isTeam ? 'Teams' : 'Resource pools';
+    const columns = data.columns || [['name','Pool'],['pool_type','Pool type'],['hierarchy_type','Hierarchy type'],['tags','Tags'],['capacity','Pool Capacity (FTE)'],['assigned_capacity','Current Capacity (FTE)'],['mappings','Has Mappings'],['peak_demand','Future Peak Demand (FTE)'],['future_exceptions','Has Future Capacity Exceptions']];
+    const fields = columns.map(column => column[0]);
     const matches = new Set(data.rows.filter(row => fields.every(field =>
         !Array.isArray(filters[field]) || filters[field].includes(String(row[field]))
     )).map(row => row.id));
@@ -80,10 +84,11 @@ export default function({data, parentElement, setTriggerValue, setStateValue}) {
         menu.setAttribute('role', 'menu'); menu.setAttribute('aria-label', row.name);
         const heading = document.createElement('div'); heading.className = 'context-menu-header';
         heading.textContent = row.name; menu.appendChild(heading);
-        let actions = [['create_root','Create pool']];
-        if (row.id) actions = row.deleted ? [['undelete','Undelete pool']]
-            : [['edit','Edit pool'], ['create','Create pool'], ['gantt','Show consuming projects in Gantt'], ['delete','Delete pool']];
-        if (row.id && !row.container && !row.deleted) actions.splice(2,0,['map','Map employees or teams']);
+        let actions = [['create_root',`Create ${noun}`]];
+        if (row.id) actions = row.deleted ? [['undelete',`Undelete ${noun}`]]
+            : [['edit',`Edit ${noun}`], ['create',`Create ${noun}`], ['delete',`Delete ${noun}`]];
+        if (row.id && !row.deleted && !isTeam) actions.splice(2,0,['gantt','Show consuming projects in Gantt']);
+        if (row.id && !row.container && !row.deleted && !isTeam) actions.splice(2,0,['map','Map employees or teams']);
         for (const [action, label] of actions) {
             const button = document.createElement('button'); button.type = 'button';
             button.className = 'context-menu-item'; button.textContent = label;
@@ -105,13 +110,13 @@ export default function({data, parentElement, setTriggerValue, setStateValue}) {
     };
     const tree = document.createElement('div'); tree.className = 'tree-scroll';
     tree.tabIndex = 0;
-    tree.setAttribute('role','tree'); tree.setAttribute('aria-label','Resource pools');
-    tree.oncontextmenu = event => showMenu(event,{id:0,name:'Resource pools',container:true},tree);
+    tree.setAttribute('role','tree'); tree.setAttribute('aria-label',treeLabel);
+    tree.oncontextmenu = event => showMenu(event,{id:0,name:treeLabel,container:true},tree);
     tree.onkeydown = event => {
         if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
             const rect = tree.getBoundingClientRect();
             showMenu({preventDefault:()=>event.preventDefault(),stopPropagation:()=>event.stopPropagation(),
-                clientX:rect.left+20,clientY:rect.top+40},{id:0,name:'Resource pools',container:true},tree);
+                clientX:rect.left+20,clientY:rect.top+40},{id:0,name:treeLabel,container:true},tree);
         }
     };
     const header = document.createElement('div'); header.className = 'tree-columns';
@@ -165,15 +170,15 @@ export default function({data, parentElement, setTriggerValue, setStateValue}) {
         menu.style.top = Math.max(10,Math.min(rect.bottom,window.innerHeight-menu.offsetHeight-10))+'px';
         search.focus();
     };
-    for (const [index,text] of ['Pool','Pool type','Hierarchy type','Tags','Pool Capacity (FTE)','Current Capacity (FTE)','Has Mappings','Future Peak Demand (FTE)','Has Future Capacity Exceptions'].entries()) {
+    for (const [index,[field,text]] of columns.entries()) {
         const cell = document.createElement('span');
         const button = document.createElement('button'); button.className = 'context-menu-item filter-button';
         button.setAttribute('aria-label',`Filter ${text}`); button.setAttribute('aria-haspopup','dialog');
         button.textContent = text + (Array.isArray(filters[fields[index]]) ? ' ▾ ●' : ' ▾');
-        if (index === 5) button.title = "Today's capacity after employee availability exceptions, or pool capacity exceptions when unmapped.";
-        if (index === 6) button.title = 'A check mark indicates direct employee or team mappings on a leaf pool.';
-        if (index === 7) button.title = 'Maximum required FTE from today onward, counting In Progress projects only.';
-        if (index === 8) button.title = 'An applicable capacity exception ends today or later. Mapped pools use employee exceptions; unmapped pools use pool exceptions.';
+        if (field === 'assigned_capacity') button.title = isTeam ? 'Current FTE of employees occupying explicitly mapped functions, counted once and including employee exceptions.' : "Today's capacity after employee availability exceptions, or pool capacity exceptions when unmapped.";
+        if (field === 'mappings') button.title = isTeam ? 'A check mark indicates explicitly mapped functions. Vacant functions contribute zero FTE.' : 'A check mark indicates direct employee or team mappings on a leaf pool.';
+        if (field === 'peak_demand') button.title = 'Maximum required FTE from today onward, counting In Progress projects only.';
+        if (field === 'future_exceptions') button.title = isTeam ? 'A mapped employee has an exception ending today or later, including ongoing exceptions.' : 'An applicable capacity exception ends today or later. Mapped pools use employee exceptions; unmapped pools use pool exceptions.';
         button.onclick = event => openFilter(event,fields[index],text);
         cell.appendChild(button); header.appendChild(cell);
     }
@@ -182,6 +187,7 @@ export default function({data, parentElement, setTriggerValue, setStateValue}) {
     for (const row of data.rows) {if (!children.has(row.parent)) children.set(row.parent,[]); children.get(row.parent).push(row);}
     const sort = data.sort || {};
     if (fields.includes(sort.field)) for (const siblings of children.values()) siblings.sort((a,b)=> {
+        if (a.parent !== null && a.has_children !== b.has_children) return Number(a.has_children)-Number(b.has_children);
         const compare = ['capacity','assigned_capacity','peak_demand'].includes(sort.field)
             ? Number(a[sort.field])-Number(b[sort.field]) : String(a[sort.field]).localeCompare(String(b[sort.field]));
         return sort.descending ? -compare : compare;
@@ -225,16 +231,20 @@ export default function({data, parentElement, setTriggerValue, setStateValue}) {
                 row.peak_exceeded ? 'Future peak demand exceeds available capacity on a peak-demand date.' : ''].filter(Boolean).join(' ');
             warning.setAttribute('aria-label',warning.title); label.appendChild(warning);
         }
-        for (const [index,value] of [row.pool_type,row.hierarchy_type,row.tags,row.capacity,row.assigned_capacity,row.mappings,row.peak_demand,row.future_exceptions].entries()) {
+        for (const field of fields.slice(1)) {
+            const value = row[field];
             const cell = document.createElement('span'); cell.className = 'pool-meta';
-            if ((index === 4 && row.current_exceeded) || (index === 6 && row.peak_exceeded)) {
+            if ((field === 'assigned_capacity' && row.current_exceeded) || (field === 'peak_demand' && row.peak_exceeded)) {
                 cell.classList.add('capacity-exceeded');
             }
-            if (index === 2) {cell.classList.add('pool-tags'); cell.title = value;}
-            if (index === 5 || index === 7) {cell.style.fontWeight = '900';}
+            if (field === 'tags') {cell.classList.add('pool-tags'); cell.title = value;}
+            if (field === 'mappings' || field === 'future_exceptions') {
+                cell.style.fontWeight = '900';
+                cell.style.textAlign = 'center';
+            }
             cell.textContent = value; item.appendChild(cell);
         }
-        item.children[5].title = "Today's capacity after employee availability exceptions, or pool capacity exceptions when unmapped.";
+        item.children[fields.indexOf('assigned_capacity')].title = isTeam ? 'Current capacity from mapped employees and their exceptions.' : "Today's capacity after employee availability exceptions, or pool capacity exceptions when unmapped.";
         item.onclick = () => emit(row,'select');
         item.oncontextmenu = event => showMenu(event,row,item);
         item.onkeydown = event => {
@@ -252,7 +262,7 @@ export default function({data, parentElement, setTriggerValue, setStateValue}) {
     }
     if (!visible.size) {
         const empty = document.createElement('p');
-        empty.textContent = data.rows.length ? 'No pools match these filters.' : 'No pools yet. Right-click here to create a pool.';
+        empty.textContent = data.rows.length ? `No ${noun}s match these filters.` : `No ${noun}s yet. Right-click here to create a ${noun}.`;
         tree.appendChild(empty);
     }
     root.appendChild(tree);
@@ -310,7 +320,12 @@ def resource_pool_tree(
     """
     rows = []
     roots = [identity for identity, pool in hierarchy.pools.items() if pool.parent_pool_id is None]
-    order = lambda identities: sorted(identities, key=lambda identity: hierarchy.pools[identity].name.casefold(), reverse=True)
+    def order(identities: list[int], *, leaves_first: bool = False) -> list[int]:
+        """Reverse sibling order for the stack, keeping child leaves first."""
+        return sorted(identities, key=lambda identity: (
+            leaves_first and bool(hierarchy.children.get(identity)),
+            hierarchy.pools[identity].name.casefold(), identity,
+        ), reverse=True)
     pending = [(identity, 0) for identity in order(roots)]
     while pending:
         identity, depth = pending.pop()
@@ -337,7 +352,7 @@ def resource_pool_tree(
                      'assigned_capacity': f'{current_capacity:.2f}' if calculated else '',
                      'pool_type': (pool_types or {}).get(hierarchy.pools[identity].pool_type_id, '—'),
                      'hierarchy_type': (hierarchy_types or {}).get(hierarchy.pools[identity].hierarchy_type_id, '—')})
-        pending.extend((child, depth + 1) for child in order(children))
+        pending.extend((child, depth + 1) for child in order(children, leaves_first=True))
     key = 'resource_pool_tree'
     state = st.session_state.get(key, {})
     component = st.components.v2.component(

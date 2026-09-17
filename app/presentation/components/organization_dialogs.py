@@ -222,7 +222,8 @@ def _open_delete_function_dialog(
         st.rerun()
 
 
-def _parent_team_selector(service: OrganizationService, team: Team | None = None) -> int | None:
+def _parent_team_selector(service: OrganizationService, team: Team | None = None,
+                          *, default_parent: int | None = None) -> int | None:
     """Offer an optional parent, excluding the edited team and its descendants."""
     teams = service.get_all_teams()
     blocked = {team.team_id} if team else set()
@@ -235,7 +236,7 @@ def _parent_team_selector(service: OrganizationService, team: Team | None = None
               for item in teams if item.team_id not in blocked}
     # None also represents an empty Streamlit widget state; use an explicit option.
     options = [0, *labels]
-    current = team.parent_team_id if team else None
+    current = team.parent_team_id if team else default_parent
     unassigned_label = t('settings.no_parent_team')
     value = st.selectbox(
         t('settings.field_parent_team'), options,
@@ -251,11 +252,12 @@ def _parent_team_selector(service: OrganizationService, team: Team | None = None
 def _open_add_team_dialog(
     service: OrganizationService,
     df_funcs: pd.DataFrame,
+    *, parent_team_id: int | None = None,
 ) -> None:
     """Modal dialog to create a new team."""
     new_name = st.text_input(t("settings.field_team_name", default="Team Name *"), placeholder="e.g. Equipe BIM")
     hierarchy_type_id = hierarchy_type_selector(service.get_all_hierarchy_types())
-    parent_team_id = _parent_team_selector(service)
+    parent_team_id = _parent_team_selector(service, default_parent=parent_team_id)
 
     func_opts = [None] + (df_funcs["function_id"].tolist() if not df_funcs.empty else [])
     func_map = dict(zip(df_funcs["function_id"], df_funcs["name"])) if not df_funcs.empty else {}

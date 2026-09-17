@@ -19,11 +19,13 @@ class DownloadRoutes:
 
     def __init__(self, access: AccessService, export_template: Callable[[Actor, int], str], *,
                  export_organization: Callable[[Actor, str], str] | None = None,
-                 export_pools: Callable[[Actor, bool, bool], str] | None = None) -> None:
+                 export_pools: Callable[[Actor, bool, bool], str] | None = None,
+                 export_teams: Callable[[Actor, bool, bool], str] | None = None) -> None:
         """Bind authenticated project and optional organization exporters."""
         self.access, self.export_template = access, export_template
         self.export_organization = export_organization
         self.export_pools = export_pools
+        self.export_teams = export_teams
 
     def routes(self) -> list[Route]:
         """Expose a fixed attachment endpoint without cached or static media URLs."""
@@ -32,27 +34,38 @@ class DownloadRoutes:
             routes.append(Route('/downloads/organization/{catalog:str}.csv', self.organization_catalog))
         if self.export_pools is not None:
             routes.append(Route('/downloads/resource-pools/{catalog:str}.csv', self.pool_catalog))
+        if self.export_teams is not None:
+            routes.append(Route('/downloads/teams/{catalog:str}.csv', self.team_catalog))
         return routes
 
     async def pool_catalog(self, request: Request) -> Response:
         """Deliver pool CSV through current session and shared-management checks."""
+        return await self._resource_catalog(request, self.export_pools, 'pools', 'resource_pools')
+
+    async def team_catalog(self, request: Request) -> Response:
+        """Deliver team CSV with the same authenticated download contract."""
+        return await self._resource_catalog(request, self.export_teams, 'teams', 'teams')
+
+    async def _resource_catalog(self, request: Request, export: Callable[[Actor, bool, bool], str] | None,
+                                catalog_name: str, filename: str) -> Response:
+        """Validate visibility and generate a no-store catalog attachment."""
         reference = token_urlsafe(16)
         try:
             actor = await run_in_threadpool(self.access.actor, request.cookies.get(SESSION_COOKIE, ''))
             catalog = request.path_params['catalog']
             visibility = request.query_params.get('include_deleted', 'false')
-            if catalog not in {'pools', 'template'} or visibility not in {'true', 'false'} or self.export_pools is None:
-                raise ValueError('Unknown resource-pool export.')
-            content = await run_in_threadpool(self.export_pools, actor, visibility == 'true', catalog == 'template')
+            if catalog not in {catalog_name, 'template'} or visibility not in {'true', 'false'} or export is None:
+                raise ValueError('Unknown resource catalog export.')
+            content = await run_in_threadpool(export, actor, visibility == 'true', catalog == 'template')
         except (AccessDenied, ValueError):
             return JSONResponse({'error': {'code': 'download_denied', 'reference': reference}},
                                 status_code=403, headers={'Cache-Control': 'no-store'})
         except Exception:
             # Deliberate HTTP boundary: return no storage or catalog details.
-            get_logger(__name__).error('pool_download.failed reference=%s', reference)
+            get_logger(__name__).error('resource_catalog_download.failed reference=%s', reference)
             return JSONResponse({'error': {'code': 'download_failed', 'reference': reference}},
                                 status_code=503, headers={'Cache-Control': 'no-store'})
-        filename = 'resource_pools_template.csv' if catalog == 'template' else 'resource_pools.csv'
+        filename += '_template.csv' if catalog == 'template' else '.csv'
         return Response(('\ufeff' + content).encode('utf-8'), media_type='text/csv; charset=utf-8',
                         headers={'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff',
                                  'Content-Disposition': f'attachment; filename="{filename}"'})

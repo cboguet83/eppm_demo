@@ -334,7 +334,28 @@ render_resource_pools(create_resource_pool_service(runtime, access=access),
     assert not edit.exception and not edit.error
     assert not any((widget.key or '').startswith('pool_exception_') for widget in edit.selectbox)
     edit = dialog(database, access, f'_open_edit_pool_dialog(service, {leaf})')
-    assert any(widget.key == f'pool_exception_select_{leaf}' for widget in edit.selectbox)
+    assert any('Capacity reduction (FTE)' in frame.value.columns for frame in edit.dataframe)
+
+
+def test_pool_exception_grid_saves_multiple_rows_and_removals(database, access):
+    import pandas as pd
+
+    service = create_resource_pool_service(database, access=access)
+    pool = service.create_pool(ResourcePool('Grid pool', capacity_fte=4))
+    grid = pd.DataFrame([
+        {'id': None, 'Start date': date(2026, 1, 1), 'End date': date(2026, 1, 2), 'Capacity reduction (FTE)': .5, 'Reason': 'First'},
+        {'id': None, 'Start date': date(2026, 2, 1), 'End date': date(2026, 2, 2), 'Capacity reduction (FTE)': 1, 'Reason': 'Second'},
+    ])
+    with patch('streamlit.data_editor', return_value=grid):
+        app = dialog(database, access, f'_open_edit_pool_dialog(service, {pool})')
+        app.button(key=f'pool_exception_grid_save_{pool}').click().run()
+    assert not app.exception and not app.error
+    saved = service.capacity_exceptions(pool)
+    assert len(saved) == 2 and [item.reason for item in saved] == ['First', 'Second']
+    with patch('streamlit.data_editor', return_value=grid.iloc[:0]):
+        app = dialog(database, access, f'_open_edit_pool_dialog(service, {pool})')
+        app.button(key=f'pool_exception_grid_save_{pool}').click().run()
+    assert not app.exception and service.capacity_exceptions(pool) == []
 
 
 def test_deleted_visibility_and_summary_calculate_only_active_leaves(database, access):

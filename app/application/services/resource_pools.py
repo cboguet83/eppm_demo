@@ -176,11 +176,28 @@ class ResourcePoolService:
             [] if template else store.get_all_pools(include_deleted=include_deleted)),
             permission=Permission.SHARED)
 
-    def import_csv(self, content: bytes) -> PoolImportResult:
+    def import_csv(self, content: bytes, *, delete_missing: bool = False) -> PoolImportResult:
         """Validate and atomically upsert a CSV catalog with generated new IDs."""
         pools = parse_pools(content)
-        return self._gateway.run(lambda store: import_pools(store, pools),
+        return self._gateway.run(lambda store: import_pools(store, pools, delete_missing=delete_missing),
                                  write=True, permission=Permission.SHARED)
+
+    def replace_capacity_exceptions(self, pool_id: int, items: list[PoolCapacityException]) -> None:
+        """Validate and atomically save an exception grid for an unmapped leaf."""
+        items = [self._normalize_capacity_exception(replace(item, pool_id=pool_id)) for item in items]
+        def operation(store: ResourcePoolStore) -> None:
+            PoolHierarchy(store.get_all_pools()).require_leaf(pool_id)
+            if store.get_mappings_by_pool(pool_id):
+                raise ValueError('Mapped pools use employee exceptions. Refresh this pool before editing.')
+            existing = {item.id for item in store.capacity_exceptions([pool_id])}
+            kept = [item.id for item in items if item.id is not None]
+            if len(kept) != len(set(kept)) or not set(kept) <= existing:
+                raise ValueError('The exceptions have changed. Refresh and try again.')
+            for identity in existing - set(kept):
+                store.delete_capacity_exception(identity)
+            for item in items:
+                store.save_capacity_exception(item)
+        self._gateway.run(operation, write=True, permission=Permission.SHARED)
 
     def undelete_pool(self, pool_id: int) -> bool:
         """Restore one pool after validating its parent and leaf-only rules.

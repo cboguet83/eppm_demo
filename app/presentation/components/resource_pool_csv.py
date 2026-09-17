@@ -15,7 +15,11 @@ def _import_dialog(service: ResourcePoolService) -> None:
     """Preview catalog rows and apply them only on explicit submission."""
     st.caption('Known pool IDs are updated. Missing or unknown IDs create pools with automatically generated IDs. '
                'Parent IDs may refer to another row in this file. The whole import succeeds or is rolled back.')
-    st.warning('Active pools omitted from this CSV will be marked deleted. Include all pools you want to keep active, including their parent containers.')
+    delete_missing = st.checkbox('Delete pools missing from the uploaded CSV', value=False,
+        help='Unchecked: keep existing pools that are absent from the file. Checked: mark absent active pools as deleted, retaining their history and mappings. Include all pools you want to keep and their parent containers.',
+        key='pool_csv_delete_missing')
+    if delete_missing:
+        st.warning('Active pools omitted from this CSV will be marked deleted. Include their parent containers when keeping child pools.')
     st.caption('Columns: name is required; blank capacity means unspecified; blank parent or hierarchy type means none. '
                'Pool type defaults to 1 and deleted_flag to false. Mappings, tags and capacity exceptions are unchanged.')
     st.link_button('Download CSV template', '/downloads/resource-pools/template.csv')
@@ -28,7 +32,7 @@ def _import_dialog(service: ResourcePoolService) -> None:
                    'Capacity (FTE)': row.capacity_fte, 'Deleted': row.deleted_flag} for row in rows],
                  hide_index=True)
     if st.button('Import pools', type='primary', key='pool_csv_submit'):
-        result = service.import_csv(upload.encode('utf-8'))
+        result = service.import_csv(upload.encode('utf-8'), delete_missing=delete_missing)
         st.session_state['pool_csv_success'] = (f'Import successful: {result.created} pools created, '
                                                f'{result.updated} updated, {result.deactivated} marked deleted.')
         st.rerun()

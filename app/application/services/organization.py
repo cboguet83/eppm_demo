@@ -10,6 +10,8 @@ from app.application.ports.references import EmployeeReference, FunctionReferenc
 from app.domain.access.models import Permission
 from app.domain.hierarchy import HierarchyType, normalize_hierarchy_type, validate_hierarchy_type_id
 from app.domain.organization.models import Employee, EmployeeCalendarException, FunctionType, OrgFunction, Team
+from app.application.services.team_capacity import TeamOverview, team_capacities
+from app.application.services.team_csv import TeamImportResult, import_teams, parse_teams
 from app.domain.organization.rules import (
     next_employee_code, normalize_employee, normalize_exception, normalize_function,
     normalize_function_type, normalize_team, validate_team_parent,
@@ -102,11 +104,42 @@ class OrganizationService:
         """Delete function within one organization transaction."""
         return self._gateway.run(lambda store: store.delete_function(func_id), write=True, permission=Permission.SHARED)
 
-    def get_all_teams(self) -> list[Team]:
+    def get_all_teams(self, *, include_deleted: bool = False) -> list[Team]:
         """Get all teams within one organization transaction."""
-        return self._gateway.run(lambda store: store.get_all_teams(), permission=Permission.SHARED)
+        return self._gateway.run(lambda store: store.get_all_teams(include_deleted=True)
+                                 if include_deleted else store.get_all_teams(), permission=Permission.SHARED)
 
-    def export_csv(self, catalog: str) -> str:
+    def team_overview(self, *, include_deleted: bool = False, today: date | None = None) -> TeamOverview:
+        """Read and calculate direct team membership in one authorized snapshot."""
+        effective_day = today if today is not None else date.today()
+        def operation(store: OrganizationStore) -> TeamOverview:
+            teams = store.get_all_teams(include_deleted=include_deleted)
+            functions = store.get_all_functions()
+            capacities = team_capacities(teams, functions, store.get_all_employees(), store.all_team_functions(),
+                                        store.get_employee_calendar_exceptions(), effective_day)
+            return TeamOverview(teams, functions, capacities, store.team_pool_mappings())
+        return self._gateway.run(operation, permission=Permission.SHARED)
+
+    def import_teams_csv(self, content: bytes, *, delete_missing: bool = False) -> TeamImportResult:
+        """Import team attributes atomically, keeping absent records by default."""
+        teams = parse_teams(content)
+        return self._gateway.run(lambda store: import_teams(store, teams, delete_missing=delete_missing),
+                                 write=True, permission=Permission.SHARED)
+
+    def undelete_team(self, team_id: int) -> bool:
+        """Restore a retained team when its parent and references are active."""
+        def operation(store: OrganizationStore) -> bool:
+            teams = store.get_all_teams(include_deleted=True)
+            team = next((team for team in teams if team.team_id == team_id), None)
+            if team is None or not team.deleted_flag:
+                return False
+            restored = replace(team, deleted_flag=False)
+            validate_team_parent(restored, [item for item in teams if not item.deleted_flag])
+            store.write_imported_team(restored)
+            return True
+        return self._gateway.run(operation, write=True, permission=Permission.SHARED)
+
+    def export_csv(self, catalog: str, *, include_deleted: bool = False, template: bool = False) -> str:
         """Export a complete organization catalog after checking shared-data access.
 
         Args:
@@ -132,7 +165,9 @@ class OrganizationService:
             output = io.StringIO(newline='')
             writer = csv.writer(output, lineterminator='\r\n')
             writer.writerow(columns)
-            for record in read():
+            records = [] if template else (store.get_all_teams(include_deleted=True)
+                if catalog == 'teams' and include_deleted else read())
+            for record in records:
                 values = [getattr(record, column) for column in columns]
                 writer.writerow([
                     "'" + value if isinstance(value, str) and value.startswith(

@@ -168,7 +168,11 @@ render_settings_view(create_settings_workspace(runtime, access=access))
             app.session_state["settings_tab_selection"] = label
             app.run()
             assert not app.exception, [error.message for error in app.exception]
-            assert len(app.get("component_instance")) == 1
+            if label == 'Teams':
+                assert len(app.metric) == 3
+                assert app.checkbox(key='team_show_deleted').label == 'Show deleted teams'
+            else:
+                assert len(app.get("component_instance")) == 1
 
 
 def test_deleted_record_is_not_reported_as_saved(database: RuntimeResources, access: BusinessAccess) -> None:

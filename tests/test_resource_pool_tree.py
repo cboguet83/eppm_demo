@@ -37,6 +37,26 @@ def test_tree_accepts_actions_for_existing_pools_and_orders_children(action):
     assert rows[2]['hierarchy_type'] == '—'
 
 
+def test_children_show_alphabetical_leaves_before_alphabetical_containers_at_each_level():
+    tree = PoolHierarchy([
+        ResourcePool('Root', id=1),
+        ResourcePool('Zulu leaf', id=2, parent_pool_id=1),
+        ResourcePool('alpha container', id=3, parent_pool_id=1),
+        ResourcePool('Beta container', id=4, parent_pool_id=1),
+        ResourcePool('alpha leaf', id=5, parent_pool_id=1),
+        ResourcePool('Zulu nested leaf', id=6, parent_pool_id=3),
+        ResourcePool('Alpha nested container', id=7, parent_pool_id=3),
+        ResourcePool('Leaf', id=8, parent_pool_id=7),
+        ResourcePool('Leaf', id=9, parent_pool_id=4),
+        ResourcePool('beta nested leaf', id=10, parent_pool_id=3),
+    ])
+    component = Mock(return_value=SimpleNamespace(action=None))
+    with patch('streamlit.components.v2.component', return_value=component):
+        resource_pool_tree(tree, {}, 1)
+    rows = component.call_args.kwargs['data']['rows']
+    assert [row['id'] for row in rows] == [1, 5, 2, 3, 10, 6, 7, 8, 4, 9]
+
+
 def test_tree_presentation_handles_hierarchies_deeper_than_python_recursion_limit():
     tree = PoolHierarchy([ResourcePool(str(identity), id=identity, parent_pool_id=identity - 1 or None)
                           for identity in range(1, 1501)])

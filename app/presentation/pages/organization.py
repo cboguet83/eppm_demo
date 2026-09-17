@@ -12,9 +12,6 @@ from app.presentation.components.organization_dialogs import (
     _open_add_function_dialog,
     _open_edit_function_dialog,
     _open_delete_function_dialog,
-    _open_add_team_dialog,
-    _open_edit_team_dialog,
-    _open_delete_team_dialog,
     _open_add_function_type_dialog,
     _open_edit_function_type_dialog,
     _open_delete_function_type_dialog,
@@ -23,10 +20,10 @@ from app.presentation.components.organization_dialogs import (
     _open_delete_employee_dialog,
 )
 from app.presentation.components.organization_frames import (
-    employees_frame, function_types_frame, functions_frame, teams_frame,
-    enrich_employees, enrich_functions, enrich_teams,
+    employees_frame, function_types_frame, functions_frame,
+    enrich_employees, enrich_functions,
 )
-from app.presentation.i18n import get_current_locale, t
+from app.presentation.i18n import t
 
 
 def _table(name: str, **kwargs: object) -> dict[str, object] | None:
@@ -189,74 +186,11 @@ def render_function_types(service: OrganizationService) -> None:
                     _open_delete_function_type_dialog(service, int(ft_id), str(ft_name))
 
 
-@organization_errors
 def render_teams(service: OrganizationService) -> None:
-    """Render the teams catalog only when its tab is open."""
-    st.link_button(t('settings.export_csv'), '/downloads/organization/teams.csv')
-    df_funcs = functions_frame(service.get_all_functions())
-    df_teams = teams_frame(service.get_all_teams())
-    hierarchy_labels = {record.id: record.label(get_current_locale()) for record in service.get_all_hierarchy_types()}
-    total_teams = len(df_teams)
-    st.subheader(f"{t('settings.teams_title', default='Teams Management')} ({total_teams} {t('settings.stat_teams', default='Teams')})")
+    """Render the shared hierarchy-based team administration page."""
+    from app.presentation.pages.teams import render_teams as render_team_hierarchy
 
-    enriched_teams = enrich_teams(df_teams, df_funcs)
-    team_names = dict(zip(df_teams['team_id'], df_teams['team_name']))
-    teams_payload = []
-    if not enriched_teams.empty:
-        for row in enriched_teams.to_dict(orient="records"):
-            teams_payload.append({
-                "team_id": int(row["team_id"]),
-                "team_name": str(row["team_name"]),
-                "parent_team_name": team_names.get(row.get('parent_team_id'), ''),
-                "hierarchy_type": hierarchy_labels.get(row.get("hierarchy_type_id"), ""),
-                "manager_function_id": int(row["manager_function_id"]) if pd.notna(row.get("manager_function_id")) else None,
-                "manager_function_name": str(row["manager_function_name"]) if pd.notna(row.get("manager_function_name")) else "—",
-            })
-
-    team_table_event = _table("team_table",
-        teams=teams_payload,
-        translations={
-            "col_id": "ID",
-            "col_team_name": t("settings.col_team_name", default="Team Name"),
-            "col_parent_team": t('settings.col_parent_team'),
-            "col_hierarchy_type": t("hierarchy.type"),
-            "col_team_mgr": t("settings.col_team_mgr", default="Manager Function"),
-            "action_add": t("settings.action_add", default="Add New"),
-            "action_edit": t("settings.action_edit", default="Edit"),
-            "action_delete": t("settings.action_delete", default="Delete"),
-            "no_teams": t("settings.no_teams", default="No teams registered."),
-            "stat_teams": t("settings.stat_teams", default="Teams"),
-            "filter_all": t("settings.filter_all", default="All"),
-            "filter_clear": t("settings.filter_clear", default="Clear Filters"),
-            "col_filter_ph": t("settings.col_filter_ph", default="Filter..."),
-            "search_values": t("settings.search_values", default="Search values..."),
-            "select_all": t("settings.select_all", default="Select All"),
-            "clear": t("settings.clear", default="Clear"),
-            "apply": t("settings.apply", default="Apply"),
-            "selected_count": t("settings.selected_count", default="{count} selected"),
-            "blanks": t("settings.blanks", default="(Blanks / None)"),
-        },
-        key="team_interactive_table",
-        default=None,
-    )
-
-    if team_table_event and isinstance(team_table_event, dict):
-        nonce = team_table_event.get("nonce")
-        last_nonce = st.session_state.get("_last_team_table_nonce")
-        if nonce and nonce != last_nonce:
-            st.session_state["_last_team_table_nonce"] = nonce
-            action = team_table_event.get("action")
-            if action == "add_team":
-                _open_add_team_dialog(service, df_funcs)
-            elif action == "edit_team":
-                tm_id = team_table_event.get("team_id")
-                if tm_id is not None:
-                    _open_edit_team_dialog(service, int(tm_id), df_funcs)
-            elif action == "delete_team":
-                tm_id = team_table_event.get("team_id")
-                tm_name = team_table_event.get("team_name", f"ID {tm_id}")
-                if tm_id is not None:
-                    _open_delete_team_dialog(service, int(tm_id), str(tm_name))
+    render_team_hierarchy(service)
 
 
 @organization_errors

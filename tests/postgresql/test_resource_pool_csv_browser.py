@@ -67,6 +67,7 @@ def test_csv_export_respects_deleted_toggle_and_import_updates_the_hierarchy(aut
             assert {row.name for row in parse_pools(Path(download.value.path()).read_bytes())} == {'Original', 'Hidden'}
             page.get_by_role('button', name='Import CSV').click()
             dialog = page.get_by_role('dialog')
+            expect(dialog.get_by_role('checkbox', name='Delete pools missing from the uploaded CSV')).not_to_be_checked()
             with page.expect_download() as template_download:
                 dialog.get_by_role('link', name='Download CSV template').click()
             assert template_download.value.suggested_filename == 'resource_pools_template.csv'
