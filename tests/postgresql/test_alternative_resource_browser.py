@@ -1,6 +1,7 @@
 """Alternative-only pools remain visible without changing active demand."""
 
 from copy import deepcopy
+import re
 
 import psycopg
 import pytest
@@ -63,7 +64,7 @@ def test_alternative_only_pool_and_container_demand_are_separate(authorized, tmp
             api.expect(container).to_be_visible()
             api.expect(container).not_to_contain_text('Group total')
             api.expect(frame.locator('#resource-left-body')).not_to_contain_text('🏊')
-            assert abs(container.bounding_box()['height'] - 23.8) < .1
+            api.expect(container).to_have_css('height', re.compile(r'23\.[78]\d*px'))
             warning = frame.locator('.resource-group-cell.cell-overallocated[data-scope="alternative_total"]').first
             api.expect(warning).to_be_visible()
             assert warning.inner_text().strip() == ''
@@ -75,7 +76,8 @@ def test_alternative_only_pool_and_container_demand_are_separate(authorized, tmp
             api.expect(frame.locator('#resource-left-body [data-row-id="pool-2-selected"]')).to_be_visible()
             api.expect(frame.locator('[data-row-id="pool-2-assigned"] .assigned-badge')).to_have_text('Pool capacity')
             api.expect(frame.locator('[data-row-id="pool-2-total"] .total-badge')).to_have_text('Pool total assignments')
-            api.expect(frame.locator('[data-row-id="pool-2-selected"] .scope-badge')).to_have_text('Active view pool assignment')
+            api.expect(frame.locator('[data-row-id="pool-2-selected"] .scope-badge')).to_have_text('Assignment on filtered project')
+            api.expect(frame.locator('#lbl-show-selected')).to_have_text('Assignment on filtered project')
             api.expect(frame.locator('[data-pool-id="2"][data-scope="alternative_total"][data-demand="3.5"]').first).to_be_visible()
             api.expect(cells.first).to_be_visible()
             capacity_row = frame.locator('#resource-left-body [data-row-id="pool-2-assigned"]')

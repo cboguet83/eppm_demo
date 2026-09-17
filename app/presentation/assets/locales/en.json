@@ -471,7 +471,7 @@
       "effective_capacity": "Minimum Effective Capacity",
       "assigned_capacity": "Pool capacity",
       "show_total": "Pool total assignments",
-      "show_selected": "Active view pool assignment",
+      "show_selected": "Assignment on filtered project",
       "filter_consuming_projects": "Filter on consuming projects",
       "clear_filter": "Clear Resource Pool Filter",
       "active_filter": "Filter Active",

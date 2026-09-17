@@ -206,7 +206,7 @@ and pools are 23.8 pixels high; virtual scrolling uses
 cumulative row heights. Container total badges and pool swimmer icons are removed.
 Only root containers start expanded; deeper containers start collapsed. Leaf pools
 can collapse to their total assignment row. Expanded pools show Pool capacity,
-Pool total assignments, and Active view pool assignment. Alternative rows use the
+Pool total assignments, and Assignment on filtered project. Alternative rows use the
 same branch arrow and badge layout without repeating the pool name, and appear
 only if a displayed cell differs at the current time scale. Containers show only
 total comparisons, never alternative selected-project rows.

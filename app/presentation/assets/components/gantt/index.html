@@ -2221,7 +2221,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
           </label>
           <label class="resource-option-checkbox">
             <input type="checkbox" id="chk-show-selected-demand" checked onchange="onToggleResourceRows()">
-            <span id="lbl-show-selected">Active view pool assignment</span>
+            <span id="lbl-show-selected">Assignment on filtered project</span>
           </label>
         </div>
         <div class="resource-panel-legend">
@@ -2778,7 +2778,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         effective_capacity: "Minimum Effective Capacity",
         assigned_capacity: "Pool capacity",
         show_total: "Pool total assignments",
-        show_selected: "Active view pool assignment",
+        show_selected: "Assignment on filtered project",
         filter_consuming_projects: "Filter on consuming projects",
         clear_filter: "Clear Resource Pool Filter",
         active_filter: "Filter Active"
@@ -2865,7 +2865,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       if (elOnlyOverallocated) elOnlyOverallocated.innerText = getT('resource_grid.only_overallocated', 'Only overallocated pools');
       const elWithin = document.getElementById('lbl-within-cap');
       document.getElementById('lbl-show-total').innerText = getT('resource_grid.show_total', 'Pool total assignments');
-      document.getElementById('lbl-show-selected').innerText = getT('resource_grid.show_selected', 'Active view pool assignment');
+      document.getElementById('lbl-show-selected').innerText = getT('resource_grid.show_selected', 'Assignment on filtered project');
       if (elWithin) elWithin.innerText = getT('resource_grid.within_capacity', 'Within Capacity');
       const elOver = document.getElementById('lbl-overallocated');
       if (elOver) elOver.innerText = getT('resource_grid.overallocated', 'Overallocated');
@@ -5661,7 +5661,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
 
         const isSelected = row.rowType === 'pool_selected';
         const rowLabel = isSelected
-          ? getT('resource_grid.show_selected', 'Active view pool assignment')
+          ? getT('resource_grid.show_selected', 'Assignment on filtered project')
           : getT('resource_grid.show_total', 'Pool total assignments');
         const usage = isSelected ? pool.selected_projects_daily_usage : pool.daily_usage;
         leftHtml += `

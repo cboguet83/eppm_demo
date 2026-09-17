@@ -472,7 +472,7 @@
       "effective_capacity": "Minimale effektive Kapazität",
       "assigned_capacity": "Poolkapazität",
       "show_total": "Gesamtzuteilungen des Pools",
-      "show_selected": "Poolzuteilung in der aktiven Ansicht",
+      "show_selected": "Zuteilung zum gefilterten Projekt",
       "filter_consuming_projects": "Nach verbrauchenden Projekten filtern",
       "clear_filter": "Ressourcen-Pool-Filter löschen",
       "active_filter": "Filter aktiv",

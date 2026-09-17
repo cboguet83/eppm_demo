@@ -472,7 +472,7 @@
       "effective_capacity": "Capacidade efetiva mínima",
       "assigned_capacity": "Capacidade do pool",
       "show_total": "Alocações totais do pool",
-      "show_selected": "Alocação do pool na vista ativa",
+      "show_selected": "Alocação no projeto filtrado",
       "filter_consuming_projects": "Filtrar em projetos consumidores",
       "clear_filter": "Limpar filtro do pool de recursos",
       "active_filter": "Filtro ativo",
