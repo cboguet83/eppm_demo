@@ -140,16 +140,18 @@ def test_ten_distinct_editors_can_save_independent_project_titles(
             )
 
         errors = []
+        results = []
         with ThreadPoolExecutor(max_workers=10) as executor:
             futures = [executor.submit(save, index) for index in range(10)]
             for index, future in enumerate(futures):
                 try:
-                    assert future.result() is True
+                    results.append(future.result())
                 except Exception as error:
                     errors.append((index, type(error).__name__, str(error)))
         record_property("attempts", json.dumps(attempts))
         record_property("predicate_locks", json.dumps(predicates))
         assert not errors, errors
+        assert all(result is True for result in results), results
         with psycopg.connect(authorized.setup.operator_url) as connection:
             assert connection.execute("SELECT id,name FROM eppm.project WHERE id=ANY(%s) ORDER BY id",
                                       (project_ids,)).fetchall() == [

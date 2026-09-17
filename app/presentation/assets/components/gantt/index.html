@@ -4742,7 +4742,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
             endDate: qEnd
           });
 
-          cur.setMonth(cur.getMonth() + 3);
+          cur = new Date(cur.getFullYear(), cur.getMonth() + 3, 1);
           qCount++;
         }
         if (qCount > yearStartIdx) {
@@ -4777,7 +4777,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
             endDate: h2End
           });
 
-          cur.setFullYear(cur.getFullYear() + 1);
+          cur = new Date(cur.getFullYear() + 1, 0, 1);
           yCount++;
         }
         totalTimelineWidth = yCount * colWidth;
@@ -4811,7 +4811,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
             endDate: mEnd
           });
 
-          cur.setMonth(cur.getMonth() + 1);
+          cur = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
           mCount++;
         }
         if (mCount > yearStartIdx) {

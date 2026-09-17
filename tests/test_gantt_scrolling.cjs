@@ -7,7 +7,31 @@ const path = require('node:path');
 const html = fs.readFileSync(path.join(__dirname, '../app/presentation/assets/components/gantt/index.html'), 'utf8');
 const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 
-test('entire Gantt script parses', () => new vm.Script(script));
+test('entire Gantt script parses', () => {
+  assert.doesNotThrow(() => new vm.Script(script));
+});
+
+test('calendar headers advance across year boundaries and leap February', () => {
+  const context = vm.createContext({document:{getElementById:()=>null},
+    MONTH_NAMES:['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']});
+  vm.runInContext(script.slice(script.indexOf('    function buildHeaderStructure('),
+    script.indexOf('    function toggleResourceGrid(')), context);
+  for (const [mode, count, width] of [['Month',15,675], ['Quarter',5,140], ['Year',4,160]]) {
+    vm.runInContext(`currentMode='${mode}'; timelineStart=new Date(2023,0,1);
+      timelineEnd=new Date(2024,3,1); result=buildHeaderStructure();`, context, {timeout:1000});
+    const cells = context.result.bottomCells;
+    assert.equal(cells.length, count);
+    assert.equal(context.totalTimelineWidth, width);
+    assert.equal(cells[0].startDate.getFullYear(), 2023);
+    assert.equal(cells.at(-1).startDate.getFullYear(), 2024);
+    for (let index=1; index<cells.length; index++) {
+      const next = new Date(cells[index-1].endDate);
+      next.setDate(next.getDate()+1);
+      assert.equal(cells[index].startDate.getTime(), next.getTime());
+    }
+    if (mode === 'Month') assert.equal(cells[13].endDate.getDate(), 29);
+  }
+});
 
 test('compact Gantt CSS matches row geometry and halves toolbar padding', () => {
   assert.match(html, /--row-height:\s*41\.4px/);
