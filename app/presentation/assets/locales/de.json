@@ -837,6 +837,7 @@
     "missing_code": "Zeile {row}: Geben Sie einen PSP-Code für diese Beträge ein."
   },
   "dashboard": {
+    "reset_filters": "Filter zurücksetzen",
     "project_status": "Projektstatus",
     "title": "Dashboard",
     "project": "Projekt",

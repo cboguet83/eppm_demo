@@ -115,6 +115,18 @@ def test_dashboard_filter_spacing_in_full_shell(authorized, tmp_path):
             frame = page.locator('.st-key-organization_service_frame')
             expect(frame).to_be_visible(timeout=30000)
             assert 9 <= frame.bounding_box()['y'] <= 10
+            controls = [page.locator('.st-key-dashboard_filter_status').get_by_role('button'),
+                        page.locator('.st-key-dashboard_filter_pool').get_by_role('button'),
+                        page.get_by_role('button', name='Advanced filters'),
+                        page.get_by_role('button', name='Reset filters')]
+            bounds = [control.bounding_box() for control in controls]
+            assert len({box['y'] for box in bounds}) == 1
+            assert [box['x'] for box in bounds] == sorted(box['x'] for box in bounds)
+            managers = page.locator('details').filter(has=page.get_by_text('Project managers', exact=True))
+            manager_bounds = managers.bounding_box()
+            assert bounds[0]['y'] - (manager_bounds['y'] + manager_bounds['height']) == 8
+            matching = page.locator('.st-key-dashboard_project_list details')
+            assert matching.bounding_box()['height'] == manager_bounds['height'] == 24
             status = page.locator('.st-key-dashboard_filter_status')
             expect(status).to_contain_text('In Progress')
             expect(status.locator('[data-testid="stMultiSelectTag"]')).to_have_count(0)

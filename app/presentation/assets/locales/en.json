@@ -836,6 +836,7 @@
     "missing_code": "Row {row}: enter a WBS code for these amounts."
   },
   "dashboard": {
+    "reset_filters": "Reset filters",
     "project_status": "Project status",
     "title": "Dashboard",
     "project": "Project",

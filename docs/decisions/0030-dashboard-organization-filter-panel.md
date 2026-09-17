@@ -20,6 +20,10 @@ a compact summary, without removable tags. Clearing a dropdown removes that
 filter restriction. Chart pool filtering queues the canonical selection in the
 component callback, before the filters render, and therefore updates the dropdown
 checkboxes in one rerun. Advanced filters retain their existing UI.
+Status, pools, Advanced filters, and Reset filters share one row, in that order.
+The row sits 8px below Project managers, matching the organization frame gaps.
+The collapsed matching-projects frame is also 24px tall. Reset filters restores
+the default In Progress selection and clears the other filters.
 
 The full dashboard shell reduces the gaps around invisible shell components from
 16px to 3.2px and its top padding to 0.16px. Together these reduce the measured

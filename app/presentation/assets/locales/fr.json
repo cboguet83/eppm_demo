@@ -860,6 +860,7 @@
     "missing_code": "Ligne {row} : saisissez un code OTP pour ces montants."
   },
   "dashboard": {
+    "reset_filters": "Réinitialiser les filtres",
     "project_status": "Statut du projet",
     "title": "Tableau de bord",
     "project": "Projet",

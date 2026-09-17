@@ -166,12 +166,11 @@ def _filters(service: DashboardService, catalog) -> tuple[dict[str, list[str]], 
             active[key] = st.multiselect(label, options, key=state_key, on_change=_reset_page,
                                          format_func=lambda value: labels.get(value, value) or _label('unassigned'))
 
-    columns = st.columns(2, vertical_alignment='top')
+    columns = st.columns([3, 3, 2, 2], vertical_alignment='top')
     for column, key in zip(columns, ('status', 'pool')):
         with column:
             choose(key, _label('project_status') if key == 'status' else _label(key))
-    actions = st.columns(6, vertical_alignment='bottom')
-    with actions[-1], st.popover(_label('advanced_filters'), width='stretch', icon=':material/filter_alt:'):
+    with columns[2], st.popover(_label('advanced_filters'), width='stretch', icon=':material/filter_alt:'):
         chosen = st.multiselect(t('planning.flex_filter_fields', default='Filter fields'), list(fields),
                                 format_func=fields.get, key='dashboard_flex_fields', on_change=_reset_page)
         match_all = st.segmented_control(t('planning.flex_filter_match_label', default='When several values are selected'),
@@ -179,8 +178,8 @@ def _filters(service: DashboardService, catalog) -> tuple[dict[str, list[str]], 
         for key in chosen:
             choose(key, fields[key])
         active = {key: values for key, values in active.items() if key in fixed or key in chosen}
-    with actions[0]:
-        st.button(t('planning.clear_all_filters', default='Clear all filters'), on_click=_clear,
+    with columns[3]:
+        st.button(_label('reset_filters'), on_click=_clear, width='stretch',
                   icon=':material/filter_alt_off:', key='dashboard_clear')
     return active, match_all
 
@@ -310,6 +309,8 @@ def render_dashboard(service: DashboardService) -> None:
     .stMainBlockContainer:has(.st-key-dashboard_filter_pool){padding-top:.05rem!important}
     .stMainBlockContainer:has(.st-key-application_page_Dashboard){padding-top:.01rem!important}
     .stMainBlockContainer:has(.st-key-application_page_Dashboard) > [data-testid="stVerticalBlock"]{gap:.2rem}
+    .st-key-dashboard_filters[data-testid="stVerticalBlock"]{gap:.5rem}
+    .st-key-dashboard_project_list details:not([open]) > summary{height:22px;min-height:22px;padding-block:0}
     .st-key-dashboard_issue_count button{background:transparent!important;border:0!important;color:var(--issue-icon)!important;min-height:90px;width:100%;justify-content:center}
     .st-key-dashboard_issue_count button > div{justify-content:center!important;width:100%}
     .st-key-dashboard_issue_count button [data-testid=stMarkdownContainer]{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
@@ -322,7 +323,8 @@ def render_dashboard(service: DashboardService) -> None:
     try:
         revision = service.revision()
         catalog = _catalog(service, revision)
-        filters, match_all = _filters(service, catalog)
+        with st.container(key='dashboard_filters'):
+            filters, match_all = _filters(service, catalog)
         projects = _matching_projects(service, catalog, filters, match_all)
         # A queued scroll callback can retain an older fragment invocation.
         # Read the latest filter snapshot inside the fragment, not its old arguments.

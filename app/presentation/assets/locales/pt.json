@@ -860,6 +860,7 @@
     "missing_code": "Linha {row}: introduza um código WBS para estes valores."
   },
   "dashboard": {
+    "reset_filters": "Repor filtros",
     "project_status": "Estado do projeto",
     "title": "Painel",
     "project": "Projeto",

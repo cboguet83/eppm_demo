@@ -837,6 +837,7 @@
     "missing_code": "Zeil {row}: Gitt e WBS-Code fir dës Montanten an."
   },
   "dashboard": {
+    "reset_filters": "Filter zerécksetzen",
     "project_status": "Projetstatus",
     "title": "Dashboard",
     "project": "Projet",
