@@ -186,13 +186,14 @@ def _filters(service: DashboardService, catalog) -> tuple[dict[str, list[str]], 
         st.button(_label('reset_filters'), on_click=_clear, width='stretch',
                   icon=':material/filter_alt_off:', key='dashboard_clear')
     advanced_active = any(active.get(key) for key in chosen)
-    any_active = (any(restricted.values()) or advanced_active or any(organization.values())
-                  or st.session_state.get('dashboard_selected_project') is not None)
+    reset_needed = (set(active['status']) != {'In Progress'} or restricted['pool']
+                    or advanced_active or any(organization.values())
+                    or st.session_state.get('dashboard_selected_project') is not None)
     controls = {
         '.st-key-dashboard_filter_status [data-testid="stPopoverButton"]': restricted['status'],
         '.st-key-dashboard_filter_pool [data-testid="stPopoverButton"]': restricted['pool'],
         '.st-key-dashboard_advanced_filter [data-testid="stPopoverButton"]': advanced_active,
-        '.st-key-dashboard_clear button': any_active,
+        '.st-key-dashboard_clear button': reset_needed,
     }
     styles = []
     for selector, is_active in controls.items():

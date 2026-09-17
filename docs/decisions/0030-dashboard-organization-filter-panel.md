@@ -27,8 +27,9 @@ the default In Progress selection and clears the other filters.
 The four controls are transparent when inactive and red when filtering. Selecting
 every available status or pool imposes no restriction and keeps its control
 transparent. Advanced filters turns red when a configured field has values.
-Reset filters turns red for any active status, pool, organization, advanced, or
-project-row filter; the default In Progress restriction also counts.
+Reset filters stays transparent for the default In Progress-only status selection
+with no other restrictions. It turns red for a cleared status filter, any other
+status combination, or an active pool, organization, advanced, or project-row filter.
 
 The full dashboard shell reduces the gaps around invisible shell components from
 16px to 3.2px and its top padding to 0.16px. Together these reduce the measured
