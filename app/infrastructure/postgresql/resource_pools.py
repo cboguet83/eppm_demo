@@ -5,6 +5,7 @@ from datetime import date
 
 import psycopg
 from psycopg.rows import dict_row
+from app.domain.resources.mapping_allocation import MappingCatalog
 
 from app.application.exceptions import ResourcePoolConflictError, ResourcePoolStorageError
 from app.application.ports.resource_pools import ResourcePoolStore
@@ -157,6 +158,17 @@ class PostgresResourcePoolStore:
         """Read configuration mappings without joining private employee details."""
         return self._rows(PoolMapping, 'SELECT id,pool_id,target_type,target_id,allocation_pct FROM eppm.active_pool_mapping '
                                       'ORDER BY pool_id,target_type COLLATE "C",target_id')
+
+    def mapping_catalog(self) -> MappingCatalog:
+        """Batch live membership inputs in the caller's authorized snapshot."""
+        from app.domain.resources.inputs import CapacityInputs
+        from app.infrastructure.postgresql.organization import PostgresOrganizationStore
+
+        organization = PostgresOrganizationStore(self.connection)
+        return MappingCatalog(self.get_all_pools(), CapacityInputs(0,
+            functions=organization.get_all_functions(), teams=organization.get_all_teams(),
+            employees=organization.get_all_employees(), team_functions=organization.all_team_functions(),
+            mappings=self.get_all_mappings()))
 
     def get_mappings_by_pool(self, pool_id: int) -> list[PoolMapping]:
         """Read one pool's mappings in target-type and identity order."""

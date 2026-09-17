@@ -155,6 +155,25 @@ An unchanged export can be imported without creating duplicate records.
 
 ## Implementation
 
+### Cross-pool resource allocation
+
+Employee and team mappings are limited to 100% across active pools. The mapping
+editor lists resources with remaining allocation, defaults new rows to that
+remaining percentage, and limits edits accordingly. Existing rows remain
+available for correction. Employees reached through explicit team/function
+memberships count toward this limit, using the same per-pool deduplication and
+direct-employee precedence as capacity calculations. Availability exceptions
+change FTE, not the percentage of a resource assigned to pools.
+
+Python validates create, update, batch-save and removal operations within the
+existing serializable transaction and retry boundary. Removing a direct override
+also requires validation because it can expose a larger team-derived allocation.
+Deleted pools consume no allocation. Restoring a pool is allowed even when it
+reintroduces an overallocation; existing excess can be retained or reduced, but
+cannot be increased through mapping edits. The pool summary counts each affected
+team or employee once. Affected pool rows and employee breakdown rows show
+warnings listing the active pools and their allocation percentages.
+
 Migration `0053_resource_soft_deletion.sql` adds the flags and filtered read views.
 These use `security_invoker` to preserve existing row security. Minimal employee
 name directories retain their existing authorization contract. Existing private

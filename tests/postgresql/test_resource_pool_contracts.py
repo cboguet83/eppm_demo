@@ -30,7 +30,8 @@ from app.domain.resources.rules import (
     normalize_pool,
 )
 from app.infrastructure.postgresql.resource_pools import PostgresResourcePoolGateway, PostgresResourcePoolStore
-from app.main import create_resource_pool_service
+from app.main import create_resource_pool_service, create_organization_service
+from app.domain.organization.models import OrgFunction
 
 
 @pytest.fixture
@@ -97,7 +98,7 @@ def test_pool_details_parent_and_tags_save_or_roll_back_together(database: Runti
     assert service.get_pool_by_id(child) == original
     assert service.get_pool_by_id(parent).capacity_fte == 9
     service.update_pool(replace(original, parent_pool_id=parent), tag_ids=[1])
-    assert service.get_pool_by_id(parent).capacity_fte is None
+    assert service.get_pool_by_id(parent).capacity_fte == 0
     assert service.descendant_pool_ids(parent) == [child]
 
 
@@ -123,6 +124,9 @@ def test_concurrent_opposite_group_edges_cannot_commit_a_cycle(database: Runtime
 
 def test_assignment_filters_missing_records_and_mapping_upsert_identity(database: RuntimeResources, access: BusinessAccess) -> None:
     service = create_resource_pool_service(database, access=access)
+    organization = create_organization_service(database, access=access)
+    organization.create_function(OrgFunction('First function', 1))
+    organization.create_function(OrgFunction('Second function', 1))
     other_service = create_resource_pool_service(database, access=access)
     pool = service.create_pool(ResourcePool("Pool"))
     mapping = PoolMapping(pool, "function", 1)

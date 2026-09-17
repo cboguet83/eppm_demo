@@ -7,6 +7,7 @@ from app.domain.access.models import Permission
 from typing import Protocol
 from app.domain.hierarchy import HierarchyType
 from app.domain.resources.pool_types import PoolType
+from app.domain.resources.mapping_allocation import MappingCatalog
 
 from app.domain.resources.models import (
     AssignmentLink,
@@ -22,6 +23,8 @@ from app.domain.resources.models import (
 
 class ResourcePoolStore(Protocol):
     """Queries and writes that share one transaction."""
+
+    def mapping_catalog(self) -> MappingCatalog: ...
 
     def capacity_exceptions(self, pool_ids: list[int]) -> list[PoolCapacityException]: ...
     def save_capacity_exception(self, item: PoolCapacityException) -> int: ...

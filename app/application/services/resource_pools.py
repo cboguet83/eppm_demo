@@ -10,6 +10,7 @@ from app.domain.access.models import Permission
 from app.domain.hierarchy import HierarchyType
 from app.domain.resources.pool_types import PoolType, normalize_pool_type
 from app.domain.resources.hierarchy import PoolHierarchy
+from app.domain.resources.mapping_allocation import MappingCatalog
 from app.application.ports.references import PoolReference, PoolGroupReference, PoolHierarchyMember
 from app.application.ports.resource_pools import ResourcePoolGateway, ResourcePoolStore
 from app.domain.resources.models import (
@@ -277,18 +278,32 @@ class ResourcePoolService:
         """Get all mappings within one application transaction."""
         return self._gateway.run(lambda store: store.get_all_mappings(), permission=Permission.SHARED)
 
+    def mapping_catalog(self) -> MappingCatalog:
+        """Read live allocation limits and warning details in one snapshot."""
+        return self._gateway.run(lambda store: store.mapping_catalog(), permission=Permission.SHARED)
+
     def create_mapping(self, mapping: PoolMapping) -> int:
         """Create mapping within one application transaction."""
         mapping = normalize_mapping(mapping)
         def operation(store: ResourcePoolStore) -> int:
             PoolHierarchy(store.get_all_pools()).require_leaf(mapping.pool_id)
+            catalog = store.mapping_catalog()
+            rows = [row for row in catalog.sources.mappings
+                    if (row.pool_id, row.target_type, row.target_id) !=
+                       (mapping.pool_id, mapping.target_type, mapping.target_id)]
+            catalog.validate(rows + [mapping])
             return store.create_mapping(mapping)
         return self._gateway.run(operation, write=True, permission=Permission.SHARED)
 
     def update_mapping(self, mapping_id: int, allocation_pct: float) -> bool:
         """Update mapping within one application transaction."""
         validate_allocation_pct(allocation_pct)
-        return self._gateway.run(lambda store: store.update_mapping(mapping_id, allocation_pct), write=True, permission=Permission.SHARED)
+        def operation(store: ResourcePoolStore) -> bool:
+            catalog = store.mapping_catalog()
+            catalog.validate([replace(row, allocation_pct=allocation_pct) if row.id == mapping_id else row
+                              for row in catalog.sources.mappings])
+            return store.update_mapping(mapping_id, allocation_pct)
+        return self._gateway.run(operation, write=True, permission=Permission.SHARED)
 
     def save_mappings(self, pool_id: int, mappings: list[PoolMapping]) -> None:
         """Atomically add, edit and remove a leaf pool's employee/team mappings.
@@ -302,6 +317,9 @@ class ResourcePoolService:
             raise ValueError('Select each employee or team only once.')
         def operation(store: ResourcePoolStore) -> None:
             PoolHierarchy(store.get_all_pools()).require_leaf(pool_id)
+            catalog = store.mapping_catalog()
+            catalog.validate([row for row in catalog.sources.mappings
+                              if row.pool_id != pool_id or row.target_type == 'function'] + desired)
             for row in store.get_mappings_by_pool(pool_id):
                 if row.target_type in {'employee', 'team'} and (row.target_type, row.target_id) not in keys:
                     store.delete_mapping(row.id)
@@ -311,7 +329,11 @@ class ResourcePoolService:
 
     def delete_mapping(self, mapping_id: int) -> bool:
         """Delete mapping within one application transaction."""
-        return self._gateway.run(lambda store: store.delete_mapping(mapping_id), write=True, permission=Permission.SHARED)
+        def operation(store: ResourcePoolStore) -> bool:
+            catalog = store.mapping_catalog()
+            catalog.validate([row for row in catalog.sources.mappings if row.id != mapping_id])
+            return store.delete_mapping(mapping_id)
+        return self._gateway.run(operation, write=True, permission=Permission.SHARED)
 
     def get_assignments(
         self,

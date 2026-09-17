@@ -230,7 +230,7 @@ render_settings_view(create_settings_workspace(runtime, access=access))
     app.session_state["settings_active_tab"] = "resource_pools"
     with patch("app.presentation.components.action_table.action_table", return_value=None) as table:
         app.run()
-    assert not app.exception and len(app.metric) == 4
+    assert not app.exception and len(app.metric) == 5
     rows, columns, actions = table.call_args.args
     assert rows[0]["project"] == "<script>project</script>"
     assert rows[0]["notes"] == "<img src=x onerror=alert(1)>"
@@ -296,7 +296,8 @@ render_resource_pools(create_resource_pool_service(runtime, access=access),
     assert app.dataframe[0].value.iloc[0]['Effective FTE'] == 0.5
     assert not any(button.key == f'btn_add_map_{parent}' for button in app.button)
     assert {metric.label: metric.value for metric in app.metric} == {
-        'Total Pools': '1', 'Overassigned Pools': '0', 'Pools with no assignment': '0', 'Pools with future capacity exceptions': '0'}
+        'Total Pools': '1', 'Overassigned Pools': '0', 'Pools with no assignment': '0',
+        'Pools with future capacity exceptions': '0', 'Overallocated teams / employees': '0'}
 
 
 def test_effective_exception_flags_counts_breakdown_and_mapped_editor(database, access):
@@ -324,7 +325,8 @@ render_resource_pools(create_resource_pool_service(runtime, access=access),
         app.run()
     assert not app.exception and not app.error
     assert [metric.label for metric in app.metric] == ['Total Pools', 'Pools with no assignment',
-                                                     'Overassigned Pools', 'Pools with future capacity exceptions']
+                                                     'Overassigned Pools', 'Pools with future capacity exceptions',
+                                                     'Overallocated teams / employees']
     assert app.metric[3].value == '2'
     assert tree.call_args.kwargs['future_exception_ids'] == {leaf, mapped}
     breakdown = next(frame.value for frame in app.dataframe if 'Source' in frame.value and 'Date stop' in frame.value)
@@ -385,4 +387,5 @@ render_resource_pools(create_resource_pool_service(runtime, access=access),
         assert set(tree.call_args.args[0].pools) == {parent, leaf, deleted}
         assert set(tree.call_args.args[1]) == {leaf}
         assert {metric.label: metric.value for metric in app.metric} == {
-            'Total Pools': '1', 'Overassigned Pools': '0', 'Pools with no assignment': '1', 'Pools with future capacity exceptions': '0'}
+            'Total Pools': '1', 'Overassigned Pools': '0', 'Pools with no assignment': '1',
+            'Pools with future capacity exceptions': '0', 'Overallocated teams / employees': '0'}

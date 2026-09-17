@@ -2,6 +2,7 @@
 
 import streamlit as st
 import pandas as pd
+from html import escape
 
 from app.application.services.organization import OrganizationService
 from app.application.services.resource_pools import ResourcePoolService
@@ -42,6 +43,7 @@ def render_resource_pools(
     leaf_ids = [identity for identity in active_hierarchy.pools if not active_hierarchy.children.get(identity)]
     all_pool_details = capacity.get_details(leaf_ids, project_ids=project_ids)
     mappings = service.get_all_mappings()
+    allocations = service.mapping_catalog().allocations()
     mapping_types: dict[int, set[str]] = {}
     for mapping in mappings:
         mapping_types.setdefault(mapping.pool_id, set()).add(mapping.target_type)
@@ -54,7 +56,11 @@ def render_resource_pools(
     exceptions = capacity_exception_breakdown(all_pool_details, service.capacity_exceptions_many(leaf_ids),
                                              organization.get_employee_calendar_exceptions())
     future_exception_ids = capacity.future_exception_pool_ids(exceptions)
-    kpi1, kpi3, kpi2, kpi4 = st.columns(4)
+    kpi1, kpi3, kpi2, kpi4, kpi5 = st.columns(5)
+    overallocated = len(allocations.overallocated)
+    kpi5.metric('Overallocated teams / employees', f'⚠ {overallocated}' if overallocated else '0',
+                help='Unique teams and employees allocated above 100% across active pools. '
+                     'Employee totals include team mappings, deduplicated within each pool. Deleted pools are excluded.')
     kpi1.metric(t("settings.kpi_total_pools", default="Total Pools"), total_pools)
     kpi3.metric('Pools with no assignment', unassigned_pools_count,
                 help='Active leaf pools with no employee or team mapped. Containers and deleted pools are excluded.')
@@ -92,6 +98,7 @@ def render_resource_pools(
             peak_capacities=capacity.peak_date_capacities(active_hierarchy, all_pool_details, set(mapping_types)),
             mapping_types=mapping_types,
             future_exception_ids=future_exception_ids,
+            resource_warnings=allocations.pool_warnings(),
             pool_types={row.id: row.label(get_current_locale()) for row in service.get_all_pool_types()},
             hierarchy_types={row.id: row.label(get_current_locale()) for row in service.get_all_hierarchy_types()},
             tags=service.get_tags_by_pools(list(hierarchy.pools)))
@@ -129,7 +136,8 @@ def render_resource_pools(
             st.markdown("####  Mapped  Capacity Breakdown")
             st.caption("Employees mapped directly or through several teams are counted once within each pool.")
             contributions = [
-                {"Pool": detail.pool_name, "Resource": item.resource_name,
+                {"Pool": detail.pool_name, "Resource": ('⚠ ' if (item.resource_type, item.resource_id)
+                    in allocations.overallocated else '') + item.resource_name,
                  "Resource type": item.resource_type.title(), "Function": item.function_name,
                  "Nominal FTE": item.nominal_fte, "Effective %": item.effective_allocation_pct,
                  "Effective FTE": item.effective_fte, "Source": item.source_name,
@@ -137,7 +145,10 @@ def render_resource_pools(
                 for detail in leaf_details for item in detail.contributing_resources
             ]
             if contributions:
-                st.dataframe(pd.DataFrame(contributions), hide_index=True, width="stretch")
+                warnings = [allocations.warning((item.resource_type, item.resource_id))
+                            if (item.resource_type, item.resource_id) in allocations.overallocated else ''
+                            for detail in leaf_details for item in detail.contributing_resources]
+                _mapping_breakdown(contributions, warnings)
             else:
                 st.caption("No mapped resources contribute capacity to this pool.")
             st.markdown('#### Pool overallocation')
@@ -158,6 +169,36 @@ def render_resource_pools(
                 if len(leaf_details) > 1:
                     st.markdown(f"**{detail.pool_name}**")
                 _render_pool_assignments_table(detail.assignments, detail.pool_id, service, planning_page)
+
+
+def _mapping_breakdown(rows: list[dict], warnings: list[str]) -> None:
+    """Show employee warnings with escaped, per-row hover and focus overlays."""
+    if not any(warnings):
+        st.dataframe(pd.DataFrame(rows), hide_index=True, width='stretch')
+        return
+    header = ''.join(f'<th scope="col">{escape(column)}</th>' for column in rows[0])
+    body = []
+    for row, warning in zip(rows, warnings):
+        cells = []
+        for column, value in row.items():
+            content = escape(str(value))
+            if column == 'Resource' and warning:
+                content = (f'<span tabindex="0" class="allocation-warning" '
+                           f'aria-label="{escape(warning, quote=True)}">{content}'
+                           f'<span role="tooltip">{escape(warning)}</span></span>')
+            cells.append(f'<td>{content}</td>')
+        body.append('<tr>' + ''.join(cells) + '</tr>')
+    st.html('''<style>
+      .mapping-breakdown {overflow:visible;padding-bottom:1rem;}
+      .mapping-breakdown table {width:100%;border-collapse:collapse;font-size:.875rem;}
+      .mapping-breakdown th,.mapping-breakdown td {padding:.5rem;text-align:left;border-bottom:1px solid #cbd5e1;}
+      .allocation-warning {position:relative;color:#a12622;font-weight:600;cursor:help;}
+      .allocation-warning [role=tooltip] {display:none;position:absolute;left:0;top:100%;z-index:10;
+        background:#fff;color:#262730;border:1px solid #9ca3af;border-radius:4px;padding:.7rem;
+        min-width:280px;max-width:440px;box-shadow:0 2px 8px #0003;white-space:normal;}
+      .allocation-warning:hover [role=tooltip],.allocation-warning:focus [role=tooltip] {display:block;}
+    </style><div class="mapping-breakdown"><table aria-label="Mapped Capacity Breakdown"><thead><tr>'''
+        + header + '</tr></thead><tbody>' + ''.join(body) + '</tbody></table></div>')
 
 
 def _render_exception_breakdown(exceptions: list[PoolExceptionBreakdown]) -> None:

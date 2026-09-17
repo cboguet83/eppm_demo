@@ -290,28 +290,40 @@ def _open_add_pool_mapping_dialog(
         (row.target_type, row.target_id): row
         for row in service.get_mappings_by_pool(pool_id)
     }
+    catalog = service.mapping_catalog()
+    limits = catalog.limits(pool_id)
     teams = {int(row.team_id): row.team_name for row in df_teams.itertuples()}
     employees = {
         int(row.employee_id): f"{row.firstname} {row.lastname}".strip()
         for row in df_employees.itertuples()
     }
+    teams = {identity: label for identity, label in teams.items()
+             if limits.get(('team', identity), 0) > 0 or ('team', identity) in existing}
+    employees = {identity: label for identity, label in employees.items()
+                 if limits.get(('employee', identity), 0) > 0 or ('employee', identity) in existing}
     st.caption(
-        'Select employees and teams to map. Each selection adds a grid row at 100%. '
+        'Select employees and teams with remaining allocation. New rows default to their remaining percentage. '
+        'Deleted pools do not consume allocation. Existing mappings remain available for correction. '
         'Edit allocations or remove rows below. Save applies all changes together.'
     )
     selected_teams = st.multiselect(
         'Teams', list(teams),
         default=[identity for kind, identity in existing if kind == 'team' and identity in teams],
-        format_func=lambda identity: f'{teams[identity]} [#{identity}]',
+        format_func=lambda identity: f'{teams[identity]} [#{identity}] — {limits["team", identity]:g}% available',
         key=f'mapping_teams_{pool_id}',
     )
     selected_employees = st.multiselect(
         'Employees', list(employees),
         default=[identity for kind, identity in existing if kind == 'employee' and identity in employees],
-        format_func=lambda identity: f'{employees[identity]} [#{identity}]',
+        format_func=lambda identity: f'{employees[identity]} [#{identity}] — {limits["employee", identity]:g}% available',
         key=f'mapping_employees_{pool_id}',
     )
     desired: list[PoolMapping] = []
+    draft = [PoolMapping(pool_id, kind, identity, st.session_state.get(
+        f'mapping_pct_{pool_id}_{kind}_{identity}',
+        existing[kind, identity].allocation_pct if (kind, identity) in existing else limits[kind, identity]))
+        for kind, identities in [('team', selected_teams), ('employee', selected_employees)] for identity in identities]
+    limits = catalog.limits(pool_id, draft)
     with st.container(border=True, key=f'pool_mapping_grid_{pool_id}'):
         widths = [1, 3, 2, 1]
         for column, heading in zip(st.columns(widths), ['Type', 'Name', 'Allocation (%)', 'Action']):
@@ -328,11 +340,18 @@ def _open_add_pool_mapping_dialog(
                 )
                 type_cell.text(kind.title())
                 name_cell.text(labels[identity])
+                maximum = limits[kind, identity]
+                state_key = f'mapping_pct_{pool_id}_{kind}_{identity}'
+                previous = st.session_state.get(state_key, float(current.allocation_pct) if current else maximum)
+                if previous > maximum:
+                    allocation_cell.warning(f'Only {maximum:g}% remains across active pools.')
+                    st.session_state[state_key] = maximum
                 percentage = allocation_cell.number_input(
                     f'{kind.title()}: {labels[identity]} - Allocation (%)',
-                    min_value=0.0, max_value=100.0,
-                    value=float(current.allocation_pct) if current else 100.0,
-                    step=5.0, key=f'mapping_pct_{pool_id}_{kind}_{identity}',
+                    min_value=0.0, max_value=float(maximum),
+                    value=min(float(current.allocation_pct), maximum) if current else maximum,
+                    step=5.0, key=state_key,
+                    help='Maximum remaining allocation across active pools, including employees mapped through teams.',
                     label_visibility='collapsed',
                 )
                 action_cell.button(

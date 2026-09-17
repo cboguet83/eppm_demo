@@ -224,11 +224,12 @@ export default function({data, parentElement, setTriggerValue, setStateValue}) {
             const badge = document.createElement('span'); badge.className = 'pool-deleted';
             badge.textContent = 'Deleted'; identity.appendChild(badge);
         }
-        if (row.current_exceeded || row.peak_exceeded) {
+        if (row.current_exceeded || row.peak_exceeded || row.resource_warning) {
             const warning = document.createElement('span'); warning.className = 'pool-warning';
             warning.textContent = '\u26a0'; warning.setAttribute('role','img');
             warning.title = [row.current_exceeded ? 'Current mappedcapacity exceeds pool capacity. Verify teams and employess mapping to this pool' : '',
-                row.peak_exceeded ? 'Future peak demand exceeds available capacity on a peak-demand date.' : ''].filter(Boolean).join(' ');
+                row.peak_exceeded ? 'Future peak demand exceeds available capacity on a peak-demand date.' : '',
+                row.resource_warning || ''].filter(Boolean).join(' ');
             warning.setAttribute('aria-label',warning.title); label.appendChild(warning);
         }
         for (const field of fields.slice(1)) {
@@ -299,6 +300,7 @@ def resource_pool_tree(
     peak_capacities: dict[int, float] | None = None,
     mapping_types: dict[int, set[str]] | None = None,
     future_exception_ids: set[int] | None = None,
+    resource_warnings: dict[int, str] | None = None,
 ) -> TableAction | None:
     """Render a validated forest and accept actions only for existing pool IDs.
 
@@ -314,6 +316,7 @@ def resource_pool_tree(
         peak_capacities: Available capacity on peak-demand dates, including exceptions.
         mapping_types: Direct mapping target types by pool ID.
         future_exception_ids: Leaf pools with an effective exception ending today or later.
+        resource_warnings: Cross-pool employee/team allocation warnings by pool.
 
     Returns:
         A validated selection, edit or child-creation event, when triggered.
@@ -340,6 +343,7 @@ def resource_pool_tree(
         current_capacity = (assigned_capacities or {}).get(identity, 0)
         peak_demand = (peak_demands or {}).get(identity, 0)
         rows.append({'id': identity, 'name': hierarchy.pools[identity].name, 'depth': depth,
+                     'resource_warning': (resource_warnings or {}).get(identity, '') if calculated else '',
                      'current_exceeded': calculated and current_capacity > nominal_capacity,
                      'peak_exceeded': calculated and peak_demand > (peak_capacities or {}).get(identity, nominal_capacity),
                      'deleted': pool.deleted_flag, 'has_children': bool(children),
