@@ -1404,6 +1404,12 @@
       font-weight: 700;
     }
 
+    .resource-left-row.resource-group-row.alternative-resource-row,
+    .resource-left-row.resource-group-row.alternative-resource-row .r-name-text,
+    .resource-left-row.resource-group-row.alternative-resource-row .r-badge {
+      color: #9333ea;
+    }
+
     .resource-tree-toggle {
       align-items: center;
       background: transparent;
@@ -2209,6 +2215,14 @@ button:not(.context-menu-item):disabled {opacity:.5;}
             <input type="checkbox" id="chk-hide-unused-pools" checked onchange="onToggleResourceRows()">
             <span id="lbl-hide-unused-pools">Hide pools unused by selected projects</span>
           </label>
+          <label class="resource-option-checkbox">
+            <input type="checkbox" id="chk-show-total-demand" checked onchange="onToggleResourceRows()">
+            <span id="lbl-show-total">Pool total assignments</span>
+          </label>
+          <label class="resource-option-checkbox">
+            <input type="checkbox" id="chk-show-selected-demand" checked onchange="onToggleResourceRows()">
+            <span id="lbl-show-selected">Active view pool assignment</span>
+          </label>
         </div>
         <div class="resource-panel-legend">
           <span class="legend-item"><span class="legend-box normal"></span> <span id="lbl-within-cap">Within Capacity</span></span>
@@ -2850,6 +2864,8 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       const elOnlyOverallocated = document.getElementById('lbl-only-overallocated-pools');
       if (elOnlyOverallocated) elOnlyOverallocated.innerText = getT('resource_grid.only_overallocated', 'Only overallocated pools');
       const elWithin = document.getElementById('lbl-within-cap');
+      document.getElementById('lbl-show-total').innerText = getT('resource_grid.show_total', 'Pool total assignments');
+      document.getElementById('lbl-show-selected').innerText = getT('resource_grid.show_selected', 'Active view pool assignment');
       if (elWithin) elWithin.innerText = getT('resource_grid.within_capacity', 'Within Capacity');
       const elOver = document.getElementById('lbl-overallocated');
       if (elOver) elOver.innerText = getT('resource_grid.overallocated', 'Overallocated');
@@ -5151,6 +5167,8 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     }
 
     function onToggleResourceRows() {
+      showTotalRows = document.getElementById('chk-show-total-demand').checked;
+      showSelectedRows = document.getElementById('chk-show-selected-demand').checked;
       hideUnusedPools = Boolean(document.getElementById('chk-hide-unused-pools')?.checked);
       onlyOverallocatedPools = Boolean(document.getElementById('chk-only-overallocated-pools')?.checked);
 
@@ -5173,6 +5191,8 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     }
 
     let hideUnusedPools = true;
+    let showTotalRows = true;
+    let showSelectedRows = true;
     let onlyOverallocatedPools = false;
 
     function isResourcePoolVisible(pool) {
@@ -5249,8 +5269,8 @@ button:not(.context-menu-item):disabled {opacity:.5;}
           return;
         }
         rows.push({ rowType: 'pool_assigned', node, nodeKey, pool, depth, collapsed: false });
-        rows.push({ rowType: 'pool_total', node, nodeKey, pool, depth: depth + 1, collapsed: false });
-        rows.push({ rowType: 'pool_selected', node, nodeKey, pool, depth: depth + 1, collapsed: false });
+        if (showTotalRows) rows.push({ rowType: 'pool_total', node, nodeKey, pool, depth: depth + 1, collapsed: false });
+        if (showSelectedRows) rows.push({ rowType: 'pool_selected', node, nodeKey, pool, depth: depth + 1, collapsed: false });
       };
 
       hierarchy.forEach(node => visit(node, 0));
@@ -5258,7 +5278,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       return rows.flatMap(row => {
         if (row.rowType === 'pool_assigned' || (row.pool && row.collapsed)) return [row];
         const scopes = row.rowType === 'group_total'
-          ? ['total']
+          ? (showTotalRows ? ['total'] : [])
           : [row.rowType === 'pool_selected' ? 'selected' : 'total'];
         const comparisonRows = scopes.filter(scope => {
           const poolIds = row.rowType === 'group_total' ? row.node.descendant_pool_ids || [] : [row.pool.id];

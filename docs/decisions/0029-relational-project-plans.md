@@ -210,6 +210,9 @@ Pool total assignments, and Active view pool assignment. Alternative rows use th
 same branch arrow and badge layout without repeating the pool name, and appear
 only if a displayed cell differs at the current time scale. Containers show only
 total comparisons, never alternative selected-project rows.
+The total and active-view assignment checkboxes independently hide expanded pool
+rows and their alternative comparisons. Collapsed pools retain their total summary.
+Alternative container labels use the same purple text as alternative pool rows.
 Double-clicking either side of a container row toggles it. The shared Expand All
 control expands projects and all resource nodes; Collapse All collapses projects
 and restores the resource tree to root-only expansion. Edit mode uses the same
