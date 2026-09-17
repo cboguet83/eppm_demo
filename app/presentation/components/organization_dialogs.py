@@ -620,17 +620,18 @@ def _open_edit_employee_dialog(
     edit_mobile = c_m2.text_input(t("settings.field_mobile", default="Mobile / Phone"), value=emp_obj.mobile)
     edit_landline = st.text_input(t("settings.field_landline", default="Landline"), value=emp_obj.landline)
 
-    from app.presentation.components.employee_editors import employee_function_editor
-    assignments = employee_function_editor(emp_obj, df_funcs)
     c_occupation = st.container()
     edit_occupation = c_occupation.number_input(
-        t("settings.field_occupation_percentage", default="Occupation %"),
+        "Employee Overall occupation",
         min_value=0.0,
         max_value=100.0,
         value=float(emp_obj.occupation_percentage),
         step=5.0,
-        help='Normal working capacity: 80% means 0.8 FTE. Function allocations divide this capacity; calendar exceptions replace it for their dates.',
+        help='Full time employee has an occupation of 100%, half time employee has an occupation of 50%.',
     )
+
+    from app.presentation.components.employee_editors import employee_function_editor
+    assignments = employee_function_editor(emp_obj, df_funcs)
 
     _render_employee_calendar_exception_editor(
         service,

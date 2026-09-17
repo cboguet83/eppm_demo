@@ -127,6 +127,11 @@ def test_employee_profile_grid_saves_multiple_functions_and_rejects_excess(datab
     org, _, employee, first, second, *_ = setup_split(database, access)
     app = dialog(database, access, f'_open_edit_employee_dialog(service, {employee}, functions)')
 
+    occupation = app.number_input[0]
+    assert occupation.label == 'Employee Overall occupation'
+    assert occupation.value == 80
+    assert occupation.proto.help == 'Full time employee has an occupation of 100%, half time employee has an occupation of 50%.'
+
     allocations = [widget for widget in app.number_input if widget.label == 'Allocation (%)']
     allocations[0].set_value(55)
     allocations[1].set_value(45)
