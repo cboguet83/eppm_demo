@@ -40,6 +40,40 @@ test('compact Gantt CSS matches row geometry and halves toolbar padding', () => 
   assert.doesNotMatch(script, /\*\s*46\b|\/\s*46\b/);
 });
 
+test('short project filters reserve enough frame height for the complete resource grid', () => {
+  const minimumHeight = Number(html.match(
+    /\.gantt-layout-container\s*\{[^}]*min-height:\s*([\d.]+)px/
+  )[1]);
+  const layout = {style: {}};
+  let frameHeight;
+  const context = vm.createContext({
+    document: {
+      getElementById: () => layout,
+      querySelector: () => ({offsetHeight: 45}),
+    },
+    resourcePoolsData: [],
+    rowHeight: () => 41.4,
+    masterRenderItems: [],
+    isResourceGridCollapsed: false,
+    getResourceDisplayRows: () => [],
+    resourceRowOffsets: () => [0, 71.4],
+    Streamlit: {setFrameHeight: height => { frameHeight = height; }},
+  });
+  vm.runInContext(script.slice(script.indexOf('    function updateComponentFrameHeight('),
+    script.indexOf('    // Synchronized column hover overlay')), context);
+  for (const taskCount of [0, 1, 2, 30]) {
+    for (const collapsed of [false, true]) {
+      context.masterRenderItems = Array(taskCount);
+      context.isResourceGridCollapsed = collapsed;
+      context.updateComponentFrameHeight();
+      const actualGanttHeight = Math.max(minimumHeight, parseFloat(layout.style.height));
+      const resourceHeight = 34 + (collapsed ? 0 : 56 + 71.4 + 16);
+      assert.ok(frameHeight >= actualGanttHeight + resourceHeight + 45,
+        `Resource grid clipped with ${taskCount} task rows, collapsed=${collapsed}`);
+    }
+  }
+});
+
 test('resource headers synchronize horizontally without scroll-driven vertical positioning', () => {
   const nodes = new Map(['resource-grid-main', 'resource-right-pane-scroller',
     'resource-header-right-wrapper', 'timeline-body-scroller', 'timeline-header-wrapper']
