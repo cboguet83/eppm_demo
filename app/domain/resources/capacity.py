@@ -223,7 +223,7 @@ def calculate_capacity(inputs: CapacityInputs, today: date) -> PoolCapacityDetai
     effective = assigned if staffing.has_assigned_resources else theoretical
     effective_calendar = dict(daily_capacity) if staffing.has_assigned_resources else {}
     reductions: dict[str, Decimal] = {}
-    for exception in inputs.capacity_exceptions:
+    for exception in ([] if staffing.has_assigned_resources else inputs.capacity_exceptions):
         first, last = date.fromisoformat(exception.start_date), date.fromisoformat(exception.end_date)
         for ordinal in range(first.toordinal(), last.toordinal() + 1):
             day = date.fromordinal(ordinal).isoformat()

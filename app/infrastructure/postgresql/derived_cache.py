@@ -27,7 +27,7 @@ type JsonPayload = dict[str, object]
 type CacheRow = tuple[int, str, JsonPayload | None, bool, bool]
 type MemoryKey = tuple[CacheKind, date, int, str]
 logger = get_logger(__name__)
-_VERSION = 1
+_VERSION = 2
 
 
 @dataclass(frozen=True)

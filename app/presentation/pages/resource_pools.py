@@ -6,8 +6,8 @@ import pandas as pd
 from app.application.services.organization import OrganizationService
 from app.application.services.resource_pools import ResourcePoolService
 from app.application.services.pool_capacity import PoolCapacityService
+from app.application.services.pool_capacity_exceptions import capacity_exception_breakdown, PoolExceptionBreakdown
 from app.domain.resources.hierarchy import PoolHierarchy
-from app.domain.projects.project import PROJECT_STATUSES
 from app.domain.resources.models import PoolCapacityDetail
 from app.presentation.components.resource_pool_dialogs import (
     pool_errors,
@@ -32,12 +32,8 @@ def render_resource_pools(
     planning_page: str,
 ) -> None:
     """Render the tree, overassigned periods and selected pool resource details."""
-    status_filter, deleted_filter = st.columns([3, 1])
-    with status_filter:
-        statuses = st.multiselect('Project statuses included in demand', PROJECT_STATUSES,
-                                  default=['In Progress'], key='pool_demand_statuses')
-    with deleted_filter:
-        show_deleted = st.checkbox('Show deleted pools', value=False, key='pool_show_deleted')
+    statuses = ['In Progress']
+    show_deleted = st.checkbox('Show deleted pools', value=False, key='pool_show_deleted')
     pool_records = service.get_all_pools(include_deleted=show_deleted)
     pool_csv_controls(service, show_deleted=show_deleted)
     hierarchy = PoolHierarchy(pool_records)
@@ -55,10 +51,15 @@ def render_resource_pools(
     overassigned_pools_count = sum(1 for pool in all_pool_details if pool.is_overassigned)
     unassigned_pools_count = sum(not (mapping_types.get(identity, set()) & {'employee', 'team'})
                                  for identity in leaf_ids)
-    kpi1, kpi2, kpi3 = st.columns(3)
+    exceptions = capacity_exception_breakdown(all_pool_details, service.capacity_exceptions_many(leaf_ids),
+                                             organization.get_employee_calendar_exceptions())
+    future_exception_ids = capacity.future_exception_pool_ids(exceptions)
+    kpi1, kpi3, kpi2, kpi4 = st.columns(4)
     kpi1.metric(t("settings.kpi_total_pools", default="Total Pools"), total_pools)
     kpi3.metric('Pools with no assignment', unassigned_pools_count,
                 help='Active leaf pools with no employee or team mapped. Containers and deleted pools are excluded.')
+    kpi4.metric('Pools with future capacity exceptions', len(future_exception_ids),
+                help='Active leaf pools with an applicable exception ending today or later. Mapped pools use employee exceptions; unmapped pools use pool exceptions.')
     if overassigned_pools_count > 0:
         kpi2.metric(
             t("settings.kpi_overassigned_pools", default="Overassigned Pools"),
@@ -90,6 +91,7 @@ def render_resource_pools(
             peak_demands={row.pool_id: capacity.future_peak_demand([row]) for row in all_pool_details},
             peak_capacities=capacity.peak_date_capacities(active_hierarchy, all_pool_details, set(mapping_types)),
             mapping_types=mapping_types,
+            future_exception_ids=future_exception_ids,
             pool_types={row.id: row.label(get_current_locale()) for row in service.get_all_pool_types()},
             hierarchy_types={row.id: row.label(get_current_locale()) for row in service.get_all_hierarchy_types()},
             tags=service.get_tags_by_pools(list(hierarchy.pools)))
@@ -123,6 +125,7 @@ def render_resource_pools(
         if selected_pool_id in active_hierarchy.pools:
             selected_leaves = active_hierarchy.descendants(selected_pool_id, leaves_only=True)
             leaf_details = [row for row in all_pool_details if row.pool_id in selected_leaves]
+            _render_exception_breakdown([item for item in exceptions if item.pool_id in selected_leaves])
             st.markdown("####  Mapped  Capacity Breakdown")
             st.caption("Employees mapped directly or through several teams are counted once within each pool.")
             contributions = [
@@ -155,6 +158,22 @@ def render_resource_pools(
                 if len(leaf_details) > 1:
                     st.markdown(f"**{detail.pool_name}**")
                 _render_pool_assignments_table(detail.assignments, detail.pool_id, service, planning_page)
+
+
+def _render_exception_breakdown(exceptions: list[PoolExceptionBreakdown]) -> None:
+    """Show all effective exception periods for the selected leaf or subtree."""
+    st.markdown('#### Pool capacity exception breakdown')
+    if not exceptions:
+        st.caption('No applicable capacity exceptions for this pool.')
+        return
+    st.caption('All periods are shown, including past exceptions. Employee exceptions replace pool exceptions when resources are mapped. '
+               'FTE reduction includes the mapping allocation; a negative value increases capacity.')
+    st.dataframe(pd.DataFrame([{
+        'Pool': item.pool_name, 'Source': item.source, 'Resource': item.resource_name,
+        'Mapped via': item.mapping_source, 'Date start': item.start_date, 'Date stop': item.end_date,
+        'FTE reduction': item.reduction_fte, 'Employee availability (%)': item.occupation_percentage,
+        'Reason': item.reason,
+    } for item in exceptions]), hide_index=True, width='stretch')
 
 
 def _open_pool_consuming_projects(hierarchy: PoolHierarchy, pool_id: int,

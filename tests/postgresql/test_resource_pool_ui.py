@@ -1,14 +1,15 @@
 """Real pool dialogs and Settings routing through the migrated services."""
 
 from unittest.mock import patch
+from datetime import date, timedelta
 
 import psycopg
 import pytest
 import streamlit as st
 from streamlit.testing.v1 import AppTest
 
-from app.domain.organization.models import Employee, Team
-from app.domain.resources.models import PoolAssignment, PoolMapping, ResourcePool
+from app.domain.organization.models import Employee, Team, EmployeeCalendarException
+from app.domain.resources.models import PoolAssignment, PoolMapping, ResourcePool, PoolCapacityException
 from app.application.services.business_access import BusinessAccess
 from app.domain.access.models import AccessDenied
 from app.main import create_organization_service, create_resource_pool_service
@@ -229,7 +230,7 @@ render_settings_view(create_settings_workspace(runtime, access=access))
     app.session_state["settings_active_tab"] = "resource_pools"
     with patch("app.presentation.components.action_table.action_table", return_value=None) as table:
         app.run()
-    assert not app.exception and len(app.metric) == 3
+    assert not app.exception and len(app.metric) == 4
     rows, columns, actions = table.call_args.args
     assert rows[0]["project"] == "<script>project</script>"
     assert rows[0]["notes"] == "<img src=x onerror=alert(1)>"
@@ -295,7 +296,45 @@ render_resource_pools(create_resource_pool_service(runtime, access=access),
     assert app.dataframe[0].value.iloc[0]['Effective FTE'] == 0.5
     assert not any(button.key == f'btn_add_map_{parent}' for button in app.button)
     assert {metric.label: metric.value for metric in app.metric} == {
-        'Total Pools': '1', 'Overassigned Pools': '0', 'Pools with no assignment': '0'}
+        'Total Pools': '1', 'Overassigned Pools': '0', 'Pools with no assignment': '0', 'Pools with future capacity exceptions': '0'}
+
+
+def test_effective_exception_flags_counts_breakdown_and_mapped_editor(database, access):
+    service = create_resource_pool_service(database, access=access)
+    organization = create_organization_service(database, access=access)
+    today = date.today()
+    parent = service.create_pool(ResourcePool('Parent'))
+    leaf = service.create_pool(ResourcePool('Pool exceptions', capacity_fte=3, parent_pool_id=parent))
+    mapped = service.create_pool(ResourcePool('Mapped', parent_pool_id=parent))
+    for first, last in [(today - timedelta(days=10), today - timedelta(days=1)),
+                        (today - timedelta(days=5), today)]:
+        service.save_capacity_exception(PoolCapacityException(leaf, first.isoformat(), last.isoformat(), .5))
+    service.save_capacity_exception(PoolCapacityException(mapped, today.isoformat(), today.isoformat(), 99, 'Ignored'))
+    employee = organization.create_employee(Employee('Ada', 'Lovelace', 'ada@exception.test', 'EXCEPTION-ADA'))
+    organization.create_employee_calendar_exception(EmployeeCalendarException(employee, today, today + timedelta(days=1), 50))
+    service.create_mapping(PoolMapping(mapped, 'employee', employee, 50))
+    app = native_screen("""
+from app.main import create_pool_capacity_service, create_organization_service, create_resource_pool_service
+from app.presentation.pages.resource_pools import render_resource_pools
+render_resource_pools(create_resource_pool_service(runtime, access=access),
+    create_pool_capacity_service(runtime, access=access), create_organization_service(runtime, access=access), 'planning')
+""", database, access)
+    app.session_state['target_resource_pool_id'] = parent
+    with patch('app.presentation.pages.resource_pools.resource_pool_tree', return_value=None) as tree:
+        app.run()
+    assert not app.exception and not app.error
+    assert [metric.label for metric in app.metric] == ['Total Pools', 'Pools with no assignment',
+                                                     'Overassigned Pools', 'Pools with future capacity exceptions']
+    assert app.metric[3].value == '2'
+    assert tree.call_args.kwargs['future_exception_ids'] == {leaf, mapped}
+    breakdown = next(frame.value for frame in app.dataframe if 'Source' in frame.value and 'Date stop' in frame.value)
+    assert len(breakdown) == 3 and set(breakdown['Source']) == {'Pool', 'Employee'}
+    assert 'Ignored' not in breakdown['Reason'].tolist()
+    edit = dialog(database, access, f'_open_edit_pool_dialog(service, {mapped})')
+    assert not edit.exception and not edit.error
+    assert not any((widget.key or '').startswith('pool_exception_') for widget in edit.selectbox)
+    edit = dialog(database, access, f'_open_edit_pool_dialog(service, {leaf})')
+    assert any(widget.key == f'pool_exception_select_{leaf}' for widget in edit.selectbox)
 
 
 def test_deleted_visibility_and_summary_calculate_only_active_leaves(database, access):
@@ -314,7 +353,7 @@ render_resource_pools(create_resource_pool_service(runtime, access=access),
             patch('app.application.services.pool_capacity.aggregate_capacity', side_effect=AssertionError('Container calculation')):
         app.run()
         assert not app.exception and not app.error
-        assert app.multiselect(key='pool_demand_statuses').value == ['In Progress']
+        assert not any(widget.key == 'pool_demand_statuses' for widget in app.multiselect)
         assert not app.checkbox(key='pool_show_deleted').value
         assert set(tree.call_args.args[0].pools) == {parent, leaf}
         assert set(tree.call_args.args[1]) == {leaf}
@@ -325,4 +364,4 @@ render_resource_pools(create_resource_pool_service(runtime, access=access),
         assert set(tree.call_args.args[0].pools) == {parent, leaf, deleted}
         assert set(tree.call_args.args[1]) == {leaf}
         assert {metric.label: metric.value for metric in app.metric} == {
-            'Total Pools': '1', 'Overassigned Pools': '0', 'Pools with no assignment': '1'}
+            'Total Pools': '1', 'Overassigned Pools': '0', 'Pools with no assignment': '1', 'Pools with future capacity exceptions': '0'}

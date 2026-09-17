@@ -77,7 +77,7 @@ def test_csv_export_respects_deleted_toggle_and_import_updates_the_hierarchy(aut
             })
             expect(dialog.get_by_text('2 pool records ready to import.')).to_be_visible()
             dialog.get_by_role('button', name='Import pools', exact=True).click()
-            expect(page.get_by_text('Import successful: 1 pools created, 1 updated.', exact=True)).to_be_visible()
+            expect(page.get_by_text('Import successful: 1 pools created, 1 updated, 0 marked deleted.', exact=True)).to_be_visible()
             expect(page.get_by_role('treeitem', name='Updated', exact=True)).to_be_visible()
             expect(page.get_by_role('treeitem', name='New pool', exact=True)).to_be_visible()
             expect(page.get_by_role('button', name='Filter Has Mappings', exact=True)).to_be_visible()

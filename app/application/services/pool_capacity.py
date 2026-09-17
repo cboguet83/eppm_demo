@@ -14,6 +14,7 @@ from app.domain.resources.allocation_scope import scope_pool_detail
 from app.domain.resources.models import PoolCapacityDetail, PoolCapacitySummary
 from app.domain.planning.plans import PlanContent
 from app.domain.planning.plan_comparison import scenario_capacity
+from app.application.services.pool_capacity_exceptions import PoolExceptionBreakdown
 
 
 class PoolCapacityService:
@@ -124,6 +125,11 @@ class PoolCapacityService:
                 if day >= today:
                     demand[day] = demand.get(day, 0.0) + required
         return round(max(demand.values(), default=0.0), 3)
+
+    def future_exception_pool_ids(self, exceptions: list[PoolExceptionBreakdown]) -> set[int]:
+        """Count each pool once when any effective exception ends today or later."""
+        today = self._today().isoformat()
+        return {item.pool_id for item in exceptions if item.end_date >= today}
 
     def _load(self, pool_ids: list[int] | None, *, details: bool,
               project_ids: set[int] | None = None) -> list[PoolCapacityDetail] | list[PoolCapacitySummary]:

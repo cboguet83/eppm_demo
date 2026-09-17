@@ -50,11 +50,26 @@ container still displays its individual leaf pools' allocations and overassigned
 periods. A deleted child does not make its active parent a capacity container;
 the historical child can still be expanded when deleted rows are visible.
 
-The summary keeps Total Pools and Overassigned Pools, and adds Pools with no
-assignment. All three counts include active leaves only, excluding containers
+The summary shows Total Pools, Pools with no assignment, Overassigned Pools,
+and Pools with future capacity exceptions, in that order. All counts include active leaves only, excluding containers
 and deleted pools. A pool has no assignment for this
 summary when no active employee or team is mapped, regardless of project demand.
 Showing deleted rows does not change these active summary counts.
+
+The status selector is hidden; demand remains restricted to In Progress projects,
+as explained by the Future Peak Demand header tooltip. The exception indicator
+counts each pool once when an applicable exception ends today or later, including
+ongoing exceptions and single-day exceptions today. The hierarchy exposes the
+same flag. Selecting a pool or container displays all applicable exception periods,
+including historical ones, with Pool or Employee source and the mapping path.
+
+Unmapped pools use pool capacity exceptions. Mapped-resource capacity ignores
+pool-level exceptions and uses employee availability exceptions instead, including
+employees occupying functions explicitly assigned to mapped teams. The existing
+staffing resolution supplies deduplicated employees and mapping precedence.
+Retained pool exceptions are hidden in the mapped pool editor and resume applying
+if all resource mappings are removed. Derived cache format version 2 invalidates
+capacity results computed with the former combined-exception rule.
 
 ## Resource-pool CSV transfer
 
@@ -78,6 +93,12 @@ pool type defaults to 1, and the deleted flag defaults to false. Booleans accept
 `true`/`false` and `1`/`0`. Comma and semicolon delimiters are accepted.
 Mappings, tags, creation timestamps and capacity exceptions are not transferred
 or modified by CSV import.
+
+Imports synchronize the active catalog: active pools omitted from the file are
+marked deleted in the same transaction, retaining mappings and history. The dialog
+warns before submission and reports the number marked deleted. Include all active
+parent containers in the file; retaining an active child while omitting its parent
+fails validation and rolls back the entire import. An empty file is rejected.
 
 An ID matching an existing record (including a deleted record) updates that
 record. Missing or unknown IDs create new records using the database identity

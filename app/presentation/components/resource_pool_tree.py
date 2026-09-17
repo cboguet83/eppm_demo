@@ -10,15 +10,15 @@ from app.presentation.components.context_menu import CONTEXT_MENU_CSS
 _CSS = """
 .pool-tree {font:inherit; border:1px solid var(--st-border-color); border-radius:8px;}
 .tree-scroll {max-height:460px; overflow:auto; padding:6px;}
-.pool-row {display:grid; grid-template-columns:minmax(240px,1fr) 110px 120px 130px 150px 150px 140px 185px;
+.pool-row {display:grid; grid-template-columns:minmax(240px,1fr) 110px 120px 130px 150px 150px 140px 185px 210px;
     align-items:center; gap:8px; padding:4.2px 10px; box-sizing:border-box;
     border-radius:5px; cursor:pointer; min-height:36.4px; outline-offset:-2px;}
 .pool-row.container {font-weight:700; background:#f1f3f5; color:#263238;}
 .pool-identity {display:flex; align-items:center; min-width:0;}
-.tree-columns {display:grid; grid-template-columns:minmax(240px,1fr) 110px 120px 130px 150px 150px 140px 185px;
+.tree-columns {display:grid; grid-template-columns:minmax(240px,1fr) 110px 120px 130px 150px 150px 140px 185px 210px;
     gap:8px; padding:8px 10px; font-size:12px; font-weight:600; position:sticky; top:0;
     background:var(--st-background-color); z-index:1;}
-.pool-row,.tree-columns {min-width:1300px;}
+.pool-row,.tree-columns {min-width:1530px;}
 .tree-columns input {display:block; box-sizing:border-box; width:100%; min-width:0; margin-top:6px;
     font:inherit; font-weight:400; padding:5px; border:1px solid var(--st-border-color);
     border-radius:4px; color:var(--st-text-color); background:var(--st-background-color);}
@@ -52,7 +52,7 @@ export default function({data, parentElement, setTriggerValue, setStateValue}) {
     const collapsed = new Set(data.collapsed || []);
     const filters = data.filters || {};
     const activeFilters = Object.values(filters).some(value => Array.isArray(value));
-    const fields = ['name','pool_type','hierarchy_type','tags','capacity','assigned_capacity','mappings','peak_demand'];
+    const fields = ['name','pool_type','hierarchy_type','tags','capacity','assigned_capacity','mappings','peak_demand','future_exceptions'];
     const matches = new Set(data.rows.filter(row => fields.every(field =>
         !Array.isArray(filters[field]) || filters[field].includes(String(row[field]))
     )).map(row => row.id));
@@ -165,14 +165,15 @@ export default function({data, parentElement, setTriggerValue, setStateValue}) {
         menu.style.top = Math.max(10,Math.min(rect.bottom,window.innerHeight-menu.offsetHeight-10))+'px';
         search.focus();
     };
-    for (const [index,text] of ['Pool','Pool type','Hierarchy type','Tags','Pool Capacity (FTE)','Current Capacity (FTE)','Has Mappings','Future Peak Demand (FTE)'].entries()) {
+    for (const [index,text] of ['Pool','Pool type','Hierarchy type','Tags','Pool Capacity (FTE)','Current Capacity (FTE)','Has Mappings','Future Peak Demand (FTE)','Has Future Capacity Exceptions'].entries()) {
         const cell = document.createElement('span');
         const button = document.createElement('button'); button.className = 'context-menu-item filter-button';
         button.setAttribute('aria-label',`Filter ${text}`); button.setAttribute('aria-haspopup','dialog');
         button.textContent = text + (Array.isArray(filters[fields[index]]) ? ' ▾ ●' : ' ▾');
         if (index === 5) button.title = "Today's capacity after employee availability exceptions, or pool capacity exceptions when unmapped.";
         if (index === 6) button.title = 'A check mark indicates direct employee or team mappings on a leaf pool.';
-        if (index === 7) button.title = 'Maximum required FTE from today onward for the selected project statuses.';
+        if (index === 7) button.title = 'Maximum required FTE from today onward, counting In Progress projects only.';
+        if (index === 8) button.title = 'An applicable capacity exception ends today or later. Mapped pools use employee exceptions; unmapped pools use pool exceptions.';
         button.onclick = event => openFilter(event,fields[index],text);
         cell.appendChild(button); header.appendChild(cell);
     }
@@ -224,13 +225,13 @@ export default function({data, parentElement, setTriggerValue, setStateValue}) {
                 row.peak_exceeded ? 'Future peak demand exceeds available capacity on a peak-demand date.' : ''].filter(Boolean).join(' ');
             warning.setAttribute('aria-label',warning.title); label.appendChild(warning);
         }
-        for (const [index,value] of [row.pool_type,row.hierarchy_type,row.tags,row.capacity,row.assigned_capacity,row.mappings,row.peak_demand].entries()) {
+        for (const [index,value] of [row.pool_type,row.hierarchy_type,row.tags,row.capacity,row.assigned_capacity,row.mappings,row.peak_demand,row.future_exceptions].entries()) {
             const cell = document.createElement('span'); cell.className = 'pool-meta';
             if ((index === 4 && row.current_exceeded) || (index === 6 && row.peak_exceeded)) {
                 cell.classList.add('capacity-exceeded');
             }
             if (index === 2) {cell.classList.add('pool-tags'); cell.title = value;}
-            if (index === 5) {cell.style.fontWeight = '900';}
+            if (index === 5 || index === 7) {cell.style.fontWeight = '900';}
             cell.textContent = value; item.appendChild(cell);
         }
         item.children[5].title = "Today's capacity after employee availability exceptions, or pool capacity exceptions when unmapped.";
@@ -287,6 +288,7 @@ def resource_pool_tree(
     peak_demands: dict[int, float] | None = None,
     peak_capacities: dict[int, float] | None = None,
     mapping_types: dict[int, set[str]] | None = None,
+    future_exception_ids: set[int] | None = None,
 ) -> TableAction | None:
     """Render a validated forest and accept actions only for existing pool IDs.
 
@@ -301,6 +303,7 @@ def resource_pool_tree(
         peak_demands: Peak required daily demand from today onward for selected statuses.
         peak_capacities: Available capacity on peak-demand dates, including exceptions.
         mapping_types: Direct mapping target types by pool ID.
+        future_exception_ids: Leaf pools with an effective exception ending today or later.
 
     Returns:
         A validated selection, edit or child-creation event, when triggered.
@@ -326,6 +329,7 @@ def resource_pool_tree(
                      'peak_exceeded': calculated and peak_demand > (peak_capacities or {}).get(identity, nominal_capacity),
                      'deleted': pool.deleted_flag, 'has_children': bool(children),
                      'mappings': mapping_label,
+                     'future_exceptions': '✓' if calculated and identity in (future_exception_ids or set()) else '',
                      'parent': hierarchy.pools[identity].parent_pool_id,
                      'peak_demand': f'{peak_demand:.2f}' if calculated else '',
                      'tags': ', '.join((tags or {}).get(identity, [])),

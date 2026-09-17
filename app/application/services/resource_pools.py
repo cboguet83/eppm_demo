@@ -102,6 +102,10 @@ class ResourcePoolService:
         """Read the selected pool's absolute-capacity reduction periods."""
         return self._gateway.run(lambda store: store.capacity_exceptions([pool_id]))
 
+    def capacity_exceptions_many(self, pool_ids: list[int]) -> list[PoolCapacityException]:
+        """Read leaf-pool exceptions in one authorized batch."""
+        return self._gateway.run(lambda store: store.capacity_exceptions(pool_ids), permission=Permission.SHARED)
+
     @staticmethod
     def _normalize_capacity_exception(item: PoolCapacityException) -> PoolCapacityException:
         """Validate and normalize an inclusive capacity reduction."""

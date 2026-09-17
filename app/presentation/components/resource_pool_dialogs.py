@@ -195,10 +195,8 @@ def _open_edit_pool_dialog(service: ResourcePoolService, pool_id: int) -> None:
     if col_cancel.button(t("settings.btn_cancel", default="Cancel"), width="stretch"):
         st.rerun()
 
-    with st.expander(t('pool_exceptions.title', default='Capacity exceptions')):
-        if container:
-            st.caption('Manage capacity exceptions on the child pools. Containers aggregate their capacity.')
-        else:
+    if not container and not service.get_mappings_by_pool(pool_id):
+        with st.expander(t('pool_exceptions.title', default='Capacity exceptions')):
             _capacity_exceptions_editor(service, pool_id)
 
 

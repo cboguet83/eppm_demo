@@ -66,6 +66,16 @@ def test_client_cannot_open_mapping_action_for_container():
         assert resource_pool_tree(tree, {}, 1) is None
 
 
+def test_future_exception_indicator_only_marks_active_leaves():
+    tree = PoolHierarchy([ResourcePool('Root', id=1), ResourcePool('Leaf', id=2, parent_pool_id=1),
+                          ResourcePool('Deleted', id=3, deleted_flag=True)])
+    component = Mock(return_value=SimpleNamespace(action=None))
+    with patch('streamlit.components.v2.component', return_value=component):
+        resource_pool_tree(tree, {}, 1, future_exception_ids={1, 2, 3})
+    assert {row['id']: row['future_exceptions'] for row in component.call_args.kwargs['data']['rows']} == {
+        1: '', 2: '✓', 3: ''}
+
+
 def test_empty_tree_accepts_root_creation():
     component = Mock(return_value=SimpleNamespace(action={'id': 0, 'action': 'create_root'}))
     with patch('streamlit.components.v2.component', return_value=component):

@@ -19,6 +19,7 @@ class PoolImportResult:
 
     created: int
     updated: int
+    deactivated: int = 0
 
 
 def export_pools(pools: list[ResourcePool]) -> str:
@@ -124,7 +125,10 @@ def import_pools(store: ResourcePoolStore, pools: list[ResourcePool]) -> PoolImp
         if pool.id is not None:
             aliases[pool.id] = identity
         resolved.append(replace(pool, id=identity))
-    final = dict(existing)
+    included = {pool.id for pool in resolved}
+    omitted = {identity for identity, pool in existing.items() if identity not in included and not pool.deleted_flag}
+    final = {identity: replace(pool, deleted_flag=True) if identity in omitted else pool
+             for identity, pool in existing.items()}
     for pool in resolved:
         final[pool.id] = replace(pool, parent_pool_id=aliases.get(pool.parent_pool_id, pool.parent_pool_id))
     PoolHierarchy(final.values())
@@ -151,4 +155,4 @@ def import_pools(store: ResourcePoolStore, pools: list[ResourcePool]) -> PoolImp
     for identity in former_parents - {None}:
         if final[identity] == existing[identity]:
             store.write_imported_pool(final[identity])
-    return PoolImportResult(created, len(pools) - created)
+    return PoolImportResult(created, len(pools) - created, len(omitted))

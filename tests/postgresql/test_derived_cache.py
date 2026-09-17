@@ -20,7 +20,7 @@ from app.domain.access.models import AccessDenied, Actor
 from app.domain.resources.models import PoolCapacitySummary
 from app.infrastructure.postgresql.authorization import ServerRequestSigner
 from app.infrastructure.postgresql.capacity_cache import PostgresCapacityCache
-from app.infrastructure.postgresql.derived_cache import CacheRecord, DerivedCacheState, PostgresDerivedCache
+from app.infrastructure.postgresql.derived_cache import CacheRecord, DerivedCacheState, PostgresDerivedCache, _VERSION
 from app.infrastructure.postgresql.planning import PostgresPlanningGateway
 from app.infrastructure.postgresql.pool_capacity import PostgresCapacityReader
 from app.infrastructure.postgresql.revisions import snapshot
@@ -45,7 +45,7 @@ def capacity(authorized, user_id=1, state=None, today=lambda: DAY):
 def body_for(derived, kind='planning', identities=(1,)):
     rows = derived.read(kind, list(identities), DAY, False, [])
     identity_field = 'pool_id' if kind == 'capacity' else 'id'
-    return json.dumps({'kind': kind, 'day': DAY.isoformat(), 'version': 1, 'entries': [
+    return json.dumps({'kind': kind, 'day': DAY.isoformat(), 'version': _VERSION, 'entries': [
         {'entity_id': identity, 'token': token, 'summary': {identity_field: identity},
          'detail': {identity_field: identity, 'assignments': [], 'contributing_resources': []}}
         for identity, token, *_ in rows
@@ -86,12 +86,12 @@ def test_capacity_cold_database_and_memory_hits_preserve_details_and_caller_inde
     service = capacity(staffing, 4, state)
     expected = service.calculate_many([1, 2, 3], DAY)
     before = snapshot(staffing.database, staffing.key, staffing.binding(4).access)
-    assert service.get_details([1, 2, 3]) == sorted(expected, key=lambda row: row.pool_name)
+    assert service.get_details([1, 2, 3]) == sorted(expected, key=lambda row: row.pool_id)
     assert snapshot(staffing.database, staffing.key, staffing.binding(4).access) == before
     # A fresh process must obtain persisted data without calculating again.
     fresh = capacity(staffing, 4)
     fresh.calculate_many = lambda *_: pytest.fail('A current persisted entry must be reused')
-    assert fresh.get_details([1, 2, 3]) == sorted(expected, key=lambda row: row.pool_name)
+    assert fresh.get_details([1, 2, 3]) == sorted(expected, key=lambda row: row.pool_id)
     service.calculate_many = lambda *_: pytest.fail('A current memory entry must be reused')
     summaries = service.get_summaries([1])
     assert summaries == [PoolCapacitySummary(**{key: asdict(expected[0])[key] for key in PoolCapacitySummary.__dataclass_fields__})]
@@ -193,7 +193,7 @@ def test_current_day_and_format_are_required_and_storage_has_one_row_per_session
     service.get_details([1])
     with psycopg.connect(staffing.setup.operator_url) as connection:
         assert connection.execute('SELECT day,count(*) FROM eppm.pool_capacity_cache GROUP BY day').fetchall() == [(day[0], 1)]
-        connection.execute('UPDATE eppm.pool_capacity_cache SET format_version=2')
+        connection.execute('UPDATE eppm.pool_capacity_cache SET format_version=%s', (_VERSION + 1,))
     assert not cache(staffing).read('capacity', [1], day[0], False, [])[0][3]
 
 

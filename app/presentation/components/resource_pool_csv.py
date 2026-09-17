@@ -15,6 +15,7 @@ def _import_dialog(service: ResourcePoolService) -> None:
     """Preview catalog rows and apply them only on explicit submission."""
     st.caption('Known pool IDs are updated. Missing or unknown IDs create pools with automatically generated IDs. '
                'Parent IDs may refer to another row in this file. The whole import succeeds or is rolled back.')
+    st.warning('Active pools omitted from this CSV will be marked deleted. Include all pools you want to keep active, including their parent containers.')
     st.caption('Columns: name is required; blank capacity means unspecified; blank parent or hierarchy type means none. '
                'Pool type defaults to 1 and deleted_flag to false. Mappings, tags and capacity exceptions are unchanged.')
     st.link_button('Download CSV template', '/downloads/resource-pools/template.csv')
@@ -28,7 +29,8 @@ def _import_dialog(service: ResourcePoolService) -> None:
                  hide_index=True)
     if st.button('Import pools', type='primary', key='pool_csv_submit'):
         result = service.import_csv(upload.encode('utf-8'))
-        st.session_state['pool_csv_success'] = f'Import successful: {result.created} pools created, {result.updated} updated.'
+        st.session_state['pool_csv_success'] = (f'Import successful: {result.created} pools created, '
+                                               f'{result.updated} updated, {result.deactivated} marked deleted.')
         st.rerun()
 
 
@@ -40,6 +42,6 @@ def pool_csv_controls(service: ResourcePoolService, *, show_deleted: bool = Fals
     with st.container(horizontal=True):
         st.link_button('Export CSV',
                        f'/downloads/resource-pools/pools.csv?include_deleted={str(show_deleted).lower()}',
-                       icon=':material/download:')
+                       icon=':material/download:', type='primary')
         if st.button('Import CSV', key='pool_csv_import', icon=':material/upload:'):
             _import_dialog(service)

@@ -67,6 +67,32 @@ def test_context_delete_and_undelete_with_deleted_visibility_filter(authorized, 
             browser.close()
 
 
+def test_future_exception_flag_and_breakdown_are_visible(authorized, tmp_path):
+    from datetime import date, timedelta
+    from app.domain.resources.models import PoolCapacityException
+
+    pools = service(authorized)
+    pool_id = pools.create_pool(ResourcePool('Exception pool', capacity_fte=4))
+    today = date.today()
+    pools.save_capacity_exception(PoolCapacityException(pool_id,
+        (today - timedelta(days=3)).isoformat(), (today + timedelta(days=3)).isoformat(), 1, 'Reduced availability'))
+    with native_server(authorized, tmp_path, SCREEN) as server, sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            page = server.new_page(browser, viewport={'width': 1850, 'height': 1100})
+            page.goto(server.origin)
+            row = page.get_by_role('treeitem', name='Exception pool', exact=True)
+            expect(row).to_be_visible(timeout=30000)
+            expect(row.locator('.pool-meta').nth(7)).to_have_text('✓')
+            expect(page.get_by_role('heading', name='Pool capacity exception breakdown')).to_be_visible()
+            expect(page.get_by_text('Pools with future capacity exceptions', exact=True)).to_be_visible()
+            expect(page.get_by_role('link', name='Export CSV')).to_have_attribute('kind', 'primary')
+            page.screenshot(path=str(tmp_path / 'future-pool-exceptions.png'), full_page=True)
+        finally:
+            browser.close()
+
+
+
 def test_capacity_excess_colors_values_and_warns_next_to_pool_names(authorized, tmp_path):
     screen = '''
 import streamlit as st
@@ -82,6 +108,7 @@ resource_pool_tree(tree, {1:6, 2:2, 3:2, 4:2}, 1,
     assigned_capacities={1:7, 2:4, 3:1, 4:2},
     peak_demands={1:7, 2:1, 3:4, 4:2})
 '''
+
 
 
     with native_server(authorized, tmp_path, screen) as server, sync_playwright() as playwright:
@@ -315,22 +342,20 @@ render_resource_pools(create_resource_pool_service""")
             page.goto(server.origin)
             row = page.get_by_role('treeitem', name='Delivery', exact=True)
             expect(row).to_be_visible(timeout=30000)
-            expect(row.locator('.pool-meta').last).to_have_text('2.00')
+            expect(row.locator('.pool-meta').nth(6)).to_have_text('2.00')
             expect(row.locator('.pool-meta').nth(4)).to_have_text('0.00')
             expect(row.locator('.pool-meta').nth(5)).to_have_text('✓')
             expect(page.get_by_role('treeitem', name='Root', exact=True).locator('.pool-meta').nth(5)).to_have_text('')
-            statuses = page.get_by_role('combobox', name='Project statuses included in demand', exact=True)
-            statuses.click()
-            page.get_by_role('option', name='Completed', exact=True).click()
-            statuses.press('Escape')
-            expect(row.locator('.pool-meta').last).to_have_text('9.00')
+            expect(page.get_by_role('combobox', name='Project statuses included in demand', exact=True)).to_have_count(0)
+            expect(page.get_by_role('button', name='Filter Future Peak Demand (FTE)', exact=True)).to_have_attribute(
+                'title', 'Maximum required FTE from today onward, counting In Progress projects only.')
             page.screenshot(path=str(tmp_path / 'current-capacity-statuses.png'), full_page=True)
             row.click(button='right')
             expect(row).to_have_attribute('aria-selected', 'true')
             page.get_by_role('menuitem', name='Show consuming projects in Gantt', exact=True).click()
             expect(page.get_by_text('Gantt navigation queued', exact=True)).to_be_visible()
-            expect(page.get_by_text('Projects: 1,2', exact=True)).to_be_visible()
-            expect(page.get_by_text('Statuses: In Progress,Completed', exact=True)).to_be_visible()
+            expect(page.get_by_text('Projects: 1', exact=True)).to_be_visible()
+            expect(page.get_by_text('Statuses: In Progress', exact=True)).to_be_visible()
         finally:
             browser.close()
 
