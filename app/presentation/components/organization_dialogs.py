@@ -629,6 +629,7 @@ def _open_edit_employee_dialog(
         max_value=100.0,
         value=float(emp_obj.occupation_percentage),
         step=5.0,
+        help='Normal working capacity: 80% means 0.8 FTE. Function allocations divide this capacity; calendar exceptions replace it for their dates.',
     )
 
     _render_employee_calendar_exception_editor(

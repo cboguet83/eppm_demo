@@ -1,6 +1,7 @@
 """Compact function-allocation and calendar grids for employee profiles."""
 
 from datetime import date
+from uuid import uuid4
 
 import pandas as pd
 import streamlit as st
@@ -26,20 +27,27 @@ def employee_function_editor(employee: Employee, functions: pd.DataFrame) -> lis
     active = set(names)
     for row in employee.assignments():
         names.setdefault(row.function_id, f'Deleted function [#{row.function_id}]')
-    reverse = {name: identity for identity, name in names.items()}
     st.markdown('#### Function assignments')
-    st.caption('Add or remove rows. Allocation across active functions must not exceed 100%.')
-    frame = pd.DataFrame([{'Function': names[row.function_id], 'Allocation (%)': row.allocation_pct}
-                          for row in employee.assignments()], columns=['Function', 'Allocation (%)'])
-    edited = st.data_editor(frame, hide_index=True, num_rows='dynamic', width='stretch',
-        key=f'employee_functions_{employee.employee_id}', column_config={
-            'Function': st.column_config.SelectboxColumn(options=list(names.values()), required=True),
-            'Allocation (%)': st.column_config.NumberColumn(min_value=0, max_value=100, default=100, required=True),
-        })
-    rows = edited.to_dict('records')
-    if any(row['Function'] not in reverse or pd.isna(row['Allocation (%)']) for row in rows):
-        raise ValueError('Each function assignment needs a function and an allocation percentage.')
-    assignments = [EmployeeFunction(reverse[row['Function']], float(row['Allocation (%)'])) for row in rows]
+    st.caption('Allocation across active functions must not exceed 100%. Delete removes a row; Save Changes applies the changes.')
+    key = f'employee_functions_{employee.employee_id}'
+    rows = _draft_rows(key, [{'function': row.function_id, 'percentage': float(row.allocation_pct)}
+                            for row in employee.assignments()])
+    assignments = []
+    with st.container(border=True):
+        _headers([3, 2, 1], ['Function', 'Allocation (%)', 'Action'])
+        for row in rows:
+            function_cell, percentage_cell, action_cell = st.columns([3, 2, 1], vertical_alignment='center')
+            identity = function_cell.selectbox('Function', list(names), index=list(names).index(row['function']),
+                format_func=names.get, key=row['_key'] + '_function', label_visibility='collapsed')
+            percentage = percentage_cell.number_input('Allocation (%)', min_value=0.0, max_value=100.0,
+                value=row['percentage'], key=row['_key'] + '_percentage', label_visibility='collapsed')
+            action_cell.button('Delete', key=row['_key'] + '_delete', on_click=_delete_row,
+                args=(key, row['_key']), help=f'Remove assignment to {names[identity]}. Save Changes to apply.')
+            assignments.append(EmployeeFunction(identity, percentage))
+        if not rows:
+            st.caption('No function assignments.')
+    st.button('Add function assignment', key=key + '_add', disabled=not names, on_click=_add_row,
+        args=(key, {'function': next(iter(names), None), 'percentage': 100.0}))
     total = sum(row.allocation_pct for row in assignments if row.function_id in active)
     if total > 100:
         st.error(f'⚠ {total:g}% allocated across active functions. Reduce the total to 100% or less before saving.')
@@ -51,27 +59,51 @@ def employee_function_editor(employee: Employee, functions: pd.DataFrame) -> lis
 def employee_exception_editor(service: OrganizationService, employee_id: int, normal_percentage: float) -> None:
     """Add, edit and remove inclusive employee exceptions in a single grid."""
     st.markdown('#### Employee Calendar Exceptions')
-    st.caption('Add rows or select rows to delete. Availability replaces the normal occupation percentage during the period.')
-    frame = pd.DataFrame([{'id': row.exception_id, 'Start date': date.fromisoformat(row.start_date),
-        'End date': date.fromisoformat(row.end_date), 'Availability (%)': row.occupation_percentage, 'Reason': row.reason}
-        for row in service.get_employee_calendar_exceptions(employee_id)],
-        columns=['id', 'Start date', 'End date', 'Availability (%)', 'Reason'])
-    edited = st.data_editor(frame, hide_index=True, num_rows='dynamic', width='stretch',
-        key=f'employee_exception_grid_{employee_id}', disabled=['id'], column_config={
-            'id': None,
-            'Start date': st.column_config.DateColumn(required=True, default=date.today()),
-            'End date': st.column_config.DateColumn(required=True, default=date.today()),
-            'Availability (%)': st.column_config.NumberColumn(min_value=0, max_value=100, required=True, default=normal_percentage),
-            'Reason': st.column_config.TextColumn(default=''),
-        })
+    st.caption('Availability replaces the normal occupation percentage during the period. Delete removes a row; Save calendar exceptions applies the changes.')
+    key = f'employee_exception_grid_{employee_id}'
+    rows = _draft_rows(key, [{'id': row.exception_id, 'start': date.fromisoformat(row.start_date),
+        'end': date.fromisoformat(row.end_date), 'percentage': float(row.occupation_percentage), 'reason': row.reason or ''}
+        for row in service.get_employee_calendar_exceptions(employee_id)])
+    items = []
+    with st.container(border=True):
+        _headers([2, 2, 2, 3, 1], ['Start date', 'End date', 'Availability (%)', 'Reason', 'Action'])
+        for row in rows:
+            first, last, availability, reason, action = st.columns([2, 2, 2, 3, 1], vertical_alignment='center')
+            start = first.date_input('Start date', value=row['start'], key=row['_key'] + '_start', label_visibility='collapsed')
+            end = last.date_input('End date', value=row['end'], key=row['_key'] + '_end', label_visibility='collapsed')
+            percentage = availability.number_input('Availability (%)', min_value=0.0, max_value=100.0,
+                value=row['percentage'], key=row['_key'] + '_percentage', label_visibility='collapsed')
+            description = reason.text_input('Reason', value=row['reason'], key=row['_key'] + '_reason', label_visibility='collapsed')
+            action.button('Delete', key=row['_key'] + '_delete', on_click=_delete_row, args=(key, row['_key']),
+                help=f'Remove exception from {start} to {end}. Save calendar exceptions to apply.')
+            items.append(EmployeeCalendarException(employee_id, start, end, percentage,
+                reason=description, exception_id=row['id']))
+        if not rows:
+            st.caption('No calendar exceptions.')
+    st.button('Add calendar exception', key=key + '_add', on_click=_add_row,
+        args=(key, {'id': None, 'start': date.today(), 'end': date.today(), 'percentage': float(normal_percentage), 'reason': ''}))
     if st.button('Save calendar exceptions', type='primary', key=f'save_employee_exception_grid_{employee_id}'):
-        items = []
-        for row in edited.to_dict('records'):
-            if any(pd.isna(row[column]) for column in ('Start date', 'End date', 'Availability (%)')):
-                raise ValueError('Each exception needs start/end dates and an availability percentage.')
-            items.append(EmployeeCalendarException(employee_id, row['Start date'], row['End date'],
-                float(row['Availability (%)']), reason='' if pd.isna(row['Reason']) else str(row['Reason']),
-                exception_id=None if pd.isna(row['id']) else int(row['id'])))
         service.replace_employee_exceptions(employee_id, items)
         st.toast('Employee calendar exceptions saved.')
         st.rerun()
+
+
+def _draft_rows(key: str, initial: list[dict]) -> list[dict]:
+    """Keep dynamic widget rows stable until saved or the dialog is closed."""
+    if key + '_add' not in st.session_state or st.session_state.get(key + '_source') != initial:
+        st.session_state[key] = [row | {'_key': key + '_' + uuid4().hex} for row in initial]
+        st.session_state[key + '_source'] = initial
+    return st.session_state[key]
+
+
+def _add_row(key: str, values: dict) -> None:
+    st.session_state[key].append(values | {'_key': key + '_' + uuid4().hex})
+
+
+def _delete_row(key: str, identity: str) -> None:
+    st.session_state[key] = [row for row in st.session_state[key] if row['_key'] != identity]
+
+
+def _headers(widths: list[int], labels: list[str]) -> None:
+    for column, label in zip(st.columns(widths), labels):
+        column.markdown(f'**{label}**')

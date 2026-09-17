@@ -50,6 +50,9 @@ employee/function/team/pool records remain the source of truth.
 ## Editing and row actions
 
 The employee profile uses grids for function shares and availability exceptions.
+Each row has a Delete button. Add, edit and delete changes remain drafts until
+the corresponding Save button is used. Occupation percentage remains the normal
+working capacity; function percentages divide that capacity.
 Exception-grid changes validate inclusive date overlap before an atomic save;
 retained rows keep their exception identities. Team member selectors identify the
 function and each employee's share explicitly.

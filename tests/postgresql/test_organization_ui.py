@@ -92,21 +92,19 @@ def test_employee_dialog_initial_exception_is_atomic_and_calendar_can_be_edited(
     assert service.get_employee_calendar_exceptions(employee.employee_id)[0].reason == "Leave"
 
     app = dialog(database, access, f"_open_edit_employee_dialog(service, {employee.employee_id}, functions)")
-    assert any('Availability (%)' in frame.value.columns for frame in app.dataframe)
-    def edit_grid(frame, **kwargs):
-        edited = frame.copy()
-        if kwargs['key'].startswith('employee_exception_grid_'):
-            edited['Availability (%)'] = 50
-        return edited
-    with patch('streamlit.data_editor', side_effect=edit_grid):
-        app.button(key=f'save_employee_exception_grid_{employee.employee_id}').click().run()
+    next(widget for widget in app.number_input if widget.label == 'Availability (%)').set_value(50)
+    app.button(key=f'save_employee_exception_grid_{employee.employee_id}').click().run()
     assert not app.exception and not app.error
     assert service.get_employee_calendar_exceptions(employee.employee_id)[0].occupation_percentage == 50
-    with patch('streamlit.data_editor', side_effect=lambda frame, **kwargs:
-               frame.iloc[0:0] if kwargs['key'].startswith('employee_exception_grid_') else frame):
-        app.button(key=f'save_employee_exception_grid_{employee.employee_id}').click().run()
+    next(widget for widget in app.button if widget.label == 'Delete').click().run()
+    assert len(service.get_employee_calendar_exceptions(employee.employee_id)) == 1
+    app.button(key=f'save_employee_exception_grid_{employee.employee_id}').click().run()
     assert not app.exception and not app.error
     assert service.get_employee_calendar_exceptions(employee.employee_id) == []
+    next(widget for widget in app.button if widget.label == 'Add calendar exception').click().run()
+    next(widget for widget in app.number_input if widget.label == 'Availability (%)').set_value(75)
+    app.button(key=f'save_employee_exception_grid_{employee.employee_id}').click().run()
+    assert service.get_employee_calendar_exceptions(employee.employee_id)[0].occupation_percentage == 75
 
 
 

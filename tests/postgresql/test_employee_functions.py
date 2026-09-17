@@ -122,34 +122,34 @@ confirm_unmap(service, {pool}, 'employee', {employee}, 'Ada One')
 
 
 def test_employee_profile_grid_saves_multiple_functions_and_rejects_excess(database, access):
-    from unittest.mock import patch
     from tests.postgresql.test_organization_ui import dialog, button
 
     org, _, employee, first, second, *_ = setup_split(database, access)
     app = dialog(database, access, f'_open_edit_employee_dialog(service, {employee}, functions)')
 
-    def edit_grid(frame, **kwargs):
-        edited = frame.copy()
-        if kwargs['key'] == f'employee_functions_{employee}':
-            edited['Allocation (%)'] = [55, 45]
-        return edited
-
-    with patch('streamlit.data_editor', side_effect=edit_grid):
-        button(app, 'Save Changes').click().run()
+    allocations = [widget for widget in app.number_input if widget.label == 'Allocation (%)']
+    allocations[0].set_value(55)
+    allocations[1].set_value(45)
+    button(app, 'Save Changes').click().run()
     assert not app.exception
     assert org.get_employee_by_id(employee).assignments() == [EmployeeFunction(first, 55), EmployeeFunction(second, 45)]
-
-    def excessive_grid(frame, **kwargs):
-        edited = frame.copy()
-        if kwargs['key'] == f'employee_functions_{employee}':
-            edited['Allocation (%)'] = [70, 45]
-        return edited
-
-    with patch('streamlit.data_editor', side_effect=excessive_grid):
-        button(app, 'Save Changes').click().run()
+    next(widget for widget in app.number_input if widget.label == 'Allocation (%)').set_value(70)
+    button(app, 'Save Changes').click().run()
     assert not app.exception
     assert any('100%' in item.value for item in app.error)
     assert org.get_employee_by_id(employee).assignments() == [EmployeeFunction(first, 55), EmployeeFunction(second, 45)]
+    deletes = [widget for widget in app.button if widget.label == 'Delete']
+    deletes[1].click().run()
+    assert len([widget for widget in app.number_input if widget.label == 'Allocation (%)']) == 1
+    assert org.get_employee_by_id(employee).assignments() == [EmployeeFunction(first, 55), EmployeeFunction(second, 45)]
+    button(app, 'Save Changes').click().run()
+    assert org.get_employee_by_id(employee).assignments() == [EmployeeFunction(first, 70)]
+    button(app, 'Add function assignment').click().run()
+    app.selectbox[-1].set_value(second)
+    [widget for widget in app.number_input if widget.label == 'Allocation (%)'][-1].set_value(30)
+    button(app, 'Save Changes').click().run()
+    assert not app.exception and not app.error
+    assert org.get_employee_by_id(employee).assignments() == [EmployeeFunction(first, 70), EmployeeFunction(second, 30)]
 
 
 def test_employee_overallocation_warning_and_profile_grids_in_browser(database, access, authorized, tmp_path):
@@ -192,7 +192,9 @@ render_employees(create_organization_service(runtime, access=access))
             popup = page.get_by_role('dialog')
             browser_api.expect(popup.get_by_text('Function assignments', exact=True)).to_be_visible()
             browser_api.expect(popup.get_by_text('Employee Calendar Exceptions', exact=True)).to_be_visible()
-            browser_api.expect(popup.get_by_test_id('stDataFrame')).to_have_count(2)
+            browser_api.expect(popup.get_by_role('button', name='Delete', exact=True)).to_have_count(2)
+            popup.get_by_role('button', name='Add calendar exception', exact=True).click()
+            browser_api.expect(popup.get_by_role('button', name='Delete', exact=True)).to_have_count(3)
             browser_api.expect(popup.locator('[data-testid="stSkeleton"]')).to_have_count(0)
             browser_api.expect(popup.get_by_role('button', name='Save Changes', exact=True)).to_be_visible()
             page.screenshot(path=str(tmp_path / 'employee-grids.png'), full_page=True)
