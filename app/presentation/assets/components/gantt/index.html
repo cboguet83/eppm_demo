@@ -3010,7 +3010,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         if (timeA !== timeB) {
           return timeA - timeB;
         }
-        return (parseInt(a.id, 10) || 0) - (parseInt(b.id, 10) || 0);
+        return (Number.parseInt(a.id, 10) || 0) - (Number.parseInt(b.id, 10) || 0);
       });
     }
 
@@ -3070,7 +3070,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     function parseDate(dStr) {
       if (!dStr) return new Date();
       const parts = dStr.split('-');
-      return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+      return new Date(Number.parseInt(parts[0], 10), Number.parseInt(parts[1], 10) - 1, Number.parseInt(parts[2], 10));
     }
 
     function formatDate(d) {
@@ -3086,9 +3086,9 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       if (typeof d === 'string') {
         const parts = d.split('-');
         if (parts.length >= 2) {
-          const y = parseInt(parts[0], 10);
-          const m = parseInt(parts[1], 10) - 1;
-          const day = parts[2] ? parseInt(parts[2], 10) : 1;
+          const y = Number.parseInt(parts[0], 10);
+          const m = Number.parseInt(parts[1], 10) - 1;
+          const day = parts[2] ? Number.parseInt(parts[2], 10) : 1;
           dateObj = new Date(y, m, day);
         } else {
           dateObj = new Date(d);
@@ -3096,7 +3096,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       } else {
         dateObj = d;
       }
-      if (!dateObj || isNaN(dateObj.getTime())) return '-';
+      if (!dateObj || Number.isNaN(dateObj.getTime())) return '-';
       const mmm = MONTH_NAMES[dateObj.getMonth()];
       const yy = String(dateObj.getFullYear()).slice(-2);
       return `${mmm}-${yy}`;
@@ -4359,7 +4359,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       const desc = document.getElementById('modal-task-desc').value.trim();
       const start = document.getElementById('modal-start-date').value;
       const end = document.getElementById('modal-end-date').value;
-      const prog = parseInt(document.getElementById('modal-progress').value, 10) || 0;
+      const prog = Number.parseInt(document.getElementById('modal-progress').value, 10) || 0;
 
       if (!name) {
         alert("Step Name is required.");
@@ -4378,7 +4378,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         const isExt = row.querySelector('.dep-is-ext').checked;
         const targetVal = row.querySelector('.dep-target').value;
         const linkType = row.querySelector('.dep-type').value;
-        const lagDays = parseInt(row.querySelector('.dep-lag').value, 10) || 0;
+        const lagDays = Number.parseInt(row.querySelector('.dep-lag').value, 10) || 0;
 
         if (targetVal.startsWith('PROJ:')) {
           const pId = targetVal.replace('PROJ:', '');
@@ -4389,7 +4389,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
             lag_days: lagDays
           });
         } else if (targetVal.startsWith('TASK:')) {
-          const tId = parseInt(targetVal.replace('TASK:', ''), 10);
+          const tId = Number.parseInt(targetVal.replace('TASK:', ''), 10);
           const pId = isExt ? row.querySelector('.dep-proj').value : null;
           dependencies.push({
             predecessor_task_id: tId,
@@ -4427,7 +4427,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         if (!selectedContextMenuTask || !selectedContextMenuTask.id) return;
         Streamlit.setComponentValue({
           action: "update_task_full",
-          id: parseInt(selectedContextMenuTask.id, 10),
+          id: Number.parseInt(selectedContextMenuTask.id, 10),
           task_name: name,
           phase: phase || "General",
           description: desc,
@@ -4447,7 +4447,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
 
       Streamlit.setComponentValue({
         action: "manage_task_tags",
-        id: parseInt(selectedContextMenuTask.id, 10),
+        id: Number.parseInt(selectedContextMenuTask.id, 10),
         task_name: selectedContextMenuTask.name || '',
         project_id: selectedContextMenuTask.project_id || currentProjectId || '',
         nonce: Date.now() + "_" + Math.random()
@@ -4461,7 +4461,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
 
       Streamlit.setComponentValue({
         action: "manage_task_pools",
-        id: parseInt(selectedContextMenuTask.id, 10),
+        id: Number.parseInt(selectedContextMenuTask.id, 10),
         task_name: selectedContextMenuTask.name || '',
         project_id: selectedContextMenuTask.project_id || currentProjectId || '',
         nonce: Date.now() + "_" + Math.random()
@@ -4575,7 +4575,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
 
       Streamlit.setComponentValue({
         action: "update_progress",
-        id: parseInt(selectedContextMenuTask.id, 10),
+        id: Number.parseInt(selectedContextMenuTask.id, 10),
         progress: 100,
         nonce: Date.now() + "_" + Math.random()
       });
@@ -4589,7 +4589,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         if (alternativeAction('delete_step', selectedContextMenuTask.project_id, selectedContextMenuTask)) return;
         Streamlit.setComponentValue({
           action: "delete_step",
-          id: parseInt(selectedContextMenuTask.id, 10),
+          id: Number.parseInt(selectedContextMenuTask.id, 10),
           task_name: selectedContextMenuTask.name,
           nonce: Date.now() + "_" + Math.random()
         });
@@ -5008,7 +5008,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       e.preventDefault();
       e.stopPropagation();
 
-      const poolId = parseInt(el.dataset.poolId, 10);
+      const poolId = Number.parseInt(el.dataset.poolId, 10);
       const poolName = el.dataset.poolName || '';
       const startStr = el.dataset.startDate || '';
       const endStr = el.dataset.endDate || '';
@@ -5018,7 +5018,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     }
 
     function handlePoolRowContextMenu(e, el) {
-      const poolId = parseInt(el.dataset.poolId, 10);
+      const poolId = Number.parseInt(el.dataset.poolId, 10);
       const poolName = el.dataset.poolName || '';
       openResourceCellContextMenu(e, poolId, poolName, '', '', '', null, el.dataset.scope || 'total');
     }
@@ -6018,9 +6018,9 @@ button:not(.context-menu-item):disabled {opacity:.5;}
           const col = currentSort.column;
           projectGroupsList.sort((a, b) => {
             if (col === 'id') {
-              const numA = parseInt(a.id, 10);
-              const numB = parseInt(b.id, 10);
-              if (!isNaN(numA) && !isNaN(numB)) {
+              const numA = Number.parseInt(a.id, 10);
+              const numB = Number.parseInt(b.id, 10);
+              if (!Number.isNaN(numA) && !Number.isNaN(numB)) {
                 return (numA - numB) * factor;
               }
               return String(a.id).localeCompare(String(b.id)) * factor;
@@ -7176,7 +7176,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
             Streamlit.setComponentValue({
               action: task.alternative ? 'update_alternative_dates' : 'update_dates',
               ...(task.alternative ? {project_id:task.project_id, plan_id:task.plan_id, revision:task.revision} : {}),
-              id: parseInt(task.id, 10),
+              id: Number.parseInt(task.id, 10),
               start_date: finalStartStr,
               end_date: finalEndStr,
               task_name: task.name,
