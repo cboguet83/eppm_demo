@@ -20,6 +20,8 @@ class PoolExceptionBreakdown:
     reduction_fte: float
     occupation_percentage: float | None
     reason: str
+    exception_id: int | None = None
+    employee_id: int | None = None
 
 
 def capacity_exception_breakdown(
@@ -42,7 +44,7 @@ def capacity_exception_breakdown(
     for detail in details:
         if not detail.has_assigned_resources:
             rows.extend(PoolExceptionBreakdown(detail.pool_id, detail.pool_name, 'Pool', detail.pool_name,
-                        '', item.start_date, item.end_date, item.reduction_fte, None, item.reason)
+                        '', item.start_date, item.end_date, item.reduction_fte, None, item.reason, item.id)
                         for item in by_pool.get(detail.pool_id, []))
             continue
         for person in detail.contributing_resources:
@@ -50,5 +52,6 @@ def capacity_exception_breakdown(
                 reduction = (person.nominal_fte - item.occupation_percentage / 100) * person.effective_allocation_pct / 100
                 rows.append(PoolExceptionBreakdown(detail.pool_id, detail.pool_name, 'Employee',
                             person.employee_name or person.resource_name, person.source_name,
-                            item.start_date, item.end_date, round(reduction, 3), item.occupation_percentage, item.reason))
+                            item.start_date, item.end_date, round(reduction, 3), item.occupation_percentage, item.reason,
+                            item.exception_id, item.employee_id))
     return sorted(rows, key=lambda row: (row.pool_name.casefold(), row.start_date, row.resource_name))

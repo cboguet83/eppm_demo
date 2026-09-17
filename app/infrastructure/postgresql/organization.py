@@ -12,7 +12,7 @@ from app.application.ports.references import EmployeeReference, FunctionReferenc
 from app.application.services.business_access import BusinessAccess
 from app.domain.access.models import Permission
 from app.domain.hierarchy import HierarchyType
-from app.domain.organization.models import Employee, EmployeeCalendarException, FunctionType, OrgFunction, Team
+from app.domain.organization.models import Employee, EmployeeCalendarException, EmployeeFunction, FunctionType, OrgFunction, Team
 from app.infrastructure.postgresql.business import run_business
 from app.infrastructure.postgresql.errors import DatabaseUnavailableError, TransactionRetryError
 from app.infrastructure.postgresql.hierarchy import hierarchy_types
@@ -206,29 +206,55 @@ class PostgresOrganizationStore:
 
     def get_all_employees(self) -> list[Employee]:
         """Read private employee records through the shared-data policy."""
-        return self._rows(Employee, 'SELECT employee_id,firstname,lastname,email,mobile,sigle,employee_code,'
-                          'function_id,occupation_percentage,landline FROM eppm.active_employee ORDER BY lastname COLLATE "C",firstname COLLATE "C"')
+        employees = self._rows(Employee, 'SELECT employee_id,firstname,lastname,email,mobile,sigle,employee_code,'
+                          'NULL::bigint AS function_id,occupation_percentage,landline FROM eppm.active_employee ORDER BY lastname COLLATE "C",firstname COLLATE "C"')
+        return self._attach_employee_functions(employees)
+
+    def _attach_employee_functions(self, employees: list[Employee]) -> list[Employee]:
+        people = {person.employee_id: person for person in employees}
+        for person in employees:
+            person.function_assignments = []
+        for employee, function, percentage in self.connection.execute(
+            'SELECT employee_id,function_id,allocation_pct FROM eppm.employee_function '
+            'WHERE employee_id=ANY(%s::bigint[]) ORDER BY function_id', (list(people),)):
+            people[employee].function_assignments.append(EmployeeFunction(function, percentage))
+        for person in employees:
+            person.function_id = person.function_assignments[0].function_id if len(person.function_assignments) == 1 else None
+        return employees
 
     def get_employee_by_id(self, emp_id: int) -> Employee | None:
         """Read one private employee, preserving nullable contact defaults."""
-        return self._one(Employee, "SELECT employee_id,firstname,lastname,email,coalesce(mobile,'') AS mobile,coalesce(sigle,'') AS sigle,"
-                         'employee_code,function_id,occupation_percentage,landline FROM eppm.active_employee WHERE employee_id=%s AND NOT deleted_flag', (emp_id,))
+        person = self._one(Employee, "SELECT employee_id,firstname,lastname,email,coalesce(mobile,'') AS mobile,coalesce(sigle,'') AS sigle,"
+                         'employee_code,NULL::bigint AS function_id,occupation_percentage,landline FROM eppm.active_employee WHERE employee_id=%s AND NOT deleted_flag', (emp_id,))
+        return self._attach_employee_functions([person])[0] if person else None
 
     def create_employee(self, emp: Employee) -> int:
         """Insert an employee within its optional initial-calendar transaction."""
-        require_live_reference(self.connection, 'function', emp.function_id)
-        return self.connection.execute('INSERT INTO eppm.employee(firstname,lastname,email,mobile,sigle,employee_code,function_id,occupation_percentage,landline) '
+        identity = self.connection.execute('INSERT INTO eppm.employee(firstname,lastname,email,mobile,sigle,employee_code,function_id,occupation_percentage,landline) '
                                        'VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING employee_id',
                                        (emp.firstname, emp.lastname, emp.email, emp.mobile, emp.sigle, emp.employee_code,
-                                        emp.function_id, emp.occupation_percentage, emp.landline)).fetchone()[0]
+                                        None, emp.occupation_percentage, emp.landline)).fetchone()[0]
+        self._save_employee_functions(identity, emp.assignments())
+        return identity
+
+    def _save_employee_functions(self, employee_id: int, assignments: list[EmployeeFunction]) -> None:
+        existing = {row[0] for row in self.connection.execute(
+            'SELECT function_id FROM eppm.employee_function WHERE employee_id=%s', (employee_id,))}
+        require_live_references(self.connection, 'function', [row.function_id for row in assignments if row.function_id not in existing])
+        self.connection.execute('DELETE FROM eppm.employee_function WHERE employee_id=%s', (employee_id,))
+        with self.connection.cursor() as cursor:
+            cursor.executemany('INSERT INTO eppm.employee_function(employee_id,function_id,allocation_pct) VALUES (%s,%s,%s)',
+                               [(employee_id, row.function_id, row.allocation_pct) for row in assignments])
 
     def update_employee(self, emp: Employee) -> bool:
         """Update the employee record under native uniqueness constraints."""
-        require_live_reference(self.connection, 'function', emp.function_id)
-        return self.connection.execute('UPDATE eppm.employee SET firstname=%s,lastname=%s,email=%s,mobile=%s,sigle=%s,employee_code=%s,'
+        changed = self.connection.execute('UPDATE eppm.employee SET firstname=%s,lastname=%s,email=%s,mobile=%s,sigle=%s,employee_code=%s,'
                                        'function_id=%s,occupation_percentage=%s,landline=%s WHERE employee_id=%s AND NOT deleted_flag',
                                        (emp.firstname, emp.lastname, emp.email, emp.mobile, emp.sigle, emp.employee_code,
-                                        emp.function_id, emp.occupation_percentage, emp.landline, emp.employee_id)).rowcount > 0
+                                        None, emp.occupation_percentage, emp.landline, emp.employee_id)).rowcount > 0
+        if changed:
+            self._save_employee_functions(emp.employee_id, emp.assignments())
+        return changed
 
     def delete_employee(self, emp_id: int) -> bool:
         """Flag the employee while retaining its calendar and mappings."""
@@ -255,6 +281,11 @@ class PostgresOrganizationStore:
 
     def create_employee_calendar_exception(self, exception: EmployeeCalendarException) -> int:
         """Insert a native date interval guarded against concurrent overlap."""
+        if exception.exception_id is not None:
+            return self.connection.execute('INSERT INTO eppm.employee_calendar_exception '
+                '(exception_id,employee_id,start_date,end_date,occupation_percentage,reason) VALUES (%s,%s,%s,%s,%s,%s) RETURNING exception_id',
+                (exception.exception_id, exception.employee_id, exception.start_date, exception.end_date,
+                 exception.occupation_percentage, exception.reason)).fetchone()[0]
         return self.connection.execute('INSERT INTO eppm.employee_calendar_exception(employee_id,start_date,end_date,occupation_percentage,reason) '
                                        'VALUES (%s,%s,%s,%s,%s) RETURNING exception_id',
                                        (exception.employee_id, exception.start_date, exception.end_date,
@@ -330,8 +361,14 @@ class PostgresOrganizationGateway:
                     permission: Permission | None = None, project_ids: Collection[int] | None = None) -> Result:
         """Return after commit and translate database errors after rollback/replay."""
         try:
+            def execute(connection):
+                result = operation(PostgresOrganizationStore(connection))
+                if write:
+                    from app.infrastructure.postgresql.staffing_projection import refresh_staffing
+                    refresh_staffing(connection)
+                return result
             return run_business(self.database, self.key, self.access,
-                                lambda connection: operation(PostgresOrganizationStore(connection)), write=write,
+                                execute, write=write,
                                 permission=permission, project_ids=project_ids)
         except psycopg.IntegrityError:
             raise OrganizationConflictError('The organization change conflicts with an existing reference or unique value.') from None

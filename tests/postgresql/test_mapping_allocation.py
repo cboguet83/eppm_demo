@@ -115,7 +115,7 @@ def test_restored_pool_warning_overlay_and_zero_remaining_editor(database, acces
             playwright_api.expect(row.locator('.pool-warning')).to_have_attribute('title', re.compile('200%'))
             warning = page.locator('.allocation-warning')
             warning.hover()
-            tooltip = warning.get_by_role('tooltip')
+            tooltip = page.get_by_role('tooltip')
             playwright_api.expect(tooltip).to_be_visible()
             playwright_api.expect(tooltip).to_contain_text('Alpha: 100%; Beta: 100%')
             page.screenshot(path=str(tmp_path / 'mapping-warnings.png'), full_page=True)

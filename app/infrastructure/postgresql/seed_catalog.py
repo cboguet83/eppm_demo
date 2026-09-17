@@ -126,6 +126,9 @@ def install_organization_catalog(connection: psycopg.Connection) -> None:
             cursor.executemany('INSERT INTO eppm.employee(employee_id,firstname,lastname,email,mobile,sigle,employee_code,function_id,landline) '
                                'VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)',
                                [(*row, f'+352 27 000 {row[0]:03d}') for row in EMPLOYEES])
+            connection.execute('INSERT INTO eppm.employee_function(employee_id,function_id) '
+                               'SELECT employee_id,function_id FROM eppm.employee WHERE function_id IS NOT NULL '
+                               'ON CONFLICT DO NOTHING')
         functions = {row[0] for row in connection.execute('SELECT function_id FROM eppm.function')}
         teams = {row[0] for row in connection.execute('SELECT team_id FROM eppm.team')}
         if not present['team_function']:

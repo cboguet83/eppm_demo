@@ -152,4 +152,6 @@ def apply_pool_scenarios(connection: psycopg.Connection, plan: PoolScenarioPlan)
         command.apply(connection)
     if plan.inserts:
         advance_seed_sequences(connection, (('resource_pool', 'id'), ('hierarchy_type', 'id')))
+    from app.infrastructure.postgresql.staffing_projection import refresh_staffing
+    refresh_staffing(connection)
     return plan.report(applied=bool(plan.inserts))

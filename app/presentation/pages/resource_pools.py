@@ -2,7 +2,6 @@
 
 import streamlit as st
 import pandas as pd
-from html import escape
 
 from app.application.services.organization import OrganizationService
 from app.application.services.resource_pools import ResourcePoolService
@@ -23,6 +22,7 @@ from app.presentation.components.resource_pool_csv import pool_csv_controls
 from app.presentation.components.organization_frames import teams_frame, employees_frame
 from app.presentation.i18n import get_current_locale, t
 from app.domain.resources.overallocation import overallocation_periods
+from app.presentation.components.action_table import TableAction
 
 
 @pool_errors
@@ -58,9 +58,12 @@ def render_resource_pools(
     future_exception_ids = capacity.future_exception_pool_ids(exceptions)
     kpi1, kpi3, kpi2, kpi4, kpi5 = st.columns(5)
     overallocated = len(allocations.overallocated)
-    kpi5.metric('Overallocated teams / employees', f'⚠ {overallocated}' if overallocated else '0',
+    with kpi5.container(key='overallocated_resources'):
+        st.metric('Overallocated teams / employees', f'⚠ {overallocated}' if overallocated else '0',
                 help='Unique teams and employees allocated above 100% across active pools. '
                      'Employee totals include team mappings, deduplicated within each pool. Deleted pools are excluded.')
+    if overallocated:
+        st.html('<style>.st-key-overallocated_resources [data-testid="stMetricValue"] {color:#c41039;}</style>')
     kpi1.metric(t("settings.kpi_total_pools", default="Total Pools"), total_pools)
     kpi3.metric('Pools with no assignment', unassigned_pools_count,
                 help='Active leaf pools with no employee or team mapped. Containers and deleted pools are excluded.')
@@ -132,7 +135,7 @@ def render_resource_pools(
         if selected_pool_id in active_hierarchy.pools:
             selected_leaves = active_hierarchy.descendants(selected_pool_id, leaves_only=True)
             leaf_details = [row for row in all_pool_details if row.pool_id in selected_leaves]
-            _render_exception_breakdown([item for item in exceptions if item.pool_id in selected_leaves])
+            _render_exception_breakdown([item for item in exceptions if item.pool_id in selected_leaves], service, organization)
             st.markdown("####  Mapped  Capacity Breakdown")
             st.caption("Employees mapped directly or through several teams are counted once within each pool.")
             contributions = [
@@ -148,7 +151,12 @@ def render_resource_pools(
                 warnings = [allocations.warning((item.resource_type, item.resource_id))
                             if (item.resource_type, item.resource_id) in allocations.overallocated else ''
                             for detail in leaf_details for item in detail.contributing_resources]
-                _mapping_breakdown(contributions, warnings)
+                event = _mapping_breakdown(contributions, warnings)
+                if event:
+                    from app.presentation.components.pool_detail_actions import confirm_unmap
+                    sources = [(detail.pool_id, item) for detail in leaf_details for item in detail.contributing_resources]
+                    owner, resource = sources[event['id']]
+                    confirm_unmap(service, owner, resource.resource_type, resource.resource_id, resource.resource_name)
             else:
                 st.caption("No mapped resources contribute capacity to this pool.")
             st.markdown('#### Pool overallocation')
@@ -171,37 +179,18 @@ def render_resource_pools(
                 _render_pool_assignments_table(detail.assignments, detail.pool_id, service, planning_page)
 
 
-def _mapping_breakdown(rows: list[dict], warnings: list[str]) -> None:
-    """Show employee warnings with escaped, per-row hover and focus overlays."""
-    if not any(warnings):
-        st.dataframe(pd.DataFrame(rows), hide_index=True, width='stretch')
-        return
-    header = ''.join(f'<th scope="col">{escape(column)}</th>' for column in rows[0])
-    body = []
-    for row, warning in zip(rows, warnings):
-        cells = []
-        for column, value in row.items():
-            content = escape(str(value))
-            if column == 'Resource' and warning:
-                content = (f'<span tabindex="0" class="allocation-warning" '
-                           f'aria-label="{escape(warning, quote=True)}">{content}'
-                           f'<span role="tooltip">{escape(warning)}</span></span>')
-            cells.append(f'<td>{content}</td>')
-        body.append('<tr>' + ''.join(cells) + '</tr>')
-    st.html('''<style>
-      .mapping-breakdown {overflow:visible;padding-bottom:1rem;}
-      .mapping-breakdown table {width:100%;border-collapse:collapse;font-size:.875rem;}
-      .mapping-breakdown th,.mapping-breakdown td {padding:.5rem;text-align:left;border-bottom:1px solid #cbd5e1;}
-      .allocation-warning {position:relative;color:#a12622;font-weight:600;cursor:help;}
-      .allocation-warning [role=tooltip] {display:none;position:absolute;left:0;top:100%;z-index:10;
-        background:#fff;color:#262730;border:1px solid #9ca3af;border-radius:4px;padding:.7rem;
-        min-width:280px;max-width:440px;box-shadow:0 2px 8px #0003;white-space:normal;}
-      .allocation-warning:hover [role=tooltip],.allocation-warning:focus [role=tooltip] {display:block;}
-    </style><div class="mapping-breakdown"><table aria-label="Mapped Capacity Breakdown"><thead><tr>'''
-        + header + '</tr></thead><tbody>' + ''.join(body) + '</tbody></table></div>')
+def _mapping_breakdown(rows: list[dict], warnings: list[str]) -> TableAction | None:
+    """Render allocation warnings and an Unmap action on each resource row."""
+    from app.presentation.components.action_table import action_table
+    columns = [(key, key) for key in rows[0]]
+    payload = [row | {'id': index, 'accessible_name': row['Resource'],
+                     'tooltips': {'Resource': warning} if warning else {}}
+               for index, (row, warning) in enumerate(zip(rows, warnings))]
+    return action_table(payload, columns, {'unmap': 'Unmap'}, key='pool_mapping_breakdown')
 
 
-def _render_exception_breakdown(exceptions: list[PoolExceptionBreakdown]) -> None:
+def _render_exception_breakdown(exceptions: list[PoolExceptionBreakdown], service: ResourcePoolService,
+                                organization: OrganizationService) -> None:
     """Show all effective exception periods for the selected leaf or subtree."""
     st.markdown('#### Pool capacity exception breakdown')
     if not exceptions:
@@ -209,12 +198,8 @@ def _render_exception_breakdown(exceptions: list[PoolExceptionBreakdown]) -> Non
         return
     st.caption('All periods are shown, including past exceptions. Employee exceptions replace pool exceptions when resources are mapped. '
                'FTE reduction includes the mapping allocation; a negative value increases capacity.')
-    st.dataframe(pd.DataFrame([{
-        'Pool': item.pool_name, 'Source': item.source, 'Resource': item.resource_name,
-        'Mapped via': item.mapping_source, 'Date start': item.start_date, 'Date stop': item.end_date,
-        'FTE reduction': item.reduction_fte, 'Employee availability (%)': item.occupation_percentage,
-        'Reason': item.reason,
-    } for item in exceptions]), hide_index=True, width='stretch')
+    from app.presentation.components.pool_detail_actions import exception_actions
+    exception_actions(exceptions, service, organization)
 
 
 def _open_pool_consuming_projects(hierarchy: PoolHierarchy, pool_id: int,

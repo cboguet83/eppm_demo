@@ -2,8 +2,10 @@
 
 import csv
 import io
-from dataclasses import fields, replace
+import json
+from dataclasses import asdict, fields, replace
 from datetime import date
+from math import isfinite
 
 from app.application.ports.organization import CalendarExceptionRow, OrganizationGateway, OrganizationStore
 from app.application.ports.references import EmployeeReference, FunctionReference
@@ -168,7 +170,8 @@ class OrganizationService:
             records = [] if template else (store.get_all_teams(include_deleted=True)
                 if catalog == 'teams' and include_deleted else read())
             for record in records:
-                values = [getattr(record, column) for column in columns]
+                values = [json.dumps([asdict(item) for item in record.assignments()])
+                          if column == 'function_assignments' else getattr(record, column) for column in columns]
                 writer.writerow([
                     "'" + value if isinstance(value, str) and value.startswith(
                         ('=', '+', '-', '@', '\t', '\r', '\n')) else value
@@ -231,6 +234,7 @@ class OrganizationService:
         emp = normalize_employee(emp)
         initial_exception = replace(initial_exception) if initial_exception is not None else None
         def operation(store: OrganizationStore) -> int:
+            self._validate_function_assignments(store, emp)
             employee_id = store.create_employee(emp)
             if initial_exception is not None:
                 exception = normalize_exception(replace(initial_exception, employee_id=employee_id, exception_id=None))
@@ -243,7 +247,42 @@ class OrganizationService:
         if emp.employee_id is None:
             return False
         emp = normalize_employee(emp)
-        return self._gateway.run(lambda store: store.update_employee(emp), write=True, permission=Permission.SHARED)
+        def operation(store: OrganizationStore) -> bool:
+            self._validate_function_assignments(store, emp)
+            return store.update_employee(emp)
+        return self._gateway.run(operation, write=True, permission=Permission.SHARED)
+
+    @staticmethod
+    def _validate_function_assignments(store: OrganizationStore, employee: Employee) -> None:
+        """Enforce the active-function total inside the serializable save."""
+        assignments = employee.assignments()
+        identities = [row.function_id for row in assignments]
+        if len(set(identities)) != len(identities):
+            raise ValueError('Select each function only once.')
+        if any(type(row.function_id) is not int or row.function_id <= 0 or not isfinite(row.allocation_pct)
+               or not 0 <= row.allocation_pct <= 100 for row in assignments):
+            raise ValueError('Function assignments require a valid function and a percentage between 0 and 100.')
+        active = {row.function_id for row in store.get_all_functions()}
+        if round(sum(row.allocation_pct for row in assignments if row.function_id in active), 6) > 100:
+            raise ValueError('Employee allocation across active functions cannot exceed 100%.')
+
+    def replace_employee_exceptions(self, employee_id: int, items: list[EmployeeCalendarException]) -> None:
+        """Validate and replace the exception grid in one authorized transaction."""
+        items = [normalize_exception(replace(item, employee_id=employee_id)) for item in items]
+        ordered = sorted(items, key=lambda item: item.start_date)
+        if any(first.end_date >= second.start_date for first, second in zip(ordered, ordered[1:])):
+            raise ValueError('Employee calendar exceptions cannot overlap.')
+        def operation(store: OrganizationStore) -> None:
+            current = store.get_employee_calendar_exceptions(employee_id)
+            known = {row.exception_id for row in current}
+            selected = [row.exception_id for row in items if row.exception_id is not None]
+            if not set(selected) <= known or len(set(selected)) != len(selected):
+                raise ValueError('The exception grid is stale. Reopen the employee profile.')
+            for row in current:
+                store.delete_employee_calendar_exception(row.exception_id)
+            for row in items:
+                store.create_employee_calendar_exception(row)
+        self._gateway.run(operation, write=True, permission=Permission.SHARED)
 
     def delete_employee(self, emp_id: int) -> bool:
         """Delete employee within one organization transaction."""
@@ -263,7 +302,7 @@ class OrganizationService:
 
     def create_employee_calendar_exception(self, exception: EmployeeCalendarException) -> int:
         """Create employee calendar exception within one organization transaction."""
-        exception = normalize_exception(exception)
+        exception = normalize_exception(replace(exception, exception_id=None))
         def operation(store: OrganizationStore) -> int:
             if store.has_overlapping_calendar_exception(
                 exception.employee_id, exception.start_date, exception.end_date, None,

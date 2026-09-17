@@ -27,10 +27,13 @@ def _details(overview: TeamOverview, selected: int) -> None:
         st.info('No active function mappings for this team.')
     st.subheader('Team capacity exceptions')
     st.caption('All employee exception periods are shown, including past exceptions. Dates are inclusive.')
-    function_names = {member.employee_id: member.function_name for member in detail.members}
+    function_names = {identity: ', '.join(member.function_name for member in detail.members if member.employee_id == identity)
+                      for identity in {member.employee_id for member in detail.members}}
+    shares = {identity: sum(member.function_allocation_pct for member in detail.members if member.employee_id == identity)
+              for identity in function_names}
     periods = [{'Function': function_names[item.employee_id], 'Employee': f'{item.firstname} {item.lastname}',
                 'Source': 'Employee', 'Date start': item.start_date, 'Date stop': item.end_date,
-                'Employee FTE during exception': item.occupation_percentage / 100, 'Reason': item.reason}
+                'Employee FTE during exception': item.occupation_percentage * shares[item.employee_id] / 10000, 'Reason': item.reason}
                for item in detail.exceptions]
     if periods:
         st.dataframe(pd.DataFrame(periods), hide_index=True, width='stretch')

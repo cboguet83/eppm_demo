@@ -46,6 +46,8 @@ def discover_migrations(directory: Path = MIGRATION_DIRECTORY) -> tuple[Migratio
             checksum_content += Path(__file__).with_name('project_plan_migration.py').read_bytes()
         if path.name == '0045_relational_project_plans.sql':
             checksum_content += Path(__file__).with_name('relational_plan_migration.py').read_bytes()
+        if path.name == '0055_employee_function_assignments.sql':
+            checksum_content += Path(__file__).with_name('employee_function_migration.py').read_bytes()
         migrations.append(Migration(len(migrations) + 1, path.name, sha256(checksum_content).hexdigest(), source))
     if not migrations:
         raise MigrationError("No migration files were found.")
@@ -105,6 +107,9 @@ def migrate(url: str, *, directory: Path = MIGRATION_DIRECTORY) -> tuple[str, ..
                 for migration in migrations[applied:]:
                     current_name = migration.name
                     connection.execute(migration.sql)
+                    if migration.name == '0055_employee_function_assignments.sql':
+                        from app.infrastructure.postgresql.employee_function_migration import initialize_staffing
+                        initialize_staffing(connection)
                     if migration.name == '0040_pool_hierarchy.sql':
                         from app.infrastructure.postgresql.pool_hierarchy_migration import convert_pool_groups
                         convert_pool_groups(connection)

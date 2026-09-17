@@ -335,6 +335,19 @@ class ResourcePoolService:
             return store.delete_mapping(mapping_id)
         return self._gateway.run(operation, write=True, permission=Permission.SHARED)
 
+    def remove_pool_mappings(self, pool_id: int, identities: list[int]) -> None:
+        """Remove explicitly confirmed source mappings atomically with allocation checks."""
+        def operation(store: ResourcePoolStore) -> None:
+            catalog = store.mapping_catalog()
+            requested = set(identities)
+            known = {row.id for row in catalog.sources.mappings if row.pool_id == pool_id}
+            if not requested or not requested <= known:
+                raise ValueError('The mappings changed. Reopen the confirmation.')
+            catalog.validate([row for row in catalog.sources.mappings if row.id not in requested])
+            for identity in sorted(requested):
+                store.delete_mapping(identity)
+        self._gateway.run(operation, write=True, permission=Permission.SHARED)
+
     def get_assignments(
         self,
         pool_id: int | None = None,

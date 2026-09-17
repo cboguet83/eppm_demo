@@ -4,7 +4,7 @@ from dataclasses import replace
 
 import pytest
 
-from app.domain.organization.models import Employee, OrgFunction, Team
+from app.domain.organization.models import Employee, EmployeeFunction, OrgFunction, Team
 from app.domain.resources.inputs import CapacityInputs
 from app.domain.resources.mapping_allocation import MappingCatalog
 from app.domain.resources.models import PoolMapping, ResourcePool
@@ -73,3 +73,12 @@ def test_empty_team_still_has_its_own_allocation_limit():
     source.sources.team_functions = {}
     assert source.remaining(2, 'team', 1) == 0
     assert source.remaining(2, 'employee', 1) == 100
+
+
+def test_remaining_team_percentage_accounts_for_partial_employee_function_share():
+    source = catalog([PoolMapping(1, 'employee', 1, 60)])
+    source.sources.employees[0].function_assignments = [EmployeeFunction(1, 60)]
+    assert source.remaining(2, 'team', 2) == 66.666
+    source.validate(source.sources.mappings + [PoolMapping(2, 'team', 2, 66.666)])
+    with pytest.raises(ValueError, match='cannot exceed 100%'):
+        source.validate(source.sources.mappings + [PoolMapping(2, 'team', 2, 66.667)])

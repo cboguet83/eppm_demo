@@ -16,6 +16,7 @@ from dataclasses import asdict
 from unittest.mock import patch
 
 from app.main import create_resource_pool_service
+from app.infrastructure.postgresql.staffing_projection import refresh_staffing
 
 
 class PoolCapacityCacheTests(unittest.TestCase):
@@ -42,6 +43,7 @@ class PoolCapacityCacheTests(unittest.TestCase):
             conn.execute(
                 'INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,fte_assigned,project_plan_id) VALUES (1,1,1,0.5,(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current))'
             )
+            refresh_staffing(conn)
 
     def test_persisted_details_equal_uncached_service_and_warm_reads_do_not_compute(self) -> None:
         expected = [
@@ -79,6 +81,7 @@ class PoolCapacityCacheTests(unittest.TestCase):
                 "INSERT INTO eppm.employee_calendar_exception(employee_id,start_date,end_date,occupation_percentage) "
                 "VALUES(1,'2026-06-15','2026-06-15',0)"
             )
+            refresh_staffing(conn)
         self.assertEqual(self._valid_cached_pool_ids(), [])
         detail = create_pool_capacity_service(self.resources, access=self.access).get_details([1])[0]
         self.assertTrue(detail.is_overassigned)
@@ -93,6 +96,7 @@ class PoolCapacityCacheTests(unittest.TestCase):
         self.assertEqual(len(detail.daily_usage), 2)
         with psycopg.connect(self.setup.operator_url) as conn:
             conn.execute("UPDATE eppm.resource_pool_mapping SET allocation_pct=25 WHERE pool_id=1")
+            refresh_staffing(conn)
         self.assertEqual(self._valid_cached_pool_ids(), [2])
         self.assertTrue(
             create_pool_capacity_service(self.resources, access=self.access).get_details([1])[0].is_overassigned
@@ -100,6 +104,7 @@ class PoolCapacityCacheTests(unittest.TestCase):
         with psycopg.connect(self.setup.operator_url) as conn:
             conn.execute("DELETE FROM eppm.resource_pool_mapping WHERE pool_id=1")
             conn.execute("UPDATE eppm.resource_pool SET capacity_fte=0.1 WHERE id=1")
+            refresh_staffing(conn)
         detail = create_pool_capacity_service(self.resources, access=self.access).get_details([1])[0]
         self.assertFalse(detail.has_assigned_resources)
         self.assertEqual(detail.effective_capacity_fte, 0.1)
@@ -130,7 +135,7 @@ class PoolCapacityCacheTests(unittest.TestCase):
         expected = [asdict(detail) for detail in service.get_details([1, 2])]
         with psycopg.connect(self.setup.operator_url) as connection:
             connection.execute(
-                "UPDATE eppm.pool_capacity_cache SET format_version=2, detail=%s",
+                "UPDATE eppm.pool_capacity_cache SET format_version=1, detail=%s",
                 (Jsonb({"contributing_functions": "incompatible format"}),),
             )
         self.resources = RuntimeResources(self.resources.database, self.resources.key)
@@ -141,6 +146,6 @@ class PoolCapacityCacheTests(unittest.TestCase):
             rows = connection.execute("SELECT format_version, detail FROM eppm.pool_capacity_cache").fetchall()
         self.assertEqual(len(rows), 2)
         for version, payload in rows:
-            self.assertEqual(version, 1)
+            self.assertEqual(version, 2)
             self.assertIn("contributing_resources", payload)
             self.assertNotIn("contributing_functions", payload)

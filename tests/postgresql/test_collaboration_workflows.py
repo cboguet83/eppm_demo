@@ -44,6 +44,8 @@ def database(runtime: RuntimeResources, authorized: AuthorizedFixture) -> Runtim
             [("Alice", "Smith", "alice@example.test", "A", 1),
              ("Bob", "Jones", "bob@example.test", "B", 2)],
         )
+        connection.execute('INSERT INTO eppm.employee_function(employee_id,function_id) '
+                           'SELECT employee_id,function_id FROM eppm.employee')
     return runtime
 
 
@@ -82,7 +84,8 @@ def test_roles_can_repeat_and_occupants_follow_the_function(collaboration, datab
     repo.save_contact(1, role, 3, first)
     assert repo.list_contacts(1)[0]["person"] == "Vacant function"
     with psycopg.connect(authorized.setup.operator_url) as conn:
-        conn.execute("UPDATE eppm.employee SET function_id=3 WHERE employee_code='A'")
+        conn.execute("UPDATE eppm.employee_function SET function_id=3 WHERE employee_id="
+                     "(SELECT employee_id FROM eppm.employee WHERE employee_code='A')")
     assert repo.list_contacts(1)[0]["person"] == "Alice Smith"
     repo.save_catalog("role", "Executive sponsor", role)
     assert repo.list_contacts(1)[0]["role"] == "Executive sponsor"

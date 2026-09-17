@@ -2,6 +2,9 @@
 
 from dataclasses import replace
 from datetime import date
+from unittest.mock import patch
+
+import pandas as pd
 
 import psycopg
 import pytest
@@ -57,11 +60,10 @@ def exception_app(service, identity):
 def test_exception_editor_saves_a_native_reduction(pools):
     identity = pools.create_pool(ResourcePool('Editor', capacity_fte=5))
     app = AppTest.from_function(exception_app, args=(pools, identity), default_timeout=10).run()
-    prefix = f'pool_exception_{identity}_None'
-    app.date_input(key=prefix+'_start').set_value(date(2026, 1, 1))
-    app.date_input(key=prefix+'_end').set_value(date(2026, 3, 3))
-    app.number_input(key=prefix+'_reduction').set_value(.5)
-    app.button(key=prefix+'_save').click().run()
+    edited = pd.DataFrame([{'id': None, 'Start date': date(2026, 1, 1),
+        'End date': date(2026, 3, 3), 'Capacity reduction (FTE)': .5, 'Reason': 'Training'}])
+    with patch('streamlit.data_editor', return_value=edited):
+        app.button(key=f'pool_exception_grid_save_{identity}').click().run()
     assert not app.exception
     assert len(pools.capacity_exceptions(identity)) == 1
 

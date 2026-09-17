@@ -95,14 +95,15 @@ class PostgresCollaborationStore:
     def list_functions(self) -> list[FunctionContact]:
         """Resolve employee phones only through shared-management row policies."""
         return self._rows(FunctionContact, '''WITH occupants AS (
-            SELECT function_id,
+            SELECT ef.function_id,
                 string_agg(trim(firstname || ' ' || lastname), ', '
-                    ORDER BY lastname COLLATE "C" NULLS FIRST,firstname COLLATE "C" NULLS FIRST,employee_id) AS person,
+                    ORDER BY lastname COLLATE "C" NULLS FIRST,firstname COLLATE "C" NULLS FIRST,e.employee_id) AS person,
                 string_agg(NULLIF(mobile,''), ', '
-                    ORDER BY lastname COLLATE "C" NULLS FIRST,firstname COLLATE "C" NULLS FIRST,employee_id) AS mobile,
+                    ORDER BY lastname COLLATE "C" NULLS FIRST,firstname COLLATE "C" NULLS FIRST,e.employee_id) AS mobile,
                 string_agg(NULLIF(landline,''), ', '
-                    ORDER BY lastname COLLATE "C" NULLS FIRST,firstname COLLATE "C" NULLS FIRST,employee_id) AS landline
-            FROM eppm.active_employee GROUP BY function_id
+                    ORDER BY lastname COLLATE "C" NULLS FIRST,firstname COLLATE "C" NULLS FIRST,e.employee_id) AS landline
+            FROM eppm.active_employee e JOIN eppm.active_employee_function ef ON ef.employee_id=e.employee_id
+            GROUP BY ef.function_id
         ) SELECT f.function_id,f.name AS function_name,COALESCE(o.person,f.name) AS person,
                  COALESCE(o.mobile,'') AS mobile,COALESCE(o.landline,'') AS landline
           FROM eppm.active_function f LEFT JOIN occupants o ON o.function_id=f.function_id

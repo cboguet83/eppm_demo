@@ -270,6 +270,7 @@
       width: 90px;
     }
 
+    tr.employee-overallocated td, tr.employee-overallocated td * {color:#c41039 !important;}
     .col-name {
       font-weight: 600;
       color: #1e293b;
@@ -1018,13 +1019,14 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         filteredData.forEach(d => {
           const tr = document.createElement('tr');
           tr.setAttribute('data-id', d.employee_id);
+          if (d.overallocated) tr.classList.add('employee-overallocated');
           if (selectedItem && selectedItem.employee_id === d.employee_id) {
             tr.classList.add('selected');
           }
 
           tr.innerHTML = `
             <td class="col-code">${escapeHtml(d.employee_code)}</td>
-            <td class="col-name">${escapeHtml(d.full_name)}</td>
+            <td class="col-name">${escapeHtml(d.full_name)}${d.overallocated ? `<span tabindex="0" role="img" aria-label="${escapeHtml(d.allocation_warning)}" title="${escapeHtml(d.allocation_warning)}"> ⚠</span>` : ''}</td>
             <td>${escapeHtml(d.email || '—')}</td>
             <td>${escapeHtml(d.mobile || '—')}</td>
             <td>${escapeHtml(d.landline || '—')}</td>

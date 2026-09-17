@@ -36,6 +36,8 @@ def install_default_data(connection: psycopg.Connection, *, force: bool, include
         'SELECT EXISTS(SELECT 1 FROM eppm.resource_pool)'
     ).fetchone()[0]:
         apply_pool_scenarios(connection, prepare_pool_scenarios(connection, year=year, seed=20260908))
+    from app.infrastructure.postgresql.staffing_projection import refresh_staffing
+    refresh_staffing(connection)
     return True
 
 

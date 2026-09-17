@@ -22,103 +22,10 @@ type ResourceKey = tuple[str, int]
 type ResourceSource = tuple[str, float]
 
 
-def _team_resources(
-    inputs: CapacityInputs,
-    occupants: dict[int, list[int]],
-) -> tuple[dict[ResourceKey, ResourceSource], dict[ResourceKey, int]]:
-    """Resolve only explicit function/team memberships without I/O."""
-    functions = {function.function_id: function for function in inputs.functions if not function.deleted_flag}
-    teams = {team.team_id: team for team in inputs.teams if not team.deleted_flag}
-    resources: dict[ResourceKey, ResourceSource] = {}
-    occurrences: dict[ResourceKey, int] = {}
-    for mapping in inputs.mappings:
-        if mapping.target_type != "team":
-            continue
-        team = teams.get(mapping.target_id)
-        if team is None:
-            continue
-        members = list(inputs.team_functions.get(mapping.target_id, []))
-        name = team.team_name if team else f"Team #{mapping.target_id}"
-        for fid in set(members) & functions.keys():
-            keys = [("employee", eid) for eid in occupants.get(fid, [])]
-            for key in keys:
-                occurrences[key] = occurrences.get(key, 0) + 1
-                if key not in resources or mapping.allocation_pct > resources[key][1]:
-                    resources[key] = (name, mapping.allocation_pct)
-    return resources, occurrences
-
-
-def _direct_resources(
-    inputs: CapacityInputs,
-    occupants: dict[int, list[int]],
-) -> tuple[dict[ResourceKey, ResourceSource], dict[ResourceKey, int]]:
-    """Apply employee mappings after function mappings to preserve precedence."""
-    resources: dict[ResourceKey, ResourceSource] = {}
-    occurrences: dict[ResourceKey, int] = {}
-    employees = {employee.employee_id for employee in inputs.employees if not employee.deleted_flag}
-    functions = {function.function_id for function in inputs.functions if not function.deleted_flag}
-    for kind in ("function", "employee"):
-        for mapping in inputs.mappings:
-            if mapping.target_type != kind:
-                continue
-            if kind == "employee" and mapping.target_id not in employees:
-                continue
-            if kind == "function" and mapping.target_id not in functions:
-                continue
-            keys = [(kind, mapping.target_id)]
-            if kind == "function" and occupants.get(mapping.target_id):
-                keys = [("employee", eid) for eid in occupants[mapping.target_id]]
-            for key in keys:
-                occurrences[key] = occurrences.get(key, 0) + 1
-                resources[key] = (f"Direct {kind.title()} Mapping", mapping.allocation_pct)
-    return resources, occurrences
-
-
 def resource_contributions(inputs: CapacityInputs) -> list[PoolResourceContribution]:
-    """Deduplicate employees; only direct function mappings retain vacant FTE."""
-    if inputs.pool is not None and inputs.pool.deleted_flag:
-        return []
-    functions = {function.function_id: function for function in inputs.functions if not function.deleted_flag}
-    employees = {employee.employee_id: employee for employee in inputs.employees if not employee.deleted_flag}
-    occupants: dict[int, list[int]] = {}
-    for employee in employees.values():
-        if employee.function_id is not None:
-            occupants.setdefault(employee.function_id, []).append(employee.employee_id)
-    teams, team_counts = _team_resources(inputs, occupants)
-    direct, direct_counts = _direct_resources(inputs, occupants)
-    result: list[PoolResourceContribution] = []
-    for kind, identity in sorted(teams.keys() | direct.keys()):
-        key = (kind, identity)
-        employee = employees.get(identity) if kind == "employee" else None
-        function_id = (employee.function_id or 0) if employee else identity
-        function = functions.get(function_id)
-        if employee is None and function is None:
-            continue
-        percentage = employee.occupation_percentage if employee else function.fte_percentage
-        nominal = (percentage if percentage is not None else 100.0) / 100.0
-        source, allocation = direct[key] if key in direct else teams[key]
-        result.append(
-            PoolResourceContribution(
-                function_id=function_id,
-                function_name=function.name if function else "Unassigned function",
-                nominal_fte=nominal,
-                effective_allocation_pct=allocation,
-                effective_fte=round(nominal * (allocation / 100.0), 3),
-                source_type="direct" if key in direct else "team",
-                source_name=source,
-                is_deduplicated=(key in direct and key in teams)
-                or direct_counts.get(key, 0) > 1
-                or team_counts.get(key, 0) > 1,
-                employee_id=employee.employee_id if employee else None,
-                employee_name=(
-                    f"{employee.firstname.strip()} {employee.lastname.strip()}".strip()
-                    if employee
-                    else None
-                ),
-                resource_type=kind,
-            )
-        )
-    return result
+    """Resolve weighted function memberships and direct employee overrides."""
+    from app.domain.resources.function_staffing import contributions
+    return contributions(inputs)
 
 
 def _calendar_capacity(

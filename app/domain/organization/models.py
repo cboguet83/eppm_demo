@@ -68,6 +68,14 @@ class Team:
     deleted_flag: bool = False
 
 
+@dataclass(frozen=True)
+class EmployeeFunction:
+    """An employee's percentage assigned to one organizational function."""
+
+    function_id: int
+    allocation_pct: float = 100.0
+
+
 @dataclass
 class Employee:
     """Represents an employee / team member record.
@@ -81,9 +89,10 @@ class Employee:
         landline: Landline telephone number.
         sigle: Trigram / initials acronym (e.g. 'JDO', 'ASM').
         employee_code: Unique employee badge/code (e.g. 'EMP-001').
-        function_id: Associated function role ID.
+        function_id: Single-function creation shorthand; derived only when one assignment exists.
         occupation_percentage: Employee's normal working percentage (0 to 100).
         deleted_flag: Whether the employee is excluded from staffing capacity.
+        function_assignments: Explicit function shares; the employee_function table is authoritative.
     """
 
     firstname: str
@@ -97,6 +106,14 @@ class Employee:
     occupation_percentage: float = 100.0
     landline: str = ""
     deleted_flag: bool = False
+
+    function_assignments: list[EmployeeFunction] | None = None
+
+    def assignments(self) -> list[EmployeeFunction]:
+        """Return explicit assignments, accepting a single-function creation DTO."""
+        if self.function_assignments is not None:
+            return self.function_assignments
+        return [EmployeeFunction(self.function_id)] if self.function_id is not None else []
 
 
 @dataclass

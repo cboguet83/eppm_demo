@@ -199,15 +199,23 @@ def render_employees(service: OrganizationService) -> None:
     st.link_button(t('settings.export_csv'), '/downloads/organization/employees.csv')
     df_types = function_types_frame(service.get_all_function_types())
     df_funcs = functions_frame(service.get_all_functions())
-    df_emps = employees_frame(service.get_all_employees())
+    employee_records = service.get_all_employees()
+    df_emps = employees_frame(employee_records)
     total_emps = len(df_emps)
     st.subheader(f"{t('settings.employees_title', default='Employee Directory & Profile Management')} ({total_emps} {t('settings.stat_employees', default='Employees')})")
 
     enriched_emps = enrich_employees(df_emps, df_funcs, df_types)
+    function_names = dict(zip(df_funcs['function_id'], df_funcs['name']))
+    people = {person.employee_id: person for person in employee_records}
     emps_payload = []
     if not enriched_emps.empty:
         for row in enriched_emps.to_dict(orient="records"):
+            assignments = [item for item in people[int(row['employee_id'])].assignments() if item.function_id in function_names]
+            assigned = sum(item.allocation_pct for item in assignments)
+            description = ', '.join(f'{function_names[item.function_id]}: {item.allocation_pct:g}%' for item in assignments)
             emps_payload.append({
+                'overallocated': assigned > 100,
+                'allocation_warning': f'{assigned:g}% allocated across active functions. {description}' if assigned > 100 else '',
                 "employee_id": int(row["employee_id"]),
                 "employee_code": str(row.get("employee_code") or ""),
                 "full_name": str(row.get("full_name") or ""),
@@ -216,7 +224,7 @@ def render_employees(service: OrganizationService) -> None:
                 "landline": str(row.get("landline") or ""),
                 "sigle": str(row.get("sigle") or ""),
                 "function_id": int(row["function_id"]) if pd.notna(row.get("function_id")) else None,
-                "function_name": str(row.get("function_name") or "—"),
+                "function_name": description or '—',
                 "function_type_name": str(row.get("function_type_name") or "—"),
                 "occupation_percentage": float(row.get("occupation_percentage", 100.0)),
             })

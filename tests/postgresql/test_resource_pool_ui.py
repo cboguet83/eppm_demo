@@ -291,9 +291,10 @@ render_resource_pools(create_resource_pool_service(runtime, access=access),
     assert table.call_args.kwargs['key'] == f'pool_assignments_{leaf}'
     assert table.call_args.args[0][0]['id'] == assignment
     assert not app.exception and not app.error
-    assert app.dataframe[0].value.iloc[0]['Pool'] == 'Delivery'
-    assert app.dataframe[0].value.iloc[0]['Resource'] == 'Ada Lovelace'
-    assert app.dataframe[0].value.iloc[0]['Effective FTE'] == 0.5
+    breakdown = next(call.args[0] for call in table.call_args_list if call.kwargs['key'] == 'pool_mapping_breakdown')
+    assert breakdown[0]['Pool'] == 'Delivery'
+    assert breakdown[0]['Resource'] == 'Ada Lovelace'
+    assert breakdown[0]['Effective FTE'] == 0.5
     assert not any(button.key == f'btn_add_map_{parent}' for button in app.button)
     assert {metric.label: metric.value for metric in app.metric} == {
         'Total Pools': '1', 'Overassigned Pools': '0', 'Pools with no assignment': '0',
@@ -321,7 +322,9 @@ render_resource_pools(create_resource_pool_service(runtime, access=access),
     create_pool_capacity_service(runtime, access=access), create_organization_service(runtime, access=access), 'planning')
 """, database, access)
     app.session_state['target_resource_pool_id'] = parent
-    with patch('app.presentation.pages.resource_pools.resource_pool_tree', return_value=None) as tree:
+    with patch('app.presentation.pages.resource_pools.resource_pool_tree', return_value=None) as tree, \
+            patch('app.presentation.components.action_table.action_table', return_value=None) as table, \
+            patch('app.presentation.components.pool_detail_actions.action_table', table):
         app.run()
     assert not app.exception and not app.error
     assert [metric.label for metric in app.metric] == ['Total Pools', 'Pools with no assignment',
@@ -329,9 +332,10 @@ render_resource_pools(create_resource_pool_service(runtime, access=access),
                                                      'Overallocated teams / employees']
     assert app.metric[3].value == '2'
     assert tree.call_args.kwargs['future_exception_ids'] == {leaf, mapped}
-    breakdown = next(frame.value for frame in app.dataframe if 'Source' in frame.value and 'Date stop' in frame.value)
-    assert len(breakdown) == 3 and set(breakdown['Source']) == {'Pool', 'Employee'}
-    assert 'Ignored' not in breakdown['Reason'].tolist()
+    breakdown = next(call.args[0] for call in table.call_args_list if call.kwargs['key'] == 'pool_exception_actions')
+    assert len(breakdown) == 3 and {row['Source'] for row in breakdown} == {'Pool', 'Employee'}
+    assert 'Ignored' not in [row['Reason'] for row in breakdown]
+    assert all(row['allowed_actions'] == (['delete'] if row['Source'] == 'Pool' else ['edit']) for row in breakdown)
     edit = dialog(database, access, f'_open_edit_pool_dialog(service, {mapped})')
     assert not edit.exception and not edit.error
     assert not any((widget.key or '').startswith('pool_exception_') for widget in edit.selectbox)

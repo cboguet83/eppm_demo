@@ -10,6 +10,8 @@ from threading import Event
 import psycopg
 import pytest
 
+from app.infrastructure.postgresql.staffing_projection import refresh_staffing
+
 from app.application.exceptions import ResourcePoolStorageError
 from app.application.services.pool_capacity import PoolCapacityService
 from app.domain.access.models import AccessDenied
@@ -57,6 +59,9 @@ def staffing(authorized):
                    (3,'employee',1,0),(4,'function',4,35),(6,'team',3,100)""")
         connection.execute("INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date,project_plan_id) VALUES (1,1,'Visible','2026-01-01','2026-01-05',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(2,2,'Read only','2026-01-02','2026-01-04',(SELECT id FROM eppm.project_plan WHERE project_id=2 AND is_current)),(3,3,'Hidden','2026-01-01','2026-01-06',(SELECT id FROM eppm.project_plan WHERE project_id=3 AND is_current))")
         connection.execute("INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,fte_assigned,start_date,end_date,project_plan_id) VALUES (1,1,NULL,1,NULL,NULL,(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(1,1,1,0.75,NULL,'2026-01-04',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(1,2,2,0.5,'2026-01-03',NULL,(SELECT id FROM eppm.project_plan WHERE project_id=2 AND is_current)),(1,3,3,20,NULL,NULL,(SELECT id FROM eppm.project_plan WHERE project_id=3 AND is_current)),(2,1,NULL,0.5,NULL,NULL,(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(3,1,1,0.25,NULL,NULL,(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(6,3,3,30,NULL,NULL,(SELECT id FROM eppm.project_plan WHERE project_id=3 AND is_current))")
+        connection.execute('INSERT INTO eppm.employee_function(employee_id,function_id) '
+                           'SELECT employee_id,function_id FROM eppm.employee WHERE function_id IS NOT NULL ON CONFLICT DO NOTHING')
+        refresh_staffing(connection)
     return authorized
 
 
@@ -101,6 +106,9 @@ def test_team_capacity_excludes_managers_reports_and_child_teams_without_explici
         connection.execute('INSERT INTO eppm.team_function(team_id,function_id) VALUES (1,3),(2,4)')
         connection.execute("INSERT INTO eppm.resource_pool(id,name) VALUES (1,'Team pool')")
         connection.execute("INSERT INTO eppm.resource_pool_mapping(pool_id,target_type,target_id,allocation_pct) VALUES (1,'team',1,100)")
+        connection.execute('INSERT INTO eppm.employee_function(employee_id,function_id) '
+                           'SELECT employee_id,function_id FROM eppm.employee WHERE function_id IS NOT NULL ON CONFLICT DO NOTHING')
+        refresh_staffing(connection)
     native = reader(authorized).read([1])[1]
     expected = calculate_capacity(reference_inputs(authorized, [1])[1], DAY)
     assert calculate_capacity(native, DAY) == expected
@@ -108,6 +116,7 @@ def test_team_capacity_excludes_managers_reports_and_child_teams_without_explici
     assert native.staffing.assigned_capacity_fte == 1
     with psycopg.connect(authorized.setup.operator_url) as connection:
         connection.execute('INSERT INTO eppm.team_function(team_id,function_id) VALUES (1,1)')
+        refresh_staffing(connection)
     assert {person.employee_id for person in reader(authorized).read([1])[1].staffing.contributing_resources} == {1, 3}
 
 
@@ -118,6 +127,7 @@ def test_vacant_team_functions_contribute_zero_without_nominal_pool_fallback(aut
         connection.execute('INSERT INTO eppm.team_function(team_id,function_id) VALUES (1,1)')
         connection.execute("INSERT INTO eppm.resource_pool(id,name,capacity_fte) VALUES (1,'Team pool',7)")
         connection.execute("INSERT INTO eppm.resource_pool_mapping(pool_id,target_type,target_id) VALUES (1,'team',1)")
+        refresh_staffing(connection)
 
     def capacity():
         native = calculate_capacity(reader(authorized).read([1])[1], DAY)
@@ -129,12 +139,17 @@ def test_vacant_team_functions_contribute_zero_without_nominal_pool_fallback(aut
     assert capacity().contributing_resources == []
     with psycopg.connect(authorized.setup.operator_url) as connection:
         connection.execute("INSERT INTO eppm.employee(employee_id,firstname,lastname,email,employee_code,function_id,occupation_percentage) VALUES (1,'First','Member','one@example.test','1',1,40),(2,'Second','Member','two@example.test','2',1,60)")
+        connection.execute('INSERT INTO eppm.employee_function(employee_id,function_id) '
+                           'SELECT employee_id,function_id FROM eppm.employee WHERE function_id IS NOT NULL ON CONFLICT DO NOTHING')
+        refresh_staffing(connection)
     assert capacity().effective_capacity_fte == 1
     with psycopg.connect(authorized.setup.operator_url) as connection:
         connection.execute("INSERT INTO eppm.employee_calendar_exception(employee_id,start_date,end_date,occupation_percentage) VALUES (1,'2026-01-03','2026-01-03',0)")
+        refresh_staffing(connection)
     assert capacity().daily_effective_capacity['2026-01-03'] == 0.6
     with psycopg.connect(authorized.setup.operator_url) as connection:
-        connection.execute('UPDATE eppm.employee SET function_id=NULL')
+        connection.execute('DELETE FROM eppm.employee_function')
+        refresh_staffing(connection)
     assert capacity().effective_capacity_fte == 0
 
 
@@ -195,6 +210,7 @@ def test_randomized_allocations_and_membership_changes_keep_native_staffing_pari
                 connection.execute('INSERT INTO eppm.team_function(team_id,function_id) VALUES (3,1) ON CONFLICT DO NOTHING')
             else:
                 connection.execute('DELETE FROM eppm.team_function WHERE team_id=3')
+            refresh_staffing(connection)
         native, reference = reader(staffing).read([1, 3, 4, 6]), reference_inputs(staffing, [1, 3, 4, 6])
         assert {key: calculate_capacity(values, DAY) for key, values in native.items()} == {
             key: calculate_capacity(values, DAY) for key, values in reference.items()}
@@ -204,6 +220,7 @@ def test_calendar_expansion_is_inclusive_and_retains_the_existing_25_year_cap(st
     with psycopg.connect(staffing.setup.operator_url) as connection:
         connection.execute("""UPDATE eppm.employee_calendar_exception SET start_date='2000-01-01',end_date='2099-01-01'
             WHERE employee_id=1""")
+        refresh_staffing(connection)
     native = reader(staffing, 1).read([3])[3]
     assert len(native.staffing.daily_assigned_capacity) == 365 * 25
     assert native.staffing.daily_assigned_capacity['2000-01-01'] == 0
@@ -244,6 +261,7 @@ def test_staffing_and_assignments_share_one_snapshot_during_concurrent_changes(s
                 connection.execute('UPDATE eppm.resource_pool SET capacity_fte=1 WHERE id=1')
                 connection.execute('DELETE FROM eppm.resource_pool_mapping WHERE pool_id=1')
                 connection.execute('DELETE FROM eppm.resource_pool_assignment WHERE pool_id=1')
+                refresh_staffing(connection)
         finally:
             changed.set()
         before, inputs = future.result()

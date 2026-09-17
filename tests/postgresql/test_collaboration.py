@@ -28,6 +28,8 @@ def collaboration(authorized):
                    ('Bob','Jones','bob@example.test','B',2,'mobile-B','landline-B'),
                    ('Charlie','Adams','charlie@example.test','C',1,'','landline-C'),
                    ('Unrelated','Person','other@example.test','U',4,'private-mobile','private-landline')""")
+        connection.execute('INSERT INTO eppm.employee_function(employee_id,function_id) '
+                           'SELECT employee_id,function_id FROM eppm.employee')
     service = CollaborationService(gateway(authorized))
     service.save_catalog('event_type', 'General information')
     return service
@@ -92,7 +94,8 @@ def test_contacts_preserve_repeated_roles_and_follow_current_function_occupants(
     assert collaboration.save_contact(1, role, 3, first) == first
     assert collaboration.list_contacts(1)[0]['person'] == 'Vacant function'
     with psycopg.connect(authorized.setup.operator_url) as connection:
-        connection.execute("UPDATE eppm.employee SET function_id=3 WHERE employee_code='A'")
+        connection.execute("UPDATE eppm.employee_function SET function_id=3 WHERE employee_id="
+                           "(SELECT employee_id FROM eppm.employee WHERE employee_code='A')")
         connection.execute("INSERT INTO eppm.project_role_translation VALUES (%s,'fr','Parrain')", (role,))
     assert collaboration.list_contacts(1, 'fr')[0]['person'] == 'Alice Smith'
     assert collaboration.list_contacts(1, 'fr')[0]['role'] == 'Parrain'

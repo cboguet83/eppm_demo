@@ -121,7 +121,7 @@ def _open_add_pool_dialog(service: ResourcePoolService, parent_pool_id: int | No
         st.rerun()
 
 
-@dialog(t("settings.dialog_edit_pool", default="Edit Resource Pool"))
+@dialog(t("settings.dialog_edit_pool", default="Edit Resource Pool"), width="medium")
 @pool_errors
 def _open_edit_pool_dialog(service: ResourcePoolService, pool_id: int) -> None:
     """Modal dialog to edit an existing resource pool."""
@@ -297,6 +297,11 @@ def _open_add_pool_mapping_dialog(
         int(row.employee_id): f"{row.firstname} {row.lastname}".strip()
         for row in df_employees.itertuples()
     }
+    function_names = {row.function_id: row.name for row in catalog.sources.functions}
+    for person in catalog.sources.employees:
+        functions = [function_names[row.function_id] for row in person.assignments() if row.function_id in function_names]
+        if person.employee_id in employees and functions:
+            employees[person.employee_id] += ' — ' + ', '.join(functions)
     teams = {identity: label for identity, label in teams.items()
              if limits.get(('team', identity), 0) > 0 or ('team', identity) in existing}
     employees = {identity: label for identity, label in employees.items()

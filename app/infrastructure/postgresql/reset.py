@@ -37,7 +37,7 @@ def _flush_references(connection: psycopg.Connection) -> None:
     connection.execute('DELETE FROM eppm.project_type WHERE NOT is_general')
     connection.execute('UPDATE eppm.resource_pool SET parent_pool_id=NULL')
     for table in (
-        'resource_pool', 'tag_dictionnary', 'tag_group', 'team', 'employee',
+        'resource_pool', 'tag_dictionnary', 'tag_group', 'team', 'employee_function', 'employee',
     ):
         connection.execute(sql.SQL('DELETE FROM eppm.{}').format(sql.Identifier(table)))
     connection.execute('UPDATE eppm.function SET manager_function_id=NULL,dual_manager_function_id=NULL')

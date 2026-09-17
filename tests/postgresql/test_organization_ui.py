@@ -92,19 +92,22 @@ def test_employee_dialog_initial_exception_is_atomic_and_calendar_can_be_edited(
     assert service.get_employee_calendar_exceptions(employee.employee_id)[0].reason == "Leave"
 
     app = dialog(database, access, f"_open_edit_employee_dialog(service, {employee.employee_id}, functions)")
-    app.radio(key=f"employee_exception_mode_{employee.employee_id}").set_value("edit").run()
-    exception_id = service.get_employee_calendar_exceptions(employee.employee_id)[0].exception_id
-    app.number_input(key=f"employee_exception_percentage_{employee.employee_id}_edit_{exception_id}").set_value(50)
-    # AppTest drives full-script reruns, so adapt only the fragment scheduling
-    # boundary; the production widgets, services, and database remain real.
-    rerun = st.rerun
-    with patch("streamlit.rerun", side_effect=lambda **_: rerun()):
-        app.button(key=f"save_employee_exception_{employee.employee_id}_edit_{exception_id}").click().run()
-        assert not app.exception, [error.message for error in app.exception]
-        assert service.get_employee_calendar_exception_by_id(exception_id).occupation_percentage == 50
-        app.button(key=f"delete_employee_exception_{employee.employee_id}_{exception_id}").click().run()
-    assert not app.exception
+    assert any('Availability (%)' in frame.value.columns for frame in app.dataframe)
+    def edit_grid(frame, **kwargs):
+        edited = frame.copy()
+        if kwargs['key'].startswith('employee_exception_grid_'):
+            edited['Availability (%)'] = 50
+        return edited
+    with patch('streamlit.data_editor', side_effect=edit_grid):
+        app.button(key=f'save_employee_exception_grid_{employee.employee_id}').click().run()
+    assert not app.exception and not app.error
+    assert service.get_employee_calendar_exceptions(employee.employee_id)[0].occupation_percentage == 50
+    with patch('streamlit.data_editor', side_effect=lambda frame, **kwargs:
+               frame.iloc[0:0] if kwargs['key'].startswith('employee_exception_grid_') else frame):
+        app.button(key=f'save_employee_exception_grid_{employee.employee_id}').click().run()
+    assert not app.exception and not app.error
     assert service.get_employee_calendar_exceptions(employee.employee_id) == []
+
 
 
 def test_employee_dialog_failure_leaves_no_partial_profile(database: RuntimeResources, access: BusinessAccess, authorized) -> None:

@@ -5,6 +5,8 @@ from datetime import date
 import psycopg
 import pytest
 
+from app.infrastructure.postgresql.staffing_projection import refresh_staffing
+
 from app.application.services.organization import OrganizationService
 from app.domain.resources.capacity import calculate_capacity
 from app.infrastructure.postgresql.organization import PostgresOrganizationGateway, PostgresOrganizationStore
@@ -18,6 +20,7 @@ from tests.postgresql.test_pool_hierarchy import capacity_service
 from tests.postgresql.test_resource_pools import service as pool_service
 from app.domain.resources.models import ResourcePool
 from app.domain.access.models import AccessDenied
+from app.application.services.business_access import Permission
 
 
 @pytest.fixture
@@ -33,6 +36,9 @@ def mapped_team(authorized):
         connection.execute("INSERT INTO eppm.resource_pool_mapping(pool_id,target_type,target_id) VALUES (1,'team',1)")
         connection.execute("INSERT INTO eppm.employee_calendar_exception(employee_id,start_date,end_date,occupation_percentage) VALUES (1,'2026-01-01','2026-01-02',50)")
         connection.execute("INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,project_plan_id,fte_assigned,start_date,end_date) SELECT 1,1,id,2,'2026-01-01','2026-01-03' FROM eppm.project_plan WHERE project_id=1 AND is_current")
+        connection.execute('INSERT INTO eppm.employee_function(employee_id,function_id) '
+                           'SELECT employee_id,function_id FROM eppm.employee WHERE function_id IS NOT NULL ON CONFLICT DO NOTHING')
+        refresh_staffing(connection)
     return authorized
 
 
@@ -49,8 +55,8 @@ def test_soft_delete_retains_mappings_but_removes_capacity(mapped_team, table, k
     assert calculate_capacity(reader.read([1])[1], date(2026, 1, 1)).assigned_capacity_fte == 1
     gateway_type = PostgresResourcePoolGateway if table == 'resource_pool' else PostgresOrganizationGateway
     gateway = gateway_type(setup.database, setup.key, **options)
-    assert gateway.run(lambda store: getattr(store, method)(1), write=True)
-    assert not gateway.run(lambda store: getattr(store, method)(1), write=True)
+    assert gateway.run(lambda store: getattr(store, method)(1), write=True, permission=Permission.SHARED)
+    assert not gateway.run(lambda store: getattr(store, method)(1), write=True, permission=Permission.SHARED)
     detail = calculate_capacity(reader.read([1])[1], date(2026, 1, 1))
     assert detail.assigned_capacity_fte == 0
     assert detail.effective_capacity_fte == 0

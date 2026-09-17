@@ -268,10 +268,12 @@ def _open_add_team_dialog(
         format_func=lambda x: func_map.get(x, "— None") if x is not None else "— None",
     )
     member_opts = df_funcs["function_id"].tolist() if not df_funcs.empty else []
+    from app.presentation.components.employee_editors import team_member_labels
+    member_labels = team_member_labels(service, func_map)
     new_members = st.multiselect(
         t("settings.field_team_members", default="Team Member Functions"),
         options=member_opts,
-        format_func=lambda x: func_map.get(x, f"Function #{x}"),
+        format_func=lambda x: member_labels.get(x, f"Function #{x}"),
         help="Select functions belonging to this team.",
     )
 
@@ -326,12 +328,14 @@ def _open_edit_team_dialog(
     )
 
     current_members = service.get_team_functions(team_id)
+    from app.presentation.components.employee_editors import team_member_labels
+    member_labels = team_member_labels(service, func_map)
     member_opts = df_funcs["function_id"].tolist() if not df_funcs.empty else []
     edit_members = st.multiselect(
         t("settings.field_team_members", default="Team Member Functions"),
         options=member_opts,
         default=[fid for fid in current_members if fid in member_opts],
-        format_func=lambda x: func_map.get(x, f"Function #{x}"),
+        format_func=lambda x: member_labels.get(x, f"Function #{x}"),
         help="Select functions belonging to this team.",
     )
 
@@ -582,207 +586,14 @@ def _open_add_employee_dialog(
 
 
 @organization_errors
-def _render_employee_calendar_exception_editor(
-    service: OrganizationService,
-    employee_id: int,
-    normal_occupation_percentage: float,
-) -> None:
-    """Render calendar exception management for the employee being edited."""
-    st.divider()
-    st.markdown(
-        f"#### {t('settings.calendar_exceptions_title', default='Employee Calendar Exceptions')}"
-    )
-    st.caption(
-        t(
-            "settings.calendar_exceptions_help",
-            default=(
-                "Temporarily override this employee's normal occupation percentage over an "
-                "inclusive date range, for example 0% during maternity leave."
-            ),
-        )
-    )
-
-    effective_today = service.get_effective_occupation_percentage(
-        employee_id, datetime.date.today()
-    )
-    normal_col, effective_col = st.columns(2)
-    normal_col.metric(
-        t("settings.normal_occupation", default="Normal occupation"),
-        f"{normal_occupation_percentage:.1f}%",
-    )
-    effective_col.metric(
-        t("settings.effective_today", default="Effective today"),
-        f"{effective_today:.1f}%" if effective_today is not None else "—",
-    )
-
-    df_exceptions = exceptions_frame(service.get_employee_calendar_exceptions(employee_id))
-    if not df_exceptions.empty:
-        display_exceptions = df_exceptions[
-            ["start_date", "end_date", "occupation_percentage", "reason"]
-        ].copy()
-        display_exceptions["occupation_percentage"] = display_exceptions[
-            "occupation_percentage"
-        ].map(lambda value: f"{float(value):.1f}%")
-        display_exceptions.columns = [
-            t("settings.field_start_date", default="Start date"),
-            t("settings.field_end_date", default="End date"),
-            t("settings.col_occupation_percentage", default="Occupation %"),
-            t("settings.field_exception_reason", default="Reason"),
-        ]
-        st.dataframe(display_exceptions, hide_index=True, width="stretch")
-    else:
-        st.info(
-            t(
-                "settings.no_calendar_exceptions",
-                default="No calendar exceptions are defined for this employee.",
-            )
-        )
-
-    editor_modes = ["add"] + (["edit"] if not df_exceptions.empty else [])
-    editor_mode = st.radio(
-        t("settings.calendar_exception_action", default="Exception action"),
-        options=editor_modes,
-        format_func={
-            "add": t("settings.action_add", default="Add New"),
-            "edit": t("settings.action_edit", default="Edit"),
-        }.get,
-        horizontal=True,
-        key=f"employee_exception_mode_{employee_id}",
-    )
-
-    selected_exception: EmployeeCalendarException | None = None
-    selected_exception_id: int | None = None
-    if editor_mode == "edit":
-        exception_ids = df_exceptions["exception_id"].astype(int).tolist()
-        exception_labels = {
-            int(row["exception_id"]): (
-                f"{row['start_date']} → {row['end_date']} · "
-                f"{float(row['occupation_percentage']):.1f}%"
-                + (f" · {row['reason']}" if row.get("reason") else "")
-            )
-            for row in df_exceptions.to_dict(orient="records")
-        }
-        selected_exception_id = st.selectbox(
-            t("settings.select_calendar_exception", default="Calendar exception"),
-            options=exception_ids,
-            format_func=lambda exception_id: exception_labels.get(
-                exception_id, str(exception_id)
-            ),
-            key=f"employee_exception_selection_{employee_id}",
-        )
-        selected_exception = service.get_employee_calendar_exception_by_id(
-            selected_exception_id
-        )
-
-    today = datetime.date.today()
-    initial_start = selected_exception.start_date if selected_exception else today
-    initial_end = selected_exception.end_date if selected_exception else today
-    initial_percentage = (
-        float(selected_exception.occupation_percentage)
-        if selected_exception
-        else 0.0
-    )
-    initial_reason = selected_exception.reason if selected_exception else ""
-    widget_suffix = (
-        f"edit_{selected_exception_id}" if selected_exception_id is not None else "add"
-    )
-
-    exception_start_col, exception_end_col = st.columns(2)
-    exception_start = exception_start_col.date_input(
-        t("settings.field_start_date", default="Start date"),
-        value=initial_start,
-        key=f"employee_exception_start_{employee_id}_{widget_suffix}",
-    )
-    exception_end = exception_end_col.date_input(
-        t("settings.field_end_date", default="End date"),
-        value=initial_end,
-        key=f"employee_exception_end_{employee_id}_{widget_suffix}",
-    )
-    exception_percentage = st.number_input(
-        t(
-            "settings.field_exception_percentage",
-            default="Working percentage during period",
-        ),
-        min_value=0.0,
-        max_value=100.0,
-        value=initial_percentage,
-        step=5.0,
-        key=f"employee_exception_percentage_{employee_id}_{widget_suffix}",
-    )
-    exception_reason = st.text_input(
-        t("settings.field_exception_reason", default="Reason (optional)"),
-        value=initial_reason,
-        key=f"employee_exception_reason_{employee_id}_{widget_suffix}",
-    )
-
-    save_exception_col, delete_exception_col = st.columns(2)
-    save_exception_label = (
-        t("settings.btn_add_calendar_exception", default="Add calendar exception")
-        if editor_mode == "add"
-        else t("settings.btn_save_changes", default="Save Changes")
-    )
-    if save_exception_col.button(
-        save_exception_label,
-        type="primary",
-        width="stretch",
-        key=f"save_employee_exception_{employee_id}_{widget_suffix}",
-    ):
-        try:
-            validate_employee_calendar_exception(
-                exception_start, exception_end, exception_percentage
-            )
-            if selected_exception is None:
-                service.create_employee_calendar_exception(
-                    EmployeeCalendarException(
-                        employee_id=employee_id,
-                        start_date=exception_start,
-                        end_date=exception_end,
-                        occupation_percentage=exception_percentage,
-                        reason=exception_reason,
-                    )
-                )
-                message = t(
-                    "settings.msg_calendar_exception_created",
-                    default="Calendar exception created.",
-                )
-            else:
-                require_change(service.update_employee_calendar_exception(
-                    EmployeeCalendarException(
-                        exception_id=selected_exception.exception_id,
-                        employee_id=employee_id,
-                        start_date=exception_start,
-                        end_date=exception_end,
-                        occupation_percentage=exception_percentage,
-                        reason=exception_reason,
-                    )
-                ))
-                message = t(
-                    "settings.msg_calendar_exception_updated",
-                    default="Calendar exception updated.",
-                )
-            st.toast(message)
-            st.rerun(scope="fragment")
-        except (ValueError, TypeError) as err:
-            st.error(str(err))
-        except OrganizationStorageError as err:
-            st.error(str(err))
-
-    if selected_exception_id is not None and delete_exception_col.button(
-        t("settings.action_delete", default="Delete"),
-        width="stretch",
-        key=f"delete_employee_exception_{employee_id}_{selected_exception_id}",
-    ):
-        require_change(service.delete_employee_calendar_exception(selected_exception_id))
-        st.toast(
-            t(
-                "settings.msg_calendar_exception_deleted",
-                default="Calendar exception deleted.",
-            ),
-        )
-        st.rerun(scope="fragment")
+def _render_employee_calendar_exception_editor(service: OrganizationService, employee_id: int,
+                                                normal_occupation_percentage: float) -> None:
+    """Render the employee's editable calendar grid."""
+    from app.presentation.components.employee_editors import employee_exception_editor
+    employee_exception_editor(service, employee_id, normal_occupation_percentage)
 
 
-@dialog(t("settings.dialog_edit_emp", default="Edit Employee Profile"))
+@dialog(t("settings.dialog_edit_emp", default="Edit Employee Profile"), width="large")
 @organization_errors
 def _open_edit_employee_dialog(
     service: OrganizationService,
@@ -795,8 +606,6 @@ def _open_edit_employee_dialog(
         st.error("Employee not found.")
         return
 
-    func_opts = [None] + (df_funcs["function_id"].tolist() if not df_funcs.empty else [])
-    func_map = dict(zip(df_funcs["function_id"], df_funcs["name"])) if not df_funcs.empty else {}
 
     c_c1, c_c2 = st.columns(2)
     edit_code = c_c1.text_input(t("settings.field_emp_code", default="Employee Code *"), value=emp_obj.employee_code)
@@ -811,14 +620,9 @@ def _open_edit_employee_dialog(
     edit_mobile = c_m2.text_input(t("settings.field_mobile", default="Mobile / Phone"), value=emp_obj.mobile)
     edit_landline = st.text_input(t("settings.field_landline", default="Landline"), value=emp_obj.landline)
 
-    emp_f_idx = func_opts.index(emp_obj.function_id) if emp_obj.function_id in func_opts else 0
-    c_role, c_occupation = st.columns([2, 1])
-    edit_func = c_role.selectbox(
-        t("settings.field_function", default="Function Role"),
-        options=func_opts,
-        index=emp_f_idx,
-        format_func=lambda x: func_map.get(x, "— None") if x is not None else "— None",
-    )
+    from app.presentation.components.employee_editors import employee_function_editor
+    assignments = employee_function_editor(emp_obj, df_funcs)
+    c_occupation = st.container()
     edit_occupation = c_occupation.number_input(
         t("settings.field_occupation_percentage", default="Occupation %"),
         min_value=0.0,
@@ -854,7 +658,7 @@ def _open_edit_employee_dialog(
                         landline=edit_landline,
                         sigle=edit_sigle,
                         employee_code=edit_code,
-                        function_id=edit_func,
+                        function_assignments=assignments,
                         occupation_percentage=edit_occupation,
                     )
                 ))

@@ -219,6 +219,7 @@ export default function({data, parentElement, setTriggerValue, setStateValue}) {
             if (collapsed.has(row.id)) hiddenBelow = row.depth;
         }
         const label = document.createElement('span'); label.className = 'pool-name'; label.textContent = row.name;
+        if (row.resource_warning || row.current_exceeded || row.peak_exceeded) label.style.color = '#c41039';
         identity.append(toggle,label); item.appendChild(identity);
         if (row.deleted) {
             const badge = document.createElement('span'); badge.className = 'pool-deleted';

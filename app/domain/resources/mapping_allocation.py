@@ -1,7 +1,6 @@
 """Cross-pool allocation limits using the existing employee deduplication rules."""
 
 from dataclasses import dataclass, replace
-from math import floor
 
 from app.domain.resources.capacity import ResourceKey, resource_contributions
 from app.domain.resources.inputs import CapacityInputs
@@ -84,12 +83,20 @@ class MappingCatalog:
         retained = [row for row in rows if row.pool_id == pool_id and
                     (row.target_type, row.target_id) != (kind, identity)]
         low = self.allocations(retained + [PoolMapping(pool_id, kind, identity, 0)])
-        high = self.allocations(retained + [PoolMapping(pool_id, kind, identity, 100)])
-        limits = [100.0]
-        for key, usage in high.usage.items():
-            if usage.get(pool_id, 0) > low.usage.get(key, {}).get(pool_id, 0):
-                limits.append(100 - outside.total(key))
-        return max(0.0, floor((min(limits) + 1e-8) * 1000) / 1000)
+        def permitted(percentage: float) -> bool:
+            candidate = self.allocations(retained + [PoolMapping(pool_id, kind, identity, percentage)])
+            return all(candidate.total(key) <= max(100 - outside.total(key), low.total(key)) + 1e-9
+                       for key in candidate.usage)
+        if permitted(100):
+            return 100.0
+        lower, upper = 0, 100000
+        while lower < upper:
+            middle = (lower + upper + 1) // 2
+            if permitted(middle / 1000):
+                lower = middle
+            else:
+                upper = middle - 1
+        return lower / 1000
 
     def limits(self, pool_id: int, draft: list[PoolMapping] | None = None) -> dict[ResourceKey, float]:
         """Calculate dropdown limits with one shared outside-pool projection."""

@@ -16,6 +16,7 @@ class TeamMember:
     employee_id: int | None
     employee_name: str
     current_fte: float
+    function_allocation_pct: float = 100
 
 
 @dataclass
@@ -42,13 +43,15 @@ class TeamOverview:
 def team_capacities(teams: list[Team], functions: list[OrgFunction], employees: list[Employee],
                     memberships: dict[int, list[int]], exceptions: list[CalendarExceptionRow],
                     today: date) -> dict[int, TeamCapacity]:
-    """Count each live employee once, without implicit managers or child teams."""
+    """Count each live employee's function share once, using explicit membership."""
     functions_by_id = {item.function_id: item for item in functions if not item.deleted_flag}
-    occupants: dict[int, dict[int, Employee]] = {}
+    occupants: dict[int, dict[int, tuple[Employee, float]]] = {}
     calendars: dict[int, list[CalendarExceptionRow]] = {}
     for employee in employees:
-        if not employee.deleted_flag and employee.function_id in functions_by_id:
-            occupants.setdefault(employee.function_id, {})[employee.employee_id] = employee
+        if not employee.deleted_flag:
+            for assignment in employee.assignments():
+                if assignment.function_id in functions_by_id:
+                    occupants.setdefault(assignment.function_id, {})[employee.employee_id] = (employee, assignment.allocation_pct)
     for exception in exceptions:
         calendars.setdefault(exception.employee_id, []).append(exception)
     result = {}
@@ -63,13 +66,13 @@ def team_capacities(teams: list[Team], functions: list[OrgFunction], employees: 
             people = occupants.get(identity, {})
             if not people:
                 detail.members.append(TeamMember(identity, function.name, None, '', 0))
-            for employee in people.values():
+            for employee, allocation in people.values():
                 periods = calendars.get(employee.employee_id, [])
                 occupation = next((period.occupation_percentage for period in periods
                     if period.start_date <= day <= period.end_date), employee.occupation_percentage)
                 detail.members.append(TeamMember(identity, function.name, employee.employee_id,
-                    f'{employee.firstname.strip()} {employee.lastname.strip()}', round(occupation / 100, 3)))
-                detail.exceptions.extend(periods)
+                    f'{employee.firstname.strip()} {employee.lastname.strip()}', round(occupation * allocation / 10000, 3), allocation))
+                detail.exceptions.extend(period for period in periods if period not in detail.exceptions)
         detail.current_fte = round(sum(member.current_fte for member in detail.members), 3)
         detail.has_employees = any(member.employee_id is not None for member in detail.members)
         detail.has_future_exceptions = any(period.end_date >= day for period in detail.exceptions)

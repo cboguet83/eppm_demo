@@ -315,7 +315,13 @@ class PostgresResourcePoolGateway:
                     permission: Permission | None = None, project_ids: Collection[int] | None = None) -> Result:
         """Run each complete attempt with a new store and current authorization."""
         try:
-            return run_business(self.database, self.key, self.access, lambda connection: operation(PostgresResourcePoolStore(connection)),
+            def execute(connection):
+                result = operation(PostgresResourcePoolStore(connection))
+                if write and permission == Permission.SHARED:
+                    from app.infrastructure.postgresql.staffing_projection import refresh_staffing
+                    refresh_staffing(connection)
+                return result
+            return run_business(self.database, self.key, self.access, execute,
                                 write=write, permission=permission, project_ids=project_ids)
         except psycopg.IntegrityError:
             raise ResourcePoolConflictError('The resource-pool change conflicts with an existing reference or constraint.') from None
