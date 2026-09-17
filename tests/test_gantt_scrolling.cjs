@@ -91,7 +91,8 @@ test('hide-unused pools preserves ancestors, respects collapsed groups, and upda
   const run = code => vm.runInContext(code, context);
   run(script.slice(script.indexOf('    function getResourcePoolById('), script.indexOf('    function renderResourceGrid(')));
   assert.equal(run('hideUnusedPools'), true);
-  assert.equal(run('getResourceDisplayRows().length'), 5);
+  assert.equal(run('getResourceDisplayRows().length'), 2);
+  run('collapsedResourceNodes.clear()');
   assert.deepEqual([...run('getResourceDisplayRows().map(row => row.nodeKey)')],
     ['root', 'nested', 'pool:1', 'pool:1', 'pool:1']);
   run("collapsedResourceNodes.add('nested')");

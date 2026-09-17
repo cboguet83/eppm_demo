@@ -145,14 +145,14 @@ test('both resource menus navigate to the selected pool or its consuming project
   }
 });
 
-test('individual pool bars are side by side and hide the summed capacity line',()=>{
+test('individual pool peaks stack and hide the summed capacity line',()=>{
   const {build}=setup();
   const chart=build('allocation',100,[{pool_id:2,name:'Pool Y',allocation:{'2026-Q1':8},overallocation:{'2026-Q1':1},available:{'2026-Q1':2}}]);
   const bars=chart.svg.children.filter(e=>e.tag==='rect');
   assert.equal(bars.length,2);
-  assert.ok(Number(bars[0].attrs.x)+Number(bars[0].attrs.width)<Number(bars[1].attrs.x));
+  assert.equal(bars[0].attrs.x,bars[1].attrs.x);
   assert.equal(Number(bars[0].attrs.y)+Number(bars[0].attrs.height),248);
-  assert.equal(Number(bars[1].attrs.y)+Number(bars[1].attrs.height),248);
+  assert.ok(Math.abs(Number(bars[1].attrs.y)+Number(bars[1].attrs.height)-Number(bars[0].attrs.y))<1e-9);
   assert.equal(chart.svg.children.filter(e=>e.tag==='path').length,0);
   chart.cleanup();
 });

@@ -29,7 +29,6 @@ export default function({data,parentElement,setTriggerValue}) {
     const color=id=>palette[1+(Math.abs(Number(id)-1)%(palette.length-1))];
     const budgetSeries=data.budgetSeries||[];
     const pools=data.pools.filter(pool=>data.rows.some(row=>Number(pool[data.metric][row.quarter])>0));
-    if(pools.length>1)svg.style.minWidth=(pools.length*data.rows.length*6)+'px';
     const showCapacity=data.metric==='allocation' && pools.length===1;
     const capacity=row=>Number(pools[0]?.capacity?.[row.quarter] ?? row.capacity);
     for(const [label,tint] of budgetSeries.map((series,i)=>[series.name,palette[i]])){
@@ -39,7 +38,7 @@ export default function({data,parentElement,setTriggerValue}) {
     const add=(kind,attrs,text)=>{const node=document.createElementNS(ns,kind);for(const [key,value] of Object.entries(attrs))node.setAttribute(key,value);if(text!==undefined)node.textContent=text;svg.appendChild(node);return node;};
     const left=68,right=1025,top=25,bottom=248,width=right-left,height=bottom-top,n=data.rows.length;
     const axis=maximum=>{const step=Math.max(1,Math.ceil(maximum/4)),count=Math.max(1,Math.ceil(maximum/step));return {step,count,max:step*count};};
-    const valueAxis=axis(Math.max(0,...data.rows.map(row=>Math.max(...pools.map(pool=>Number(pool[data.metric][row.quarter]||0)),showCapacity?capacity(row):0)),...budgetSeries.flatMap(series=>series.points.map(point=>point.value||0))));
+    const valueAxis=axis(Math.max(0,...data.rows.map(row=>Math.max(pools.reduce((sum,pool)=>sum+Number(pool[data.metric][row.quarter]||0),0),showCapacity?capacity(row):0)),...budgetSeries.flatMap(series=>series.points.map(point=>point.value||0))));
     const fmt=value=>Number(value).toLocaleString(data.locale,{minimumFractionDigits:1,maximumFractionDigits:1});
     const money=value=>Number(value).toLocaleString(data.locale,{minimumFractionDigits:2,maximumFractionDigits:2});
     const tick=value=>Number(value).toLocaleString(data.locale,{maximumFractionDigits:0});
@@ -81,10 +80,11 @@ export default function({data,parentElement,setTriggerValue}) {
         const [year,quarter]=row.quarter.split('-Q').map(Number);
         const quarterStart=Date.UTC(year,(quarter-1)*3,1),quarterEnd=Date.UTC(year,quarter*3,1);
         const x=left+width*((quarterStart+quarterEnd)/2-first)/(last-first);
-        for(const [poolIndex,pool] of pools.entries()){
+        let cumulative=0;
+        for(const pool of pools){
             const value=Number(pool[data.metric][row.quarter]||0);if(value<=0)continue;
-            const barHeight=height*value/valueAxis.max,barWidth=width/n*.72/Math.max(1,pools.length);
-            const bar=add('rect',{x:x-width/n*.36+poolIndex*barWidth,y:bottom-barHeight,width:barWidth*.9,height:barHeight,
+            const barHeight=height*value/valueAxis.max;cumulative+=value;
+            const bar=add('rect',{x:x-width/n*.36,y:bottom-height*cumulative/valueAxis.max,width:width/n*.72,height:barHeight,
                 fill:color(pool.pool_id),tabindex:0,role:'button','data-quarter':row.quarter,'data-pool-id':pool.pool_id,
                 'aria-label':pool.name+', '+row.quarter+': '+data.valueLabel+' '+fmt(value)});
             bar.onpointermove=event=>{if(menu)return;

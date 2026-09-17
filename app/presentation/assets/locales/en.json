@@ -870,7 +870,7 @@
     "pool_details": "Pool details",
     "filter_pool": "Filter on this pool",
     "simultaneous_peak": "Portfolio simultaneous peak",
-    "individual_pool_peaks": "Each bar shows one pool's quarterly peak.",
+    "individual_pool_peaks": "Each segment shows one pool's quarterly peak; the stack sums these independent peaks.",
     "clear_pool_filter": "Show all pools",
     "filtered_pool": "Resource pool: {pool}",
     "loading": "Loading…",

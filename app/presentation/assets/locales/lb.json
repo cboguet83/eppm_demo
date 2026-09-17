@@ -871,7 +871,7 @@
     "pool_details": "Pooldetailer",
     "filter_pool": "Op dëse Pool filteren",
     "simultaneous_peak": "Gläichzäitege Portefeuille-Spëtzewäert",
-    "individual_pool_peaks": "All Balken weist de Véierels-Spëtzewäert vun engem Pool.",
+    "individual_pool_peaks": "All Segment weist de Véierels-Spëtzewäert vun engem Pool; de Stack addéiert dës onofhängeg Spëtzewäerter.",
     "clear_pool_filter": "All Pools weisen",
     "filtered_pool": "Ressourcepool: {pool}",
     "loading": "Gëtt gelueden…",

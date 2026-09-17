@@ -894,7 +894,7 @@
     "pool_details": "Detalhes do pool",
     "filter_pool": "Filtrar por este pool",
     "simultaneous_peak": "Pico simultâneo do portfólio",
-    "individual_pool_peaks": "Cada barra mostra o pico trimestral de um pool.",
+    "individual_pool_peaks": "Cada segmento mostra o pico trimestral de um pool; a pilha soma esses picos independentes.",
     "clear_pool_filter": "Mostrar todos os pools",
     "filtered_pool": "Pool de recursos: {pool}",
     "loading": "A carregar…",

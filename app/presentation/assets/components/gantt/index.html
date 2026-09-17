@@ -2104,10 +2104,10 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         </div>
 
         <div id="multi-project-tools" style="display:none; gap:6px; margin-right:4px;">
-          <button class="btn-mode" id="btn-expand-all" onclick="expandAllProjects()" title="Expand all project tasks">▼
+          <button class="btn-mode" id="btn-expand-all" onclick="expandAllProjects()" title="Expand all project tasks and resource pools">▼
             Expand All</button>
           <button class="btn-mode" id="btn-collapse-all" onclick="collapseAllProjects()"
-            title="Collapse all project tasks">▶ Collapse All</button>
+            title="Collapse project tasks and expand only root resource pools and containers">▶ Collapse All</button>
         </div>
 
         <div class="view-modes">
@@ -2121,8 +2121,8 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         <div id="badge-projects-count" style="font-size:12px; font-weight:700; color:#1e40af; background:#eff6ff; border:1px solid #bfdbfe; padding:4px 10px; border-radius:6px; display:inline-flex; align-items:center; gap:4px;">
           📁 <span id="badge-projects-count-text">0 Projects</span>
         </div>
-        <label style="display:inline-flex;align-items:center;gap:5px;font-size:12px;white-space:nowrap;">
-          <input type="checkbox" id="enable-edit" onchange="toggleEdit(this.checked)">Enable edit mode
+        <label class="toggle-link-opt" title="Enable planning changes">
+          <input type="checkbox" id="enable-edit" onchange="toggleEdit(this.checked)"><span>✏️ Enable edit mode</span>
         </label>
       </div>
     </div>
@@ -5216,7 +5216,29 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       return Boolean(pool && isResourcePoolVisible(pool));
     }
 
+    const knownResourceNodes = new Set();
+    function syncResourceExpansion(reset = false) {
+      const visit = (node, depth) => {
+        const key = String(node.key || `${node.node_type}:${node.group_id || node.pool_id}`);
+        if (reset || !knownResourceNodes.has(key)) {
+          if (depth > 0) collapsedResourceNodes.add(key); else collapsedResourceNodes.delete(key);
+          knownResourceNodes.add(key);
+        }
+        (node.children || []).forEach(child => visit(child, depth + 1));
+      };
+      const roots = resourcePoolHierarchy?.length ? resourcePoolHierarchy
+        : (resourcePoolsData || []).map(pool => ({key:`pool:${pool.id}`, node_type:'pool', pool_id:pool.id}));
+      roots.forEach(node => visit(node, 0));
+    }
+
+    function toggleResourceContainer(event, key) {
+      if (event.target.closest('button')) return;
+      event.preventDefault();
+      toggleResourceNode(key);
+    }
+
     function getResourceDisplayRows() {
+      syncResourceExpansion();
       const hierarchy = resourcePoolHierarchy && resourcePoolHierarchy.length
         ? resourcePoolHierarchy
         : (resourcePoolsData || []).map(pool => ({
@@ -5543,6 +5565,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
           });
           leftHtml += `
             <div class="resource-left-row resource-group-row ${row.alternative ? 'alternative-resource-row' : ''}" data-scope="${row.alternative ? 'alternative_' + row.comparisonScope : 'total'}"
+                 ondblclick="toggleResourceContainer(event, '${escapeHtml(row.nodeKey)}')"
                  data-group-id="${Number(group.group_id)}" data-group-name="${escapeHtml(group.name)}"
                  oncontextmenu="handleGroupContextMenu(event)"
                  data-row-id="${escapeHtml(row.nodeKey)}${row.alternative ? '-alternative-' + row.comparisonScope : ''}"
@@ -5575,6 +5598,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
                     </div>`;
           }).join('');
           rightHtml += `<div class="resource-right-row resource-group-row ${row.alternative ? 'alternative-resource-row' : ''}"
+                            ondblclick="toggleResourceContainer(event, '${escapeHtml(row.nodeKey)}')"
                             style="width:${totalTimelineWidth}px;box-sizing:border-box;padding-left:${columnLeft}px;">${groupCells}</div>`;
           return;
         }
@@ -5794,6 +5818,8 @@ button:not(.context-menu-item):disabled {opacity:.5;}
 
     function expandAllProjects() {
       collapsedProjects.clear();
+      syncResourceExpansion();
+      collapsedResourceNodes.clear();
       renderTimeline();
     }
 
@@ -5805,6 +5831,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       });
       allPIds.forEach(p => collapsedProjects.add(p));
       projectSummariesData.forEach(p => collapsedProjects.add(String(p.id)));
+      syncResourceExpansion(true);
       renderTimeline();
     }
 
@@ -5930,7 +5957,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       // Update multi-project toolbar visibility
       const multiTools = document.getElementById('multi-project-tools');
       if (multiTools) {
-        multiTools.style.display = isMultiProject ? 'flex' : 'none';
+        multiTools.style.display = (isMultiProject || resourcePoolsData.length) ? 'flex' : 'none';
       }
 
       // Group tasks by project
