@@ -99,6 +99,7 @@ def test_dashboard_charts_paging_and_read_only_issues_do_not_rerun_shell(popup_s
             start=time.perf_counter();page.get_by_role('option',name='Project 0001',exact=True).click()
             expect(page.get_by_text('1 matching projects',exact=True)).to_be_visible()
             filtering=time.perf_counter()-start
+            expect(page.locator('.st-key-dashboard_advanced_filter [data-testid="stPopoverButton"]')).to_have_css('background-color', 'rgb(196, 16, 57)')
             page.keyboard.press('Escape')
             page.get_by_role('button', name='Advanced filters').click()
             expect(field).not_to_be_visible()
@@ -156,6 +157,7 @@ def test_dashboard_charts_paging_and_read_only_issues_do_not_rerun_shell(popup_s
                 page.get_by_role('menuitem', name='Filter on this pool', exact=True).click()
                 expect(page.get_by_text('Resource pool: Pool A', exact=True)).to_be_visible()
                 expect(page.locator('.st-key-dashboard_filter_pool')).to_contain_text('Pool A')
+                expect(page.locator('.st-key-dashboard_filter_pool [data-testid="stPopoverButton"]')).to_have_css('background-color', 'rgb(196, 16, 57)')
                 page.locator('.st-key-dashboard_filter_pool').get_by_role('button').click()
                 expect(page.get_by_role('checkbox', name='Pool A', exact=True)).to_be_checked()
                 expect(page.get_by_role('checkbox', name='Pool B', exact=True)).not_to_be_checked()
@@ -174,6 +176,7 @@ def test_dashboard_charts_paging_and_read_only_issues_do_not_rerun_shell(popup_s
                 expect(allocation.locator('path')).to_have_count(1)
                 page.get_by_role('button', name='Show all pools', exact=True).click()
                 expect(page.locator('.st-key-dashboard_filter_pool')).to_contain_text('All')
+                expect(page.locator('.st-key-dashboard_filter_pool [data-testid="stPopoverButton"]')).to_have_css('background-color', 'rgba(0, 0, 0, 0)')
                 expect(allocation.locator('[data-pool-id="2"]').first).to_be_visible()
                 expect(page.get_by_text('1 matching projects', exact=True)).to_be_visible()
                 expect(page.get_by_text('Shell runs: 1', exact=True)).to_be_visible()

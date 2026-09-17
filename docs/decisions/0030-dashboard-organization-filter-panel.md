@@ -24,6 +24,11 @@ Status, pools, Advanced filters, and Reset filters share one row, in that order.
 The row sits 8px below Project managers, matching the organization frame gaps.
 The collapsed matching-projects frame is also 24px tall. Reset filters restores
 the default In Progress selection and clears the other filters.
+The four controls are transparent when inactive and red when filtering. Selecting
+every available status or pool imposes no restriction and keeps its control
+transparent. Advanced filters turns red when a configured field has values.
+Reset filters turns red for any active status, pool, organization, advanced, or
+project-row filter; the default In Progress restriction also counts.
 
 The full dashboard shell reduces the gaps around invisible shell components from
 16px to 3.2px and its top padding to 0.16px. Together these reduce the measured

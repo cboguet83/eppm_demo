@@ -151,6 +151,7 @@ def _filters(service: DashboardService, catalog) -> tuple[dict[str, list[str]], 
     active = {key: st.session_state.get('dashboard_filter_' + key, []) for key in (*fixed, *selected_fields)}
     active.update(organization)
     match_all = st.session_state.get('dashboard_match', 'Any') == 'All'
+    restricted: dict[str, bool] = {}
 
     def choose(key: str, label: str) -> None:
         options = service.choices(catalog, active, key, match_all)
@@ -162,6 +163,7 @@ def _filters(service: DashboardService, catalog) -> tuple[dict[str, list[str]], 
         labels = catalog.labels.get(key, {})
         if key in {'status', 'pool'}:
             active[key] = checkbox_filter(label, options, labels, key=state_key, on_change=_reset_page)
+            restricted[key] = bool(active[key]) and set(active[key]) != set(options)
         else:
             active[key] = st.multiselect(label, options, key=state_key, on_change=_reset_page,
                                          format_func=lambda value: labels.get(value, value) or _label('unassigned'))
@@ -170,7 +172,9 @@ def _filters(service: DashboardService, catalog) -> tuple[dict[str, list[str]], 
     for column, key in zip(columns, ('status', 'pool')):
         with column:
             choose(key, _label('project_status') if key == 'status' else _label(key))
-    with columns[2], st.popover(_label('advanced_filters'), width='stretch', icon=':material/filter_alt:'):
+    with columns[2], st.container(key='dashboard_advanced_filter'), st.popover(
+        _label('advanced_filters'), width='stretch', icon=':material/filter_alt:',
+    ):
         chosen = st.multiselect(t('planning.flex_filter_fields', default='Filter fields'), list(fields),
                                 format_func=fields.get, key='dashboard_flex_fields', on_change=_reset_page)
         match_all = st.segmented_control(t('planning.flex_filter_match_label', default='When several values are selected'),
@@ -181,6 +185,23 @@ def _filters(service: DashboardService, catalog) -> tuple[dict[str, list[str]], 
     with columns[3]:
         st.button(_label('reset_filters'), on_click=_clear, width='stretch',
                   icon=':material/filter_alt_off:', key='dashboard_clear')
+    advanced_active = any(active.get(key) for key in chosen)
+    any_active = (any(restricted.values()) or advanced_active or any(organization.values())
+                  or st.session_state.get('dashboard_selected_project') is not None)
+    controls = {
+        '.st-key-dashboard_filter_status [data-testid="stPopoverButton"]': restricted['status'],
+        '.st-key-dashboard_filter_pool [data-testid="stPopoverButton"]': restricted['pool'],
+        '.st-key-dashboard_advanced_filter [data-testid="stPopoverButton"]': advanced_active,
+        '.st-key-dashboard_clear button': any_active,
+    }
+    styles = []
+    for selector, is_active in controls.items():
+        background = '#C41039' if is_active else 'transparent'
+        color = 'white' if is_active else 'var(--st-text-color, #31333f)'
+        border = '#C41039' if is_active else 'var(--st-border-color, #cbd5e1)'
+        styles.append(f'{selector}{{background:{background}!important;color:{color}!important;'
+                      f'border-color:{border}!important}}')
+    st.html('<style>' + ''.join(styles) + '</style>')
     return active, match_all
 
 
