@@ -229,7 +229,7 @@ render_settings_view(create_settings_workspace(runtime, access=access))
     app.session_state["settings_active_tab"] = "resource_pools"
     with patch("app.presentation.components.action_table.action_table", return_value=None) as table:
         app.run()
-    assert not app.exception and len(app.metric) == 5
+    assert not app.exception and len(app.metric) == 3
     rows, columns, actions = table.call_args.args
     assert rows[0]["project"] == "<script>project</script>"
     assert rows[0]["notes"] == "<img src=x onerror=alert(1)>"
@@ -294,4 +294,35 @@ render_resource_pools(create_resource_pool_service(runtime, access=access),
     assert app.dataframe[0].value.iloc[0]['Resource'] == 'Ada Lovelace'
     assert app.dataframe[0].value.iloc[0]['Effective FTE'] == 0.5
     assert not any(button.key == f'btn_add_map_{parent}' for button in app.button)
-    assert app.metric[1].value == '4.00 FTE'
+    assert {metric.label: metric.value for metric in app.metric} == {
+        'Total Pools': '2', 'Overassigned Pools': '0', 'Pools with no assignment': '0'}
+
+
+def test_deleted_visibility_and_summary_calculate_only_active_leaves(database, access):
+    service = create_resource_pool_service(database, access=access)
+    parent = service.create_pool(ResourcePool('Parent'))
+    leaf = service.create_pool(ResourcePool('Leaf', capacity_fte=2, parent_pool_id=parent))
+    deleted = service.create_pool(ResourcePool('Deleted leaf', capacity_fte=100, parent_pool_id=parent))
+    service.delete_pool(deleted)
+    app = native_screen("""
+from app.main import create_pool_capacity_service, create_organization_service, create_resource_pool_service
+from app.presentation.pages.resource_pools import render_resource_pools
+render_resource_pools(create_resource_pool_service(runtime, access=access),
+    create_pool_capacity_service(runtime, access=access), create_organization_service(runtime, access=access), 'planning')
+""", database, access)
+    with patch('app.presentation.pages.resource_pools.resource_pool_tree', return_value=None) as tree, \
+            patch('app.application.services.pool_capacity.aggregate_capacity', side_effect=AssertionError('Container calculation')):
+        app.run()
+        assert not app.exception and not app.error
+        assert app.multiselect(key='pool_demand_statuses').value == ['In Progress']
+        assert not app.checkbox(key='pool_show_deleted').value
+        assert set(tree.call_args.args[0].pools) == {parent, leaf}
+        assert set(tree.call_args.args[1]) == {leaf}
+        assert set(tree.call_args.kwargs['assigned_capacities']) == {leaf}
+        assert set(tree.call_args.kwargs['peak_demands']) == {leaf}
+        app.checkbox(key='pool_show_deleted').check().run()
+        assert not app.exception and not app.error
+        assert set(tree.call_args.args[0].pools) == {parent, leaf, deleted}
+        assert set(tree.call_args.args[1]) == {leaf}
+        assert {metric.label: metric.value for metric in app.metric} == {
+            'Total Pools': '2', 'Overassigned Pools': '0', 'Pools with no assignment': '1'}

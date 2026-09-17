@@ -15,6 +15,9 @@ from app.infrastructure.postgresql.plan_rows import read_plans, write_plan
 from app.domain.resources.models import PoolAssignment
 from app.domain.organization.models import Team, Employee
 from tests.postgresql.test_pool_hierarchy import capacity_service
+from tests.postgresql.test_resource_pools import service as pool_service
+from app.domain.resources.models import ResourcePool
+from app.domain.access.models import AccessDenied
 
 
 @pytest.fixture
@@ -162,3 +165,38 @@ def test_deleted_employee_invalidates_cached_capacity_and_cannot_be_remapped(map
     pools = PostgresResourcePoolGateway(setup.database, setup.key, access=setup.binding(4).access)
     with pytest.raises(ValueError, match='no longer exists'):
         pools.run(lambda store: store.create_mapping(PoolMapping(1, 'employee', 1)), write=True)
+
+
+def test_undelete_pool_restores_retained_mappings_and_demand(mapped_team):
+    pools = pool_service(mapped_team)
+    capacity = capacity_service(mapped_team)
+    assert capacity.get_details([1])[0].assigned_capacity_fte == 1
+    assert pools.delete_pool(1)
+    assert pools.get_all_pools() == []
+    assert pools.get_all_pools(include_deleted=True)[0].deleted_flag
+    assert pools.undelete_pool(1)
+    assert not pools.undelete_pool(1)
+    assert not pools.get_pool_by_id(1).deleted_flag
+    assert len(pools.get_all_mappings()) == len(pools.get_assignments()) == 1
+    assert capacity.get_details([1])[0].assigned_capacity_fte == 1
+
+
+def test_undelete_requires_live_parent_and_preserves_parent_assignment_rules(authorized):
+    pools = pool_service(authorized)
+    parent = pools.create_pool(ResourcePool('Parent'))
+    child = pools.create_pool(ResourcePool('Child', capacity_fte=4, parent_pool_id=parent))
+    pools.delete_pool(child)
+    pools.delete_pool(parent)
+    with pytest.raises(ValueError, match='parent pool'):
+        pools.undelete_pool(child)
+    assert pools.undelete_pool(parent)
+    assignment = pools.create_assignment(PoolAssignment(parent, 1, 1))
+    with pytest.raises(ValueError, match='assignments'):
+        pools.undelete_pool(child)
+    assert pools.get_pool_by_id(child) is None
+    pools.delete_assignment(assignment)
+    assert pools.undelete_pool(child)
+    assert pools.get_pool_by_id(parent).capacity_fte == 0
+    assert pools.get_pool_by_id(child).parent_pool_id == parent
+    with pytest.raises(AccessDenied):
+        pool_service(authorized, 1).undelete_pool(child)

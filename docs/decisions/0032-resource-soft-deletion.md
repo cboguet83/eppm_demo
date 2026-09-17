@@ -28,7 +28,33 @@ link but no longer prevents deletion of that parent.
 
 Ordinary edits do not restore deleted records, and stale selections cannot create
 new mappings to deleted resources. Existing unique names, codes and emails remain
-reserved. Restoration and identifier reuse are outside this change.
+reserved. Identifier reuse is outside this change.
+
+## Pool restoration and administration
+
+The resource-pools page hides deleted pools by default. An adjacent checkbox to
+the demand-status filter includes deleted pools in the hierarchy with a visible
+Deleted badge. Active rows offer Delete; deleted rows offer Undelete, with other
+editing actions unavailable. Deletion uses the existing confirmation dialog.
+
+Undelete restores one pool in a Python application transaction, retaining its
+identity, assignments, resource mappings and exceptions. Deleted parents must be
+restored first. Restoring a child reuses the existing container-conversion rules:
+its parent cannot have assignments, resource mappings or capacity exceptions, and
+the parent's defined capacity is zeroed. Deleted mapped employees or teams remain
+excluded after restoring a pool.
+
+This page requests calculations only for active leaf pools and displays no
+capacity or demand numbers for containers or deleted rows. Selecting an active
+container still displays its individual leaf pools' allocations and overassigned
+periods. A deleted child does not make its active parent a capacity container;
+the historical child can still be expanded when deleted rows are visible.
+
+The summary keeps Total Pools and Overassigned Pools, and adds Pools with no
+assignment. Total Pools retains the active catalog count, including containers;
+the other counts include active leaves only. A pool has no assignment for this
+summary when no active employee or team is mapped, regardless of project demand.
+Showing deleted rows does not change these active summary counts.
 
 ## Implementation
 

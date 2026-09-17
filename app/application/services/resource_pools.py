@@ -159,9 +159,27 @@ class ResourcePoolService:
         """Delete an unused leaf type; database references protect pools and children."""
         return self._gateway.run(lambda store: store.delete_pool_type(identity), write=True, permission=Permission.SHARED)
 
-    def get_all_pools(self) -> list[ResourcePool]:
-        """Get all pools within one application transaction."""
-        return self._gateway.run(lambda store: store.get_all_pools(), permission=Permission.SHARED)
+    def get_all_pools(self, *, include_deleted: bool = False) -> list[ResourcePool]:
+        """Read active pools, optionally including deleted rows for administration."""
+        return self._gateway.run(lambda store: store.get_all_pools(include_deleted=True)
+                                 if include_deleted else store.get_all_pools(), permission=Permission.SHARED)
+
+    def undelete_pool(self, pool_id: int) -> bool:
+        """Restore one pool after validating its parent and leaf-only rules.
+
+        Deleted ancestors must be restored first. Existing mappings and project
+        assignments become available again without being recreated.
+        """
+        def operation(store: ResourcePoolStore) -> bool:
+            pool = next((row for row in store.get_all_pools(include_deleted=True) if row.id == pool_id), None)
+            if pool is None or not pool.deleted_flag:
+                return False
+            active = {row.id for row in store.get_all_pools()}
+            if pool.parent_pool_id is not None and pool.parent_pool_id not in active:
+                raise ValueError('Undelete the parent pool before restoring this pool.')
+            self._validate_pool_save(store, replace(pool, deleted_flag=False))
+            return store.undelete_pool(pool_id)
+        return self._gateway.run(operation, write=True, permission=Permission.SHARED)
 
     def get_all_hierarchy_types(self) -> list[HierarchyType]:
         """Read shared classifications for optional pool and group assignments."""

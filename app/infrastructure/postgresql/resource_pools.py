@@ -26,7 +26,7 @@ from app.infrastructure.postgresql.resource_references import require_live_refer
 
 logger = get_logger(__name__)
 _CREATED = "to_char(created_at AT TIME ZONE 'UTC','YYYY-MM-DD HH24:MI:SS') AS created_at"
-_POOL = f"id,name,COALESCE(description,'') AS description,capacity_fte,{_CREATED},hierarchy_type_id,pool_type_id,parent_pool_id"
+_POOL = f"id,name,COALESCE(description,'') AS description,capacity_fte,{_CREATED},hierarchy_type_id,pool_type_id,parent_pool_id,deleted_flag"
 
 
 def _assignment_values(assignment: PoolAssignment) -> tuple[object, ...]:
@@ -107,9 +107,15 @@ class PostgresResourcePoolStore:
         """Delete an unused type, cascading only its translated names."""
         return self.connection.execute('DELETE FROM eppm.pool_type WHERE id=%s', (identity,)).rowcount > 0
 
-    def get_all_pools(self) -> list[ResourcePool]:
-        """Read the shared pool catalog in stable name order."""
-        return self._rows(ResourcePool, f'SELECT {_POOL} FROM eppm.active_resource_pool ORDER BY name COLLATE "C",id')
+    def get_all_pools(self, *, include_deleted: bool = False) -> list[ResourcePool]:
+        """Read the live catalog, optionally including retained deleted pools."""
+        source = 'eppm.resource_pool' if include_deleted else 'eppm.active_resource_pool'
+        return self._rows(ResourcePool, f'SELECT {_POOL} FROM {source} ORDER BY name COLLATE "C",id')
+
+    def undelete_pool(self, pool_id: int) -> bool:
+        """Restore the retained pool and its existing relationships atomically."""
+        return self.connection.execute('UPDATE eppm.resource_pool SET deleted_flag=false '
+                                       'WHERE id=%s AND deleted_flag', (pool_id,)).rowcount > 0
 
     def assigned_pool_ids(self) -> set[int]:
         """Read only occupied pool IDs, including assignments on hidden projects."""

@@ -32,6 +32,41 @@ render_resource_pools(create_resource_pool_service(runtime, access=access),
 '''
 
 
+def test_context_delete_and_undelete_with_deleted_visibility_filter(authorized, tmp_path):
+    identity = service(authorized).create_pool(ResourcePool('Restorable', capacity_fte=4))
+    with native_server(authorized, tmp_path, SCREEN) as server, sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            page = server.new_page(browser, viewport={'width': 1500, 'height': 1000})
+            page.goto(server.origin)
+            toggle = page.get_by_role('checkbox', name='Show deleted pools', exact=True)
+            expect(toggle).not_to_be_checked(timeout=30000)
+            row = page.get_by_role('treeitem', name='Restorable', exact=True)
+            row.click(button='right')
+            expect(page.get_by_role('menuitem', name='Undelete pool', exact=True)).to_have_count(0)
+            page.get_by_role('menuitem', name='Delete pool', exact=True).click()
+            page.get_by_role('dialog').get_by_role('button', name='Yes, Delete', exact=True).click()
+            expect(row).to_have_count(0)
+            page.get_by_text('Show deleted pools', exact=True).click()
+            expect(toggle).to_be_checked()
+            deleted = page.get_by_role('treeitem', name='Restorable (Deleted)', exact=True)
+            expect(deleted).to_be_visible()
+            expect(deleted.locator('.pool-deleted')).to_have_text('Deleted')
+            expect(deleted.locator('.pool-meta').nth(3)).to_have_text('')
+            deleted.click(button='right')
+            expect(page.get_by_role('menuitem', name='Delete pool', exact=True)).to_have_count(0)
+            expect(page.get_by_role('menuitem', name='Edit pool', exact=True)).to_have_count(0)
+            page.screenshot(path=str(tmp_path / 'deleted-pool-menu.png'), full_page=True)
+            page.get_by_role('menuitem', name='Undelete pool', exact=True).click()
+            expect(row).to_be_visible()
+            expect(row.locator('.pool-deleted')).to_have_count(0)
+            expect(row.locator('.pool-meta').nth(3)).to_have_text('4.00')
+            with psycopg.connect(authorized.setup.operator_url) as connection:
+                assert connection.execute('SELECT deleted_flag FROM eppm.resource_pool WHERE id=%s', (identity,)).fetchone() == (False,)
+        finally:
+            browser.close()
+
+
 def test_capacity_excess_colors_values_and_warns_next_to_pool_names(authorized, tmp_path):
     screen = '''
 import streamlit as st
@@ -47,13 +82,15 @@ resource_pool_tree(tree, {1:6, 2:2, 3:2, 4:2}, 1,
     assigned_capacities={1:7, 2:4, 3:1, 4:2},
     peak_demands={1:7, 2:1, 3:4, 4:2})
 '''
+
+
     with native_server(authorized, tmp_path, screen) as server, sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
             page = server.new_page(browser, viewport={'width': 1700, 'height': 900})
             page.goto(server.origin)
             for name, current, peak in [
-                ('Container', True, True), ('Current excess', True, False),
+                ('Container', False, False), ('Current excess', True, False),
                 ('Peak excess', False, True), ('At capacity', False, False),
             ]:
                 row = page.get_by_role('treeitem', name=name, exact=True)
@@ -117,7 +154,7 @@ def test_create_child_switches_parent_to_container_and_disables_direct_capacity(
                 assert rows == [('Engineering', None, 0), ('Backend', parent, 4)]
             expect(page.get_by_text('No overassigned periods for Engineering.', exact=True)).to_be_visible()
             expect(parent_row).to_have_attribute('aria-selected', 'true')
-            expect(parent_row).to_contain_text('4.00')
+            expect(parent_row.locator('.pool-meta').nth(3)).to_have_text('')
             child_row = tree.get_by_role('treeitem', name='Backend', exact=True)
             expect(child_row).to_have_attribute('aria-level', '2')
             parent_row.press('ArrowLeft')
@@ -153,7 +190,7 @@ def test_create_child_switches_parent_to_container_and_disables_direct_capacity(
             dialog.get_by_role('textbox', name='Resource Pool Name *', exact=True).fill('Engineering renamed')
             dialog.get_by_role('button', name='Save Changes', exact=True).click()
             expect(dialog).to_have_count(0)
-            expect(tree.get_by_role('treeitem', name='Engineering renamed', exact=True)).to_contain_text('4.00')
+            expect(tree.get_by_role('treeitem', name='Engineering renamed', exact=True).locator('.pool-meta').nth(3)).to_have_text('')
             with psycopg.connect(authorized.setup.operator_url) as connection:
                 assert connection.execute('SELECT capacity_fte FROM eppm.resource_pool WHERE id=%s', (parent,)).fetchone() == (0,)
             assert not errors

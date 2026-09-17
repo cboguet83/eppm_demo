@@ -38,6 +38,7 @@ _CSS = """
 .pool-meta {font-size:13px; opacity:.75; white-space:nowrap;}
 .pool-meta.capacity-exceeded {color:#c62828; opacity:1; font-weight:700;}
 .pool-warning {color:#c62828; margin-left:6px; flex-shrink:0;}
+.pool-deleted {font-size:12px; margin-left:8px; padding:2px 6px; border:1px solid currentColor; border-radius:4px;}
 .tree-toggle {display:inline-flex; justify-content:center; width:22px; flex-shrink:0;}
 .pool-row:focus-visible {outline:2px solid var(--st-primary-color);}
 """
@@ -79,9 +80,10 @@ export default function({data, parentElement, setTriggerValue, setStateValue}) {
         menu.setAttribute('role', 'menu'); menu.setAttribute('aria-label', row.name);
         const heading = document.createElement('div'); heading.className = 'context-menu-header';
         heading.textContent = row.name; menu.appendChild(heading);
-        const actions = row.id ? [['edit','Edit pool'], ['create','Create pool'], ['gantt','Show consuming projects in Gantt']]
-            : [['create_root','Create pool']];
-        if (row.id && !row.container) actions.splice(2,0,['map','Map employees or teams']);
+        let actions = [['create_root','Create pool']];
+        if (row.id) actions = row.deleted ? [['undelete','Undelete pool']]
+            : [['edit','Edit pool'], ['create','Create pool'], ['gantt','Show consuming projects in Gantt'], ['delete','Delete pool']];
+        if (row.id && !row.container && !row.deleted) actions.splice(2,0,['map','Map employees or teams']);
         for (const [action, label] of actions) {
             const button = document.createElement('button'); button.type = 'button';
             button.className = 'context-menu-item'; button.textContent = label;
@@ -192,25 +194,29 @@ export default function({data, parentElement, setTriggerValue, setStateValue}) {
         hiddenBelow = null;
         const item = document.createElement('div'); item.className = 'pool-row'; item.tabIndex = 0;
         item.dataset.id = row.id; item.setAttribute('role','treeitem');
-        item.setAttribute('aria-label',row.name); item.setAttribute('aria-level',row.depth+1);
+        item.setAttribute('aria-label',row.name + (row.deleted ? ' (Deleted)' : '')); item.setAttribute('aria-level',row.depth+1);
         item.setAttribute('aria-selected',String(row.id === data.selected));
         if (row.container) item.classList.add('container');
         const identity = document.createElement('span'); identity.className = 'pool-identity';
         identity.style.paddingLeft = (row.depth*24)+'px';
         const toggle = document.createElement('span'); toggle.className = 'tree-toggle';
-        toggle.setAttribute('aria-hidden','true'); toggle.textContent = row.container ? (collapsed.has(row.id) && !activeFilters ? '▸' : '▾') : '·';
+        toggle.setAttribute('aria-hidden','true'); toggle.textContent = row.has_children ? (collapsed.has(row.id) && !activeFilters ? '▸' : '▾') : '·';
         const changeExpanded = () => {
             root.dataset.focusPool = row.id;
             if (collapsed.has(row.id)) collapsed.delete(row.id); else collapsed.add(row.id);
             setStateValue('collapsed',[...collapsed]);
         };
-        if (row.container) {
+        if (row.has_children) {
             item.setAttribute('aria-expanded',String(activeFilters || !collapsed.has(row.id)));
             toggle.onclick = event => {event.stopPropagation(); changeExpanded();};
             if (collapsed.has(row.id)) hiddenBelow = row.depth;
         }
         const label = document.createElement('span'); label.className = 'pool-name'; label.textContent = row.name;
         identity.append(toggle,label); item.appendChild(identity);
+        if (row.deleted) {
+            const badge = document.createElement('span'); badge.className = 'pool-deleted';
+            badge.textContent = 'Deleted'; identity.appendChild(badge);
+        }
         if (row.current_exceeded || row.peak_exceeded) {
             const warning = document.createElement('span'); warning.className = 'pool-warning';
             warning.textContent = '\u26a0'; warning.setAttribute('role','img');
@@ -237,7 +243,7 @@ export default function({data, parentElement, setTriggerValue, setStateValue}) {
             } else if (event.key === 'Enter' || event.key === ' ') {event.preventDefault(); emit(row,'select');}
             else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
                 event.preventDefault(); (event.key === 'ArrowDown' ? item.nextElementSibling : item.previousElementSibling)?.focus();
-            } else if (row.container && ((event.key === 'ArrowRight' && collapsed.has(row.id)) ||
+            } else if (row.has_children && ((event.key === 'ArrowRight' && collapsed.has(row.id)) ||
                        (event.key === 'ArrowLeft' && !collapsed.has(row.id)))) {event.preventDefault(); changeExpanded();}
         };
         tree.appendChild(item);
@@ -285,9 +291,9 @@ def resource_pool_tree(
 
     Args:
         hierarchy: Validated pool snapshot used for iterative tree ordering.
-        capacities: Effective capacity by pool, including container rollups.
+        capacities: Effective capacity of active leaf pools only.
         selected: Pool currently inspected by the surrounding page.
-        assigned_capacities: Today's current capacity, already summed for containers.
+        assigned_capacities: Today's current capacity of active leaf pools.
         pool_types: Localized labels by pool type ID.
         hierarchy_types: Localized labels by hierarchy type ID.
         tags: Pool-tag labels by pool ID.
@@ -305,20 +311,25 @@ def resource_pool_tree(
     while pending:
         identity, depth = pending.pop()
         children = hierarchy.children.get(identity, [])
+        pool = hierarchy.pools[identity]
+        container = bool(children) if pool.deleted_flag else any(
+            not hierarchy.pools[child].deleted_flag for child in children)
+        calculated = not container and not pool.deleted_flag
         targets = (mapping_types or {}).get(identity, set())
-        mapping_label = '✓' if not children and targets & {'employee', 'team'} else ''
+        mapping_label = '✓' if calculated and targets & {'employee', 'team'} else ''
         nominal_capacity = capacities.get(identity, 0)
         current_capacity = (assigned_capacities or {}).get(identity, 0)
         peak_demand = (peak_demands or {}).get(identity, 0)
         rows.append({'id': identity, 'name': hierarchy.pools[identity].name, 'depth': depth,
-                     'current_exceeded': current_capacity > nominal_capacity,
-                     'peak_exceeded': peak_demand > (peak_capacities or {}).get(identity, nominal_capacity),
+                     'current_exceeded': calculated and current_capacity > nominal_capacity,
+                     'peak_exceeded': calculated and peak_demand > (peak_capacities or {}).get(identity, nominal_capacity),
+                     'deleted': pool.deleted_flag, 'has_children': bool(children),
                      'mappings': mapping_label,
                      'parent': hierarchy.pools[identity].parent_pool_id,
-                     'peak_demand': f'{(peak_demands or {}).get(identity, 0):.2f}',
+                     'peak_demand': f'{peak_demand:.2f}' if calculated else '',
                      'tags': ', '.join((tags or {}).get(identity, [])),
-                     'container': bool(children), 'capacity': f'{capacities.get(identity, 0):.2f}',
-                     'assigned_capacity': f'{(assigned_capacities or {}).get(identity, 0):.2f}',
+                     'container': container, 'capacity': f'{nominal_capacity:.2f}' if calculated else '',
+                     'assigned_capacity': f'{current_capacity:.2f}' if calculated else '',
                      'pool_type': (pool_types or {}).get(hierarchy.pools[identity].pool_type_id, '—'),
                      'hierarchy_type': (hierarchy_types or {}).get(hierarchy.pools[identity].hierarchy_type_id, '—')})
         pending.extend((child, depth + 1) for child in order(children))
@@ -338,13 +349,17 @@ def resource_pool_tree(
                        key=key, width='stretch', height='content',
                        on_action_change=lambda: None, on_collapsed_change=lambda: None, on_filters_change=lambda: None, on_sort_change=lambda: None, on_selected_change=select_row)
     event = getattr(result, 'action', None)
-    if not isinstance(event, dict) or event.get('action') not in ('select', 'edit', 'create', 'gantt', 'map', 'create_root'):
+    if not isinstance(event, dict) or event.get('action') not in ('select', 'edit', 'create', 'gantt', 'map', 'create_root', 'delete', 'undelete'):
         return None
     identity = event.get('id')
     if event['action'] == 'create_root':
         return TableAction(id=0, action='create_root') if type(identity) is int and identity == 0 else None
     if type(identity) is not int or identity not in hierarchy.pools:
         return None
-    if event['action'] == 'map' and hierarchy.children.get(identity):
+    if hierarchy.pools[identity].deleted_flag and event['action'] not in ('select', 'undelete'):
+        return None
+    if event['action'] == 'undelete' and not hierarchy.pools[identity].deleted_flag:
+        return None
+    if event['action'] == 'map' and any(not hierarchy.pools[child].deleted_flag for child in hierarchy.children.get(identity, [])):
         return None
     return TableAction(id=identity, action=event['action'])

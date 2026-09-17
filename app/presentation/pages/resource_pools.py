@@ -13,6 +13,7 @@ from app.presentation.components.resource_pool_dialogs import (
     pool_errors,
     _open_add_pool_dialog,
     _open_edit_pool_dialog,
+    _open_delete_pool_dialog,
     _open_add_pool_mapping_dialog,
     _render_pool_assignments_table,
 )
@@ -30,40 +31,34 @@ def render_resource_pools(
     planning_page: str,
 ) -> None:
     """Render the tree, overassigned periods and selected pool resource details."""
-    pool_records = service.get_all_pools()
+    status_filter, deleted_filter = st.columns([3, 1])
+    with status_filter:
+        statuses = st.multiselect('Project statuses included in demand', PROJECT_STATUSES,
+                                  default=['In Progress'], key='pool_demand_statuses')
+    with deleted_filter:
+        show_deleted = st.checkbox('Show deleted pools', value=False, key='pool_show_deleted')
+    pool_records = service.get_all_pools(include_deleted=show_deleted)
     hierarchy = PoolHierarchy(pool_records)
-    statuses = st.multiselect('Project statuses included in demand', PROJECT_STATUSES,
-                              default=['In Progress'], key='pool_demand_statuses')
+    active_hierarchy = PoolHierarchy([pool for pool in pool_records if not pool.deleted_flag])
     project_ids = service.project_ids_for_statuses(statuses)
-    all_pool_details = capacity.get_details(list(hierarchy.pools), project_ids=project_ids)
+    leaf_ids = [identity for identity in active_hierarchy.pools if not active_hierarchy.children.get(identity)]
+    all_pool_details = capacity.get_details(leaf_ids, project_ids=project_ids)
     mappings = service.get_all_mappings()
     mapping_types: dict[int, set[str]] = {}
     for mapping in mappings:
         mapping_types.setdefault(mapping.pool_id, set()).add(mapping.target_type)
-    current_capacities = capacity.current_capacities(hierarchy, all_pool_details,
-                                                    set(mapping_types))
-    leaf_details = [row for row in all_pool_details if not hierarchy.children.get(row.pool_id)]
-    total_pools = len(all_pool_details)
-    total_portfolio_capacity = sum((p.total_capacity_fte for p in leaf_details))
-    total_assigned_capacity = sum((p.assigned_capacity_fte for p in leaf_details))
-    peak_portfolio_assigned = capacity.future_peak_demand(leaf_details)
-    overassigned_pools_count = sum((1 for p in leaf_details if p.is_overassigned))
-    kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(5)
+    current_capacities = capacity.current_capacities(active_hierarchy, all_pool_details,
+                                                    set(mapping_types), include_containers=False)
+    total_pools = len(active_hierarchy.pools)
+    overassigned_pools_count = sum(1 for pool in all_pool_details if pool.is_overassigned)
+    unassigned_pools_count = sum(not (mapping_types.get(identity, set()) & {'employee', 'team'})
+                                 for identity in leaf_ids)
+    kpi1, kpi2, kpi3 = st.columns(3)
     kpi1.metric(t("settings.kpi_total_pools", default="Total Pools"), total_pools)
-    kpi2.metric(
-        t("settings.kpi_total_capacity", default="Defined Capacity"),
-        f"{total_portfolio_capacity:.2f} FTE",
-    )
-    kpi3.metric(
-        t("settings.kpi_assigned_capacity", default="Assigned Capacity"),
-        f"{total_assigned_capacity:.2f} FTE",
-    )
-    kpi4.metric(
-        "Future Peak Demand",
-        f"{peak_portfolio_assigned:.2f} FTE",
-    )
+    kpi3.metric('Pools with no assignment', unassigned_pools_count,
+                help='Active leaf pools with no employee or team mapped. Containers and deleted pools are excluded.')
     if overassigned_pools_count > 0:
-        kpi5.metric(
+        kpi2.metric(
             t("settings.kpi_overassigned_pools", default="Overassigned Pools"),
             str(overassigned_pools_count),
             delta=f"+{overassigned_pools_count} Alert",
@@ -71,9 +66,9 @@ def render_resource_pools(
             delta_arrow="off",
         )
     else:
-        kpi5.metric(t("settings.kpi_overassigned_pools", default="Overassigned Pools"), "0")
+        kpi2.metric(t("settings.kpi_overassigned_pools", default="Overassigned Pools"), "0")
     st.divider()
-    st.caption("Pools form a hierarchy. Only pools without children can be assigned; containers total their children’s capacity.")
+    st.caption("Only active leaf pools have capacity and demand values. Containers organize the hierarchy; summary counts exclude deleted pools.")
     st.caption("Pools have a defined capacity (FTE) and can be assigned to projects and tasks.")
     st.caption("Employees defined in the system can be mapped to pools via their team memberships or directly, and their effective allocation is counted towards the pool’s assigned capacity.")
     if not pool_records:
@@ -91,7 +86,7 @@ def render_resource_pools(
             {row.pool_id: row.total_capacity_fte for row in all_pool_details}, selected_pool_id,
             assigned_capacities=current_capacities,
             peak_demands={row.pool_id: capacity.future_peak_demand([row]) for row in all_pool_details},
-            peak_capacities=capacity.peak_date_capacities(hierarchy, all_pool_details, set(mapping_types)),
+            peak_capacities=capacity.peak_date_capacities(active_hierarchy, all_pool_details, set(mapping_types)),
             mapping_types=mapping_types,
             pool_types={row.id: row.label(get_current_locale()) for row in service.get_all_pool_types()},
             hierarchy_types={row.id: row.label(get_current_locale()) for row in service.get_all_hierarchy_types()},
@@ -103,26 +98,29 @@ def render_resource_pools(
             st.session_state["sb_selected_resource_pool"] = selected_pool_id
             if event['action'] == 'select':
                 st.rerun()
+            elif event['action'] == 'delete':
+                _open_delete_pool_dialog(service, selected_pool_id, hierarchy.pools[selected_pool_id].name)
+            elif event['action'] == 'undelete':
+                if service.undelete_pool(selected_pool_id):
+                    st.toast('Resource pool restored.')
+                    st.rerun()
             elif event['action'] == 'edit':
                 _open_edit_pool_dialog(service, selected_pool_id)
             elif event['action'] == 'gantt':
-                _open_pool_consuming_projects(hierarchy, selected_pool_id, all_pool_details, statuses, planning_page)
+                _open_pool_consuming_projects(active_hierarchy, selected_pool_id, all_pool_details, statuses, planning_page)
             elif event['action'] == 'map':
-                hierarchy.require_leaf(selected_pool_id)
+                active_hierarchy.require_leaf(selected_pool_id)
                 _open_add_pool_mapping_dialog(service, selected_pool_id,
                     teams_frame(organization.get_all_teams()), employees_frame(organization.get_all_employees()))
-            else:
+            elif event['action'] == 'create':
                 warning = service.parent_pool_warning(selected_pool_id)
                 if warning:
                     st.warning(warning)
                 else:
                     _open_add_pool_dialog(service, selected_pool_id)
-        current_detail = next((row for row in all_pool_details if row.pool_id == selected_pool_id), None)
-        if current_detail:
-            leaf_details = (
-                [row for row in all_pool_details if row.pool_id in hierarchy.descendants(selected_pool_id, leaves_only=True)]
-                if hierarchy.children.get(selected_pool_id) else [current_detail]
-            )
+        if selected_pool_id in active_hierarchy.pools:
+            selected_leaves = active_hierarchy.descendants(selected_pool_id, leaves_only=True)
+            leaf_details = [row for row in all_pool_details if row.pool_id in selected_leaves]
             st.markdown("####  Mapped  Capacity Breakdown")
             st.caption("Employees mapped directly or through several teams are counted once within each pool.")
             contributions = [
@@ -149,7 +147,7 @@ def render_resource_pools(
                     'FTE': st.column_config.NumberColumn('FTE', format='%.3f'),
                 })
             else:
-                st.caption(f"No overassigned periods for {current_detail.pool_name}.")
+                st.caption(f"No overassigned periods for {hierarchy.pools[selected_pool_id].name}.")
             st.markdown("#### Active Allocations on Projects & Tasks")
             for detail in leaf_details:
                 if len(leaf_details) > 1:

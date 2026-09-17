@@ -67,15 +67,18 @@ class PoolCapacityService:
                 scenario_capacity(details, alternative, names, today))
 
     def current_capacities(self, hierarchy: PoolHierarchy, details: list[PoolCapacityDetail],
-                           mapped_pool_ids: set[int]) -> dict[int, float]:
+                           mapped_pool_ids: set[int], *, include_containers: bool = True) -> dict[int, float]:
         """Calculate today's staffing or fallback capacity, then sum container leaves.
 
         Any mapping selects staffing, including an empty team or zero availability.
         Unmapped leaves use defined capacity reduced by their pool exceptions.
+        Set include_containers to false for views that only calculate leaf pools.
         """
         day = self._today().isoformat()
         leaves = {row.pool_id: self._capacity_on_date(row, day, mapped_pool_ids)
                   for row in details if not hierarchy.children.get(row.pool_id)}
+        if not include_containers:
+            return leaves
         return {identity: round(sum(leaves.get(leaf, 0) for leaf in hierarchy.descendants(identity, leaves_only=True)), 3)
                 for identity in hierarchy.pools}
 

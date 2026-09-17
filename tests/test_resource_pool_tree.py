@@ -11,7 +11,7 @@ from app.presentation.components.resource_pool_tree import resource_pool_tree
 
 
 @pytest.mark.parametrize('event', [None, [], {}, {'id': True, 'action': 'edit'},
-    {'id': '1', 'action': 'edit'}, {'id': 99, 'action': 'create'}, {'id': 1, 'action': 'delete'}])
+    {'id': '1', 'action': 'edit'}, {'id': 99, 'action': 'create'}, {'id': 1, 'action': 'unknown'}])
 def test_tree_rejects_malformed_or_stale_client_events(event):
     tree = PoolHierarchy([ResourcePool('Pool', id=1)])
     component = Mock(return_value=SimpleNamespace(action=event))
@@ -19,7 +19,7 @@ def test_tree_rejects_malformed_or_stale_client_events(event):
         assert resource_pool_tree(tree, {}, 1) is None
 
 
-@pytest.mark.parametrize('action', ['select', 'edit', 'create', 'gantt', 'map'])
+@pytest.mark.parametrize('action', ['select', 'edit', 'create', 'gantt', 'map', 'delete'])
 def test_tree_accepts_actions_for_existing_pools_and_orders_children(action):
     tree = PoolHierarchy([ResourcePool('Zulu', id=1, hierarchy_type_id=7), ResourcePool('Child', id=2, parent_pool_id=1),
                           ResourcePool('Alpha', id=3)])
@@ -29,8 +29,9 @@ def test_tree_accepts_actions_for_existing_pools_and_orders_children(action):
                                   pool_types={1: 'Human'}, hierarchy_types={7: 'Department'}) == {'id': 2, 'action': action}
     rows = component.call_args.kwargs['data']['rows']
     assert [(row['id'], row['depth'], row['container']) for row in rows] == [(3, 0, False), (1, 0, True), (2, 1, False)]
-    assert rows[1]['capacity'] == rows[2]['capacity'] == '4.00'
-    assert rows[1]['assigned_capacity'] == rows[2]['assigned_capacity'] == '2.50'
+    assert rows[1]['capacity'] == rows[1]['assigned_capacity'] == rows[1]['peak_demand'] == ''
+    assert rows[2]['capacity'] == '4.00'
+    assert rows[2]['assigned_capacity'] == '2.50'
     assert rows[1]['pool_type'] == 'Human'
     assert rows[1]['hierarchy_type'] == 'Department'
     assert rows[2]['hierarchy_type'] == '—'
@@ -92,4 +93,23 @@ def test_capacity_warnings_compare_each_value_strictly_to_pool_capacity(current,
                            assigned_capacities={1: current, 2: current},
                            peak_demands={1: peak, 2: peak})
     for row in component.call_args.kwargs['data']['rows']:
-        assert (row['current_exceeded'], row['peak_exceeded']) == expected
+        assert (row['current_exceeded'], row['peak_exceeded']) == ((False, False) if row['container'] else expected)
+
+
+@pytest.mark.parametrize('deleted,action,accepted', [
+    (True, 'undelete', True), (True, 'select', True), (True, 'delete', False),
+    (True, 'edit', False), (True, 'create', False), (True, 'map', False),
+    (True, 'gantt', False), (False, 'undelete', False),
+])
+def test_deleted_pool_actions_and_capacity_are_separate(deleted, action, accepted):
+    tree = PoolHierarchy([ResourcePool('Pool', id=1, deleted_flag=deleted)])
+    event = {'id': 1, 'action': action}
+    component = Mock(return_value=SimpleNamespace(action=event))
+    with patch('streamlit.components.v2.component', return_value=component):
+        result = resource_pool_tree(tree, {1: 4}, 1, assigned_capacities={1: 8}, peak_demands={1: 9})
+    assert result == (event if accepted else None)
+    row = component.call_args.kwargs['data']['rows'][0]
+    assert row['deleted'] is deleted
+    if deleted:
+        assert row['capacity'] == row['assigned_capacity'] == row['peak_demand'] == ''
+        assert not row['current_exceeded'] and not row['peak_exceeded']
