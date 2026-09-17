@@ -1,4 +1,11 @@
 {
+  "organization_filters": {
+    "services": "Services",
+    "divisions": "Divisions",
+    "teams": "Équipes",
+    "managers": "Chefs de projet",
+    "unassigned": "Non affecté"
+  },
   "pool_types": {
     "title": "Types de ressources",
     "type": "Type de ressources",

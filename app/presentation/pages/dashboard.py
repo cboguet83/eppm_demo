@@ -16,6 +16,7 @@ from app.domain.finance import euro_text
 from app.presentation.components.action_table import action_table
 from app.presentation.components.dialog import dialog
 from app.presentation.components.dashboard_table import dashboard_table
+from app.presentation.components.organization_filter_panel import organization_filter_panel
 from app.presentation.components.dashboard_resource_chart import finance_chart, resource_chart
 from app.presentation.navigation import PAGE_PLANNING, PAGE_SETTINGS
 from app.presentation.components.authorized_cache import authorized_cache
@@ -128,7 +129,7 @@ def _issues(service: DashboardService, ids: tuple[int, ...]) -> None:
 def _filters(service: DashboardService, catalog) -> tuple[dict[str, list[str]], bool]:
     if 'dashboard_pending_pool_filter' in st.session_state:
         st.session_state['dashboard_filter_pool'] = st.session_state.pop('dashboard_pending_pool_filter')
-    fixed = ('status', 'level3', 'level4', 'team', 'manager', 'pool')
+    fixed = ('status', 'service', 'division', 'org_team', 'org_manager', 'pool')
     st.session_state.setdefault('dashboard_filter_status', ['In Progress'])
     st.session_state['dashboard_filter_status'] = [
         'In Progress' if value == 'Active' else value
@@ -142,7 +143,12 @@ def _filters(service: DashboardService, catalog) -> tuple[dict[str, list[str]], 
         fields[parameter['param_id']] = label + (f" ({parameter['param_id']})" if label in fields.values() else '')
     selected_fields = [key for key in st.session_state.get('dashboard_flex_fields', []) if key in fields]
     st.session_state['dashboard_flex_fields'] = selected_fields
+    organization = organization_filter_panel(
+        lambda upstream, key: service.organization_choices(catalog, upstream, key), catalog.labels,
+        prefix='dashboard_filter_', on_change=_reset_page,
+    )
     active = {key: st.session_state.get('dashboard_filter_' + key, []) for key in (*fixed, *selected_fields)}
+    active.update(organization)
     match_all = st.session_state.get('dashboard_match', 'Any') == 'All'
 
     def choose(key: str, label: str) -> None:
@@ -156,8 +162,8 @@ def _filters(service: DashboardService, catalog) -> tuple[dict[str, list[str]], 
         active[key] = st.multiselect(label, options, key=state_key, on_change=_reset_page,
                                      format_func=lambda value: labels.get(value, value) or _label('unassigned'))
 
-    columns = st.columns(6, vertical_alignment='top')
-    for column, key in zip(columns, fixed):
+    columns = st.columns(2, vertical_alignment='top')
+    for column, key in zip(columns, ('status', 'pool')):
         with column:
             choose(key, _label('project_status') if key == 'status' else _label(key))
     actions = st.columns(6, vertical_alignment='bottom')

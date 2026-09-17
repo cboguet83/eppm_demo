@@ -1,4 +1,11 @@
 {
+  "organization_filters": {
+    "services": "Serviços",
+    "divisions": "Divisões",
+    "teams": "Equipas",
+    "managers": "Gestores de projeto",
+    "unassigned": "Não atribuído"
+  },
   "pool_types": {
     "title": "Tipos de pool",
     "type": "Tipo de pool",

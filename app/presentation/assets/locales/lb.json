@@ -1,4 +1,11 @@
 {
+  "organization_filters": {
+    "services": "Servicer",
+    "divisions": "Divisiounen",
+    "teams": "Ekippen",
+    "managers": "Projetmanager",
+    "unassigned": "Net zougedeelt"
+  },
   "pool_types": {
     "title": "Pool-Typen",
     "type": "Pool-Typ",

@@ -8,6 +8,7 @@ from psycopg.rows import dict_row
 
 from app.application.ports.dashboard import DashboardCatalog
 from app.domain.dashboard import DashboardProject, ancestor
+from app.domain.organization.project_filters import FilterTeam, manager_team_facets
 from app.infrastructure.postgresql.portfolio_query import DIRECTORY
 from app.infrastructure.postgresql.property_store import parameters
 
@@ -24,7 +25,12 @@ def read_catalog(connection: psycopg.Connection, project_ids: list[int]) -> Dash
         names = {identity: row['label'] for identity, row in functions.items()}
         levels = {level: {identity: ancestor(identity, level, functions) for identity in functions} for level in (3, 4)}
         teams: dict[int, list[str]] = {}
-        for team, function in connection.execute('SELECT team_id,function_id FROM eppm.team_function ORDER BY team_id,function_id'):
+        memberships = connection.execute('SELECT team_id,function_id FROM eppm.team_function ORDER BY team_id,function_id').fetchall()
+        organization = {row[0]: FilterTeam(*row) for row in connection.execute('''
+            SELECT t.team_id,t.team_name,h.code,t.parent_team_id
+            FROM eppm.team t LEFT JOIN eppm.hierarchy_type h ON h.id=t.hierarchy_type_id''')}
+        organization_facets = manager_team_facets(organization, memberships)
+        for team, function in memberships:
             teams.setdefault(function, []).append(str(team))
         for row in cursor.execute("""SELECT p.id,p.name,p.status,p.function_id,t.name AS template
             FROM eppm.project p JOIN eppm.project_type t ON t.id=p.project_type_id
@@ -35,6 +41,8 @@ def read_catalog(connection: psycopg.Connection, project_ids: list[int]) -> Dash
                       'manager': [str(identity) if identity in functions else ''], 'level3': [str(third) if third else ''],
                       'level4': [str(fourth) if fourth else ''], 'team': teams.get(identity, ['']),
                       'project_manager': [names.get(identity, '')], 'level_3_manager_name': [names.get(third, '')]}
+            fields.update(organization_facets.get(identity, {key: [''] for key in ('service', 'division', 'org_team')}))
+            fields['org_manager'] = [str(identity) if identity in functions else '']
             projects[row['id']] = DashboardProject(id=row['id'], name=row['name'], fields=fields)
     ids = list(projects)
     pool_names = {}
@@ -61,9 +69,9 @@ def read_catalog(connection: psycopg.Connection, project_ids: list[int]) -> Dash
     labels[''] = ''
     team_names = {str(identity): name for identity, name in connection.execute('SELECT team_id,team_name FROM eppm.team')}
     safe_labels = {}
-    for key in ('manager', 'level3', 'level4', 'team', 'pool'):
+    for key in ('manager', 'org_manager', 'level3', 'level4', 'team', 'service', 'division', 'org_team', 'pool'):
         visible = {value for project in projects.values() for value in project['fields'].get(key, [])}
-        source = pool_names if key == 'pool' else team_names if key == 'team' else labels
+        source = pool_names if key == 'pool' else team_names if key in {'team', 'service', 'division', 'org_team'} else labels
         safe_labels[key] = {value: source.get(value, '') for value in visible}
     return DashboardCatalog(list(projects.values()), safe_labels, definitions)
 

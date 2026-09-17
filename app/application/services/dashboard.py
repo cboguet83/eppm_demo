@@ -53,6 +53,11 @@ class DashboardService:
                    for value in project['fields'].get(key, [])}
         return sorted(options | (set(filters.get(key, [])) & authorized), key=str.casefold)
 
+    def organization_choices(self, catalog: DashboardCatalog, upstream: dict[str, list[str]], key: str) -> list[str]:
+        """List authorized organization values under the selected parent facets."""
+        return sorted({value for project in self.filtered(catalog, upstream)
+                       for value in project['fields'].get(key, [''])}, key=str.casefold)
+
     def report(self, project_ids: list[int], status: str = 'Approved') -> DashboardReport:
         """Calculate WBS shares from the latest snapshot with the requested status."""
         data = self.reader.data(project_ids, status)
