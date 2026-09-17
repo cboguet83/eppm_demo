@@ -472,7 +472,7 @@
       "effective_capacity": "Minimum effektiv Kapazitéit",
       "assigned_capacity": "Poolkapazitéit",
       "show_total": "Gesamtallokatioune vum Pool",
-      "show_selected": "Allokatioun um gefilterte Projet",
+      "show_selected": "Allokatioun op de gefilterte Projeten",
       "filter_consuming_projects": "No verbrauchende Projeten filteren",
       "clear_filter": "Ressourcen-Pool-Filter läschen",
       "active_filter": "Filter aktiv",
