@@ -41,6 +41,11 @@ def test_dashboard_organization_buttons_cascade_and_keep_status_default(authoriz
             teams = page.locator('details').filter(has=page.get_by_text('Teams', exact=True))
             expect(divisions).not_to_have_attribute('open', '')
             expect(teams).not_to_have_attribute('open', '')
+            managers = page.locator('details').filter(has=page.get_by_text('Project managers', exact=True))
+            expect(managers).not_to_have_attribute('open', '')
+            expect(page.get_by_text('Services', exact=True)).not_to_be_visible()
+            assert divisions.bounding_box()['height'] == 24
+            assert teams.bounding_box()['y'] - (divisions.bounding_box()['y'] + 24) == 8
             page.screenshot(path=str(tmp_path / 'organization-panel-default.png'), full_page=True)
             services.get_by_role('button', name='Service A', exact=True).click()
             count(1)
@@ -79,6 +84,7 @@ def test_dashboard_organization_buttons_cascade_and_keep_status_default(authoriz
             services.get_by_role('button', name='Service A', exact=True).focus()
             page.keyboard.press('Space')
             count(3)
+            managers.locator('summary').click()
             page.locator('.st-key-dashboard_filter_org_manager').get_by_role('button', name='Alice Manager', exact=True).click()
             count(1)
             page.screenshot(path=str(tmp_path / 'organization-panel.png'), full_page=True)

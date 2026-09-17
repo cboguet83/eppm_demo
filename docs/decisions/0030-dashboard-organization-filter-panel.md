@@ -2,9 +2,9 @@
 
 ## Decision
 
-The dashboard starts with a reusable organization filter panel. Services and
-project managers are framed horizontal multiselect buttons; Division and Team
-frames start collapsed. Buttons wrap so every available service is visible.
+The dashboard starts with a reusable organization filter panel. Services are framed horizontal multiselect buttons without a visible heading.
+Division, Team, and Project managers frames start collapsed. Frame gaps are 8px
+(half the standard gap), and collapsed frames are 24px tall (40% shorter). Buttons wrap so every available service is visible.
 An ordinary click, Ctrl-click, or keyboard activation toggles an option without
 clearing the other selections. Multiple values within a facet use OR; facets
 combine with AND. No organization selection imposes no organization restriction.

@@ -14,7 +14,7 @@ def organization_filter_panel(
     *, prefix: str,
     on_change: Callable[[], None],
 ) -> dict[str, list[str]]:
-    """Render services, then collapsed divisions/teams, then project managers.
+    """Render services above compact, initially collapsed organization frames.
 
     Choices depend only on upstream organization facets. Other page filters
     cannot hide service buttons. Native multiselect pills toggle independently
@@ -27,25 +27,36 @@ def organization_filter_panel(
         'org_team': t('organization_filters.teams', default='Teams'),
         'org_manager': t('organization_filters.managers', default='Project managers'),
     }
-    for facet in ORGANIZATION_FACETS:
-        title = titles[facet]
-        options = choices(active, facet)
-        names = labels.get(facet, {})
-        options = sorted(options, key=lambda value: (value == '', names.get(value, value).casefold(), value))
-        key = prefix + facet
-        previous = st.session_state.get(key, [])
-        selected = [value for value in previous if value in options]
-        if selected != previous:
-            on_change()
-        st.session_state[key] = selected
-        frame = st.expander(title, expanded=False) if facet in {'division', 'org_team'} else st.container(border=True)
-        with frame:
-            if facet not in {'division', 'org_team'}:
-                st.markdown(f'**{title}**')
-            active[facet] = st.pills(
-                title, options, selection_mode='multi', key=key, label_visibility='collapsed',
-                format_func=lambda value, names=names: names.get(value, value) if value else
-                    t('organization_filters.unassigned', default='Not assigned'),
-                on_change=on_change, width='stretch', wrap=True,
-            )
+    st.html("""
+        <style>
+        .st-key-organization_filter_frames[data-testid="stVerticalBlock"] {
+            gap: 0.5rem;
+        }
+        .st-key-organization_filter_frames details:not([open]) > summary {
+            height: 22px;
+            min-height: 22px;
+            padding-block: 0;
+        }
+        </style>
+    """)
+    with st.container(key='organization_filter_frames'):
+        for facet in ORGANIZATION_FACETS:
+            title = titles[facet]
+            options = choices(active, facet)
+            names = labels.get(facet, {})
+            options = sorted(options, key=lambda value: (value == '', names.get(value, value).casefold(), value))
+            key = prefix + facet
+            previous = st.session_state.get(key, [])
+            selected = [value for value in previous if value in options]
+            if selected != previous:
+                on_change()
+            st.session_state[key] = selected
+            frame = st.container(border=True) if facet == 'service' else st.expander(title, expanded=False)
+            with frame:
+                active[facet] = st.pills(
+                    title, options, selection_mode='multi', key=key, label_visibility='collapsed',
+                    format_func=lambda value, names=names: names.get(value, value) if value else
+                        t('organization_filters.unassigned', default='Not assigned'),
+                    on_change=on_change, width='stretch', wrap=True,
+                )
     return active
