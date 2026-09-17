@@ -30,6 +30,8 @@ def test_parent_column_shows_names_filters_and_clears(popup_server):
             page.goto(popup_server)
             table = page.frame_locator('iframe[title*="interactive_team_table"]')
             expect(table.locator('#th-parent')).to_have_text('Parent team')
+            expect(table.get_by_role('columnheader', name='Team Leader')).to_have_count(0)
+            expect(table.locator('tr[data-id="3"] td')).to_have_count(5)
             expect(table.locator('tr[data-id="3"] td').last).to_have_text('Root <one>')
             table.locator('#flt-parent').fill('root')
             expect(table.locator('#table-body tr')).to_have_count(1)

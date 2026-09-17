@@ -54,6 +54,7 @@ def test_team_dialog_saves_details_and_membership_then_edits_and_deletes(databas
     service = create_organization_service(database, access=access)
     member = service.create_function(OrgFunction("Engineer", 3))
     app = dialog(database, access, "_open_add_team_dialog(service, functions)")
+    assert not any('Leader' in widget.label for widget in app.selectbox)
     app.text_input[0].input("Delivery")
     app.multiselect[0].set_value([member])
     button(app, "Save").click().run()
@@ -63,6 +64,7 @@ def test_team_dialog_saves_details_and_membership_then_edits_and_deletes(databas
     assert service.get_team_functions(team.team_id) == [member]
 
     app = dialog(database, access, f"_open_edit_team_dialog(service, {team.team_id}, functions)")
+    assert not any('Leader' in widget.label for widget in app.selectbox)
     app.text_input[0].input("Delivery renamed")
     app.multiselect[0].set_value([])
     button(app, "Save").click().run()

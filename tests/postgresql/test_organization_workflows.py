@@ -241,16 +241,11 @@ class TestOrganization(unittest.TestCase):
         mgr_fn_id = self.repo.create_function(
             OrgFunction(name="Department Manager", hierarchy_level=3, has_reports=True)
         )
-        ldr_fn_id = self.repo.create_function(
-            OrgFunction(name="Scrum Master / Lead", hierarchy_level=4, has_reports=False)
-        )
-
         # 1. Create team
         t1_id = self.repo.create_team(
             Team(
                 team_name="Cloud Platform Team",
                 manager_function_id=mgr_fn_id,
-                leader_function_id=ldr_fn_id,
             )
         )
         self.assertIsInstance(t1_id, int)
@@ -261,7 +256,6 @@ class TestOrganization(unittest.TestCase):
         self.assertIsNotNone(team)
         self.assertEqual(team.team_name, "Cloud Platform Team")
         self.assertEqual(team.manager_function_id, mgr_fn_id)
-        self.assertEqual(team.leader_function_id, ldr_fn_id)
 
         # 3. Update team
         updated = self.repo.update_team(
@@ -269,13 +263,11 @@ class TestOrganization(unittest.TestCase):
                 team_id=t1_id,
                 team_name="Core Cloud Team",
                 manager_function_id=mgr_fn_id,
-                leader_function_id=None,
             )
         )
         self.assertTrue(updated)
         team_mod = self.repo.get_team_by_id(t1_id)
         self.assertEqual(team_mod.team_name, "Core Cloud Team")
-        self.assertIsNone(team_mod.leader_function_id)
 
         # 4. List all teams
         df_teams = organization_frames.teams_frame(self.repo.get_all_teams())
@@ -285,9 +277,7 @@ class TestOrganization(unittest.TestCase):
         df_funcs = organization_frames.functions_frame(self.repo.get_all_functions())
         enriched_teams = enrich_teams(df_teams, df_funcs)
         self.assertIn("manager_function_name", enriched_teams.columns)
-        self.assertIn("leader_function_name", enriched_teams.columns)
         self.assertEqual(enriched_teams.iloc[0]["manager_function_name"], "Department Manager")
-        self.assertEqual(enriched_teams.iloc[0]["leader_function_name"], "—")
 
         # 6. Delete team
         self.assertTrue(self.repo.delete_team(t1_id))

@@ -121,7 +121,7 @@ def install_organization_catalog(connection: psycopg.Connection) -> None:
             cursor.executemany('INSERT INTO eppm.function(function_id,name,hierarchy_level,function_type_id,manager_function_id,'
                                'dual_manager_function_id,fte_percentage,has_reports) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)', FUNCTIONS)
         if not present['team']:
-            cursor.executemany('INSERT INTO eppm.team(team_id,team_name,manager_function_id,leader_function_id) VALUES (%s,%s,%s,%s)', TEAMS)
+            cursor.executemany('INSERT INTO eppm.team(team_id,team_name,manager_function_id) VALUES (%s,%s,%s)', TEAMS)
         if not present['employee']:
             cursor.executemany('INSERT INTO eppm.employee(employee_id,firstname,lastname,email,mobile,sigle,employee_code,function_id,landline) '
                                'VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)',

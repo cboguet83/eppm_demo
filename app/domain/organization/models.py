@@ -51,7 +51,6 @@ class Team:
         team_name: Name of the team.
         team_id: Unique primary key identifier.
         manager_function_id: Optional manager function ID for the team.
-        leader_function_id: Optional team leader function ID.
         hierarchy_type_id: Optional shared hierarchy classification.
         parent_team_id: Optional parent team in the team hierarchy.
     """
@@ -59,7 +58,6 @@ class Team:
     team_name: str
     team_id: int | None = None
     manager_function_id: int | None = None
-    leader_function_id: int | None = None
     hierarchy_type_id: int | None = None
     parent_team_id: int | None = None
 

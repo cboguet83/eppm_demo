@@ -74,6 +74,7 @@ def test_direct_override_zero_capacity_and_vacant_function_fallback() -> None:
             OrgFunction("Vacant", 2, function_id=2, manager_function_id=1, fte_percentage=200),
         ],
         teams=[Team("Small team", team_id=1, manager_function_id=1)],
+        team_functions={1: [1, 2]},
         employees=[
             Employee("Ada", "Lovelace", "ada@example.invalid", "ADA", employee_id=1, function_id=1)
         ],

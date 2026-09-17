@@ -325,7 +325,7 @@ FUNCTIONS: list[tuple[int, str, int, int, int | None, int | None, int, bool]] = 
  (59, 'Chef de Projet D_1_A', 5, 5, 53, None, 100, False),
  (60, 'Chef de Projet E_1_A', 5, 5, 55, None, 100, False)]
 
-TEAMS: list[tuple[int, str, int, int | None]] = [(1, 'Equipe Projets A', 10, 17), (2, 'Equipe Projets B', 10, 23), (3, 'Equipe BIM ', 13, None)]
+TEAMS: list[tuple[int, str, int]] = [(1, 'Equipe Projets A', 10), (2, 'Equipe Projets B', 10), (3, 'Equipe BIM ', 13)]
 
 EMPLOYEES: list[tuple[int, str, str, str, str, str, str, int]] = [(1, 'Linus', 'Torvalds', 'ltorvalds@enterprise.com', '+352 621 100 004', 'LTO', '1', 1),
  (2, 'Louis', 'Pasteur', 'lpasteur@enterprise.com', '+352 621 100 002', 'LPA', '2', 2),

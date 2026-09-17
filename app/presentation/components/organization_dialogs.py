@@ -265,12 +265,6 @@ def _open_add_team_dialog(
         options=func_opts,
         format_func=lambda x: func_map.get(x, "— None") if x is not None else "— None",
     )
-    new_leader = st.selectbox(
-        t("settings.field_team_leader", default="Team Leader Function (Optional)"),
-        options=func_opts,
-        format_func=lambda x: func_map.get(x, "— None") if x is not None else "— None",
-    )
-
     member_opts = df_funcs["function_id"].tolist() if not df_funcs.empty else []
     new_members = st.multiselect(
         t("settings.field_team_members", default="Team Member Functions"),
@@ -287,7 +281,6 @@ def _open_add_team_dialog(
                 Team(
                     team_name=new_name,
                     manager_function_id=new_mgr,
-                    leader_function_id=new_leader,
                     hierarchy_type_id=hierarchy_type_id,
                     parent_team_id=parent_team_id,
                 ), function_ids=new_members,
@@ -330,14 +323,6 @@ def _open_edit_team_dialog(
         format_func=lambda x: func_map.get(x, "— None") if x is not None else "— None",
     )
 
-    ldr_idx = func_opts.index(team_obj.leader_function_id) if team_obj.leader_function_id in func_opts else 0
-    edit_leader = st.selectbox(
-        t("settings.field_team_leader", default="Team Leader Function"),
-        options=func_opts,
-        index=ldr_idx,
-        format_func=lambda x: func_map.get(x, "— None") if x is not None else "— None",
-    )
-
     current_members = service.get_team_functions(team_id)
     member_opts = df_funcs["function_id"].tolist() if not df_funcs.empty else []
     edit_members = st.multiselect(
@@ -357,7 +342,6 @@ def _open_edit_team_dialog(
                     team_id=team_id,
                     team_name=edit_name,
                     manager_function_id=edit_mgr,
-                    leader_function_id=edit_leader,
                     hierarchy_type_id=hierarchy_type_id,
                     parent_team_id=parent_team_id,
                 ), function_ids=edit_members,

@@ -45,8 +45,8 @@ def staffing(authorized):
             VALUES (1,'2026-01-02','2026-01-04',0,'Private leave reason'),
                    (2,'2026-01-03','2026-01-05',20,'Another private reason'),
                    (4,'2026-01-02','2026-01-03',50,'Third private reason')""")
-        connection.execute("""INSERT INTO eppm.team(team_id,team_name,manager_function_id,leader_function_id)
-            VALUES (1,'Implicit',1,NULL),(2,'Explicit',1,3),(3,'Same leaders',1,1)""")
+        connection.execute("""INSERT INTO eppm.team(team_id,team_name,manager_function_id)
+            VALUES (1,'Implicit',1),(2,'Explicit',1),(3,'Manager only',1)""")
         connection.execute('INSERT INTO eppm.team_function(team_id,function_id) VALUES (2,2)')
         connection.execute("""INSERT INTO eppm.resource_pool(id,name,capacity_fte)
             VALUES (1,'Staffed',10),(2,'Defined only',2),(3,'Zero override',10),
@@ -91,6 +91,24 @@ def test_native_staffing_matches_pure_domain_deduplication_overrides_calendars_a
     zero = calculate_capacity(native[3], DAY)
     assert zero.has_assigned_resources and zero.effective_capacity_fte == 0 and zero.is_overassigned
     assert {person.resource_type for person in native[1].staffing.contributing_resources} == {'function', 'employee'}
+
+
+def test_team_capacity_excludes_managers_reports_and_child_teams_without_explicit_membership(authorized):
+    with psycopg.connect(authorized.setup.operator_url) as connection:
+        connection.execute("INSERT INTO eppm.function(function_id,name,hierarchy_level,manager_function_id) VALUES (1,'Manager',1,NULL),(2,'Report',2,1),(3,'Explicit',2,NULL),(4,'Child member',2,NULL)")
+        connection.execute("INSERT INTO eppm.employee(employee_id,firstname,lastname,email,employee_code,function_id) SELECT function_id,name,'Employee',function_id || '@example.test',function_id::text,function_id FROM eppm.function")
+        connection.execute("INSERT INTO eppm.team(team_id,team_name,manager_function_id,parent_team_id) VALUES (1,'Root',1,NULL),(2,'Child',NULL,1)")
+        connection.execute('INSERT INTO eppm.team_function(team_id,function_id) VALUES (1,3),(2,4)')
+        connection.execute("INSERT INTO eppm.resource_pool(id,name) VALUES (1,'Team pool')")
+        connection.execute("INSERT INTO eppm.resource_pool_mapping(pool_id,target_type,target_id,allocation_pct) VALUES (1,'team',1,100)")
+    native = reader(authorized).read([1])[1]
+    expected = calculate_capacity(reference_inputs(authorized, [1])[1], DAY)
+    assert calculate_capacity(native, DAY) == expected
+    assert [person.employee_id for person in native.staffing.contributing_resources] == [3]
+    assert native.staffing.assigned_capacity_fte == 1
+    with psycopg.connect(authorized.setup.operator_url) as connection:
+        connection.execute('INSERT INTO eppm.team_function(team_id,function_id) VALUES (1,1)')
+    assert {person.employee_id for person in reader(authorized).read([1])[1].staffing.contributing_resources} == {1, 3}
 
 
 def test_project_readers_receive_aggregate_capacity_and_only_visible_demand(staffing):

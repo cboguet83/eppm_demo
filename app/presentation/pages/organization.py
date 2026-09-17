@@ -211,8 +211,6 @@ def render_teams(service: OrganizationService) -> None:
                 "hierarchy_type": hierarchy_labels.get(row.get("hierarchy_type_id"), ""),
                 "manager_function_id": int(row["manager_function_id"]) if pd.notna(row.get("manager_function_id")) else None,
                 "manager_function_name": str(row["manager_function_name"]) if pd.notna(row.get("manager_function_name")) else "—",
-                "leader_function_id": int(row["leader_function_id"]) if pd.notna(row.get("leader_function_id")) else None,
-                "leader_function_name": str(row["leader_function_name"]) if pd.notna(row.get("leader_function_name")) else "—",
             })
 
     team_table_event = _table("team_table",
@@ -223,7 +221,6 @@ def render_teams(service: OrganizationService) -> None:
             "col_parent_team": t('settings.col_parent_team'),
             "col_hierarchy_type": t("hierarchy.type"),
             "col_team_mgr": t("settings.col_team_mgr", default="Manager Function"),
-            "col_team_leader": t("settings.col_team_leader", default="Team Leader"),
             "action_add": t("settings.action_add", default="Add New"),
             "action_edit": t("settings.action_edit", default="Edit"),
             "action_delete": t("settings.action_delete", default="Delete"),

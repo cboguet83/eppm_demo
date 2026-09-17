@@ -25,7 +25,7 @@ def _team_resources(
     inputs: CapacityInputs,
     occupants: dict[int, list[int]],
 ) -> tuple[dict[ResourceKey, ResourceSource], dict[ResourceKey, int]]:
-    """Resolve explicit and historical implicit team membership without I/O."""
+    """Resolve only explicit function/team memberships without I/O."""
     functions = {function.function_id: function for function in inputs.functions}
     teams = {team.team_id: team for team in inputs.teams}
     resources: dict[ResourceKey, ResourceSource] = {}
@@ -35,16 +35,6 @@ def _team_resources(
             continue
         team = teams.get(mapping.target_id)
         members = list(inputs.team_functions.get(mapping.target_id, []))
-        manager = team.manager_function_id if team else None
-        leader = team.leader_function_id if team else None
-        members.extend(fid for fid in (manager, leader) if fid is not None)
-        # Preserve the existing <=2 rule, including manager/leader entries.
-        if len(members) <= 2 and manager is not None:
-            members.extend(
-                fid
-                for fid, function in functions.items()
-                if function.manager_function_id == manager
-            )
         name = team.team_name if team else f"Team #{mapping.target_id}"
         for fid in set(members) & functions.keys():
             keys = [("employee", eid) for eid in occupants.get(fid, [])] or [("function", fid)]

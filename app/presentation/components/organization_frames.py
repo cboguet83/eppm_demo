@@ -19,7 +19,7 @@ def functions_frame(records: list[OrgFunction]) -> pd.DataFrame:
 
 def teams_frame(records: list[Team]) -> pd.DataFrame:
     """Retain the existing teams columns, including empty catalogs."""
-    return pd.DataFrame([asdict(record) for record in records], columns=['team_id', 'team_name', 'manager_function_id', 'leader_function_id', 'hierarchy_type_id', 'parent_team_id'])
+    return pd.DataFrame([asdict(record) for record in records], columns=['team_id', 'team_name', 'manager_function_id', 'hierarchy_type_id', 'parent_team_id'])
 
 
 def employees_frame(records: list[Employee]) -> pd.DataFrame:
@@ -117,7 +117,7 @@ def enrich_teams(
     df_teams: pd.DataFrame,
     df_functions: pd.DataFrame,
 ) -> pd.DataFrame:
-    """Enriches teams DataFrame with readable manager and leader function titles.
+    """Enriches teams DataFrame with readable manager function titles.
 
     Args:
         df_teams: Teams DataFrame.
@@ -133,9 +133,6 @@ def enrich_teams(
     func_map = dict(zip(df_functions["function_id"], df_functions["name"])) if not df_functions.empty else {}
 
     df["manager_function_name"] = df["manager_function_id"].apply(
-        lambda x: func_map.get(x, "—") if pd.notna(x) and x in func_map else "—"
-    )
-    df["leader_function_name"] = df["leader_function_id"].apply(
         lambda x: func_map.get(x, "—") if pd.notna(x) and x in func_map else "—"
     )
     return df

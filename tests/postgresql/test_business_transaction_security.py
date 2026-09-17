@@ -990,7 +990,7 @@ def test_business_admin_catalog_menu_opens_the_requested_record_and_consumes_the
     with psycopg.connect(pg_database.operator_url) as connection:
         connection.execute("INSERT INTO eppm.function_type(function_type_id,function_type) VALUES(10,'Engineering')")
         connection.execute("INSERT INTO eppm.function(function_id,name,hierarchy_level,function_type_id) VALUES(10,'Engineer',3,10)")
-        connection.execute("INSERT INTO eppm.team(team_id,team_name,manager_function_id,leader_function_id) VALUES(10,'Delivery',10,10)")
+        connection.execute("INSERT INTO eppm.team(team_id,team_name,manager_function_id) VALUES(10,'Delivery',10)")
         connection.execute("INSERT INTO eppm.team_function(team_id,function_id) VALUES(10,10)")
         connection.execute("INSERT INTO eppm.employee(employee_id,firstname,lastname,email,employee_code,function_id) VALUES(10,'Rae','Example','rae@example.test','EX10',10)")
     event = {

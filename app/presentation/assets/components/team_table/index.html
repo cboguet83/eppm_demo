@@ -586,7 +586,6 @@ button:not(.context-menu-item):disabled {opacity:.5;}
             <th scope="col" id="column-team_id" class="sortable col-id" onclick="sortTable('team_id')">ID <span aria-hidden="true" id="sort-team_id"></span></th>
             <th scope="col" id="column-team_name" class="sortable col-name" onclick="sortTable('team_name')"><span id="th-name">Team Name</span> <span aria-hidden="true" id="sort-team_name"></span></th>
             <th scope="col" id="column-manager_function_name" class="sortable" onclick="sortTable('manager_function_name')"><span id="th-mgr">Manager Function</span> <span aria-hidden="true" id="sort-manager_function_name"></span></th>
-            <th scope="col" id="column-leader_function_name" class="sortable" onclick="sortTable('leader_function_name')"><span id="th-leader">Team Leader</span> <span aria-hidden="true" id="sort-leader_function_name"></span></th>
             <th scope="col" id="column-hierarchy_type" class="sortable" onclick="sortTable('hierarchy_type')"><span id="th-hierarchy">Hierarchy type</span> <span aria-hidden="true" id="sort-hierarchy_type"></span></th>
             <th scope="col" id="column-parent_team_name" class="sortable" onclick="sortTable('parent_team_name')"><span id="th-parent">Parent team</span> <span aria-hidden="true" id="sort-parent_team_name"></span></th>
           </tr>
@@ -601,12 +600,6 @@ button:not(.context-menu-item):disabled {opacity:.5;}
             <th scope="col">
               <div class="excel-trigger" id="trigger-flt-mgr" onclick="openExcelFilter('manager_function_name', 'Manager Function', event)">
                 <span class="excel-trigger-text" id="label-flt-mgr">All</span>
-                <span class="excel-trigger-icon">▼</span>
-              </div>
-            </th>
-            <th scope="col">
-              <div class="excel-trigger" id="trigger-flt-leader" onclick="openExcelFilter('leader_function_name', 'Team Leader', event)">
-                <span class="excel-trigger-text" id="label-flt-leader">All</span>
                 <span class="excel-trigger-icon">▼</span>
               </div>
             </th>
@@ -682,7 +675,6 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     let excelFilters = {
       team_name: null,
       manager_function_name: null,
-      leader_function_name: null
     };
 
     let activeExcelCol = null;
@@ -713,7 +705,6 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       let displayName = colLabel;
       if (colKey === 'team_name' && translations.col_team_name) displayName = translations.col_team_name;
       if (colKey === 'manager_function_name' && translations.col_team_mgr) displayName = translations.col_team_mgr;
-      if (colKey === 'leader_function_name' && translations.col_team_leader) displayName = translations.col_team_leader;
 
       title.innerText = `${translations.col_filter_ph ? translations.col_filter_ph.replace('...', '') : 'Filter'}: ${displayName}`;
       searchBox.value = '';
@@ -841,10 +832,8 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     }
 
     function updateExcelTriggerDisplay(colKey) {
-      const triggerId = colKey === 'team_name' ? 'trigger-flt-name' :
-                        colKey === 'manager_function_name' ? 'trigger-flt-mgr' : 'trigger-flt-leader';
-      const labelId = colKey === 'team_name' ? 'label-flt-name' :
-                      colKey === 'manager_function_name' ? 'label-flt-mgr' : 'label-flt-leader';
+      const triggerId = colKey === 'team_name' ? 'trigger-flt-name' : 'trigger-flt-mgr';
+      const labelId = colKey === 'team_name' ? 'label-flt-name' : 'label-flt-mgr';
 
       const triggerEl = document.getElementById(triggerId);
       const labelEl = document.getElementById(labelId);
@@ -885,12 +874,11 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       excelFilters = {
         team_name: null,
         manager_function_name: null,
-        leader_function_name: null
       };
 
       document.getElementById('search-box').value = '';
       document.querySelectorAll('.col-filter-input').forEach(i => { i.value = ''; i.classList.remove('active'); });
-      ['team_name', 'manager_function_name', 'leader_function_name'].forEach(updateExcelTriggerDisplay);
+      ['team_name', 'manager_function_name'].forEach(updateExcelTriggerDisplay);
 
       closeExcelPopup();
       renderTable();
@@ -914,7 +902,6 @@ button:not(.context-menu-item):disabled {opacity:.5;}
           const matchGlobal =
             (d.team_name && String(d.team_name).toLowerCase().includes(globalSearchQuery)) ||
             (d.manager_function_name && String(d.manager_function_name).toLowerCase().includes(globalSearchQuery)) ||
-            (d.leader_function_name && String(d.leader_function_name).toLowerCase().includes(globalSearchQuery)) ||
             (d.hierarchy_type && String(d.hierarchy_type).toLowerCase().includes(globalSearchQuery)) ||
             (d.parent_team_name && String(d.parent_team_name).toLowerCase().includes(globalSearchQuery)) ||
             (d.team_id && String(d.team_id).includes(globalSearchQuery));
@@ -954,7 +941,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         return sortAsc ? (valA > valB ? 1 : -1) : (valA < valB ? 1 : -1);
       });
 
-      ['team_id', 'team_name', 'manager_function_name', 'leader_function_name', 'hierarchy_type', 'parent_team_name'].forEach(col => {
+      ['team_id', 'team_name', 'manager_function_name', 'hierarchy_type', 'parent_team_name'].forEach(col => {
         const iconSpan = document.getElementById(`sort-${col}`);
         if (iconSpan) iconSpan.innerText = (currentSortCol === col) ? (sortAsc ? ' ▲' : ' ▼') : '';
       });
@@ -962,7 +949,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       if (filteredData.length === 0) {
         tbody.innerHTML = `
           <tr>
-            <td colspan="6" class="empty-state">
+            <td colspan="5" class="empty-state">
               ${escapeHtml(translations.no_teams || 'No teams registered matching the filters.')}
             </td>
           </tr>
@@ -979,7 +966,6 @@ button:not(.context-menu-item):disabled {opacity:.5;}
             <td class="col-id">${d.team_id}</td>
             <td class="col-name">${escapeHtml(d.team_name)}</td>
             <td>${escapeHtml(d.manager_function_name || '—')}</td>
-            <td>${escapeHtml(d.leader_function_name || '—')}</td>
             <td>${escapeHtml(d.hierarchy_type || '—')}</td>
             <td>${escapeHtml(d.parent_team_name || '—')}</td>
           `;
@@ -1108,7 +1094,6 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       if (translations.search_placeholder) searchInput.ariaLabel = translations.search_placeholder;
       if (translations.col_team_name) document.getElementById('th-name').innerText = translations.col_team_name;
       if (translations.col_team_mgr) document.getElementById('th-mgr').innerText = translations.col_team_mgr;
-      if (translations.col_team_leader) document.getElementById('th-leader').innerText = translations.col_team_leader;
       if (translations.col_hierarchy_type) document.getElementById('th-hierarchy').innerText = translations.col_hierarchy_type;
       if (translations.col_parent_team) document.getElementById('th-parent').innerText = translations.col_parent_team;
 
@@ -1124,7 +1109,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       if (translations.apply) document.getElementById('lbl-popup-apply').innerText = translations.apply;
       if (translations.btn_cancel) document.getElementById('lbl-popup-cancel').innerText = translations.btn_cancel;
 
-      ['team_name', 'manager_function_name', 'leader_function_name'].forEach(updateExcelTriggerDisplay);
+      ['team_name', 'manager_function_name'].forEach(updateExcelTriggerDisplay);
     }
 
     window.addEventListener('message', function(event) {
