@@ -2014,17 +2014,17 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         <!-- Row 1: Step Name (flex:1.5), Phase/Category (flex:1), Description (flex:1.5) -->
         <div class="form-row step-edit-fields" style="gap: 10px;">
           <div class="form-group" style="flex: 1.5;">
-            <label class="form-label" id="modal-label-task-name" style="font-size: 12px;">Step / Task Name *</label>
+            <label class="form-label" id="modal-label-task-name" for="modal-task-name" style="font-size: 12px;">Step / Task Name *</label>
             <input type="text" class="form-input" id="modal-task-name" placeholder="e.g. UAT Validation"
               style="font-size: 13px; padding: 6px 10px;" />
           </div>
           <div class="form-group" style="flex: 1;">
-            <label class="form-label" id="modal-label-phase" style="font-size: 12px;">Phase / Category</label>
+            <label class="form-label" id="modal-label-phase" for="modal-task-phase" style="font-size: 12px;">Phase / Category</label>
             <input type="text" class="form-input" id="modal-task-phase" placeholder="e.g. Phase 1 - Inception"
               style="font-size: 13px; padding: 6px 10px;" />
           </div>
           <div class="form-group" style="flex: 1.5;">
-            <label class="form-label" id="modal-label-desc" style="font-size: 12px;">Description <span
+            <label class="form-label" id="modal-label-desc" for="modal-task-desc" style="font-size: 12px;">Description <span
                 style="font-weight:400;color:#64748b;">(Optional)</span></label>
             <input type="text" class="form-input" id="modal-task-desc" placeholder="e.g. Detailed scope & deliverables"
               style="font-size: 13px; padding: 6px 10px;" />
@@ -2034,17 +2034,17 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         <!-- Row 2: Start Date, End Date, Progress Slider -->
         <div class="form-row step-edit-fields" style="gap: 10px; align-items: flex-end;">
           <div class="form-group" style="flex: 1;">
-            <label class="form-label" id="modal-label-start" style="font-size: 12px;">Start Date *</label>
+            <label class="form-label" id="modal-label-start" for="modal-start-date" style="font-size: 12px;">Start Date *</label>
             <input type="date" class="form-input" id="modal-start-date" onchange="syncModalEndDate()"
               style="font-size: 13px; padding: 6px 10px;" />
           </div>
           <div class="form-group" style="flex: 1;">
-            <label class="form-label" id="modal-label-end" style="font-size: 12px;">End Date *</label>
+            <label class="form-label" id="modal-label-end" for="modal-end-date" style="font-size: 12px;">End Date *</label>
             <input type="date" class="form-input" id="modal-end-date" style="font-size: 13px; padding: 6px 10px;" />
           </div>
           <div class="form-group" style="flex: 1.2;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;">
-              <label class="form-label" id="modal-label-progress" style="margin:0; font-size: 12px;">Progress</label>
+              <label class="form-label" id="modal-label-progress" for="modal-progress" style="margin:0; font-size: 12px;">Progress</label>
               <span id="modal-progress-badge"
                 style="font-size:11px; font-weight:700; color:var(--primary); background:#eff6ff; padding:1px 8px; border-radius:10px; border:1px solid #bfdbfe;">0%</span>
             </div>
@@ -2056,11 +2056,11 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         <!-- Predecessors / Dependencies Builder -->
         <div id="project-dependency-status" role="status" style="display:none; font-size:13px;"></div>
         <button id="project-dependency-reload" class="btn-cancel" style="display:none;" onclick="openProjectDependencies(projectDependencyDraft.projectId)">Reload dependencies (discard edits)</button>
-        <div class="form-group" style="display: flex; flex-direction: column; margin-top: 2px;">
+        <div class="form-group" role="group" aria-labelledby="modal-label-deps" style="display: flex; flex-direction: column; margin-top: 2px;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-            <label class="form-label" id="modal-label-deps"
+            <span class="form-label" id="modal-label-deps"
               style="margin:0; font-size: 12px; font-weight: 700; color: #1e293b;">🔗 Predecessors &amp;
-              Dependencies</label>
+              Dependencies</span>
             <button type="button" class="btn-add-dep" id="modal-btn-add-dep" onclick="addDependencyRow()"
               style="padding: 4px 10px; font-size: 12px;">➕ Add Predecessor</button>
           </div>

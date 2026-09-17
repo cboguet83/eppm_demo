@@ -205,7 +205,7 @@ def test_milestones_and_shared_step_and_resource_dialogs_keep_alternative_isolat
             expect(milestone).to_be_visible()
             expect(milestone.locator('.resize-handle')).to_have_count(0)
             expect(frame.locator(f'#timeline-row-alternative-1-{extra_id} .alternative-milestone')).to_be_visible()
-            frame.get_by_role('checkbox', name='Enable edit mode', exact=True).check()
+            frame.locator('#enable-edit').check()
             frame.locator('#btn-mode-day').click()
             extra_milestone = frame.locator(f'#timeline-row-alternative-1-{extra_id} .alternative-milestone')
             drag(page, extra_milestone)
@@ -213,6 +213,20 @@ def test_milestones_and_shared_step_and_resource_dialogs_keep_alternative_isolat
             expect(extra_milestone).to_have_attribute('data-schedule-label', re.compile(r'Milestone · Option A: (2027-01-\d{2}) → \1'))
             frame.locator('#frozen-row-2').dblclick()
             expect(frame.locator('#modal-task-name')).to_have_value('Build')
+            for label, control in [
+                ('modal-label-task-name', 'modal-task-name'),
+                ('modal-label-phase', 'modal-task-phase'),
+                ('modal-label-desc', 'modal-task-desc'),
+                ('modal-label-start', 'modal-start-date'),
+                ('modal-label-end', 'modal-end-date'),
+                ('modal-label-progress', 'modal-progress'),
+            ]:
+                label_text = frame.locator(f'#{label}').inner_text()
+                expect(frame.get_by_label(label_text, exact=True)).to_have_id(control)
+                frame.locator(f'#{label}').click()
+                expect(frame.locator(f'#{control}')).to_be_focused()
+            dependencies_heading = frame.locator('#modal-label-deps').inner_text()
+            expect(frame.get_by_role('group', name=dependencies_heading)).to_contain_text('Add Predecessor')
             expect(frame.locator('#modal-progress')).to_have_value('60')
             expect(frame.locator('.dep-target')).to_have_value('TASK:1')
             expect(frame.locator('.dep-lag')).to_have_value('2')
