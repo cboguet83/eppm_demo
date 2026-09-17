@@ -12,10 +12,12 @@ class FunctionType:
     Attributes:
         function_type_id: Unique primary key identifier.
         function_type: Name/label of function type (e.g. 'Executive', 'Operational').
+        deleted_flag: Whether the retained record is excluded from live use.
     """
 
     function_type: str
     function_type_id: int | None = None
+    deleted_flag: bool = False
 
 
 @dataclass
@@ -31,6 +33,7 @@ class OrgFunction:
         dual_manager_function_id: Optional secondary / dotted-line manager function ID.
         fte_percentage: Full-time equivalent workload percentage (default 100).
         has_reports: Whether this function has reporting subordinates (default False).
+        deleted_flag: Whether the function is excluded from live memberships.
     """
 
     name: str
@@ -41,6 +44,7 @@ class OrgFunction:
     dual_manager_function_id: int | None = None
     fte_percentage: int = 100
     has_reports: bool = False
+    deleted_flag: bool = False
 
 
 @dataclass
@@ -53,6 +57,7 @@ class Team:
         manager_function_id: Optional manager function ID for the team.
         hierarchy_type_id: Optional shared hierarchy classification.
         parent_team_id: Optional parent team in the team hierarchy.
+        deleted_flag: Whether the team is excluded from live memberships.
     """
 
     team_name: str
@@ -60,6 +65,7 @@ class Team:
     manager_function_id: int | None = None
     hierarchy_type_id: int | None = None
     parent_team_id: int | None = None
+    deleted_flag: bool = False
 
 
 @dataclass
@@ -77,6 +83,7 @@ class Employee:
         employee_code: Unique employee badge/code (e.g. 'EMP-001').
         function_id: Associated function role ID.
         occupation_percentage: Employee's normal working percentage (0 to 100).
+        deleted_flag: Whether the employee is excluded from staffing capacity.
     """
 
     firstname: str
@@ -89,6 +96,7 @@ class Employee:
     function_id: int | None = None
     occupation_percentage: float = 100.0
     landline: str = ""
+    deleted_flag: bool = False
 
 
 @dataclass

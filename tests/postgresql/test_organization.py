@@ -60,16 +60,16 @@ def test_crud_preserves_native_boolean_values_and_existing_organization_dtos(org
     assert service.get_all_teams()[0].team_name == "Renamed"
     assert service.get_all_employees()[0].occupation_percentage == 60
     assert service.get_effective_occupation_percentage(employee_id, date(2026, 8, 31)) == 60
-    with pytest.raises(OrganizationConflictError):
+    with pytest.raises(ValueError, match='in use'):
         service.delete_function_type(type_id)
-    with pytest.raises(OrganizationConflictError):
-        service.delete_function(function_id)
+    assert service.delete_function(function_id)
     with pytest.raises(OrganizationConflictError):
         service.create_employee(employee())
     assert service.delete_employee(employee_id)
     assert service.delete_team(team_id)
-    assert service.delete_function(function_id)
-    assert service.delete_function_type(type_id)
+    assert not service.delete_function(function_id)
+    with pytest.raises(ValueError, match='in use'):
+        service.delete_function_type(type_id)
     for remover in (service.delete_function_type, service.delete_function, service.delete_team,
                     service.delete_employee, service.delete_employee_calendar_exception):
         assert not remover(-1)
@@ -86,21 +86,21 @@ def test_updates_keep_missing_record_results_without_creating_memberships(organi
 
 def test_team_membership_and_details_commit_or_rollback_together(organization):
     member = organization.create_function(OrgFunction("Member", 1))
-    with pytest.raises(OrganizationConflictError):
+    with pytest.raises(ValueError, match='no longer exists'):
         organization.create_team(Team("Partial"), function_ids=[member, 999])
     assert organization.get_all_teams() == []
     team_id = organization.create_team(Team("Original"), function_ids=[member])
-    with pytest.raises(OrganizationConflictError):
+    with pytest.raises(ValueError, match='no longer exists'):
         organization.update_team(Team("Partial rename", team_id), function_ids=[999])
     assert organization.get_team_by_id(team_id).team_name == "Original"
-    with pytest.raises(OrganizationConflictError):
+    with pytest.raises(ValueError, match='no longer exists'):
         organization.set_team_functions(team_id, [member, 999])
     assert organization.get_team_functions(team_id) == [member]
     assert not organization.add_team_function(team_id, member)
     assert organization.remove_team_function(team_id, member)
     assert not organization.remove_team_function(team_id, member)
     assert organization.add_team_function(team_id, member)
-    with pytest.raises(OrganizationConflictError):
+    with pytest.raises(ValueError, match='no longer exists'):
         organization.add_team_function(team_id, 999)
     assert organization.update_team(Team("Cleared", team_id), function_ids=[])
     assert organization.get_team_functions(team_id) == []
@@ -156,9 +156,9 @@ def test_hierarchy_labels_and_optional_team_assignments_are_atomic(organization)
     team = organization.get_team_by_id(team_id)
     assert team.hierarchy_type_id is None
     assert organization.update_team(replace(team, hierarchy_type_id=type_id))
-    with pytest.raises(OrganizationConflictError):
+    with pytest.raises(ValueError, match='in use'):
         organization.delete_hierarchy_type(type_id)
-    with pytest.raises(OrganizationConflictError):
+    with pytest.raises(ValueError, match='no longer exists'):
         organization.update_team(replace(team, hierarchy_type_id=999))
     assert organization.get_team_by_id(team_id).hierarchy_type_id == type_id
     assert organization.update_team(team)

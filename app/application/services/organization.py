@@ -46,9 +46,13 @@ class OrganizationService:
         return self._gateway.run(lambda store: store.save_hierarchy_type(value), write=True, permission=Permission.SHARED)
 
     def delete_hierarchy_type(self, type_id: int) -> bool:
-        """Delete an unused type; database references protect existing assignments."""
+        """Soft-delete a classification only when no records reference it."""
         validate_hierarchy_type_id(type_id)
-        return self._gateway.run(lambda store: store.delete_hierarchy_type(type_id), write=True, permission=Permission.SHARED)
+        def operation(store: OrganizationStore) -> bool:
+            if store.hierarchy_type_in_use(type_id):
+                raise ValueError("This hierarchy type is in use and cannot be deleted.")
+            return store.delete_hierarchy_type(type_id)
+        return self._gateway.run(operation, write=True, permission=Permission.SHARED)
 
     def get_function_type_by_id(self, type_id: int) -> FunctionType | None:
         """Get function type by id within one organization transaction."""
@@ -67,8 +71,12 @@ class OrganizationService:
         return self._gateway.run(lambda store: store.update_function_type(ftype), write=True, permission=Permission.SHARED)
 
     def delete_function_type(self, type_id: int) -> bool:
-        """Delete function type within one organization transaction."""
-        return self._gateway.run(lambda store: store.delete_function_type(type_id), write=True, permission=Permission.SHARED)
+        """Soft-delete a function type only when no functions reference it."""
+        def operation(store: OrganizationStore) -> bool:
+            if store.function_type_in_use(type_id):
+                raise ValueError("This function type is in use and cannot be deleted.")
+            return store.delete_function_type(type_id)
+        return self._gateway.run(operation, write=True, permission=Permission.SHARED)
 
     def get_all_functions(self) -> list[OrgFunction]:
         """Get all functions within one organization transaction."""
@@ -168,8 +176,12 @@ class OrganizationService:
         return self._gateway.run(operation, write=True, permission=Permission.SHARED)
 
     def delete_team(self, team_id: int) -> bool:
-        """Delete team within one organization transaction."""
-        return self._gateway.run(lambda store: store.delete_team(team_id), write=True, permission=Permission.SHARED)
+        """Soft-delete a team after its active children have been moved or deleted."""
+        def operation(store: OrganizationStore) -> bool:
+            if any(team.parent_team_id == team_id for team in store.get_all_teams()):
+                raise ValueError("Move or delete this team's children before deleting the team.")
+            return store.delete_team(team_id)
+        return self._gateway.run(operation, write=True, permission=Permission.SHARED)
 
     def get_all_employees(self) -> list[Employee]:
         """Get all employees within one organization transaction."""

@@ -130,7 +130,7 @@ class PostgresPortfolioReader:
                 groups = cursor.execute('SELECT id,group_name,display_order FROM eppm.schema_groups ORDER BY display_order,id').fetchall()
                 options = cursor.execute('SELECT id,param_id,option_value,display_order FROM eppm.schema_param_options ORDER BY display_order,id').fetchall()
             managers = dict(connection.execute(sql.SQL('WITH ') + DIRECTORY + sql.SQL(" SELECT f.function_id,"
-                "coalesce(occupants.choice_label,nullif(f.name,''),'—') FROM eppm.function f "
+                "coalesce(occupants.choice_label,nullif(f.name,''),'—') FROM eppm.active_function f "
                 'LEFT JOIN occupants ON occupants.function_id=f.function_id ORDER BY f.hierarchy_level,f.name COLLATE "C"'))
             ) if include_managers else {}
             return ProjectCatalog(cast(list[PropertyGroup], groups), parameters(connection), cast(list[PropertyOption], options), managers)

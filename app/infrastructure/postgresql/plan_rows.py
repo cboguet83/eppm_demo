@@ -26,6 +26,7 @@ def read_plans(connection: psycopg.Connection, plan_ids: list[int]) -> dict[int,
         for row in cursor.execute('''SELECT a.project_plan_id,coalesce(a.stable_assignment_id,a.id) AS id,a.pool_id,a.project_id,
             coalesce(t.stable_task_id,t.id) AS task_id,a.fte_assigned::float,a.start_date::text,a.end_date::text,a.notes,
             a.schedule_anchor,a.offset_days,a.duration_days FROM eppm.resource_pool_assignment a
+            JOIN eppm.active_resource_pool pool ON pool.id=a.pool_id
             LEFT JOIN eppm.project_task t ON t.id=a.task_id WHERE a.project_plan_id=ANY(%s::bigint[])
             AND (a.task_id IS NULL OR NOT t.is_deleted) ORDER BY a.id''', (list(result),)):
             result[row.pop('project_plan_id')].assignments.append(PoolAssignment(**row))
@@ -146,4 +147,5 @@ def _clear_editable_children(connection: psycopg.Connection, plan_id: int, task_
             JOIN eppm.project_task p ON p.id=d.predecessor_task_id)''', (task_ids,))
     connection.execute('DELETE FROM eppm.task_tag WHERE task_id=ANY(%s::bigint[])', (tag_tasks,))
     if assignments:
-        connection.execute('DELETE FROM eppm.resource_pool_assignment WHERE project_plan_id=%s', (plan_id,))
+        connection.execute('DELETE FROM eppm.resource_pool_assignment WHERE project_plan_id=%s '
+                           'AND pool_id IN (SELECT id FROM eppm.active_resource_pool)', (plan_id,))

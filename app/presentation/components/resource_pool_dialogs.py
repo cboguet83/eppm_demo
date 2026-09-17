@@ -253,7 +253,8 @@ def _open_delete_pool_dialog(service: ResourcePoolService, pool_id: int, pool_na
         f"Are you sure you want to delete Resource Pool **{pool_name}** (ID: #{pool_id})?"
     )
     st.caption(
-        "All mappings and project/task assignments linked to this pool will also be deleted."
+        "The pool will be marked as deleted and excluded from calculations. "
+        "Its mappings and project/task assignments will be retained."
     )
     col_confirm, col_cancel = st.columns(2)
     if col_confirm.button(

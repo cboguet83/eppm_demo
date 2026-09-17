@@ -1,6 +1,7 @@
 """Pure capacity calculation with explicit source records and effective date."""
 
 from datetime import date
+from dataclasses import replace
 from decimal import Decimal
 
 from app.domain.resources.inputs import CapacityInputs, CapacityStaffing
@@ -26,14 +27,16 @@ def _team_resources(
     occupants: dict[int, list[int]],
 ) -> tuple[dict[ResourceKey, ResourceSource], dict[ResourceKey, int]]:
     """Resolve only explicit function/team memberships without I/O."""
-    functions = {function.function_id: function for function in inputs.functions}
-    teams = {team.team_id: team for team in inputs.teams}
+    functions = {function.function_id: function for function in inputs.functions if not function.deleted_flag}
+    teams = {team.team_id: team for team in inputs.teams if not team.deleted_flag}
     resources: dict[ResourceKey, ResourceSource] = {}
     occurrences: dict[ResourceKey, int] = {}
     for mapping in inputs.mappings:
         if mapping.target_type != "team":
             continue
         team = teams.get(mapping.target_id)
+        if team is None:
+            continue
         members = list(inputs.team_functions.get(mapping.target_id, []))
         name = team.team_name if team else f"Team #{mapping.target_id}"
         for fid in set(members) & functions.keys():
@@ -52,12 +55,15 @@ def _direct_resources(
     """Apply employee mappings after function mappings to preserve precedence."""
     resources: dict[ResourceKey, ResourceSource] = {}
     occurrences: dict[ResourceKey, int] = {}
-    employees = {employee.employee_id for employee in inputs.employees}
+    employees = {employee.employee_id for employee in inputs.employees if not employee.deleted_flag}
+    functions = {function.function_id for function in inputs.functions if not function.deleted_flag}
     for kind in ("function", "employee"):
         for mapping in inputs.mappings:
             if mapping.target_type != kind:
                 continue
             if kind == "employee" and mapping.target_id not in employees:
+                continue
+            if kind == "function" and mapping.target_id not in functions:
                 continue
             keys = [(kind, mapping.target_id)]
             if kind == "function" and occupants.get(mapping.target_id):
@@ -70,10 +76,12 @@ def _direct_resources(
 
 def resource_contributions(inputs: CapacityInputs) -> list[PoolResourceContribution]:
     """Deduplicate employees; only direct function mappings retain vacant FTE."""
-    functions = {function.function_id: function for function in inputs.functions}
-    employees = {employee.employee_id: employee for employee in inputs.employees}
+    if inputs.pool is not None and inputs.pool.deleted_flag:
+        return []
+    functions = {function.function_id: function for function in inputs.functions if not function.deleted_flag}
+    employees = {employee.employee_id: employee for employee in inputs.employees if not employee.deleted_flag}
     occupants: dict[int, list[int]] = {}
-    for employee in inputs.employees:
+    for employee in employees.values():
         if employee.function_id is not None:
             occupants.setdefault(employee.function_id, []).append(employee.employee_id)
     teams, team_counts = _team_resources(inputs, occupants)
@@ -142,6 +150,8 @@ def _calendar_capacity(
 
 def resolve_assignments(inputs: CapacityInputs, today: date) -> list[CapacityAssignment]:
     """Resolve custom, task, project, and finally today's dates in that order."""
+    if inputs.pool is not None and inputs.pool.deleted_flag:
+        return []
     result: list[CapacityAssignment] = []
     for row in inputs.assignments:
         pid, tid = int(row["project_id"]), row.get("task_id")
@@ -186,7 +196,7 @@ def calculate_staffing(inputs: CapacityInputs) -> CapacityStaffing:
     for contribution in contributions:
         assigned += contribution.effective_fte
     assigned = round(assigned, 3)
-    team_ids = {team.team_id for team in inputs.teams}
+    team_ids = {team.team_id for team in inputs.teams if not team.deleted_flag}
     has_team_mapping = any(mapping.target_type == 'team' and mapping.target_id in team_ids
                            for mapping in inputs.mappings)
     return CapacityStaffing(
@@ -202,6 +212,9 @@ def calculate_capacity(inputs: CapacityInputs, today: date) -> PoolCapacityDetai
     records. Explicit domain snapshots retain the same pure staffing calculation.
     Person details do not determine whether assigned capacity takes precedence.
     """
+    if inputs.pool is not None and inputs.pool.deleted_flag:
+        inputs = CapacityInputs(pool_id=inputs.pool_id, pool=replace(inputs.pool, capacity_fte=0.0),
+                                staffing=CapacityStaffing())
     staffing = inputs.staffing if inputs.staffing is not None else calculate_staffing(inputs)
     assigned = staffing.assigned_capacity_fte
     daily_capacity = staffing.daily_assigned_capacity

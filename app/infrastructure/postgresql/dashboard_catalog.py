@@ -20,15 +20,15 @@ def read_catalog(connection: psycopg.Connection, project_ids: list[int]) -> Dash
     with connection.cursor(row_factory=dict_row) as cursor:
         functions = {row['function_id']: row for row in cursor.execute(sql.SQL('WITH ') + DIRECTORY + sql.SQL(
             ' SELECT f.function_id,f.name,f.hierarchy_level,f.manager_function_id,coalesce(o.grid_label,f.name) AS label '
-            'FROM eppm.function f LEFT JOIN occupants o ON o.function_id=f.function_id'))}
+            'FROM eppm.active_function f LEFT JOIN occupants o ON o.function_id=f.function_id'))}
         projects: dict[int, DashboardProject] = {}
         names = {identity: row['label'] for identity, row in functions.items()}
         levels = {level: {identity: ancestor(identity, level, functions) for identity in functions} for level in (3, 4)}
         teams: dict[int, list[str]] = {}
-        memberships = connection.execute('SELECT team_id,function_id FROM eppm.team_function ORDER BY team_id,function_id').fetchall()
+        memberships = connection.execute('SELECT team_id,function_id FROM eppm.active_team_function ORDER BY team_id,function_id').fetchall()
         organization = {row[0]: FilterTeam(*row) for row in connection.execute('''
             SELECT t.team_id,t.team_name,h.code,t.parent_team_id
-            FROM eppm.team t LEFT JOIN eppm.hierarchy_type h ON h.id=t.hierarchy_type_id''')}
+            FROM eppm.active_team t LEFT JOIN eppm.active_hierarchy_type h ON h.id=t.hierarchy_type_id''')}
         organization_facets = manager_team_facets(organization, memberships)
         for team, function in memberships:
             teams.setdefault(function, []).append(str(team))
@@ -47,7 +47,7 @@ def read_catalog(connection: psycopg.Connection, project_ids: list[int]) -> Dash
     ids = list(projects)
     pool_names = {}
     for project_id, pool_id, name in connection.execute('''SELECT DISTINCT a.project_id,p.id,p.name
-        FROM eppm.current_resource_pool_assignment a JOIN eppm.resource_pool p ON p.id=a.pool_id
+        FROM eppm.current_resource_pool_assignment a JOIN eppm.active_resource_pool p ON p.id=a.pool_id
         WHERE a.fte_assigned>0 AND a.project_id=ANY(%s::bigint[]) ORDER BY a.project_id,p.id''', (ids,)):
         pool_names[str(pool_id)] = name
         projects[project_id]['fields'].setdefault('pool', []).append(str(pool_id))
@@ -67,7 +67,7 @@ def read_catalog(connection: psycopg.Connection, project_ids: list[int]) -> Dash
     labels = {str(identity): name + (f' ({functions[identity]["name"]}, #{identity})' if counts[name] > 1 else '')
               for identity, name in names.items()}
     labels[''] = ''
-    team_names = {str(identity): name for identity, name in connection.execute('SELECT team_id,team_name FROM eppm.team')}
+    team_names = {str(identity): name for identity, name in connection.execute('SELECT team_id,team_name FROM eppm.active_team')}
     safe_labels = {}
     for key in ('manager', 'org_manager', 'level3', 'level4', 'team', 'service', 'division', 'org_team', 'pool'):
         visible = {value for project in projects.values() for value in project['fields'].get(key, [])}

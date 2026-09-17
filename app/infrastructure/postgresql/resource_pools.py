@@ -22,6 +22,7 @@ from app.infrastructure.postgresql.hierarchy import hierarchy_types
 from app.infrastructure.postgresql.pool import Database
 from app.shared.logging import get_logger
 from app.infrastructure.postgresql.plan_guards import require_current_edit
+from app.infrastructure.postgresql.resource_references import require_live_reference
 
 logger = get_logger(__name__)
 _CREATED = "to_char(created_at AT TIME ZONE 'UTC','YYYY-MM-DD HH24:MI:SS') AS created_at"
@@ -57,7 +58,8 @@ class PostgresResourcePoolStore:
         """Read requested pool reductions in a single authorized query."""
         return self._rows(PoolCapacityException, '''SELECT id,pool_id,to_char(start_date,'YYYY-MM-DD') AS start_date,
             to_char(end_date,'YYYY-MM-DD') AS end_date,reduction_fte::double precision AS reduction_fte,reason
-            FROM eppm.resource_pool_capacity_exception WHERE pool_id=ANY(%s::bigint[]) ORDER BY start_date,id''', (pool_ids,))
+            FROM eppm.resource_pool_capacity_exception WHERE pool_id=ANY(%s::bigint[])
+            AND pool_id IN (SELECT id FROM eppm.active_resource_pool) ORDER BY start_date,id''', (pool_ids,))
 
     def save_capacity_exception(self, item: PoolCapacityException) -> int:
         """Create or edit an absolute reduction under the shared-management guard."""
@@ -107,7 +109,7 @@ class PostgresResourcePoolStore:
 
     def get_all_pools(self) -> list[ResourcePool]:
         """Read the shared pool catalog in stable name order."""
-        return self._rows(ResourcePool, f'SELECT {_POOL} FROM eppm.resource_pool ORDER BY name COLLATE "C",id')
+        return self._rows(ResourcePool, f'SELECT {_POOL} FROM eppm.active_resource_pool ORDER BY name COLLATE "C",id')
 
     def assigned_pool_ids(self) -> set[int]:
         """Read only occupied pool IDs, including assignments on hidden projects."""
@@ -115,43 +117,50 @@ class PostgresResourcePoolStore:
 
     def get_pool_by_id(self, pool_id: int) -> ResourcePool | None:
         """Read one pool, including optional capacity and hierarchy classification."""
-        rows = self._rows(ResourcePool, f'SELECT {_POOL} FROM eppm.resource_pool WHERE id=%s', (pool_id,))
+        rows = self._rows(ResourcePool, f'SELECT {_POOL} FROM eppm.active_resource_pool WHERE id=%s', (pool_id,))
         return rows[0] if rows else None
 
     def create_pool(self, pool: ResourcePool) -> int:
         """Create normalized pool details within the enclosing compound save."""
+        require_live_reference(self.connection, 'hierarchy_type', pool.hierarchy_type_id)
+        require_live_reference(self.connection, 'resource_pool', pool.parent_pool_id)
         return self.connection.execute('INSERT INTO eppm.resource_pool(name,description,capacity_fte,hierarchy_type_id,pool_type_id,parent_pool_id) '
                                        'VALUES (%s,%s,%s,%s,%s,%s) RETURNING id',
                                        (pool.name, pool.description, pool.capacity_fte, pool.hierarchy_type_id, pool.pool_type_id, pool.parent_pool_id)).fetchone()[0]
 
     def update_pool(self, pool: ResourcePool) -> bool:
         """Preserve identity and creation time when updating pool details."""
-        return self.connection.execute('UPDATE eppm.resource_pool SET name=%s,description=%s,capacity_fte=%s,hierarchy_type_id=%s,pool_type_id=%s,parent_pool_id=%s WHERE id=%s',
+        require_live_reference(self.connection, 'hierarchy_type', pool.hierarchy_type_id)
+        require_live_reference(self.connection, 'resource_pool', pool.parent_pool_id)
+        return self.connection.execute('UPDATE eppm.resource_pool SET name=%s,description=%s,capacity_fte=%s,hierarchy_type_id=%s,pool_type_id=%s,parent_pool_id=%s WHERE id=%s AND NOT deleted_flag',
                                        (pool.name, pool.description, pool.capacity_fte, pool.hierarchy_type_id, pool.pool_type_id, pool.parent_pool_id, pool.id)).rowcount > 0
 
     def delete_pool(self, pool_id: int) -> bool:
-        """Delete the pool and its native cascading memberships, tags and demand."""
-        return self.connection.execute('DELETE FROM eppm.resource_pool WHERE id=%s', (pool_id,)).rowcount > 0
+        """Flag the pool while retaining its mappings, tags and demand."""
+        return self.connection.execute('UPDATE eppm.resource_pool SET deleted_flag=true WHERE id=%s AND NOT deleted_flag', (pool_id,)).rowcount > 0
 
     def get_all_mappings(self) -> list[PoolMapping]:
         """Read configuration mappings without joining private employee details."""
-        return self._rows(PoolMapping, 'SELECT id,pool_id,target_type,target_id,allocation_pct FROM eppm.resource_pool_mapping '
+        return self._rows(PoolMapping, 'SELECT id,pool_id,target_type,target_id,allocation_pct FROM eppm.active_pool_mapping '
                                       'ORDER BY pool_id,target_type COLLATE "C",target_id')
 
     def get_mappings_by_pool(self, pool_id: int) -> list[PoolMapping]:
         """Read one pool's mappings in target-type and identity order."""
-        return self._rows(PoolMapping, 'SELECT id,pool_id,target_type,target_id,allocation_pct FROM eppm.resource_pool_mapping '
+        return self._rows(PoolMapping, 'SELECT id,pool_id,target_type,target_id,allocation_pct FROM eppm.active_pool_mapping '
                                       'WHERE pool_id=%s ORDER BY target_type COLLATE "C",target_id', (pool_id,))
 
     def create_mapping(self, mapping: PoolMapping) -> int:
         """Upsert one target percentage and return its preserved mapping identity."""
+        require_live_reference(self.connection, 'resource_pool', mapping.pool_id)
+        require_live_reference(self.connection, mapping.target_type, mapping.target_id)
         return self.connection.execute('INSERT INTO eppm.resource_pool_mapping(pool_id,target_type,target_id,allocation_pct) VALUES (%s,%s,%s,%s) '
                                        'ON CONFLICT(pool_id,target_type,target_id) DO UPDATE SET allocation_pct=excluded.allocation_pct RETURNING id',
                                        (mapping.pool_id, mapping.target_type, mapping.target_id, mapping.allocation_pct)).fetchone()[0]
 
     def update_mapping(self, mapping_id: int, allocation_pct: float) -> bool:
         """Change a nonmonetary capacity percentage without changing its target."""
-        return self.connection.execute('UPDATE eppm.resource_pool_mapping SET allocation_pct=%s WHERE id=%s', (allocation_pct, mapping_id)).rowcount > 0
+        return self.connection.execute('UPDATE eppm.resource_pool_mapping SET allocation_pct=%s WHERE id=%s '
+                                       'AND id IN (SELECT id FROM eppm.active_pool_mapping)', (allocation_pct, mapping_id)).rowcount > 0
 
     def delete_mapping(self, mapping_id: int) -> bool:
         """Delete one configuration mapping."""
@@ -168,7 +177,7 @@ class PostgresResourcePoolStore:
             a.schedule_anchor,a.offset_days,a.duration_days,a.fte_assigned,to_char(a.start_date,'YYYY-MM-DD') AS custom_start_date,to_char(a.end_date,'YYYY-MM-DD') AS custom_end_date,
             to_char(COALESCE(relative.first,a.start_date,t.start_date),'YYYY-MM-DD') AS effective_start_date,
             to_char(COALESCE(relative.last,a.end_date,t.end_date),'YYYY-MM-DD') AS effective_end_date,a.notes
-            FROM eppm.current_resource_pool_assignment a JOIN eppm.resource_pool pool ON pool.id=a.pool_id
+            FROM eppm.current_resource_pool_assignment a JOIN eppm.active_resource_pool pool ON pool.id=a.pool_id
             JOIN eppm.project p ON p.id=a.project_id LEFT JOIN eppm.current_project_task t ON t.id=a.task_id
             LEFT JOIN bounds b ON b.project_id=a.project_id
             LEFT JOIN LATERAL eppm.assignment_period(coalesce(t.start_date,b.first,current_date),
@@ -183,7 +192,7 @@ class PostgresResourcePoolStore:
         """Read one visible assignment with ISO date and empty-note boundaries."""
         rows = self._rows(PoolAssignment, '''SELECT id,pool_id,project_id,task_id,fte_assigned,
             to_char(start_date,'YYYY-MM-DD') AS start_date,to_char(end_date,'YYYY-MM-DD') AS end_date,COALESCE(notes,'') AS notes,schedule_anchor,offset_days,duration_days
-            FROM eppm.current_resource_pool_assignment WHERE id=%s''', (assignment_id,))
+            FROM eppm.active_pool_assignment WHERE id=%s''', (assignment_id,))
         return rows[0] if rows else None
 
     def create_assignment(self, assignment: PoolAssignment) -> int:
@@ -221,7 +230,7 @@ class PostgresResourcePoolStore:
                 SELECT a.id,a.pool_id,p.name,a.{owner},a.fte_assigned,
                 to_char(coalesce(relative.first,a.start_date),'YYYY-MM-DD'),
                 to_char(coalesce(relative.last,a.end_date),'YYYY-MM-DD')
-                FROM eppm.current_resource_pool_assignment a JOIN eppm.resource_pool p ON p.id=a.pool_id
+                FROM eppm.current_resource_pool_assignment a JOIN eppm.active_resource_pool p ON p.id=a.pool_id
                 LEFT JOIN eppm.current_project_task t ON t.id=a.task_id LEFT JOIN bounds b ON b.project_id=a.project_id
                 LEFT JOIN LATERAL eppm.assignment_period(coalesce(t.start_date,b.first,current_date),
                     coalesce(t.end_date,b.last,current_date),a.schedule_anchor,a.offset_days,a.duration_days) relative ON true
@@ -251,14 +260,16 @@ class PostgresResourcePoolStore:
         """Read the selected pool's current tags in dictionary display order."""
         return self._rows(PoolTag, 'SELECT p.id,p.pool_id,p.tag_id,t.tag AS tag_name,g.tag_group_name FROM eppm.resource_pool_tag p '
                                   'JOIN eppm.tag_dictionnary t ON t.id=p.tag_id LEFT JOIN eppm.tag_group g ON g.id=t.tag_group_id '
-                                  'WHERE p.pool_id=%s ORDER BY t.tag COLLATE "C",p.id', (pool_id,))
+                                  'WHERE p.pool_id=%s AND p.pool_id IN (SELECT id FROM eppm.active_resource_pool) '
+                                  'ORDER BY t.tag COLLATE "C",p.id', (pool_id,))
 
     def get_tags_by_pools(self, pool_ids: list[int]) -> list[PoolTag]:
         """Read tags for the requested shared pool snapshot in one query."""
         return self._rows(PoolTag, 'SELECT p.id,p.pool_id,p.tag_id,t.tag AS tag_name,g.tag_group_name '
                          'FROM eppm.resource_pool_tag p JOIN eppm.tag_dictionnary t ON t.id=p.tag_id '
                          'LEFT JOIN eppm.tag_group g ON g.id=t.tag_group_id '
-                         'WHERE p.pool_id=ANY(%s::bigint[]) ORDER BY t.tag COLLATE "C",p.id', (pool_ids,))
+                         'WHERE p.pool_id=ANY(%s::bigint[]) AND p.pool_id IN (SELECT id FROM eppm.active_resource_pool) '
+                         'ORDER BY t.tag COLLATE "C",p.id', (pool_ids,))
 
     def set_pool_tags(self, pool_id: int, tag_ids: list[int]) -> None:
         """Replace validated tag choices as part of the complete pool save."""

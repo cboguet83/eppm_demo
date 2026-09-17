@@ -141,7 +141,7 @@ class PostgresTagStore:
     def get_all_resource_pool_tags(self) -> list[PoolTagRow]:
         """Return pool assignments with pool, dictionary and group labels."""
         return self._rows(PoolTagRow, 'SELECT rpt.id,rpt.pool_id,rpt.tag_id,rp.name AS pool_name,td.tag AS tag_name,tg.tag_group_name '
-            'FROM eppm.resource_pool_tag rpt JOIN eppm.resource_pool rp ON rp.id=rpt.pool_id '
+            'FROM eppm.resource_pool_tag rpt JOIN eppm.active_resource_pool rp ON rp.id=rpt.pool_id '
             'JOIN eppm.tag_dictionnary td ON td.id=rpt.tag_id LEFT JOIN eppm.tag_group tg ON tg.id=td.tag_group_id '
             'ORDER BY rp.name COLLATE "C",td.tag COLLATE "C",rpt.id')
 

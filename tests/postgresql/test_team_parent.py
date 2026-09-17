@@ -36,7 +36,7 @@ def test_parent_links_can_be_assigned_reparented_and_cleared(organization):
     child = organization.get_team_by_id(child_id)
     assert child.parent_team_id == roots[0]
     assert organization.get_all_teams()[0].parent_team_id == roots[0]
-    with pytest.raises(OrganizationConflictError):
+    with pytest.raises(ValueError, match='children'):
         organization.delete_team(roots[0])
     assert organization.update_team(replace(child, parent_team_id=roots[1]))
     assert organization.get_team_by_id(child_id).parent_team_id == roots[1]

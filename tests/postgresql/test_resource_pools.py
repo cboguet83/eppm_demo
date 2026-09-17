@@ -28,6 +28,9 @@ def service(authorized, user_id=4):
 @pytest.fixture
 def pools(authorized):
     with psycopg.connect(authorized.setup.operator_url) as connection:
+        connection.execute("INSERT INTO eppm.team(team_id,team_name) VALUES (1,'Team'),(10,'Mapping team')")
+        connection.execute("INSERT INTO eppm.function(function_id,name,hierarchy_level) VALUES (10,'Mapping function',1)")
+        connection.execute("INSERT INTO eppm.employee(employee_id,firstname,lastname,email,employee_code) VALUES (10,'Mapping','Employee','mapping@example.test','MAPPING')")
         connection.execute("INSERT INTO eppm.hierarchy_type(code) VALUES ('service')")
         connection.execute("INSERT INTO eppm.hierarchy_type_translation VALUES (1,'fr','Service')")
         connection.execute("INSERT INTO eppm.tag_group(tag_group_name) VALUES ('Priority')")
@@ -57,7 +60,7 @@ def test_pool_details_tags_and_hierarchy_are_atomic_and_identity_is_stable(pools
     assert pools.get_pool_tags(identity) == []
     with pytest.raises(ResourcePoolConflictError):
         pools.create_pool(ResourcePool('Kept'))
-    with pytest.raises(ResourcePoolConflictError):
+    with pytest.raises(ValueError, match='no longer exists'):
         pools.update_pool(replace(kept, hierarchy_type_id=999))
     with pytest.raises(ValueError, match='does not exist'):
         pools.set_pool_tags(999, [1])
@@ -172,7 +175,7 @@ def test_late_tag_insert_failure_restores_pool_details_and_existing_links(pools,
     assert pools.get_pool_by_id(pool) == original and pools.get_pool_tags(pool) == tags
 
 
-def test_pool_delete_failure_restores_cascading_assignments_members_tags_and_mappings(pools, authorized):
+def test_pool_soft_delete_is_atomic_and_preserves_assignments_tags_and_mappings(pools, authorized):
     pool = pools.create_pool(ResourcePool('Pool'), tag_ids=[1])
     group = create_container(pools, ResourcePool('Group'), pool_ids=[pool])
     mapping = pools.create_mapping(PoolMapping(pool, 'team', 1))
@@ -180,7 +183,7 @@ def test_pool_delete_failure_restores_cascading_assignments_members_tags_and_map
     with psycopg.connect(authorized.setup.operator_url) as connection:
         connection.execute("""CREATE FUNCTION eppm.reject_pool_delete() RETURNS trigger LANGUAGE plpgsql AS $$
             BEGIN RAISE EXCEPTION 'Test constraint' USING ERRCODE='23514'; END $$""")
-        connection.execute('CREATE TRIGGER reject_pool_delete AFTER DELETE ON eppm.resource_pool FOR EACH ROW EXECUTE FUNCTION eppm.reject_pool_delete()')
+        connection.execute('CREATE TRIGGER reject_pool_delete AFTER UPDATE OF deleted_flag ON eppm.resource_pool FOR EACH ROW EXECUTE FUNCTION eppm.reject_pool_delete()')
     with pytest.raises(ResourcePoolConflictError):
         pools.delete_pool(pool)
     assert pools.get_assignment_by_id(assignment) and pools.get_mappings_by_pool(pool)[0].id == mapping
@@ -189,6 +192,11 @@ def test_pool_delete_failure_restores_cascading_assignments_members_tags_and_map
         connection.execute('DROP TRIGGER reject_pool_delete ON eppm.resource_pool')
     assert pools.delete_pool(pool)
     assert pools.get_assignments() == [] and pools.get_all_mappings() == [] and pools.get_pool_tags(pool) == []
+    with psycopg.connect(authorized.setup.operator_url) as connection:
+        assert connection.execute('SELECT deleted_flag FROM eppm.resource_pool WHERE id=%s', (pool,)).fetchone() == (True,)
+        assert connection.execute('SELECT id FROM eppm.resource_pool_mapping WHERE pool_id=%s', (pool,)).fetchone() == (mapping,)
+        assert connection.execute('SELECT id FROM eppm.resource_pool_assignment WHERE pool_id=%s', (pool,)).fetchone() == (assignment,)
+        assert connection.execute('SELECT tag_id FROM eppm.resource_pool_tag WHERE pool_id=%s', (pool,)).fetchone() == (1,)
     assert pools.descendant_pool_ids(group) == [group]
 
 

@@ -60,13 +60,13 @@ def source(columns: list[PortfolioColumn]) -> tuple[sql.Composed, list[object], 
                                    for key, value in expressions.items())
     query = sql.SQL("""WITH RECURSIVE lineage(origin,function_id,name,hierarchy_level,manager_function_id,depth,path) AS (
         SELECT function_id,function_id,name,hierarchy_level,manager_function_id,0,ARRAY[function_id]
-        FROM eppm.function UNION ALL
+        FROM eppm.active_function UNION ALL
         SELECT l.origin,f.function_id,f.name,f.hierarchy_level,f.manager_function_id,l.depth+1,l.path || f.function_id
-        FROM lineage l JOIN eppm.function f ON f.function_id=l.manager_function_id
+        FROM lineage l JOIN eppm.active_function f ON f.function_id=l.manager_function_id
         WHERE l.hierarchy_level>3 AND l.depth<20 AND NOT f.function_id=ANY(l.path)
     ), managers AS (SELECT DISTINCT ON(origin) origin,name FROM lineage WHERE hierarchy_level=3 ORDER BY origin,depth),
     {}, portfolio AS NOT MATERIALIZED (SELECT {} FROM eppm.project p JOIN eppm.project_type t ON t.id=p.project_type_id
-        LEFT JOIN eppm.function f ON f.function_id=p.function_id
+        LEFT JOIN eppm.active_function f ON f.function_id=p.function_id
         LEFT JOIN occupants ON occupants.function_id=p.function_id LEFT JOIN managers ON managers.origin=p.function_id) """).format(DIRECTORY, projection)
     return query, arguments, formats
 

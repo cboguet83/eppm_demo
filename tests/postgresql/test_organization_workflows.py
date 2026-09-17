@@ -359,8 +359,8 @@ class TestOrganization(unittest.TestCase):
         self.assertEqual(enriched_emps.iloc[0]["function_name"], "Director of Engineering")
         self.assertEqual(enriched_emps.iloc[0]["function_type_name"], "Full Time")
 
-    def test_foreign_key_restrict_enforcement(self) -> None:
-        """Verify that ON DELETE RESTRICT blocks deletion of referenced entities."""
+    def test_soft_deleted_function_retains_references_and_blocks_type_deletion(self) -> None:
+        """Functions retain employee links; referenced types cannot be deleted."""
         ft_id = self.repo.create_function_type(FunctionType(function_type="Core Type"))
         fn_id = self.repo.create_function(
             OrgFunction(name="Director", hierarchy_level=1, function_type_id=ft_id, has_reports=True)
@@ -375,12 +375,11 @@ class TestOrganization(unittest.TestCase):
             )
         )
 
-        # Attempting to delete function referenced by employee must fail with IntegrityError
-        with self.assertRaises(OrganizationConflictError):
-            self.repo.delete_function(fn_id)
+        self.assertTrue(self.repo.delete_function(fn_id))
+        self.assertIsNone(self.repo.get_function_by_id(fn_id))
+        self.assertEqual(self.repo.get_all_employees()[0].function_id, fn_id)
 
-        # Attempting to delete function type referenced by function must fail with IntegrityError
-        with self.assertRaises(OrganizationConflictError):
+        with self.assertRaisesRegex(ValueError, 'in use'):
             self.repo.delete_function_type(ft_id)
 
 

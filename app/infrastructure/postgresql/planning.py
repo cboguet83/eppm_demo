@@ -79,7 +79,7 @@ class PostgresPlanningStore:
         """Count visible owners and endpoints before computing planning totals."""
         row = self.connection.execute('''SELECT (SELECT count(*) FROM eppm.project),(SELECT count(*) FROM eppm.current_project_task),
             (SELECT count(*) FROM eppm.effective_task_dependencies)+(SELECT count(*) FROM eppm.effective_project_dependency),
-            (SELECT count(DISTINCT pool_id) FROM eppm.current_resource_pool_assignment)''').fetchone()
+            (SELECT count(DISTINCT pool_id) FROM eppm.active_pool_assignment)''').fetchone()
         return PlanningTotals(projects=row[0], tasks=row[1], dependencies=row[2], pools=row[3])
 
     def _tasks(self, where: str = '', params: Sequence[object] = ()) -> list[TaskRow]:
@@ -334,12 +334,12 @@ class PostgresPlanningStore:
             JOIN eppm.current_project_task task ON task.id=d.task_id WHERE d.predecessor_task_id=%s OR d.predecessor_project_id=%s
             UNION SELECT project_id FROM eppm.effective_project_dependency WHERE predecessor_task_id=%s OR predecessor_project_id=%s''',
             (task_id, project_id, task_id, project_id))}
-        pools = {row[0] for row in self.connection.execute('SELECT DISTINCT pool_id FROM eppm.current_resource_pool_assignment WHERE project_id=%s', (project_id,))}
+        pools = {row[0] for row in self.connection.execute('SELECT DISTINCT pool_id FROM eppm.active_pool_assignment WHERE project_id=%s', (project_id,))}
         return projects, pools
 
     def consuming_pool_ids(self, project_ids: list[int]) -> list[int]:
         """Read distinct positive-demand pools after project-owner filtering."""
-        return [row[0] for row in self.connection.execute('''SELECT DISTINCT pool_id FROM eppm.current_resource_pool_assignment
+        return [row[0] for row in self.connection.execute('''SELECT DISTINCT pool_id FROM eppm.active_pool_assignment
             WHERE fte_assigned>0 AND project_id=ANY(%s::bigint[]) ORDER BY pool_id''', (project_ids,))]
 
     def read_task_bundle(self, project_ids: list[int]) -> PlanningTaskBundle:

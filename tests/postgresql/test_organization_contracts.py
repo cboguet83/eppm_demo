@@ -134,17 +134,17 @@ def test_application_crud_and_display_frames_handle_missing_records(database: Ru
     assert not organization_frames.employees_frame(other_service.get_all_employees()).empty
     assert service.get_effective_occupation_percentage(employee_id, date(2026, 8, 31)) == 60
 
-    with pytest.raises(OrganizationConflictError) as conflict:
+    with pytest.raises(ValueError, match='in use') as conflict:
         service.delete_function_type(type_id)
     assert conflict.value.__cause__ is None
-    with pytest.raises(OrganizationConflictError):
-        other_service.delete_function(function_id)
+    assert other_service.delete_function(function_id)
     with pytest.raises(OrganizationConflictError):
         other_service.create_employee(employee())
     assert service.delete_employee(employee_id)
     assert service.delete_team(team_id)
-    assert service.delete_function(function_id)
-    assert service.delete_function_type(type_id)
+    assert not service.delete_function(function_id)
+    with pytest.raises(ValueError, match='in use'):
+        service.delete_function_type(type_id)
     for remover in (service.delete_function_type, service.delete_function,
                     service.delete_team, service.delete_employee,
                     service.delete_employee_calendar_exception):
@@ -165,16 +165,16 @@ def test_updates_preserve_missing_record_boolean_contracts(database: RuntimeReso
 def test_team_details_and_membership_rollback_together(database: RuntimeResources, access: BusinessAccess) -> None:
     service = create_organization_service(database, access=access)
     member = service.create_function(OrgFunction("Member", 1))
-    with pytest.raises(OrganizationConflictError):
+    with pytest.raises(ValueError, match='no longer exists'):
         service.create_team(Team("Partial"), function_ids=[member, 999])
     assert service.get_all_teams() == []
     team_id = service.create_team(Team("Original"), function_ids=[member])
-    with pytest.raises(OrganizationConflictError):
+    with pytest.raises(ValueError, match='no longer exists'):
         service.update_team(Team("Partial rename", team_id), function_ids=[999])
     assert service.get_team_by_id(team_id).team_name == "Original"
     assert service.get_team_functions(team_id) == [member]
     pools = create_organization_service(database, access=access)
-    with pytest.raises(OrganizationConflictError):
+    with pytest.raises(ValueError, match='no longer exists'):
         pools.set_team_functions(team_id, [member, 999])
     assert pools.get_team_functions(team_id) == [member]
     assert not pools.add_team_function(team_id, member)

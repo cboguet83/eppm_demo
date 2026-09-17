@@ -94,7 +94,7 @@ def _digest(value: tuple) -> str:
 
 def read_task_pool_pairs(connection: psycopg.Connection, project_ids: list[int]) -> set[tuple[int, int]]:
     """Read task allocation ownership in the caller's authorized revision snapshot."""
-    return set(connection.execute('SELECT DISTINCT project_id,pool_id FROM eppm.current_resource_pool_assignment '
+    return set(connection.execute('SELECT DISTINCT project_id,pool_id FROM eppm.active_pool_assignment '
                                   'WHERE project_id=ANY(%s::bigint[]) AND task_id IS NOT NULL', (project_ids,)).fetchall())
 
 

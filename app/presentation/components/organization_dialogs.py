@@ -210,7 +210,7 @@ def _open_delete_function_dialog(
 ) -> None:
     """Modal dialog to confirm deletion of a job function."""
     st.warning(f"{t('settings.delete_confirm_msg', name=func_name, default=f'Are you sure you want to delete Function **{func_name}** (ID: {func_id})?')}")
-    st.caption("This action cannot be undone.")
+    st.caption("The record will be marked as deleted. Its history and mappings will be retained.")
 
     col_confirm, col_cancel = st.columns(2)
     if col_confirm.button(t("settings.btn_confirm_delete", default="Yes, Delete"), type="primary", width="stretch"):
@@ -366,7 +366,7 @@ def _open_delete_team_dialog(
 ) -> None:
     """Modal dialog to confirm deletion of a team."""
     st.warning(f"{t('settings.delete_confirm_msg', name=team_name, default=f'Are you sure you want to delete Team **{team_name}** (ID: {team_id})?')}")
-    st.caption("This action cannot be undone.")
+    st.caption("The record will be marked as deleted. Its history and mappings will be retained.")
 
     col_confirm, col_cancel = st.columns(2)
     if col_confirm.button(t("settings.btn_confirm_delete", default="Yes, Delete"), type="primary", width="stretch"):
@@ -437,7 +437,7 @@ def _open_delete_function_type_dialog(
 ) -> None:
     """Modal dialog to confirm deletion of a function type."""
     st.warning(f"{t('settings.delete_confirm_msg', name=type_name, default=f'Are you sure you want to delete Function Type **{type_name}** (ID: {type_id})?')}")
-    st.caption("This action cannot be undone.")
+    st.caption("The record will be marked as deleted. Its history and mappings will be retained.")
 
     col_confirm, col_cancel = st.columns(2)
     if col_confirm.button(t("settings.btn_confirm_delete", default="Yes, Delete"), type="primary", width="stretch"):
@@ -876,7 +876,7 @@ def _open_delete_employee_dialog(
 ) -> None:
     """Modal dialog to confirm deletion of an employee profile."""
     st.warning(f"{t('settings.delete_confirm_msg', name=emp_name, default=f'Are you sure you want to delete Employee profile **{emp_name}** (ID: {emp_id})?')}")
-    st.caption("This action cannot be undone.")
+    st.caption("The record will be marked as deleted. Its history and mappings will be retained.")
 
     col_confirm, col_cancel = st.columns(2)
     if col_confirm.button(t("settings.btn_confirm_delete", default="Yes, Delete"), type="primary", width="stretch"):

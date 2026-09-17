@@ -26,5 +26,5 @@ def test_remove_leader_preserves_manager_membership_and_invalidates_capacity(emp
         assert connection.execute('SELECT team_id,function_id FROM eppm.team_function').fetchall() == [(2, 2)]
         assert connection.execute('SELECT count(*) FROM eppm.function').fetchone() == (2,)
         assert connection.execute('SELECT function_id FROM eppm.capacity_contributions(ARRAY[1]::bigint[])').fetchall() == []
-        assert connection.execute('SELECT revision FROM eppm.catalog_cache_revision').fetchone()[0] == revision + 2
+        assert connection.execute('SELECT revision FROM eppm.catalog_cache_revision').fetchone()[0] == revision + 3
     assert migrate(empty_database.operator_url) == ()

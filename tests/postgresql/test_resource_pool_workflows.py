@@ -143,6 +143,8 @@ class TestResourcePools(unittest.TestCase):
         # 1. Create Functions: F1 (100% FTE = 1.0), F2 (100% FTE = 1.0)
         f1_id = self.org_repo.create_function(OrgFunction(name="Lead Architect", hierarchy_level=2, fte_percentage=100))
         f2_id = self.org_repo.create_function(OrgFunction(name="Security Engineer", hierarchy_level=3, fte_percentage=100))
+        self.org_repo.create_employee(Employee('Lead', 'Architect', 'lead@example.test', 'LEAD', function_id=f1_id))
+        self.org_repo.create_employee(Employee('Security', 'Engineer', 'security@example.test', 'SEC', function_id=f2_id))
 
         # 2. Create Team and assign both F1 and F2 to Team
         t_id = self.org_repo.create_team(Team(team_name="Infrastructure Team", manager_function_id=f1_id))

@@ -89,7 +89,7 @@ class PostgresCollaborationStore:
                 ORDER BY lastname COLLATE "C" NULLS FIRST,firstname COLLATE "C" NULLS FIRST) AS person
             FROM eppm.employee_name_directory GROUP BY function_id
         ) SELECT f.function_id,f.name AS function_name,COALESCE(o.person,f.name) AS person
-          FROM eppm.function f LEFT JOIN occupants o ON o.function_id=f.function_id
+          FROM eppm.active_function f LEFT JOIN occupants o ON o.function_id=f.function_id
           ORDER BY lower(COALESCE(o.person,f.name) COLLATE "C") COLLATE "C",f.function_id''')
 
     def list_functions(self) -> list[FunctionContact]:
@@ -102,10 +102,10 @@ class PostgresCollaborationStore:
                     ORDER BY lastname COLLATE "C" NULLS FIRST,firstname COLLATE "C" NULLS FIRST,employee_id) AS mobile,
                 string_agg(NULLIF(landline,''), ', '
                     ORDER BY lastname COLLATE "C" NULLS FIRST,firstname COLLATE "C" NULLS FIRST,employee_id) AS landline
-            FROM eppm.employee GROUP BY function_id
+            FROM eppm.active_employee GROUP BY function_id
         ) SELECT f.function_id,f.name AS function_name,COALESCE(o.person,f.name) AS person,
                  COALESCE(o.mobile,'') AS mobile,COALESCE(o.landline,'') AS landline
-          FROM eppm.function f LEFT JOIN occupants o ON o.function_id=f.function_id
+          FROM eppm.active_function f LEFT JOIN occupants o ON o.function_id=f.function_id
           ORDER BY lower(COALESCE(o.person,f.name) COLLATE "C") COLLATE "C",f.function_id''')
 
     def list_contacts(self, project_id: int, locale: str) -> list[ProjectContact]:

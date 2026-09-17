@@ -43,14 +43,15 @@ def test_migration_preserves_leaf_ids_assignments_and_converts_groups(empty_data
         connection.execute("INSERT INTO eppm.resource_pool_group_member(group_id,pool_id) VALUES (2,1)")
         connection.execute("INSERT INTO eppm.project_type(id,name) VALUES (1,'General')")
         connection.execute("INSERT INTO eppm.project(id,name) VALUES (1,'Project')")
-        connection.execute('INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,fte_assigned,project_plan_id) VALUES (1,1,2,(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current))')
-    assert migrate(url) == ('0040_pool_hierarchy.sql',)
+        connection.execute('INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,fte_assigned) VALUES (1,1,2)')
+    assert migrate(url) == tuple(item.name for item in discover_migrations()[39:])
     assert migrate(url) == ()
     with psycopg.connect(url) as connection:
         rows = connection.execute("SELECT p.name,parent.name,p.capacity_fte FROM eppm.resource_pool p "
                                   "LEFT JOIN eppm.resource_pool parent ON parent.id=p.parent_pool_id ORDER BY p.name").fetchall()
         assert rows == [('Branch', 'Root', None), ('Leaf', 'Branch', 3), ('Root', None, None)]
-        assert connection.execute("SELECT pool_id,fte_assigned FROM eppm.resource_pool_assignment").fetchall() == [(1, 2)]
+        assert connection.execute("SELECT a.pool_id,a.fte_assigned FROM eppm.resource_pool_assignment a "
+                                  "JOIN eppm.project_plan p ON p.id=a.project_plan_id WHERE p.is_current").fetchall() == [(1, 2)]
         assert connection.execute("SELECT to_regclass('eppm.resource_pool_group')").fetchone()[0] is None
 
 

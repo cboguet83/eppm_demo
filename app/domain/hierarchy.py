@@ -6,11 +6,12 @@ import re
 
 @dataclass(frozen=True)
 class HierarchyType:
-    """A stable code with editable labels shared by teams, pools, and groups."""
+    """A retained classification; deleted entries are unavailable for assignment."""
 
     code: str
     translations: dict[str, str] = field(default_factory=dict)
     id: int | None = None
+    deleted_flag: bool = False
 
     def label(self, locale: str) -> str:
         """Return the requested label, falling back to English and the code."""

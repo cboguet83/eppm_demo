@@ -71,10 +71,10 @@ def test_optional_assignments_round_trip_and_protect_referenced_types(catalog, k
     assert read(record_id).hierarchy_type_id is None
     assert update(replace(read(record_id), hierarchy_type_id=type_id))
     assert read(record_id).hierarchy_type_id == type_id
-    with pytest.raises(OrganizationConflictError):
+    with pytest.raises(ValueError, match='in use'):
         organization.delete_hierarchy_type(type_id)
     assert organization.get_all_hierarchy_types()[-1].id == type_id
-    with pytest.raises(conflict):
+    with pytest.raises(ValueError, match='no longer exists'):
         update(replace(read(record_id), hierarchy_type_id=99999))
     assert read(record_id).hierarchy_type_id == type_id
     assert update(replace(read(record_id), hierarchy_type_id=None))

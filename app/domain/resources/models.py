@@ -84,6 +84,7 @@ class ResourcePool:
         hierarchy_type_id: Optional shared hierarchy classification.
         pool_type_id: Required pool classification; Human (1) is the default.
         parent_pool_id: Optional parent; pools with children are capacity containers.
+        deleted_flag: Whether the retained pool is excluded from capacity and demand.
     """
 
     name: str
@@ -94,6 +95,7 @@ class ResourcePool:
     hierarchy_type_id: int | None = None
     pool_type_id: int = 1
     parent_pool_id: int | None = None
+    deleted_flag: bool = False
 
 
 @dataclass(frozen=True)
