@@ -52,9 +52,27 @@ test('resource grid rounds small values and truncates values from 100', () => {
     [100, '100'], [100.99, '100'], [999.99, '999']]) {
     assert.equal(context.formatResourceValue(value), expected);
   }
-  assert.deepEqual([...context.resourceRowOffsets([{rowType:'group_total'}, {rowType:'pool_total'}, {rowType:'group_total'}])], [0,23.8,57.8,81.6]);
+  assert.deepEqual([...context.resourceRowOffsets([{rowType:'group_total'}, {rowType:'pool_total'}, {rowType:'group_total'}])], [0,23.8,47.6,71.4]);
   assert.match(html, /button:not\(\.context-menu-item\):not\(\.resource-tree-toggle\)/);
   assert.doesNotMatch(html, /<span>🏊<\/span>/);
+});
+
+test('alternative pool rows compare displayed period peaks rather than different daily dates', () => {
+  const pool = {daily_usage:{'2027-01-01':2, '2027-01-02':1}};
+  const context = vm.createContext({
+    alternativePoolChanges:{1:['total']},
+    alternativePoolUsage:{1:{total:{'2027-01-01':1, '2027-01-02':2}}},
+    getResourcePoolById:()=>pool, formatDate:value=>value,
+    lastRenderedBottomCells:[{startDate:'2027-01-01', endDate:'2027-01-31'}],
+  });
+  vm.runInContext(script.slice(script.indexOf('    const EMPTY_DAILY_SERIES ='),
+    script.indexOf('    function isDisplayedPoolPeriodOverallocated(')), context);
+  vm.runInContext(script.slice(script.indexOf('    function formatResourceValue('),
+    script.indexOf('    function renderResourceGrid(')), context);
+  assert.equal(context.resourceComparisonDiffers(1, 'total'), false);
+  context.lastRenderedBottomCells = [{startDate:'2027-01-01', endDate:'2027-01-01'}];
+  assert.equal(context.resourceComparisonDiffers(1, 'total'), true);
+  assert.equal(context.resourceComparisonDiffers(1, 'selected'), false);
 });
 
 test('scale buttons keep exactly one red selection and gray alternatives', () => {
@@ -97,7 +115,8 @@ test('hide-unused pools preserves ancestors, respects collapsed groups, and upda
     ['root', 'nested', 'pool:1', 'pool:1', 'pool:1']);
   run("collapsedResourceNodes.add('pool:1')");
   assert.deepEqual([...run('getResourceDisplayRows().filter(row => row.pool).map(row => row.rowType)')],
-    ['pool_assigned', 'pool_total', 'pool_selected']);
+    ['pool_total']);
+  run("collapsedResourceNodes.delete('pool:1')");
   run("collapsedResourceNodes.add('nested')");
   assert.equal(run('getResourceDisplayRows().length'), 2);
   pools[0].used_by_selected_projects = false;

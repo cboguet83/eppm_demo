@@ -202,11 +202,14 @@ The stacked height is explicitly labelled as the sum of independent peaks.
 In the planning resource grid, containers are structural rows with no aggregate
 capacity or demand values. Their cells stay red when any visible descendant pool
 is over capacity in that period, including alternative scenario rows. Containers
-are 23.8 pixels high (30% below the 34-pixel pool rows); virtual scrolling uses
+and pools are 23.8 pixels high; virtual scrolling uses
 cumulative row heights. Container total badges and pool swimmer icons are removed.
 Only root containers start expanded; deeper containers start collapsed. Leaf pools
-cannot collapse: every visible pool shows Pool capacity, Pool total assignments,
-and Active view pool assignment, plus any differing alternative assignment rows.
+can collapse to their total assignment row. Expanded pools show Pool capacity,
+Pool total assignments, and Active view pool assignment. Alternative rows use the
+same branch arrow and badge layout without repeating the pool name, and appear
+only if a displayed cell differs at the current time scale. Containers show only
+total comparisons, never alternative selected-project rows.
 Double-clicking either side of a container row toggles it. The shared Expand All
 control expands projects and all resource nodes; Collapse All collapses projects
 and restores the resource tree to root-only expansion. Edit mode uses the same

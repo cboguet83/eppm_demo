@@ -1368,7 +1368,7 @@
     }
 
     .resource-left-row {
-      height: 34px;
+      height: 23.8px;
       display: flex;
       align-items: center;
       padding: 0 10px;
@@ -1644,7 +1644,7 @@
     }
 
     .resource-right-row {
-      height: 34px;
+      height: 23.8px;
       display: flex;
       align-items: center;
       border-bottom: 1px solid var(--border);
@@ -5244,6 +5244,10 @@ button:not(.context-menu-item):disabled {opacity:.5;}
 
         const pool = getResourcePoolById(node.pool_id);
         if (!pool) return;
+        if (collapsed) {
+          rows.push({rowType:'pool_total', node, nodeKey, pool, depth, collapsed:true});
+          return;
+        }
         rows.push({ rowType: 'pool_assigned', node, nodeKey, pool, depth, collapsed: false });
         rows.push({ rowType: 'pool_total', node, nodeKey, pool, depth: depth + 1, collapsed: false });
         rows.push({ rowType: 'pool_selected', node, nodeKey, pool, depth: depth + 1, collapsed: false });
@@ -5252,14 +5256,13 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       hierarchy.forEach(node => visit(node, 0));
       if (!comparingScenario()) return rows;
       return rows.flatMap(row => {
-        if (row.rowType === 'pool_assigned') return [row];
+        if (row.rowType === 'pool_assigned' || (row.pool && row.collapsed)) return [row];
         const scopes = row.rowType === 'group_total'
-          ? ['total', 'selected']
+          ? ['total']
           : [row.rowType === 'pool_selected' ? 'selected' : 'total'];
         const comparisonRows = scopes.filter(scope => {
           const poolIds = row.rowType === 'group_total' ? row.node.descendant_pool_ids || [] : [row.pool.id];
-          if (!poolIds.some(id => (alternativePoolChanges[String(id)] || []).includes(scope))) return false;
-          return true;
+          return poolIds.some(id => resourceComparisonDiffers(id, scope));
         }).map(scope => {
           const usage = row.rowType === 'group_total'
             ? {}
@@ -5275,9 +5278,22 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       return value >= 100 ? String(Math.trunc(value)) : value.toFixed(1);
     }
 
+    function resourceComparisonDiffers(poolId, scope) {
+      if (!(alternativePoolChanges[String(poolId)] || []).includes(scope)) return false;
+      const pool = getResourcePoolById(poolId);
+      if (!pool) return false;
+      const active = scope === 'selected' ? pool.selected_projects_daily_usage : pool.daily_usage;
+      const alternative = alternativePoolUsage[String(poolId)]?.[scope] || {};
+      return lastRenderedBottomCells.some(cell => {
+        const start = formatDate(cell.startDate), end = formatDate(cell.endDate);
+        return formatResourceValue(getMaxDemandForPeriod(active, start, end)) !==
+          formatResourceValue(getMaxDemandForPeriod(alternative, start, end));
+      });
+    }
+
     function resourceRowOffsets(rows) {
       const offsets = [0];
-      for (const row of rows) offsets.push(offsets.at(-1) + (row.rowType === 'group_total' ? 23.8 : 34));
+      for (const row of rows) offsets.push(offsets.at(-1) + 23.8);
       return offsets;
     }
 
@@ -5518,7 +5534,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
             data-row-id="${escapeHtml(row.nodeKey)}-alternative-${row.comparisonScope}" data-pool-id="${pool.id}"
             data-pool-name="${label}" data-scope="alternative_${row.comparisonScope}" oncontextmenu="handlePoolRowContextMenu(event, this)">
             <div class="resource-pool-name" style="padding-left:${indent}px;color:#9333ea">
-              <span class="r-name-text">${label}</span><span class="r-badge">Alternative ${row.comparisonScope === 'selected' ? 'Selected Projects' : 'Total Assignments'}</span>
+              <span class="resource-tree-branch">↳</span><span class="r-badge">Alternative ${row.comparisonScope === 'selected' ? 'Selected Projects' : 'Total Assignments'}</span>
             </div></div>`;
           const cells = renderDemandCells(pool, row.usage, 'alternative_' + row.comparisonScope);
           rightHtml += `<div class="resource-right-row alternative-resource-row sub-row"
@@ -5592,6 +5608,8 @@ button:not(.context-menu-item):disabled {opacity:.5;}
             <div class="resource-left-row assigned-capacity-row ${assignedState} ${isFilterActive ? 'active-filter-row' : ''}"
                  data-row-id="pool-${pool.id}-assigned" ${rowContext}>
               <div class="resource-pool-name" style="padding-left:${indent}px;">
+                <button class="resource-tree-toggle" type="button" aria-label="Collapse ${escapeHtml(pool.name)}"
+                        onclick="toggleResourceNode('${row.nodeKey}')">${toggle}</button>
                 <span class="r-name-text">${escapeHtml(pool.name)}</span>
                 ${poolAssignmentBadges(pool, visibleCapacity, poolCap)}
                 <span class="r-badge assigned-badge ${assignedState}">${getT('resource_grid.assigned_capacity', 'Pool capacity')}</span>
@@ -5630,7 +5648,9 @@ button:not(.context-menu-item):disabled {opacity:.5;}
           <div class="resource-left-row sub-row ${isFilterActive ? 'active-filter-row' : ''}"
                data-row-id="pool-${pool.id}-${isSelected ? 'selected' : 'total'}" ${rowContext}>
             <div class="resource-pool-name" style="padding-left:${indent}px;">
-              <span class="resource-tree-branch">↳</span>
+              ${row.collapsed ? `<button class="resource-tree-toggle" type="button" aria-label="Expand ${escapeHtml(pool.name)}"
+                onclick="toggleResourceNode('${row.nodeKey}')">${toggle}</button><span class="r-name-text">${escapeHtml(pool.name)}</span>`
+                : '<span class="resource-tree-branch">↳</span>'}
               <span class="r-badge ${isSelected ? 'scope-badge' : 'total-badge'}">${rowLabel}</span>
             </div>
           </div>
