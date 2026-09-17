@@ -14,6 +14,7 @@ from app.domain.access.models import AccessDenied
 from app.domain.dashboard import DashboardProject
 from app.domain.finance import euro_text
 from app.presentation.components.action_table import action_table
+from app.presentation.components.checkbox_filter import checkbox_filter
 from app.presentation.components.dialog import dialog
 from app.presentation.components.dashboard_table import dashboard_table
 from app.presentation.components.organization_filter_panel import organization_filter_panel
@@ -159,8 +160,11 @@ def _filters(service: DashboardService, catalog) -> tuple[dict[str, list[str]], 
         if state_key in st.session_state:
             st.session_state[state_key] = [value for value in st.session_state[state_key] if value in options]
         labels = catalog.labels.get(key, {})
-        active[key] = st.multiselect(label, options, key=state_key, on_change=_reset_page,
-                                     format_func=lambda value: labels.get(value, value) or _label('unassigned'))
+        if key in {'status', 'pool'}:
+            active[key] = checkbox_filter(label, options, labels, key=state_key, on_change=_reset_page)
+        else:
+            active[key] = st.multiselect(label, options, key=state_key, on_change=_reset_page,
+                                         format_func=lambda value: labels.get(value, value) or _label('unassigned'))
 
     columns = st.columns(2, vertical_alignment='top')
     for column, key in zip(columns, ('status', 'pool')):
@@ -304,6 +308,8 @@ def render_dashboard(service: DashboardService) -> None:
     """Update filters, five-row pages and charts independently of the application shell."""
     st.html("""<style>
     .stMainBlockContainer:has(.st-key-dashboard_filter_pool){padding-top:.05rem!important}
+    .stMainBlockContainer:has(.st-key-application_page_Dashboard){padding-top:.01rem!important}
+    .stMainBlockContainer:has(.st-key-application_page_Dashboard) > [data-testid="stVerticalBlock"]{gap:.2rem}
     .st-key-dashboard_issue_count button{background:transparent!important;border:0!important;color:var(--issue-icon)!important;min-height:90px;width:100%;justify-content:center}
     .st-key-dashboard_issue_count button > div{justify-content:center!important;width:100%}
     .st-key-dashboard_issue_count button [data-testid=stMarkdownContainer]{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
@@ -362,6 +368,7 @@ def render_dashboard(service: DashboardService) -> None:
             with st.container(key='dashboard_resource_charts'):
                 for metric in ('overallocation', 'allocation'):
                     selection = resource_chart(series, today=service.today().isoformat(),
+                        on_pool_filter=lambda pool_id: _queue_pool_filter([str(pool_id)]),
                         year=service.today().year, locale=get_current_locale(), metric=metric, labels={
                             'title': _label(metric), 'valueLabel': _label(metric), 'totalValueLabel': _label('total_' + metric),
                             'totalCapacityLabel': _label('total_capacity_short'),
@@ -379,8 +386,9 @@ def render_dashboard(service: DashboardService) -> None:
                         elif action == 'planning':
                             _planning_jump(service, ids, selection['quarter'], selection['pool_id'], metric)
                         elif action == 'filter_pool' and selection['pool_id'] in pool_names:
-                            _queue_pool_filter([str(selection['pool_id'])])
-                            st.rerun(scope='fragment')
+                            # The component callback queues this before filters render.
+                            # A second mid-render rerun corrupts nested fragment paths.
+                            continue
                         else:
                             raise ValueError('Invalid resource action.')
         with issues:

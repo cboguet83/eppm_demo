@@ -1,5 +1,7 @@
 """Accessible quarterly resource chart with an authorized planning drill-through."""
 
+from collections.abc import Callable
+
 import streamlit as st
 
 from app.application.ports.dashboard import ResourceBreakdown
@@ -151,16 +153,27 @@ export default function({data,parentElement,setTriggerValue}) {
 
 
 def resource_chart(series: ResourceBreakdown, *, today: str, year: int,
-                   labels: dict[str, str], locale: str, metric: str = 'overallocation') -> dict | None:
+                   labels: dict[str, str], locale: str, metric: str = 'overallocation',
+                   on_pool_filter: Callable[[int], None] | None = None) -> dict | None:
     """Render per-pool stacks and return the selected pool/quarter for reauthorization."""
     component = st.components.v2.component('eppm_dashboard_resources',
         html='<div class="resource-chart"></div>', css=_CSS + CONTEXT_MENU_CSS, js=_JS)
+    key = 'dashboard_resource_chart_' + metric
+
+    def apply_filter() -> None:
+        event = getattr(st.session_state.get(key), 'selection', None)
+        if (on_pool_filter is not None and isinstance(event, dict)
+                and event.get('action') == 'filter_pool' and event.get('metric') == metric
+                and type(event.get('pool_id')) is int and isinstance(event.get('quarter'), str)
+                and event['pool_id'] in {pool['pool_id'] for pool in series['pools']}):
+            on_pool_filter(event['pool_id'])
+
     rows = [{'quarter': key, 'value': float(value), 'capacity': float(series['capacity'][key])}
             for key, value in sorted(series[metric].items()) if year - 2 <= int(key[:4]) <= year + 9]
     result = component(data={'rows': rows, 'pools': series.get('individual_pools', series['pools']), 'metric': metric,
                              'today': today, 'start': f'{year-2}-01-01', 'end': f'{year+10}-01-01',
-                             'locale': locale, 'palette': PALETTE, **labels}, key='dashboard_resource_chart_' + metric,
-                       on_selection_change=lambda: None, height='content')
+                             'locale': locale, 'palette': PALETTE, **labels}, key=key,
+                       on_selection_change=apply_filter, height='content')
     return getattr(result, 'selection', None)
 
 

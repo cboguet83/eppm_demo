@@ -1,4 +1,12 @@
 {
+  "checkbox_filter": {
+    "all": "All",
+    "selected": "{count} selected",
+    "search": "Search",
+    "select_all": "Select all",
+    "clear": "Clear",
+    "no_matches": "No matching options"
+  },
   "organization_filters": {
     "services": "Services",
     "divisions": "Divisions",

@@ -1,4 +1,12 @@
 {
+  "checkbox_filter": {
+    "all": "Alle",
+    "selected": "{count} ausgewählt",
+    "search": "Suchen",
+    "select_all": "Alle auswählen",
+    "clear": "Zurücksetzen",
+    "no_matches": "Keine passenden Optionen"
+  },
   "organization_filters": {
     "services": "Dienste",
     "divisions": "Abteilungen",

@@ -42,6 +42,8 @@ def test_dashboard_charts_paging_and_read_only_issues_do_not_rerun_shell(popup_s
         browser=playwright.chromium.launch(headless=True)
         try:
             page=popup_server.new_page(browser, viewport={'width':1500,'height':1200})
+            browser_errors = []
+            page.on('pageerror', lambda error: browser_errors.append(str(error)))
             start=time.perf_counter();page.goto(popup_server.origin)
             expect(page.locator('.st-key-dashboard_issue_count button:visible')).to_be_visible(timeout=30000)
             expect(page.locator('.st-key-dashboard_finance_chart').first).to_be_visible(timeout=30000)
@@ -98,7 +100,7 @@ def test_dashboard_charts_paging_and_read_only_issues_do_not_rerun_shell(popup_s
             expect(page.get_by_text('1 matching projects',exact=True)).to_be_visible()
             filtering=time.perf_counter()-start
             page.keyboard.press('Escape')
-            page.get_by_test_id('stPopoverButton').click()
+            page.get_by_role('button', name='Advanced filters').click()
             expect(field).not_to_be_visible()
             expect(page.get_by_text('Shell runs: 1',exact=True)).to_be_visible()
             point = page.locator('.st-key-dashboard_finance_chart').first.locator('circle').first
@@ -154,6 +156,15 @@ def test_dashboard_charts_paging_and_read_only_issues_do_not_rerun_shell(popup_s
                 page.get_by_role('menuitem', name='Filter on this pool', exact=True).click()
                 expect(page.get_by_text('Resource pool: Pool A', exact=True)).to_be_visible()
                 expect(page.locator('.st-key-dashboard_filter_pool')).to_contain_text('Pool A')
+                page.locator('.st-key-dashboard_filter_pool').get_by_role('button').click()
+                expect(page.get_by_role('checkbox', name='Pool A', exact=True)).to_be_checked()
+                expect(page.get_by_role('checkbox', name='Pool B', exact=True)).not_to_be_checked()
+                page.get_by_test_id('stPopoverBody').get_by_text('Pool B', exact=True).click()
+                expect(page.get_by_role('checkbox', name='Pool B', exact=True)).to_be_checked()
+                expect(allocation.locator('[data-pool-id="2"]').first).to_be_visible()
+                page.get_by_test_id('stPopoverBody').get_by_text('Pool B', exact=True).click()
+                expect(page.get_by_role('checkbox', name='Pool B', exact=True)).not_to_be_checked()
+                page.keyboard.press('Escape')
                 for filtered in (resource, allocation):
                     expect(filtered.locator('[data-pool-id="2"]')).to_have_count(0)
                     expect(filtered.locator('[data-pool-id="1"]').first).to_be_visible()
@@ -162,7 +173,7 @@ def test_dashboard_charts_paging_and_read_only_issues_do_not_rerun_shell(popup_s
                 expect(allocation.get_by_role('tooltip')).to_contain_text('Portfolio simultaneous peak: 3.0')
                 expect(allocation.locator('path')).to_have_count(1)
                 page.get_by_role('button', name='Show all pools', exact=True).click()
-                expect(page.locator('.st-key-dashboard_filter_pool').get_by_role('button', name='Remove Pool A')).to_have_count(0)
+                expect(page.locator('.st-key-dashboard_filter_pool')).to_contain_text('All')
                 expect(allocation.locator('[data-pool-id="2"]').first).to_be_visible()
                 expect(page.get_by_text('1 matching projects', exact=True)).to_be_visible()
                 expect(page.get_by_text('Shell runs: 1', exact=True)).to_be_visible()
@@ -170,5 +181,6 @@ def test_dashboard_charts_paging_and_read_only_issues_do_not_rerun_shell(popup_s
             quarter.click(button='right')
             page.get_by_role('menuitem', name='Planning & milestones: consuming projects').click()
             expect(page.get_by_text('Planning projects: [1, 2]', exact=True)).to_be_visible()
+            assert not browser_errors
         finally:
             browser.close()

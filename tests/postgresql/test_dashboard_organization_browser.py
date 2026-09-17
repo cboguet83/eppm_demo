@@ -99,3 +99,43 @@ def test_dashboard_organization_buttons_cascade_and_keep_status_default(authoriz
             page.screenshot(path=str(tmp_path / 'organization-panel.png'), full_page=True)
         finally:
             browser.close()
+
+
+def test_dashboard_filter_spacing_in_full_shell(authorized, tmp_path):
+    """Measure actual shell whitespace rather than the standalone page fixture."""
+    from tests.postgresql.shell_browser import _APP
+
+    seed_organization(authorized)
+    screen = _APP.replace('render_application(workspace)', "st.session_state.setdefault('app_sidebar_nav', 'Dashboard')\nrender_application(workspace)")
+    with native_server(authorized, tmp_path, screen) as server, sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            page = server.new_page(browser, viewport={'width':1500, 'height':1100})
+            page.goto(server.origin)
+            frame = page.locator('.st-key-organization_service_frame')
+            expect(frame).to_be_visible(timeout=30000)
+            assert 9 <= frame.bounding_box()['y'] <= 10
+            status = page.locator('.st-key-dashboard_filter_status')
+            expect(status).to_contain_text('In Progress')
+            expect(status.locator('[data-testid="stMultiSelectTag"]')).to_have_count(0)
+            status.get_by_role('button').click()
+            completed = page.get_by_role('checkbox', name='Completed', exact=True)
+            expect(page.get_by_role('checkbox', name='In Progress', exact=True)).to_be_checked()
+            page.get_by_test_id('stPopoverBody').get_by_text('Completed', exact=True).click()
+            expect(page.get_by_text('4 matching projects', exact=True)).to_be_visible()
+            expect(completed).to_be_visible()
+            page.get_by_role('textbox', name='Search', exact=True).fill('completed')
+            page.get_by_role('textbox', name='Search', exact=True).press('Enter')
+            expect(page.get_by_role('checkbox', name='In Progress', exact=True)).to_have_count(0)
+            expect(completed).to_be_checked()
+            page.get_by_role('button', name='Clear', exact=True).click()
+            expect(completed).not_to_be_checked()
+            page.get_by_role('button', name='Select all', exact=True).click()
+            expect(completed).to_be_checked()
+            page.keyboard.press('Escape')
+            page.locator('.st-key-dashboard_clear button').click()
+            expect(status).to_contain_text('In Progress')
+            expect(page.get_by_text('3 matching projects', exact=True)).to_be_visible()
+            page.screenshot(path=str(tmp_path / 'dashboard-compact-shell.png'), full_page=True)
+        finally:
+            browser.close()

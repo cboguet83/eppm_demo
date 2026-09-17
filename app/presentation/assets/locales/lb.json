@@ -1,4 +1,12 @@
 {
+  "checkbox_filter": {
+    "all": "All",
+    "selected": "{count} ausgewielt",
+    "search": "Sichen",
+    "select_all": "All auswielen",
+    "clear": "Läschen",
+    "no_matches": "Keng passend Optiounen"
+  },
   "organization_filters": {
     "services": "Servicer",
     "divisions": "Divisiounen",

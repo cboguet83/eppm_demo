@@ -63,16 +63,16 @@ def test_resource_charts_follow_status_and_top_pool_selections(business, authori
 
     assert not app.exception and not app.error
     assert (values('allocation'), values('overallocation')) == (1, 0)
-    app.multiselect(key='dashboard_filter_status').set_value(['In Progress', 'Completed']).run()
+    app.checkbox(key='dashboard_filter_status_option_Completed').check().run()
     assert (values('allocation'), values('overallocation')) == (3, 2)
-    app.multiselect(key='dashboard_filter_status').set_value(['Completed']).run()
+    app.checkbox(key='dashboard_filter_status_option_In Progress').uncheck().run()
     assert (values('allocation'), values('overallocation')) == (2, 1)
-    app.multiselect(key='dashboard_filter_status').set_value([]).run()
+    app.button(key='dashboard_filter_status_clear').click().run()
     assert (values('allocation'), values('overallocation')) == (3, 2)
-    app.multiselect(key='dashboard_filter_pool').set_value(['1']).run()
+    app.checkbox(key='dashboard_filter_pool_option_1').check().run()
     assert not app.exception and not app.error
     app.button(key='dashboard_clear_chart_pool').click().run()
-    assert app.multiselect(key='dashboard_filter_pool').value == []
+    assert app.session_state['dashboard_filter_pool'] == []
     assert (values('allocation'), values('overallocation')) == (3, 2)
 
 
@@ -85,8 +85,8 @@ def test_dashboard_lazy_table_and_filters_cover_all_results(business, authorized
     assert not app.header
     assert table_data(app)['total']==12
     assert [row['id'] for row in table_data(app)['rows']]==list(range(1,13))
-    assert app.expander[0].label=='12 matching projects'
-    assert app.expander[0].proto.expanded is False
+    project_list = next(item for item in app.expander if item.label == '12 matching projects')
+    assert project_list.proto.expanded is False
     assert not any(button.key in {'dashboard_next','dashboard_previous'} for button in app.button)
     app.multiselect(key='dashboard_flex_fields').set_value(['name']).run()
     app.multiselect(key='dashboard_filter_name').set_value(['Visible']).run()
@@ -103,22 +103,22 @@ def test_status_defaults_to_in_progress_and_can_include_completed_or_all_project
         connection.execute("UPDATE eppm.project SET status='Completed' WHERE id=2")
     app = AppTest.from_function(screen, args=(path, manager.actor), default_timeout=30).run()
     assert not app.exception
-    assert app.multiselect(key='dashboard_filter_status').value == ['In Progress']
-    assert 'Active' not in app.multiselect(key='dashboard_filter_status').options
+    assert app.session_state['dashboard_filter_status'] == ['In Progress']
+    assert not any(item.label == 'Active' for item in app.checkbox)
     assert [row['id'] for row in table_data(app)['rows']] == [1]
-    app.multiselect(key='dashboard_filter_status').set_value(['In Progress', 'Completed']).run()
+    app.checkbox(key='dashboard_filter_status_option_Completed').check().run()
     assert table_data(app)['total'] == 2
     app.segmented_control(key='dashboard_match').set_value('All').run()
     assert table_data(app)['total'] == 2
-    app.multiselect(key='dashboard_filter_status').set_value(['Completed']).run()
+    app.checkbox(key='dashboard_filter_status_option_In Progress').uncheck().run()
     assert [row['id'] for row in table_data(app)['rows']] == [2]
-    app.multiselect(key='dashboard_filter_status').set_value([]).run()
+    app.button(key='dashboard_filter_status_clear').click().run()
     assert table_data(app)['total'] == 2
     app.run()
-    assert app.multiselect(key='dashboard_filter_status').value == []
-    app.multiselect(key='dashboard_filter_status').set_value(['In Progress']).run()
+    assert app.session_state['dashboard_filter_status'] == []
+    app.checkbox(key='dashboard_filter_status_option_In Progress').check().run()
     app.button(key='dashboard_clear').click().run()
-    assert app.multiselect(key='dashboard_filter_status').value == ['In Progress']
+    assert app.session_state['dashboard_filter_status'] == ['In Progress']
     assert table_data(app)['total'] == 1
 
 

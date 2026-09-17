@@ -14,6 +14,17 @@ and dashboard top padding is reduced from 0.25rem to 0.05rem. Multiple values wi
 combine with AND. No organization selection imposes no organization restriction.
 The existing **In Progress** default and Clear all filters behavior are retained.
 
+Project status and Resource pools use searchable checkbox dropdowns with Select
+all and Clear actions. Selections apply immediately and the closed dropdown shows
+a compact summary, without removable tags. Clearing a dropdown removes that
+filter restriction. Chart pool filtering queues the canonical selection in the
+component callback, before the filters render, and therefore updates the dropdown
+checkboxes in one rerun. Advanced filters retain their existing UI.
+
+The full dashboard shell reduces the gaps around invisible shell components from
+16px to 3.2px and its top padding to 0.16px. Together these reduce the measured
+space above Services from about 49px to about 10px; other pages keep their layout.
+
 Choices come from currently readable projects, across statuses, not the current
 status/pool/advanced filters. Services therefore remain visible when other
 dashboard filters change. Division choices depend on selected services; Team
