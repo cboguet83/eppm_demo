@@ -292,10 +292,9 @@ def _open_add_pool_mapping_dialog(
     }
     mode_key = f'direct_employee_mapping_mode_{pool_id}'
     employee_draft_key = f'employee_mapping_selection_draft_{pool_id}'
-    if mode_key not in st.session_state:
+    if employee_draft_key not in st.session_state:
         st.session_state[employee_draft_key] = [identity for kind, identity in existing if kind == 'employee']
-    direct_mode = st.checkbox('direct employee mapping mode', value=False, key=mode_key,
-        help='Use direct employee mappings as exceptions. They consume capacity before team mappings across all active pools.')
+    direct_mode = bool(st.session_state.get(mode_key, False))
     catalog = service.mapping_catalog()
     limits = catalog.limits(pool_id)
     teams = {int(row.team_id): row.team_name for row in df_teams.itertuples()}
@@ -329,6 +328,8 @@ def _open_add_pool_mapping_dialog(
         key=f'mapping_teams_{pool_id}',
         disabled=direct_mode,
     )
+    direct_mode = st.checkbox('direct employee mapping mode', value=False, key=mode_key,
+        help='Use direct employee mappings as exceptions. They consume capacity before team mappings across all active pools.')
     selected_employees = [identity for identity in st.session_state[employee_draft_key] if identity in employees]
     if direct_mode:
         selected_employees = st.multiselect(

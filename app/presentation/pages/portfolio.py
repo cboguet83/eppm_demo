@@ -37,8 +37,7 @@ ALLOWED_DYNAMIC_PARAMS: set[str] = {
 
 
 def _clear_portfolio_filters() -> None:
-    """Reset search, column filters and status before rendering the table again."""
-    st.session_state["portfolio_search"] = ""
+    """Reset column filters and status before rendering the table again."""
     st.session_state["portfolio_statuses"] = ["In Progress"]
     st.session_state.pop(_PORTFOLIO_TABLE_KEY, None)
     st.session_state["portfolio_filter_reset"] = st.session_state.get("portfolio_filter_reset", 0) + 1
@@ -371,9 +370,7 @@ def _render_portfolio_browser(workspace: ProjectWorkspace) -> None:
     </style>""")
     params = pd.DataFrame(workspace.portfolio.get_catalog(include_managers=False).parameters)
     columns = _portfolio_columns(localize_parameters(params, workspace.schema.alias_references(get_current_locale())))
-    search_col, status_col, clear_col = st.columns([3, 2, 1], vertical_alignment="bottom")
-    with search_col:
-        search = st.text_input(t("portfolio.filter_search"), placeholder=t("portfolio.filter_search_placeholder"), key="portfolio_search")
+    status_col, clear_col = st.columns([5, 1], vertical_alignment="bottom")
     with status_col:
         st.multiselect(t("dashboard.project_status", default="Project status"), PROJECT_STATUSES,
                        default=["In Progress"], key="portfolio_statuses")
@@ -385,7 +382,7 @@ def _render_portfolio_browser(workspace: ProjectWorkspace) -> None:
         _render_project_create_action(workspace)
     st.caption("Click a project to see its details. Scroll to load more projects automatically.")
 
-    _render_portfolio_grid(workspace, columns, search)
+    _render_portfolio_grid(workspace, columns, '')
     _render_portfolio_selection(workspace, params)
     render_project_modal(workspace)
 

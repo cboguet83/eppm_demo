@@ -238,6 +238,7 @@ def test_mapping_mode_resets_on_reopen_and_csv_displays_blocked_restoration_warn
             popup = page.get_by_role('dialog')
             mode = popup.get_by_role('checkbox', name='direct employee mapping mode', exact=True)
             browser_api.expect(mode).not_to_be_checked()
+            assert popup.get_by_text('Teams', exact=True).bounding_box()['y'] < mode.bounding_box()['y']
             browser_api.expect(popup.get_by_text('Employees', exact=True)).to_have_count(0)
             popup.get_by_text('direct employee mapping mode', exact=True).click()
             browser_api.expect(popup.get_by_text('Employees', exact=True)).to_be_visible()

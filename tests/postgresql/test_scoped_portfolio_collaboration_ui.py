@@ -168,12 +168,12 @@ def test_portfolio_facet_requests_and_invalid_offsets_keep_scoped_rows_and_stati
         assert info["request_id"] == "facet-request"
 
 
-@pytest.mark.parametrize('search_changed', [False, True])
-def test_scroll_after_another_committed_edit_preserves_page_only_for_the_same_view(business, pg_database, search_changed):
+@pytest.mark.parametrize('filter_changed', [False, True])
+def test_scroll_after_another_committed_edit_preserves_page_only_for_the_same_view(business, pg_database, filter_changed):
     """Refresh stale data without replacing an unchanged scroll request by page one."""
     path, _, _, _, manager = business
     with psycopg.connect(pg_database.operator_url) as connection:
-        connection.execute("INSERT INTO eppm.project(id,name) SELECT id,'Page entry '||id FROM generate_series(3,232) id")
+        connection.execute("INSERT INTO eppm.project(id,name,status) SELECT id,'Page entry '||id,'In Progress' FROM generate_series(3,232) id")
     with patch('app.presentation.pages.portfolio.portfolio_project_table') as table:
         app = AppTest.from_function(portfolio_app, args=(path, manager.actor)).run()
         previous = table.call_args.kwargs['page_info']
@@ -183,13 +183,15 @@ def test_scroll_after_another_committed_edit_preserves_page_only_for_the_same_vi
         }}
         with psycopg.connect(pg_database.operator_url) as connection:
             connection.execute("UPDATE eppm.project SET name='Updated by another editor' WHERE id=2")
-        if search_changed:
-            app.text_input[0].set_value('Visible')
+        assert not any(widget.key == 'portfolio_search' for widget in app.text_input)
+        assert app.multiselect(key='portfolio_statuses').value == ['In Progress']
+        if filter_changed:
+            app.multiselect(key='portfolio_statuses').set_value(['In Progress', 'Completed'])
         app.run()
         assert not app.exception and not app.error
         current = table.call_args.kwargs['page_info']
         assert current['context'] != previous['context']
-        if search_changed:
+        if filter_changed:
             assert current['view_context'] != previous['view_context']
             assert current['offset'] == 0 and current['request_id'] is None
             assert not current['preserve_position']
@@ -323,6 +325,8 @@ def contacts(pg_database, business):
     with psycopg.connect(pg_database.operator_url) as connection:
         connection.execute("INSERT INTO eppm.function(function_id,name,hierarchy_level) VALUES(10,'Visible function',1),(20,'Hidden function',1),(30,'Unrelated function',1)")
         connection.execute("INSERT INTO eppm.employee(firstname,lastname,email,function_id) VALUES('Rae','Visible','visible@example.test',10),('Robin','Hidden','hidden@example.test',20),('Unrelated','Person','unrelated@example.test',30)")
+        connection.execute('INSERT INTO eppm.employee_function(employee_id,function_id,allocation_pct) '
+                           'SELECT employee_id,function_id,100 FROM eppm.employee WHERE function_id IN (10,20,30)')
     shared = create_collaboration_service(path, access=manager)
     role_id = shared.save_catalog("role", "Sponsor")
     visible_id = shared.save_contact(1, role_id, 10)

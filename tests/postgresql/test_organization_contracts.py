@@ -115,13 +115,13 @@ def test_application_crud_and_display_frames_handle_missing_records(database: Ru
     assert service.check_email_exists("EMP-001@EXAMPLE.COM")
     assert not service.check_email_exists("EMP-001@EXAMPLE.COM", employee_id)
     assert service.update_function_type(FunctionType("Architecture", type_id))
-    assert service.update_function(OrgFunction("Lead", 3, function_id, type_id, has_reports=True))
+    assert service.update_function(OrgFunction("Lead", 3, function_id, type_id))
     assert service.update_team(Team("Renamed", team_id))
     assert service.get_team_functions(team_id) == [function_id]
     assert service.update_employee(replace(
         employee(), employee_id=employee_id, occupation_percentage=60, function_id=function_id,
     ))
-    assert organization_frames.functions_frame(other_service.get_all_functions()).iloc[0]["has_reports"] == 1
+    assert not organization_frames.functions_frame(other_service.get_all_functions()).iloc[0]["has_reports"]
     assert not organization_frames.function_types_frame(other_service.get_all_function_types()).empty
     assert not organization_frames.teams_frame(other_service.get_all_teams()).empty
     assert not organization_frames.employees_frame(other_service.get_all_employees()).empty

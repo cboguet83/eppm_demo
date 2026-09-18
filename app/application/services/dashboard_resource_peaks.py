@@ -12,7 +12,8 @@ def individual_pool_peaks(pools: list[PoolResourceSeries], days: list[list],
 
     The JSON boundary carries heterogeneous arrays: pool ID, ISO day, demand and
     capacity, or pool ID, nominal capacity and a sparse daily capacity calendar.
-    Earliest dates win equal peaks. Capacities retain inclusive calendar overrides.
+    Earliest dates win equal peaks. Displayed capacities use the period minimum,
+    retaining inclusive calendar overrides and baseline days without overrides.
     """
     result = {pool['pool_id']: deepcopy(pool) for pool in pools}
     for pool in result.values():
@@ -34,5 +35,5 @@ def individual_pool_peaks(pools: list[PoolResourceSeries], days: list[list],
             values = [float(value) for day, value in calendar.items() if first.isoformat() <= day <= last.isoformat()]
             if len(values) < (last-first).days + 1:
                 values.append(float(base))
-            pool['capacity'][quarter] = round(max(values, default=float(base)), 3)
+            pool['capacity'][quarter] = round(min(values, default=float(base)), 3)
     return list(result.values())

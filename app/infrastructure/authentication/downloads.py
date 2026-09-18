@@ -20,12 +20,14 @@ class DownloadRoutes:
     def __init__(self, access: AccessService, export_template: Callable[[Actor, int], str], *,
                  export_organization: Callable[[Actor, str], str] | None = None,
                  export_pools: Callable[[Actor, bool, bool], str] | None = None,
-                 export_teams: Callable[[Actor, bool, bool], str] | None = None) -> None:
+                 export_teams: Callable[[Actor, bool, bool], str] | None = None,
+                 export_functions: Callable[[Actor, bool, bool], str] | None = None) -> None:
         """Bind authenticated project and optional organization exporters."""
         self.access, self.export_template = access, export_template
         self.export_organization = export_organization
         self.export_pools = export_pools
         self.export_teams = export_teams
+        self.export_functions = export_functions
 
     def routes(self) -> list[Route]:
         """Expose a fixed attachment endpoint without cached or static media URLs."""
@@ -36,7 +38,13 @@ class DownloadRoutes:
             routes.append(Route('/downloads/resource-pools/{catalog:str}.csv', self.pool_catalog))
         if self.export_teams is not None:
             routes.append(Route('/downloads/teams/{catalog:str}.csv', self.team_catalog))
+        if self.export_functions is not None:
+            routes.append(Route('/downloads/functions/{catalog:str}.csv', self.function_catalog))
         return routes
+
+    async def function_catalog(self, request: Request) -> Response:
+        """Deliver function catalogs and templates after current authorization."""
+        return await self._resource_catalog(request, self.export_functions, 'functions', 'functions')
 
     async def pool_catalog(self, request: Request) -> Response:
         """Deliver pool CSV through current session and shared-management checks."""

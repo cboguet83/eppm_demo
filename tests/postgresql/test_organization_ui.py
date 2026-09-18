@@ -172,6 +172,9 @@ render_settings_view(create_settings_workspace(runtime, access=access))
             if label == 'Teams':
                 assert len(app.metric) == 3
                 assert app.checkbox(key='team_show_deleted').label == 'Show deleted teams'
+            elif label == 'Functions':
+                assert len(app.get('bidi_component')) == 1
+                assert app.checkbox(key='function_show_deleted').label == 'Show deleted functions'
             else:
                 assert len(app.get("component_instance")) == 1
 

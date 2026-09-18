@@ -64,7 +64,7 @@ def test_quarter_capacity_uses_concurrent_daily_totals_and_calendar_overrides():
     second = replace(pool(2, 1, '2026-02-01'), effective_capacity_fte=3, has_assigned_resources=True,
                      daily_assigned_capacity={'2026-02-01':5})
     capacity = quarterly_capacity([first, second, first], 2026)
-    assert capacity['2026-Q1'] == 7  # Different-day capacity peaks are not added.
+    assert capacity['2026-Q1'] == 5  # Temporary increases do not raise the period minimum.
     assert capacity['2026-Q2'] == 5
     start, end = quarter_bounds('2026-Q1', 2026)
     assert responsible_pools([first, second], {1}, start, end) == {1,2}

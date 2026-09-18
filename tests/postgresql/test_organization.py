@@ -49,10 +49,10 @@ def test_crud_preserves_native_boolean_values_and_existing_organization_dtos(org
     assert service.get_employee_by_id(employee_id).email == "emp-001@example.test"
     assert service.check_email_exists("EMP-001@EXAMPLE.TEST") and not service.check_email_exists("EMP-001@EXAMPLE.TEST", employee_id)
     assert service.update_function_type(FunctionType("Architecture", type_id))
-    assert service.update_function(OrgFunction("Lead", 3, function_id, type_id, has_reports=True))
+    assert service.update_function(OrgFunction("Lead", 3, function_id, type_id))
     assert service.update_team(Team("Renamed", team_id))
     assert service.update_employee(replace(employee(), employee_id=employee_id, occupation_percentage=60, function_id=function_id))
-    assert service.get_all_functions()[0].has_reports is True
+    assert service.get_all_functions()[0].hierarchy_level == 3
     assert service.get_all_function_types()[0].function_type == "Architecture"
     assert service.get_all_teams()[0].team_name == "Renamed"
     assert service.get_all_employees()[0].occupation_percentage == 60

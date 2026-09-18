@@ -43,6 +43,7 @@ def _open_add_function_dialog(
     service: OrganizationService,
     df_funcs: pd.DataFrame,
     df_types: pd.DataFrame,
+    parent_function_id: int | None = None,
 ) -> None:
     """Modal dialog to create a new job function."""
     new_name = st.text_input(t("settings.field_func_name", default="Function Title *"), placeholder="e.g. Solution Architect")
@@ -66,6 +67,7 @@ def _open_add_function_dialog(
     new_mgr = st.selectbox(
         t("settings.field_primary_mgr", default="Primary Manager Function (Optional)"),
         options=func_opts,
+        index=func_opts.index(parent_function_id) if parent_function_id in func_opts else 0,
         format_func=lambda x: func_map.get(x, "— None") if x is not None else "— None",
     )
     new_dual = st.selectbox(
@@ -80,10 +82,6 @@ def _open_add_function_dialog(
         value=100,
         step=5,
     )
-    new_has_reports = st.checkbox(
-        t("settings.field_has_reports", default="Has Reports / Subordinates"),
-        value=False,
-    )
 
     col_save, col_cancel = st.columns(2)
     if col_save.button(t("settings.btn_save", default="Save Function"), type="primary", width="stretch"):
@@ -97,7 +95,6 @@ def _open_add_function_dialog(
                     manager_function_id=new_mgr,
                     dual_manager_function_id=new_dual,
                     fte_percentage=int(new_fte),
-                    has_reports=new_has_reports,
                 )
             )
             st.toast(t("settings.msg_func_created", name=new_name, default=f"Function '{new_name}' created (ID: {new_fid})!"))
@@ -169,10 +166,6 @@ def _open_edit_function_dialog(
         value=fn_obj.fte_percentage if fn_obj.fte_percentage is not None else 100,
         step=5,
     )
-    edit_has_reports = st.checkbox(
-        t("settings.field_has_reports", default="Has Reports / Subordinates"),
-        value=fn_obj.has_reports,
-    )
 
     col_save, col_cancel = st.columns(2)
     if col_save.button(t("settings.btn_save_changes", default="Save Changes"), type="primary", width="stretch"):
@@ -187,7 +180,6 @@ def _open_edit_function_dialog(
                     manager_function_id=edit_mgr,
                     dual_manager_function_id=edit_dual,
                     fte_percentage=int(edit_fte),
-                    has_reports=edit_has_reports,
                 )
             ))
             st.toast(t("settings.msg_func_updated", default="Function updated successfully!"))

@@ -902,7 +902,7 @@
     "peak_day": "Spitzentag",
     "total_overallocation": "Gesamtüberbelegung",
     "total_allocation": "Gesamtzuweisung",
-    "total_capacity_short": "Gesamtkapazität"
+    "total_capacity_short": "Mindestkapazität im Zeitraum"
   },
   "pool_exceptions": {
     "title": "Kapazitätsausnahmen",

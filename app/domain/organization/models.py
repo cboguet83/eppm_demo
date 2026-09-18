@@ -32,7 +32,6 @@ class OrgFunction:
         manager_function_id: Direct reporting manager function ID.
         dual_manager_function_id: Optional secondary / dotted-line manager function ID.
         fte_percentage: Full-time equivalent workload percentage (default 100).
-        has_reports: Whether this function has reporting subordinates (default False).
         deleted_flag: Whether the function is excluded from live memberships.
     """
 
@@ -43,7 +42,6 @@ class OrgFunction:
     manager_function_id: int | None = None
     dual_manager_function_id: int | None = None
     fte_percentage: int = 100
-    has_reports: bool = False
     deleted_flag: bool = False
 
 

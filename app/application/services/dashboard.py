@@ -24,6 +24,13 @@ class DashboardReport:
     budget: AllocatedBudget
     approved: BudgetVersion | None
     issue_count: int
+    late_project_count: int = 0
+    project_count: int = 0
+
+    @property
+    def late_project_percentage(self) -> float:
+        """Return the share of all filtered projects with overdue unfinished work."""
+        return 100 * self.late_project_count / self.project_count if self.project_count else 0.0
 
 
 class DashboardService:
@@ -61,8 +68,13 @@ class DashboardService:
     def report(self, project_ids: list[int], status: str = 'Approved') -> DashboardReport:
         """Calculate WBS shares from the latest snapshot with the requested status."""
         data = self.reader.data(project_ids, status)
-        return DashboardReport(allocated_budget(data.shares, data.approved, self.today().year),
-                               data.approved.version if data.approved else None, data.issue_count)
+        today = self.today()
+        selected = set(project_ids)
+        late = {identity for identity, end, progress in data.task_deadlines
+                if identity in selected and end < today and progress < 100}
+        return DashboardReport(allocated_budget(data.shares, data.approved, today.year),
+                               data.approved.version if data.approved else None, data.issue_count,
+                               len(late), len(selected))
 
     def shortages(self, project_ids: list[int]) -> dict[str, float]:
         """Return only aggregate quarterly shortfalls for currently readable projects."""

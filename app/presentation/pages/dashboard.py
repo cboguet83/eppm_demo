@@ -358,7 +358,11 @@ def render_dashboard(service: DashboardService) -> None:
         ids = tuple(row['id'] for row in projects)
         report = _report(service, revision, ids)
         proposed = _report(service, revision, ids, 'Proposed')
-        finance, issues = st.columns([8, 1.5], gap=None, vertical_alignment='top')
+        finance, indicators = st.columns([8, 1.5], gap=None, vertical_alignment='top')
+        with indicators, st.container(border=True):
+            st.metric('Late projects', f'{report.late_project_percentage:.1f}%',
+                      help='Projects with an active-plan task ending before today and less than 100% complete, among all projects in the dashboard filters.')
+            st.caption(f'{report.late_project_count} of {report.project_count} projects')
         with finance:
             st.subheader(_label('finance_overview'))
             approved_source, proposed_source = st.columns(2)
@@ -366,7 +370,7 @@ def render_dashboard(service: DashboardService) -> None:
                 _source(report)
             with proposed_source:
                 _source(proposed, 'Proposed')
-        with issues, st.container(border=True, key='dashboard_issue_card'):
+        with indicators, st.container(border=True, key='dashboard_issue_card'):
             icon_color = '#df8b16' if report.issue_count else '#23934c'
             text_color = '#df8b16' if report.issue_count else '#000000'
             st.html(f'<style>.st-key-dashboard_issue_card{{--issue-icon:{icon_color};--issue-text:{text_color}}}</style>')
@@ -415,7 +419,7 @@ def render_dashboard(service: DashboardService) -> None:
                             continue
                         else:
                             raise ValueError('Invalid resource action.')
-        with issues:
+        with indicators:
             _pool_warning(series.get('overallocated_pools', []))
     except (AccessDenied, ProjectStorageError, ValueError):
         st.error(_label('unavailable'))

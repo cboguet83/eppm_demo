@@ -1,10 +1,12 @@
 """Format plain organization records for Streamlit."""
 
 from dataclasses import asdict
+from collections.abc import Sequence
 
 import pandas as pd
 
 from app.application.ports.organization import CalendarExceptionRow
+from app.application.ports.references import FunctionReference
 from app.domain.organization.models import Employee, FunctionType, OrgFunction, Team
 
 def function_types_frame(records: list[FunctionType]) -> pd.DataFrame:
@@ -12,9 +14,14 @@ def function_types_frame(records: list[FunctionType]) -> pd.DataFrame:
     return pd.DataFrame([asdict(record) for record in records], columns=['function_type_id', 'function_type'])
 
 
-def functions_frame(records: list[OrgFunction]) -> pd.DataFrame:
-    """Retain the existing functions columns, including empty catalogs."""
-    return pd.DataFrame([asdict(record) for record in records], columns=['function_id', 'name', 'hierarchy_level', 'function_type_id', 'manager_function_id', 'dual_manager_function_id', 'fte_percentage', 'has_reports'])
+def functions_frame(records: Sequence[OrgFunction | FunctionReference]) -> pd.DataFrame:
+    """Format full catalog records or the active references used by planning."""
+    rows = [asdict(record) for record in records]
+    parents = {row['manager_function_id'] for row in rows if not row.get('deleted_flag', False)}
+    return pd.DataFrame([{**row, 'has_reports': row['function_id'] in parents,
+                          'deleted_flag': row.get('deleted_flag', False)} for row in rows],
+        columns=['function_id', 'name', 'hierarchy_level', 'function_type_id', 'manager_function_id',
+                 'dual_manager_function_id', 'fte_percentage', 'has_reports', 'deleted_flag'])
 
 
 def teams_frame(records: list[Team]) -> pd.DataFrame:

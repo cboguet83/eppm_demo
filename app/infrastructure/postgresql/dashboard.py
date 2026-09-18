@@ -12,7 +12,7 @@ from app.application.exceptions import ProjectStorageError
 from app.application.ports.dashboard import DashboardCatalog, DashboardData, ResourceBreakdown
 from app.application.services.business_access import BusinessAccess
 from app.domain.access.models import AccessDenied, Actor
-from app.domain.dashboard import WbsShare, quarter_bounds
+from app.domain.dashboard import WbsShare, quarter_bounds, quarterly_capacity
 from app.domain.resources.capacity import calculate_capacity
 from app.application.services.dashboard_resource_peaks import individual_pool_peaks
 from app.infrastructure.postgresql.access import PostgresAccessStore
@@ -48,13 +48,22 @@ def _resource_breakdown(connection: psycopg.Connection, ids: list[int], today: d
         'WHERE project_id=ANY(%s::bigint[]) AND fte_assigned>0', (ids,))]
     sources = read_capacity_sources(PostgresResourcePoolStore(connection), selected) if selected else {}
     capacities = []
+    details = {}
     for source in sources.values():
         detail = calculate_capacity(source, today)
+        details[detail.pool_id] = detail
         capacities.append({'pool_id': detail.pool_id, 'base': detail.effective_capacity_fte,
                            'calendar': detail.capacity_calendar})
-    return connection.execute(
+    result = connection.execute(
         'SELECT eppm.dashboard_resource_breakdown_with_capacity(%s,%s::bigint[],%s,%s,%s,%s,%s::text[],%s::bigint[])',
         (Jsonb(capacities), ids, today, quarter, pool_id, metric, statuses, pool_ids)).fetchone()[0]
+    # Presentation capacity uses the same period minimum as the planning grid.
+    # Demand and excess retain the reader's date-specific calculations.
+    relevant = [details[pool['pool_id']] for pool in result['pools']]
+    result['capacity'] = quarterly_capacity(relevant, today.year)
+    for pool in result['pools']:
+        pool['capacity'] = quarterly_capacity([details[pool['pool_id']]], today.year)
+    return result
 
 
 class PostgresDashboardReader:
@@ -111,7 +120,10 @@ class PostgresDashboardReader:
             latest = connection.execute(_LATEST, (status,)).fetchone() if ids else None
             approved = PostgresFinanceStore(connection, self.access, security, writable=False).snapshot(latest[0]) if latest else None
             count = connection.execute('SELECT count(*) ' + _BLOCKERS, (ids,)).fetchone()[0]
-            return DashboardData(shares, approved, count)
+            deadlines = list(connection.execute('''SELECT t.project_id,t.end_date,COALESCE(t.progress_pct,0)
+                FROM eppm.project_task t JOIN eppm.project_plan p ON p.id=t.project_plan_id
+                WHERE p.is_current AND NOT t.is_deleted AND t.project_id=ANY(%s::bigint[])''', (ids,)))
+            return DashboardData(shares, approved, count, deadlines)
         return self._run(operation, project_ids)
 
     def shortages(self, project_ids: list[int], today: date) -> dict[str, float]:

@@ -21,8 +21,10 @@ from app.presentation.components.organization_dialogs import (
 )
 from app.presentation.components.organization_frames import (
     employees_frame, function_types_frame, functions_frame,
-    enrich_employees, enrich_functions,
+    enrich_employees,
 )
+from app.presentation.components.function_csv import function_csv_controls
+from app.presentation.components.function_tree import function_tree
 from app.presentation.i18n import t
 
 
@@ -44,86 +46,32 @@ def _table(name: str, **kwargs: object) -> dict[str, object] | None:
 
 @organization_errors
 def render_functions(service: OrganizationService) -> None:
-    """Render the functions catalog only when its tab is open."""
-    st.link_button(t('settings.export_csv'), '/downloads/organization/functions.csv')
-    df_types = function_types_frame(service.get_all_function_types())
-    df_funcs = functions_frame(service.get_all_functions())
-    total_funcs = len(df_funcs)
-    total_fte = (df_funcs["fte_percentage"].sum() / 100.0) if not df_funcs.empty and "fte_percentage" in df_funcs.columns else 0.0
-
-    st.subheader(f"{t('settings.functions_title', default='Job Functions Management')} ({total_funcs} {t('settings.stat_functions', default='Functions')} • {total_fte:.2f} {t('settings.stat_fte', default='FTE')})")
-
-    # Interactive Overview Table with Column Filtering & Right-Click Context Menu
-    enriched_funcs = enrich_functions(df_funcs, df_types)
-    functions_payload = []
-    if not enriched_funcs.empty:
-        for row in enriched_funcs.to_dict(orient="records"):
-            functions_payload.append({
-                "function_id": int(row["function_id"]),
-                "name": str(row["name"]),
-                "hierarchy_level": int(row["hierarchy_level"]) if pd.notna(row.get("hierarchy_level")) else 1,
-                "has_reports": bool(row.get("has_reports", False)),
-                "function_type_id": int(row["function_type_id"]) if pd.notna(row.get("function_type_id")) else None,
-                "function_type_name": str(row["function_type_name"]) if pd.notna(row.get("function_type_name")) else "—",
-                "manager_function_id": int(row["manager_function_id"]) if pd.notna(row.get("manager_function_id")) else None,
-                "manager_function_name": str(row["manager_function_name"]) if pd.notna(row.get("manager_function_name")) else "—",
-                "dual_manager_function_id": int(row["dual_manager_function_id"]) if pd.notna(row.get("dual_manager_function_id")) else None,
-                "dual_manager_function_name": str(row["dual_manager_function_name"]) if pd.notna(row.get("dual_manager_function_name")) else "—",
-                "fte_percentage": int(row["fte_percentage"]) if pd.notna(row.get("fte_percentage")) else 100,
-            })
-
-    table_event = _table("function_table",
-        functions=functions_payload,
-        translations={
-            "col_id": "ID",
-            "col_func_name": t("settings.col_func_name", default="Function Title"),
-            "col_level": t("settings.col_level", default="Hierarchy Level"),
-            "col_has_reports": t("settings.col_has_reports", default="Has Reports"),
-            "col_type": t("settings.col_type", default="Function Type"),
-            "col_primary_mgr": t("settings.col_primary_mgr", default="Primary Manager"),
-            "col_dual_mgr": t("settings.col_dual_mgr", default="Dual Manager"),
-            "col_fte_pct": t("settings.col_fte_pct", default="FTE %"),
-            "action_add": t("settings.action_add", default="Add New"),
-            "action_edit": t("settings.action_edit", default="Edit"),
-            "action_delete": t("settings.action_delete", default="Delete"),
-            "no_functions": t("settings.no_functions", default="No job functions registered."),
-            "hint_right_click": t("settings.hint_right_click", default="💡 Right-click any row to Add, Edit, or Delete"),
-            "badge_yes": t("settings.badge_yes", default="Yes"),
-            "badge_no": t("settings.badge_no", default="No"),
-            "stat_functions": t("settings.stat_functions", default="Functions"),
-            "stat_fte": t("settings.stat_fte", default="FTE"),
-            "filter_all": t("settings.filter_all", default="All"),
-            "filter_clear": t("settings.filter_clear", default="Clear Filters"),
-            "col_filter_ph": t("settings.col_filter_ph", default="Filter..."),
-            "search_values": t("settings.search_values", default="Search values..."),
-            "select_all": t("settings.select_all", default="Select All"),
-            "clear": t("settings.clear", default="Clear"),
-            "apply": t("settings.apply", default="Apply"),
-            "selected_count": t("settings.selected_count", default="{count} selected"),
-            "blanks": t("settings.blanks", default="(Blanks / None)"),
-        },
-        key="func_interactive_table",
-        default=None,
-    )
-
-    # Handle context menu trigger events
-    if table_event and isinstance(table_event, dict):
-        nonce = table_event.get("nonce")
-        last_nonce = st.session_state.get("_last_func_table_nonce")
-        if nonce and nonce != last_nonce:
-            st.session_state["_last_func_table_nonce"] = nonce
-            action = table_event.get("action")
-            if action == "add_function":
-                _open_add_function_dialog(service, df_funcs, df_types)
-            elif action == "edit_function":
-                fn_id = table_event.get("function_id")
-                if fn_id is not None:
-                    _open_edit_function_dialog(service, int(fn_id), df_funcs, df_types)
-            elif action == "delete_function":
-                fn_id = table_event.get("function_id")
-                fn_name = table_event.get("function_name", f"ID {fn_id}")
-                if fn_id is not None:
-                    _open_delete_function_dialog(service, int(fn_id), str(fn_name))
+    """Manage reporting hierarchies, deleted functions and atomic CSV imports."""
+    show_deleted = st.checkbox('Show deleted functions', value=False, key='function_show_deleted')
+    function_csv_controls(service, show_deleted=show_deleted)
+    records = service.get_all_functions(include_deleted=show_deleted)
+    types = service.get_all_function_types()
+    active = [item for item in records if not item.deleted_flag]
+    total, capacity = st.columns(2)
+    total.metric('Total Functions', len(active))
+    capacity.metric('FTE', f'{sum(item.fte_percentage for item in active) / 100:.2f}')
+    selected = st.session_state.get('selected_function_id', 0)
+    event = function_tree(records, selected, {item.function_type_id: item.function_type for item in types})
+    if not event:
+        return
+    identity, action = event['id'], event['action']
+    frame, type_frame = functions_frame(active), function_types_frame(types)
+    if action in {'create', 'create_root'}:
+        _open_add_function_dialog(service, frame, type_frame,
+                                  parent_function_id=identity if action == 'create' else None)
+    elif action == 'edit':
+        _open_edit_function_dialog(service, identity, frame, type_frame)
+    elif action == 'delete':
+        name = next(item.name for item in records if item.function_id == identity)
+        _open_delete_function_dialog(service, identity, name)
+    elif action == 'undelete' and service.undelete_function(identity):
+        st.toast('Function restored.')
+        st.rerun()
 
 
 @organization_errors

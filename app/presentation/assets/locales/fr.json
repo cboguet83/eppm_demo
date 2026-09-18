@@ -925,7 +925,7 @@
     "peak_day": "Jour du pic",
     "total_overallocation": "Surallocation totale",
     "total_allocation": "Allocation totale",
-    "total_capacity_short": "Capacité totale"
+    "total_capacity_short": "Capacité minimale sur la période"
   },
   "pool_exceptions": {
     "title": "Exceptions de capacité",

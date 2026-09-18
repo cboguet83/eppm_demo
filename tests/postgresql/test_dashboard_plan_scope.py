@@ -8,6 +8,7 @@ import pytest
 
 from app.domain.access.models import AccessDenied
 from app.domain.resources.capacity import calculate_capacity
+from app.infrastructure.postgresql.staffing_projection import refresh_staffing
 from tests.postgresql.test_dashboard import service
 from tests.postgresql.test_pool_capacity import staffing, reference_inputs, DAY
 from tests.postgresql.test_project_plans import service as plan_service
@@ -69,6 +70,7 @@ def test_status_filter_excludes_competing_demand_and_drill_through_consumers(sta
         connection.execute("UPDATE eppm.project SET status=CASE id WHEN 1 THEN 'In Progress' WHEN 2 THEN 'Completed' ELSE 'Draft' END")
         connection.execute('DELETE FROM eppm.resource_pool_mapping WHERE pool_id=1')
         connection.execute('UPDATE eppm.resource_pool SET capacity_fte=1 WHERE id=1')
+        refresh_staffing(connection)
     dashboard = service(staffing, 4)
     active = dashboard.resource_breakdown([1], statuses=['In Progress'], pool_ids=[1])
     completed = dashboard.resource_breakdown([1, 2], statuses=['In Progress', 'Completed'], pool_ids=[1])
@@ -100,6 +102,7 @@ def test_individual_pool_peaks_keep_distinct_dates_without_summing_them(staffing
         connection.execute("""INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,fte_assigned,start_date,end_date,project_plan_id)
             SELECT pool_id,1,fte,day,day,(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)
             FROM (VALUES(1,10,'2026-01-01'::date),(2,8,'2026-02-01'::date)) rows(pool_id,fte,day)""")
+        refresh_staffing(connection)
     result = service(staffing, 4).resource_breakdown([1])
     assert result['allocation']['2026-Q1'] == 10
     assert result['overallocation']['2026-Q1'] == 8
@@ -109,3 +112,25 @@ def test_individual_pool_peaks_keep_distinct_dates_without_summing_them(staffing
     assert second['overallocation']['2026-Q1'] == 6
     assert second['available']['2026-Q1'] == -6
     assert second['capacity']['2026-Q1'] == 2
+
+
+def test_capacity_displays_use_period_minimum_and_keep_daily_overallocation(staffing):
+    with psycopg.connect(staffing.setup.operator_url) as connection:
+        connection.execute('DELETE FROM eppm.resource_pool_assignment')
+        connection.execute('DELETE FROM eppm.resource_pool_mapping')
+        connection.execute('DELETE FROM eppm.resource_pool_capacity_exception')
+        connection.execute('UPDATE eppm.resource_pool SET capacity_fte=4 WHERE id=1')
+        connection.execute("""INSERT INTO eppm.resource_pool_capacity_exception
+            (pool_id,start_date,end_date,reduction_fte) VALUES(1,'2027-06-01','2027-06-30',1)""")
+        connection.execute("""INSERT INTO eppm.resource_pool_assignment
+            (pool_id,project_id,fte_assigned,start_date,end_date,project_plan_id)
+            SELECT 1,1,fte,day,day,(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)
+            FROM (VALUES(5.2,'2027-05-17'::date),(5,'2027-06-01'::date)) rows(fte,day)""")
+        refresh_staffing(connection)
+    dashboard = service(staffing, 4)
+    result = dashboard.resource_breakdown([1], pool_id=1)
+    for values in (result, result['pools'][0], result['individual_pools'][0]):
+        assert values['capacity']['2027-Q2'] == 3
+        assert values['allocation']['2027-Q2'] == 5.2
+        assert values['overallocation']['2027-Q2'] == 2
+    assert dashboard.resources([1])['capacity']['2027-Q2'] == 3

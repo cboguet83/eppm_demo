@@ -53,8 +53,9 @@ export default function({data, parentElement, setTriggerValue, setStateValue}) {
     const filters = data.filters || {};
     const activeFilters = Object.values(filters).some(value => Array.isArray(value));
     const isTeam = data.kind === 'team';
-    const noun = isTeam ? 'team' : 'pool';
-    const treeLabel = isTeam ? 'Teams' : 'Resource pools';
+    const isFunction = data.kind === 'function';
+    const noun = isFunction ? 'function' : (isTeam ? 'team' : 'pool');
+    const treeLabel = isFunction ? 'Functions' : (isTeam ? 'Teams' : 'Resource pools');
     const columns = data.columns || [['name','Pool'],['pool_type','Pool type'],['hierarchy_type','Hierarchy type'],['tags','Tags'],['capacity','Pool Capacity (FTE)'],['assigned_capacity','Current Capacity (FTE)'],['mappings','Has Mappings'],['peak_demand','Future Peak Demand (FTE)'],['future_exceptions','Has Future Capacity Exceptions']];
     const fields = columns.map(column => column[0]);
     const matches = new Set(data.rows.filter(row => fields.every(field =>
@@ -87,8 +88,8 @@ export default function({data, parentElement, setTriggerValue, setStateValue}) {
         let actions = [['create_root',`Create ${noun}`]];
         if (row.id) actions = row.deleted ? [['undelete',`Undelete ${noun}`]]
             : [['edit',`Edit ${noun}`], ['create',`Create ${noun}`], ['delete',`Delete ${noun}`]];
-        if (row.id && !row.deleted && !isTeam) actions.splice(2,0,['gantt','Show consuming projects in Gantt']);
-        if (row.id && !row.container && !row.deleted && !isTeam) actions.splice(2,0,['map','Map employees or teams']);
+        if (row.id && !row.deleted && !isTeam && !isFunction) actions.splice(2,0,['gantt','Show consuming projects in Gantt']);
+        if (row.id && !row.container && !row.deleted && !isTeam && !isFunction) actions.splice(2,0,['map','Map employees or teams']);
         for (const [action, label] of actions) {
             const button = document.createElement('button'); button.type = 'button';
             button.className = 'context-menu-item'; button.textContent = label;
@@ -246,7 +247,7 @@ export default function({data, parentElement, setTriggerValue, setStateValue}) {
             }
             cell.textContent = value; item.appendChild(cell);
         }
-        item.children[fields.indexOf('assigned_capacity')].title = isTeam ? 'Current capacity from mapped employees and their exceptions.' : "Today's capacity after employee availability exceptions, or pool capacity exceptions when unmapped.";
+        if (fields.includes('assigned_capacity')) item.children[fields.indexOf('assigned_capacity')].title = isTeam ? 'Current capacity from mapped employees and their exceptions.' : "Today's capacity after employee availability exceptions, or pool capacity exceptions when unmapped.";
         item.onclick = () => emit(row,'select');
         item.oncontextmenu = event => showMenu(event,row,item);
         item.onkeydown = event => {

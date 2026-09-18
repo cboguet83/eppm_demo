@@ -14,6 +14,8 @@ from app.domain.hierarchy import HierarchyType, normalize_hierarchy_type, valida
 from app.domain.organization.models import Employee, EmployeeCalendarException, FunctionType, OrgFunction, Team
 from app.application.services.team_capacity import TeamOverview, team_capacities
 from app.application.services.team_csv import TeamImportResult, import_teams, parse_teams
+from app.application.services.function_csv import FunctionImportResult, import_functions, parse_functions
+from app.domain.organization.function_hierarchy import validate_function_hierarchy
 from app.domain.organization.rules import (
     normalize_employee, normalize_exception, normalize_function,
     normalize_function_type, normalize_team, validate_team_parent,
@@ -82,9 +84,10 @@ class OrganizationService:
             return store.delete_function_type(type_id)
         return self._gateway.run(operation, write=True, permission=Permission.SHARED)
 
-    def get_all_functions(self) -> list[OrgFunction]:
+    def get_all_functions(self, *, include_deleted: bool = False) -> list[OrgFunction]:
         """Get all functions within one organization transaction."""
-        return self._gateway.run(lambda store: store.get_all_functions(), permission=Permission.SHARED)
+        return self._gateway.run(lambda store: store.get_all_functions(include_deleted=True)
+            if include_deleted else store.get_all_functions(), permission=Permission.SHARED)
 
     def get_function_by_id(self, func_id: int) -> OrgFunction | None:
         """Get function by id within one organization transaction."""
@@ -93,18 +96,49 @@ class OrganizationService:
     def create_function(self, func: OrgFunction) -> int:
         """Create function within one organization transaction."""
         func = normalize_function(func)
-        return self._gateway.run(lambda store: store.create_function(func), write=True, permission=Permission.SHARED)
+        def operation(store: OrganizationStore) -> int:
+            identity = store.create_function(func)
+            validate_function_hierarchy(store.get_all_functions(include_deleted=True))
+            return identity
+        return self._gateway.run(operation, write=True, permission=Permission.SHARED)
 
     def update_function(self, func: OrgFunction) -> bool:
         """Update function within one organization transaction."""
         if func.function_id is None:
             return False
         func = normalize_function(func)
-        return self._gateway.run(lambda store: store.update_function(func), write=True, permission=Permission.SHARED)
+        def operation(store: OrganizationStore) -> bool:
+            changed = store.update_function(func)
+            validate_function_hierarchy(store.get_all_functions(include_deleted=True))
+            return changed
+        return self._gateway.run(operation, write=True, permission=Permission.SHARED)
 
     def delete_function(self, func_id: int) -> bool:
         """Delete function within one organization transaction."""
-        return self._gateway.run(lambda store: store.delete_function(func_id), write=True, permission=Permission.SHARED)
+        def operation(store: OrganizationStore) -> bool:
+            changed = store.delete_function(func_id)
+            validate_function_hierarchy(store.get_all_functions(include_deleted=True))
+            return changed
+        return self._gateway.run(operation, write=True, permission=Permission.SHARED)
+
+    def undelete_function(self, func_id: int) -> bool:
+        """Restore a retained function only with a valid active reporting hierarchy."""
+        def operation(store: OrganizationStore) -> bool:
+            records = store.get_all_functions(include_deleted=True)
+            current = next((item for item in records if item.function_id == func_id), None)
+            if current is None or not current.deleted_flag:
+                return False
+            restored = replace(current, deleted_flag=False)
+            validate_function_hierarchy([restored if item.function_id == func_id else item for item in records])
+            store.write_imported_function(restored)
+            return True
+        return self._gateway.run(operation, write=True, permission=Permission.SHARED)
+
+    def import_functions_csv(self, content: bytes, *, delete_missing: bool = False) -> FunctionImportResult:
+        """Import function attributes while retaining employee and team mappings."""
+        functions = parse_functions(content)
+        return self._gateway.run(lambda store: import_functions(store, functions, delete_missing=delete_missing),
+            write=True, permission=Permission.SHARED)
 
     def get_all_teams(self, *, include_deleted: bool = False) -> list[Team]:
         """Get all teams within one organization transaction."""
@@ -167,8 +201,8 @@ class OrganizationService:
             output = io.StringIO(newline='')
             writer = csv.writer(output, lineterminator='\r\n')
             writer.writerow(columns)
-            records = [] if template else (store.get_all_teams(include_deleted=True)
-                if catalog == 'teams' and include_deleted else read())
+            records = [] if template else (read(include_deleted=True)
+                if catalog in {'teams', 'functions'} and include_deleted else read())
             for record in records:
                 values = [json.dumps([asdict(item) for item in record.assignments()])
                           if column == 'function_assignments' else getattr(record, column) for column in columns]

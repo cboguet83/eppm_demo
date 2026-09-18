@@ -51,13 +51,13 @@ class TestOrganization(unittest.TestCase):
         self.assertIsNone(self.repo.get_function_type_by_id(t1_id))
 
     def test_function_crud_with_types_and_managers(self) -> None:
-        """Verify Functions CRUD with hierarchy_level integer, has_reports boolean, and manager relations."""
+        """Verify Functions CRUD with hierarchy levels, derived reports, and manager relations."""
         ft_exec = self.repo.create_function_type(FunctionType(function_type="Executive"))
         ft_tech = self.repo.create_function_type(FunctionType(function_type="Technical"))
 
         # Create CEO function
         ceo_id = self.repo.create_function(
-            OrgFunction(name="Chief Executive Officer", hierarchy_level=1, function_type_id=ft_exec, has_reports=True)
+            OrgFunction(name="Chief Executive Officer", hierarchy_level=1, function_type_id=ft_exec)
         )
 
         # Create CTO with primary manager as CEO
@@ -67,7 +67,7 @@ class TestOrganization(unittest.TestCase):
                 hierarchy_level=2,
                 function_type_id=ft_tech,
                 manager_function_id=ceo_id,
-                has_reports=True,
+
             )
         )
 
@@ -79,7 +79,7 @@ class TestOrganization(unittest.TestCase):
                 function_type_id=ft_tech,
                 manager_function_id=cto_id,
                 dual_manager_function_id=ceo_id,
-                has_reports=False,
+
             )
         )
 
@@ -87,7 +87,7 @@ class TestOrganization(unittest.TestCase):
         self.assertIsNotNone(arch)
         self.assertEqual(arch.name, "Principal Architect")
         self.assertEqual(arch.hierarchy_level, 3)
-        self.assertFalse(arch.has_reports)
+        self.assertFalse(organization_frames.functions_frame([arch]).iloc[0]["has_reports"])
         self.assertEqual(arch.function_type_id, ft_tech)
         self.assertEqual(arch.manager_function_id, cto_id)
         self.assertEqual(arch.dual_manager_function_id, ceo_id)
@@ -101,14 +101,14 @@ class TestOrganization(unittest.TestCase):
                 function_type_id=ft_exec,
                 manager_function_id=cto_id,
                 dual_manager_function_id=None,
-                has_reports=True,
+
             )
         )
         self.assertTrue(updated)
         arch_mod = self.repo.get_function_by_id(arch_id)
         self.assertEqual(arch_mod.name, "Chief Architect")
         self.assertEqual(arch_mod.hierarchy_level, 2)
-        self.assertTrue(arch_mod.has_reports)
+        self.assertFalse(organization_frames.functions_frame([arch_mod]).iloc[0]["has_reports"])
         self.assertEqual(arch_mod.function_type_id, ft_exec)
         self.assertIsNone(arch_mod.dual_manager_function_id)
 
@@ -227,7 +227,7 @@ class TestOrganization(unittest.TestCase):
     def test_team_crud_and_service_enrichment(self) -> None:
         """Verify Team CRUD operations and enrich_teams."""
         mgr_fn_id = self.repo.create_function(
-            OrgFunction(name="Department Manager", hierarchy_level=3, has_reports=True)
+            OrgFunction(name="Department Manager", hierarchy_level=3)
         )
         # 1. Create team
         t1_id = self.repo.create_team(
@@ -313,7 +313,7 @@ class TestOrganization(unittest.TestCase):
         # Enrichment test
         ft_id = self.repo.create_function_type(FunctionType(function_type="Full Time"))
         fn_id = self.repo.create_function(
-            OrgFunction(name="Director of Engineering", hierarchy_level=1, function_type_id=ft_id, fte_percentage=80, has_reports=True)
+            OrgFunction(name="Director of Engineering", hierarchy_level=1, function_type_id=ft_id, fte_percentage=80)
         )
         self.repo.create_employee(
             Employee(
@@ -334,7 +334,7 @@ class TestOrganization(unittest.TestCase):
         self.assertEqual(enriched_funcs.iloc[0]["function_type_name"], "Full Time")
         self.assertEqual(enriched_funcs.iloc[0]["fte_percentage"], 80)
         self.assertEqual(enriched_funcs.iloc[0]["hierarchy_level"], 1)
-        self.assertTrue(bool(enriched_funcs.iloc[0]["has_reports"]))
+        self.assertFalse(bool(enriched_funcs.iloc[0]["has_reports"]))
 
         # Check employee enrichment inherits function_type_name
         enriched_emps = enrich_employees(df_emps, df_funcs, df_types)
@@ -349,7 +349,7 @@ class TestOrganization(unittest.TestCase):
         """Functions retain employee links; referenced types cannot be deleted."""
         ft_id = self.repo.create_function_type(FunctionType(function_type="Core Type"))
         fn_id = self.repo.create_function(
-            OrgFunction(name="Director", hierarchy_level=1, function_type_id=ft_id, has_reports=True)
+            OrgFunction(name="Director", hierarchy_level=1, function_type_id=ft_id)
         )
         self.repo.create_employee(
             Employee(

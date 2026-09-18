@@ -147,7 +147,7 @@ def responsible_pools(pools: list[PoolCapacityDetail], project_ids: set[int],
 
 
 def quarterly_capacity(pools: list[PoolCapacityDetail], year: int) -> dict[str, float]:
-    """Peak daily total effective capacity of the selected, distinct relevant pools."""
+    """Minimum daily total effective capacity of distinct relevant pools per quarter."""
     unique = {pool.pool_id: pool for pool in pools}.values()
     base = sum(Decimal(str(pool.effective_capacity_fte)) for pool in unique)
     deltas: dict[str, Decimal] = defaultdict(Decimal)
@@ -163,5 +163,5 @@ def quarterly_capacity(pools: list[PoolCapacityDetail], year: int) -> dict[str, 
             # Do not invent a baseline day when every day has a calendar override.
             if len(changes) < (end - start).days + 1:
                 changes.append(Decimal(0))
-            result[quarter] = float(base + max(changes, default=Decimal(0)))
+            result[quarter] = float(base + min(changes, default=Decimal(0)))
     return result

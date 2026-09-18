@@ -107,33 +107,43 @@ class PostgresOrganizationStore:
         """Flag the function type while retaining its identity."""
         return self.connection.execute('UPDATE eppm.function_type SET deleted_flag=true WHERE function_type_id=%s AND NOT deleted_flag', (type_id,)).rowcount > 0
 
-    def get_all_functions(self) -> list[OrgFunction]:
+    def get_all_functions(self, *, include_deleted: bool = False) -> list[OrgFunction]:
         """Read functions by hierarchy level and binary name order."""
+        source = 'eppm.function' if include_deleted else 'eppm.active_function'
         return self._rows(OrgFunction, 'SELECT function_id,name,hierarchy_level,function_type_id,manager_function_id,'
-                          'dual_manager_function_id,fte_percentage,has_reports FROM eppm.active_function '
+                          f'dual_manager_function_id,fte_percentage,deleted_flag FROM {source} '
                           'ORDER BY hierarchy_level,name COLLATE "C"')
 
     def get_function_by_id(self, func_id: int) -> OrgFunction | None:
-        """Read one function with the established defaults for nullable flags."""
+        """Read one active function with the established FTE default."""
         return self._one(OrgFunction, 'SELECT function_id,name,hierarchy_level,function_type_id,manager_function_id,'
-                         'dual_manager_function_id,coalesce(fte_percentage,100) AS fte_percentage,'
-                         'coalesce(has_reports,false) AS has_reports FROM eppm.active_function WHERE function_id=%s AND NOT deleted_flag', (func_id,))
+                         'dual_manager_function_id,coalesce(fte_percentage,100) AS fte_percentage,deleted_flag '
+                         'FROM eppm.active_function WHERE function_id=%s AND NOT deleted_flag', (func_id,))
 
     def create_function(self, func: OrgFunction) -> int:
-        """Persist native booleans and generated function identity."""
+        """Persist reporting relationships and a generated function identity."""
         self._function_references(func)
         return self.connection.execute('INSERT INTO eppm.function(name,hierarchy_level,function_type_id,manager_function_id,'
-                                       'dual_manager_function_id,fte_percentage,has_reports) VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING function_id',
+                                       'dual_manager_function_id,fte_percentage) VALUES (%s,%s,%s,%s,%s,%s) RETURNING function_id',
                                        (func.name, func.hierarchy_level, func.function_type_id, func.manager_function_id,
-                                        func.dual_manager_function_id, func.fte_percentage, func.has_reports)).fetchone()[0]
+                                        func.dual_manager_function_id, func.fte_percentage)).fetchone()[0]
 
     def update_function(self, func: OrgFunction) -> bool:
-        """Update reporting relationships and native boolean flags together."""
+        """Update function attributes and reporting relationships together."""
         self._function_references(func)
         return self.connection.execute('UPDATE eppm.function SET name=%s,hierarchy_level=%s,function_type_id=%s,manager_function_id=%s,'
-                                       'dual_manager_function_id=%s,fte_percentage=%s,has_reports=%s WHERE function_id=%s AND NOT deleted_flag',
+                                       'dual_manager_function_id=%s,fte_percentage=%s WHERE function_id=%s AND NOT deleted_flag',
                                        (func.name, func.hierarchy_level, func.function_type_id, func.manager_function_id,
-                                        func.dual_manager_function_id, func.fte_percentage, func.has_reports, func.function_id)).rowcount > 0
+                                        func.dual_manager_function_id, func.fte_percentage, func.function_id)).rowcount > 0
+
+    def write_imported_function(self, func: OrgFunction) -> None:
+        """Persist validated final catalog fields without changing retained memberships."""
+        if not func.deleted_flag:
+            require_live_reference(self.connection, 'function_type', func.function_type_id)
+        self.connection.execute('UPDATE eppm.function SET name=%s,hierarchy_level=%s,function_type_id=%s,'
+            'manager_function_id=%s,dual_manager_function_id=%s,fte_percentage=%s,deleted_flag=%s WHERE function_id=%s',
+            (func.name, func.hierarchy_level, func.function_type_id, func.manager_function_id,
+             func.dual_manager_function_id, func.fte_percentage, func.deleted_flag, func.function_id))
 
     def delete_function(self, func_id: int) -> bool:
         """Flag the function while retaining all historical relationships."""

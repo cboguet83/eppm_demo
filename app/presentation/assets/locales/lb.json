@@ -902,7 +902,7 @@
     "peak_day": "Dag vum Maximum",
     "total_overallocation": "Total Iwwerbelaaschtung",
     "total_allocation": "Total Zoudeelung",
-    "total_capacity_short": "Total Kapazitéit"
+    "total_capacity_short": "Minimal Kapazitéit am Zäitraum"
   },
   "pool_exceptions": {
     "title": "Kapazitéitsausnamen",

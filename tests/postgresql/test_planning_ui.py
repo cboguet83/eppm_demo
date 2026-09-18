@@ -48,6 +48,16 @@ def database(authorized, runtime: RuntimeResources, access: BusinessAccess) -> R
     return runtime
 
 
+def test_planning_loads_with_active_function_reference_catalog(database: RuntimeResources, access: BusinessAccess, authorized) -> None:
+    """Planning's minimal function references must render without private catalog fields."""
+    with psycopg.connect(authorized.setup.operator_url) as connection:
+        connection.execute("INSERT INTO eppm.function(name,hierarchy_level) VALUES('Planning manager',3)")
+    app = AppTest.from_function(planning_app, args=(database, access), default_timeout=30)
+    with patch('app.presentation.pages.planning._interactive_gantt', return_value=None):
+        app.run()
+    assert not app.exception and not app.error
+
+
 def test_dashboard_drill_through_replaces_stale_planning_filters(database: RuntimeResources, access: BusinessAccess, authorized) -> None:
     """A resource-chart jump must show all its consumers despite old filters."""
     with psycopg.connect(authorized.setup.operator_url) as connection:

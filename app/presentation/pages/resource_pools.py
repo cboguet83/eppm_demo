@@ -143,6 +143,8 @@ def render_resource_pools(
                 _open_pool_consuming_projects(active_hierarchy, selected_pool_id, all_pool_details, statuses, planning_page)
             elif event['action'] == 'map':
                 active_hierarchy.require_leaf(selected_pool_id)
+                st.session_state[f'direct_employee_mapping_mode_{selected_pool_id}'] = False
+                st.session_state.pop(f'employee_mapping_selection_draft_{selected_pool_id}', None)
                 _open_add_pool_mapping_dialog(service, selected_pool_id,
                     teams_frame(organization.get_all_teams()), employees_frame(organization.get_all_employees()))
             elif event['action'] == 'create':

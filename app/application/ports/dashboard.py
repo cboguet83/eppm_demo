@@ -1,6 +1,6 @@
 """Authorized dashboard read projections, independent of database models."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from typing import NotRequired, Protocol, TypedDict
 
@@ -24,6 +24,7 @@ class DashboardData:
     shares: list[WbsShare]
     approved: BudgetSnapshot | None
     issue_count: int
+    task_deadlines: list[tuple[int, date, int]] = field(default_factory=list)
 
 
 class PoolResourceSeries(TypedDict):
