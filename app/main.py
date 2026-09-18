@@ -24,6 +24,8 @@ from app.application.services.finance import FinanceService
 from app.application.services.dashboard import DashboardService
 
 if TYPE_CHECKING:
+    from app.application.services.project_budget import ProjectBudgetService
+    from app.application.services.financial_transactions import FinancialTransactionService
     from app.runtime import RuntimeResources
     from app.infrastructure.postgresql.capacity_cache import PostgresCapacityCache
     from app.presentation.components.project_workspace import ProjectWorkspace
@@ -138,7 +140,7 @@ def create_project_workspace(resources: RuntimeResources, *, access: BusinessAcc
         open_project_event_dialog, render_project_contacts, render_project_log, render_project_links,
     )
 
-    from app.presentation.pages.dashboard import render_project_budget
+    from app.presentation.components.project_budget import render_project_budget
 
     collaboration = create_collaboration_service(resources, access=access)
 
@@ -156,7 +158,7 @@ def create_project_workspace(resources: RuntimeResources, *, access: BusinessAcc
         partial(render_project_log, service=collaboration),
         create_schema_service(resources, access=access),
         partial(render_project_links, service=collaboration),
-        partial(render_project_budget, service=create_dashboard_service(resources, access=access)),
+        partial(render_project_budget, service=create_project_budget_service(resources, access=access)),
         partial(open_project_event_dialog, service=collaboration),
         render_plans,
     )
@@ -350,6 +352,25 @@ def create_finance_service(resources: RuntimeResources, *, access: BusinessAcces
     """Compose the independent shared budget plan with explicit actor authorization."""
     from app.infrastructure.postgresql.finance import PostgresFinanceGateway
     return FinanceService(PostgresFinanceGateway(resources.database, resources.key, access=access))
+
+
+def create_project_budget_service(resources: RuntimeResources, *, access: BusinessAccess) -> ProjectBudgetService:
+    """Compose the unified project/WBS budget and transaction editor."""
+    from app.application.services.project_budget import ProjectBudgetService
+    from app.infrastructure.postgresql.project_budget import PostgresProjectBudgetGateway
+
+    return ProjectBudgetService(PostgresProjectBudgetGateway(resources.database, resources.key, access=access))
+
+
+def create_financial_transaction_service(
+    resources: RuntimeResources, *, access: BusinessAccess,
+) -> FinancialTransactionService:
+    """Compose project-scoped financial CRUD without changing any page or budget."""
+    from app.application.services.financial_transactions import FinancialTransactionService
+    from app.infrastructure.postgresql.financial_transactions import PostgresFinancialTransactionGateway
+
+    return FinancialTransactionService(
+        PostgresFinancialTransactionGateway(resources.database, resources.key, access=access))
 
 
 def create_planning_workspace(resources: RuntimeResources, *, access: BusinessAccess) -> PlanningWorkspace:

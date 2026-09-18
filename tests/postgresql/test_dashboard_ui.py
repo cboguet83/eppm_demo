@@ -165,12 +165,12 @@ def test_project_selection_rechecks_scope_and_rejects_stale_events(business, eve
 def budget_screen(path, actor, project_id):
     from app.application.services.access import AuthorizationPolicy, SessionLimits
     from app.application.services.business_access import BusinessAccess
-    from app.main import create_dashboard_service
-    from app.presentation.pages.dashboard import render_project_budget
+    from app.main import create_project_budget_service
+    from app.presentation.components.project_budget import render_project_budget
     from app.presentation.i18n import set_current_locale
     from datetime import date
     set_current_locale('en')
-    service = create_dashboard_service(path, access=BusinessAccess(actor, AuthorizationPolicy(lambda: 1000, SessionLimits())))
+    service = create_project_budget_service(path, access=BusinessAccess(actor, AuthorizationPolicy(lambda: 1000, SessionLimits())))
     service.today = lambda: date(2026, 6, 1)
     render_project_budget(project_id, service)
 
@@ -187,18 +187,17 @@ def test_project_budget_and_dashboard_use_identical_rounded_shares_and_missing_v
     finance.save([{'code': 'A', 'amounts': {'2026': '150.03', '2027': '20'}}],
                  base_id=None, name='Proposed plan', status='Proposed', year=2026)
     app = AppTest.from_function(budget_screen, args=(path, manager.actor, 1)).run()
-    assert not app.exception and app.warning
-    table = app.dataframe[0].value
-    assert len(table) == 3 and len(table.columns) == 21
-    assert table['2026'].dropna().tolist() == ['50.01', '50.01']
-    assert table['2027'].dropna().tolist() == ['0.00', '0.00']
-    assert table.loc[1, ['2026', '2027']].isna().all()
-    assert table['2028'].isna().all()
+    assert not app.exception and not app.error
+    data = json.loads(app.get('bidi_component')[0].proto.json)
+    assert len(data['rows']) == 10 and data['years'] == list(range(2025, 2035))
+    assert data['rows'][0]['amounts'] == {'2026': '50.01', '2027': '0.00'}
+    assert data['rows'][1]['amounts'] == {'2026': '75.02', '2027': '10.00'}
+    assert data['rows'][5]['amounts'] == {}
     dashboard = AppTest.from_function(screen, args=(path, manager.actor)).run()
     assert not dashboard.exception and dashboard.warning
     chart = json.loads(next(item.proto.json for item in dashboard.get('bidi_component')
                             if item.proto.id.endswith('-dashboard_finance_chart')))
-    assert [series['name'] for series in chart['budgetSeries']] == ['Approved', 'Proposed']
+    assert [series['name'] for series in chart['budgetSeries']] == ['Approved — Approved plan', 'Proposed — Proposed plan']
     totals = [{point['date']: point['value'] for point in series['points']}
               for series in chart['budgetSeries']]
     assert totals[0]['2026-01-01'] == 50.01
@@ -222,7 +221,7 @@ def test_project_budget_empty_states_and_authorization(business):
     assert not denied.exception and denied.error and not denied.dataframe
 
 
-def test_project_budget_displays_latest_approved_proposed_and_draft_with_requested_columns(business, authorized):
+def test_project_budget_displays_latest_revisions_and_independent_live_budget(business, authorized):
     path, _, _, _, manager = business
     with psycopg.connect(authorized.setup.operator_url) as conn:
         conn.execute("INSERT INTO eppm.wbs(id,code,description) VALUES(1,'A','Example')")
@@ -233,12 +232,14 @@ def test_project_budget_displays_latest_approved_proposed_and_draft_with_request
         latest = finance.save([{'code':'A','amounts':{'2026':amount}}], base_id=None, name=status, status=status, year=2026)
     app = AppTest.from_function(budget_screen, args=(path, manager.actor, 1)).run()
     assert not app.exception
-    assert [heading.value for heading in app.subheader] == ['Approved','Proposed','Draft']
-    assert [table.value.iloc[0]['2026'] for table in app.dataframe] == ['50.00','200.00','150.00']
-    assert ['Allocation (%)' in table.value for table in app.dataframe] == [False,False,True]
+    data = json.loads(app.get('bidi_component')[0].proto.json)
+    assert [row['label'] for row in data['rows']] == ['Budget - Approved', 'Budget-Proposed', 'Budget-Live', 'Actual', 'Commitment']
+    assert [row['amounts'].get('2026') for row in data['rows']] == ['50.00','200.00',None,None,None]
+    assert data['can_edit']
     finance.cancel(latest)
     app.run()
-    assert app.dataframe[1].value.iloc[0]['2026'] == '100.00'
+    data = json.loads(app.get('bidi_component')[0].proto.json)
+    assert data['rows'][1]['amounts']['2026'] == '100.00'
 
 
 def pool_jump_screen(path, actor, pool_id):

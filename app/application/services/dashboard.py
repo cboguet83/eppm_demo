@@ -7,6 +7,7 @@ from datetime import date
 from app.application.ports.dashboard import DashboardCatalog, DashboardReader, ResourceBreakdown
 from app.domain.dashboard import AllocatedBudget, DashboardProject, allocated_budget, matches
 from app.domain.finance import BudgetVersion
+from app.domain.financial_transactions import YearlyProjectFinancials
 from app.domain.projects.project import PROJECT_STATUSES
 
 
@@ -26,6 +27,7 @@ class DashboardReport:
     issue_count: int
     late_project_count: int = 0
     project_count: int = 0
+    financials: tuple[YearlyProjectFinancials, ...] = ()
 
     @property
     def late_project_percentage(self) -> float:
@@ -74,7 +76,7 @@ class DashboardService:
                 if identity in selected and end < today and progress < 100}
         return DashboardReport(allocated_budget(data.shares, data.approved, today.year),
                                data.approved.version if data.approved else None, data.issue_count,
-                               len(late), len(selected))
+                               len(late), len(selected), data.financials)
 
     def shortages(self, project_ids: list[int]) -> dict[str, float]:
         """Return only aggregate quarterly shortfalls for currently readable projects."""

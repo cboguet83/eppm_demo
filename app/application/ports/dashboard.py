@@ -6,6 +6,7 @@ from typing import NotRequired, Protocol, TypedDict
 
 from app.domain.dashboard import DashboardProject, WbsShare
 from app.domain.finance import BudgetSnapshot
+from app.domain.financial_transactions import YearlyProjectFinancials
 
 
 @dataclass(frozen=True)
@@ -25,6 +26,7 @@ class DashboardData:
     approved: BudgetSnapshot | None
     issue_count: int
     task_deadlines: list[tuple[int, date, int]] = field(default_factory=list)
+    financials: tuple[YearlyProjectFinancials, ...] = ()
 
 
 class PoolResourceSeries(TypedDict):

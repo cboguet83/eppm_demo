@@ -21,6 +21,7 @@ from app.infrastructure.postgresql.authorization import ActorBinding, ServerRequ
 from app.infrastructure.postgresql.dashboard_catalog import read_catalog
 from app.infrastructure.postgresql.errors import DatabaseUnavailableError, TransactionRetryError
 from app.infrastructure.postgresql.finance import PostgresFinanceStore
+from app.infrastructure.postgresql.financial_transactions import PostgresFinancialTransactionStore
 from app.infrastructure.postgresql.pool import Database
 from app.infrastructure.postgresql.pool_capacity import read_capacity_sources
 from app.infrastructure.postgresql.resource_pools import PostgresResourcePoolStore
@@ -113,7 +114,12 @@ class PostgresDashboardReader:
     def revision(self) -> tuple:
         """Hash visible sources, relevant competing demand and latest finance statuses."""
         return self._run(lambda connection, _ids, _security: (
-            connection.execute('SELECT eppm.dashboard_revision()').fetchone()[0], 'python-capacity-v1'))
+            connection.execute('SELECT eppm.dashboard_revision()').fetchone()[0],
+            connection.execute('''SELECT md5(coalesce(string_agg(
+                concat_ws(':',id,project_id,fiscal_year,financial_record_type,amount_base_currency),
+                ',' ORDER BY id),'')) FROM eppm.project_financial_transaction
+                WHERE financial_record_type IN ('ACTUAL','COMMITMENT')''').fetchone()[0],
+            'python-capacity-v1'))
 
     def catalog(self) -> DashboardCatalog:
         """Read current project/filter fields without exposing unrelated labels."""
@@ -133,7 +139,9 @@ class PostgresDashboardReader:
             deadlines = list(connection.execute('''SELECT t.project_id,t.end_date,COALESCE(t.progress_pct,0)
                 FROM eppm.project_task t JOIN eppm.project_plan p ON p.id=t.project_plan_id
                 WHERE p.is_current AND NOT t.is_deleted AND t.project_id=ANY(%s::bigint[])''', (ids,)))
-            return DashboardData(shares, approved, count, deadlines)
+            financials = PostgresFinancialTransactionStore(
+                connection, writable=False, finance_editor=False).yearly_totals(ids) if status == 'Approved' else ()
+            return DashboardData(shares, approved, count, deadlines, financials)
         return self._run(operation, project_ids)
 
     def shortages(self, project_ids: list[int], today: date) -> dict[str, float]:

@@ -20,7 +20,7 @@ def test_upgrade_removes_level_and_preserves_parent_links_and_memberships(empty_
         connection.execute("INSERT INTO eppm.team(team_id,team_name) VALUES (1,'Team')")
         connection.execute('INSERT INTO eppm.team_function(team_id,function_id) VALUES (1,2)')
         before = connection.execute("SELECT to_jsonb(f)-'hierarchy_level' FROM eppm.function f ORDER BY function_id").fetchall()
-    assert migrate(empty_database.operator_url) == ('0060_remove_function_hierarchy_level.sql',)
+    assert migrate(empty_database.operator_url) == tuple(item.name for item in migrations[59:])
     with psycopg.connect(empty_database.operator_url) as connection:
         check_schema(connection)
         assert connection.execute('SELECT to_jsonb(f) FROM eppm.function f ORDER BY function_id').fetchall() == before

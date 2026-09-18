@@ -1,0 +1,20 @@
+.project-budget {font:14px var(--st-font, sans-serif);color:var(--st-text-color,#0f172a)}
+.project-budget .viewport {overflow:auto;max-height:600px;border:1px solid #cbd5e1}
+.project-budget table {border-collapse:separate;border-spacing:0;min-width:100%;table-layout:fixed}
+.project-budget th,.project-budget td {height:34px;padding:5px 9px;border-right:1px solid #cbd5e1;border-bottom:1px solid #cbd5e1;white-space:nowrap;text-align:right;box-sizing:border-box;min-width:108px;background:var(--st-background-color,#fff)}
+.project-budget thead th {background:var(--st-secondary-background-color,#f8fafc);position:sticky;top:0;z-index:2;font-weight:600}
+.project-budget tr>*:nth-child(1) {position:sticky;left:0;min-width:140px;max-width:140px;width:140px;text-align:left;z-index:1;overflow:hidden;text-overflow:ellipsis}
+.project-budget tr>*:nth-child(2) {position:sticky;left:140px;min-width:180px;width:180px;text-align:left;z-index:1}
+.project-budget tr>*:nth-child(3) {position:sticky;left:320px;min-width:85px;width:85px;text-align:center;z-index:1}
+.project-budget thead tr>*:nth-child(-n+3) {z-index:3}
+.project-budget .group-start>* {border-top:2px solid #94a3b8}
+.project-budget .readonly {background:var(--st-secondary-background-color,#f8fafc)}
+.project-budget .editable {padding:0;background:var(--st-background-color,#fff)}
+.project-budget input {width:100%;min-width:100px;max-width:130px;box-sizing:border-box;height:33px;background:transparent;border:0;padding:5px 9px;text-align:right;color:inherit;font:inherit}
+.project-budget input:focus {outline:2px solid #399df4;outline-offset:-2px}
+.project-budget .actions {display:flex;justify-content:flex-end;gap:8px;margin-top:10px}
+.project-budget button {border:1px solid #cbd5e1;border-radius:5px;padding:7px 15px;background:var(--st-background-color,#fff);color:inherit;font:inherit;cursor:pointer}
+.project-budget button.primary {background:#C41039;color:white;border-color:#C41039}
+.project-budget button:disabled {opacity:.5;cursor:default}
+.project-budget .error {color:#b91c1c}.project-budget .message {color:#16703c}
+.project-budget .error:not(:empty),.project-budget .message:not(:empty) {margin-bottom:8px}

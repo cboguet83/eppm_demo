@@ -22,7 +22,7 @@ def test_finance_curve_uses_selected_project_share(popup_server):
             table = page.locator('.st-key-dashboard_project_table .viewport')
             expect(table.locator('tr[data-project-id="1"]')).to_be_visible(timeout=30000)
             points = page.locator('.st-key-dashboard_finance_chart circle')
-            for project_id, expected in [(1,'50.01'),(2,'25.00')]:
+            for project_id, expected in [(1,'0.05 kEUR'),(2,'0.03 kEUR')]:
                 table.locator(f'tr[data-project-id="{project_id}"]').click()
                 expect(page.get_by_text('1 matching projects',exact=True)).to_be_visible()
                 expect(points).to_have_count(2)
@@ -106,7 +106,7 @@ def test_dashboard_charts_paging_and_read_only_issues_do_not_rerun_shell(popup_s
             expect(page.get_by_text('Shell runs: 1',exact=True)).to_be_visible()
             point = page.locator('.st-key-dashboard_finance_chart').first.locator('circle').first
             point.hover()
-            expect(page.locator('.st-key-dashboard_finance_chart .tip')).to_contain_text('50.01')
+            expect(page.locator('.st-key-dashboard_finance_chart .tip')).to_contain_text('0.05 kEUR')
             page.get_by_role('heading', name='Finance overview', exact=True).hover()
             expect(page.get_by_role('heading', name='Dashboard', exact=True)).to_have_count(0)
             expect(page.locator('.resource-chart [data-today="2026-06-01"]')).to_have_count(3)
@@ -116,7 +116,8 @@ def test_dashboard_charts_paging_and_read_only_issues_do_not_rerun_shell(popup_s
             allocation = page.locator('.st-key-dashboard_resource_chart_allocation .resource-chart')
             expect(allocation.locator('[data-axis-title=allocation]')).to_contain_text('Allocation')
             expect(allocation.locator('[data-pool-id="1"]').first).to_be_visible()
-            expect(resource.locator('[data-axis-title="overallocation"]')).to_have_attribute('transform',re.compile(r'rotate\(-90\)'))
+            expect(resource.locator('[data-axis-title="overallocation"]')).to_have_attribute('y', '15')
+            assert resource.locator('[data-axis-title="overallocation"]').get_attribute('transform') is None
             expect(resource.locator('[data-axis-title="capacity"]')).to_have_count(0)
             assert resource.locator('[data-quarter]').count() > 0
             assert resource.locator('[data-pool-id]').count() == resource.locator('[data-quarter]').count()
@@ -171,7 +172,7 @@ def test_dashboard_charts_paging_and_read_only_issues_do_not_rerun_shell(popup_s
                     expect(filtered.locator('[data-pool-id="2"]')).to_have_count(0)
                     expect(filtered.locator('[data-pool-id="1"]').first).to_be_visible()
                 allocation.locator('[data-quarter="2026-Q1"]').first.hover()
-                expect(allocation.get_by_role('tooltip')).to_contain_text('Total capacity: 1.0')
+                expect(allocation.get_by_role('tooltip')).to_contain_text('Minimum capacity in period: 1.0')
                 expect(allocation.get_by_role('tooltip')).to_contain_text('Portfolio simultaneous peak: 3.0')
                 expect(allocation.locator('path')).to_have_count(1)
                 page.get_by_role('button', name='Show all pools', exact=True).click()

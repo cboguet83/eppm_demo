@@ -13,11 +13,12 @@ PALETTE = ['#000000', '#399df4', '#09703e', '#b1343b', '#de00c3',
            '#ffb14e', '#ea5f94', '#f10d0d', '#0ccd66', '#27e0e0']
 
 _CSS = """
-.resource-chart {position:relative;display:grid;grid-template-columns:minmax(0,1fr);align-items:center;gap:0;overflow-x:auto;color:var(--st-text-color);font:12px var(--st-font)}
+.resource-chart {position:relative;display:grid;grid-template-columns:minmax(0,1fr);align-items:center;gap:0;overflow-x:auto;padding-left:5px;box-sizing:border-box;color:var(--st-text-color);font:12px var(--st-font)}
 svg {grid-column:1;grid-row:1;display:block;width:100%;height:300px;overflow:visible}
 .legend {grid-column:1;grid-row:2;display:flex;flex-wrap:wrap;gap:16px;justify-content:center;margin:0;padding:0 0 8px}
 .pool-swatch {display:inline-block;width:10px;height:10px;margin-right:6px;background:var(--series)}
 .legend span::before {content:'';display:inline-block;width:22px;height:3px;background:var(--series);margin-right:7px;vertical-align:middle}
+.legend .bar-series::before {width:10px;height:10px}
 .tip {position:fixed;background:var(--st-background-color);color:var(--st-text-color);border:1px solid #cbd5e1;box-shadow:0 4px 12px #0002;padding:8px;border-radius:5px;white-space:pre-line;pointer-events:none;z-index:10001}
 [data-quarter]:focus {outline:2px solid #C41039;outline-offset:-2px}
 """
@@ -30,27 +31,53 @@ export default function({data,parentElement,setTriggerValue}) {
     const palette=data.palette;
     const color=id=>palette[1+(Math.abs(Number(id)-1)%(palette.length-1))];
     const budgetSeries=data.budgetSeries||[];
+    const transactions=data.transactions||[];
+    const transactionSeries=data.transactionSeries||[];
     const pools=data.pools.filter(pool=>data.rows.some(row=>Number(pool[data.metric][row.quarter])>0));
     const showCapacity=data.metric==='allocation' && pools.length===1;
     const capacity=row=>Number(pools[0]?.capacity?.[row.quarter] ?? row.capacity);
     for(const [label,tint] of budgetSeries.map((series,i)=>[series.name,palette[i]])){
         const item=document.createElement('span');item.textContent=label;item.style.setProperty('--series',tint);legend.appendChild(item);
     }
-    root.replaceChildren(svg,...(budgetSeries.length?[legend]:[]));
+    for(const series of transactionSeries){
+        const item=document.createElement('span');item.className='bar-series';item.textContent=series.name;
+        item.style.setProperty('--series',series.color);legend.appendChild(item);
+    }
+    root.replaceChildren(svg,...(budgetSeries.length||transactionSeries.length?[legend]:[]));
     const add=(kind,attrs,text)=>{const node=document.createElementNS(ns,kind);for(const [key,value] of Object.entries(attrs))node.setAttribute(key,value);if(text!==undefined)node.textContent=text;svg.appendChild(node);return node;};
-    const left=68,right=1025,top=25,bottom=248,width=right-left,height=bottom-top,n=data.rows.length;
-    const axis=maximum=>{const step=Math.max(1,Math.ceil(maximum/4)),count=Math.max(1,Math.ceil(maximum/step));return {step,count,max:step*count};};
-    const valueAxis=axis(Math.max(0,...data.rows.map(row=>Math.max(pools.reduce((sum,pool)=>sum+Number(pool[data.metric][row.quarter]||0),0),showCapacity?capacity(row):0)),...budgetSeries.flatMap(series=>series.points.map(point=>point.value||0))));
+    const left=110,right=1025,top=35,bottom=248,width=right-left,height=bottom-top,n=data.rows.length;
+    const stackTotal=(row,positive)=>transactionSeries.reduce((sum,series)=>sum+(positive?Math.max(0,Number(row[series.key]||0)):Math.min(0,Number(row[series.key]||0))),0);
+    const axis=(maximum,minimum)=>{
+        if(data.metric==='finance'){
+            const magnitude=Math.max(Math.abs(maximum),Math.abs(minimum),100)/1000;
+            let step=1000*Math.max(.1,10**Math.floor(Math.log10(magnitude)));
+            const rounded=Math.max(Math.abs(Math.ceil(maximum/step)*step),Math.abs(Math.floor(minimum/step)*step),100)/1000;
+            step=1000*Math.max(.1,10**Math.floor(Math.log10(rounded)));
+            const min=Math.floor(minimum/step)*step,max=Math.ceil(maximum/step)*step;
+            // Four equal intervals, with distinct labels at a precision of 0.1 kEUR.
+            step=Math.max(100,Math.ceil((max-min)/400)*100);
+            return {step,count:4,min,max:min+step*4};
+        }
+        const step=Math.max(1,Math.ceil((maximum-minimum)/4)),min=Math.floor(minimum/step)*step,count=Math.max(1,Math.ceil((maximum-min)/step));
+        return {step,count,min,max:min+step*count};
+    };
+    const valueAxis=axis(Math.max(0,...data.rows.map(row=>Math.max(pools.reduce((sum,pool)=>sum+Number(pool[data.metric][row.quarter]||0),0),showCapacity?capacity(row):0)),...budgetSeries.flatMap(series=>series.points.map(point=>point.value||0)),...transactions.map(row=>stackTotal(row,true))),
+        Math.min(0,...transactions.map(row=>stackTotal(row,false))));
+    const valueY=value=>bottom-height*(value-valueAxis.min)/(valueAxis.max-valueAxis.min);
     const fmt=value=>Number(value).toLocaleString(data.locale,{minimumFractionDigits:1,maximumFractionDigits:1});
-    const money=value=>Number(value).toLocaleString(data.locale,{minimumFractionDigits:2,maximumFractionDigits:2});
-    const tick=value=>Number(value).toLocaleString(data.locale,{maximumFractionDigits:0});
+    const money=value=>(Number(value)/1000).toLocaleString(data.locale,{minimumFractionDigits:2,maximumFractionDigits:2});
+    const tick=value=>Number(data.metric==='finance'?value/1000:value).toLocaleString(data.locale,{maximumFractionDigits:data.metric==='finance'?1:0});
     for(let i=0;i<=valueAxis.count;i++){
         const y=bottom-height*i/valueAxis.count;
         add('line',{x1:left,x2:right,y1:y,y2:y,stroke:'#dce2eb','stroke-width':.6});
-        add('text',{x:left-8,y:y+4,'text-anchor':'end',fill:'currentColor','data-axis':data.metric},tick(valueAxis.step*i));
+        add('text',{x:left-24,y:y+4,'text-anchor':'end',fill:'currentColor','data-axis':data.metric},tick(valueAxis.min+valueAxis.step*i));
     }
     const middle=(top+bottom)/2;
-    add('text',{transform:`translate(6 ${middle}) rotate(-90)`,'text-anchor':'middle',fill:'currentColor','data-axis-title':data.metric},data.valueLabel);
+    if(data.metric==='finance'){
+        add('text',{transform:`translate(11 ${middle}) rotate(-90)`,'text-anchor':'middle',fill:'currentColor','data-axis-title':data.metric},data.valueLabel);
+    }else{
+        add('text',{x:11,y:15,'text-anchor':'start',fill:'currentColor','data-axis-title':data.metric},data.valueLabel+' (FTE)');
+    }
     let tip,menu;
     const closeTip=()=>{tip?.remove();tip=null;};
     const closeMenu=()=>{menu?.remove();menu=null;};
@@ -76,12 +103,14 @@ export default function({data,parentElement,setTriggerValue}) {
         root.appendChild(menu);position(menu,x,y);item.focus({preventScroll:true});
     };
     const path=[];
-    const first=Date.parse(data.start),last=Date.parse(data.end),today=Date.parse(data.today);
+    // Leave half a year before the first labeled date so centered bars clear the value axis.
+    const first=Date.UTC(Number(data.start.slice(0,4))-1,6,1),last=Date.parse(data.end),today=Date.parse(data.today);
     const dateX=date=>left+width*(Date.parse(date)-first)/(last-first);
+    const yearX=year=>(dateX(year+'-04-01')+dateX(year+'-07-01'))/2;
     data.rows.forEach((row,index)=>{
         const [year,quarter]=row.quarter.split('-Q').map(Number);
-        const quarterStart=Date.UTC(year,(quarter-1)*3,1),quarterEnd=Date.UTC(year,quarter*3,1);
-        const x=left+width*((quarterStart+quarterEnd)/2-first)/(last-first);
+        const quarterStart=Date.UTC(year,(quarter-1)*3,1);
+        const x=left+width*(quarterStart-first)/(last-first);
         let cumulative=0;
         for(const pool of pools){
             const value=Number(pool[data.metric][row.quarter]||0);if(value<=0)continue;
@@ -105,19 +134,37 @@ export default function({data,parentElement,setTriggerValue}) {
     });
     if(showCapacity)add('path',{d:path.join(' '),fill:'none',stroke:'#f10d0d','stroke-width':2,'stroke-dasharray':'6 4','pointer-events':'none'});
     for(let year=Number(data.start.slice(0,4));year<Number(data.end.slice(0,4));year++){
-        add('text',{x:dateX(year+'-01-01'),y:bottom+22,'text-anchor':'middle',fill:'currentColor','data-year':year},String(year));
+        add('text',{x:yearX(year),y:bottom+22,'text-anchor':'middle',fill:'currentColor','data-year':year},String(year));
+    }
+    for(const row of transactions){
+        const start=dateX(row.year+'-01-01'),end=dateX((row.year+1)+'-01-01');
+        let positive=0,negative=0;
+        for(const series of transactionSeries){
+            const value=Number(row[series.key]||0);if(value===0)continue;
+            const base=value>0?positive:negative,total=base+value;
+            if(value>0)positive=total;else negative=total;
+            const bar=add('rect',{x:yearX(row.year)-(end-start)*.3,y:Math.min(valueY(base),valueY(total)),
+                width:(end-start)*.6,height:Math.abs(valueY(base)-valueY(total)),fill:series.color,
+                tabindex:0,role:'img','data-financial-year':row.year,'data-financial-type':series.key,
+                'aria-label':row.year+', '+series.name+': '+money(value)+' kEUR'});
+            const show=event=>showTip([[String(row.year)],...transactionSeries.map(item=>
+                [item.name+': '+money(row[item.key]||0)+' kEUR',item.color])],event);
+            bar.onpointermove=show;bar.onpointerleave=closeTip;
+            bar.onfocus=()=>{const rect=bar.getBoundingClientRect();show({clientX:rect.left,clientY:rect.top});};
+            bar.onblur=closeTip;
+        }
     }
     budgetSeries.forEach((series,index)=>{
         const segments=[];let connected=false;
         for(const point of series.points){
             if(point.value===null){connected=false;continue;}
-            const x=dateX(point.date),y=bottom-height*point.value/valueAxis.max;
+            const x=yearX(Number(point.date.slice(0,4))),y=valueY(point.value);
             segments.push((connected?'L':'M')+x+','+y);connected=true;
             const marker=add('circle',{cx:x,cy:y,r:4,fill:palette[index],tabindex:0,'data-budget-series':series.name,
-                'aria-label':series.name+', '+point.date.slice(0,4)+': '+money(point.value)+' €'});
+                'aria-label':series.name+', '+point.date.slice(0,4)+': '+money(point.value)+' kEUR'});
             const show=event=>showTip([[point.date.slice(0,4)],...budgetSeries.map(budget=>{
                 const value=budget.points.find(item=>item.date===point.date)?.value;
-                return [budget.name+': '+(value===null||value===undefined?'—':money(value)+' €')];
+                return [budget.name+': '+(value===null||value===undefined?'—':money(value)+' kEUR')];
             })],event);
             marker.onpointermove=show;marker.onpointerleave=closeTip;
             marker.onfocus=()=>{const rect=marker.getBoundingClientRect();show({clientX:rect.left,clientY:rect.top});};
@@ -177,12 +224,15 @@ def resource_chart(series: ResourceBreakdown, *, today: str, year: int,
     return getattr(result, 'selection', None)
 
 
-def finance_chart(*, series: list[dict], today: str, year: int, locale: str,
+def finance_chart(*, series: list[dict], transactions: list[dict], today: str, year: int, locale: str,
                   title: str, value_label: str) -> None:
-    """Render budget lines with the resource charts' date scale and hover guide."""
+    """Render budget lines and yearly transaction stacks on the shared date scale."""
     component = st.components.v2.component('eppm_dashboard_resources',
         html='<div class="resource-chart"></div>', css=_CSS + CONTEXT_MENU_CSS, js=_JS)
     component(data={'rows': [], 'pools': [], 'metric': 'finance', 'budgetSeries': series,
+                    'transactions': transactions, 'transactionSeries': [
+                        {'key': 'actual', 'name': 'Actual', 'color': '#C41049'},
+                        {'key': 'commitment', 'name': 'Commitment', 'color': '#6D6E70'}],
                     'today': today, 'start': f'{year-2}-01-01', 'end': f'{year+10}-01-01',
-                    'locale': locale, 'palette': PALETTE, 'title': title, 'valueLabel': value_label},
+                    'locale': locale, 'palette': PALETTE, 'title': title, 'valueLabel': value_label.replace('€', 'kEUR')},
               key='dashboard_finance_chart', height='content')

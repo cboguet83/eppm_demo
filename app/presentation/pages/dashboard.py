@@ -6,15 +6,13 @@ from functools import partial
 from collections.abc import Callable
 from time import perf_counter
 
-import pandas as pd
 import streamlit as st
 
 from app.application.exceptions import ProjectStorageError
 from app.application.ports.dashboard import DashboardCatalog, OverallocatedPool
 from app.application.services.dashboard import DashboardService
 from app.domain.access.models import AccessDenied
-from app.domain.dashboard import DashboardProject
-from app.domain.finance import euro_text
+from app.domain.dashboard import DashboardProject, financial_utilization, yearly_financial_amounts
 from app.presentation.components.action_table import action_table
 from app.presentation.components.checkbox_filter import checkbox_filter
 from app.presentation.components.dialog import dialog
@@ -84,41 +82,9 @@ def _source(report, status: str = 'Approved') -> bool:
     if report.approved is None:
         st.info(t('dashboard.no_status_budget', status=label))
         return False
-    st.caption(t('dashboard.status_source', status=label, number=report.approved.number, name=report.approved.name))
     if report.budget.unmatched:
         st.warning(t('dashboard.unmatched_status', status=label, codes=', '.join(report.budget.unmatched)))
     return True
-
-
-def _budget_table(report, years: range, include_allocation: bool) -> None:
-    code, allocation = t('wbs.code'), t('wbs.allocation')
-    rows = [{code: share.code,
-             **({allocation: f'{share.percentage}%'} if include_allocation else {}),
-             **{str(year): euro_text(values[year]) if year in values else None for year in years}}
-            for share, values in report.budget.rows]
-    if not rows:
-        st.info(_label('no_wbs'))
-        return
-    rows.append({code: _label('total'), **({allocation: ''} if include_allocation else {}),
-                 **{str(year): euro_text(report.budget.totals[year]) if year in report.budget.totals else None for year in years}})
-    frame = pd.DataFrame(rows).style.set_properties(
-        subset=[code, allocation] if include_allocation else [code], **{'color': '#808080'})
-    st.dataframe(frame, hide_index=True, height=min(440, 40+35*len(rows)),
-                 column_config={code: st.column_config.TextColumn(pinned=True)})
-
-
-def render_project_budget(project_id: int, service: DashboardService) -> None:
-    """Show latest Approved, Proposed and Draft shares without changing Finance history."""
-    try:
-        revision = service.revision()
-        years = range(service.today().year-5, service.today().year+15)
-        for status in ('Approved', 'Proposed', 'Draft'):
-            st.subheader(t('finance.' + status, default=status))
-            report = _report(service, revision, (project_id,), status)
-            if _source(report, status):
-                _budget_table(report, years, status == 'Draft')
-    except (AccessDenied, ProjectStorageError):
-        st.error(_label('unavailable'))
 
 
 @dialog('Issues', width='large')
@@ -276,14 +242,34 @@ def _finance_chart(service: DashboardService, report, proposed) -> None:
     """Display both authorized budget snapshots on the shared dashboard timeline."""
     years = range(service.today().year - 2, service.today().year + 10)
     series = [
-        {'name': t('finance.' + status, default=status),
+        {'name': (t('finance.' + status, default=status) + ' — ' + snapshot.approved.name)
+                 if snapshot.approved else t('finance.' + status, default=status),
          'points': [{'date': f'{year}-01-01',
                      'value': float(snapshot.budget.totals[year])
                      if year in snapshot.budget.totals else None} for year in years]}
         for status, snapshot in [('Approved', report), ('Proposed', proposed)]
     ]
-    finance_chart(series=series, today=service.today().isoformat(), year=service.today().year,
+    amounts = yearly_financial_amounts(report.financials, years)
+    transactions = [{'year': year, 'actual': float(actual), 'commitment': float(commitment)}
+                    for year, (actual, commitment) in amounts.items()]
+    finance_chart(series=series, transactions=transactions,
+                  today=service.today().isoformat(), year=service.today().year,
                   locale=get_current_locale(), title=_label('finance_overview'), value_label=_label('euros'))
+
+
+def _financial_indicators(service: DashboardService, report) -> None:
+    """Show filtered utilization percentages with a consistent chart-period denominator."""
+    years = range(service.today().year - 2, service.today().year + 10)
+    utilization = financial_utilization(report.budget, report.financials, years)
+    for key, label, value in (
+        ('actual', 'Actual / Approved Budget', utilization.actual_percentage),
+        ('committed', '(Actual + Commitment) / Approved Budget', utilization.committed_percentage),
+    ):
+        with st.container(border=True, key=f'dashboard_{key}_ratio_card'):
+            st.metric(label, f'{value:.1f}%' if value is not None else 'N/A',
+                      help=f'Filtered projects, {years.start}–{years.stop - 1}, in EUR. '
+                           'Uses the latest approved budget with project WBS shares. '
+                           'N/A means the approved budget is missing or zero.')
 
 
 def _planning_jump(service: DashboardService, ids: tuple[int, ...], quarter: str,
@@ -352,8 +338,9 @@ def render_dashboard(service: DashboardService) -> None:
     .st-key-dashboard_issue_count button [data-testid=stIconMaterial]{font-size:52px!important;width:52px!important;height:52px!important;flex:0 0 52px;line-height:1;color:var(--issue-icon)!important}
     .st-key-dashboard_issue_count button:disabled{opacity:1!important}
     .st-key-dashboard_issue_card [data-testid=stMarkdownContainer]{text-align:center;color:var(--issue-text)}
-    .st-key-dashboard_late_card [data-testid=stMetricLabel]{display:flex;width:100%;justify-content:center}
-    .st-key-dashboard_late_card [data-testid=stMetricValue],
+    :is(.st-key-dashboard_late_card,.st-key-dashboard_actual_ratio_card,.st-key-dashboard_committed_ratio_card) [data-testid=stMetricLabel]{display:flex;width:100%;justify-content:center;text-align:center}
+    :is(.st-key-dashboard_actual_ratio_card,.st-key-dashboard_committed_ratio_card) [data-testid=stMetricLabel] p{white-space:normal}
+    :is(.st-key-dashboard_late_card,.st-key-dashboard_actual_ratio_card,.st-key-dashboard_committed_ratio_card) [data-testid=stMetricValue],
     .st-key-dashboard_late_card [data-testid=stCaptionContainer]{text-align:center}
     </style>""")
     if st.session_state.pop('dashboard_selection_error', False):
@@ -379,13 +366,12 @@ def render_dashboard(service: DashboardService) -> None:
             st.metric('Late projects', f'{report.late_project_percentage:.1f}%',
                       help='Projects with an active-plan task ending before today and less than 100% complete, among all projects in the dashboard filters.')
             st.caption(f'{report.late_project_count} of {report.project_count} projects')
+        with indicators:
+            _financial_indicators(service, report)
         with finance:
             st.subheader(_label('finance_overview'))
-            approved_source, proposed_source = st.columns(2)
-            with approved_source:
-                _source(report)
-            with proposed_source:
-                _source(proposed, 'Proposed')
+            _source(report)
+            _source(proposed, 'Proposed')
         with indicators, st.container(border=True, key='dashboard_issue_card'):
             icon_color = '#df8b16' if report.issue_count else '#23934c'
             text_color = '#df8b16' if report.issue_count else '#000000'

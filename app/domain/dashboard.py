@@ -8,6 +8,7 @@ from decimal import Decimal, ROUND_HALF_UP, localcontext
 from typing import TypedDict
 
 from app.domain.finance import BudgetSnapshot
+from app.domain.financial_transactions import YearlyProjectFinancials
 from app.domain.resources.models import PoolCapacityDetail
 
 
@@ -35,6 +36,52 @@ class AllocatedBudget:
     rows: tuple[tuple[WbsShare, dict[int, Decimal]], ...]
     totals: dict[int, Decimal]
     unmatched: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class FinancialUtilization:
+    """Exact totals and ratios over the same years as the financial chart."""
+
+    actual: Decimal
+    commitment: Decimal
+    approved: Decimal
+
+    @property
+    def actual_percentage(self) -> Decimal | None:
+        """Return no percentage when an approved denominator is unavailable."""
+        with localcontext(prec=60):
+            return self.actual * 100 / self.approved if self.approved > 0 else None
+
+    @property
+    def committed_percentage(self) -> Decimal | None:
+        """Include actuals and commitments without subtracting linked actuals."""
+        with localcontext(prec=60):
+            return (self.actual + self.commitment) * 100 / self.approved if self.approved > 0 else None
+
+
+def yearly_financial_amounts(records: tuple[YearlyProjectFinancials, ...],
+                             years: range) -> dict[int, tuple[Decimal, Decimal]]:
+    """Sum stored euro totals across filtered projects without binary floats."""
+    totals = {year: (Decimal(0), Decimal(0)) for year in years}
+    with localcontext(prec=60):
+        for record in records:
+            if record.fiscal_year in totals:
+                actual, commitment = totals[record.fiscal_year]
+                totals[record.fiscal_year] = (actual + record.total_actual_spending,
+                                              commitment + record.total_commitment)
+    return totals
+
+
+def financial_utilization(budget: AllocatedBudget, records: tuple[YearlyProjectFinancials, ...],
+                          years: range) -> FinancialUtilization:
+    """Use the chart period for numerator and allocated approved denominator."""
+    yearly = yearly_financial_amounts(records, years)
+    with localcontext(prec=60):
+        return FinancialUtilization(
+            sum((value[0] for value in yearly.values()), Decimal(0)),
+            sum((value[1] for value in yearly.values()), Decimal(0)),
+            sum((budget.totals.get(year, Decimal(0)) for year in years), Decimal(0)),
+        )
 
 
 def allocated_budget(shares: list[WbsShare], snapshot: BudgetSnapshot | None, year: int) -> AllocatedBudget:
