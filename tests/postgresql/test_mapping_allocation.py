@@ -21,7 +21,7 @@ def setup_resources(database, access):
     second = service.create_pool(ResourcePool('Beta'))
     function = org.create_function(OrgFunction('Engineer', 1))
     team = org.create_team(Team('Delivery'), function_ids=[function])
-    employee = org.create_employee(Employee('Ada', 'One', 'ada@example.test', 'ADA', function_id=function))
+    employee = org.create_employee(Employee('Ada', 'One', 'ada@example.test', function_id=function))
     return service, first, second, team, employee
 
 

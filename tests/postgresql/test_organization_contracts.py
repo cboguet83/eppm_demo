@@ -21,7 +21,7 @@ from app.domain.organization.models import (
     Employee, EmployeeCalendarException, FunctionType, OrgFunction, Team,
 )
 from app.domain.organization.rules import (
-    next_employee_code, normalize_employee, normalize_exception, normalize_function,
+    normalize_employee, normalize_exception, normalize_function,
     normalize_function_type, normalize_team, validate_employee_calendar_exception,
     validate_function, validate_occupation_percentage,
 )
@@ -37,8 +37,7 @@ def database(runtime: RuntimeResources) -> RuntimeResources:
 
 def employee(code: str = "EMP-001") -> Employee:
     """Build a valid profile whose email is distinct for each code."""
-    return Employee(" Ada ", " Lovelace ", f" {code}@Example.com ", code,
-                    mobile=" 123 ", sigle=" al ", occupation_percentage=80.0)
+    return Employee(" Ada ", " Lovelace ", f" {code}@Example.com ", mobile=" 123 ", sigle=" al ", occupation_percentage=80.0)
 
 
 def exception(employee_id: int, start: int = 1, end: int = 10) -> EmployeeCalendarException:
@@ -66,11 +65,9 @@ def test_domain_normalization_and_existing_function_capacity_contract() -> None:
     assert (normalized.firstname, normalized.lastname, normalized.email) == (
         "Ada", "Lovelace", "emp-001@example.com",
     )
-    assert (normalized.mobile, normalized.sigle, normalized.employee_code) == ("123", "AL", "EMP-001")
+    assert (normalized.mobile, normalized.sigle) == ("123", "AL")
     assert normalize_exception(exception(1)).reason == "Leave"
     assert employee().firstname == " Ada "
-    assert next_employee_code(["manual", "EMP-003-OLD", "emp-004", "EMP-²"]) == "EMP-005"
-    assert next_employee_code(["EMP-٠٠٩"]) == "EMP-010"
     for invalid in ("", "  "):
         with pytest.raises(ValueError):
             normalize_function_type(FunctionType(invalid))
@@ -96,10 +93,9 @@ def test_application_crud_and_display_frames_handle_missing_records(database: Ru
     assert service.get_all_function_types() == service.get_all_functions() == []
     assert service.get_all_teams() == service.get_all_employees() == []
     assert service.get_employee_calendar_exceptions() == []
-    assert service.generate_next_employee_code() == "EMP-001"
     assert list(organization_frames.employees_frame(other_service.get_all_employees()).columns) == [
         "employee_id", "firstname", "lastname", "email", "mobile", "landline", "sigle",
-        "employee_code", "function_id", "occupation_percentage",
+        "function_id", "occupation_percentage",
     ]
     for getter in (service.get_function_type_by_id, service.get_function_by_id,
                    service.get_team_by_id, service.get_employee_by_id,
@@ -116,11 +112,8 @@ def test_application_crud_and_display_frames_handle_missing_records(database: Ru
     assert service.get_function_by_id(function_id).name == "Architect"
     assert service.get_team_by_id(team_id).team_name == "Platform"
     assert service.get_employee_by_id(employee_id).email == "emp-001@example.com"
-    assert service.generate_next_employee_code() == "EMP-002"
     assert service.check_email_exists("EMP-001@EXAMPLE.COM")
     assert not service.check_email_exists("EMP-001@EXAMPLE.COM", employee_id)
-    assert service.check_code_exists("emp-001")
-    assert not service.check_code_exists("emp-001", employee_id)
     assert service.update_function_type(FunctionType("Architecture", type_id))
     assert service.update_function(OrgFunction("Lead", 3, function_id, type_id, has_reports=True))
     assert service.update_team(Team("Renamed", team_id))

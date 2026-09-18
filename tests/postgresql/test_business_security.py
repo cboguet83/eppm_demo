@@ -26,7 +26,7 @@ def portfolio(authorized):
         operator.execute("INSERT INTO eppm.schema_param_options(param_id,option_value) VALUES ('REGION','North'),('REGION','South')")
         operator.execute("INSERT INTO eppm.project_property_value(project_id,param_id,kind,text_value) VALUES (1,'REGION','text','North'),(2,'REGION','text','South'),(3,'REGION','text','North')")
         operator.execute("INSERT INTO eppm.function(name,hierarchy_level) VALUES ('Manager',1)")
-        operator.execute("INSERT INTO eppm.employee(firstname,lastname,email,mobile,employee_code,function_id) VALUES ('Public','Manager','private@example.invalid','secret-phone','STAFF',1)")
+        operator.execute("INSERT INTO eppm.employee(firstname,lastname,email,mobile,function_id) VALUES ('Public','Manager','private@example.invalid','secret-phone',1)")
         operator.execute("UPDATE eppm.project SET function_id=1 WHERE id=1")
     return authorized
 

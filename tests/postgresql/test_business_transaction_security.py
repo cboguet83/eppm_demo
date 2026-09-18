@@ -210,7 +210,6 @@ def test_revoked_session_and_invalid_context_cannot_open_business_transaction(bu
 @pytest.mark.parametrize("factory,operation", [
     ("create_organization_service", "get_all_employees"),
     ("create_organization_service", "get_all_functions"),
-    ("create_organization_service", "generate_next_employee_code"),
     ("create_schema_service", "get_snapshot"),
     ("create_schema_service", "get_all_parameters"),
     ("create_project_type_service", "get_all_types"),
@@ -240,8 +239,7 @@ def test_public_reads_and_references_never_expose_hidden_owners_or_employee_deta
     path, _, _, editor, _ = business
     with psycopg.connect(pg_database.operator_url) as conn:
         conn.execute("INSERT INTO eppm.function(function_id,name,hierarchy_level) VALUES(1,'Manager',3)")
-        conn.execute("INSERT INTO eppm.employee(firstname,lastname,email,mobile,landline,employee_code,function_id) "
-                     "VALUES('Fictional','Person','private@example.test','private-mobile','private-line','private-code',1)")
+        conn.execute("INSERT INTO eppm.employee(firstname,lastname,email,mobile,landline,function_id) VALUES('Fictional','Person','private@example.test','private-mobile','private-line',1)")
         conn.execute("INSERT INTO eppm.resource_pool_mapping(pool_id,target_type,target_id,allocation_pct) VALUES(1,'employee',1,100)")
     projects = main.create_project_service(path, access=editor)
     assert projects.get_project_by_id(2) is None
@@ -992,7 +990,7 @@ def test_business_admin_catalog_menu_opens_the_requested_record_and_consumes_the
         connection.execute("INSERT INTO eppm.function(function_id,name,hierarchy_level,function_type_id) VALUES(10,'Engineer',3,10)")
         connection.execute("INSERT INTO eppm.team(team_id,team_name,manager_function_id) VALUES(10,'Delivery',10)")
         connection.execute("INSERT INTO eppm.team_function(team_id,function_id) VALUES(10,10)")
-        connection.execute("INSERT INTO eppm.employee(employee_id,firstname,lastname,email,employee_code,function_id) VALUES(10,'Rae','Example','rae@example.test','EX10',10)")
+        connection.execute("INSERT INTO eppm.employee(employee_id,firstname,lastname,email,function_id) VALUES(10,'Rae','Example','rae@example.test',10)")
     event = {
         "action": action + "_" + entity, entity + "_id": 10,
         entity + "_name": display, "nonce": "open-record",

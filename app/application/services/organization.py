@@ -15,7 +15,7 @@ from app.domain.organization.models import Employee, EmployeeCalendarException, 
 from app.application.services.team_capacity import TeamOverview, team_capacities
 from app.application.services.team_csv import TeamImportResult, import_teams, parse_teams
 from app.domain.organization.rules import (
-    next_employee_code, normalize_employee, normalize_exception, normalize_function,
+    normalize_employee, normalize_exception, normalize_function,
     normalize_function_type, normalize_team, validate_team_parent,
 )
 
@@ -242,14 +242,17 @@ class OrganizationService:
             return employee_id
         return self._gateway.run(operation, write=True, permission=Permission.SHARED)
 
-    def update_employee(self, emp: Employee) -> bool:
-        """Update employee within one organization transaction."""
+    def update_employee(self, emp: Employee, *, exceptions: list[EmployeeCalendarException] | None = None) -> bool:
+        """Save profile, function shares and optional calendar grid atomically."""
         if emp.employee_id is None:
             return False
         emp = normalize_employee(emp)
         def operation(store: OrganizationStore) -> bool:
             self._validate_function_assignments(store, emp)
-            return store.update_employee(emp)
+            changed = store.update_employee(emp)
+            if changed and exceptions is not None:
+                self._replace_employee_exceptions(store, emp.employee_id, exceptions)
+            return changed
         return self._gateway.run(operation, write=True, permission=Permission.SHARED)
 
     @staticmethod
@@ -268,21 +271,26 @@ class OrganizationService:
 
     def replace_employee_exceptions(self, employee_id: int, items: list[EmployeeCalendarException]) -> None:
         """Validate and replace the exception grid in one authorized transaction."""
+        self._gateway.run(lambda store: self._replace_employee_exceptions(store, employee_id, items),
+                          write=True, permission=Permission.SHARED)
+
+    @staticmethod
+    def _replace_employee_exceptions(store: OrganizationStore, employee_id: int,
+                                     items: list[EmployeeCalendarException]) -> None:
+        """Validate and persist the grid in the caller's profile transaction."""
         items = [normalize_exception(replace(item, employee_id=employee_id)) for item in items]
         ordered = sorted(items, key=lambda item: item.start_date)
         if any(first.end_date >= second.start_date for first, second in zip(ordered, ordered[1:])):
             raise ValueError('Employee calendar exceptions cannot overlap.')
-        def operation(store: OrganizationStore) -> None:
-            current = store.get_employee_calendar_exceptions(employee_id)
-            known = {row.exception_id for row in current}
-            selected = [row.exception_id for row in items if row.exception_id is not None]
-            if not set(selected) <= known or len(set(selected)) != len(selected):
-                raise ValueError('The exception grid is stale. Reopen the employee profile.')
-            for row in current:
-                store.delete_employee_calendar_exception(row.exception_id)
-            for row in items:
-                store.create_employee_calendar_exception(row)
-        self._gateway.run(operation, write=True, permission=Permission.SHARED)
+        current = store.get_employee_calendar_exceptions(employee_id)
+        known = {row.exception_id for row in current}
+        selected = [row.exception_id for row in items if row.exception_id is not None]
+        if not set(selected) <= known or len(set(selected)) != len(selected):
+            raise ValueError('The exception grid is stale. Reopen the employee profile.')
+        for row in current:
+            store.delete_employee_calendar_exception(row.exception_id)
+        for row in items:
+            store.create_employee_calendar_exception(row)
 
     def delete_employee(self, emp_id: int) -> bool:
         """Delete employee within one organization transaction."""
@@ -335,14 +343,6 @@ class OrganizationService:
     def check_email_exists(self, email: str, exclude_id: int | None = None) -> bool:
         """Check email exists within one organization transaction."""
         return self._gateway.run(lambda store: store.check_email_exists(email, exclude_id), permission=Permission.SHARED)
-
-    def check_code_exists(self, code: str, exclude_id: int | None = None) -> bool:
-        """Check code exists within one organization transaction."""
-        return self._gateway.run(lambda store: store.check_code_exists(code, exclude_id), permission=Permission.SHARED)
-
-    def generate_next_employee_code(self) -> str:
-        """Preview the next code; uniqueness is enforced again when saving."""
-        return self._gateway.run(lambda store: next_employee_code(store.employee_codes()), permission=Permission.SHARED)
 
     def get_team_functions(self, team_id: int) -> list[int]:
         """Get team functions in a single transaction."""

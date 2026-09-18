@@ -322,7 +322,7 @@ def contacts(pg_database, business):
     path, _, _, editor, manager = business
     with psycopg.connect(pg_database.operator_url) as connection:
         connection.execute("INSERT INTO eppm.function(function_id,name,hierarchy_level) VALUES(10,'Visible function',1),(20,'Hidden function',1),(30,'Unrelated function',1)")
-        connection.execute("INSERT INTO eppm.employee(firstname,lastname,email,employee_code,function_id) VALUES('Rae','Visible','visible@example.test','V',10),('Robin','Hidden','hidden@example.test','H',20),('Unrelated','Person','unrelated@example.test','U',30)")
+        connection.execute("INSERT INTO eppm.employee(firstname,lastname,email,function_id) VALUES('Rae','Visible','visible@example.test',10),('Robin','Hidden','hidden@example.test',20),('Unrelated','Person','unrelated@example.test',30)")
     shared = create_collaboration_service(path, access=manager)
     role_id = shared.save_catalog("role", "Sponsor")
     visible_id = shared.save_contact(1, role_id, 10)

@@ -16,7 +16,7 @@ def team_member_labels(service: OrganizationService, names: dict[int, str]) -> d
     for person in service.get_all_employees():
         for assignment in person.assignments():
             occupants.setdefault(assignment.function_id, []).append(
-                f'{person.firstname} {person.lastname} ({assignment.allocation_pct:g}%)')
+                f'{person.firstname} {person.lastname} ({assignment.allocation_pct:.0f}%)')
     return {identity: name + (' — ' + ', '.join(occupants[identity]) if identity in occupants else ' — Vacant')
             for identity, name in names.items()}
 
@@ -40,7 +40,7 @@ def employee_function_editor(employee: Employee, functions: pd.DataFrame) -> lis
             identity = function_cell.selectbox('Function', list(names), index=list(names).index(row['function']),
                 format_func=names.get, key=row['_key'] + '_function', label_visibility='collapsed')
             percentage = percentage_cell.number_input('Allocation (%)', min_value=0.0, max_value=100.0,
-                value=row['percentage'], key=row['_key'] + '_percentage', label_visibility='collapsed')
+                value=row['percentage'], step=5.0, format='%.0f', key=row['_key'] + '_percentage', label_visibility='collapsed')
             action_cell.button('Delete', key=row['_key'] + '_delete', on_click=_delete_row,
                 args=(key, row['_key']), help=f'Remove assignment to {names[identity]}. Save Changes to apply.')
             assignments.append(EmployeeFunction(identity, percentage))
@@ -50,16 +50,16 @@ def employee_function_editor(employee: Employee, functions: pd.DataFrame) -> lis
         args=(key, {'function': next(iter(names), None), 'percentage': 100.0}))
     total = sum(row.allocation_pct for row in assignments if row.function_id in active)
     if total > 100:
-        st.error(f'⚠ {total:g}% allocated across active functions. Reduce the total to 100% or less before saving.')
+        st.error(f'⚠ {total:.0f}% allocated across active functions. Reduce the total to 100% or less before saving.')
     else:
-        st.caption(f'Allocated to active functions: {total:g}% · Remaining: {100 - total:g}%')
+        st.caption(f'Allocated to active functions: {total:.0f}% · Remaining: {100 - total:.0f}%')
     return assignments
 
 
-def employee_exception_editor(service: OrganizationService, employee_id: int, normal_percentage: float) -> None:
+def employee_exception_editor(service: OrganizationService, employee_id: int, normal_percentage: float) -> list[EmployeeCalendarException]:
     """Add, edit and remove inclusive employee exceptions in a single grid."""
     st.markdown('#### Employee Calendar Exceptions')
-    st.caption('Availability replaces the normal occupation percentage during the period. Delete removes a row; Save calendar exceptions applies the changes.')
+    st.caption('Availability replaces the normal occupation percentage during the period. Delete removes a row; Save Changes applies the changes.')
     key = f'employee_exception_grid_{employee_id}'
     rows = _draft_rows(key, [{'id': row.exception_id, 'start': date.fromisoformat(row.start_date),
         'end': date.fromisoformat(row.end_date), 'percentage': float(row.occupation_percentage), 'reason': row.reason or ''}
@@ -72,20 +72,17 @@ def employee_exception_editor(service: OrganizationService, employee_id: int, no
             start = first.date_input('Start date', value=row['start'], key=row['_key'] + '_start', label_visibility='collapsed')
             end = last.date_input('End date', value=row['end'], key=row['_key'] + '_end', label_visibility='collapsed')
             percentage = availability.number_input('Availability (%)', min_value=0.0, max_value=100.0,
-                value=row['percentage'], key=row['_key'] + '_percentage', label_visibility='collapsed')
+                value=row['percentage'], step=5.0, format='%.0f', key=row['_key'] + '_percentage', label_visibility='collapsed')
             description = reason.text_input('Reason', value=row['reason'], key=row['_key'] + '_reason', label_visibility='collapsed')
             action.button('Delete', key=row['_key'] + '_delete', on_click=_delete_row, args=(key, row['_key']),
-                help=f'Remove exception from {start} to {end}. Save calendar exceptions to apply.')
+                help=f'Remove exception from {start} to {end}. Save Changes to apply.')
             items.append(EmployeeCalendarException(employee_id, start, end, percentage,
                 reason=description, exception_id=row['id']))
         if not rows:
             st.caption('No calendar exceptions.')
     st.button('Add calendar exception', key=key + '_add', on_click=_add_row,
         args=(key, {'id': None, 'start': date.today(), 'end': date.today(), 'percentage': float(normal_percentage), 'reason': ''}))
-    if st.button('Save calendar exceptions', type='primary', key=f'save_employee_exception_grid_{employee_id}'):
-        service.replace_employee_exceptions(employee_id, items)
-        st.toast('Employee calendar exceptions saved.')
-        st.rerun()
+    return items
 
 
 def _draft_rows(key: str, initial: list[dict]) -> list[dict]:

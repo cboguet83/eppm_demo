@@ -116,15 +116,13 @@ class TestOrganization(unittest.TestCase):
         self.assertTrue(self.repo.delete_function(arch_id))
         self.assertIsNone(self.repo.get_function_by_id(arch_id))
 
-    def test_employee_crud_and_code_generation(self) -> None:
-        """Verify Employee CRUD, auto-calculated employee codes, and email uniqueness."""
+    def test_employee_crud_and_email_uniqueness(self) -> None:
+        """Verify Employee CRUD and email uniqueness."""
         ft_id = self.repo.create_function_type(FunctionType(function_type="Full Time"))
         fn_id = self.repo.create_function(
             OrgFunction(name="Senior Developer", hierarchy_level=3, function_type_id=ft_id)
         )
 
-        code_1 = self.repo.generate_next_employee_code()
-        self.assertEqual(code_1, "EMP-001")
 
         e1_id = self.repo.create_employee(
             Employee(
@@ -133,16 +131,12 @@ class TestOrganization(unittest.TestCase):
                 email="jdoe@example.com",
                 mobile="+1-555-1234",
                 sigle="JDO",
-                employee_code=code_1,
                 function_id=fn_id,
                 occupation_percentage=80.0,
             )
         )
         self.assertGreater(e1_id, 0)
 
-        # Next code should be EMP-002
-        code_2 = self.repo.generate_next_employee_code()
-        self.assertEqual(code_2, "EMP-002")
 
         # Check email exists
         self.assertTrue(self.repo.check_email_exists("jdoe@example.com"))
@@ -150,10 +144,6 @@ class TestOrganization(unittest.TestCase):
         self.assertFalse(self.repo.check_email_exists("jdoe@example.com", exclude_id=e1_id))
         self.assertFalse(self.repo.check_email_exists("other@example.com"))
 
-        # Check code exists
-        self.assertTrue(self.repo.check_code_exists("EMP-001"))
-        self.assertFalse(self.repo.check_code_exists("EMP-001", exclude_id=e1_id))
-        self.assertFalse(self.repo.check_code_exists("EMP-002"))
 
         # Update
         updated = self.repo.update_employee(
@@ -164,7 +154,6 @@ class TestOrganization(unittest.TestCase):
                 email="jdoe_updated@example.com",
                 mobile="+1-555-9999",
                 sigle="JDO",
-                employee_code="EMP-001",
                 function_id=fn_id,
             )
         )
@@ -185,7 +174,6 @@ class TestOrganization(unittest.TestCase):
                 firstname="Jane",
                 lastname="Doe",
                 email="jane.doe@example.com",
-                employee_code="EMP-001",
                 occupation_percentage=80.0,
             )
         )
@@ -307,16 +295,15 @@ class TestOrganization(unittest.TestCase):
             validate_team("   ")
 
         with self.assertRaises(ValueError):
-            validate_employee("", "Last", "valid@email.com", "EMP-001")
+            validate_employee("", "Last", "valid@email.com")
         with self.assertRaises(ValueError):
-            validate_employee("First", "", "valid@email.com", "EMP-001")
+            validate_employee("First", "", "valid@email.com")
         with self.assertRaises(ValueError):
-            validate_employee("First", "Last", "bad-email", "EMP-001")
-        with self.assertRaises(ValueError):
-            validate_employee("First", "Last", "valid@email.com", "")
+            validate_employee("First", "Last", "bad-email")
+        validate_employee("First", "Last", "valid@email.com")
         with self.assertRaises(ValueError):
             validate_employee(
-                "First", "Last", "valid@email.com", "EMP-001", occupation_percentage=101
+                "First", "Last", "valid@email.com", occupation_percentage=101
             )
         with self.assertRaises(ValueError):
             validate_employee_calendar_exception(
@@ -333,7 +320,6 @@ class TestOrganization(unittest.TestCase):
                 firstname="Alice",
                 lastname="Smith",
                 email="asmith@enterprise.com",
-                employee_code="EMP-001",
                 function_id=fn_id,
             )
         )
@@ -370,7 +356,6 @@ class TestOrganization(unittest.TestCase):
                 firstname="Bob",
                 lastname="Marley",
                 email="bmarley@enterprise.com",
-                employee_code="EMP-999",
                 function_id=fn_id,
             )
         )

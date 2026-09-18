@@ -371,7 +371,7 @@ def test_context_mapping_saves_leaf_mapping_and_keeps_container_indicator_blank(
     leaf = pools.create_pool(ResourcePool('Delivery', parent_pool_id=parent))
     org = create_organization_service(RuntimeResources(authorized.database, authorized.key), access=authorized.binding(4).access)
     org.create_team(Team('Delivery team'))
-    org.create_employee(Employee('Ada', 'Lovelace', 'mapping@example.test', 'MAPPING'))
+    org.create_employee(Employee('Ada', 'Lovelace', 'mapping@example.test'))
     with native_server(authorized, tmp_path, SCREEN) as server, sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:

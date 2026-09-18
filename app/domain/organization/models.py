@@ -88,7 +88,6 @@ class Employee:
         mobile: Mobile telephone number.
         landline: Landline telephone number.
         sigle: Trigram / initials acronym (e.g. 'JDO', 'ASM').
-        employee_code: Unique employee badge/code (e.g. 'EMP-001').
         function_id: Single-function creation shorthand; derived only when one assignment exists.
         occupation_percentage: Employee's normal working percentage (0 to 100).
         deleted_flag: Whether the employee is excluded from staffing capacity.
@@ -98,7 +97,6 @@ class Employee:
     firstname: str
     lastname: str
     email: str
-    employee_code: str
     employee_id: int | None = None
     mobile: str = ""
     sigle: str = ""

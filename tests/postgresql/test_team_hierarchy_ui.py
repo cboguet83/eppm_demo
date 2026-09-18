@@ -22,7 +22,7 @@ def test_team_page_counts_employee_capacity_and_shows_selected_breakdowns(databa
     pools = create_resource_pool_service(database, access=access)
     function = org.create_function(OrgFunction('Engineer', 1))
     team = org.create_team(Team('Delivery'), function_ids=[function])
-    employee = org.create_employee(Employee('Ada', 'One', 'a@ui.test', 'TEAM-ADA', function_id=function))
+    employee = org.create_employee(Employee('Ada', 'One', 'a@ui.test', function_id=function))
     org.create_employee_calendar_exception(EmployeeCalendarException(employee, date.today()-timedelta(days=1),
                                                                      date.today()+timedelta(days=1), 50))
     pool = pools.create_pool(ResourcePool('Engineering'))

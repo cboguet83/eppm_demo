@@ -22,7 +22,7 @@ def directory(authorized, business):
         connection.execute("INSERT INTO eppm.function_type(function_type_id,function_type) VALUES(10,'Engineering')")
         connection.execute("INSERT INTO eppm.function(function_id,name,hierarchy_level,function_type_id) VALUES(10,'Engineer',3,10)")
         connection.execute("INSERT INTO eppm.team(team_id,team_name,manager_function_id) VALUES(10,'Delivery',10)")
-        connection.execute("INSERT INTO eppm.employee(employee_id,firstname,lastname,email,employee_code,function_id) VALUES(10,'Rae','Example','rae@example.test','D10',10),(20,'Robin','Example','robin@example.test','D20',10)")
+        connection.execute("INSERT INTO eppm.employee(employee_id,firstname,lastname,email,function_id) VALUES(10,'Rae','Example','rae@example.test',10),(20,'Robin','Example','robin@example.test',10)")
     return runtime_resources, editor.actor
 
 
@@ -120,7 +120,7 @@ def test_directory_required_names_are_revalidated_before_saving(authorized, dire
     assert directory_snapshot(authorized.setup.operator_url) == before
 
 
-@pytest.mark.parametrize("field,value", [("Email", "robin@example.test"), ("Employee Code", "D20")])
+@pytest.mark.parametrize("field,value", [("Email", "robin@example.test")])
 @pytest.mark.parametrize("action", ["add", "edit"])
 def test_duplicate_employee_identity_fields_do_not_modify_either_profile_or_application_users(authorized, directory, field, value, action):
     runtime_resources, _ = directory

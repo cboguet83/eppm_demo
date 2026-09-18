@@ -462,10 +462,7 @@ def _open_add_employee_dialog(
     df_funcs: pd.DataFrame,
 ) -> None:
     """Modal dialog to create a new employee profile."""
-    auto_code = service.generate_next_employee_code()
-    c_c1, c_c2 = st.columns(2)
-    new_code = c_c1.text_input(t("settings.field_emp_code", default="Employee Code *"), value=auto_code)
-    new_sigle = c_c2.text_input(t("settings.field_sigle", default="Sigle / Trigram"), placeholder="e.g. SCO")
+    new_sigle = st.text_input(t("settings.field_sigle", default="Sigle / Trigram"), placeholder="e.g. SCO")
 
     c_n1, c_n2 = st.columns(2)
     new_first = c_n1.text_input(t("settings.field_firstname", default="First Name *"), placeholder="Sarah")
@@ -489,7 +486,7 @@ def _open_add_employee_dialog(
         min_value=0.0,
         max_value=100.0,
         value=100.0,
-        step=5.0,
+        step=5.0, format="%.0f",
     )
 
     st.divider()
@@ -530,7 +527,7 @@ def _open_add_employee_dialog(
                 min_value=0.0,
                 max_value=100.0,
                 value=0.0,
-                step=5.0,
+                step=5.0, format="%.0f",
                 key="new_employee_exception_percentage",
             )
             initial_exception_reason = st.text_input(
@@ -546,7 +543,7 @@ def _open_add_employee_dialog(
     if col_save.button(t("settings.btn_save", default="Save Employee"), type="primary", width="stretch"):
         try:
             validate_employee(
-                new_first, new_last, new_email, new_code, new_occupation
+                new_first, new_last, new_email, new_occupation
             )
             if add_initial_exception:
                 validate_employee_calendar_exception(
@@ -556,8 +553,6 @@ def _open_add_employee_dialog(
                 )
             if service.check_email_exists(new_email):
                 st.error(t("settings.err_email_taken", email=new_email, default=f"Email '{new_email}' is already registered."))
-            elif service.check_code_exists(new_code):
-                st.error(t("settings.err_code_taken", code=new_code, default=f"Employee code '{new_code}' is already taken."))
             else:
                 initial_exception = (
                     EmployeeCalendarException(
@@ -570,7 +565,7 @@ def _open_add_employee_dialog(
                 new_eid = service.create_employee(
                     Employee(
                         firstname=new_first, lastname=new_last, email=new_email,
-                        mobile=new_mobile, landline=new_landline, sigle=new_sigle, employee_code=new_code,
+                        mobile=new_mobile, landline=new_landline, sigle=new_sigle,
                         function_id=new_func, occupation_percentage=new_occupation,
                     ), initial_exception=initial_exception,
                 )
@@ -585,15 +580,14 @@ def _open_add_employee_dialog(
         st.rerun()
 
 
-@organization_errors
 def _render_employee_calendar_exception_editor(service: OrganizationService, employee_id: int,
-                                                normal_occupation_percentage: float) -> None:
+                                                normal_occupation_percentage: float) -> list[EmployeeCalendarException]:
     """Render the employee's editable calendar grid."""
     from app.presentation.components.employee_editors import employee_exception_editor
-    employee_exception_editor(service, employee_id, normal_occupation_percentage)
+    return employee_exception_editor(service, employee_id, normal_occupation_percentage)
 
 
-@dialog(t("settings.dialog_edit_emp", default="Edit Employee Profile"), width="large")
+@dialog(t("settings.dialog_edit_emp", default="Edit Employee Profile"), width="large", on_dismiss="rerun")
 @organization_errors
 def _open_edit_employee_dialog(
     service: OrganizationService,
@@ -607,9 +601,7 @@ def _open_edit_employee_dialog(
         return
 
 
-    c_c1, c_c2 = st.columns(2)
-    edit_code = c_c1.text_input(t("settings.field_emp_code", default="Employee Code *"), value=emp_obj.employee_code)
-    edit_sigle = c_c2.text_input(t("settings.field_sigle", default="Sigle / Trigram"), value=emp_obj.sigle)
+    edit_sigle = st.text_input(t("settings.field_sigle", default="Sigle / Trigram"), value=emp_obj.sigle)
 
     c_n1, c_n2 = st.columns(2)
     edit_first = c_n1.text_input(t("settings.field_firstname", default="First Name *"), value=emp_obj.firstname)
@@ -626,29 +618,27 @@ def _open_edit_employee_dialog(
         min_value=0.0,
         max_value=100.0,
         value=float(emp_obj.occupation_percentage),
-        step=5.0,
+        step=5.0, format="%.0f",
         help='Full time employee has an occupation of 100%, half time employee has an occupation of 50%.',
     )
 
     from app.presentation.components.employee_editors import employee_function_editor
     assignments = employee_function_editor(emp_obj, df_funcs)
 
-    _render_employee_calendar_exception_editor(
+    exceptions = _render_employee_calendar_exception_editor(
         service,
         emp_id,
-        float(emp_obj.occupation_percentage),
+        edit_occupation,
     )
 
     col_save, col_cancel = st.columns(2)
     if col_save.button(t("settings.btn_save_changes", default="Save Changes"), type="primary", width="stretch"):
         try:
             validate_employee(
-                edit_first, edit_last, edit_email, edit_code, edit_occupation
+                edit_first, edit_last, edit_email, edit_occupation
             )
             if service.check_email_exists(edit_email, exclude_id=emp_id):
                 st.error(t("settings.err_email_taken", email=edit_email, default=f"Email '{edit_email}' is already registered."))
-            elif service.check_code_exists(edit_code, exclude_id=emp_id):
-                st.error(t("settings.err_code_taken", code=edit_code, default=f"Employee code '{edit_code}' is already taken."))
             else:
                 require_change(service.update_employee(
                     Employee(
@@ -659,10 +649,9 @@ def _open_edit_employee_dialog(
                         mobile=edit_mobile,
                         landline=edit_landline,
                         sigle=edit_sigle,
-                        employee_code=edit_code,
                         function_assignments=assignments,
                         occupation_percentage=edit_occupation,
-                    )
+                    ), exceptions=exceptions
                 ))
                 st.toast(t("settings.msg_emp_updated", default="Employee profile updated successfully!"))
                 st.rerun()

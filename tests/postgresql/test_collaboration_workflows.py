@@ -39,10 +39,9 @@ def database(runtime: RuntimeResources, authorized: AuthorizedFixture) -> Runtim
             [(1, "Manager"), (2, "Architect"), (3, "Vacant function")],
         )
         cursor.executemany(
-            """INSERT INTO eppm.employee(firstname,lastname,email,employee_code,function_id)
-            VALUES (%s,%s,%s,%s,%s)""",
-            [("Alice", "Smith", "alice@example.test", "A", 1),
-             ("Bob", "Jones", "bob@example.test", "B", 2)],
+            'INSERT INTO eppm.employee(firstname,lastname,email,function_id)\n            VALUES (%s,%s,%s,%s)',
+            [("Alice", "Smith", "alice@example.test", 1),
+             ("Bob", "Jones", "bob@example.test", 2)],
         )
         connection.execute('INSERT INTO eppm.employee_function(employee_id,function_id) '
                            'SELECT employee_id,function_id FROM eppm.employee')
@@ -85,7 +84,7 @@ def test_roles_can_repeat_and_occupants_follow_the_function(collaboration, datab
     assert repo.list_contacts(1)[0]["person"] == "Vacant function"
     with psycopg.connect(authorized.setup.operator_url) as conn:
         conn.execute("UPDATE eppm.employee_function SET function_id=3 WHERE employee_id="
-                     "(SELECT employee_id FROM eppm.employee WHERE employee_code='A')")
+                     "(SELECT employee_id FROM eppm.employee WHERE email='alice@example.test')")
     assert repo.list_contacts(1)[0]["person"] == "Alice Smith"
     repo.save_catalog("role", "Executive sponsor", role)
     assert repo.list_contacts(1)[0]["role"] == "Executive sponsor"

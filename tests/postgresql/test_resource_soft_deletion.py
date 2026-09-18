@@ -31,7 +31,7 @@ def mapped_team(authorized):
         connection.execute("INSERT INTO eppm.function(function_id,name,hierarchy_level,function_type_id) VALUES (1,'A',1,1)")
         connection.execute("INSERT INTO eppm.team(team_id,team_name,hierarchy_type_id) VALUES (1,'Team 1',1)")
         connection.execute('INSERT INTO eppm.team_function(team_id,function_id) VALUES (1,1)')
-        connection.execute("INSERT INTO eppm.employee(employee_id,firstname,lastname,email,employee_code,function_id) VALUES (1,'Toto','One','toto@example.test','TOTO',1)")
+        connection.execute("INSERT INTO eppm.employee(employee_id,firstname,lastname,email,function_id) VALUES (1,'Toto','One','toto@example.test',1)")
         connection.execute("INSERT INTO eppm.resource_pool(id,name,capacity_fte) VALUES (1,'Mapped',0)")
         connection.execute("INSERT INTO eppm.resource_pool_mapping(pool_id,target_type,target_id) VALUES (1,'team',1)")
         connection.execute("INSERT INTO eppm.employee_calendar_exception(employee_id,start_date,end_date,occupation_percentage) VALUES (1,'2026-01-01','2026-01-02',50)")
@@ -166,7 +166,7 @@ def test_deleted_employee_invalidates_cached_capacity_and_cannot_be_remapped(map
     service = OrganizationService(PostgresOrganizationGateway(setup.database, setup.key, access=setup.binding(4).access))
     assert service.delete_employee(1)
     assert capacity.get_details([1])[0].assigned_capacity_fte == 0
-    assert not service.update_employee(Employee('Changed', 'Name', 'changed@example.test', 'CHANGED', employee_id=1))
+    assert not service.update_employee(Employee('Changed', 'Name', 'changed@example.test', employee_id=1))
     from app.domain.resources.models import PoolMapping
     pools = PostgresResourcePoolGateway(setup.database, setup.key, access=setup.binding(4).access)
     with pytest.raises(ValueError, match='no longer exists'):

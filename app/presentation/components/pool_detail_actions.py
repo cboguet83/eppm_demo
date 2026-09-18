@@ -41,7 +41,7 @@ def confirm_unmap(service: ResourcePoolService, pool_id: int, resource_type: str
     labels = {row.id: f'{row.target_type.title()}: ' + (
         team_names.get(row.target_id, str(row.target_id)) if row.target_type == 'team' else
         function_names.get(row.target_id, str(row.target_id)) if row.target_type == 'function' else name)
-        + f' ({row.allocation_pct:g}%)' for row in mappings}
+        + f' ({row.allocation_pct:.0f}%)' for row in mappings}
     pool_name = next((pool.name for pool in catalog.pools if pool.id == pool_id), str(pool_id))
     st.write(f'Remove mapping sources for {name} from pool {pool_name}.')
     chosen = st.multiselect('Mappings to remove', list(labels),
@@ -79,7 +79,8 @@ def exception_actions(items: list[PoolExceptionBreakdown], pools: ResourcePoolSe
     """Render source-specific row buttons without exposing invalid actions."""
     rows = [{'id': index, 'Pool': item.pool_name, 'Source': item.source, 'Resource': item.resource_name,
         'Mapped via': item.mapping_source, 'Date start': item.start_date, 'Date stop': item.end_date,
-        'FTE reduction': item.reduction_fte, 'Employee availability (%)': item.occupation_percentage,
+        'FTE reduction': item.reduction_fte, 'Employee availability (%)':
+            f'{item.occupation_percentage:.0f}' if item.occupation_percentage is not None else '',
         'Reason': item.reason, 'accessible_name': item.resource_name,
         'allowed_actions': ['delete'] if item.source == 'Pool' else ['edit']}
         for index, item in enumerate(items)]

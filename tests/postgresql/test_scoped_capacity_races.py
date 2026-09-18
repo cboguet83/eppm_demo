@@ -50,7 +50,7 @@ def test_capacity_cache_redacts_staffing_after_shared_permission_is_revoked(pg_d
     service.grant(admin, admin.user_id, "project_viewer", {"kind": "all"})
     assignment = next(row["id"] for row in service.assignments(admin, admin.user_id) if row["role"] == "business_admin")
     with psycopg.connect(pg_database.operator_url) as connection:
-        connection.execute("INSERT INTO eppm.employee(employee_id,firstname,lastname,email,employee_code) VALUES(1,'Resource','Person','resource@example.test','RES1')")
+        connection.execute("INSERT INTO eppm.employee(employee_id,firstname,lastname,email) VALUES(1,'Resource','Person','resource@example.test')")
         connection.execute("INSERT INTO eppm.resource_pool_mapping(pool_id,target_type,target_id) VALUES(1,'employee',1)")
     state = DerivedCacheState()
     cache = PostgresCapacityCache(path.database, path.key, state, lambda: date(2026, 1, 2), access=manager)

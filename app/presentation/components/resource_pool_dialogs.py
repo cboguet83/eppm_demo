@@ -372,7 +372,7 @@ def _open_add_pool_mapping_dialog(
                     f'{kind.title()}: {labels[identity]} - Allocation (%)',
                     min_value=0.0, max_value=float(maximum),
                     value=min(float(current.allocation_pct), maximum) if current else maximum,
-                    step=5.0, key=state_key,
+                    step=5.0, format='%.0f', key=state_key,
                     help=('Remaining direct allocation across active pools. Direct mappings reduce capacity available through teams.'
                           if kind == 'employee' else 'Available team mapping percentage. Members contribute their remaining capacity after direct mappings.'),
                     label_visibility='collapsed',

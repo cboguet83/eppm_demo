@@ -15,7 +15,7 @@ from app.domain.resources.models import PoolMapping, ResourcePool
 def test_deleted_record_breaks_team_capacity_chain(kind):
     inputs = CapacityInputs(
         pool_id=1, pool=ResourcePool('Pool', id=1, capacity_fte=0),
-        employees=[Employee('Toto', 'One', 'toto@example.test', 'TOTO', employee_id=1, function_id=1)],
+        employees=[Employee('Toto', 'One', 'toto@example.test', employee_id=1, function_id=1)],
         functions=[OrgFunction('A', 1, function_id=1)],
         teams=[Team('Team 1', team_id=1)], team_functions={1: [1]},
         mappings=[PoolMapping(pool_id=1, target_type='team', target_id=1)],

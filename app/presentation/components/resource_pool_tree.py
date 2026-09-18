@@ -219,7 +219,7 @@ export default function({data, parentElement, setTriggerValue, setStateValue}) {
             if (collapsed.has(row.id)) hiddenBelow = row.depth;
         }
         const label = document.createElement('span'); label.className = 'pool-name'; label.textContent = row.name;
-        if (row.resource_warning || row.current_exceeded || row.peak_exceeded) label.style.color = '#c41039';
+        if (row.employee_overallocated) label.style.color = '#c41039';
         identity.append(toggle,label); item.appendChild(identity);
         if (row.deleted) {
             const badge = document.createElement('span'); badge.className = 'pool-deleted';
@@ -302,6 +302,7 @@ def resource_pool_tree(
     mapping_types: dict[int, set[str]] | None = None,
     future_exception_ids: set[int] | None = None,
     resource_warnings: dict[int, str] | None = None,
+    overallocated_employee_pool_ids: set[int] | None = None,
 ) -> TableAction | None:
     """Render a validated forest and accept actions only for existing pool IDs.
 
@@ -318,6 +319,7 @@ def resource_pool_tree(
         mapping_types: Direct mapping target types by pool ID.
         future_exception_ids: Leaf pools with an effective exception ending today or later.
         resource_warnings: Cross-pool employee/team allocation warnings by pool.
+        overallocated_employee_pool_ids: Pools with employee allocation above 100%; only these names use red.
 
     Returns:
         A validated selection, edit or child-creation event, when triggered.
@@ -344,6 +346,7 @@ def resource_pool_tree(
         current_capacity = (assigned_capacities or {}).get(identity, 0)
         peak_demand = (peak_demands or {}).get(identity, 0)
         rows.append({'id': identity, 'name': hierarchy.pools[identity].name, 'depth': depth,
+                     'employee_overallocated': calculated and identity in (overallocated_employee_pool_ids or set()),
                      'resource_warning': (resource_warnings or {}).get(identity, '') if calculated else '',
                      'current_exceeded': calculated and current_capacity > nominal_capacity,
                      'peak_exceeded': calculated and peak_demand > (peak_capacities or {}).get(identity, nominal_capacity),

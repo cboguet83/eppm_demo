@@ -45,8 +45,7 @@ def test_staffed_pool_uses_assigned_capacity_and_exception_zero_not_theory(
     project = create_project_service(runtime, access=access).create_project(name='Assigned')
     with psycopg.connect(authorized.setup.operator_url) as connection:
         connection.execute("INSERT INTO eppm.resource_pool(id,name,capacity_fte) VALUES (1,'Pool',10)")
-        connection.execute("""INSERT INTO eppm.employee(employee_id,firstname,lastname,email,employee_code)
-            VALUES (1,'A','Person','a@example.test','A')""")
+        connection.execute("INSERT INTO eppm.employee(employee_id,firstname,lastname,email)\n            VALUES (1,'A','Person','a@example.test')")
         connection.execute("INSERT INTO eppm.resource_pool_mapping(pool_id,target_type,target_id) VALUES (1,'employee',1)")
         connection.execute("""INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,fte_assigned,start_date,end_date,project_plan_id)
             VALUES (1,%s,0.5,'2027-01-01','2027-12-31',(SELECT id FROM eppm.project_plan WHERE project_id=%s AND is_current))""", (project, project))

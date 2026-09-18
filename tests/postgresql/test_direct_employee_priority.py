@@ -19,8 +19,7 @@ def split_resources(database, access):
     pools = create_resource_pool_service(database, access=access)
     first = org.create_function(OrgFunction('Function A', 1))
     second = org.create_function(OrgFunction('Function B', 1))
-    employee = org.create_employee(Employee('Employee', 'A', 'a@priority.test', 'A',
-        function_assignments=[EmployeeFunction(first, 25), EmployeeFunction(second, 75)]))
+    employee = org.create_employee(Employee('Employee', 'A', 'a@priority.test', function_assignments=[EmployeeFunction(first, 25), EmployeeFunction(second, 75)]))
     team_a = org.create_team(Team('Team A'), function_ids=[first])
     team_b = org.create_team(Team('Team B'), function_ids=[second])
     x, y, z = [pools.create_pool(ResourcePool(name, capacity_fte=8)) for name in ('X', 'Y', 'Z')]
@@ -73,7 +72,7 @@ def test_same_pool_adds_direct_and_residual_team_share_and_full_direct_member_do
 def restoration_conflict(database, access):
     org = create_organization_service(database, access=access)
     pools = create_resource_pool_service(database, access=access)
-    employee = org.create_employee(Employee('Ada', 'One', 'restore@priority.test', 'RESTORE'))
+    employee = org.create_employee(Employee('Ada', 'One', 'restore@priority.test'))
     first = pools.create_pool(ResourcePool('Deleted pool'))
     second = pools.create_pool(ResourcePool('Active pool'))
     pools.create_mapping(PoolMapping(first, 'employee', employee, 80))
@@ -215,7 +214,7 @@ def test_migration_rebuilds_existing_staffing_with_global_priority(empty_databas
         connection.execute("INSERT INTO eppm.resource_pool(id,name) VALUES (1,'Team pool'),(2,'Direct pool')")
         connection.execute("INSERT INTO eppm.resource_pool_mapping(pool_id,target_type,target_id,allocation_pct) VALUES (1,'team',1,100),(2,'employee',1,80)")
         connection.execute("INSERT INTO eppm.pool_staffing_projection VALUES (1,1,true,'{}','[]'),(2,.8,true,'{}','[]')")
-    assert migrate(empty_database.operator_url) == ('0056_direct_employee_priority.sql',)
+    assert migrate(empty_database.operator_url) == tuple(item.name for item in discover_migrations()[55:])
     with psycopg.connect(empty_database.operator_url) as connection:
         check_schema(connection)
         assert connection.execute('SELECT assigned_capacity_fte FROM eppm.pool_staffing_projection ORDER BY pool_id').fetchall() == [(.2,), (.8,)]

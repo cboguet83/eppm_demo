@@ -23,7 +23,7 @@ def organization(authorized):
 
 
 def employee(code="EMP-001"):
-    return Employee(" Ada ", " Lovelace ", f"{code.lower()}@example.test", code, occupation_percentage=80)
+    return Employee(" Ada ", " Lovelace ", f"{code.lower()}@example.test", occupation_percentage=80)
 
 
 def exception(employee_id, start=1, end=10):
@@ -34,7 +34,6 @@ def test_crud_preserves_native_boolean_values_and_existing_organization_dtos(org
     service = organization
     assert service.get_all_function_types() == service.get_all_functions() == []
     assert service.get_all_teams() == service.get_all_employees() == []
-    assert service.generate_next_employee_code() == "EMP-001"
     for getter in (service.get_function_type_by_id, service.get_function_by_id, service.get_team_by_id,
                    service.get_employee_by_id, service.get_employee_calendar_exception_by_id):
         assert getter(-1) is None
@@ -48,9 +47,7 @@ def test_crud_preserves_native_boolean_values_and_existing_organization_dtos(org
     assert service.get_function_by_id(function_id).name == "Architect"
     assert service.get_team_by_id(team_id).team_name == "Platform"
     assert service.get_employee_by_id(employee_id).email == "emp-001@example.test"
-    assert service.generate_next_employee_code() == "EMP-002"
     assert service.check_email_exists("EMP-001@EXAMPLE.TEST") and not service.check_email_exists("EMP-001@EXAMPLE.TEST", employee_id)
-    assert service.check_code_exists("emp-001") and not service.check_code_exists("emp-001", employee_id)
     assert service.update_function_type(FunctionType("Architecture", type_id))
     assert service.update_function(OrgFunction("Lead", 3, function_id, type_id, has_reports=True))
     assert service.update_team(Team("Renamed", team_id))

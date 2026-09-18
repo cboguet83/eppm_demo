@@ -240,7 +240,7 @@ def test_today_capacity_uses_mapping_availability_or_pool_exceptions_and_status_
     mapped = pools.create_pool(ResourcePool('Mapped', capacity_fte=10, parent_pool_id=root))
     fallback = pools.create_pool(ResourcePool('Fallback', capacity_fte=4, parent_pool_id=root))
     empty = pools.create_pool(ResourcePool('Empty team', capacity_fte=9, parent_pool_id=root))
-    employee = org.create_employee(Employee('Ada', 'Lovelace', 'current@example.test', 'CURRENT'))
+    employee = org.create_employee(Employee('Ada', 'Lovelace', 'current@example.test'))
     org.create_employee_calendar_exception(EmployeeCalendarException(employee, date(2026, 1, 1), date(2026, 1, 1), 0))
     pools.create_mapping(PoolMapping(mapped, 'employee', employee, 100))
     pools.create_mapping(PoolMapping(empty, 'team', org.create_team(Team('Empty team')), 100))

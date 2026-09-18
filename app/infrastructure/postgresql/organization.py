@@ -206,8 +206,9 @@ class PostgresOrganizationStore:
 
     def get_all_employees(self) -> list[Employee]:
         """Read private employee records through the shared-data policy."""
-        employees = self._rows(Employee, 'SELECT employee_id,firstname,lastname,email,mobile,sigle,employee_code,'
-                          'NULL::bigint AS function_id,occupation_percentage,landline FROM eppm.active_employee ORDER BY lastname COLLATE "C",firstname COLLATE "C"')
+        employees = self._rows(Employee, 'SELECT employee_id,firstname,lastname,email,mobile,sigle,'
+                          'NULL::bigint AS function_id,occupation_percentage,landline FROM eppm.active_employee '
+                          "ORDER BY (upper(lastname) || ' ' || firstname) COLLATE \"C\",employee_id")
         return self._attach_employee_functions(employees)
 
     def _attach_employee_functions(self, employees: list[Employee]) -> list[Employee]:
@@ -225,14 +226,14 @@ class PostgresOrganizationStore:
     def get_employee_by_id(self, emp_id: int) -> Employee | None:
         """Read one private employee, preserving nullable contact defaults."""
         person = self._one(Employee, "SELECT employee_id,firstname,lastname,email,coalesce(mobile,'') AS mobile,coalesce(sigle,'') AS sigle,"
-                         'employee_code,NULL::bigint AS function_id,occupation_percentage,landline FROM eppm.active_employee WHERE employee_id=%s AND NOT deleted_flag', (emp_id,))
+                         'NULL::bigint AS function_id,occupation_percentage,landline FROM eppm.active_employee WHERE employee_id=%s AND NOT deleted_flag', (emp_id,))
         return self._attach_employee_functions([person])[0] if person else None
 
     def create_employee(self, emp: Employee) -> int:
         """Insert an employee within its optional initial-calendar transaction."""
-        identity = self.connection.execute('INSERT INTO eppm.employee(firstname,lastname,email,mobile,sigle,employee_code,function_id,occupation_percentage,landline) '
-                                       'VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING employee_id',
-                                       (emp.firstname, emp.lastname, emp.email, emp.mobile, emp.sigle, emp.employee_code,
+        identity = self.connection.execute('INSERT INTO eppm.employee(firstname,lastname,email,mobile,sigle,function_id,occupation_percentage,landline) '
+                                       'VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING employee_id',
+                                       (emp.firstname, emp.lastname, emp.email, emp.mobile, emp.sigle,
                                         None, emp.occupation_percentage, emp.landline)).fetchone()[0]
         self._save_employee_functions(identity, emp.assignments())
         return identity
@@ -248,9 +249,9 @@ class PostgresOrganizationStore:
 
     def update_employee(self, emp: Employee) -> bool:
         """Update the employee record under native uniqueness constraints."""
-        changed = self.connection.execute('UPDATE eppm.employee SET firstname=%s,lastname=%s,email=%s,mobile=%s,sigle=%s,employee_code=%s,'
+        changed = self.connection.execute('UPDATE eppm.employee SET firstname=%s,lastname=%s,email=%s,mobile=%s,sigle=%s,'
                                        'function_id=%s,occupation_percentage=%s,landline=%s WHERE employee_id=%s AND NOT deleted_flag',
-                                       (emp.firstname, emp.lastname, emp.email, emp.mobile, emp.sigle, emp.employee_code,
+                                       (emp.firstname, emp.lastname, emp.email, emp.mobile, emp.sigle,
                                         None, emp.occupation_percentage, emp.landline, emp.employee_id)).rowcount > 0
         if changed:
             self._save_employee_functions(emp.employee_id, emp.assignments())
@@ -262,7 +263,7 @@ class PostgresOrganizationStore:
 
     def get_employee_calendar_exceptions(self, emp_id: int | None = None) -> list[CalendarExceptionRow]:
         """Return native calendar dates as explicit ISO presentation values."""
-        return self._rows(CalendarExceptionRow, "SELECT c.exception_id,c.employee_id,e.employee_code,e.firstname,e.lastname,"
+        return self._rows(CalendarExceptionRow, "SELECT c.exception_id,c.employee_id,e.firstname,e.lastname,"
                           "to_char(c.start_date,'YYYY-MM-DD') AS start_date,to_char(c.end_date,'YYYY-MM-DD') AS end_date,"
                           'c.occupation_percentage,c.reason FROM eppm.employee_calendar_exception c JOIN eppm.active_employee e USING(employee_id) '
                           'WHERE (%s::bigint IS NULL OR c.employee_id=%s) ORDER BY c.start_date DESC,c.end_date DESC,c.exception_id DESC', (emp_id, emp_id))
@@ -314,11 +315,6 @@ class PostgresOrganizationStore:
         return self.connection.execute('SELECT EXISTS(SELECT 1 FROM eppm.employee WHERE lower(email)=%s '
                                        'AND (%s::bigint IS NULL OR employee_id<>%s))', (email.strip().lower(), exclude_id, exclude_id)).fetchone()[0]
 
-    def check_code_exists(self, code: str, exclude_id: int | None = None) -> bool:
-        """Check a normalized employee code without leaking private rows."""
-        return self.connection.execute('SELECT EXISTS(SELECT 1 FROM eppm.employee WHERE upper(employee_code)=%s '
-                                       'AND (%s::bigint IS NULL OR employee_id<>%s))', (code.strip().upper(), exclude_id, exclude_id)).fetchone()[0]
-
     def get_team_functions(self, team_id: int) -> list[int]:
         """Read stable, deduplicated membership references."""
         return [row[0] for row in self.connection.execute('SELECT function_id FROM eppm.active_team_function WHERE team_id=%s ORDER BY function_id', (team_id,))]
@@ -344,10 +340,6 @@ class PostgresOrganizationStore:
     def remove_team_function(self, team_id: int, function_id: int) -> bool:
         """Remove one membership while retaining the referenced function."""
         return self.connection.execute('DELETE FROM eppm.team_function WHERE team_id=%s AND function_id=%s', (team_id, function_id)).rowcount > 0
-
-    def employee_codes(self) -> list[str]:
-        """Read existing codes for a preview; native uniqueness protects saves."""
-        return [row[0] for row in self.connection.execute('SELECT employee_code FROM eppm.employee')]
 
 
 class PostgresOrganizationGateway:

@@ -236,9 +236,8 @@ def test_catalog_hierarchy_and_duplicate_labels_keep_only_current_project_facets
             connection.execute('INSERT INTO eppm.function(function_id,name,hierarchy_level,manager_function_id) '
                                'VALUES (%s,%s,%s,%s)', (identity, f'Role {identity}', identity - 3,
                                                        identity - 1 if identity > 6 else None))
-            connection.execute('INSERT INTO eppm.employee(employee_id,firstname,lastname,email,employee_code,function_id) '
-                               'VALUES (%s,%s,%s,%s,%s,%s)', (identity, 'Same', 'Name', f'{identity}@example.test',
-                                                            str(identity), identity))
+            connection.execute('INSERT INTO eppm.employee(employee_id,firstname,lastname,email,function_id) VALUES (%s,%s,%s,%s,%s)', (identity, 'Same', 'Name', f'{identity}@example.test',
+                                                            identity))
         connection.execute('UPDATE eppm.project SET function_id=8 WHERE id=1')
         connection.execute('UPDATE eppm.project SET function_id=9 WHERE id IN (2,3)')
     dashboard = service(staffing)

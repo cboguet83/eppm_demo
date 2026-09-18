@@ -78,8 +78,8 @@ def test_organization_labels_membership_facets_and_dynamic_fields(business, auth
         for identity in range(3,7):
             conn.execute('INSERT INTO eppm.function(function_id,name,hierarchy_level,manager_function_id) VALUES(%s,%s,%s,%s)',
                          (identity,f'Role {identity}',identity,identity-1 if identity>3 else None))
-            conn.execute('INSERT INTO eppm.employee(firstname,lastname,email,employee_code,function_id) VALUES(%s,%s,%s,%s,%s)',
-                         ('Same','Name',f'{identity}@example.test',str(identity),identity))
+            conn.execute('INSERT INTO eppm.employee(firstname,lastname,email,function_id) VALUES(%s,%s,%s,%s)',
+                         ('Same','Name',f'{identity}@example.test',identity))
         conn.execute("INSERT INTO eppm.team(team_id,team_name) VALUES(1,'First'),(2,'Second')")
         conn.execute('INSERT INTO eppm.team_function(team_id,function_id) VALUES(1,5),(2,5)')
         conn.execute('UPDATE eppm.project SET function_id=5 WHERE id=1')

@@ -144,8 +144,8 @@ def test_mapping_dialog_preserves_team_and_employee_choices(database: RuntimeRes
     org = create_organization_service(database, access=access)
     team = org.create_team(Team("Team"))
     second_team = org.create_team(Team("Second team"))
-    employee = org.create_employee(Employee("Ada", "Lovelace", "ada@example.invalid", "ADA"))
-    second_employee = org.create_employee(Employee("Grace", "Hopper", "grace@example.invalid", "GRACE"))
+    employee = org.create_employee(Employee("Ada", "Lovelace", "ada@example.invalid"))
+    second_employee = org.create_employee(Employee("Grace", "Hopper", "grace@example.invalid"))
     app = dialog(database, access, f"_open_add_pool_mapping_dialog(service, {pool}, teams, employees)")
     app.multiselect(key=f'mapping_teams_{pool}').set_value([team, second_team]).run()
     app.number_input(key=f'mapping_pct_{pool}_team_{team}').set_value(50).run()
@@ -181,7 +181,7 @@ def test_mapping_batch_rolls_back_removals_when_insertion_fails(database, access
     pool = service.create_pool(ResourcePool('Delivery'))
     org = create_organization_service(database, access=access)
     team = org.create_team(Team('Original team'))
-    employee = org.create_employee(Employee('Ada', 'Lovelace', 'batch@example.invalid', 'BATCH'))
+    employee = org.create_employee(Employee('Ada', 'Lovelace', 'batch@example.invalid'))
     original = service.create_mapping(PoolMapping(pool, 'team', team, 50))
     with psycopg.connect(authorized.setup.operator_url) as connection:
         connection.execute('REVOKE INSERT ON eppm.resource_pool_mapping FROM eppm_runtime')
@@ -279,7 +279,7 @@ def test_container_inspector_shows_children_and_aggregates_without_mapping_contr
     parent = service.create_pool(ResourcePool('Parent'))
     leaf = service.create_pool(ResourcePool('Delivery', capacity_fte=4, parent_pool_id=parent))
     organization = create_organization_service(database, access=access)
-    employee = organization.create_employee(Employee('Ada', 'Lovelace', 'ada@pool.test', 'POOL-ADA'))
+    employee = organization.create_employee(Employee('Ada', 'Lovelace', 'ada@pool.test'))
     service.create_mapping(PoolMapping(leaf, 'employee', employee, 50))
     assignment = service.create_assignment(PoolAssignment(leaf, 1, 0.25))
     app = native_screen("""
@@ -315,7 +315,7 @@ def test_effective_exception_flags_counts_breakdown_and_mapped_editor(database, 
                         (today - timedelta(days=5), today)]:
         service.save_capacity_exception(PoolCapacityException(leaf, first.isoformat(), last.isoformat(), .5))
     service.save_capacity_exception(PoolCapacityException(mapped, today.isoformat(), today.isoformat(), 99, 'Ignored'))
-    employee = organization.create_employee(Employee('Ada', 'Lovelace', 'ada@exception.test', 'EXCEPTION-ADA'))
+    employee = organization.create_employee(Employee('Ada', 'Lovelace', 'ada@exception.test'))
     organization.create_employee_calendar_exception(EmployeeCalendarException(employee, today, today + timedelta(days=1), 50))
     service.create_mapping(PoolMapping(mapped, 'employee', employee, 50))
     app = native_screen("""

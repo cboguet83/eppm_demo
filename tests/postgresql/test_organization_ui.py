@@ -93,17 +93,17 @@ def test_employee_dialog_initial_exception_is_atomic_and_calendar_can_be_edited(
 
     app = dialog(database, access, f"_open_edit_employee_dialog(service, {employee.employee_id}, functions)")
     next(widget for widget in app.number_input if widget.label == 'Availability (%)').set_value(50)
-    app.button(key=f'save_employee_exception_grid_{employee.employee_id}').click().run()
+    button(app, 'Save Changes').click().run()
     assert not app.exception and not app.error
     assert service.get_employee_calendar_exceptions(employee.employee_id)[0].occupation_percentage == 50
     next(widget for widget in app.button if widget.label == 'Delete').click().run()
     assert len(service.get_employee_calendar_exceptions(employee.employee_id)) == 1
-    app.button(key=f'save_employee_exception_grid_{employee.employee_id}').click().run()
+    button(app, 'Save Changes').click().run()
     assert not app.exception and not app.error
     assert service.get_employee_calendar_exceptions(employee.employee_id) == []
     next(widget for widget in app.button if widget.label == 'Add calendar exception').click().run()
     next(widget for widget in app.number_input if widget.label == 'Availability (%)').set_value(75)
-    app.button(key=f'save_employee_exception_grid_{employee.employee_id}').click().run()
+    button(app, 'Save Changes').click().run()
     assert service.get_employee_calendar_exceptions(employee.employee_id)[0].occupation_percentage == 75
 
 

@@ -212,12 +212,11 @@ def render_employees(service: OrganizationService) -> None:
         for row in enriched_emps.to_dict(orient="records"):
             assignments = [item for item in people[int(row['employee_id'])].assignments() if item.function_id in function_names]
             assigned = sum(item.allocation_pct for item in assignments)
-            description = ', '.join(f'{function_names[item.function_id]}: {item.allocation_pct:g}%' for item in assignments)
+            description = ', '.join(f'{function_names[item.function_id]}: {item.allocation_pct:.0f}%' for item in assignments)
             emps_payload.append({
                 'overallocated': assigned > 100,
-                'allocation_warning': f'{assigned:g}% allocated across active functions. {description}' if assigned > 100 else '',
+                'allocation_warning': f'{assigned:.0f}% allocated across active functions. {description}' if assigned > 100 else '',
                 "employee_id": int(row["employee_id"]),
-                "employee_code": str(row.get("employee_code") or ""),
                 "full_name": str(row.get("full_name") or ""),
                 "email": str(row.get("email") or ""),
                 "mobile": str(row.get("mobile") or ""),
@@ -232,7 +231,6 @@ def render_employees(service: OrganizationService) -> None:
     emp_table_event = _table("employee_table",
         employees=emps_payload,
         translations={
-            "col_emp_code": t("settings.col_emp_code", default="Code"),
             "col_full_name": t("settings.col_full_name", default="Full Name"),
             "col_mobile": t("settings.col_mobile", default="Mobile"),
             "col_landline": t("settings.col_landline", default="Landline"),

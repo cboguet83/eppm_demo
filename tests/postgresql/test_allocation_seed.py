@@ -38,8 +38,7 @@ def install(connection, *, project=True):
     from app.infrastructure.postgresql.seed_plan import ensure_operator_plan
     ensure_operator_plan(connection, 1)
     connection.execute("INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date,project_plan_id) VALUES (1,1,'Task','2026-06-01','2026-06-05',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current))")
-    connection.execute("INSERT INTO eppm.employee(employee_id,firstname,lastname,email,employee_code) "
-                       "VALUES (1,'Test','Employee','test@example.invalid','E1')")
+    connection.execute("INSERT INTO eppm.employee(employee_id,firstname,lastname,email) VALUES (1,'Test','Employee','test@example.invalid')")
     with connection.cursor() as cursor:
         cursor.executemany('INSERT INTO eppm.resource_pool(id,name,capacity_fte) VALUES (%s,%s,4)',
                            [(identity, f'Pool {identity}') for identity in range(1, 11)])

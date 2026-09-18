@@ -12,7 +12,7 @@ from app.domain.resources.models import PoolMapping, ResourcePool
 
 def catalog(rows):
     return MappingCatalog([ResourcePool('Alpha', id=1), ResourcePool('Beta', id=2)], CapacityInputs(0,
-        employees=[Employee('Ada', 'One', 'ada@example.test', 'ADA', employee_id=1, function_id=1,
+        employees=[Employee('Ada', 'One', 'ada@example.test', employee_id=1, function_id=1,
                             occupation_percentage=50)],
         functions=[OrgFunction('Engineer', 1, function_id=1)],
         teams=[Team('Team', team_id=1), Team('Other', team_id=2)],

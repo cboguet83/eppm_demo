@@ -44,7 +44,18 @@ def render_resource_pools(
     leaf_ids = [identity for identity in active_hierarchy.pools if not active_hierarchy.children.get(identity)]
     all_pool_details = capacity.get_details(leaf_ids, project_ids=project_ids)
     mappings = service.get_all_mappings()
-    allocations = service.mapping_catalog().allocations()
+    catalog = service.mapping_catalog()
+    allocations = catalog.allocations()
+    functions = {row.function_id: row.name for row in catalog.sources.functions if not row.deleted_flag}
+    employee_functions = {person.employee_id: ', '.join(
+        f'{functions[row.function_id]} ({row.allocation_pct:.0f}%)' for row in person.assignments()
+        if row.function_id in functions) for person in catalog.sources.employees}
+    allocation_details = []
+    for resource in sorted(allocations.overallocated):
+        description = allocations.warning(resource)
+        if resource[0] == 'employee' and employee_functions.get(resource[1]):
+            description += ' Functions: ' + employee_functions[resource[1]] + '.'
+        allocation_details.append(description)
     mapping_types: dict[int, set[str]] = {}
     for mapping in mappings:
         mapping_types.setdefault(mapping.pool_id, set()).add(mapping.target_type)
@@ -62,7 +73,8 @@ def render_resource_pools(
     with kpi5.container(key='overallocated_resources'):
         st.metric('Overallocated teams / employees', f'⚠ {overallocated}' if overallocated else '0',
                 help='Unique teams and employees allocated above 100% across active pools. '
-                     'Employee totals include team mappings, deduplicated within each pool. Deleted pools are excluded.')
+                     'Employee totals include team mappings, deduplicated within each pool. Deleted pools are excluded.'
+                     + ('\n\n' + '\n\n'.join(allocation_details) if allocation_details else ''))
     if overallocated:
         st.html('<style>.st-key-overallocated_resources [data-testid="stMetricValue"] {color:#c41039;}</style>')
     kpi1.metric(t("settings.kpi_total_pools", default="Total Pools"), total_pools)
@@ -103,6 +115,8 @@ def render_resource_pools(
             mapping_types=mapping_types,
             future_exception_ids=future_exception_ids,
             resource_warnings=allocations.pool_warnings(),
+            overallocated_employee_pool_ids={pool for key in allocations.overallocated if key[0] == 'employee'
+                                             for pool, percentage in allocations.usage[key].items() if percentage > 0},
             pool_types={row.id: row.label(get_current_locale()) for row in service.get_all_pool_types()},
             hierarchy_types={row.id: row.label(get_current_locale()) for row in service.get_all_hierarchy_types()},
             tags=service.get_tags_by_pools(list(hierarchy.pools)))
@@ -147,7 +161,7 @@ def render_resource_pools(
                 {"Pool": detail.pool_name, "Resource": ('⚠ ' if (item.resource_type, item.resource_id)
                     in allocations.overallocated else '') + item.resource_name,
                  "Resource type": item.resource_type.title(), "Function": item.function_name,
-                 "Nominal FTE": item.nominal_fte, "Effective %": item.effective_allocation_pct,
+                 "Nominal FTE": item.nominal_fte, "Effective %": f'{item.effective_allocation_pct:.0f}',
                  "Effective FTE": item.effective_fte, "Source": item.source_name,
                  "Deduplication": "Direct override" if item.is_deduplicated else "Standard"}
                 for detail in leaf_details for item in detail.contributing_resources

@@ -24,12 +24,12 @@ def teams_frame(records: list[Team]) -> pd.DataFrame:
 
 def employees_frame(records: list[Employee]) -> pd.DataFrame:
     """Retain the existing employees columns, including empty catalogs."""
-    return pd.DataFrame([asdict(record) for record in records], columns=['employee_id', 'firstname', 'lastname', 'email', 'mobile', 'landline', 'sigle', 'employee_code', 'function_id', 'occupation_percentage'])
+    return pd.DataFrame([asdict(record) for record in records], columns=['employee_id', 'firstname', 'lastname', 'email', 'mobile', 'landline', 'sigle', 'function_id', 'occupation_percentage'])
 
 
 def exceptions_frame(records: list[CalendarExceptionRow]) -> pd.DataFrame:
     """Retain the existing exceptions columns, including empty catalogs."""
-    return pd.DataFrame([asdict(record) for record in records], columns=['exception_id', 'employee_id', 'employee_code', 'firstname', 'lastname', 'start_date', 'end_date', 'occupation_percentage', 'reason'])
+    return pd.DataFrame([asdict(record) for record in records], columns=['exception_id', 'employee_id', 'firstname', 'lastname', 'start_date', 'end_date', 'occupation_percentage', 'reason'])
 
 
 def enrich_functions(

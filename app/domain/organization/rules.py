@@ -1,6 +1,5 @@
 """Pure organization validation and normalization, independent of storage."""
 
-from collections.abc import Iterable
 from dataclasses import replace
 from datetime import date
 from math import isfinite
@@ -63,7 +62,6 @@ def validate_employee(
     firstname: str,
     lastname: str,
     email: str,
-    employee_code: str,
     occupation_percentage: float = 100.0,
 ) -> None:
     """Validates employee profile fields.
@@ -72,7 +70,6 @@ def validate_employee(
         firstname: First name.
         lastname: Last name.
         email: Email address.
-        employee_code: Unique badge code.
         occupation_percentage: Normal working percentage from 0 to 100.
 
     Raises:
@@ -84,8 +81,6 @@ def validate_employee(
         raise ValueError("Last name cannot be empty.")
     if not email or not is_valid_email(email):
         raise ValueError(f"Invalid email address: '{email}'.")
-    if not employee_code or not employee_code.strip():
-        raise ValueError("Employee code cannot be empty.")
     validate_occupation_percentage(occupation_percentage)
 
 
@@ -164,34 +159,19 @@ def validate_team_parent(team: Team, teams: list[Team]) -> None:
 
 
 def normalize_employee(value: Employee) -> Employee:
-    """Validate profiles and preserve case normalization of codes and email."""
+    """Validate profiles and preserve case normalization of sigle and email."""
     validate_employee(value.firstname, value.lastname, value.email,
-                      value.employee_code, value.occupation_percentage)
+                      value.occupation_percentage)
     return replace(value, firstname=value.firstname.strip(), lastname=value.lastname.strip(),
                    email=value.email.strip().lower(), mobile=value.mobile.strip(),
                    landline=value.landline.strip(),
-                   sigle=value.sigle.strip().upper(), employee_code=value.employee_code.strip().upper())
+                   sigle=value.sigle.strip().upper())
 
 
 def normalize_exception(value: EmployeeCalendarException) -> EmployeeCalendarException:
     """Validate inclusive calendar boundaries and trim the optional reason."""
     validate_employee_calendar_exception(value.start_date, value.end_date, value.occupation_percentage)
     return replace(value, reason=value.reason.strip())
-
-
-def next_employee_code(codes: Iterable[str]) -> str:
-    """Suggest the next EMP code, retaining the historical suffix interpretation."""
-    existing = set(codes)
-    maximum = 0
-    for code in existing:
-        parts = code.split("-")
-        if code.startswith("EMP-") and parts[1].isdecimal():
-            maximum = max(maximum, int(parts[1]))
-    candidate = maximum + 1
-    occupied = {code.upper() for code in existing}
-    while f"EMP-{candidate:03d}" in occupied:
-        candidate += 1
-    return f"EMP-{candidate:03d}"
 
 
 def find_level_3_function(

@@ -23,7 +23,7 @@ def test_csv_exports_all_four_catalogs_with_stable_fields_and_safe_text(organiza
     function_id = organization.create_function(OrgFunction('=SUM(1,2)', 2, function_type_id=type_id))
     parent = organization.create_team(Team('Parent'))
     child = organization.create_team(Team('Équipe "Delivery"', parent_team_id=parent))
-    organization.create_employee(Employee('Ada', 'Lovelace', 'ada@example.test', 'EMP-001', function_id=function_id))
+    organization.create_employee(Employee('Ada', 'Lovelace', 'ada@example.test', function_id=function_id))
     for catalog, model, count in [('functions', OrgFunction, 1), ('function_types', FunctionType, 1),
                                   ('teams', Team, 2), ('employees', Employee, 1)]:
         reader = csv.DictReader(io.StringIO(organization.export_csv(catalog)))

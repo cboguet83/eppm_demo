@@ -163,8 +163,7 @@ def test_manager_labels_use_minimal_directory_and_bounded_reporting_ancestry(aut
         connection.execute('ALTER TABLE eppm.function DISABLE TRIGGER USER')
         connection.execute('UPDATE eppm.function SET manager_function_id=6 WHERE function_id=5')
         connection.execute('ALTER TABLE eppm.function ENABLE TRIGGER USER')
-        connection.execute("INSERT INTO eppm.employee(firstname,lastname,email,employee_code,function_id) "
-                           "VALUES (' Ada ','One','private@example.test','PRIVATE',2),('Zed','Zed','z@example.test','Z',2)")
+        connection.execute("INSERT INTO eppm.employee(firstname,lastname,email,function_id) VALUES (' Ada ','One','private@example.test',2),('Zed','Zed','z@example.test',2)")
         connection.execute('UPDATE eppm.project SET function_id=CASE id WHEN 1 THEN 2 WHEN 2 THEN 3 ELSE 5 END')
     browse = service(authorized, 1)
     row = browse.get_detail(1)

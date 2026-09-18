@@ -44,10 +44,10 @@ class TestDatabaseContracts(unittest.TestCase):
     def test_native_employee_availability_defaults_survive_migration_reentry(self) -> None:
         """Verify fresh native availability fields and idempotent operator reentry."""
         with psycopg.connect(self.setup.operator_url) as connection:
-            connection.execute("INSERT INTO eppm.employee(firstname,lastname,email,employee_code) VALUES('Native','Employee','native@example.test','EMP-001')")
+            connection.execute("INSERT INTO eppm.employee(firstname,lastname,email) VALUES('Native','Employee','native@example.test')")
         migrate(self.setup.operator_url)
         with psycopg.connect(self.setup.operator_url) as connection:
-            self.assertEqual(connection.execute("SELECT occupation_percentage FROM eppm.employee WHERE employee_code='EMP-001'").fetchone()[0], 100)
+            self.assertEqual(connection.execute("SELECT occupation_percentage FROM eppm.employee WHERE email='native@example.test'").fetchone()[0], 100)
             self.assertIsNotNone(connection.execute("SELECT to_regclass('eppm.employee_calendar_exception')").fetchone()[0])
 
     def test_seed_default_data_populates_records(self) -> None:

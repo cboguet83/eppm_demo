@@ -264,11 +264,6 @@
       white-space: nowrap;
     }
 
-    .col-code {
-      font-weight: 600;
-      color: #0369a1;
-      width: 90px;
-    }
 
     tr.employee-overallocated td, tr.employee-overallocated td * {color:#c41039 !important;}
     .col-name {
@@ -608,7 +603,6 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       <table id="employees-table">
         <thead>
           <tr>
-            <th scope="col" id="column-employee_code" class="sortable col-code" onclick="sortTable('employee_code')"><span id="th-code">Code</span> <span aria-hidden="true" id="sort-employee_code"></span></th>
             <th scope="col" id="column-full_name" class="sortable col-name" onclick="sortTable('full_name')"><span id="th-name">Full Name</span> <span aria-hidden="true" id="sort-full_name"></span></th>
             <th scope="col" id="column-email" class="sortable" onclick="sortTable('email')">Email <span aria-hidden="true" id="sort-email"></span></th>
             <th scope="col" id="column-mobile" class="sortable" onclick="sortTable('mobile')"><span id="th-mobile">Mobile</span> <span aria-hidden="true" id="sort-mobile"></span></th>
@@ -619,7 +613,6 @@ button:not(.context-menu-item):disabled {opacity:.5;}
             <th scope="col" id="column-function_type_name" class="sortable" onclick="sortTable('function_type_name')"><span id="th-type">Type</span> <span aria-hidden="true" id="sort-function_type_name"></span></th>
           </tr>
           <tr class="filter-row">
-            <th scope="col"><input aria-labelledby="column-employee_code" type="text" class="col-filter-input" id="flt-code" placeholder="Code..." oninput="setColFilter('employee_code', this.value)" /></th>
             <th scope="col">
               <div class="excel-trigger" id="trigger-flt-name" onclick="openExcelFilter('full_name', 'Full Name', event)">
                 <span class="excel-trigger-text" id="label-flt-name">All</span>
@@ -710,7 +703,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     let filteredData = [];
     let translations = {};
     let selectedItem = null;
-    let currentSortCol = 'employee_code';
+    let currentSortCol = 'full_name';
     let sortAsc = true;
     let globalSearchQuery = '';
     let colFilters = {};
@@ -946,9 +939,8 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       const clearBtn = document.getElementById('btn-clear');
       if (clearBtn) clearBtn.style.display = hasActiveFilters ? 'inline-flex' : 'none';
 
-      ['employee_code', 'email', 'mobile', 'landline', 'occupation_percentage'].forEach(k => {
-        const inputId = k === 'employee_code' ? 'code' :
-                        k === 'occupation_percentage' ? 'occupation' : k;
+      ['email', 'mobile', 'landline', 'occupation_percentage'].forEach(k => {
+        const inputId = k === 'occupation_percentage' ? 'occupation' : k;
         const el = document.getElementById(`flt-${inputId}`);
         if (el) el.classList.toggle('active', Boolean(colFilters[k]));
       });
@@ -957,7 +949,6 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         if (globalSearchQuery) {
           const matchGlobal =
             (d.full_name && String(d.full_name).toLowerCase().includes(globalSearchQuery)) ||
-            (d.employee_code && String(d.employee_code).toLowerCase().includes(globalSearchQuery)) ||
             (d.email && String(d.email).toLowerCase().includes(globalSearchQuery)) ||
             (d.mobile && String(d.mobile).toLowerCase().includes(globalSearchQuery)) ||
             (d.landline && String(d.landline).toLowerCase().includes(globalSearchQuery)) ||
@@ -996,13 +987,11 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         if (valA === null || valA === undefined) valA = '';
         if (valB === null || valB === undefined) valB = '';
 
-        if (typeof valA === 'string') {
-          return sortAsc ? valA.localeCompare(valB) : valB.localeCompare(valA);
-        }
-        return sortAsc ? (valA > valB ? 1 : -1) : (valA < valB ? 1 : -1);
+        const comparison = typeof valA === 'string' ? valA.localeCompare(valB) : Number(valA) - Number(valB);
+        return (sortAsc ? comparison : -comparison) || Number(a.employee_id) - Number(b.employee_id);
       });
 
-      ['employee_code', 'full_name', 'email', 'mobile', 'landline', 'sigle', 'function_name', 'occupation_percentage', 'function_type_name'].forEach(col => {
+      ['full_name', 'email', 'mobile', 'landline', 'sigle', 'function_name', 'occupation_percentage', 'function_type_name'].forEach(col => {
         const iconSpan = document.getElementById(`sort-${col}`);
         if (iconSpan) iconSpan.innerText = (currentSortCol === col) ? (sortAsc ? ' ▲' : ' ▼') : '';
       });
@@ -1010,7 +999,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       if (filteredData.length === 0) {
         tbody.innerHTML = `
           <tr>
-            <td colspan="9" class="empty-state">
+            <td colspan="8" class="empty-state">
               ${escapeHtml(translations.no_employees || 'No employees registered matching the filters.')}
             </td>
           </tr>
@@ -1025,14 +1014,13 @@ button:not(.context-menu-item):disabled {opacity:.5;}
           }
 
           tr.innerHTML = `
-            <td class="col-code">${escapeHtml(d.employee_code)}</td>
             <td class="col-name">${escapeHtml(d.full_name)}${d.overallocated ? `<span tabindex="0" role="img" aria-label="${escapeHtml(d.allocation_warning)}" title="${escapeHtml(d.allocation_warning)}"> ⚠</span>` : ''}</td>
             <td>${escapeHtml(d.email || '—')}</td>
             <td>${escapeHtml(d.mobile || '—')}</td>
             <td>${escapeHtml(d.landline || '—')}</td>
             <td><span class="badge-sigle">${escapeHtml(d.sigle || '—')}</span></td>
             <td>${escapeHtml(d.function_name || '—')}</td>
-            <td><span class="badge-occupation">${escapeHtml(Number(d.occupation_percentage || 0).toFixed(1))}%</span></td>
+            <td><span class="badge-occupation">${escapeHtml(Number(d.occupation_percentage || 0).toFixed(0))}%</span></td>
             <td>${escapeHtml(d.function_type_name || '—')}</td>
           `;
 
@@ -1076,7 +1064,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       const divider = document.getElementById('ctx-divider');
 
       if (item) {
-        header.innerText = `Employee: ${item.full_name || item.employee_code}`;
+        header.innerText = `Employee: ${item.full_name || item.employee_id}`;
         header.style.display = 'block';
         editItem.style.display = 'flex';
         delItem.style.display = 'flex';
@@ -1158,7 +1146,6 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     function updateTranslations() {
       const searchInput = document.getElementById('search-box');
       if (translations.search_placeholder) searchInput.ariaLabel = translations.search_placeholder;
-      if (translations.col_emp_code) document.getElementById('th-code').innerText = translations.col_emp_code;
       if (translations.col_full_name) document.getElementById('th-name').innerText = translations.col_full_name;
       if (translations.col_landline) document.getElementById('th-landline').innerText = translations.col_landline;
       if (translations.col_mobile) document.getElementById('th-mobile').innerText = translations.col_mobile;

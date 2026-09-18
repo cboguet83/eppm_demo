@@ -46,7 +46,7 @@ def business(pg_database):
         operator.execute("INSERT INTO eppm.wbs(code) VALUES ('A'),('B')")
         operator.execute("INSERT INTO eppm.resource_pool(name) VALUES ('Pool')")
         operator.execute("INSERT INTO eppm.resource_pool_group(name) VALUES ('First'),('Second'),('Third')")
-        operator.execute("INSERT INTO eppm.employee(firstname,lastname,email,employee_code) VALUES ('Test','Person','person@example.invalid','TEST')")
+        operator.execute("INSERT INTO eppm.employee(firstname,lastname,email) VALUES ('Test','Person','person@example.invalid')")
         operator.execute("INSERT INTO eppm.app_user(status,created_at,updated_at) VALUES ('active',900,900)")
         operator.execute("INSERT INTO eppm.app_session VALUES ('business-session',1,950,2000,980,true,false)")
         operator.execute("""INSERT INTO eppm.app_role_assignment(user_id,role,scope_json,created_at,created_by)

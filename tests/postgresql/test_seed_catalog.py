@@ -124,7 +124,7 @@ def test_seeded_explicit_ids_advance_sequences_and_normal_creates_do_not_collide
     OperatorDatabase(pg_database.operator_url).run(install, write=True)
     with psycopg.connect(pg_database.operator_url) as connection:
         assert connection.execute("INSERT INTO eppm.function(name,hierarchy_level) VALUES ('New role',1) RETURNING function_id").fetchone()[0] > 60
-        assert connection.execute("INSERT INTO eppm.employee(firstname,lastname,email,employee_code) VALUES ('New','Person','new@example.test','NEW') RETURNING employee_id").fetchone()[0] > 50
+        assert connection.execute("INSERT INTO eppm.employee(firstname,lastname,email) VALUES ('New','Person','new@example.test') RETURNING employee_id").fetchone()[0] > 50
         assert connection.execute("INSERT INTO eppm.resource_pool(name) VALUES ('New pool') RETURNING id").fetchone()[0] > 0
         assert connection.execute("INSERT INTO eppm.schema_groups(group_name,display_order) VALUES ('New group',6) RETURNING id").fetchone()[0] > 5
 

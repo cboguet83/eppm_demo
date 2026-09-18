@@ -76,7 +76,7 @@ def test_zero_direct_share_retains_indirect_capacity_and_vacant_function_fallbac
         teams=[Team("Small team", team_id=1, manager_function_id=1)],
         team_functions={1: [1, 2]},
         employees=[
-            Employee("Ada", "Lovelace", "ada@example.invalid", "ADA", employee_id=1, function_id=1)
+            Employee("Ada", "Lovelace", "ada@example.invalid", employee_id=1, function_id=1)
         ],
         mappings=[
             PoolMapping(1, "team", 1, 50),

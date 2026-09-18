@@ -36,7 +36,7 @@ def setup_split(database, access):
     pools = create_resource_pool_service(database, access=access)
     first = org.create_function(OrgFunction('Engineer', 1))
     second = org.create_function(OrgFunction('Analyst', 1))
-    employee = org.create_employee(Employee('Ada', 'One', 'ada@x.test', 'ADA', occupation_percentage=80,
+    employee = org.create_employee(Employee('Ada', 'One', 'ada@x.test', occupation_percentage=80,
         function_assignments=[EmployeeFunction(first, 60), EmployeeFunction(second, 40)]))
     team_a = org.create_team(Team('Engineering'), function_ids=[first])
     team_b = org.create_team(Team('Analysis'), function_ids=[second])
@@ -99,7 +99,7 @@ def test_team_unmapping_names_affected_employees_and_requires_confirmation(datab
     from tests.postgresql.ui import native_screen
 
     org, pools, employee, first, _, team, _, pool, _ = setup_split(database, access)
-    colleague = org.create_employee(Employee('Ben', 'Two', 'ben@x.test', 'BEN', function_id=first))
+    colleague = org.create_employee(Employee('Ben', 'Two', 'ben@x.test', function_id=first))
     script = f'''
 from app.main import create_resource_pool_service
 from app.presentation.components.pool_detail_actions import confirm_unmap

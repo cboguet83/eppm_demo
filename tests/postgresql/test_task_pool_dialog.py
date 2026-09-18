@@ -63,8 +63,7 @@ class TaskPoolDialogTests(unittest.TestCase):
                  (2, 'Empty task', '2026-02-01', '2026-02-28')],
             )
             conn.execute(
-                'INSERT INTO eppm.employee(employee_id,firstname,lastname,email,employee_code) '
-                "VALUES(1,'Test','Employee','test@example.invalid','TEST')"
+                "INSERT INTO eppm.employee(employee_id,firstname,lastname,email) VALUES(1,'Test','Employee','test@example.invalid')"
             )
             cursor.executemany(
                 'INSERT INTO eppm.resource_pool(id,name,capacity_fte) VALUES(%s,%s,%s)',
