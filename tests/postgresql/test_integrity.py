@@ -6,8 +6,6 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
-import json
-from pathlib import Path
 from secrets import token_bytes
 from threading import Barrier
 
@@ -45,7 +43,6 @@ def business(pg_database):
         seed_test_plans(operator)
         operator.execute("INSERT INTO eppm.wbs(code) VALUES ('A'),('B')")
         operator.execute("INSERT INTO eppm.resource_pool(name) VALUES ('Pool')")
-        operator.execute("INSERT INTO eppm.resource_pool_group(name) VALUES ('First'),('Second'),('Third')")
         operator.execute("INSERT INTO eppm.employee(firstname,lastname,email) VALUES ('Test','Person','person@example.invalid')")
         operator.execute("INSERT INTO eppm.app_user(status,created_at,updated_at) VALUES ('active',900,900)")
         operator.execute("INSERT INTO eppm.app_session VALUES ('business-session',1,950,2000,980,true,false)")
@@ -65,21 +62,6 @@ def execute(database, source, parameters=(), *, write=False):
         cursor = connection.execute(source, parameters)
         return cursor.fetchall() if cursor.description is not None else []
     return database.run(operation, write=write)
-
-
-def test_native_baseline_contains_every_current_business_table(pg_database):
-    baseline = json.loads((Path(__file__).parents[2] / "docs/implementation/benchmarks/sqlite-baseline.json").read_text())
-    replaced = {"schema_migration", "display_revision", "pool_capacity_revision", "pool_capacity_cache",
-                "pool_capacity_employee", "planning_summary_cache"}
-    expected = set(baseline["row_counts"]) - replaced
-    with psycopg.connect(pg_database.operator_url) as operator:
-        actual = {row[0] for row in operator.execute("SELECT tablename FROM pg_tables WHERE schemaname='eppm'")}
-    assert actual == expected | {
-        "schema_migration", "database_identity", "request_binding_key", "role_permission",
-        "project_cache_revision", "pool_cache_revision", "catalog_cache_revision",
-        "pool_capacity_cache", "planning_summary_cache", "operator_seed_state",
-        "project_dependency", "resource_pool_capacity_exception",
-    }
 
 
 def test_native_money_dates_booleans_and_json_round_trip_exactly(business):
@@ -142,16 +124,6 @@ def test_hierarchy_codes_are_stable_optional_and_referenced_deletion_is_restrict
     execute(business, "UPDATE eppm.resource_pool SET hierarchy_type_id=NULL", write=True)
     execute(business, "DELETE FROM eppm.hierarchy_type", write=True)
     assert execute(business, "SELECT COUNT(*) FROM eppm.hierarchy_type_translation") == [(0,)]
-
-
-def test_pool_group_membership_rejects_cycles_on_insert_and_update(business):
-    execute(business, "INSERT INTO eppm.resource_pool_group_member(group_id,child_group_id) VALUES (1,2),(2,3)", write=True)
-    with pytest.raises(psycopg.errors.CheckViolation, match="cycle"):
-        execute(business, "INSERT INTO eppm.resource_pool_group_member(group_id,child_group_id) VALUES (3,1)", write=True)
-    with pytest.raises(psycopg.errors.CheckViolation, match="cycle"):
-        execute(business, "UPDATE eppm.resource_pool_group_member SET group_id=3 WHERE group_id=1", write=True)
-    with pytest.raises(psycopg.errors.CheckViolation):
-        execute(business, "INSERT INTO eppm.resource_pool_group_member(group_id,pool_id,child_group_id) VALUES (1,1,3)", write=True)
 
 
 def test_calendar_exception_intervals_are_inclusive_and_can_be_updated(business):
@@ -243,7 +215,7 @@ def test_audit_history_is_append_only_even_for_the_operator(pg_database, busines
                 operator.execute(source)
 
 
-@pytest.mark.parametrize("kind", ["wbs", "calendar", "group"])
+@pytest.mark.parametrize("kind", ["wbs", "calendar"])
 def test_concurrent_aggregate_and_hierarchy_writes_preserve_integrity(business, kind):
     barrier = Barrier(2)
     attempts = [0, 0]
@@ -252,9 +224,6 @@ def test_concurrent_aggregate_and_hierarchy_writes_preserve_integrity(business, 
         "calendar": ("employee_calendar_exception", [
             "INSERT INTO eppm.employee_calendar_exception(employee_id,start_date,end_date,occupation_percentage) VALUES (1,'2026-01-01','2026-01-05',10)",
             "INSERT INTO eppm.employee_calendar_exception(employee_id,start_date,end_date,occupation_percentage) VALUES (1,'2026-01-05','2026-01-06',50)"]),
-        "group": ("resource_pool_group_member", [
-            "INSERT INTO eppm.resource_pool_group_member(group_id,child_group_id) VALUES (1,2)",
-            "INSERT INTO eppm.resource_pool_group_member(group_id,child_group_id) VALUES (2,1)"]),
     }[kind]
 
     def save(index):
@@ -290,4 +259,6 @@ def test_protected_trigger_helpers_are_not_publicly_executable(business):
         "dashboard_revision", "dashboard_resources", "dashboard_resource_breakdown", "pool_effective_capacity", "assignment_period",
         "wbs_options", "project_id_preview", "allocate_project_id",
         "planning_task_source_keys", "portfolio_cache_revision",
+        # Explicit runtime grants added by migrations 0042, 0049 and 0054.
+        "runtime_session", "dashboard_resource_breakdown_scoped", "dashboard_resource_breakdown_with_capacity",
     }

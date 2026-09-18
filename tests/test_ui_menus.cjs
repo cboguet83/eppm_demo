@@ -13,10 +13,17 @@ function loadFunction(context, name) {
 }
 
 function loadPermissions(context, projectIds) {
-  context.editAllProjects = false;
-  context.editableProjectIds = new Set(projectIds.map(String));
-  context.canManageShared = false;
-  for (const name of ['canEditProject', 'canEditTask', 'setMenuActionsVisible']) loadFunction(context, name);
+  // Use the production scenario state and guards together, as the page does.
+  vm.runInContext(script.slice(script.indexOf('    let tasksData ='),
+    script.indexOf('    function toggleBaseline(')), context);
+  vm.runInContext(script.slice(script.indexOf('    let editAllProjects ='),
+    script.indexOf('    let allProjectsData =')), context);
+  loadFunction(context, 'canImportProject');
+  context.selectedContextMenuProjectAlternative = false;
+  context.updatePermissionControls({editable_projects: projectIds});
+  // These tests exercise permitted menu actions; read-only behavior is covered
+  // separately by test_gantt_permissions.cjs.
+  vm.runInContext('editEnabled = true', context);
 }
 
 test('project CSV menu and pool allocation menu retain the selected identity', () => {

@@ -16,9 +16,10 @@ function harness() {
   const context = vm.createContext({document: {getElementById: node},
     window: {innerWidth: 1200, innerHeight: 800},
     hideContextMenu() {}, hideProjectContextMenu() {}, hideDepContextMenu() {}, hideTooltip() {},
-    hideResourceCellContextMenu() {}, confirm: () => true,
+    hideResourceCellContextMenu() {}, renderTimeline() {}, confirm: () => true,
     Streamlit: {setComponentValue: message => messages.push(message)},
     tasksData: [], projectSummariesData: [], currentProjectId: 1, selectedContextMenuTask: null, selectedContextMenuProjectId: null,
+    selectedContextMenuProjectAlternative: false,
   });
   const run = code => vm.runInContext(code, context);
   const load = (start, end) => run(script.slice(script.indexOf(start), script.indexOf(end)));
@@ -28,7 +29,13 @@ function harness() {
   load('    function projectDependencyIssues(', '    function hideResourceCellContextMenu(');
   load('    function triggerManageTaskTags(', '    // TIMELINE RENDERER');
   load('    function triggerGoToResourcePoolDetails(', '    function triggerFilterResourcePool(');
-  return {context, run, load, node, messages};
+  const setEditMode = enabled => {
+    context.toggleEdit(enabled);
+    const event = messages.pop();
+    assert.equal(event.action, 'toggle_edit');
+    assert.equal(event.enabled, enabled);
+  };
+  return {context, run, load, node, messages, setEditMode};
 }
 
 test('baseline replacement requires confirmation while first capture does not', () => {
@@ -38,6 +45,10 @@ test('baseline replacement requires confirmation while first capture does not', 
   const prompts = [];
   h.context.confirm = message => {prompts.push(message); return false;};
   h.context.updatePermissionControls({approvable_projects: [1]});
+  h.context.setCurrentProjectBaseline();
+  assert.equal(prompts.length, 0);
+  assert.equal(h.messages.length, 0, 'Approval permission alone must not enable baseline creation');
+  h.setEditMode(true);
   h.context.setCurrentProjectBaseline();
   assert.equal(prompts.length, 0);
   assert.equal(h.messages.length, 1);
@@ -51,19 +62,23 @@ test('baseline replacement requires confirmation while first capture does not', 
   assert.equal(h.messages[1].action, 'baseline_current_project');
 });
 
-test('task and project menus default to read only and use the independent edit scope', () => {
+for (const editEnabled of [false, true]) test(`task and project menus require permission and edit mode: ${editEnabled}`, () => {
   const h = harness();
+  if (editEnabled) h.setEditMode(true);
   for (const permission of [undefined, {editable_projects: [1]}, {editable_projects: [1], versioned_projects: [1, 2]}]) {
     h.context.updatePermissionControls(permission);
     for (const projectId of [1, 2]) {
       h.context.showContextMenu(null, {id: 10, project_id: projectId});
       h.context.showProjectContextMenu(null, projectId);
-      const expected = permission && projectId === 1 ? '' : 'none';
+      const permitted = Boolean(permission && projectId === 1);
+      const expected = editEnabled && permitted ? '' : 'none';
       for (const id of ['ctx-label-add-step', 'ctx-label-edit-step', 'ctx-label-task-tags',
         'ctx-label-task-pools', 'ctx-label-complete-step', 'ctx-label-delete-step',
-        'ctx-project-add-step', 'ctx-import-csv', 'ctx-label-project-tags', 'ctx-label-project-pools', 'ctx-project-dependencies',
-        'ctx-project-log-event', 'ctx-task-log-event']) {
+        'ctx-project-add-step', 'ctx-import-csv', 'ctx-label-project-tags', 'ctx-label-project-pools', 'ctx-project-dependencies']) {
         assert.equal(h.node(id).style.display, expected, id);
+      }
+      for (const id of ['ctx-project-log-event', 'ctx-task-log-event']) {
+        assert.equal(h.node(id).style.display, permitted ? '' : 'none', id);
       }
       assert.equal(h.node('ctx-export-csv').style.display, undefined);
       assert.equal(h.node('ctx-label-edit-project').style.display, undefined);
@@ -98,7 +113,14 @@ test('stale task actions stop emitting writes after edit permission changes', ()
     'deleteSelectedStep', 'triggerManageProjectTagsFromMenu', 'triggerManageProjectPoolsFromMenu'];
   h.context.updatePermissionControls({editable_projects: [1]});
   actions.forEach(action => h.context[action]());
+  assert.equal(h.messages.length, 0, 'Permission alone must not enable writes');
+  h.setEditMode(true);
+  actions.forEach(action => h.context[action]());
   assert.equal(h.messages.length, actions.length);
+  h.setEditMode(false);
+  actions.forEach(action => h.context[action]());
+  assert.equal(h.messages.length, actions.length, 'Disabling edit mode must stop stale actions');
+  h.setEditMode(true);
   h.context.updatePermissionControls({editable_projects: [2]});
   actions.forEach(action => h.context[action]());
   assert.equal(h.messages.length, actions.length);
@@ -110,6 +132,8 @@ test('stale task actions stop emitting writes after edit permission changes', ()
 test('dependency editing needs both projects and shared pool details need business administration', () => {
   const h = harness();
   h.context.updatePermissionControls({editable_projects: [1]});
+  assert.equal(h.context.canEditDependency({predProjectId: 1, succProjectId: 1}), false);
+  h.setEditMode(true);
   assert.equal(h.context.canEditDependency({predProjectId: 2, succProjectId: 1}), false);
   assert.equal(h.context.canEditDependency({predProjectId: 1, succProjectId: 1}), true);
   h.context.selectedResourceCellCtx = {pool_id: 1};
@@ -127,6 +151,9 @@ test('dependency editing needs both projects and shared pool details need busine
 test('current versioned tasks can reschedule but baseline-only rows cannot', () => {
   const h = harness();
   h.context.updatePermissionControls({editable_projects: [1], versioned_projects: [1], approvable_projects: [2]});
+  assert.equal(h.context.canRescheduleTask({id: 10, project_id: 1}), false);
+  assert.equal(h.context.canBaselineProject(2), false);
+  h.setEditMode(true);
   assert.equal(h.context.canRescheduleTask({id: 10, project_id: 1}), true);
   assert.equal(h.context.canRescheduleTask({id: 10, project_id: 1, baselineOnly: true}), false);
   assert.equal(h.context.canRescheduleTask({id: 20, project_id: 2}), false);
@@ -146,9 +173,37 @@ test('read-only task bars hide resize handles and register no drag action', () =
   assert.equal(listeners.length, 0);
   h.context.updatePermissionControls({editable_projects: [1]});
   h.context.bindDragEvents(element, {id: 10, project_id: 1}, false);
+  assert.equal(listeners.length, 0, 'Permission alone must not enable dragging');
+  h.setEditMode(true);
+  h.context.bindDragEvents(element, {id: 10, project_id: 1}, false);
   assert.equal(listeners.length, 1);
+  h.setEditMode(false);
+  listeners[0].callback({button: 0});
+  assert.equal(h.messages.length, 0);
+  h.setEditMode(true);
   h.context.updatePermissionControls({});
   // A stale listener returns before consuming the event or touching task dates.
   listeners[0].callback({button: 0});
   assert.equal(h.messages.length, 0);
+});
+
+for (const editable of [false, true]) test(`dual mode only permits the editable alternative: ${editable}`, () => {
+  const h = harness();
+  h.run(`alternatives = {'1': {editable: ${editable}, tasks: []}}`);
+  h.context.updatePermissionControls({editable_projects: [1], approvable_projects: [1]});
+  const active = {id: 10, project_id: 1};
+  const alternative = {...active, alternative: true};
+  assert.equal(h.context.canRescheduleTask(alternative), false);
+  h.setEditMode(true);
+  assert.equal(h.context.canEditTask(active), false);
+  assert.equal(h.context.canRescheduleTask(active), false);
+  assert.equal(h.context.canEditTask(alternative), editable);
+  assert.equal(h.context.canRescheduleTask(alternative), editable);
+  assert.equal(h.context.canRescheduleTask({...alternative, baselineOnly: true}), false);
+  assert.equal(h.context.canBaselineProject(1), false);
+  assert.equal(h.context.canEditDependency({predProjectId: 1, succProjectId: 1}), false);
+  assert.equal(h.context.canEditDependency({predProjectId: 1, succProjectId: 1, alternative: true}), editable);
+  h.context.updatePermissionControls({});
+  assert.equal(h.context.canEditTask(alternative), false);
+  assert.equal(h.context.canRescheduleTask(alternative), false);
 });

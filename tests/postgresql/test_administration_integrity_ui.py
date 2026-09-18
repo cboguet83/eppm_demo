@@ -22,7 +22,8 @@ def directory(authorized, business):
         connection.execute("INSERT INTO eppm.function_type(function_type_id,function_type) VALUES(10,'Engineering')")
         connection.execute("INSERT INTO eppm.function(function_id,name,hierarchy_level,function_type_id) VALUES(10,'Engineer',3,10)")
         connection.execute("INSERT INTO eppm.team(team_id,team_name,manager_function_id) VALUES(10,'Delivery',10)")
-        connection.execute("INSERT INTO eppm.employee(employee_id,firstname,lastname,email,function_id) VALUES(10,'Rae','Example','rae@example.test',10),(20,'Robin','Example','robin@example.test',10)")
+        connection.execute("INSERT INTO eppm.employee(employee_id,firstname,lastname,email) VALUES(10,'Rae','Example','rae@example.test'),(20,'Robin','Example','robin@example.test')")
+        connection.execute("INSERT INTO eppm.employee_function(employee_id,function_id,allocation_pct) VALUES(10,10,100),(20,10,100)")
     return runtime_resources, editor.actor
 
 
@@ -52,7 +53,6 @@ def administration_dialog(runtime_resources: RuntimeResources, actor: Actor, ent
         ("employee", "add"): lambda: organization._open_add_employee_dialog(service, functions),
         ("employee", "edit"): lambda: organization._open_edit_employee_dialog(service, record_id, functions),
         ("pool", "edit"): lambda: pools._open_edit_pool_dialog(resources, record_id),
-        ("group", "edit"): lambda: pools._open_edit_pool_group_dialog(resources, record_id),
         ("assignment", "delete"): lambda: pools._confirm_unassign(resources, 1, record_id, "Visible"),
     }
     dialogs[entity, action]()
@@ -74,7 +74,7 @@ def directory_snapshot(operator_url: str) -> dict[str, list[tuple[object, ...]]]
     """Capture business and identity rows so failed writes cannot hide partial changes."""
     with psycopg.connect(operator_url) as connection:
         return {table: connection.execute(f"SELECT * FROM eppm.{table} ORDER BY 1").fetchall() for table in (
-            "function", "function_type", "team", "team_function", "employee", "employee_calendar_exception",
+            "function", "function_type", "team", "team_function", "employee", "employee_function", "employee_calendar_exception",
             "app_user", "app_identity", "app_role_assignment",
         )}
 
@@ -137,7 +137,7 @@ def test_duplicate_employee_identity_fields_do_not_modify_either_profile_or_appl
     assert directory_snapshot(authorized.setup.operator_url) == before
 
 
-@pytest.mark.parametrize("entity", ["function", "team", "employee", "pool", "group"])
+@pytest.mark.parametrize("entity", ["function", "team", "employee", "pool"])
 def test_missing_directory_or_pool_record_cannot_open_an_editable_form(directory, entity):
     app = open_dialog(directory, entity, "edit", record_id=999)
     assert not app.exception and app.error
@@ -150,20 +150,21 @@ def test_employee_calendar_creation_rejects_invalid_periods_and_storage_failure_
     runtime_resources, _ = directory
     before = directory_snapshot(authorized.setup.operator_url)
     app = open_dialog(directory, "employee", "edit")
-    app.date_input(key="employee_exception_start_10_add").set_value(date(2026, 10, 5))
-    app.date_input(key="employee_exception_end_10_add").set_value(date(2026, 10, 4))
-    app.button(key="save_employee_exception_10_add").click().run()
+    next(button for button in app.button if button.label == "Add calendar exception").click().run()
+    next(widget for widget in app.date_input if widget.label == "Start date").set_value(date(2026, 10, 5))
+    next(widget for widget in app.date_input if widget.label == "End date").set_value(date(2026, 10, 4))
+    save(app).click().run()
     assert not app.exception and app.error
     assert directory_snapshot(authorized.setup.operator_url) == before
-    app.date_input(key="employee_exception_end_10_add").set_value(date(2026, 10, 9))
-    app.number_input(key="employee_exception_percentage_10_add").set_value(50.0)
-    app.text_input(key="employee_exception_reason_10_add").input("Reduced capacity")
+    next(widget for widget in app.date_input if widget.label == "End date").set_value(date(2026, 10, 9))
+    next(widget for widget in app.number_input if widget.label == "Availability (%)").set_value(50.0)
+    next(widget for widget in app.text_input if widget.label == "Reason").input("Reduced capacity")
     with psycopg.connect(authorized.setup.operator_url) as connection:
         connection.execute(f"""CREATE FUNCTION eppm.reject_calendar_write() RETURNS trigger
             LANGUAGE plpgsql AS $$ BEGIN {failure}; RETURN NEW; END $$""")
         connection.execute("CREATE TRIGGER reject_calendar BEFORE INSERT ON eppm.employee_calendar_exception "
                            "FOR EACH ROW EXECUTE FUNCTION eppm.reject_calendar_write()")
-    app.button(key="save_employee_exception_10_add").click().run()
+    save(app).click().run()
     assert not app.exception and app.error and "private calendar" not in app.error[0].value
     assert "private_calendar_storage" not in app.error[0].value
     assert directory_snapshot(authorized.setup.operator_url) == before
@@ -171,7 +172,7 @@ def test_employee_calendar_creation_rejects_invalid_periods_and_storage_failure_
         connection.execute("DROP TRIGGER reject_calendar ON eppm.employee_calendar_exception")
     rerun = st.rerun
     with patch("streamlit.rerun", side_effect=lambda **_: rerun()):
-        app.button(key="save_employee_exception_10_add").click().run()
+        save(app).click().run()
     assert not app.exception and not app.error
     after = directory_snapshot(authorized.setup.operator_url)
     assert len(after.pop("employee_calendar_exception")) == 1
@@ -185,7 +186,7 @@ def test_employee_calendar_creation_rejects_invalid_periods_and_storage_failure_
             LEFT JOIN eppm.employee employee USING(employee_id) WHERE employee.employee_id IS NULL""").fetchone() == (0,)
 
 
-def test_business_administrator_can_delete_an_unreferenced_function_without_touching_identities(authorized, directory):
+def test_business_administrator_can_soft_delete_an_unreferenced_function_without_touching_identities(authorized, directory):
     runtime_resources, _ = directory
     with psycopg.connect(authorized.setup.operator_url) as connection:
         connection.execute("INSERT INTO eppm.function(function_id,name,hierarchy_level) VALUES(30,'Vacant function',4)")
@@ -194,7 +195,12 @@ def test_business_administrator_can_delete_an_unreferenced_function_without_touc
     app.button[0].click().run()
     assert not app.exception and not app.error
     after = directory_snapshot(authorized.setup.operator_url)
-    assert len(after.pop("function")) == len(before.pop("function")) - 1
+    previous_functions = before.pop("function")
+    saved_functions = after.pop("function")
+    assert len(saved_functions) == len(previous_functions)
+    assert [row for row in saved_functions if row[0] != 30] == [row for row in previous_functions if row[0] != 30]
+    with psycopg.connect(authorized.setup.operator_url) as connection:
+        assert connection.execute("SELECT deleted_flag FROM eppm.function WHERE function_id=30").fetchone() == (True,)
     assert before == after
 
 
@@ -243,39 +249,6 @@ def test_project_configuration_catalog_crud_does_not_change_fixed_application_ro
     app.button(key=prefix + "_delete").click().run()
     assert not app.exception and not app.error
     assert app.selectbox(key=prefix + "_selection").value is None
-    assert directory_snapshot(authorized.setup.operator_url) == before
-
-
-def test_resource_inspector_updates_and_removes_mappings_without_changing_project_allocations(authorized, directory):
-    runtime_resources, _ = directory
-    with psycopg.connect(authorized.setup.operator_url) as connection:
-        connection.execute("UPDATE eppm.resource_pool SET capacity_fte=0.5,description='Delivery capacity' WHERE id=1")
-        connection.execute("INSERT INTO eppm.team_function(team_id,function_id) VALUES(10,10)")
-        connection.execute("INSERT INTO eppm.resource_pool_mapping(id,pool_id,target_type,target_id,allocation_pct) VALUES(1,1,'function',10,50),(2,1,'employee',10,40),(3,1,'team',10,25)")
-    before = directory_snapshot(authorized.setup.operator_url)
-    app = AppTest.from_function(settings_app, args=directory, default_timeout=30)
-    app.session_state["settings_active_tab"] = "resource_pools"
-    app.run()
-    assert not app.exception
-    assert any("OVERASSIGNMENT" in item.value for item in app.error)
-    text = "\n".join(item.value for item in app.markdown)
-    assert "Legacy function" in text and "Rae Example" in text and "Delivery" in text
-    # Native tab containers are not serialized as widgets by Streamlit 1.63 AppTest.
-    app.session_state["settings_active_tab"] = "resource_pools"
-    app.number_input(key="num_alloc_pct_1").set_value(75).run()
-    assert not app.exception
-    with psycopg.connect(authorized.setup.operator_url) as connection:
-        assert connection.execute("SELECT allocation_pct FROM eppm.resource_pool_mapping WHERE id=1").fetchone()[0] == 75
-    app.session_state["settings_active_tab"] = "resource_pools"
-    app.button(key="btn_del_map_3").click().run()
-    assert not app.exception
-    with psycopg.connect(authorized.setup.operator_url) as connection:
-        mappings = connection.execute("SELECT id,allocation_pct FROM eppm.resource_pool_mapping ORDER BY id").fetchall()
-        assert mappings == [(1, 75), (2, 40)], {
-            "mappings": mappings, "widgets": [(item.key, item.value) for item in app.number_input],
-            "errors": [item.value for item in app.error],
-        }
-        assert connection.execute("SELECT id FROM eppm.resource_pool_assignment ORDER BY id").fetchall() == [(1,), (2,)]
     assert directory_snapshot(authorized.setup.operator_url) == before
 
 

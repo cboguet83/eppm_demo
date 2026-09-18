@@ -631,7 +631,7 @@ def _open_edit_employee_dialog(
         edit_occupation,
     )
 
-    col_save, col_cancel = st.columns(2)
+    col_cancel, col_save = st.columns(2)
     if col_save.button(t("settings.btn_save_changes", default="Save Changes"), type="primary", width="stretch"):
         try:
             validate_employee(

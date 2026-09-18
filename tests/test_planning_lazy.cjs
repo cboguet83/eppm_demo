@@ -112,9 +112,12 @@ test('HTTP failures leave existing rows visible and offer an explicit retry', as
 
 for (const sameSelection of [true,false]) test(`new chart data preserves the viewport only for the same selection: ${sameSelection}`,()=>{
   const h=harness(), viewport={scrollTop:12000,scrollLeft:750}; let render;
+  const elements = new Map([
+    ['timeline-body-scroller', viewport], ['enable-edit', {}], ['ctx-show-baseline', {}],
+  ]);
   Object.assign(h.context,{
     window:{addEventListener(type,listener){render=listener;}},
-    document:{getElementById:id=>id==='show-baseline'?{}:viewport,
+    document:{getElementById:id=>elements.get(id),
       body:{classList:{toggle(){}}},documentElement:{style:{setProperty(){}}}}, updatePermissionControls(){},
     lastFilterReset:0,hasInitializedCollapse:true,collapsedProjects:new Set(['2']),
     renderTimeline(){viewport.scrollTop=0;viewport.scrollLeft=0;},
@@ -124,6 +127,8 @@ for (const sameSelection of [true,false]) test(`new chart data preserves the vie
   render({data:{type:'streamlit:render',args:{tasks:[],data_revision:'new',scope_token:'new-scope',
     view_scope:sameSelection?'selection':'different-selection',loaded_project_ids:[],project_summaries:[]}}});
   assert.deepEqual(viewport,sameSelection?{scrollTop:12000,scrollLeft:750}:{scrollTop:0,scrollLeft:0});
+  assert.equal(elements.get('enable-edit').checked, false);
+  assert.equal(elements.get('ctx-show-baseline').textContent, 'Show baseline');
   assert.equal(h.context.collapsedProjects.has('2'),sameSelection);
 });
 

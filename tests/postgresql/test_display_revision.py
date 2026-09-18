@@ -76,7 +76,6 @@ def test_permission_change_invalidates_display_with_unchanged_read_scope(busines
     "UPDATE eppm.schema_parameters SET param_name='Renamed' WHERE param_id='DEPT'",
     "UPDATE eppm.project_property_value SET text_value='Delivery' WHERE project_id=1",
     "DELETE FROM eppm.task_dependencies",
-    "INSERT INTO eppm.resource_pool_group(name) VALUES('New group')",
 ])
 def test_display_revision_tracks_committed_business_changes_and_ignores_rollbacks(pg_database, business, sql):
     path, _, _, editor, _ = business
@@ -143,7 +142,8 @@ def test_portfolio_paging_keeps_context_and_requested_offset_after_activity(pg_d
 
     path, service, _, _, manager = business
     with psycopg.connect(pg_database.operator_url) as connection:
-        connection.cursor().executemany("INSERT INTO eppm.project(id,name) VALUES(%s,%s)", [(index, f"Project {index}") for index in range(3, 303)])
+        # Paging needs enough projects within the default In Progress filter.
+        connection.cursor().executemany("INSERT INTO eppm.project(id,name,status) VALUES(%s,%s,'In Progress')", [(index, f"Project {index}") for index in range(3, 303)])
     with patch("app.presentation.pages.portfolio.portfolio_project_table") as table:
         app = AppTest.from_function(portfolio_app, args=(path, manager.actor), default_timeout=30).run()
         assert not app.exception and not app.error

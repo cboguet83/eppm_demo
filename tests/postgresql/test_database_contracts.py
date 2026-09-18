@@ -166,6 +166,10 @@ class TestDatabaseContracts(unittest.TestCase):
         # Insert custom dummy data that should be wiped on force re-seed
         with psycopg.connect(self.setup.operator_url) as conn:
             cursor = conn.cursor()
+            seeded_pools = cursor.execute(
+                "SELECT pool.name,parent.name FROM eppm.resource_pool pool "
+                "LEFT JOIN eppm.resource_pool parent ON parent.id=pool.parent_pool_id ORDER BY pool.name"
+            ).fetchall()
             cursor.execute(
                 "INSERT INTO eppm.project (id, name, status, planned_budget, actual_budget) VALUES (999, 'Dummy Custom Project', 'Draft', 1000, 500)"
             )
@@ -203,7 +207,8 @@ class TestDatabaseContracts(unittest.TestCase):
             self.assertEqual(cursor.fetchone()[0], 60)
             cursor.execute("SELECT COUNT(*) FROM eppm.employee")
             self.assertEqual(cursor.fetchone()[0], 50)
-            cursor.execute("SELECT COUNT(*) FROM eppm.resource_pool")
-            self.assertEqual(cursor.fetchone()[0], 33)
-            cursor.execute("SELECT COUNT(*) FROM eppm.resource_pool_group")
-            self.assertEqual(cursor.fetchone()[0], 7)
+            cursor.execute(
+                "SELECT pool.name,parent.name FROM eppm.resource_pool pool "
+                "LEFT JOIN eppm.resource_pool parent ON parent.id=pool.parent_pool_id ORDER BY pool.name"
+            )
+            self.assertEqual(cursor.fetchall(), seeded_pools)

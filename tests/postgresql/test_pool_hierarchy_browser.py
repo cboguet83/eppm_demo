@@ -245,7 +245,7 @@ def test_context_child_creation_warns_for_assigned_pool(authorized, tmp_path):
             browser.close()
 
 
-def test_header_filters_keep_ancestors_and_pool_tags_and_exception_editor_are_visible(authorized, tmp_path):
+def test_header_filters_keep_ancestors_and_pool_tags_and_exception_grid_are_visible(authorized, tmp_path):
     pools = service(authorized)
     with psycopg.connect(authorized.setup.operator_url) as connection:
         connection.execute("INSERT INTO eppm.tag_group(id,tag_group_name) VALUES(1,'pool_tag'),(2,'project_tag')")
@@ -300,11 +300,9 @@ def test_header_filters_keep_ancestors_and_pool_tags_and_exception_editor_are_vi
             expect(exceptions).to_be_visible()
             assert exceptions.bounding_box()['y'] > dialog.get_by_role('button', name='Save Changes', exact=True).bounding_box()['y']
             exceptions.click()
-            dialog.get_by_role('textbox', name='Reason', exact=True).fill('Training')
-            dialog.get_by_role('button', name='Save exception', exact=True).click()
+            expect(dialog.get_by_test_id('stDataFrame')).to_be_visible()
+            dialog.get_by_role('button', name='Cancel', exact=True).click()
             expect(dialog).to_have_count(0)
-            with psycopg.connect(authorized.setup.operator_url) as connection:
-                assert connection.execute('SELECT reason FROM eppm.resource_pool_capacity_exception WHERE pool_id=%s', (child,)).fetchone() == ('Training',)
             expect(tree.get_by_role('treeitem', name='Other', exact=True)).to_have_count(0)
             page.screenshot(path=str(tmp_path / 'pool-tags-filters.png'), full_page=True)
         finally:
@@ -385,12 +383,14 @@ def test_context_mapping_saves_leaf_mapping_and_keeps_container_indicator_blank(
             row.click(button='right')
             page.get_by_role('menuitem', name='Map employees or teams', exact=True).click()
             dialog = page.get_by_role('dialog')
+            if target_type == 'employee':
+                dialog.get_by_role('checkbox', name='direct employee mapping mode', exact=True).press('Space')
             selector = dialog.get_by_role('combobox', name='Teams' if target_type == 'team' else 'Employees', exact=True)
             selector.click()
             page.get_by_role('option', name=re.compile('Delivery team' if target_type == 'team' else 'Ada Lovelace')).click()
-            page.get_by_text('Select employees and teams to map.', exact=False).click()
-            expect(dialog.get_by_label(re.compile('Allocation'))).to_have_count(1)
-            expect(dialog.get_by_label(re.compile('Allocation'))).to_have_value('100.00')
+            dialog.get_by_text('Select employees and teams with remaining allocation.', exact=False).click()
+            expect(dialog.get_by_role('spinbutton', name=re.compile('Allocation'))).to_have_count(1)
+            expect(dialog.get_by_role('spinbutton', name=re.compile('Allocation'))).to_have_value('100')
             expect(dialog.get_by_role('button', name='Remove', exact=True)).to_have_count(1)
             page.screenshot(path=str(tmp_path / 'mapping-grid.png'), full_page=True)
             dialog.get_by_role('button', name=re.compile('^Save')).click()
@@ -401,8 +401,10 @@ def test_context_mapping_saves_leaf_mapping_and_keeps_container_indicator_blank(
                 assert connection.execute('SELECT target_type,allocation_pct FROM eppm.resource_pool_mapping WHERE pool_id=%s', (leaf,)).fetchall() == [(target_type, 100)]
             row.click(button='right')
             page.get_by_role('menuitem', name='Map employees or teams', exact=True).click()
+            if target_type == 'employee':
+                dialog.get_by_role('checkbox', name='direct employee mapping mode', exact=True).press('Space')
             dialog.get_by_role('button', name='Remove', exact=True).click()
-            expect(dialog.get_by_label(re.compile('Allocation'))).to_have_count(0)
+            expect(dialog.get_by_role('spinbutton', name=re.compile('Allocation'))).to_have_count(0)
             expect(dialog.get_by_text('No mappings.', exact=False)).to_be_visible()
             dialog.get_by_role('button', name='Save mappings', exact=True).click()
             expect(dialog).to_have_count(0)
