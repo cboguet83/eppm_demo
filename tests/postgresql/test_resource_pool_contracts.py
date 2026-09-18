@@ -125,8 +125,8 @@ def test_concurrent_opposite_group_edges_cannot_commit_a_cycle(database: Runtime
 def test_assignment_filters_missing_records_and_mapping_upsert_identity(database: RuntimeResources, access: BusinessAccess) -> None:
     service = create_resource_pool_service(database, access=access)
     organization = create_organization_service(database, access=access)
-    organization.create_function(OrgFunction('First function', 1))
-    organization.create_function(OrgFunction('Second function', 1))
+    organization.create_function(OrgFunction('First function'))
+    organization.create_function(OrgFunction('Second function'))
     other_service = create_resource_pool_service(database, access=access)
     pool = service.create_pool(ResourcePool("Pool"))
     mapping = PoolMapping(pool, "function", 1)

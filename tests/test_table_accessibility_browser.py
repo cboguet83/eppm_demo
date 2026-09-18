@@ -10,7 +10,7 @@ COMPONENTS = Path(__file__).resolve().parents[1] / 'app/presentation/assets/comp
 
 
 @pytest.mark.parametrize('component', [
-    'employee_table', 'function_table', 'function_type_table', 'team_table',
+    'employee_table', 'function_type_table', 'team_table',
     'project_tag_table', 'task_tag_table', 'tag_dictionary_table', 'tag_group_table',
 ])
 def test_table_filters_have_accessible_names_and_scoped_headers(component):

@@ -39,7 +39,7 @@ def test_crud_preserves_native_boolean_values_and_existing_organization_dtos(org
         assert getter(-1) is None
     assert service.get_effective_occupation_percentage(-1, date(2026, 9, 1)) is None
     type_id = service.create_function_type(FunctionType(" Engineering "))
-    function_id = service.create_function(OrgFunction(" Architect ", 2, function_type_id=type_id))
+    function_id = service.create_function(OrgFunction(" Architect ", function_type_id=type_id))
     team_id = service.create_team(Team(" Platform "), function_ids=[function_id, function_id])
     employee_id = service.create_employee(replace(employee(), function_id=function_id))
     assert service.get_team_functions(team_id) == [function_id]
@@ -49,10 +49,10 @@ def test_crud_preserves_native_boolean_values_and_existing_organization_dtos(org
     assert service.get_employee_by_id(employee_id).email == "emp-001@example.test"
     assert service.check_email_exists("EMP-001@EXAMPLE.TEST") and not service.check_email_exists("EMP-001@EXAMPLE.TEST", employee_id)
     assert service.update_function_type(FunctionType("Architecture", type_id))
-    assert service.update_function(OrgFunction("Lead", 3, function_id, type_id))
+    assert service.update_function(OrgFunction("Lead", function_id, type_id))
     assert service.update_team(Team("Renamed", team_id))
     assert service.update_employee(replace(employee(), employee_id=employee_id, occupation_percentage=60, function_id=function_id))
-    assert service.get_all_functions()[0].hierarchy_level == 3
+    assert "hierarchy_level" not in asdict(service.get_all_functions()[0])
     assert service.get_all_function_types()[0].function_type == "Architecture"
     assert service.get_all_teams()[0].team_name == "Renamed"
     assert service.get_all_employees()[0].occupation_percentage == 60
@@ -75,14 +75,14 @@ def test_crud_preserves_native_boolean_values_and_existing_organization_dtos(org
 @pytest.mark.parametrize("missing", [None, -1])
 def test_updates_keep_missing_record_results_without_creating_memberships(organization, missing):
     assert not organization.update_function_type(FunctionType("Absent", missing))
-    assert not organization.update_function(OrgFunction("Absent", 1, missing))
+    assert not organization.update_function(OrgFunction("Absent", missing))
     assert not organization.update_team(Team("Absent", missing), function_ids=[999])
     assert not organization.update_employee(replace(employee(), employee_id=missing))
     assert not organization.update_employee_calendar_exception(replace(exception(1), exception_id=missing))
 
 
 def test_team_membership_and_details_commit_or_rollback_together(organization):
-    member = organization.create_function(OrgFunction("Member", 1))
+    member = organization.create_function(OrgFunction("Member"))
     with pytest.raises(ValueError, match='no longer exists'):
         organization.create_team(Team("Partial"), function_ids=[member, 999])
     assert organization.get_all_teams() == []
@@ -164,7 +164,7 @@ def test_hierarchy_labels_and_optional_team_assignments_are_atomic(organization)
 
 
 def test_scoped_reader_sees_only_name_projection_and_no_private_employee_fields(organization, authorized, caplog):
-    function_id = organization.create_function(OrgFunction("Lead", 1))
+    function_id = organization.create_function(OrgFunction("Lead"))
     organization.create_employee(replace(employee(), function_id=function_id, mobile="private phone", landline="private landline"))
     reader = OrganizationService(PostgresOrganizationGateway(authorized.database, authorized.key, access=authorized.binding(1).access))
     assert asdict(reader.employee_references()[0]) == {"function_id": function_id, "firstname": "Ada", "lastname": "Lovelace"}
@@ -214,7 +214,7 @@ def simultaneous_gateways(authorized):
 
 
 def test_concurrent_team_replacements_replay_complete_details_and_membership(organization, authorized):
-    members = [organization.create_function(OrgFunction(name, 1)) for name in ("First", "Second")]
+    members = [organization.create_function(OrgFunction(name)) for name in ("First", "Second")]
     team_id = organization.create_team(Team("Initial"))
     services, attempts = simultaneous_gateways(authorized)
     def update(index):

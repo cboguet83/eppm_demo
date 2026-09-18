@@ -2,6 +2,7 @@
 
 from collections.abc import Callable, Collection, Sequence
 from datetime import date
+from uuid import uuid4
 
 import psycopg
 from psycopg.rows import class_row, dict_row
@@ -42,8 +43,8 @@ class PostgresOrganizationStore:
 
     def function_references(self) -> list[FunctionReference]:
         """Read reporting ancestry without employee or staffing records."""
-        return self._rows(FunctionReference, 'SELECT function_id,name,hierarchy_level,manager_function_id '
-                          'FROM eppm.active_function ORDER BY hierarchy_level,name COLLATE "C"')
+        return self._rows(FunctionReference, 'SELECT function_id,name,manager_function_id '
+                          'FROM eppm.active_function ORDER BY name COLLATE "C",function_id')
 
     def employee_references(self) -> list[EmployeeReference]:
         """Read the dedicated name-only directory for authorized project labels."""
@@ -108,42 +109,51 @@ class PostgresOrganizationStore:
         return self.connection.execute('UPDATE eppm.function_type SET deleted_flag=true WHERE function_type_id=%s AND NOT deleted_flag', (type_id,)).rowcount > 0
 
     def get_all_functions(self, *, include_deleted: bool = False) -> list[OrgFunction]:
-        """Read functions by hierarchy level and binary name order."""
+        """Read functions in binary name and identity order."""
         source = 'eppm.function' if include_deleted else 'eppm.active_function'
-        return self._rows(OrgFunction, 'SELECT function_id,name,hierarchy_level,function_type_id,manager_function_id,'
+        return self._rows(OrgFunction, 'SELECT function_id,name,function_type_id,manager_function_id,'
                           f'dual_manager_function_id,fte_percentage,deleted_flag FROM {source} '
-                          'ORDER BY hierarchy_level,name COLLATE "C"')
+                          'ORDER BY name COLLATE "C",function_id')
 
     def get_function_by_id(self, func_id: int) -> OrgFunction | None:
         """Read one active function with the established FTE default."""
-        return self._one(OrgFunction, 'SELECT function_id,name,hierarchy_level,function_type_id,manager_function_id,'
+        return self._one(OrgFunction, 'SELECT function_id,name,function_type_id,manager_function_id,'
                          'dual_manager_function_id,coalesce(fte_percentage,100) AS fte_percentage,deleted_flag '
                          'FROM eppm.active_function WHERE function_id=%s AND NOT deleted_flag', (func_id,))
 
     def create_function(self, func: OrgFunction) -> int:
         """Persist reporting relationships and a generated function identity."""
         self._function_references(func)
-        return self.connection.execute('INSERT INTO eppm.function(name,hierarchy_level,function_type_id,manager_function_id,'
-                                       'dual_manager_function_id,fte_percentage) VALUES (%s,%s,%s,%s,%s,%s) RETURNING function_id',
-                                       (func.name, func.hierarchy_level, func.function_type_id, func.manager_function_id,
+        return self.connection.execute('INSERT INTO eppm.function(name,function_type_id,manager_function_id,'
+                                       'dual_manager_function_id,fte_percentage) VALUES (%s,%s,%s,%s,%s) RETURNING function_id',
+                                       (func.name, func.function_type_id, func.manager_function_id,
                                         func.dual_manager_function_id, func.fte_percentage)).fetchone()[0]
 
     def update_function(self, func: OrgFunction) -> bool:
         """Update function attributes and reporting relationships together."""
         self._function_references(func)
-        return self.connection.execute('UPDATE eppm.function SET name=%s,hierarchy_level=%s,function_type_id=%s,manager_function_id=%s,'
+        return self.connection.execute('UPDATE eppm.function SET name=%s,function_type_id=%s,manager_function_id=%s,'
                                        'dual_manager_function_id=%s,fte_percentage=%s WHERE function_id=%s AND NOT deleted_flag',
-                                       (func.name, func.hierarchy_level, func.function_type_id, func.manager_function_id,
+                                       (func.name, func.function_type_id, func.manager_function_id,
                                         func.dual_manager_function_id, func.fte_percentage, func.function_id)).rowcount > 0
 
     def write_imported_function(self, func: OrgFunction) -> None:
         """Persist validated final catalog fields without changing retained memberships."""
         if not func.deleted_flag:
             require_live_reference(self.connection, 'function_type', func.function_type_id)
-        self.connection.execute('UPDATE eppm.function SET name=%s,hierarchy_level=%s,function_type_id=%s,'
-            'manager_function_id=%s,dual_manager_function_id=%s,fte_percentage=%s,deleted_flag=%s WHERE function_id=%s',
-            (func.name, func.hierarchy_level, func.function_type_id, func.manager_function_id,
-             func.dual_manager_function_id, func.fte_percentage, func.deleted_flag, func.function_id))
+        try:
+            self.connection.execute('UPDATE eppm.function SET name=%s,function_type_id=%s,'
+                'manager_function_id=%s,dual_manager_function_id=%s,fte_percentage=%s,deleted_flag=%s WHERE function_id=%s',
+                (func.name, func.function_type_id, func.manager_function_id,
+                 func.dual_manager_function_id, func.fte_percentage, func.deleted_flag, func.function_id))
+        except psycopg.IntegrityError as error:
+            field = {
+                'function_function_type_id_fkey': 'function_type_id',
+                'function_manager_function_id_fkey': 'manager_function_id',
+                'function_dual_manager_function_id_fkey': 'dual_manager_function_id',
+            }.get(error.diag.constraint_name)
+            reason = f'{field} references a missing record.' if field else 'A reference or value violates a database constraint.'
+            raise OrganizationConflictError(reason) from None
 
     def delete_function(self, func_id: int) -> bool:
         """Flag the function while retaining all historical relationships."""
@@ -375,5 +385,9 @@ class PostgresOrganizationGateway:
         except psycopg.IntegrityError:
             raise OrganizationConflictError('The organization change conflicts with an existing reference or unique value.') from None
         except (psycopg.Error, DatabaseUnavailableError, TransactionRetryError) as error:
-            logger.error('Organization storage operation failed (%s)', type(error).__name__)
-            raise OrganizationStorageError('Organization data could not be accessed. Please try again.') from None
+            reference = uuid4().hex[:12]
+            source = 'database connection' if isinstance(error, (DatabaseUnavailableError, psycopg.OperationalError)) else 'database operation'
+            logger.error('Organization storage operation failed reference=%s source=%s error=%s sqlstate=%s',
+                         reference, source, type(error).__name__, getattr(error, 'sqlstate', None))
+            raise OrganizationStorageError(f'Organization data could not be accessed: {source} failed. '
+                                           f'Please try again. Error reference: {reference}.') from None

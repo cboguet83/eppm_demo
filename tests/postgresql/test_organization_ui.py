@@ -52,7 +52,7 @@ def button(app: AppTest, text: str):
 
 def test_team_dialog_saves_details_and_membership_then_edits_and_deletes(database: RuntimeResources, access: BusinessAccess) -> None:
     service = create_organization_service(database, access=access)
-    member = service.create_function(OrgFunction("Engineer", 3))
+    member = service.create_function(OrgFunction("Engineer"))
     app = dialog(database, access, "_open_add_team_dialog(service, functions)")
     assert not any('Leader' in widget.label for widget in app.selectbox)
     app.text_input[0].input("Delivery")

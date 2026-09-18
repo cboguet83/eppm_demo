@@ -16,7 +16,7 @@ from tests.postgresql.test_resource_pool_ui import database, access
 
 def test_profile_save_updates_all_sections_or_rolls_back(database, access):
     organization = create_organization_service(database, access=access)
-    function = organization.create_function(OrgFunction('Engineer', 1))
+    function = organization.create_function(OrgFunction('Engineer'))
     identity = organization.create_employee(Employee('Ada', 'One', 'ada@profile.test', function_id=function))
     person = organization.get_employee_by_id(identity)
     exception = EmployeeCalendarException(identity, date(2026, 1, 1), date(2026, 1, 3), 25)
@@ -43,7 +43,7 @@ def test_employee_code_migration_preserves_identity_membership_and_calendar(empt
         (tmp_path / migration.name).write_bytes(migration.sql.encode('utf-8'))
     migrate(empty_database.operator_url, directory=tmp_path)
     with psycopg.connect(empty_database.operator_url) as connection:
-        connection.execute("INSERT INTO eppm.function(function_id,name,hierarchy_level) VALUES (1,'Engineer',1)")
+        connection.execute("INSERT INTO eppm.function(function_id,name) VALUES (1,'Engineer')")
         connection.execute("INSERT INTO eppm.employee(employee_id,firstname,lastname,email,employee_code) VALUES (7,'Ada','One','a@profile.test','OLD')")
         connection.execute('INSERT INTO eppm.employee_function VALUES (7,1,80)')
         connection.execute("INSERT INTO eppm.employee_calendar_exception(employee_id,start_date,end_date,occupation_percentage) VALUES (7,'2026-01-01','2026-01-03',50)")
@@ -60,7 +60,7 @@ def test_employee_editor_percentages_and_calendar_save_with_profile(database, ac
     from tests.postgresql.test_organization_ui import dialog, button
 
     organization = create_organization_service(database, access=access)
-    function = organization.create_function(OrgFunction('Analyst', 1))
+    function = organization.create_function(OrgFunction('Analyst'))
     identity = organization.create_employee(Employee('Ada', 'One', 'edit@profile.test', function_id=function))
     app = dialog(database, access, f'_open_edit_employee_dialog(service, {identity}, functions)')
     assert not any('Code' in widget.label for widget in app.text_input)
@@ -87,7 +87,7 @@ def test_pool_warning_overlay_and_only_employee_overallocation_colors_names(data
     api = pytest.importorskip('playwright.sync_api')
     organization = create_organization_service(database, access=access)
     pools = create_resource_pool_service(database, access=access)
-    function = organization.create_function(OrgFunction('Engineer', 1))
+    function = organization.create_function(OrgFunction('Engineer'))
     employee = organization.create_employee(Employee('Ada', 'One', 'warning@profile.test', function_id=function))
     team = organization.create_team(Team('Vacant team'))
     identities = [pools.create_pool(ResourcePool(name, capacity_fte=1)) for name in

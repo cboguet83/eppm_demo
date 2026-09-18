@@ -130,14 +130,18 @@ test('overallocation omits capacity and allocation uses a shared axis including 
 });
 
 test('both resource menus navigate to the selected pool or its consuming projects',()=>{
-  const {build}=setup();
+  const {build,listeners}=setup();
+  let navigationStarts=0;
+  listeners.set('eppm-navigation-start',new Set([()=>navigationStarts++]));
   for(const metric of ['allocation','overallocation']){
     const chart=build(metric),bar=chart.svg.children.find(e=>e.tag==='rect');
     for(const [index,action] of [[1,'planning'],[2,'pool_details'],[3,'filter_pool']]){
       bar.oncontextmenu({preventDefault(){},clientX:400,clientY:100});
       const menu=chart.root.children.find(e=>e.className==='context-menu');
       assert.deepEqual(menu.children.slice(1).map(e=>e.textContent),['Planning','Pool details','Filter on this pool']);
+      const before=navigationStarts;
       menu.children[index].onclick();
+      assert.equal(navigationStarts-before,action==='filter_pool'?0:1);
       assert.deepEqual(chart.events.at(-1),{name:'selection',quarter:'2026-Q1',pool_id:1,metric,action});
       assert.equal(chart.root.children.some(e=>e.className==='context-menu'),false);
     }

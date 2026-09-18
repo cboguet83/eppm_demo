@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass
 from datetime import date
-from typing import TypedDict
 
 
 @dataclass
@@ -26,7 +25,6 @@ class OrgFunction:
 
     Attributes:
         name: Title of the function (e.g. 'Chief Technology Officer', 'Project Manager').
-        hierarchy_level: Numerical hierarchy level rank (e.g. 1 for Executive, 2 for VP, etc.).
         function_id: Unique primary key identifier.
         function_type_id: Optional associated function type ID.
         manager_function_id: Direct reporting manager function ID.
@@ -36,7 +34,6 @@ class OrgFunction:
     """
 
     name: str
-    hierarchy_level: int
     function_id: int | None = None
     function_type_id: int | None = None
     manager_function_id: int | None = None
@@ -134,12 +131,3 @@ class EmployeeCalendarException:
     occupation_percentage: float
     reason: str = ""
     exception_id: int | None = None
-
-
-class FunctionHierarchy(TypedDict):
-    """Plain hierarchy node used by existing planning-label traversal."""
-
-    function_id: int
-    name: str
-    hierarchy_level: int
-    manager_function_id: int | None

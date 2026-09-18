@@ -28,7 +28,7 @@ def mapped_team(authorized):
     with psycopg.connect(authorized.setup.operator_url) as connection:
         connection.execute("INSERT INTO eppm.function_type(function_type_id,function_type) VALUES (1,'Engineering')")
         connection.execute("INSERT INTO eppm.hierarchy_type(id,code) VALUES (1,'team')")
-        connection.execute("INSERT INTO eppm.function(function_id,name,hierarchy_level,function_type_id) VALUES (1,'A',1,1)")
+        connection.execute("INSERT INTO eppm.function(function_id,name,function_type_id) VALUES (1,'A',1)")
         connection.execute("INSERT INTO eppm.team(team_id,team_name,hierarchy_type_id) VALUES (1,'Team 1',1)")
         connection.execute('INSERT INTO eppm.team_function(team_id,function_id) VALUES (1,1)')
         connection.execute("INSERT INTO eppm.employee(employee_id,firstname,lastname,email,function_id) VALUES (1,'Toto','One','toto@example.test',1)")
@@ -109,7 +109,7 @@ def test_migration_backfills_false_and_rejects_null_flags(empty_database, tmp_pa
     migrate(empty_database.operator_url, directory=tmp_path)
     with psycopg.connect(empty_database.operator_url) as connection:
         connection.execute("INSERT INTO eppm.team(team_name) VALUES ('Existing')")
-        connection.execute("INSERT INTO eppm.function(name,hierarchy_level) VALUES ('Existing',1)")
+        connection.execute("INSERT INTO eppm.function(name) VALUES ('Existing')")
         connection.execute("INSERT INTO eppm.employee(firstname,lastname,email,employee_code) VALUES ('Existing','Employee','old@example.test','OLD')")
         connection.execute("INSERT INTO eppm.resource_pool(name) VALUES ('Existing')")
         connection.execute("INSERT INTO eppm.function_type(function_type) VALUES ('Existing')")

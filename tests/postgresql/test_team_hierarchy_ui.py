@@ -20,7 +20,7 @@ render_teams(create_organization_service(runtime, access=access))
 def test_team_page_counts_employee_capacity_and_shows_selected_breakdowns(database, access):
     org = create_organization_service(database, access=access)
     pools = create_resource_pool_service(database, access=access)
-    function = org.create_function(OrgFunction('Engineer', 1))
+    function = org.create_function(OrgFunction('Engineer'))
     team = org.create_team(Team('Delivery'), function_ids=[function])
     employee = org.create_employee(Employee('Ada', 'One', 'a@ui.test', function_id=function))
     org.create_employee_calendar_exception(EmployeeCalendarException(employee, date.today()-timedelta(days=1),

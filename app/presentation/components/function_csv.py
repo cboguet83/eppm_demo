@@ -5,8 +5,9 @@ from dataclasses import asdict
 import streamlit as st
 
 from app.application.services.organization import OrganizationService
+from app.application.exceptions import OrganizationStorageError
 from app.application.services.function_csv import parse_functions
-from app.presentation.components.csv_upload import project_csv_upload
+from app.presentation.components.csv_upload import project_csv_upload, reset_csv_upload
 from app.presentation.components.dialog import dialog
 from app.presentation.components.organization_dialogs import organization_errors
 
@@ -26,10 +27,20 @@ def import_functions_dialog(service: OrganizationService) -> None:
     upload = project_csv_upload('Functions CSV', key='function_csv_upload')
     if upload is None:
         return
-    rows = parse_functions(upload.encode('utf-8'))
+    try:
+        rows = parse_functions(upload.encode('utf-8'))
+    except ValueError as error:
+        st.error('Function import failed while reading the CSV. No changes were saved.')
+        st.text(str(error))
+        return
     st.dataframe([asdict(function) for function in rows], hide_index=True)
     if st.button('Import functions', type='primary', key='function_csv_submit'):
-        result = service.import_functions_csv(upload.encode('utf-8'), delete_missing=delete_missing)
+        try:
+            result = service.import_functions_csv(upload.encode('utf-8'), delete_missing=delete_missing)
+        except (ValueError, OrganizationStorageError) as error:
+            st.error('Function import failed during validation or database save. No changes were saved.')
+            st.text(str(error))
+            return
         st.session_state['function_csv_success'] = (f'Import successful: {result.created} functions created, '
             f'{result.updated} updated, {result.deleted} marked deleted.')
         st.rerun()
@@ -44,4 +55,5 @@ def function_csv_controls(service: OrganizationService, *, show_deleted: bool) -
         st.link_button('Export CSV', f'/downloads/functions/functions.csv?include_deleted={str(show_deleted).lower()}',
                        icon=':material/download:', type='primary')
         if st.button('Import CSV', key='function_csv_import', icon=':material/upload:'):
+            reset_csv_upload('function_csv_upload')
             import_functions_dialog(service)

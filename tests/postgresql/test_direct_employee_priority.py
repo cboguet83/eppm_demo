@@ -17,8 +17,8 @@ from tests.postgresql.test_resource_pool_ui import database, access, dialog
 def split_resources(database, access):
     org = create_organization_service(database, access=access)
     pools = create_resource_pool_service(database, access=access)
-    first = org.create_function(OrgFunction('Function A', 1))
-    second = org.create_function(OrgFunction('Function B', 1))
+    first = org.create_function(OrgFunction('Function A'))
+    second = org.create_function(OrgFunction('Function B'))
     employee = org.create_employee(Employee('Employee', 'A', 'a@priority.test', function_assignments=[EmployeeFunction(first, 25), EmployeeFunction(second, 75)]))
     team_a = org.create_team(Team('Team A'), function_ids=[first])
     team_b = org.create_team(Team('Team B'), function_ids=[second])
@@ -206,7 +206,7 @@ def test_migration_rebuilds_existing_staffing_with_global_priority(empty_databas
         (tmp_path / migration.name).write_bytes(migration.sql.encode('utf-8'))
     migrate(empty_database.operator_url, directory=tmp_path)
     with psycopg.connect(empty_database.operator_url) as connection:
-        connection.execute("INSERT INTO eppm.function(function_id,name,hierarchy_level) VALUES (1,'Engineer',1)")
+        connection.execute("INSERT INTO eppm.function(function_id,name) VALUES (1,'Engineer')")
         connection.execute("INSERT INTO eppm.employee(employee_id,firstname,lastname,email,employee_code) VALUES (1,'A','One','a@migration.test','A')")
         connection.execute('INSERT INTO eppm.employee_function(employee_id,function_id) VALUES (1,1)')
         connection.execute("INSERT INTO eppm.team(team_id,team_name) VALUES (1,'Team')")

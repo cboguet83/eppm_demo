@@ -9,8 +9,8 @@ from app.domain.organization.models import Employee, OrgFunction, Team
 
 def test_team_capacity_deduplicates_and_never_infers_membership_or_vacant_fte():
     teams = [Team('Parent', 1, manager_function_id=1), Team('Child', 2, parent_team_id=1), Team('Deleted', 3, deleted_flag=True)]
-    functions = [OrgFunction('Occupied', 1, function_id=1), OrgFunction('Vacant', 1, function_id=2),
-                 OrgFunction('Deleted', 1, function_id=3, deleted_flag=True)]
+    functions = [OrgFunction('Occupied', function_id=1), OrgFunction('Vacant', function_id=2),
+                 OrgFunction('Deleted', function_id=3, deleted_flag=True)]
     employees = [Employee('Ada', 'One', 'a@t.test', employee_id=1, function_id=1, occupation_percentage=80),
                  Employee('Gone', 'Two', 'b@t.test', employee_id=2, function_id=1, deleted_flag=True),
                  Employee('Gone function', 'Three', 'c@t.test', employee_id=3, function_id=3)]

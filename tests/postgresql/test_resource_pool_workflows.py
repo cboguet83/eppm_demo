@@ -110,7 +110,7 @@ class TestResourcePools(unittest.TestCase):
     def test_pool_mapping_crud_and_allocations(self) -> None:
         """Verify adding and updating team and function mappings with partial allocations (0-100%)."""
         p_id = self.pool_repo.create_pool(ResourcePool(name="Backend Pool"))
-        fn_id = self.org_repo.create_function(OrgFunction(name="Senior Python Dev", hierarchy_level=3))
+        fn_id = self.org_repo.create_function(OrgFunction(name="Senior Python Dev"))
         tm_id = self.org_repo.create_team(Team(team_name="Cloud Platform Squad"))
 
         # Map Function at 75%
@@ -141,8 +141,8 @@ class TestResourcePools(unittest.TestCase):
     def test_pool_capacity_deduplication(self) -> None:
         """Verify that a function mapped directly AND through an assigned team is considered strictly once."""
         # 1. Create Functions: F1 (100% FTE = 1.0), F2 (100% FTE = 1.0)
-        f1_id = self.org_repo.create_function(OrgFunction(name="Lead Architect", hierarchy_level=2, fte_percentage=100))
-        f2_id = self.org_repo.create_function(OrgFunction(name="Security Engineer", hierarchy_level=3, fte_percentage=100))
+        f1_id = self.org_repo.create_function(OrgFunction(name="Lead Architect",  fte_percentage=100))
+        f2_id = self.org_repo.create_function(OrgFunction(name="Security Engineer",  fte_percentage=100))
         self.org_repo.create_employee(Employee('Lead', 'Architect', 'lead@example.test', function_id=f1_id))
         self.org_repo.create_employee(Employee('Security', 'Engineer', 'security@example.test', function_id=f2_id))
 
@@ -186,7 +186,7 @@ class TestResourcePools(unittest.TestCase):
     def test_defined_and_employee_assigned_capacity_are_separate_and_deduplicated(self) -> None:
         """An employee reached directly and through several teams contributes only once."""
         function_id = self.org_repo.create_function(
-            OrgFunction(name="Delivery Engineer", hierarchy_level=3, fte_percentage=100)
+            OrgFunction(name="Delivery Engineer",  fte_percentage=100)
         )
         employee_id = self.org_repo.create_employee(
             Employee(
@@ -282,7 +282,7 @@ class TestResourcePools(unittest.TestCase):
     def test_single_low_capacity_day_marks_the_whole_period_overallocated(self) -> None:
         """One overallocated day is detected even when all other period days are valid."""
         function_id = self.org_repo.create_function(
-            OrgFunction(name="Capacity Specialist", hierarchy_level=3, fte_percentage=100)
+            OrgFunction(name="Capacity Specialist",  fte_percentage=100)
         )
         employee_id = self.org_repo.create_employee(
             Employee(
@@ -362,8 +362,8 @@ class TestResourcePools(unittest.TestCase):
     def test_daily_overassignment_detection(self) -> None:
         """Verify that overassignment is calculated on a daily basis and detects overlapping peak FTE."""
         # 1. Create Function (2.0 FTE capacity)
-        f1_id = self.org_repo.create_function(OrgFunction(name="Dev 1", hierarchy_level=3, fte_percentage=100))
-        f2_id = self.org_repo.create_function(OrgFunction(name="Dev 2", hierarchy_level=3, fte_percentage=100))
+        f1_id = self.org_repo.create_function(OrgFunction(name="Dev 1",  fte_percentage=100))
+        f2_id = self.org_repo.create_function(OrgFunction(name="Dev 2",  fte_percentage=100))
 
         # 2. Pool with capacity 2.0 FTE
         p_id = self.pool_repo.create_pool(ResourcePool(name="Dev Squad Pool"))
@@ -445,7 +445,7 @@ class TestResourcePools(unittest.TestCase):
 
     def test_custom_date_period_assignment(self) -> None:
         """Verify that an assignment with a specific custom date period is scoped strictly to that period."""
-        f_id = self.org_repo.create_function(OrgFunction(name="Specialist", hierarchy_level=3, fte_percentage=100))
+        f_id = self.org_repo.create_function(OrgFunction(name="Specialist",  fte_percentage=100))
         p_id = self.pool_repo.create_pool(ResourcePool(name="Specialist Pool"))
         self.pool_repo.create_mapping(PoolMapping(pool_id=p_id, target_type="function", target_id=f_id, allocation_pct=100.0))
 
@@ -487,7 +487,7 @@ class TestResourcePools(unittest.TestCase):
 
     def test_project_pool_status(self) -> None:
         """Verify calculate_project_pool_status evaluates project-level peak demand and overassignment."""
-        f_id = self.org_repo.create_function(OrgFunction(name="Engineer", hierarchy_level=3, fte_percentage=100))
+        f_id = self.org_repo.create_function(OrgFunction(name="Engineer",  fte_percentage=100))
         p_id = self.pool_repo.create_pool(ResourcePool(name="Eng Pool"))
         self.pool_repo.create_mapping(PoolMapping(pool_id=p_id, target_type="function", target_id=f_id, allocation_pct=100.0))
 
@@ -534,7 +534,7 @@ class TestResourcePools(unittest.TestCase):
 
     def test_get_task_assignments_map_and_milestone_by_id(self) -> None:
         """Verify get_task_assignments_map and get_milestone_by_id methods."""
-        f_id = self.org_repo.create_function(OrgFunction(name="Tester", hierarchy_level=2, fte_percentage=100))
+        f_id = self.org_repo.create_function(OrgFunction(name="Tester",  fte_percentage=100))
         p_id = self.pool_repo.create_pool(ResourcePool(name="QA Pool"))
         self.pool_repo.create_mapping(PoolMapping(pool_id=p_id, target_type="function", target_id=f_id, allocation_pct=100.0))
 
@@ -594,7 +594,7 @@ class TestResourcePools(unittest.TestCase):
 
     def test_portfolio_pools_summary(self) -> None:
         """Verify get_portfolio_pools_summary returns List[PoolCapacityDetail] correctly."""
-        f_id = self.org_repo.create_function(OrgFunction(name="QA Engineer", hierarchy_level=2, fte_percentage=100))
+        f_id = self.org_repo.create_function(OrgFunction(name="QA Engineer",  fte_percentage=100))
         p_id = self.pool_repo.create_pool(ResourcePool(name="QA Pool"))
         self.pool_repo.create_mapping(PoolMapping(pool_id=p_id, target_type="function", target_id=f_id, allocation_pct=100.0))
 
@@ -607,7 +607,7 @@ class TestResourcePools(unittest.TestCase):
     def test_capacity_detail_matches_pool_catalog(self) -> None:
         """Verify the pool catalog and calculated detail describe the same pool."""
         f_id = self.org_repo.create_function(
-            OrgFunction(name="DevOps Lead", hierarchy_level=2, fte_percentage=100)
+            OrgFunction(name="DevOps Lead",  fte_percentage=100)
         )
         p_id = self.pool_repo.create_pool(ResourcePool(name="DevOps Pool"))
         self.pool_repo.create_mapping(
@@ -627,7 +627,7 @@ class TestResourcePools(unittest.TestCase):
     def test_project_level_and_task_level_deduplication(self) -> None:
         """Verify deduplication between project-level and task-level assignments."""
         f_id = self.org_repo.create_function(
-            OrgFunction(name="Principal Architect", hierarchy_level=2, fte_percentage=200)
+            OrgFunction(name="Principal Architect",  fte_percentage=200)
         )
         p_id = self.pool_repo.create_pool(ResourcePool(name="Architecture Pool"))
         self.pool_repo.create_mapping(
@@ -797,7 +797,7 @@ class TestResourcePools(unittest.TestCase):
 
         # Create detail with two separate intervals (gap between them)
         f_id = self.org_repo.create_function(
-            OrgFunction(name="Engineer", hierarchy_level=1, fte_percentage=100)
+            OrgFunction(name="Engineer",  fte_percentage=100)
         )
         p_id = self.pool_repo.create_pool(ResourcePool(name="Interval Pool"))
         self.pool_repo.create_mapping(
@@ -866,7 +866,7 @@ class TestResourcePools(unittest.TestCase):
         self.assertEqual(bounds["80"], ("2026-06-01", "2026-06-30"))
 
         f_id = self.org_repo.create_function(
-            OrgFunction(name="Consultant", hierarchy_level=1, fte_percentage=100)
+            OrgFunction(name="Consultant",  fte_percentage=100)
         )
         p_id = self.pool_repo.create_pool(ResourcePool(name="Consulting Pool"))
         self.pool_repo.create_mapping(
@@ -908,7 +908,7 @@ class TestResourcePools(unittest.TestCase):
     def test_resource_grid_payload_and_max_demand_period_calculation(self) -> None:
         """Verify that daily_usage accurately provides period max demand for the resource grid."""
         f_id = self.org_repo.create_function(
-            OrgFunction(name="Cloud Architect", hierarchy_level=2, fte_percentage=200)
+            OrgFunction(name="Cloud Architect",  fte_percentage=200)
         )
         p_id = self.pool_repo.create_pool(ResourcePool(name="Cloud Arch Pool"))
         self.pool_repo.create_mapping(

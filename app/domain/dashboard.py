@@ -1,6 +1,7 @@
 """Exact allocated budgets, organizational facets, and concurrent pool shortages."""
 
 from collections import defaultdict
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal, ROUND_HALF_UP, localcontext
@@ -65,27 +66,6 @@ def _allocated_budget(shares: list[WbsShare], snapshot: BudgetSnapshot | None, y
     return AllocatedBudget(tuple(result), totals, tuple(sorted(missing)))
 
 
-def ancestor(function_id: int | None, level: int, functions: dict[int, dict]) -> int | None:
-    """Resolve a primary ancestor or senior self with cycle and depth guards."""
-    node = functions.get(function_id)
-    if not node:
-        return None
-    if node['hierarchy_level'] <= level:
-        return function_id
-    seen = set()
-    for _ in range(100):
-        if function_id in seen or function_id not in functions:
-            return None
-        seen.add(function_id)
-        node = functions[function_id]
-        if node['hierarchy_level'] == level:
-            return function_id
-        if node['hierarchy_level'] < level:
-            return None
-        function_id = node['manager_function_id']
-    return None
-
-
 def matches(project: DashboardProject, filters: dict[str, list[str]], match_all: bool = False,
             exclude: str | None = None) -> bool:
     """AND fields, OR fixed facets, and retain the Gantt flexible Any/All rule."""
@@ -94,7 +74,7 @@ def matches(project: DashboardProject, filters: dict[str, list[str]], match_all:
             continue
         actual = {value.casefold() for value in project['fields'].get(key, [])}
         wanted = {value.casefold() for value in selected}
-        if match_all and key not in {'status', 'manager', 'org_manager', 'level3', 'level4', 'team', 'service', 'division', 'org_team', 'pool'}:
+        if match_all and key not in {'status', 'manager', 'org_manager', 'team', 'service', 'division', 'org_team', 'pool'}:
             if not wanted <= actual:
                 return False
         elif not wanted & actual:
@@ -146,6 +126,30 @@ def responsible_pools(pools: list[PoolCapacityDetail], project_ids: set[int],
     return result
 
 
+def minimum_quarterly_capacity(base: float | Decimal, calendar: Mapping[str, float | Decimal],
+                               quarters: Iterable[str], year: int) -> dict[str, float]:
+    """Bucket daily overrides once, preserving baseline days and inclusive quarters."""
+    requested = set(quarters)
+    counts: dict[str, int] = defaultdict(int)
+    minima: dict[str, Decimal] = {}
+    for day, value in calendar.items():
+        quarter = f'{day[:4]}-Q{(int(day[5:7]) - 1) // 3 + 1}'
+        if quarter not in requested:
+            continue
+        amount = Decimal(str(value))
+        counts[quarter] += 1
+        minima[quarter] = min(minima.get(quarter, amount), amount)
+    result = {}
+    normal = Decimal(str(base))
+    for quarter in sorted(requested):
+        first, last = quarter_bounds(quarter, year)
+        minimum = minima.get(quarter, normal)
+        if counts[quarter] < (last - first).days + 1:
+            minimum = min(minimum, normal)
+        result[quarter] = float(minimum)
+    return result
+
+
 def quarterly_capacity(pools: list[PoolCapacityDetail], year: int) -> dict[str, float]:
     """Minimum daily total effective capacity of distinct relevant pools per quarter."""
     unique = {pool.pool_id: pool for pool in pools}.values()
@@ -154,14 +158,5 @@ def quarterly_capacity(pools: list[PoolCapacityDetail], year: int) -> dict[str, 
     for pool in unique:
         for day, capacity in pool.capacity_calendar.items():
             deltas[day] += Decimal(str(capacity)) - Decimal(str(pool.effective_capacity_fte))
-    result = {}
-    for y in range(year - 5, year + 15):
-        for q in range(1, 5):
-            quarter = f'{y}-Q{q}'
-            start, end = quarter_bounds(quarter, year)
-            changes = [value for day, value in deltas.items() if start.isoformat() <= day <= end.isoformat()]
-            # Do not invent a baseline day when every day has a calendar override.
-            if len(changes) < (end - start).days + 1:
-                changes.append(Decimal(0))
-            result[quarter] = float(base + min(changes, default=Decimal(0)))
-    return result
+    quarters = (f'{y}-Q{q}' for y in range(year - 5, year + 15) for q in range(1, 5))
+    return minimum_quarterly_capacity(base, {day: base + delta for day, delta in deltas.items()}, quarters, year)

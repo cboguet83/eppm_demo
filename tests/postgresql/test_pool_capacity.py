@@ -37,9 +37,7 @@ def gateway(authorized, user_id=4):
 @pytest.fixture
 def staffing(authorized):
     with psycopg.connect(authorized.setup.operator_url) as connection:
-        connection.execute("""INSERT INTO eppm.function(function_id,name,hierarchy_level,manager_function_id,fte_percentage)
-            VALUES (1,'Manager',1,NULL,100),(2,'Vacant',2,1,200),(3,'Occupied',2,1,100),
-                   (4,'Tiny',1,NULL,1),(5,'Unmapped',1,NULL,100)""")
+        connection.execute("INSERT INTO eppm.function(function_id,name,manager_function_id,fte_percentage)\n            VALUES (1,'Manager',NULL,100),(2,'Vacant',1,200),(3,'Occupied',1,100),(4,'Tiny',NULL,1),(5,'Unmapped',NULL,100)")
         connection.execute("INSERT INTO eppm.employee(employee_id,firstname,lastname,email,function_id,occupation_percentage)\n            VALUES (1,' Ada ','One','ada@example.test',1,80),(2,'Ben','Two','ben@example.test',3,60),\n                   (3,'Cara','Three','cara@example.test',3,40),(4,'Dan','Four','dan@example.test',NULL,100)")
         connection.execute("""INSERT INTO eppm.employee_calendar_exception(employee_id,start_date,end_date,occupation_percentage,reason)
             VALUES (1,'2026-01-02','2026-01-04',0,'Private leave reason'),
@@ -102,7 +100,7 @@ def test_native_staffing_matches_pure_domain_deduplication_overrides_calendars_a
 
 def test_team_capacity_excludes_managers_reports_and_child_teams_without_explicit_membership(authorized):
     with psycopg.connect(authorized.setup.operator_url) as connection:
-        connection.execute("INSERT INTO eppm.function(function_id,name,hierarchy_level,manager_function_id) VALUES (1,'Manager',1,NULL),(2,'Report',2,1),(3,'Explicit',2,NULL),(4,'Child member',2,NULL)")
+        connection.execute("INSERT INTO eppm.function(function_id,name,manager_function_id) VALUES (1,'Manager',NULL),(2,'Report',1),(3,'Explicit',NULL),(4,'Child member',NULL)")
         connection.execute("INSERT INTO eppm.employee(employee_id,firstname,lastname,email,function_id) SELECT function_id,name,'Employee',function_id || '@example.test',function_id FROM eppm.function")
         connection.execute("INSERT INTO eppm.team(team_id,team_name,manager_function_id,parent_team_id) VALUES (1,'Root',1,NULL),(2,'Child',NULL,1)")
         connection.execute('INSERT INTO eppm.team_function(team_id,function_id) VALUES (1,3),(2,4)')
@@ -124,7 +122,7 @@ def test_team_capacity_excludes_managers_reports_and_child_teams_without_explici
 
 def test_vacant_team_functions_contribute_zero_without_nominal_pool_fallback(authorized):
     with psycopg.connect(authorized.setup.operator_url) as connection:
-        connection.execute("INSERT INTO eppm.function(function_id,name,hierarchy_level,fte_percentage) VALUES (1,'Vacant',1,200)")
+        connection.execute("INSERT INTO eppm.function(function_id,name,fte_percentage) VALUES (1,'Vacant',200)")
         connection.execute("INSERT INTO eppm.team(team_id,team_name) VALUES (1,'Explicit team')")
         connection.execute('INSERT INTO eppm.team_function(team_id,function_id) VALUES (1,1)')
         connection.execute("INSERT INTO eppm.resource_pool(id,name,capacity_fte) VALUES (1,'Team pool',7)")

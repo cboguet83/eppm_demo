@@ -158,18 +158,18 @@ def test_untrusted_columns_and_values_never_become_executable_sql(portfolio):
 
 def test_manager_labels_use_minimal_directory_and_bounded_reporting_ancestry(authorized):
     with psycopg.connect(authorized.setup.operator_url) as connection:
-        connection.execute("INSERT INTO eppm.function(function_id,name,hierarchy_level,manager_function_id) "
-                           "VALUES (1,'Level three',3,NULL),(2,'Manager',4,1),(3,'Vacant',4,1),(4,'',4,1),(5,'Cycle A',5,NULL),(6,'Cycle B',4,5)")
+        connection.execute("INSERT INTO eppm.function(function_id,name,manager_function_id) VALUES (1,'Level three',NULL),(2,'Manager',1),(3,'Vacant',1),(4,'',1),(5,'Cycle A',NULL),(6,'Cycle B',5)")
         connection.execute('ALTER TABLE eppm.function DISABLE TRIGGER USER')
         connection.execute('UPDATE eppm.function SET manager_function_id=6 WHERE function_id=5')
         connection.execute('ALTER TABLE eppm.function ENABLE TRIGGER USER')
         connection.execute("INSERT INTO eppm.employee(firstname,lastname,email,function_id) VALUES (' Ada ','One','private@example.test',2),('Zed','Zed','z@example.test',2)")
+        connection.execute('INSERT INTO eppm.employee_function(employee_id,function_id) SELECT employee_id,function_id FROM eppm.employee WHERE function_id IS NOT NULL ON CONFLICT DO NOTHING')
         connection.execute('UPDATE eppm.project SET function_id=CASE id WHEN 1 THEN 2 WHEN 2 THEN 3 ELSE 5 END')
     browse = service(authorized, 1)
     row = browse.get_detail(1)
-    assert row['project_manager'] == 'Ada  One' and row['level_3_manager_name'] == 'Level three'
+    assert row['project_manager'] == 'Ada  One'
     assert browse.get_detail(2)['project_manager'] == 'Vacant'
-    assert service(authorized).get_detail(3)['level_3_manager_name'] == ''
+    assert 'level_3_manager_name' not in service(authorized).get_detail(3)
     managers = browse.get_catalog().managers
     assert managers[2] == 'Ada One' and managers[3] == 'Vacant' and managers[4] == '—'
     assert browse.get_catalog(include_managers=False).managers == {}

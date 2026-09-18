@@ -76,8 +76,8 @@ def test_organization_labels_membership_facets_and_dynamic_fields(business, auth
     path,_,_,_,manager=business
     with psycopg.connect(authorized.setup.operator_url) as conn:
         for identity in range(3,7):
-            conn.execute('INSERT INTO eppm.function(function_id,name,hierarchy_level,manager_function_id) VALUES(%s,%s,%s,%s)',
-                         (identity,f'Role {identity}',identity,identity-1 if identity>3 else None))
+            conn.execute('INSERT INTO eppm.function(function_id,name,manager_function_id) VALUES(%s,%s,%s)',
+                         (identity,f'Role {identity}',identity-1 if identity>3 else None))
             conn.execute('INSERT INTO eppm.employee(firstname,lastname,email,function_id) VALUES(%s,%s,%s,%s)',
                          ('Same','Name',f'{identity}@example.test',identity))
         conn.execute("INSERT INTO eppm.team(team_id,team_name) VALUES(1,'First'),(2,'Second')")
@@ -88,7 +88,7 @@ def test_organization_labels_membership_facets_and_dynamic_fields(business, auth
         conn.execute("INSERT INTO eppm.project_property_value(project_id,param_id,kind,text_value) VALUES(1,'PRM_001','text','MAIL-1')")
     service=create_dashboard_service(path,access=manager)
     catalog=service.catalog();first=catalog.projects[1] if catalog.projects[1]['id']==1 else catalog.projects[0]
-    assert first['fields']['level3']==['3'] and first['fields']['level4']==['4']
+    assert not {'level3', 'level4'} & first['fields'].keys()
     assert first['fields']['team']==['1','2'] and first['fields']['PRM_001']==['MAIL-1']
     assert catalog.labels['manager']['5']!=catalog.labels['manager']['6']
     assert service.choices(catalog,{'team':['1'],'manager':['6']},'manager')==['5','6']
@@ -128,17 +128,19 @@ def test_undated_assignments_use_today_and_invalidate_on_calendar_day_change(bus
 
 
 
-def test_pool_facets_exclude_finished_projects_and_preserve_numeric_project_order(business, authorized):
+def test_pool_facets_follow_status_filter_and_preserve_numeric_project_order(business, authorized):
     path, _, _, _, manager = business
     with psycopg.connect(authorized.setup.operator_url) as conn:
         conn.cursor().executemany('INSERT INTO eppm.project(id,name,status) VALUES(%s,%s,%s)',
                          [(3,'AAA','Completed'),(4,'BBB','Cancelled'),(5,'CCC','Canceled'),(6,'AAA','In Progress')])
     service = create_dashboard_service(path, access=manager)
     catalog = service.catalog()
-    assert [row['id'] for row in catalog.projects] == [1, 2, 6]
-    assert service.choices(catalog, {}, 'pool') == ['', '1']
-    assert [row['id'] for row in service.filtered(catalog, {'pool':['1']})] == [1,2]
-    assert service.filtered(catalog, {'pool':['']})[0]['id'] == 6
+    assert [row['id'] for row in catalog.projects] == [1, 2, 3, 4, 5, 6]
+    filters = {'status': ['In Progress']}
+    assert [row['id'] for row in service.filtered(catalog, filters)] == [1, 2, 6]
+    assert service.choices(catalog, filters, 'pool') == ['', '1']
+    assert [row['id'] for row in service.filtered(catalog, {**filters, 'pool':['1']})] == [1,2]
+    assert service.filtered(catalog, {**filters, 'pool':['']})[0]['id'] == 6
     assert matches(catalog.projects[0], {'pool':['1','other']}, True)
 
 
@@ -155,4 +157,3 @@ def test_chart_drillthrough_includes_all_authorized_consumers_but_never_hidden_p
     assert restricted.consuming_projects([1], '2027-Q1') == []
     with pytest.raises(AccessDenied):
         restricted.consuming_projects([2], '2026-Q1')
-

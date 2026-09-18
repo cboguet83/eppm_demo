@@ -268,8 +268,8 @@ class TestRepositories(unittest.TestCase):
         """Verify creating, reading, and updating a project with function_id (Project Manager)."""
         with psycopg.connect(self.authorized.setup.operator_url) as conn, conn.cursor() as cursor:
             cursor.execute("INSERT INTO eppm.function_type (function_type_id, function_type) VALUES (1, 'Chef de Projet')")
-            cursor.execute("INSERT INTO eppm.function (function_id, name, hierarchy_level, function_type_id) VALUES (10, 'Alice PM', 3, 1)")
-            cursor.execute("INSERT INTO eppm.function (function_id, name, hierarchy_level, function_type_id) VALUES (20, 'Bob PM', 3, 1)")
+            cursor.execute("INSERT INTO eppm.function (function_id, name, function_type_id) VALUES (10, 'Alice PM', 1)")
+            cursor.execute("INSERT INTO eppm.function (function_id, name, function_type_id) VALUES (20, 'Bob PM', 1)")
 
         # Create project with function_id 10
         created = self.project_repo.create_project(

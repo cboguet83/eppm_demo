@@ -323,7 +323,7 @@ def contacts(pg_database, business):
     """Create visible/hidden assignments and an unrelated employee for payload checks."""
     path, _, _, editor, manager = business
     with psycopg.connect(pg_database.operator_url) as connection:
-        connection.execute("INSERT INTO eppm.function(function_id,name,hierarchy_level) VALUES(10,'Visible function',1),(20,'Hidden function',1),(30,'Unrelated function',1)")
+        connection.execute("INSERT INTO eppm.function(function_id,name) VALUES(10,'Visible function'),(20,'Hidden function'),(30,'Unrelated function')")
         connection.execute("INSERT INTO eppm.employee(firstname,lastname,email,function_id) VALUES('Rae','Visible','visible@example.test',10),('Robin','Hidden','hidden@example.test',20),('Unrelated','Person','unrelated@example.test',30)")
         connection.execute('INSERT INTO eppm.employee_function(employee_id,function_id,allocation_pct) '
                            'SELECT employee_id,function_id,100 FROM eppm.employee WHERE function_id IN (10,20,30)')

@@ -3,6 +3,7 @@
 from collections.abc import Callable
 from datetime import date
 import json
+from time import perf_counter
 
 import psycopg
 from psycopg.rows import dict_row
@@ -43,9 +44,13 @@ def _resource_breakdown(connection: psycopg.Connection, ids: list[int], today: d
     Staffing is fetched in one batch through its existing privacy boundary.
     Employee records and hidden project assignments are never loaded here.
     """
+    started = perf_counter()
     selected = [row[0] for row in connection.execute(
         'SELECT DISTINCT pool_id FROM eppm.active_pool_assignment '
         'WHERE project_id=ANY(%s::bigint[]) AND fte_assigned>0', (ids,))]
+    if pool_ids is not None:
+        requested_pools = set(pool_ids)
+        selected = [identity for identity in selected if identity in requested_pools]
     sources = read_capacity_sources(PostgresResourcePoolStore(connection), selected) if selected else {}
     capacities = []
     details = {}
@@ -54,15 +59,20 @@ def _resource_breakdown(connection: psycopg.Connection, ids: list[int], today: d
         details[detail.pool_id] = detail
         capacities.append({'pool_id': detail.pool_id, 'base': detail.effective_capacity_fte,
                            'calendar': detail.capacity_calendar})
+    query_started = perf_counter()
     result = connection.execute(
         'SELECT eppm.dashboard_resource_breakdown_with_capacity(%s,%s::bigint[],%s,%s,%s,%s,%s::text[],%s::bigint[])',
         (Jsonb(capacities), ids, today, quarter, pool_id, metric, statuses, pool_ids)).fetchone()[0]
+    query_finished = perf_counter()
     # Presentation capacity uses the same period minimum as the planning grid.
     # Demand and excess retain the reader's date-specific calculations.
     relevant = [details[pool['pool_id']] for pool in result['pools']]
     result['capacity'] = quarterly_capacity(relevant, today.year)
     for pool in result['pools']:
         pool['capacity'] = quarterly_capacity([details[pool['pool_id']]], today.year)
+    logger.info('dashboard.resources projects=%d pools=%d staffing_ms=%.1f query_ms=%.1f minimum_ms=%.1f total_ms=%.1f',
+                len(ids), len(relevant), (query_started-started)*1000, (query_finished-query_started)*1000,
+                (perf_counter()-query_finished)*1000, (perf_counter()-started)*1000)
     return result
 
 
@@ -159,7 +169,8 @@ class PostgresDashboardReader:
         if metric not in {'overallocation', 'allocation'}:
             raise ValueError('Select a valid resource metric.')
         return self._run(lambda connection, ids, _security: _resource_breakdown(
-            connection, ids, today, quarter, pool_id, metric, statuses)['consumers'], project_ids)
+            connection, ids, today, quarter, pool_id, metric, statuses,
+            pool_ids=[pool_id] if pool_id is not None else None)['consumers'], project_ids)
 
     def issues(self, project_ids: list[int], locale: str) -> list[dict]:
         """Read localized active blockers with the established ISO date boundaries."""

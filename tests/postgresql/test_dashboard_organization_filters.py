@@ -9,8 +9,9 @@ def seed_organization(authorized):
     """Install two hierarchy paths, one incomplete path, and four projects."""
     with psycopg.connect(authorized.setup.operator_url) as connection:
         connection.execute("INSERT INTO eppm.hierarchy_type(id,code) VALUES (101,'service'),(102,'division'),(103,'equipe')")
-        connection.execute("INSERT INTO eppm.function(function_id,name,hierarchy_level) VALUES (101,'PM Alpha',5),(102,'PM Beta',5),(103,'PM Vacant',5)")
+        connection.execute("INSERT INTO eppm.function(function_id,name) VALUES (101,'PM Alpha'),(102,'PM Beta'),(103,'PM Vacant')")
         connection.execute("INSERT INTO eppm.employee(firstname,lastname,email,function_id) VALUES ('Alice','Manager','alice@example.test',101)")
+        connection.execute('INSERT INTO eppm.employee_function(employee_id,function_id) SELECT employee_id,function_id FROM eppm.employee WHERE function_id=101')
         connection.execute("""INSERT INTO eppm.team(team_id,team_name,hierarchy_type_id,parent_team_id) VALUES
             (101,'Service A',101,NULL),(102,'Division A',102,101),(103,'Team A',103,102),
             (104,'Service B',101,NULL),(105,'Division B',102,104),(106,'Team B',103,105),

@@ -35,7 +35,7 @@ def database(runtime: RuntimeResources, authorized: AuthorizedFixture) -> Runtim
         connection.execute("DELETE FROM eppm.project WHERE id=3")
         cursor.executemany("UPDATE eppm.project SET name=%s WHERE id=%s", [("Alpha", 1), ("Beta", 2)])
         cursor.executemany(
-            "INSERT INTO eppm.function(function_id,name,hierarchy_level) VALUES (%s,%s,1)",
+            'INSERT INTO eppm.function(function_id,name) VALUES (%s,%s)',
             [(1, "Manager"), (2, "Architect"), (3, "Vacant function")],
         )
         cursor.executemany(

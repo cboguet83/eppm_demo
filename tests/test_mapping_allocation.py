@@ -14,7 +14,7 @@ def catalog(rows):
     return MappingCatalog([ResourcePool('Alpha', id=1), ResourcePool('Beta', id=2)], CapacityInputs(0,
         employees=[Employee('Ada', 'One', 'ada@example.test', employee_id=1, function_id=1,
                             occupation_percentage=50)],
-        functions=[OrgFunction('Engineer', 1, function_id=1)],
+        functions=[OrgFunction('Engineer', function_id=1)],
         teams=[Team('Team', team_id=1), Team('Other', team_id=2)],
         team_functions={1: [1, 1], 2: [1]}, mappings=rows))
 

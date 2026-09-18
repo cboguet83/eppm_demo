@@ -28,7 +28,7 @@ from app.presentation.components.property_labels import property_label
 def experience_database(runtime: RuntimeResources, access: BusinessAccess, authorized: AuthorizedFixture) -> RuntimeResources:
     """Prepare project contact examples using native organization operations."""
     with psycopg.connect(authorized.setup.operator_url) as connection:
-        connection.execute("INSERT INTO eppm.function(function_id,name,hierarchy_level) VALUES(1,'Engineer',1),(2,'Lead',1)")
+        connection.execute("INSERT INTO eppm.function(function_id,name) VALUES(1,'Engineer'),(2,'Lead')")
     organization = create_organization_service(runtime, access=access)
     organization.create_employee(Employee("Alice", "Smith", "alice@example.invalid", function_id=1, mobile="+352 621 111 111", landline="+352 27 111 111"))
     organization.create_employee(Employee("Bob", "Jones", "bob@example.invalid", function_id=2, mobile="+352 621 222 222", landline="+352 27 222 222"))

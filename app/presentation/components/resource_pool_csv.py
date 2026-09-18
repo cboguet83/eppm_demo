@@ -4,7 +4,7 @@ import streamlit as st
 
 from app.application.services.resource_pool_csv import parse_pools
 from app.application.services.resource_pools import ResourcePoolService
-from app.presentation.components.csv_upload import project_csv_upload
+from app.presentation.components.csv_upload import project_csv_upload, reset_csv_upload
 from app.presentation.components.dialog import dialog
 from app.presentation.components.resource_pool_dialogs import pool_errors
 
@@ -55,4 +55,5 @@ def pool_csv_controls(service: ResourcePoolService, *, show_deleted: bool = Fals
                        f'/downloads/resource-pools/pools.csv?include_deleted={str(show_deleted).lower()}',
                        icon=':material/download:', type='primary')
         if st.button('Import CSV', key='pool_csv_import', icon=':material/upload:'):
+            reset_csv_upload('pool_csv_upload')
             _import_dialog(service)

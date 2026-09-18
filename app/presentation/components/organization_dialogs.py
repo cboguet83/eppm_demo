@@ -47,12 +47,6 @@ def _open_add_function_dialog(
 ) -> None:
     """Modal dialog to create a new job function."""
     new_name = st.text_input(t("settings.field_func_name", default="Function Title *"), placeholder="e.g. Solution Architect")
-    new_level = st.number_input(
-        t("settings.field_func_level", default="Hierarchy Level (Integer) *"),
-        min_value=1,
-        value=1,
-        step=1,
-    )
 
     type_opts = [None] + (df_types["function_type_id"].tolist() if not df_types.empty else [])
     type_map = dict(zip(df_types["function_type_id"], df_types["function_type"])) if not df_types.empty else {}
@@ -86,11 +80,10 @@ def _open_add_function_dialog(
     col_save, col_cancel = st.columns(2)
     if col_save.button(t("settings.btn_save", default="Save Function"), type="primary", width="stretch"):
         try:
-            validate_function(new_name, int(new_level), int(new_fte))
+            validate_function(new_name, int(new_fte))
             new_fid = service.create_function(
                 OrgFunction(
                     name=new_name,
-                    hierarchy_level=int(new_level),
                     function_type_id=new_type,
                     manager_function_id=new_mgr,
                     dual_manager_function_id=new_dual,
@@ -126,12 +119,6 @@ def _open_edit_function_dialog(
     type_map = dict(zip(df_types["function_type_id"], df_types["function_type"])) if not df_types.empty else {}
 
     edit_name = st.text_input(t("settings.field_func_name", default="Function Title *"), value=fn_obj.name)
-    edit_level = st.number_input(
-        t("settings.field_func_level", default="Hierarchy Level (Integer) *"),
-        min_value=1,
-        value=fn_obj.hierarchy_level,
-        step=1,
-    )
 
     type_opts = [None] + (df_types["function_type_id"].tolist() if not df_types.empty else [])
     edit_type_idx = type_opts.index(fn_obj.function_type_id) if fn_obj.function_type_id in type_opts else 0
@@ -170,12 +157,11 @@ def _open_edit_function_dialog(
     col_save, col_cancel = st.columns(2)
     if col_save.button(t("settings.btn_save_changes", default="Save Changes"), type="primary", width="stretch"):
         try:
-            validate_function(edit_name, int(edit_level), int(edit_fte))
+            validate_function(edit_name, int(edit_fte))
             require_change(service.update_function(
                 OrgFunction(
                     function_id=func_id,
                     name=edit_name,
-                    hierarchy_level=int(edit_level),
                     function_type_id=edit_type,
                     manager_function_id=edit_mgr,
                     dual_manager_function_id=edit_dual,

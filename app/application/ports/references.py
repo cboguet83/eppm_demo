@@ -9,7 +9,6 @@ class FunctionReference:
 
     function_id: int | None
     name: str
-    hierarchy_level: int
     manager_function_id: int | None
 
 

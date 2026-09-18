@@ -18,7 +18,7 @@ def test_migration_preserves_every_existing_function_link_at_100_percent(empty_d
         (tmp_path / migration.name).write_bytes(migration.sql.encode('utf-8'))
     migrate(empty_database.operator_url, directory=tmp_path)
     with psycopg.connect(empty_database.operator_url) as connection:
-        connection.execute("INSERT INTO eppm.function(function_id,name,hierarchy_level) VALUES (1,'Engineer',1)")
+        connection.execute("INSERT INTO eppm.function(function_id,name) VALUES (1,'Engineer')")
         connection.execute("INSERT INTO eppm.employee(employee_id,firstname,lastname,email,employee_code,function_id,deleted_flag) "
             "VALUES (1,'A','One','a@x.test','A',1,false),(2,'B','Two','b@x.test','B',1,true),(3,'C','Three','c@x.test','C',NULL,false)")
         connection.execute("INSERT INTO eppm.resource_pool(id,name) VALUES (1,'Existing pool')")
@@ -34,8 +34,8 @@ def test_migration_preserves_every_existing_function_link_at_100_percent(empty_d
 def setup_split(database, access):
     org = create_organization_service(database, access=access)
     pools = create_resource_pool_service(database, access=access)
-    first = org.create_function(OrgFunction('Engineer', 1))
-    second = org.create_function(OrgFunction('Analyst', 1))
+    first = org.create_function(OrgFunction('Engineer'))
+    second = org.create_function(OrgFunction('Analyst'))
     employee = org.create_employee(Employee('Ada', 'One', 'ada@x.test', occupation_percentage=80,
         function_assignments=[EmployeeFunction(first, 60), EmployeeFunction(second, 40)]))
     team_a = org.create_team(Team('Engineering'), function_ids=[first])

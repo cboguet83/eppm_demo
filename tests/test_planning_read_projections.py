@@ -8,15 +8,14 @@ import pytest
 from app.application.ports.references import PoolGroupReference, PoolHierarchyMember
 from app.presentation.components.planning_catalog import (
     enrich_projects_with_organization, get_function_occupant_names,
-    get_level_3_managing_function,
 )
 from app.presentation.pages.planning import _build_resource_pool_hierarchy
 
 
 def test_function_labels_ignore_unresolved_employees_and_keep_the_first_valid_occupant() -> None:
     functions = pd.DataFrame([
-        {"function_id": 10, "name": "Manager", "hierarchy_level": 3, "manager_function_id": None},
-        {"function_id": 20, "name": "Vacant", "hierarchy_level": 4, "manager_function_id": 10},
+        {"function_id": 10, "name": "Manager", "manager_function_id": None},
+        {"function_id": 20, "name": "Vacant", "manager_function_id": 10},
         {"function_id": None, "name": "No identity"},
         {"function_id": "invalid", "name": "Invalid identity"},
     ])
@@ -31,8 +30,7 @@ def test_function_labels_ignore_unresolved_employees_and_keep_the_first_valid_oc
     project = pd.DataFrame([{"id": 1, "function_id": 20}])
     enriched = enrich_projects_with_organization(project, functions, employees)
     assert enriched.iloc[0].project_manager == "Vacant"
-    assert enriched.iloc[0].level_3_manager_id == 10
-    assert enriched.iloc[0].level_3_manager_name == "Manager"
+    assert "level_3_manager_name" not in enriched and "level_3_manager_id" not in enriched
     assert project.columns.tolist() == ["id", "function_id"]
 
 
@@ -42,14 +40,6 @@ def test_function_names_remain_available_when_employee_references_are_absent(emp
     assert get_function_occupant_names(functions, employees) == {10: "Vacant manager"}
 
 
-def test_unusable_hierarchy_rows_never_supply_a_managing_function() -> None:
-    functions = pd.DataFrame([
-        {"function_id": None, "name": "No identity", "hierarchy_level": 3},
-        {"function_id": "invalid", "name": "Broken identity", "hierarchy_level": 3},
-        {"function_id": 20, "name": "Broken hierarchy", "hierarchy_level": "invalid"},
-        {"function_id": 10, "name": "Delivery", "hierarchy_level": 4, "manager_function_id": 20},
-    ])
-    assert get_level_3_managing_function(10, functions) is None
 
 
 def test_resource_hierarchy_bounds_cycles_and_omits_missing_pool_references() -> None:

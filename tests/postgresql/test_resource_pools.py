@@ -29,7 +29,7 @@ def service(authorized, user_id=4):
 def pools(authorized):
     with psycopg.connect(authorized.setup.operator_url) as connection:
         connection.execute("INSERT INTO eppm.team(team_id,team_name) VALUES (1,'Team'),(10,'Mapping team')")
-        connection.execute("INSERT INTO eppm.function(function_id,name,hierarchy_level) VALUES (10,'Mapping function',1)")
+        connection.execute("INSERT INTO eppm.function(function_id,name) VALUES (10,'Mapping function')")
         connection.execute("INSERT INTO eppm.employee(employee_id,firstname,lastname,email) VALUES (10,'Mapping','Employee','mapping@example.test')")
         connection.execute("INSERT INTO eppm.hierarchy_type(code) VALUES ('service')")
         connection.execute("INSERT INTO eppm.hierarchy_type_translation VALUES (1,'fr','Service')")

@@ -6,7 +6,7 @@ import streamlit as st
 
 from app.application.services.organization import OrganizationService
 from app.application.services.team_csv import parse_teams
-from app.presentation.components.csv_upload import project_csv_upload
+from app.presentation.components.csv_upload import project_csv_upload, reset_csv_upload
 from app.presentation.components.dialog import dialog
 from app.presentation.components.organization_dialogs import organization_errors
 
@@ -44,4 +44,5 @@ def team_csv_controls(service: OrganizationService, *, show_deleted: bool) -> No
         st.link_button('Export CSV', f'/downloads/teams/teams.csv?include_deleted={str(show_deleted).lower()}',
                        icon=':material/download:', type='primary')
         if st.button('Import CSV', key='team_csv_import', icon=':material/upload:'):
+            reset_csv_upload('team_csv_upload')
             import_teams_dialog(service)

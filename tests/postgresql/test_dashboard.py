@@ -233,20 +233,19 @@ def test_dashboard_rejects_operator_actors_and_invalid_transaction_signatures(st
 def test_catalog_hierarchy_and_duplicate_labels_keep_only_current_project_facets(staffing):
     with psycopg.connect(staffing.setup.operator_url) as connection:
         for identity in range(6, 10):
-            connection.execute('INSERT INTO eppm.function(function_id,name,hierarchy_level,manager_function_id) '
-                               'VALUES (%s,%s,%s,%s)', (identity, f'Role {identity}', identity - 3,
+            connection.execute('INSERT INTO eppm.function(function_id,name,manager_function_id) VALUES (%s,%s,%s)', (identity, f'Role {identity}',
                                                        identity - 1 if identity > 6 else None))
             connection.execute('INSERT INTO eppm.employee(employee_id,firstname,lastname,email,function_id) VALUES (%s,%s,%s,%s,%s)', (identity, 'Same', 'Name', f'{identity}@example.test',
                                                             identity))
+        connection.execute('INSERT INTO eppm.employee_function(employee_id,function_id) SELECT employee_id,function_id FROM eppm.employee WHERE employee_id BETWEEN 6 AND 9')
         connection.execute('UPDATE eppm.project SET function_id=8 WHERE id=1')
         connection.execute('UPDATE eppm.project SET function_id=9 WHERE id IN (2,3)')
     dashboard = service(staffing)
     catalog = dashboard.catalog()
-    assert catalog.projects[0]['fields']['level3'] == ['6']
-    assert catalog.projects[0]['fields']['level4'] == ['7']
+    assert not {'level3', 'level4', 'level_3_manager_name'} & catalog.projects[0]['fields'].keys()
     assert catalog.labels['manager'] == {'8': 'Same Name (Role 8, #8)', '9': 'Same Name (Role 9, #9)'}
-    assert catalog.labels['level3'] == {'6': 'Same Name (Role 6, #6)'}
+    assert not {'level3', 'level4'} & catalog.labels.keys()
     assert dashboard.choices(catalog, {'manager': ['8', '6']}, 'manager') == ['8', '9']
     with psycopg.connect(staffing.setup.operator_url) as connection:
         connection.execute('UPDATE eppm.function SET manager_function_id=8 WHERE function_id=7')
-    assert dashboard.catalog().projects[0]['fields']['level3'] == ['']
+    assert not {'level3', 'level4'} & dashboard.catalog().projects[0]['fields'].keys()

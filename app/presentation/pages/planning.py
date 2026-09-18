@@ -1859,9 +1859,6 @@ def render_planning_milestones(workspace: PlanningWorkspace) -> None:
     flex_filter_fields: dict[str, str] = {
         "name": t("portfolio.col_name", default="Project name"),
         "project_manager": t("master_data.field_project_manager", default="Project Manager"),
-        "level_3_manager_name": t(
-            "portfolio.filter_level_3_manager", default="Managing Function (Level 3)"
-        ),
         "_project_tags": t("planning.flex_filter_project_tags", default="Project Tags"),
     }
     if not params.empty and "param_id" in params.columns:

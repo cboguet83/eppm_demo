@@ -9,7 +9,7 @@ from app.presentation.components.resource_pool_tree import _CSS, _JS
 
 
 def function_rows(records: list[OrgFunction], type_labels: dict[int, str]) -> list[dict]:
-    """Build JSON rows with derived reports and bounded, leaf-first traversal."""
+    """Build visible JSON fields and child links with bounded, leaf-first traversal."""
     functions = {item.function_id: item for item in records}
     children: dict[int | None, list[int]] = {}
     for item in records:
@@ -30,8 +30,6 @@ def function_rows(records: list[OrgFunction], type_labels: dict[int, str]) -> li
             'parent': item.manager_function_id if item.manager_function_id in functions else None,
             'depth': depth, 'container': bool(children.get(identity)),
             'has_children': bool(children.get(identity)), 'deleted': item.deleted_flag,
-            'hierarchy_level': item.hierarchy_level,
-            'has_reports': 'Yes' if any(not functions[child].deleted_flag for child in children.get(identity, [])) else 'No',
             'function_type': type_labels.get(item.function_type_id, '—'),
             'dual_manager': dual.name if dual else '—', 'fte_percentage': item.fte_percentage})
         pending.extend((child, depth + 1) for child in reversed(children.get(identity, [])))
@@ -45,17 +43,19 @@ def function_tree(records: list[OrgFunction], selected: int, type_labels: dict[i
     functions = {item.function_id: item for item in records}
     key = 'function_hierarchy'
     state = st.session_state.get(key, {})
+    columns = [('name', 'Function Title'), ('function_type', 'Function Type'),
+               ('dual_manager', 'Dual Manager'), ('fte_percentage', 'FTE %')]
+    visible_fields = {field for field, _label in columns}
     def select_row() -> None:
         identity = st.session_state[key].get('selected')
         if type(identity) is int and identity in functions:
             st.session_state['selected_function_id'] = identity
     component = st.components.v2.component('eppm_function_tree', html='<div class="pool-tree"></div>',
-        css=_CSS + CONTEXT_MENU_CSS + '.pool-row,.tree-columns{grid-template-columns:minmax(240px,1fr) 140px 120px 200px 220px 100px;min-width:1020px}', js=_JS)
+        css=_CSS + CONTEXT_MENU_CSS + '.pool-row,.tree-columns{grid-template-columns:minmax(240px,1fr) 200px 220px 100px;min-width:760px}', js=_JS)
     result = component(data={'kind': 'function', 'rows': function_rows(records, type_labels), 'selected': selected,
-        'columns': [('name', 'Function Title'), ('hierarchy_level', 'Hierarchy Level'),
-                    ('has_reports', 'Has Reports'), ('function_type', 'Function Type'),
-                    ('dual_manager', 'Dual Manager'), ('fte_percentage', 'FTE %')],
-        'collapsed': state.get('collapsed', []), 'filters': state.get('filters', {}), 'sort': state.get('sort', {})},
+        'columns': columns, 'collapsed': state.get('collapsed', []),
+        'filters': {field: values for field, values in state.get('filters', {}).items() if field in visible_fields},
+        'sort': state.get('sort', {}) if state.get('sort', {}).get('field') in visible_fields else {}},
         key=key, width='stretch', height='content', on_action_change=lambda: None, on_selected_change=select_row,
         on_collapsed_change=lambda: None, on_filters_change=lambda: None, on_sort_change=lambda: None)
     event = getattr(result, 'action', None)

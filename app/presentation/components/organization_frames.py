@@ -20,7 +20,7 @@ def functions_frame(records: Sequence[OrgFunction | FunctionReference]) -> pd.Da
     parents = {row['manager_function_id'] for row in rows if not row.get('deleted_flag', False)}
     return pd.DataFrame([{**row, 'has_reports': row['function_id'] in parents,
                           'deleted_flag': row.get('deleted_flag', False)} for row in rows],
-        columns=['function_id', 'name', 'hierarchy_level', 'function_type_id', 'manager_function_id',
+        columns=['function_id', 'name', 'function_type_id', 'manager_function_id',
                  'dual_manager_function_id', 'fte_percentage', 'has_reports', 'deleted_flag'])
 
 

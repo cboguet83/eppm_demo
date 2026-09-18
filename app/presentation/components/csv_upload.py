@@ -57,6 +57,12 @@ def validated_csv_upload(payload: object) -> tuple[str, str] | None:
     return content.lstrip("\ufeff"), name
 
 
+def reset_csv_upload(key: str) -> None:
+    """Start a fresh upload when opening a dialog, not on its fragment reruns."""
+    epoch_key = f'{key}_epoch'
+    st.session_state[epoch_key] = st.session_state.get(epoch_key, 0) + 1
+
+
 def project_csv_upload(label: str, *, key: str) -> str | None:
     """Select a file without creating an unauthenticated upload URL or server file."""
     component = st.components.v2.component(
@@ -64,7 +70,8 @@ def project_csv_upload(label: str, *, key: str) -> str | None:
         css="label {display:grid; gap:8px; font:inherit;} input {font:inherit;}",
     )
     result = component(data={"label": label, "max_bytes": MAX_CSV_BYTES},
-                       key=key, height="content", on_upload_change=lambda: None)
+                       key=f'{key}_{st.session_state.get(f"{key}_epoch", 0)}',
+                       height="content", on_upload_change=lambda: None)
     upload = validated_csv_upload(getattr(result, "upload", None))
     if upload is None:
         return None

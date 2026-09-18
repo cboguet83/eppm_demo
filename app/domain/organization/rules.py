@@ -7,7 +7,7 @@ import re
 
 from app.domain.hierarchy import validate_hierarchy_type_id
 from app.domain.organization.models import (
-    Employee, EmployeeCalendarException, FunctionHierarchy, FunctionType, OrgFunction, Team,
+    Employee, EmployeeCalendarException, FunctionType, OrgFunction, Team,
 )
 
 EMAIL_REGEX = re.compile(r"^[\w\.-]+@[\w\.-]+\.\w+$")
@@ -26,12 +26,11 @@ def is_valid_email(email: str) -> bool:
     return bool(EMAIL_REGEX.match(email.strip()))
 
 
-def validate_function(name: str, hierarchy_level: int | None, fte_percentage: int = 100) -> None:
+def validate_function(name: str, fte_percentage: int = 100) -> None:
     """Validates job function fields.
 
     Args:
         name: Function title.
-        hierarchy_level: Numerical hierarchy level rank (must be >= 1).
         fte_percentage: FTE workload percentage.
 
     Raises:
@@ -39,8 +38,6 @@ def validate_function(name: str, hierarchy_level: int | None, fte_percentage: in
     """
     if not name or not name.strip():
         raise ValueError("Function name cannot be empty.")
-    if type(hierarchy_level) is not int or hierarchy_level < 1:
-        raise ValueError("Hierarchy level must be an integer greater than or equal to 1.")
     if not isfinite(fte_percentage) or not 0 <= fte_percentage <= 100:
         raise ValueError("FTE percentage must be between 0 and 100.")
 
@@ -117,7 +114,7 @@ def normalize_function(value: OrgFunction) -> OrgFunction:
     functions representing more than one FTE, which remain supported.
     """
     fte = value.fte_percentage if value.fte_percentage is not None else 100
-    validate_function(value.name, value.hierarchy_level)
+    validate_function(value.name)
     if not isfinite(fte) or fte < 0:
         raise ValueError("FTE percentage must be finite and nonnegative.")
     return replace(value, name=value.name.strip(), fte_percentage=fte)
@@ -172,28 +169,3 @@ def normalize_exception(value: EmployeeCalendarException) -> EmployeeCalendarExc
     """Validate inclusive calendar boundaries and trim the optional reason."""
     validate_employee_calendar_exception(value.start_date, value.end_date, value.occupation_percentage)
     return replace(value, reason=value.reason.strip())
-
-
-def find_level_3_function(
-    function_id: int | None,
-    func_lookup: dict[int, FunctionHierarchy],
-) -> FunctionHierarchy | None:
-    """Find the level-three ancestor, retaining the 20-hop limit and cycle guard."""
-    curr_id: int | None = function_id
-    visited: set[int] = set()
-    max_depth = 20
-    depth = 0
-
-    while curr_id is not None and curr_id not in visited and depth < max_depth:
-        visited.add(curr_id)
-        depth += 1
-        node = func_lookup.get(curr_id)
-        if not node:
-            break
-        if node["hierarchy_level"] == 3:
-            return node
-        if node["hierarchy_level"] < 3:
-            break
-        curr_id = node["manager_function_id"]
-
-    return None

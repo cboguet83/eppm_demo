@@ -19,7 +19,7 @@ def setup_resources(database, access):
     org = create_organization_service(database, access=access)
     first = service.create_pool(ResourcePool('Alpha'))
     second = service.create_pool(ResourcePool('Beta'))
-    function = org.create_function(OrgFunction('Engineer', 1))
+    function = org.create_function(OrgFunction('Engineer'))
     team = org.create_team(Team('Delivery'), function_ids=[function])
     employee = org.create_employee(Employee('Ada', 'One', 'ada@example.test', function_id=function))
     return service, first, second, team, employee

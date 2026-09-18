@@ -20,7 +20,7 @@ def directory(authorized, business):
     access.grant(administrator, editor.actor.user_id, "business_admin", {"kind": "all"})
     with psycopg.connect(authorized.setup.operator_url) as connection:
         connection.execute("INSERT INTO eppm.function_type(function_type_id,function_type) VALUES(10,'Engineering')")
-        connection.execute("INSERT INTO eppm.function(function_id,name,hierarchy_level,function_type_id) VALUES(10,'Engineer',3,10)")
+        connection.execute("INSERT INTO eppm.function(function_id,name,function_type_id) VALUES(10,'Engineer',10)")
         connection.execute("INSERT INTO eppm.team(team_id,team_name,manager_function_id) VALUES(10,'Delivery',10)")
         connection.execute("INSERT INTO eppm.employee(employee_id,firstname,lastname,email) VALUES(10,'Rae','Example','rae@example.test'),(20,'Robin','Example','robin@example.test')")
         connection.execute("INSERT INTO eppm.employee_function(employee_id,function_id,allocation_pct) VALUES(10,10,100),(20,10,100)")
@@ -189,7 +189,7 @@ def test_employee_calendar_creation_rejects_invalid_periods_and_storage_failure_
 def test_business_administrator_can_soft_delete_an_unreferenced_function_without_touching_identities(authorized, directory):
     runtime_resources, _ = directory
     with psycopg.connect(authorized.setup.operator_url) as connection:
-        connection.execute("INSERT INTO eppm.function(function_id,name,hierarchy_level) VALUES(30,'Vacant function',4)")
+        connection.execute("INSERT INTO eppm.function(function_id,name) VALUES(30,'Vacant function')")
     before = directory_snapshot(authorized.setup.operator_url)
     app = open_dialog(directory, "function", "delete", record_id=30)
     app.button[0].click().run()

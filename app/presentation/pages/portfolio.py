@@ -176,7 +176,6 @@ def _draw_project_details(selected_proj: pd.Series, workspace: ProjectWorkspace)
     proj_name = selected_proj["name"]
     proj_status = selected_proj.get("status", "—")
     pm_name = selected_proj.get("project_manager", "—")
-    l3_name = selected_proj.get("level_3_manager_name", "—")
     planned = euro_amount(selected_proj.get("planned_budget"))
     actual = euro_amount(selected_proj.get("actual_budget"))
     analysis = analyze_budget(BudgetAmounts(planned, actual))
@@ -193,7 +192,6 @@ def _draw_project_details(selected_proj: pd.Series, workspace: ProjectWorkspace)
     summary = [
         (t("portfolio.col_status", default="Status"), str(proj_status)),
         (t("master_data.field_project_manager", default="Project Manager"), str(pm_name)),
-        (t("portfolio.filter_level_3_manager", default="Managing Func (L3)"), str(l3_name)),
         (t("portfolio.col_planned", default="Planned (€)"), f"€{planned:,.2f}"),
         (t("portfolio.col_actual", default="Actual (€)"), f"€{actual:,.2f}"),
         (t("portfolio.kpi_variance", default="Variance"), f"€{variance:,.2f} · {burn_rate_label} burn"),
@@ -335,7 +333,6 @@ def _portfolio_columns(params: pd.DataFrame) -> list[dict]:
         {"key": "name", "label": t("portfolio.col_name"), "format": "text"},
         {"key": "project_template", "label": t("project_types.label"), "format": "text"},
         {"key": "project_manager", "label": t("master_data.field_project_manager"), "format": "text"},
-        {"key": "level_3_manager_name", "label": t("portfolio.filter_level_3_manager"), "format": "text"},
         {"key": "status", "label": t("portfolio.col_status"), "format": "text"},
         {"key": "planned_budget", "label": t("portfolio.col_planned"), "format": "currency"},
         {"key": "actual_budget", "label": t("portfolio.col_actual"), "format": "currency"},
@@ -469,8 +466,7 @@ def _portfolio_selection(workspace: ProjectWorkspace, params: pd.DataFrame) -> N
         detail = workspace.portfolio.get_detail(int(selected_id))
         if detail is not None:
             selected = pd.Series({**detail, "id": detail["project_id"]})
-            for key in ("project_manager", "level_3_manager_name"):
-                selected[key] = selected.get(key) or "—"
+            selected['project_manager'] = selected.get('project_manager') or '—'
             _render_project_details_panel(selected, params, workspace)
 
 

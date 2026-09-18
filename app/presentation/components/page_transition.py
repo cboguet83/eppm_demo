@@ -26,11 +26,7 @@ export default function({parentElement}) {
             doc.body.classList.remove('eppm-page-loading');
         }));
     };
-    const begin = event => {
-        const label = event.target.closest?.('.st-key-app_sidebar_nav label');
-        const input = label?.querySelector('input[type="radio"]')
-            || event.target.closest?.('.st-key-app_sidebar_nav input[type="radio"]');
-        if (!input || input.checked) return;
+    const start = () => {
         const main = doc.querySelector('[data-testid="stMain"]');
         if (!main) return;
         const bounds = main.getBoundingClientRect();
@@ -39,6 +35,13 @@ export default function({parentElement}) {
         loading = true; ran = false;
         doc.body.classList.add('eppm-page-loading');
     };
+    const begin = event => {
+        const label = event.target.closest?.('.st-key-app_sidebar_nav label');
+        const input = label?.querySelector('input[type="radio"]')
+            || event.target.closest?.('.st-key-app_sidebar_nav input[type="radio"]');
+        if (input && !input.checked) start();
+    };
+    doc.addEventListener('eppm-navigation-start', start);
     doc.addEventListener('click', begin, true);
     const keyboard = event => {
         if (event.key === ' ' || event.key.startsWith('Arrow')) begin(event);
@@ -51,6 +54,7 @@ export default function({parentElement}) {
         observer.disconnect(); cancelAnimationFrame(frame);
         doc.removeEventListener('click', begin, true);
         doc.removeEventListener('keydown', keyboard, true);
+        doc.removeEventListener('eppm-navigation-start', start);
         doc.body.classList.remove('eppm-page-loading'); overlay.remove();
     };
 }

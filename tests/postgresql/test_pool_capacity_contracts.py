@@ -40,7 +40,7 @@ DAY = date(2026, 9, 8)
 def test_capacity_keeps_historical_rounding_order_at_half_millifte_boundary() -> None:
     inputs = CapacityInputs(
         1,
-        functions=[OrgFunction("Part-time", 1, function_id=1, fte_percentage=1)],
+        functions=[OrgFunction("Part-time", function_id=1, fte_percentage=1)],
         mappings=[PoolMapping(1, "function", 1, 35)],
     )
     # Dividing the mapping percentage first is the established calculation.
@@ -70,8 +70,8 @@ def test_zero_direct_share_retains_indirect_capacity_and_vacant_function_fallbac
         1,
         pool=ResourcePool("Pool", capacity_fte=10),
         functions=[
-            OrgFunction("Manager", 1, function_id=1),
-            OrgFunction("Vacant", 2, function_id=2, manager_function_id=1, fte_percentage=200),
+            OrgFunction("Manager", function_id=1),
+            OrgFunction("Vacant", function_id=2, manager_function_id=1, fte_percentage=200),
         ],
         teams=[Team("Small team", team_id=1, manager_function_id=1)],
         team_functions={1: [1, 2]},

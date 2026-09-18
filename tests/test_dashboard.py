@@ -3,7 +3,7 @@
 from decimal import Decimal
 import pytest
 
-from app.domain.dashboard import WbsShare, allocated_budget, ancestor, matches, quarterly_shortfall
+from app.domain.dashboard import WbsShare, allocated_budget, matches, quarterly_shortfall
 from app.domain.finance import BudgetSnapshot, BudgetVersion, BudgetRow
 from app.domain.resources.models import PoolCapacityDetail, DailyOverassignment
 
@@ -20,15 +20,6 @@ def test_allocated_budget_rounds_per_project_row_and_preserves_gaps_and_zero():
 
 
 
-def test_hierarchy_senior_self_missing_levels_and_cycles():
-    functions={i:{'hierarchy_level':i,'manager_function_id':i-1} for i in range(1,7)}
-    assert ancestor(5,3,functions)==3 and ancestor(5,4,functions)==4
-    assert ancestor(2,4,functions)==2 and ancestor(3,3,functions)==3
-    assert ancestor(None,3,functions) is None
-    functions[4]['manager_function_id']=2
-    assert ancestor(5,3,functions) is None
-    functions[4]['manager_function_id']=5
-    assert ancestor(5,3,functions) is None
 
 
 

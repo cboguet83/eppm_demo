@@ -8,6 +8,7 @@ import pytest
 from app.application.services.team_csv import parse_teams
 from app.domain.organization.models import Team
 from tests.postgresql.browser import native_server
+from tests.postgresql.csv_dialog_checks import check_fresh_import_dialog
 from tests.postgresql.test_pool_hierarchy_browser import SCREEN as POOL_SCREEN
 from tests.postgresql.test_resource_pool_csv_browser import SECURED_LAUNCHER
 from tests.postgresql.test_team_overview import mapped_team, service
@@ -61,6 +62,7 @@ def test_team_hierarchy_csv_selection_context_and_deleted_rows(mapped_team, tmp_
             modal.get_by_role('button', name='Import teams', exact=True).click()
             expect(tree.get_by_role('treeitem', name='Imported team', exact=True)).to_be_visible()
             expect(tree.get_by_role('treeitem', name='Team 1', exact=True)).to_be_visible()
+            check_fresh_import_dialog(page, 'teams.csv', 'Import teams', b'team_name\nNot submitted\n')
             target = tree.get_by_role('treeitem', name='Deleted team (Deleted)', exact=True)
             target.click(button='right')
             expect(page.get_by_role('menuitem', name='Undelete team', exact=True)).to_be_visible()

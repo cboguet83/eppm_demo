@@ -8,6 +8,7 @@ import psycopg
 from app.application.services.resource_pool_csv import parse_pools
 from app.domain.resources.models import ResourcePool
 from tests.postgresql.browser import native_server
+from tests.postgresql.csv_dialog_checks import check_fresh_import_dialog
 from tests.postgresql.test_pool_hierarchy_browser import SCREEN
 from tests.postgresql.test_resource_pools import service
 
@@ -79,6 +80,7 @@ def test_csv_export_respects_deleted_toggle_and_import_updates_the_hierarchy(aut
             expect(dialog.get_by_text('2 pool records ready to import.')).to_be_visible()
             dialog.get_by_role('button', name='Import pools', exact=True).click()
             expect(page.get_by_text('Import successful: 1 pools created, 1 updated, 0 marked deleted.', exact=True)).to_be_visible()
+            check_fresh_import_dialog(page, 'pools.csv', 'Import pools', b'name\nNot submitted\n')
             expect(page.get_by_role('treeitem', name='Updated', exact=True)).to_be_visible()
             expect(page.get_by_role('treeitem', name='New pool', exact=True)).to_be_visible()
             expect(page.get_by_role('button', name='Filter Has Mappings', exact=True)).to_be_visible()

@@ -8,6 +8,7 @@ import pytest
 
 from app.domain.access.models import AccessDenied
 from app.domain.resources.capacity import calculate_capacity
+from app.infrastructure.postgresql.dashboard import _resource_breakdown
 from app.infrastructure.postgresql.staffing_projection import refresh_staffing
 from tests.postgresql.test_dashboard import service
 from tests.postgresql.test_pool_capacity import staffing, reference_inputs, DAY
@@ -134,3 +135,17 @@ def test_capacity_displays_use_period_minimum_and_keep_daily_overallocation(staf
         assert values['allocation']['2027-Q2'] == 5.2
         assert values['overallocation']['2027-Q2'] == 2
     assert dashboard.resources([1])['capacity']['2027-Q2'] == 3
+
+
+@pytest.mark.parametrize('metric', ['allocation', 'overallocation'])
+def test_pool_drill_through_matches_full_aggregate_consumers(staffing, metric):
+    """Narrowing computation to the clicked pool preserves private consumer scope."""
+    from tests.postgresql.test_dashboard import reader
+
+    with psycopg.connect(staffing.setup.operator_url) as connection:
+        connection.execute("UPDATE eppm.project SET status='In Progress'")
+    dashboard_reader = reader(staffing, 4)
+    expected = dashboard_reader._run(lambda connection, ids, _security: _resource_breakdown(
+        connection, ids, DAY, '2026-Q1', 1, metric, ['In Progress'])['consumers'], [1])
+    assert dashboard_reader.consuming_projects([1], '2026-Q1', DAY, 1, metric,
+        statuses=['In Progress']) == expected

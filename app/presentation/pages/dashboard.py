@@ -3,6 +3,8 @@
 from hashlib import sha256
 from html import escape
 from functools import partial
+from collections.abc import Callable
+from time import perf_counter
 
 import pandas as pd
 import streamlit as st
@@ -22,6 +24,16 @@ from app.presentation.components.dashboard_resource_chart import finance_chart, 
 from app.presentation.navigation import PAGE_PLANNING, PAGE_SETTINGS
 from app.presentation.components.authorized_cache import authorized_cache
 from app.presentation.i18n import get_current_locale, t
+from app.shared.logging import get_logger
+
+
+def _measure[Result](stage: str, operation: Callable[[], Result]) -> Result:
+    """Record dashboard stage latency, including cache checks, without user data."""
+    started = perf_counter()
+    try:
+        return operation()
+    finally:
+        get_logger(__name__).info('dashboard.load stage=%s elapsed_ms=%.1f', stage, (perf_counter()-started)*1000)
 
 
 def _label(key: str) -> str:
@@ -137,7 +149,7 @@ def _filters(service: DashboardService, catalog) -> tuple[dict[str, list[str]], 
         for value in st.session_state['dashboard_filter_status']
     ]
     fields = {'name': _label('project'),
-              'project_manager': _label('manager'), 'level_3_manager_name': _label('level3'),
+              'project_manager': _label('manager'),
               '_project_tags': t('planning.flex_filter_project_tags', default='Project tags')}
     for parameter in catalog.parameters:
         label = parameter.get('translations', {}).get(get_current_locale()) or parameter.get('alias') or parameter['param_name']
@@ -327,6 +339,7 @@ def _pool_details_jump(service: DashboardService, ids: tuple[int, ...], quarter:
 @st.fragment(key='dashboard')
 def render_dashboard(service: DashboardService) -> None:
     """Update filters, five-row pages and charts independently of the application shell."""
+    started = perf_counter()
     st.html("""<style>
     .stMainBlockContainer:has(.st-key-dashboard_filter_pool){padding-top:.05rem!important}
     .stMainBlockContainer:has(.st-key-application_page_Dashboard){padding-top:.01rem!important}
@@ -339,27 +352,30 @@ def render_dashboard(service: DashboardService) -> None:
     .st-key-dashboard_issue_count button [data-testid=stIconMaterial]{font-size:52px!important;width:52px!important;height:52px!important;flex:0 0 52px;line-height:1;color:var(--issue-icon)!important}
     .st-key-dashboard_issue_count button:disabled{opacity:1!important}
     .st-key-dashboard_issue_card [data-testid=stMarkdownContainer]{text-align:center;color:var(--issue-text)}
+    .st-key-dashboard_late_card [data-testid=stMetricLabel]{display:flex;width:100%;justify-content:center}
+    .st-key-dashboard_late_card [data-testid=stMetricValue],
+    .st-key-dashboard_late_card [data-testid=stCaptionContainer]{text-align:center}
     </style>""")
     if st.session_state.pop('dashboard_selection_error', False):
         st.error(_label('unavailable'))
     try:
-        revision = service.revision()
-        catalog = _catalog(service, revision)
+        revision = _measure('revision', service.revision)
+        catalog = _measure('catalog', lambda: _catalog(service, revision))
         with st.container(key='dashboard_filters'):
-            filters, match_all = _filters(service, catalog)
-        projects = _matching_projects(service, catalog, filters, match_all)
+            filters, match_all = _measure('filters', lambda: _filters(service, catalog))
+        projects = _measure('matching_projects', lambda: _matching_projects(service, catalog, filters, match_all))
         # A queued scroll callback can retain an older fragment invocation.
         # Read the latest filter snapshot inside the fragment, not its old arguments.
         st.session_state['dashboard_active_filters'] = (filters, match_all)
-        _projects(service)
+        _measure('project_list', lambda: _projects(service))
         if not projects:
             st.info(_label('no_projects'))
             return
         ids = tuple(row['id'] for row in projects)
-        report = _report(service, revision, ids)
-        proposed = _report(service, revision, ids, 'Proposed')
+        report = _measure('approved_report', lambda: _report(service, revision, ids))
+        proposed = _measure('proposed_report', lambda: _report(service, revision, ids, 'Proposed'))
         finance, indicators = st.columns([8, 1.5], gap=None, vertical_alignment='top')
-        with indicators, st.container(border=True):
+        with indicators, st.container(border=True, key='dashboard_late_card'):
             st.metric('Late projects', f'{report.late_project_percentage:.1f}%',
                       help='Projects with an active-plan task ending before today and less than 100% complete, among all projects in the dashboard filters.')
             st.caption(f'{report.late_project_count} of {report.project_count} projects')
@@ -384,7 +400,8 @@ def render_dashboard(service: DashboardService) -> None:
             _finance_chart(service, report, proposed)
             selected_pools = filters.get('pool', [])
             chart_pools = tuple(int(value) for value in selected_pools if value.isdigit()) if selected_pools else None
-            series = _shortages(service, revision, ids, tuple(filters.get('status', [])), chart_pools)
+            series = _measure('resource_charts', lambda: _shortages(
+                service, revision, ids, tuple(filters.get('status', [])), chart_pools))
             st.subheader(_label('resources_allocation'))
             st.caption(_label('individual_pool_peaks'))
             pool_names = {pool['pool_id']: pool['name'] for pool in series['pools']}
@@ -423,3 +440,5 @@ def render_dashboard(service: DashboardService) -> None:
             _pool_warning(series.get('overallocated_pools', []))
     except (AccessDenied, ProjectStorageError, ValueError):
         st.error(_label('unavailable'))
+    finally:
+        get_logger(__name__).info('dashboard.load stage=render_total elapsed_ms=%.1f', (perf_counter()-started)*1000)

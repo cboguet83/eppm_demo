@@ -59,8 +59,8 @@ def test_occupation_percentage_rejects_invalid_and_nonfinite_values(value: float
 def test_domain_normalization_and_existing_function_capacity_contract() -> None:
     assert normalize_function_type(FunctionType(" Engineering ")).function_type == "Engineering"
     assert normalize_team(Team(" Platform ")).team_name == "Platform"
-    assert normalize_function(OrgFunction(" Architect ", 2, fte_percentage=200)).fte_percentage == 200
-    assert normalize_function(OrgFunction(" Architect ", 2, fte_percentage=None)).fte_percentage == 100
+    assert normalize_function(OrgFunction(" Architect ", fte_percentage=200)).fte_percentage == 200
+    assert normalize_function(OrgFunction(" Architect ", fte_percentage=None)).fte_percentage == 100
     normalized = normalize_employee(employee())
     assert (normalized.firstname, normalized.lastname, normalized.email) == (
         "Ada", "Lovelace", "emp-001@example.com",
@@ -75,12 +75,9 @@ def test_domain_normalization_and_existing_function_capacity_contract() -> None:
             normalize_team(Team(invalid))
     for fte in (-1, float("nan"), float("inf")):
         with pytest.raises(ValueError):
-            normalize_function(OrgFunction("Architect", 1, fte_percentage=fte))
-    for level in (None, 0, 1.5, True):
-        with pytest.raises(ValueError, match="Hierarchy"):
-            validate_function("Architect", level)
+            normalize_function(OrgFunction("Architect", fte_percentage=fte))
     with pytest.raises(ValueError):
-        validate_function("Architect", 1, 200)
+        validate_function("Architect", 200)
     with pytest.raises(ValueError, match="dates"):
         validate_employee_calendar_exception(None, date(2026, 9, 1), 0)
     with pytest.raises(ValueError, match="End date"):
@@ -104,7 +101,7 @@ def test_application_crud_and_display_frames_handle_missing_records(database: Ru
     assert service.get_effective_occupation_percentage(-1, date(2026, 9, 1)) is None
 
     type_id = service.create_function_type(FunctionType(" Engineering "))
-    function_id = service.create_function(OrgFunction(" Architect ", 2, function_type_id=type_id))
+    function_id = service.create_function(OrgFunction(" Architect ", function_type_id=type_id))
     team_id = service.create_team(Team(" Platform "), function_ids=[function_id, function_id])
     employee_id = service.create_employee(replace(employee(), function_id=function_id))
     assert service.get_team_functions(team_id) == [function_id]
@@ -115,7 +112,7 @@ def test_application_crud_and_display_frames_handle_missing_records(database: Ru
     assert service.check_email_exists("EMP-001@EXAMPLE.COM")
     assert not service.check_email_exists("EMP-001@EXAMPLE.COM", employee_id)
     assert service.update_function_type(FunctionType("Architecture", type_id))
-    assert service.update_function(OrgFunction("Lead", 3, function_id, type_id))
+    assert service.update_function(OrgFunction("Lead", function_id, type_id))
     assert service.update_team(Team("Renamed", team_id))
     assert service.get_team_functions(team_id) == [function_id]
     assert service.update_employee(replace(
@@ -149,7 +146,7 @@ def test_updates_preserve_missing_record_boolean_contracts(database: RuntimeReso
     service = create_organization_service(database, access=access)
     missing = -1 if with_id else None
     assert not service.update_function_type(FunctionType("Absent", missing))
-    assert not service.update_function(OrgFunction("Absent", 1, missing))
+    assert not service.update_function(OrgFunction("Absent", missing))
     assert not service.update_team(Team("Absent", missing), function_ids=[999])
     assert not service.update_employee(replace(employee(), employee_id=missing))
     assert not service.update_employee_calendar_exception(replace(exception(1), exception_id=missing))
@@ -157,7 +154,7 @@ def test_updates_preserve_missing_record_boolean_contracts(database: RuntimeReso
 
 def test_team_details_and_membership_rollback_together(database: RuntimeResources, access: BusinessAccess) -> None:
     service = create_organization_service(database, access=access)
-    member = service.create_function(OrgFunction("Member", 1))
+    member = service.create_function(OrgFunction("Member"))
     with pytest.raises(ValueError, match='no longer exists'):
         service.create_team(Team("Partial"), function_ids=[member, 999])
     assert service.get_all_teams() == []

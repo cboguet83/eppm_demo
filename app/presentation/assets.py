@@ -6,7 +6,6 @@ COMPONENT_NAMES = frozenset(
     {
         "gantt",
         "employee_table",
-        "function_table",
         "function_type_table",
         "team_table",
         "tag_group_table",

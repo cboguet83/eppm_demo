@@ -238,7 +238,7 @@ def test_public_reads_and_references_never_expose_hidden_owners_or_employee_deta
 
     path, _, _, editor, _ = business
     with psycopg.connect(pg_database.operator_url) as conn:
-        conn.execute("INSERT INTO eppm.function(function_id,name,hierarchy_level) VALUES(1,'Manager',3)")
+        conn.execute("INSERT INTO eppm.function(function_id,name) VALUES(1,'Manager')")
         conn.execute("INSERT INTO eppm.employee(firstname,lastname,email,mobile,landline,function_id) VALUES('Fictional','Person','private@example.test','private-mobile','private-line',1)")
         conn.execute("INSERT INTO eppm.resource_pool_mapping(pool_id,target_type,target_id,allocation_pct) VALUES(1,'employee',1,100)")
     projects = main.create_project_service(path, access=editor)
@@ -987,7 +987,7 @@ def test_business_admin_catalog_menu_opens_the_requested_record_and_consumes_the
     path, _, _, _, manager = business
     with psycopg.connect(pg_database.operator_url) as connection:
         connection.execute("INSERT INTO eppm.function_type(function_type_id,function_type) VALUES(10,'Engineering')")
-        connection.execute("INSERT INTO eppm.function(function_id,name,hierarchy_level,function_type_id) VALUES(10,'Engineer',3,10)")
+        connection.execute("INSERT INTO eppm.function(function_id,name,function_type_id) VALUES(10,'Engineer',10)")
         connection.execute("INSERT INTO eppm.team(team_id,team_name,manager_function_id) VALUES(10,'Delivery',10)")
         connection.execute("INSERT INTO eppm.team_function(team_id,function_id) VALUES(10,10)")
         connection.execute("INSERT INTO eppm.employee(employee_id,firstname,lastname,email,function_id) VALUES(10,'Rae','Example','rae@example.test',10)")

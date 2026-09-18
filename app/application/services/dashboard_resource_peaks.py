@@ -3,7 +3,7 @@
 from copy import deepcopy
 
 from app.application.ports.dashboard import PoolResourceSeries
-from app.domain.dashboard import quarter_bounds
+from app.domain.dashboard import minimum_quarterly_capacity
 
 
 def individual_pool_peaks(pools: list[PoolResourceSeries], days: list[list],
@@ -29,11 +29,6 @@ def individual_pool_peaks(pools: list[PoolResourceSeries], days: list[list],
         pool['overallocation'][quarter] = max(pool['overallocation'][quarter], round(demand-capacity, 3), 0)
     for identity, base, calendar in staffing:
         pool = result[identity]
-        pool['capacity'] = {}
-        for quarter in pool['allocation']:
-            first, last = quarter_bounds(quarter, year)
-            values = [float(value) for day, value in calendar.items() if first.isoformat() <= day <= last.isoformat()]
-            if len(values) < (last-first).days + 1:
-                values.append(float(base))
-            pool['capacity'][quarter] = round(min(values, default=float(base)), 3)
+        pool['capacity'] = {quarter: round(value, 3) for quarter, value in
+            minimum_quarterly_capacity(float(base), calendar, pool['allocation'], year).items()}
     return list(result.values())

@@ -20,7 +20,7 @@ from tests.postgresql.test_access_service import administrator, identity, pg_acc
 
 def test_csv_exports_all_four_catalogs_with_stable_fields_and_safe_text(organization):
     type_id = organization.create_function_type(FunctionType('Engineering, Europe'))
-    function_id = organization.create_function(OrgFunction('=SUM(1,2)', 2, function_type_id=type_id))
+    function_id = organization.create_function(OrgFunction('=SUM(1,2)', function_type_id=type_id))
     parent = organization.create_team(Team('Parent'))
     child = organization.create_team(Team('Équipe "Delivery"', parent_team_id=parent))
     organization.create_employee(Employee('Ada', 'Lovelace', 'ada@example.test', function_id=function_id))

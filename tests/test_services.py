@@ -6,7 +6,6 @@ from app.domain.planning.csv_import import parse_csv
 from app.domain.projects.budgets import BudgetAmounts, euro_amount, summarize_budgets
 from app.presentation.components.planning_catalog import enrich_projects_with_organization
 from app.presentation.components.planning_catalog import flatten_dynamic_attributes
-from app.presentation.components.planning_catalog import get_level_3_managing_function
 from app.presentation.components.planning_imports import csv_text
 
 import io
@@ -187,48 +186,15 @@ class TestServices(unittest.TestCase):
         self.assertIsNone(flattened.iloc[0]["p"])
         self.assertIsNone(flattened.iloc[0]["Display title"])
 
-    def test_get_level_3_managing_function(self) -> None:
-        """Verify traversal up the reporting hierarchy to locate Level 3 managing function."""
-        df_funcs = pd.DataFrame([
-            {"function_id": 1, "name": "DG", "hierarchy_level": 1, "manager_function_id": None},
-            {"function_id": 2, "name": "Dir 1", "hierarchy_level": 2, "manager_function_id": 1},
-            {"function_id": 5, "name": "Chef Service A", "hierarchy_level": 3, "manager_function_id": 2},
-            {"function_id": 10, "name": "Chef Div A1", "hierarchy_level": 4, "manager_function_id": 5},
-            {"function_id": 17, "name": "Chef Projet A1", "hierarchy_level": 5, "manager_function_id": 10},
-        ])
-
-        # 1. Level 5 function climbs up to level 3
-        l3 = get_level_3_managing_function(17, df_funcs)
-        self.assertIsNotNone(l3)
-        self.assertEqual(l3["function_id"], 5)
-        self.assertEqual(l3["name"], "Chef Service A")
-
-        # 2. Level 4 function climbs up to level 3
-        l3_div = get_level_3_managing_function(10, df_funcs)
-        self.assertIsNotNone(l3_div)
-        self.assertEqual(l3_div["function_id"], 5)
-
-        # 3. Level 3 function returns itself
-        l3_self = get_level_3_managing_function(5, df_funcs)
-        self.assertIsNotNone(l3_self)
-        self.assertEqual(l3_self["function_id"], 5)
-
-        # 4. Level 2 function (above level 3) returns None
-        l3_above = get_level_3_managing_function(2, df_funcs)
-        self.assertIsNone(l3_above)
-
-        # 5. None or invalid function_id returns None
-        self.assertIsNone(get_level_3_managing_function(None, df_funcs))
-        self.assertIsNone(get_level_3_managing_function(999, df_funcs))
 
     def test_enrich_projects_with_organization(self) -> None:
-        """Verify enrichment of projects dataframe with Project Manager and Level 3 Managing Function."""
+        """Verify enrichment of projects dataframe with direct Project Manager labels."""
         df_funcs = pd.DataFrame([
-            {"function_id": 1, "name": "DG", "hierarchy_level": 1, "manager_function_id": None},
-            {"function_id": 2, "name": "Dir 1", "hierarchy_level": 2, "manager_function_id": 1},
-            {"function_id": 5, "name": "Chef Service A", "hierarchy_level": 3, "manager_function_id": 2},
-            {"function_id": 10, "name": "Chef Div A1", "hierarchy_level": 4, "manager_function_id": 5},
-            {"function_id": 17, "name": "Chef Projet A1", "hierarchy_level": 5, "manager_function_id": 10},
+            {"function_id": 1, "name": "DG", "manager_function_id": None},
+            {"function_id": 2, "name": "Dir 1", "manager_function_id": 1},
+            {"function_id": 5, "name": "Chef Service A", "manager_function_id": 2},
+            {"function_id": 10, "name": "Chef Div A1", "manager_function_id": 5},
+            {"function_id": 17, "name": "Chef Projet A1", "manager_function_id": 10},
         ])
         df_projects = pd.DataFrame([
             {"id": 1, "name": "P1", "function_id": 17},
@@ -245,12 +211,9 @@ class TestServices(unittest.TestCase):
             df_employees,
         )
         self.assertEqual(enriched.iloc[0]["project_manager"], "Ada Lovelace")
-        self.assertEqual(enriched.iloc[0]["level_3_manager_name"], "Chef Service A")
-        self.assertEqual(enriched.iloc[0]["level_3_manager_id"], 5)
+        self.assertNotIn("level_3_manager_name", enriched.columns)
 
         self.assertEqual(enriched.iloc[1]["project_manager"], "—")
-        self.assertEqual(enriched.iloc[1]["level_3_manager_name"], "—")
-        self.assertTrue(pd.isna(enriched.iloc[1]["level_3_manager_id"]))
         self.assertEqual(enriched.iloc[2]["project_manager"], "Chef Div A1")
 
 
