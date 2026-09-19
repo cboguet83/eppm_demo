@@ -46,8 +46,13 @@ def test_private_competing_demand_and_calendars_match_the_existing_domain_aggreg
     assert actual == {'overallocation': quarterly_shortfall(expected, {1}, DAY.year),
                       'capacity': quarterly_capacity(expected, DAY.year)}
     assert restricted.shortages([1]) == actual['overallocation']
-    # Hidden project 3 still counts; vacant team functions no longer supply FTE.
-    assert actual['overallocation']['2026-Q1'] == 21.485
+    # Ben contributes 20% availability * (10% direct + 90% remaining * 30%
+    # function mapping) = .074 FTE; Cara adds .120 and Dan adds .125.
+    staffed = next(pool for pool in expected if pool.pool_id == 1)
+    assert staffed.daily_effective_capacity[DAY.isoformat()] == pytest.approx(.319)
+    # Hidden project 3 still counts: (21.5 - .319) + .25 from pool 3.
+    # Vacant team functions supply no FTE.
+    assert actual['overallocation']['2026-Q1'] == 21.431
     assert len(actual['overallocation']) == len(actual['capacity']) == 80
     assert set(actual) == {'overallocation', 'capacity'}
     start, end = quarter_bounds('2026-Q1', DAY.year)
