@@ -11,6 +11,32 @@ test('entire Gantt script parses', () => {
   assert.doesNotThrow(() => new vm.Script(script));
 });
 
+test('single clicks toggle projects and resource rows without toggling twice on arrows', () => {
+  const toggled = [];
+  let renders = 0;
+  const context = vm.createContext({collapsedProjects: new Set(),
+    renderTimeline: () => renders++, toggleResourceNode: key => toggled.push(key)});
+  for (const [start, end] of [['toggleProjectCollapse', 'expandAllProjects'],
+    ['toggleResourceContainer', 'getResourceDisplayRows']]) {
+    vm.runInContext(script.slice(script.indexOf('    function ' + start + '('),
+      script.indexOf('    function ' + end + '(')), context);
+  }
+  let stopped = 0;
+  const event = {stopPropagation: () => stopped++, preventDefault() {}, target: {closest: () => null}};
+  context.toggleProjectCollapse('42', event);
+  assert.equal(context.collapsedProjects.has('42'), true);
+  context.toggleProjectCollapse('42', event);
+  assert.equal(context.collapsedProjects.has('42'), false);
+  assert.equal(renders, 2);
+  assert.equal(stopped, 2);
+  context.toggleResourceContainer(event, 'pool:7');
+  context.toggleResourceContainer({...event, target: {closest: () => ({tagName: 'BUTTON'})}}, 'pool:7');
+  assert.deepEqual(toggled, ['pool:7']);
+  assert.match(html, /pBar\.onclick = \(event\) => toggleProjectCollapse/);
+  assert.doesNotMatch(html, /ondblclick[^\n]*toggle(?:ProjectCollapse|ResourceContainer)/);
+  assert.match(html, /ondblclick="openEditModalById/);
+});
+
 test('calendar headers advance across year boundaries and leap February', () => {
   const context = vm.createContext({document:{getElementById:()=>null},
     MONTH_NAMES:['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']});

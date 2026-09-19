@@ -553,8 +553,8 @@
 
     /* Shared EPPM context-menu standard (context_menu.py). */
 
-button:not(.context-menu-item) {background-color:#C41039 !important;color:#fff !important;border-color:#C41039 !important;}
-button:not(.context-menu-item):disabled {opacity:.5;}
+button:not(.context-menu-item):not(.excel-trigger) {background-color:#C41039 !important;color:#fff !important;border-color:#C41039 !important;}
+button:not(.context-menu-item):not(.excel-trigger):disabled {opacity:.5;}
 .context-menu {
     position: fixed; background: var(--st-background-color, #fff);
     color: var(--st-text-color, #1e293b); border: 1px solid #cbd5e1;
@@ -578,6 +578,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
 .context-menu-divider {height: 1px; background: #e2e8f0; margin: 4px 0;}
 .context-menu-header {padding: 8px 16px; font-size: 12px; font-weight: 600;}
 
+    button.excel-trigger { font-family: inherit; text-align: left; box-sizing: border-box; }
   </style>
 </head>
 <body>
@@ -614,32 +615,32 @@ button:not(.context-menu-item):disabled {opacity:.5;}
           </tr>
           <tr class="filter-row">
             <th scope="col">
-              <div class="excel-trigger" id="trigger-flt-name" onclick="openExcelFilter('full_name', 'Full Name', event)">
+              <button type="button" class="excel-trigger" id="trigger-flt-name" onclick="openExcelFilter('full_name', 'Full Name', event)">
                 <span class="excel-trigger-text" id="label-flt-name">All</span>
                 <span class="excel-trigger-icon">▼</span>
-              </div>
+              </button>
             </th>
             <th scope="col"><input aria-labelledby="column-email" type="text" class="col-filter-input" id="flt-email" placeholder="Email..." oninput="setColFilter('email', this.value)" /></th>
             <th scope="col"><input aria-labelledby="column-mobile" type="text" class="col-filter-input" id="flt-mobile" placeholder="Mobile..." oninput="setColFilter('mobile', this.value)" /></th>
             <th scope="col"><input aria-labelledby="column-landline" type="text" class="col-filter-input" id="flt-landline" placeholder="Landline..." oninput="setColFilter('landline', this.value)" /></th>
             <th scope="col">
-              <div class="excel-trigger" id="trigger-flt-sigle" onclick="openExcelFilter('sigle', 'Sigle', event)">
+              <button type="button" class="excel-trigger" id="trigger-flt-sigle" onclick="openExcelFilter('sigle', 'Sigle', event)">
                 <span class="excel-trigger-text" id="label-flt-sigle">All</span>
                 <span class="excel-trigger-icon">▼</span>
-              </div>
+              </button>
             </th>
             <th scope="col">
-              <div class="excel-trigger" id="trigger-flt-func" onclick="openExcelFilter('function_name', 'Function', event)">
+              <button type="button" class="excel-trigger" id="trigger-flt-func" onclick="openExcelFilter('function_name', 'Function', event)">
                 <span class="excel-trigger-text" id="label-flt-func">All</span>
                 <span class="excel-trigger-icon">▼</span>
-              </div>
+              </button>
             </th>
             <th scope="col"><input aria-labelledby="column-occupation_percentage" type="text" class="col-filter-input" id="flt-occupation" placeholder="%..." oninput="setColFilter('occupation_percentage', this.value)" /></th>
             <th scope="col">
-              <div class="excel-trigger" id="trigger-flt-type" onclick="openExcelFilter('function_type_name', 'Type', event)">
+              <button type="button" class="excel-trigger" id="trigger-flt-type" onclick="openExcelFilter('function_type_name', 'Type', event)">
                 <span class="excel-trigger-text" id="label-flt-type">All</span>
                 <span class="excel-trigger-icon">▼</span>
-              </div>
+              </button>
             </th>
           </tr>
         </thead>
@@ -671,19 +672,19 @@ button:not(.context-menu-item):disabled {opacity:.5;}
   <!-- Context Menu -->
   <div class="context-menu" id="context-menu">
     <div class="context-menu-header" id="ctx-header">Employee Actions</div>
-    <div class="context-menu-item" onclick="triggerAction('add')">
+    <button type="button" class="context-menu-item" onclick="triggerAction('add')">
 
       <span id="ctx-add-label">Add New Employee</span>
-    </div>
-    <div class="context-menu-item" id="ctx-item-edit" onclick="triggerAction('edit')">
+    </button>
+    <button type="button" class="context-menu-item" id="ctx-item-edit" onclick="triggerAction('edit')">
 
       <span id="ctx-edit-label">Edit Employee Profile</span>
-    </div>
+    </button>
     <div class="context-menu-divider" id="ctx-divider"></div>
-    <div class="context-menu-item danger" id="ctx-item-delete" onclick="triggerAction('delete')">
+    <button type="button" class="context-menu-item danger" id="ctx-item-delete" onclick="triggerAction('delete')">
 
       <span id="ctx-delete-label">Delete Employee</span>
-    </div>
+    </button>
   </div>
 
   <script>

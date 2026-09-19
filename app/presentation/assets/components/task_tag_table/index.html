@@ -443,16 +443,16 @@ button:not(.context-menu-item):disabled {opacity:.5;}
   <!-- Context Menu -->
   <div id="context-menu" class="context-menu">
     <div class="context-menu-header" id="ctx-header">Task Tag Actions</div>
-    <div class="context-menu-item" onclick="triggerAction('add')">
+    <button type="button" class="context-menu-item" onclick="triggerAction('add')">
       <span id="ctx-add-label">Assign New Tag</span>
-    </div>
+    </button>
     <div class="context-menu-divider" id="ctx-divider"></div>
-    <div class="context-menu-item" id="ctx-edit" onclick="triggerAction('edit')">
+    <button type="button" class="context-menu-item" id="ctx-edit" onclick="triggerAction('edit')">
       <span id="ctx-edit-label">Edit Tag Assignment</span>
-    </div>
-    <div class="context-menu-item danger" id="ctx-delete" onclick="triggerAction('delete')">
+    </button>
+    <button type="button" class="context-menu-item danger" id="ctx-delete" onclick="triggerAction('delete')">
       <span id="ctx-delete-label">Delete Tag Assignment</span>
-    </div>
+    </button>
   </div>
 
   <script>

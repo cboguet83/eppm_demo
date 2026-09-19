@@ -273,9 +273,15 @@ def _open_delete_pool_dialog(service: ResourcePoolService, pool_id: int, pool_na
 def _remove_mapping_row(pool_id: int, kind: str, identity: int) -> None:
     """Remove a draft row and synchronize its selection before widgets rerender."""
     selection_key = f"mapping_{'teams' if kind == 'team' else 'employees'}_{pool_id}"
-    st.session_state[selection_key] = [
-        selected for selected in st.session_state[selection_key] if selected != identity
-    ]
+    if kind == 'employee':
+        draft_key = f'employee_mapping_selection_draft_{pool_id}'
+        st.session_state[draft_key] = [
+            selected for selected in st.session_state.get(draft_key, []) if selected != identity
+        ]
+    if selection_key in st.session_state:
+        st.session_state[selection_key] = [
+            selected for selected in st.session_state[selection_key] if selected != identity
+        ]
     st.session_state.pop(f'mapping_pct_{pool_id}_{kind}_{identity}', None)
 
 
@@ -361,7 +367,7 @@ def _open_add_pool_mapping_dialog(
                 )
                 type_cell.text(kind.title())
                 name_cell.text(labels[identity])
-                maximum = limits[kind, identity]
+                maximum = float(limits[kind, identity])
                 state_key = f'mapping_pct_{pool_id}_{kind}_{identity}'
                 previous = st.session_state.get(state_key, float(current.allocation_pct) if current else maximum)
                 if previous > maximum and editable:
@@ -382,7 +388,6 @@ def _open_add_pool_mapping_dialog(
                 action_cell.button(
                     'Remove', key=f'remove_mapping_{pool_id}_{kind}_{identity}',
                     on_click=_remove_mapping_row, args=(pool_id, kind, identity),
-                    disabled=not editable,
                 )
                 desired.append(PoolMapping(pool_id, kind, identity, percentage))
     save, cancel = st.columns(2)

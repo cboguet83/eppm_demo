@@ -31,6 +31,10 @@ def spending_targets(budgets: tuple[ApprovedProjectAmount, ...], *, year: int,
     Past years share one 95–105% actual multiplier per project. Current-year
     spending is 80–100% of approved, with actuals representing 20–80% of that
     combined spending. Future commitments use a 0–75% multiplier per project/year.
+
+    Security review: Random generates synthetic demo amounts only, never secrets,
+    identifiers or authorization decisions. Predictability is intentional: the
+    same seed must reproduce preview/apply targets and make reruns idempotent.
     """
     result = []
     with localcontext(prec=60):

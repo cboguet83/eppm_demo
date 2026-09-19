@@ -144,6 +144,37 @@ def test_mapping_mode_defaults_to_teams_and_preserves_both_types_when_switched(d
     assert values == {'employee': 60, 'team': 100}
 
 
+def test_mapping_rows_can_be_removed_in_the_other_mode_without_reappearing(database, access):
+    _, pools, employee, team_a, _, x, _, _ = split_resources(database, access)
+    pools.create_mapping(PoolMapping(x, 'employee', employee, 80))
+    app = dialog(database, access, f'_open_add_pool_mapping_dialog(service, {x}, teams, employees)')
+    remove = app.button(key=f'remove_mapping_{x}_employee_{employee}')
+    assert not remove.disabled
+    remove.click().run()
+    app.checkbox(key=f'direct_employee_mapping_mode_{x}').check().run()
+    assert app.multiselect(key=f'mapping_employees_{x}').value == []
+    remove = app.button(key=f'remove_mapping_{x}_team_{team_a}')
+    assert not remove.disabled
+    remove.click().run()
+    app.checkbox(key=f'direct_employee_mapping_mode_{x}').uncheck().run()
+    assert app.multiselect(key=f'mapping_teams_{x}').value == []
+    assert len(pools.get_mappings_by_pool(x)) == 2
+    next(button for button in app.button if button.label == 'Save mappings').click().run()
+    assert not app.error and not app.exception
+    assert pools.get_mappings_by_pool(x) == []
+
+
+def test_direct_mode_handles_existing_employee_with_zero_remaining_allocation(database, access):
+    _, pools, employee, _, _, x, _, z = split_resources(database, access)
+    pools.create_mapping(PoolMapping(z, 'employee', employee, 100))
+    pools.create_mapping(PoolMapping(x, 'employee', employee, 0))
+    app = dialog(database, access, f'_open_add_pool_mapping_dialog(service, {x}, teams, employees)')
+    app.checkbox(key=f'direct_employee_mapping_mode_{x}').check().run()
+    assert not app.error and not app.exception
+    widget = app.number_input(key=f'mapping_pct_{x}_employee_{employee}')
+    assert widget.value == widget.max == 0.0
+
+
 def test_csv_keeps_children_deleted_when_their_requested_parent_restoration_is_blocked(database, access):
     pools, _, first, _ = restoration_conflict(database, access)
     rows = [replace(row, deleted_flag=False) for row in pools.get_all_pools(include_deleted=True)]
@@ -206,7 +237,8 @@ def test_migration_rebuilds_existing_staffing_with_global_priority(empty_databas
         (tmp_path / migration.name).write_bytes(migration.sql.encode('utf-8'))
     migrate(empty_database.operator_url, directory=tmp_path)
     with psycopg.connect(empty_database.operator_url) as connection:
-        connection.execute("INSERT INTO eppm.function(function_id,name) VALUES (1,'Engineer')")
+        # Migration 55 still requires the level column; migration 60 removes it.
+        connection.execute("INSERT INTO eppm.function(function_id,name,hierarchy_level) VALUES (1,'Engineer',1)")
         connection.execute("INSERT INTO eppm.employee(employee_id,firstname,lastname,email,employee_code) VALUES (1,'A','One','a@migration.test','A')")
         connection.execute('INSERT INTO eppm.employee_function(employee_id,function_id) VALUES (1,1)')
         connection.execute("INSERT INTO eppm.team(team_id,team_name) VALUES (1,'Team')")

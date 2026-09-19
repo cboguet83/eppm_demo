@@ -1790,7 +1790,7 @@
 
     /* Shared EPPM context-menu standard (context_menu.py). */
 
-button:not(.context-menu-item):not(.resource-tree-toggle):not(.view-modes .btn-mode) {background-color:#C41039 !important;color:#fff !important;border-color:#C41039 !important;}
+button:not(.context-menu-item):not(.resource-tree-toggle):not(.view-modes .btn-mode):not(.resource-panel-toggle):not(.resource-active-filter-pill) {background-color:#C41039 !important;color:#fff !important;border-color:#C41039 !important;}
 button:not(.context-menu-item):disabled {opacity:.5;}
 .context-menu {
     position: fixed; background: var(--st-background-color, #fff);
@@ -1815,6 +1815,8 @@ button:not(.context-menu-item):disabled {opacity:.5;}
 .context-menu-divider {height: 1px; background: #e2e8f0; margin: 4px 0;}
 .context-menu-header {padding: 8px 16px; font-size: 12px; font-weight: 600;}
 
+    button.resource-panel-toggle, button.resource-active-filter-pill { font-family: inherit; }
+    button.resource-panel-toggle { background: transparent; border: 0; }
   </style>
 </head>
 
@@ -1823,57 +1825,61 @@ button:not(.context-menu-item):disabled {opacity:.5;}
 
   <!-- Context Menu -->
   <div class="context-menu" id="context-menu">
-    <div class="context-menu-item warning" id="ctx-violation-btn" onclick="openDiagModal()" style="display:none;">
+    <button type="button" class="context-menu-item warning" id="ctx-violation-btn" onclick="openDiagModal()" style="display:none;">
       <span>⚠️</span>
       <span id="ctx-violation-label">View Constraint Issues</span>
-    </div>
-    <div class="context-menu-item" id="ctx-view-pred-btn" onclick="openViewPredecessorsModal()" style="display:none;">
+    </button>
+    <button type="button" class="context-menu-item" id="ctx-view-pred-btn" onclick="openViewPredecessorsModal()" style="display:none;">
       <span>🔗</span>
       <span id="ctx-view-pred-label">View Predecessors</span>
-    </div>
-    <div class="context-menu-item context-submenu-parent" tabindex="0" onmouseenter="positionSubmenu(this)" onfocus="positionSubmenu(this)">
+    </button>
+    <div class="context-submenu-parent">
+      <button type="button" class="context-menu-item" onmouseenter="positionSubmenu(this.parentElement)" onfocus="positionSubmenu(this.parentElement)" onclick="positionSubmenu(this.parentElement)">
       <span>🔍</span>
       <span class="ctx-label-filter">Filter</span><span class="submenu-arrow">▸</span>
+      </button>
       <div class="context-menu context-submenu">
         <button class="context-menu-item" onclick="triggerFilterContextProject('task','this')" data-filter-label="filter_this">This project</button>
         <button class="context-menu-item" onclick="triggerFilterContextProject('task','all')" data-filter-label="filter_all">This project and all dependencies</button>
         <button class="context-menu-item" onclick="triggerFilterContextProject('task','predecessors')" data-filter-label="filter_predecessors">This project and predecessors</button>
       </div>
     </div>
-    <div class="context-menu-item" onclick="openAddStepModal()">
+    <button type="button" class="context-menu-item" onclick="openAddStepModal()">
       <span>➕</span>
       <span id="ctx-label-add-step">Add Step</span>
-    </div>
-    <div class="context-menu-item" onclick="openEditModal()">
+    </button>
+    <button type="button" class="context-menu-item" onclick="openEditModal()">
       <span>✏️</span>
       <span id="ctx-label-edit-step">Edit Step &amp; Dependencies</span>
-    </div>
-    <div class="context-menu-item" onclick="triggerManageTaskTags()">
+    </button>
+    <button type="button" class="context-menu-item" onclick="triggerManageTaskTags()">
       <span>🏷️</span>
       <span id="ctx-label-task-tags">Manage Tags</span>
-    </div>
-    <div class="context-menu-item" onclick="triggerManageTaskPools()">
+    </button>
+    <button type="button" class="context-menu-item" onclick="triggerManageTaskPools()">
       <span>👤</span>
       <span id="ctx-label-task-pools">Assign Resource</span>
-    </div>
-    <div class="context-menu-item" onclick="triggerLogProjectEvent('task')">
+    </button>
+    <button type="button" class="context-menu-item" onclick="triggerLogProjectEvent('task')">
       <span>＋</span><span id="ctx-task-log-event">Log event</span>
-    </div>
-    <div class="context-menu-item" onclick="markComplete()">
+    </button>
+    <button type="button" class="context-menu-item" onclick="markComplete()">
       <span>✅</span>
       <span id="ctx-label-complete-step">Mark 100% Complete</span>
-    </div>
+    </button>
     <div class="context-menu-divider"></div>
-    <div class="context-menu-item danger" onclick="deleteSelectedStep()">
+    <button type="button" class="context-menu-item danger" onclick="deleteSelectedStep()">
       <span>🗑️</span>
       <span id="ctx-label-delete-step">Delete Step</span>
-    </div>
+    </button>
   </div>
 
   <!-- Project Context Menu (Displayed when right-clicking a project row) -->
   <div class="context-menu" id="project-context-menu" style="display:none; min-width:210px;">
-    <div class="context-menu-item context-submenu-parent" tabindex="0" onmouseenter="positionSubmenu(this)" onfocus="positionSubmenu(this)">
+    <div class="context-submenu-parent">
+      <button type="button" class="context-menu-item" onmouseenter="positionSubmenu(this.parentElement)" onfocus="positionSubmenu(this.parentElement)" onclick="positionSubmenu(this.parentElement)">
       <span>◆</span><span>Scenario management</span><span>▸</span>
+      </button>
       <div class="context-menu context-submenu">
         <button class="context-menu-item" onclick="setCurrentProjectBaseline()"><span id="ctx-project-baseline">Set current project plan as baseline</span></button>
         <button class="context-menu-item" onclick="createAlternativeScenario()"><span id="ctx-create-alternative">Create alternative scenario</span></button>
@@ -1884,27 +1890,31 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         <button class="context-menu-item" onclick="activateAlternativeScenario()"><span id="ctx-activate-alternative">Set alternative as active scenario</span></button>
       </div>
     </div>
-    <div class="context-menu-item warning" id="ctx-proj-violation-btn" onclick="openProjectDiagModal(selectedContextMenuProjectId, selectedContextMenuProjectAlternative)" style="display:none;">
+    <button type="button" class="context-menu-item warning" id="ctx-proj-violation-btn" onclick="openProjectDiagModal(selectedContextMenuProjectId, selectedContextMenuProjectAlternative)" style="display:none;">
       <span>⚠️</span>
       <span id="ctx-proj-violation-label">View Project Violations</span>
-    </div>
-    <div class="context-menu-item context-submenu-parent" tabindex="0" onmouseenter="positionSubmenu(this)" onfocus="positionSubmenu(this)">
+    </button>
+    <div class="context-submenu-parent">
+      <button type="button" class="context-menu-item" onmouseenter="positionSubmenu(this.parentElement)" onfocus="positionSubmenu(this.parentElement)" onclick="positionSubmenu(this.parentElement)">
       <span>🔍</span>
       <span id="ctx-filter-menu">Filter</span><span class="submenu-arrow">▸</span>
+      </button>
       <div class="context-menu context-submenu">
         <button class="context-menu-item" onclick="triggerFilterContextProject('project', 'this')" id="ctx-filter-this">This project</button>
         <button class="context-menu-item" onclick="triggerFilterContextProject('project', 'all')" id="ctx-filter-all">This project and all dependencies</button>
         <button class="context-menu-item" onclick="triggerFilterContextProject('project', 'predecessors')" id="ctx-filter-predecessors">This project and predecessors</button>
       </div>
     </div>
-    <div class="context-menu-item" onclick="openAddStepModal(selectedContextMenuProjectId)">
+    <button type="button" class="context-menu-item" onclick="openAddStepModal(selectedContextMenuProjectId)">
       <span>＋</span><span id="ctx-project-add-step">Add step</span>
-    </div>
-    <div class="context-menu-item" onclick="openProjectDependencies(selectedContextMenuProjectId)">
+    </button>
+    <button type="button" class="context-menu-item" onclick="openProjectDependencies(selectedContextMenuProjectId)">
       <span>🔗</span><span id="ctx-project-dependencies">Manage dependencies</span>
-    </div>
-    <div class="context-menu-item context-submenu-parent" tabindex="0" onmouseenter="positionSubmenu(this)" onfocus="positionSubmenu(this)">
+    </button>
+    <div class="context-submenu-parent">
+      <button type="button" class="context-menu-item" onmouseenter="positionSubmenu(this.parentElement)" onfocus="positionSubmenu(this.parentElement)" onclick="positionSubmenu(this.parentElement)">
       <span>☷</span><span id="ctx-bulk-actions">Bulk actions</span><span class="submenu-arrow">▸</span>
+      </button>
       <div class="context-menu context-submenu">
     <button class="context-menu-item" onclick="triggerManageProjectTagsFromMenu('export_csv_template')">
       <span>↓</span><span id="ctx-export-csv">Export CSV template</span>
@@ -1914,31 +1924,31 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     </button>
       </div>
     </div>
-    <div class="context-menu-item" onclick="triggerManageProjectTagsFromMenu()">
+    <button type="button" class="context-menu-item" onclick="triggerManageProjectTagsFromMenu()">
       <span>🏷️</span>
       <span id="ctx-label-project-tags">Manage Tags</span>
-    </div>
-    <div class="context-menu-item" onclick="triggerManageProjectPoolsFromMenu()">
+    </button>
+    <button type="button" class="context-menu-item" onclick="triggerManageProjectPoolsFromMenu()">
       <span>👤</span>
       <span id="ctx-label-project-pools">Assign Resource</span>
-    </div>
-    <div class="context-menu-item" onclick="triggerLogProjectEvent('project')">
+    </button>
+    <button type="button" class="context-menu-item" onclick="triggerLogProjectEvent('project')">
       <span>＋</span><span id="ctx-project-log-event">Log event</span>
-    </div>
-    <div class="context-menu-item" onclick="triggerEditProjectFromMenu()">
+    </button>
+    <button type="button" class="context-menu-item" onclick="triggerEditProjectFromMenu()">
       <span>📁</span>
       <span id="ctx-label-edit-project">View project details</span>
-    </div>
+    </button>
   </div>
 
   <!-- Dependency Details Right-Click Context Menu -->
   <div class="context-menu dep-context-menu" id="dep-context-menu" style="display:none; width:320px; padding:12px;">
     <div id="dep-ctx-content"></div>
     <div class="context-menu-divider" style="margin:8px 0;"></div>
-    <div class="context-menu-item" onclick="openEditModalForDep()">
+    <button type="button" class="context-menu-item" onclick="openEditModalForDep()">
       <span>✏️</span>
       <span id="ctx-label-edit-dep">Edit Dependency</span>
-    </div>
+    </button>
   </div>
 
   <!-- Resource Pool Cell Context Menu -->
@@ -1946,16 +1956,18 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     <div id="ctx-res-header" style="padding:7px 12px; font-size:11px; font-weight:700; color:#334155; border-bottom:1px solid #e2e8f0; background:#f8fafc;">
       🏊 Resource Filter
     </div>
-    <div class="context-menu-item" id="ctx-res-details-btn" onclick="triggerGoToResourcePoolDetails()">
+    <button type="button" class="context-menu-item" id="ctx-res-details-btn" onclick="triggerGoToResourcePoolDetails()">
       <span style="font-size:14px;">&#8599;</span>
       <span>Go to pool details</span>
-    </div>
-    <div class="context-menu-item" onclick="triggerGoToResourcePoolDetails('show_pool_allocations')">
+    </button>
+    <button type="button" class="context-menu-item" onclick="triggerGoToResourcePoolDetails('show_pool_allocations')">
       <span>☷</span><span id="ctx-pool-allocations">Show active allocations</span>
-    </div>
-    <div class="context-menu-item context-submenu-parent" id="ctx-res-filter-btn" tabindex="0" onmouseenter="positionSubmenu(this)" onfocus="positionSubmenu(this)">
+    </button>
+    <div class="context-submenu-parent" id="ctx-res-filter-btn">
+      <button type="button" class="context-menu-item" onmouseenter="positionSubmenu(this.parentElement)" onfocus="positionSubmenu(this.parentElement)" onclick="positionSubmenu(this.parentElement)">
       <span style="font-size:14px;">🔍</span>
       <span class="ctx-label-filter">Filter</span><span class="submenu-arrow">▸</span>
+      </button>
       <div class="context-menu context-submenu">
         <button class="context-menu-item" onclick="triggerFilterResourcePool(true,'this')" data-resource-filter="consuming">Consuming projects</button>
         <button class="context-menu-item" onclick="triggerFilterResourcePool(true,'all')" data-resource-filter="consuming_all">Consuming projects and all dependencies</button>
@@ -1963,10 +1975,10 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       </div>
     </div>
     <div class="context-menu-divider" id="ctx-res-divider" style="display:none;"></div>
-    <div class="context-menu-item danger" id="ctx-res-clear-btn" onclick="triggerClearResourcePoolFilter(event)" style="display:none;">
+    <button type="button" class="context-menu-item danger" id="ctx-res-clear-btn" onclick="triggerClearResourcePoolFilter(event)" style="display:none;">
       <span style="font-size:14px;">✖</span>
       <span id="ctx-res-clear-label">Clear Resource Pool Filter</span>
-    </div>
+    </button>
   </div>
 
 
@@ -2201,10 +2213,10 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       <!-- Resource Section Header Bar -->
       <div class="resource-panel-header" id="resource-panel-header">
         <div class="resource-panel-title">
-          <span class="resource-panel-toggle" id="btn-toggle-resource-grid" onclick="toggleResourceGrid()">▼</span>
+          <button type="button" class="resource-panel-toggle" id="btn-toggle-resource-grid" aria-label="Toggle resource pools grid" onclick="toggleResourceGrid()">▼</button>
           <span class="resource-panel-heading" id="lbl-resource-panel-title">Resource Pools & Capacity Usage</span>
           <span class="resource-count-badge" id="resource-count-badge">0 Pools</span>
-          <span class="resource-active-filter-pill" id="resource-active-filter-pill" style="display:none;" onclick="triggerClearResourcePoolFilter(event)" title="Click to clear active filter"></span>
+          <button type="button" class="resource-active-filter-pill" id="resource-active-filter-pill" style="display:none;" onclick="triggerClearResourcePoolFilter(event)" title="Click to clear active filter"></button>
         </div>
         <div class="resource-panel-options">
           <label class="resource-option-checkbox">
@@ -5087,7 +5099,6 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         item.style.pointerEvents = disabled ? 'none' : '';
         item.style.opacity = disabled ? '.45' : '';
         if (item.tagName === 'BUTTON') item.disabled = disabled;
-        if (item.classList.contains('context-submenu-parent')) item.tabIndex = disabled ? -1 : 0;
       });
       menu.style.display = 'block';
 
@@ -5570,7 +5581,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
           });
           leftHtml += `
             <div class="resource-left-row resource-group-row ${row.alternative ? 'alternative-resource-row' : ''}" data-scope="${row.alternative ? 'alternative_' + row.comparisonScope : 'total'}"
-                 ondblclick="toggleResourceContainer(event, '${escapeHtml(row.nodeKey)}')"
+                 onclick="toggleResourceContainer(event, '${escapeHtml(row.nodeKey)}')"
                  data-group-id="${Number(group.group_id)}" data-group-name="${escapeHtml(group.name)}"
                  oncontextmenu="handleGroupContextMenu(event)"
                  data-row-id="${escapeHtml(row.nodeKey)}${row.alternative ? '-alternative-' + row.comparisonScope : ''}"
@@ -5603,7 +5614,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
                     </div>`;
           }).join('');
           rightHtml += `<div class="resource-right-row resource-group-row ${row.alternative ? 'alternative-resource-row' : ''}"
-                            ondblclick="toggleResourceContainer(event, '${escapeHtml(row.nodeKey)}')"
+                            onclick="toggleResourceContainer(event, '${escapeHtml(row.nodeKey)}')"
                             style="width:${totalTimelineWidth}px;box-sizing:border-box;padding-left:${columnLeft}px;">${groupCells}</div>`;
           return;
         }
@@ -5626,7 +5637,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         if (row.rowType === 'pool_assigned') {
           leftHtml += `
             <div class="resource-left-row assigned-capacity-row ${assignedState} ${isFilterActive ? 'active-filter-row' : ''}"
-                 data-row-id="pool-${pool.id}-assigned" ${rowContext}>
+                 data-row-id="pool-${pool.id}-assigned" onclick="toggleResourceContainer(event, '${escapeHtml(row.nodeKey)}')" ${rowContext}>
               <div class="resource-pool-name" style="padding-left:${indent}px;">
                 <button class="resource-tree-toggle" type="button" aria-label="Collapse ${escapeHtml(pool.name)}"
                         onclick="toggleResourceNode('${row.nodeKey}')">${toggle}</button>
@@ -5655,6 +5666,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
                     </div>`;
           }).join('');
           rightHtml += `<div class="resource-right-row assigned-capacity-row ${isFilterActive ? 'active-filter-row' : ''}"
+                            onclick="toggleResourceContainer(event, '${escapeHtml(row.nodeKey)}')"
                             style="width:${totalTimelineWidth}px;box-sizing:border-box;padding-left:${columnLeft}px;">${assignedCells}</div>`;
           return;
         }
@@ -5666,7 +5678,8 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         const usage = isSelected ? pool.selected_projects_daily_usage : pool.daily_usage;
         leftHtml += `
           <div class="resource-left-row sub-row ${isFilterActive ? 'active-filter-row' : ''}"
-               data-row-id="pool-${pool.id}-${isSelected ? 'selected' : 'total'}" ${rowContext}>
+               data-row-id="pool-${pool.id}-${isSelected ? 'selected' : 'total'}"
+               ${row.collapsed ? `onclick="toggleResourceContainer(event, '${escapeHtml(row.nodeKey)}')"` : ''} ${rowContext}>
             <div class="resource-pool-name" style="padding-left:${indent}px;">
               ${row.collapsed ? `<button class="resource-tree-toggle" type="button" aria-label="Expand ${escapeHtml(pool.name)}"
                 onclick="toggleResourceNode('${row.nodeKey}')">${toggle}</button><span class="r-name-text">${escapeHtml(pool.name)}</span>`
@@ -5677,6 +5690,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         `;
         const demandCells = renderDemandCells(pool, usage, isSelected ? 'selected' : 'total');
         rightHtml += `<div class="resource-right-row sub-row ${isFilterActive ? 'active-filter-row' : ''}"
+                          ${row.collapsed ? `onclick="toggleResourceContainer(event, '${escapeHtml(row.nodeKey)}')"` : ''}
                           style="width:${totalTimelineWidth}px;box-sizing:border-box;padding-left:${columnLeft}px;">${demandCells}</div>`;
       });
 
@@ -6411,6 +6425,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
           frozenHtml += `
             <div class="frozen-row project-group-row ${hasViol ? 'has-violations' : ''} ${alternatives[String(item.project_id)]?.new_scenario ? 'new-scenario' : ''}" id="frozen-row-proj-${item.project_id}"
                  style="top: ${topPos}px; width: ${totalW}px; min-width: ${totalW}px; cursor:default;"
+                 onclick="toggleProjectCollapse('${item.project_id}', event)"
                  oncontextmenu="showProjectContextMenu(event, '${item.project_id}')">
               <span class="task-id-cell" style="width:${colWidths.id}px; min-width:${colWidths.id}px; max-width:${colWidths.id}px; font-weight:700; color:#475569;">📁</span>
               <span class="collapse-toggle-icon" onclick="toggleProjectCollapse('${item.project_id}', event)" style="cursor:pointer;" title="${item.isCollapsed ? 'Click to expand tasks' : 'Click to collapse tasks'}">${item.isCollapsed ? '▶' : '▼'}</span>
@@ -6502,7 +6517,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
               pBar.onmouseenter = (event) => showProjectHoverTooltip(event, item.project_id);
               pBar.onmousemove = moveTooltip;
               pBar.onmouseleave = hideTooltip;
-              pBar.ondblclick = (event) => toggleProjectCollapse(item.project_id, event);
+              pBar.onclick = (event) => toggleProjectCollapse(item.project_id, event);
 
               rowEl.appendChild(pBar);
             }
