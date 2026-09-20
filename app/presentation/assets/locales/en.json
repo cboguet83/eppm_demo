@@ -417,7 +417,8 @@
     "csv_replace_warning": "Importing replaces this project's entire schedule. All existing tasks, dependency links (including links to other projects), and project/task resource allocations will be deleted. Project fields and useful web links are retained. Nothing is deleted until the template passes validation and you click Replace project schedule.",
     "csv_replace_button": "Replace project schedule",
     "clear_all_filters": "Clear all filters",
-    "close_alternative_view": "Close alternative view"
+    "close_alternative_view": "Close alternative view",
+    "projects_to_display": "Projects to display"
   },
   "gantt": {
     "columns": {
@@ -865,9 +866,9 @@
     "no_wbs": "This project has no assigned WBS.",
     "unavailable": "Dashboard data is unavailable or access has changed. Please reload.",
     "pool": "Resource pools",
-    "finance_overview": "Finance overview",
+    "finance_overview": "Finance",
     "approved_budget": "Approved budget",
-    "resources_allocation": "Resources allocation",
+    "resources_allocation": "Resources",
     "capacity_overallocation": "Capacity and Overallocation",
     "overallocation": "Overallocation",
     "total_capacity": "Total pools capacity",

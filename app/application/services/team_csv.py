@@ -8,6 +8,8 @@ from app.application.ports.organization import OrganizationStore
 from app.domain.organization.models import Team
 from app.domain.organization.rules import normalize_team, validate_team_parent
 
+TEAM_CSV_COLUMNS = ('team_name', 'team_id', 'manager_function_id', 'hierarchy_type_id', 'parent_team_id', 'deleted_flag')
+
 
 @dataclass(frozen=True)
 class TeamImportResult:
@@ -44,6 +46,9 @@ def parse_teams(content: bytes) -> list[Team]:
         columns = reader.fieldnames or []
         if 'team_name' not in columns or len(set(columns)) != len(columns):
             raise ValueError('The CSV requires unique headers including team_name.')
+        unknown = set(columns) - set(TEAM_CSV_COLUMNS)
+        if unknown:
+            raise ValueError('Unsupported CSV columns: ' + ', '.join(sorted(unknown)) + '. Use the current template.')
         for number, row in enumerate(reader, 2):
             try:
                 if None in row or any(value is None for value in row.values()):

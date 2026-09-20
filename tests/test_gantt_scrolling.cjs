@@ -11,10 +11,10 @@ test('entire Gantt script parses', () => {
   assert.doesNotThrow(() => new vm.Script(script));
 });
 
-test('single clicks toggle projects and resource rows without toggling twice on arrows', () => {
+test('single clicks toggle projects and double clicks toggle resource rows', () => {
   const toggled = [];
   let renders = 0;
-  const context = vm.createContext({collapsedProjects: new Set(),
+  const context = vm.createContext({collapsedProjects: new Set(), resourceSelectionTimer: null, clearTimeout() {},
     renderTimeline: () => renders++, toggleResourceNode: key => toggled.push(key)});
   for (const [start, end] of [['toggleProjectCollapse', 'expandAllProjects'],
     ['toggleResourceContainer', 'getResourceDisplayRows']]) {
@@ -33,8 +33,43 @@ test('single clicks toggle projects and resource rows without toggling twice on 
   context.toggleResourceContainer({...event, target: {closest: () => ({tagName: 'BUTTON'})}}, 'pool:7');
   assert.deepEqual(toggled, ['pool:7']);
   assert.match(html, /pBar\.onclick = \(event\) => toggleProjectCollapse/);
-  assert.doesNotMatch(html, /ondblclick[^\n]*toggle(?:ProjectCollapse|ResourceContainer)/);
+  assert.doesNotMatch(html, /ondblclick[^\n]*toggleProjectCollapse/);
+  assert.match(html, /ondblclick[^\n]*toggleResourceContainer/);
+  assert.doesNotMatch(html, / onclick="toggleResourceContainer/);
   assert.match(html, /ondblclick="openEditModalById/);
+});
+
+test('new resource hierarchies expand every level but collapse-all retains root expansion', () => {
+  const context = vm.createContext({collapsedResourceNodes: new Set(), resourcePoolHierarchy: [
+    {key:'group:1', node_type:'group', children:[{key:'group:2', node_type:'group', children:[
+      {key:'pool:3', node_type:'pool', pool_id:3}]}]}]});
+  vm.runInContext(script.slice(script.indexOf('    const knownResourceNodes ='),
+    script.indexOf('    let resourceSelectionTimer =')), context);
+  context.syncResourceExpansion();
+  assert.equal(context.collapsedResourceNodes.size, 0);
+  context.collapsedResourceNodes.add('pool:3');
+  context.syncResourceExpansion();
+  assert.equal(context.collapsedResourceNodes.has('pool:3'), true);
+  context.syncResourceExpansion(true);
+  assert.deepEqual([...context.collapsedResourceNodes], ['group:2']);
+});
+
+test('pool single clicks select allocation details and double clicks cancel selection', () => {
+  let pending, message;
+  const context = vm.createContext({setTimeout: callback => {pending = callback; return 1;},
+    clearTimeout: () => {pending = null;}, Streamlit:{setComponentValue: value => {message=value;}}});
+  vm.runInContext(script.slice(script.indexOf('    let resourceSelectionTimer ='),
+    script.indexOf('    function toggleResourceContainer(')), context);
+  const row = {dataset:{poolId:'7', scope:'selected', startDate:'2026-01-01', endDate:'2026-03-31'}};
+  const target = {closest: selector => selector === 'button' ? null : row};
+  context.selectResourceAllocation({detail:1, target});
+  pending();
+  assert.equal(message.action, 'select_pool_allocations');
+  assert.equal(message.pool_id, '7');
+  assert.equal(message.allocation_scope, 'selected');
+  context.selectResourceAllocation({detail:1, target});
+  context.selectResourceAllocation({detail:2, target});
+  assert.equal(pending, null);
 });
 
 test('calendar headers advance across year boundaries and leap February', () => {
@@ -193,8 +228,7 @@ test('hide-unused pools preserves ancestors, respects collapsed groups, and upda
   const run = code => vm.runInContext(code, context);
   run(script.slice(script.indexOf('    function getResourcePoolById('), script.indexOf('    function renderResourceGrid(')));
   assert.equal(run('hideUnusedPools'), true);
-  assert.equal(run('getResourceDisplayRows().length'), 2);
-  run('collapsedResourceNodes.clear()');
+  assert.equal(run('getResourceDisplayRows().length'), 5);
   assert.deepEqual([...run('getResourceDisplayRows().map(row => row.nodeKey)')],
     ['root', 'nested', 'pool:1', 'pool:1', 'pool:1']);
   run("collapsedResourceNodes.add('pool:1')");

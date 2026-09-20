@@ -87,7 +87,7 @@ export default function({data, parentElement, setTriggerValue, setStateValue}) {
         heading.textContent = row.name; menu.appendChild(heading);
         let actions = [['create_root',`Create ${noun}`]];
         if (row.id) actions = row.deleted ? [['undelete',`Undelete ${noun}`]]
-            : [['edit',`Edit ${noun}`], ['create',`Create ${noun}`], ['delete',`Delete ${noun}`]];
+            : [['edit',`Edit ${noun}`], ['create',isTeam || isFunction ? `Create ${noun}` : 'Add child pool'], ['delete',`Delete ${noun}`]];
         if (row.id && !row.deleted && !isTeam && !isFunction) actions.splice(2,0,['gantt','Show consuming projects in Gantt']);
         if (row.id && !row.container && !row.deleted && !isTeam && !isFunction) actions.splice(2,0,['map','Map employees or teams']);
         for (const [action, label] of actions) {

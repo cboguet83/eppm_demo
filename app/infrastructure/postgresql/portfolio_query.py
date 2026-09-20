@@ -89,6 +89,9 @@ def _filter_values(values: list[object], numeric: bool) -> tuple[list[Decimal], 
 def where(query: dict, formats: dict[str, str], *, exclude: str | None = None) -> tuple[sql.Composable, list[object]]:
     """Bind filters after scope policies, ignoring unknown client column names."""
     clauses, arguments = [], []
+    if query.get('project_ids') is not None:
+        clauses.append(sql.SQL('project_id=ANY(%s::bigint[])'))
+        arguments.append(query['project_ids'])
     search = str(query.get('search') or '').strip()
     if search:
         clauses.append(sql.SQL('(strpos({}, {})>0 OR strpos(project_id::text,%s)>0)').format(

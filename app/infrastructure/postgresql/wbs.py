@@ -14,8 +14,14 @@ class PostgresWbsStore:
 
     def wbs_options(self, project_id: int | None) -> list[WbsOption]:
         """Read global remainder without exposing hidden project identities."""
-        return [WbsOption(id=row[0], code=row[1], description=row[2], available=row[3]) for row in self.connection.execute(
-            'SELECT id,code,description,available FROM eppm.wbs_options(%s)', (project_id,))]
+        choices: dict[int, WbsOption] = {}
+        for identity, code, description, percentage, status in self.connection.execute(
+            'SELECT id,code,description,percentage,status FROM eppm.wbs_allocation_facts(%s)', (project_id,)
+        ):
+            option = choices.setdefault(identity, WbsOption(id=identity, code=code, description=description, available=100))
+            if percentage is not None and status != 'Cancelled':
+                option['available'] -= int(percentage)
+        return list(choices.values())
 
     def wbs_allocations(self, project_id: int) -> list[WbsAllocation]:
         """Return only visible project allocations in stable WBS order."""
@@ -24,7 +30,11 @@ class PostgresWbsStore:
 
     def replace_wbs(self, project_id: int, allocations: list[WbsAllocation]) -> None:
         """Revalidate the global cap in the write snapshot before replacing shares."""
-        validate_availability(allocations, self.wbs_options(project_id))
+        options = self.wbs_options(project_id)
+        status = self.connection.execute('SELECT status FROM eppm.project WHERE id=%s', (project_id,)).fetchone()[0]
+        if status == 'Cancelled':
+            options = [WbsOption(**{**option, 'available': 100}) for option in options]
+        validate_availability(allocations, options)
         self.connection.execute('DELETE FROM eppm.project_wbs WHERE project_id=%s', (project_id,))
         with self.connection.cursor() as cursor:
             cursor.executemany('INSERT INTO eppm.project_wbs(project_id,wbs_id,percentage) VALUES (%s,%s,%s)',

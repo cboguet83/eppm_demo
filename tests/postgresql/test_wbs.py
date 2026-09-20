@@ -87,6 +87,51 @@ def test_new_project_wbs_save_is_atomic_and_multiple_codes_are_independent(busin
     assert projects.get_wbs_options()[0]["available"] == 100
 
 
+def test_cancellation_releases_wbs_and_reactivation_validates_retained_shares(business):
+    resources, _, _, _, manager = business
+    projects = create_project_service(resources, access=manager)
+    identity = catalog(resources, manager).save('CANCELLED')
+    save_allocation(projects, 1, [{'wbs_id': identity, 'percentage': 100}])
+    first = projects.get_project_by_id(1)
+    projects.update_project(1, first.name, 'Cancelled', first.dynamic_attributes)
+    assert projects.get_wbs_options(2)[0]['available'] == 100
+    save_allocation(projects, 2, [{'wbs_id': identity, 'percentage': 80}])
+    with pytest.raises(ValueError, match='Resolve its WBS allocation conflict.*only 20%'):
+        projects.update_project(1, first.name, 'In Progress', first.dynamic_attributes)
+    assert projects.get_project_by_id(1).status == 'Cancelled'
+    assert projects.get_wbs_allocations(1) == [{'wbs_id': identity, 'percentage': 100}]
+    projects.update_project(1, first.name, 'In Progress', first.dynamic_attributes,
+                            wbs_allocations=[{'wbs_id': identity, 'percentage': 20}])
+    assert projects.get_project_by_id(1).status == 'In Progress'
+    assert projects.get_wbs_options()[0]['available'] == 0
+
+
+def test_concurrent_wbs_reactivation_and_claim_cannot_exceed_cap(business):
+    resources, _, _, _, manager = business
+    projects = create_project_service(resources, access=manager)
+    identity = catalog(resources, manager).save('RESTORE-RACE')
+    save_allocation(projects, 1, [{'wbs_id': identity, 'percentage': 100}])
+    project = projects.get_project_by_id(1)
+    projects.update_project(1, project.name, 'Cancelled', project.dynamic_attributes)
+    ready = Barrier(2)
+
+    def save(restore):
+        service = create_project_service(resources, access=manager)
+        ready.wait(timeout=10)
+        try:
+            if restore:
+                service.update_project(1, project.name, 'In Progress', project.dynamic_attributes)
+            else:
+                save_allocation(service, 2, [{'wbs_id': identity, 'percentage': 100}])
+            return 'saved'
+        except ValueError:
+            return 'rejected'
+
+    with ThreadPoolExecutor(max_workers=2) as workers:
+        assert sorted(workers.map(save, [True, False])) == ['rejected', 'saved']
+    assert projects.get_wbs_options()[0]['available'] == 0
+
+
 def test_direct_database_constraints_guard_caps_fractions_references_and_owner_changes(business, authorized):
     """SQL must reject fractional shares before rounding and preserve owner checks."""
     resources, _, _, editor, manager = business

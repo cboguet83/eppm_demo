@@ -8,7 +8,7 @@ from app.application.ports.projects import PlanningProject, ProjectGateway, Proj
 from app.domain.projects.project import Project, normalize_project_name, prepare_project_values
 from app.domain.projects.project_types import PropertyValue
 from app.domain.projects.links import LinkValues, normalize_link
-from app.domain.projects.wbs import WbsAllocation, WbsOption, normalize_allocations
+from app.domain.projects.wbs import WbsAllocation, WbsOption, normalize_allocations, validate_availability
 
 
 def create_in_transaction(store: ProjectStore, project: Project) -> int:
@@ -107,6 +107,14 @@ class ProjectService:
                 creating=False, existing=existing.dynamic_attributes,
             )
             store.update(Project(project_id, clean_name, status, values, function_id, type_id, strategic_priority_id))
+            if existing.status == 'Cancelled' and status != 'Cancelled':
+                try:
+                    validate_availability(allocations if allocations is not None else store.wbs_allocations(project_id),
+                                          store.wbs_options(project_id))
+                except ValueError as exc:
+                    raise ValueError('Cannot change the status of this cancelled project. '
+                                     'Resolve its WBS allocation conflict before reactivating it. '
+                                     + str(exc)) from exc
             if links is not None:
                 store.replace_links(project_id, links)
             if allocations is not None:

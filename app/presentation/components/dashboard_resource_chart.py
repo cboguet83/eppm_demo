@@ -65,7 +65,7 @@ export default function({data,parentElement,setTriggerValue}) {
     const valueAxis=axis(Math.max(0,...data.rows.map(row=>Math.max(pools.reduce((sum,pool)=>sum+Number(pool[data.metric][row.quarter]||0),0),showCapacity?capacity(row):0)),...budgetSeries.flatMap(series=>series.points.map(point=>point.value||0)),...transactions.map(row=>stackTotal(row,true))),
         Math.min(0,...transactions.map(row=>stackTotal(row,false))));
     const valueY=value=>bottom-height*(value-valueAxis.min)/(valueAxis.max-valueAxis.min);
-    const fmt=value=>Number(value).toLocaleString(data.locale,{maximumFractionDigits:0});
+    const fmt=value=>Number(value).toLocaleString(data.locale,{minimumFractionDigits:1,maximumFractionDigits:1});
     const money=value=>(Number(value)/1000).toLocaleString(data.locale,{maximumFractionDigits:0});
     const tick=value=>Number(data.metric==='finance'?value/1000:value).toLocaleString(data.locale,{maximumFractionDigits:data.metric==='finance'?1:0});
     for(let i=0;i<=valueAxis.count;i++){

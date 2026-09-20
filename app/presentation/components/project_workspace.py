@@ -4,6 +4,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from app.application.services.projects import ProjectService
+from app.application.services.dashboard import DashboardService
 from app.application.services.project_types import ProjectTypeService
 from app.application.services.portfolio import PortfolioService
 from app.application.services.schema import SchemaService
@@ -27,3 +28,5 @@ class ProjectWorkspace:
     render_budget: Callable[[int], None] | None = None
     open_event_dialog: Callable[[int], None] | None = None
     render_plans: Callable[[int], None] | None = None
+
+    dashboard: DashboardService | None = None

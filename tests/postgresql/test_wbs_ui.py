@@ -38,7 +38,7 @@ def catalog_screen(path, actor, locale):
 def test_business_administrator_can_maintain_catalog_from_settings(business, locale, title):
     path, _, _, _, manager = business
     app = AppTest.from_function(settings_screen, args=(path, manager.actor, locale)).run()
-    app.radio(key="rb_settings_section").set_value("project_configuration").run()
+    app.session_state["rb_settings_section"] = "project_configuration"
     app.session_state["project_configuration_tab"] = title
     app.run()
     assert not app.exception
@@ -65,7 +65,7 @@ def test_business_administrator_can_maintain_catalog_from_settings(business, loc
 def test_project_editor_cannot_maintain_shared_wbs_catalog(business):
     path, _, _, editor, _ = business
     app = AppTest.from_function(settings_screen, args=(path, editor.actor, "en")).run()
-    app.radio(key="rb_settings_section").set_value("project_configuration").run()
+    app.session_state["rb_settings_section"] = "project_configuration"
     app.session_state["project_configuration_tab"] = "WBS"
     app.run()
     assert not app.exception

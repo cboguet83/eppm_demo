@@ -144,7 +144,9 @@ def render_teams(service: OrganizationService) -> None:
 @organization_errors
 def render_employees(service: OrganizationService) -> None:
     """Render the employees catalog only when its tab is open."""
-    st.link_button(t('settings.export_csv'), '/downloads/organization/employees.csv')
+    from app.presentation.components.employee_csv import employee_csv_controls
+
+    employee_csv_controls(service, show_deleted=False)
     df_types = function_types_frame(service.get_all_function_types())
     df_funcs = functions_frame(service.get_all_functions())
     employee_records = service.get_all_employees()

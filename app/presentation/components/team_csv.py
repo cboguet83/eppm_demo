@@ -1,11 +1,9 @@
 """Authenticated team CSV controls with an explicit optional deletion policy."""
 
-from dataclasses import asdict
-
 import streamlit as st
 
 from app.application.services.organization import OrganizationService
-from app.application.services.team_csv import parse_teams
+from app.application.services.team_csv import TEAM_CSV_COLUMNS, parse_teams
 from app.presentation.components.csv_upload import project_csv_upload, reset_csv_upload
 from app.presentation.components.dialog import dialog
 from app.presentation.components.organization_dialogs import organization_errors
@@ -27,7 +25,7 @@ def import_teams_dialog(service: OrganizationService) -> None:
     if upload is None:
         return
     rows = parse_teams(upload.encode('utf-8'))
-    st.dataframe([asdict(team) for team in rows], hide_index=True)
+    st.dataframe([{column: getattr(team, column) for column in TEAM_CSV_COLUMNS} for team in rows], hide_index=True)
     if st.button('Import teams', type='primary', key='team_csv_submit'):
         result = service.import_teams_csv(upload.encode('utf-8'), delete_missing=delete_missing)
         st.session_state['team_csv_success'] = (f'Import successful: {result.created} teams created, '

@@ -418,7 +418,8 @@
     "csv_replace_warning": "L’import remplace tout le planning du projet. Les tâches, liens de dépendance (y compris avec les autres projets) et affectations de ressources au projet et aux tâches seront supprimés. Les champs du projet et les liens web utiles sont conservés. Aucune suppression avant validation du fichier et clic sur Remplacer le planning du projet.",
     "csv_replace_button": "Remplacer le planning du projet",
     "clear_all_filters": "Effacer tous les filtres",
-    "close_alternative_view": "Fermer la vue alternative"
+    "close_alternative_view": "Fermer la vue alternative",
+    "projects_to_display": "Projets ? afficher"
   },
   "gantt": {
     "columns": {
@@ -889,9 +890,9 @@
     "no_wbs": "Aucun OTP affecté à ce projet.",
     "unavailable": "Données indisponibles ou droits modifiés. Rechargez la page.",
     "pool": "Pools de ressources",
-    "finance_overview": "Vue financière",
+    "finance_overview": "Finance",
     "approved_budget": "Budget approuvé",
-    "resources_allocation": "Allocation des ressources",
+    "resources_allocation": "Ressources",
     "capacity_overallocation": "Capacité et suraffectation",
     "overallocation": "Suraffectation",
     "total_capacity": "Capacité totale des pools",

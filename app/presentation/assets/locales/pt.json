@@ -418,7 +418,8 @@
     "csv_replace_warning": "A importação substitui todo o cronograma. As tarefas, dependências (incluindo outros projetos) e alocações de recursos do projeto e das tarefas serão excluídas. Os campos do projeto e links web serão mantidos. Nada será excluído antes da validação e do clique em Substituir cronograma do projeto.",
     "csv_replace_button": "Substituir cronograma do projeto",
     "clear_all_filters": "Limpar todos os filtros",
-    "close_alternative_view": "Fechar vista alternativa"
+    "close_alternative_view": "Fechar vista alternativa",
+    "projects_to_display": "Projetos a apresentar"
   },
   "gantt": {
     "columns": {
@@ -889,9 +890,9 @@
     "no_wbs": "Este projeto não tem WBS atribuídos.",
     "unavailable": "Dados indisponíveis ou acesso alterado. Recarregue a página.",
     "pool": "Grupos de recursos",
-    "finance_overview": "Visão financeira",
+    "finance_overview": "Finanças",
     "approved_budget": "Orçamento aprovado",
-    "resources_allocation": "Alocação de recursos",
+    "resources_allocation": "Recursos",
     "capacity_overallocation": "Capacidade e sobrealocação",
     "overallocation": "Sobrealocação",
     "total_capacity": "Capacidade total dos grupos",

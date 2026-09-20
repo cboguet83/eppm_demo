@@ -13,8 +13,9 @@ from app.domain.access.models import Permission
 from app.domain.hierarchy import HierarchyType, normalize_hierarchy_type, validate_hierarchy_type_id
 from app.domain.organization.models import Employee, EmployeeCalendarException, FunctionType, OrgFunction, Team
 from app.application.services.team_capacity import TeamOverview, team_capacities
-from app.application.services.team_csv import TeamImportResult, import_teams, parse_teams
+from app.application.services.team_csv import TEAM_CSV_COLUMNS, TeamImportResult, import_teams, parse_teams
 from app.application.services.function_csv import FunctionImportResult, import_functions, parse_functions
+from app.application.services.employee_csv import EmployeeImportResult, import_employees, parse_employees
 from app.domain.organization.function_hierarchy import validate_function_hierarchy
 from app.domain.organization.rules import (
     normalize_employee, normalize_exception, normalize_function,
@@ -197,12 +198,12 @@ class OrganizationService:
             if catalog not in catalogs:
                 raise ValueError('Unknown organization catalog.')
             model, read = catalogs[catalog]
-            columns = [field.name for field in fields(model)]
+            columns = list(TEAM_CSV_COLUMNS) if catalog == 'teams' else [field.name for field in fields(model)]
             output = io.StringIO(newline='')
             writer = csv.writer(output, lineterminator='\r\n')
             writer.writerow(columns)
             records = [] if template else (read(include_deleted=True)
-                if catalog in {'teams', 'functions'} and include_deleted else read())
+                if catalog in {'teams', 'functions', 'employees'} and include_deleted else read())
             for record in records:
                 values = [json.dumps([asdict(item) for item in record.assignments()])
                           if column == 'function_assignments' else getattr(record, column) for column in columns]
@@ -258,6 +259,12 @@ class OrganizationService:
     def get_all_employees(self) -> list[Employee]:
         """Get all employees within one organization transaction."""
         return self._gateway.run(lambda store: store.get_all_employees(), permission=Permission.SHARED)
+
+    def import_employees_csv(self, content: bytes, *, delete_missing: bool = False) -> EmployeeImportResult:
+        """Import employee profiles and function shares in one authorized transaction."""
+        employees = parse_employees(content)
+        return self._gateway.run(lambda store: import_employees(store, employees, delete_missing=delete_missing,
+            validate=self._validate_function_assignments), write=True, permission=Permission.SHARED)
 
     def get_employee_by_id(self, emp_id: int) -> Employee | None:
         """Get employee by id within one organization transaction."""

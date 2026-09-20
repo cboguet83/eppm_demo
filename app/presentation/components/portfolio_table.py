@@ -280,6 +280,7 @@ export default function(component) {
     const closeProjectMenu = () => root.querySelector('.project-context-menu')?.remove();
     const showProjectMenu = (event, row) => {
         event.preventDefault(); event.stopPropagation(); dismissFilterMenu(); closeProjectMenu();
+        if (!row.is_overallocated) return;
         const menu = document.createElement('div');
         menu.className = 'context-menu project-context-menu'; menu.setAttribute('role', 'menu');
         menu.setAttribute('aria-label', 'Project actions: ' + row.name);
@@ -291,12 +292,10 @@ export default function(component) {
             button.textContent = label; button.setAttribute('role', 'menuitem');
             button.onclick = e => {
                 e.stopPropagation(); closeProjectMenu();
-                if (trigger === 'row_click') {model.selected = row.project_id; model.redraw?.();}
                 setTriggerValue(trigger, row.project_id);
             };
             menu.appendChild(button);
         };
-        addAction('Open project details', 'row_click');
         if (row.is_overallocated) addAction('View resource overallocation in Gantt', 'gantt_click');
         root.appendChild(menu); menu.querySelector('button')?.focus();
     };

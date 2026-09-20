@@ -134,7 +134,7 @@ resource_pool_tree(tree, {1:6, 2:2, 3:2, 4:2}, 1,
             browser.close()
 
 
-def test_empty_pool_list_creates_root_from_context_menu_without_toolbar_button(authorized, tmp_path):
+def test_empty_pool_list_offers_root_creation_in_menu_and_toolbar(authorized, tmp_path):
     with native_server(authorized, tmp_path, SCREEN) as server, sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
@@ -142,7 +142,7 @@ def test_empty_pool_list_creates_root_from_context_menu_without_toolbar_button(a
             page.goto(server.origin)
             empty = page.get_by_text('No pools yet. Right-click here to create a pool.', exact=True)
             expect(empty).to_be_visible(timeout=30000)
-            expect(page.get_by_role('button', name='Create Pool', exact=True)).to_have_count(0)
+            expect(page.get_by_role('button', name='Create pool', exact=True)).to_be_visible()
             empty.click(button='right')
             page.get_by_role('menuitem', name='Create pool', exact=True).click()
             dialog = page.get_by_role('dialog')
@@ -170,7 +170,7 @@ def test_create_child_switches_parent_to_container_and_disables_direct_capacity(
             expect(parent_row).to_be_visible(timeout=30000)
             expect(page.get_by_role('heading', name='Resource Pools Management', exact=False)).to_have_count(0)
             parent_row.click(button='right')
-            page.get_by_role('menuitem', name='Create pool', exact=True).click()
+            page.get_by_role('menuitem', name='Add child pool', exact=True).click()
             dialog = page.get_by_role('dialog')
             dialog.get_by_role('textbox', name='Resource Pool Name *', exact=True).fill('Backend')
             dialog.get_by_role('spinbutton', name='Defined capacity (FTE)', exact=True).fill('4')
@@ -196,7 +196,7 @@ def test_create_child_switches_parent_to_container_and_disables_direct_capacity(
             expect(parent_row).to_have_attribute('aria-selected', 'true')
             expect(page.get_by_role('button', name='Edit', exact=True)).to_have_count(0)
             expect(page.get_by_role('button', name='Delete', exact=True)).to_have_count(0)
-            expect(page.get_by_role('button', name='Create pool', exact=True)).to_have_count(0)
+            expect(page.get_by_role('button', name='Create pool', exact=True)).to_be_visible()
             expect(parent_row).to_have_css('font-weight', '700')
             assert abs(parent_row.bounding_box()['height'] - 36.4) < 1
             expect(tree.get_by_role('button', name='Filter Pool type', exact=True)).to_be_visible()
@@ -218,8 +218,18 @@ def test_create_child_switches_parent_to_container_and_disables_direct_capacity(
             dialog.get_by_role('button', name='Save Changes', exact=True).click()
             expect(dialog).to_have_count(0)
             expect(tree.get_by_role('treeitem', name='Engineering renamed', exact=True).locator('.pool-meta').nth(3)).to_have_text('')
+            create = page.get_by_role('button', name='Create pool', exact=True)
+            assert create.bounding_box()['y'] < tree.bounding_box()['y']
+            assert abs(create.bounding_box()['x'] + create.bounding_box()['width']
+                       - tree.bounding_box()['x'] - tree.bounding_box()['width']) < 3
+            create.click()
+            expect(dialog.get_by_role('combobox', name='Parent pool', exact=True)).to_have_value('No parent (root pool)')
+            dialog.get_by_role('textbox', name='Resource Pool Name *', exact=True).fill('Independent pool')
+            dialog.get_by_role('button', name='Save', exact=True).click()
+            expect(dialog).to_have_count(0)
             with psycopg.connect(authorized.setup.operator_url) as connection:
                 assert connection.execute('SELECT capacity_fte FROM eppm.resource_pool WHERE id=%s', (parent,)).fetchone() == (0,)
+                assert connection.execute("SELECT parent_pool_id FROM eppm.resource_pool WHERE name='Independent pool'").fetchone() == (None,)
             assert not errors
         finally:
             browser.close()
@@ -236,7 +246,7 @@ def test_context_child_creation_warns_for_assigned_pool(authorized, tmp_path):
             page.goto(server.origin)
             row = page.get_by_role('treeitem', name='Assigned pool', exact=True)
             row.click(button='right', timeout=30000)
-            page.get_by_role('menuitem', name='Create pool', exact=True).click()
+            page.get_by_role('menuitem', name='Add child pool', exact=True).click()
             expect(page.get_by_role('dialog')).to_have_count(0)
             expect(page.get_by_text('Remove or reassign them before adding children.', exact=False).first).to_be_visible()
             with psycopg.connect(authorized.setup.operator_url) as connection:

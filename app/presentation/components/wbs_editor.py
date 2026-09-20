@@ -26,6 +26,8 @@ def render_wbs_editor(allocations: list[WbsAllocation], options: list[WbsOption]
     if disabled:
         render_wbs_rows(allocations, options)
         return allocations
+    assigned = {row['wbs_id'] for row in allocations}
+    options = [row for row in options if row['available'] > 0 or row['id'] in assigned]
     if not options:
         st.info(t("wbs.empty"))
         return allocations

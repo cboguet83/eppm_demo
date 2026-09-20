@@ -19,6 +19,16 @@ from app.main import create_project_service, create_portfolio_service
 from app.presentation.pages.portfolio import _load_portfolio_page
 
 
+def test_shared_project_scope_intersects_column_filters_and_authorization(authorized):
+    service = PortfolioService(PostgresPortfolioReader(
+        authorized.database, authorized.key, access=authorized.binding(1).access))
+    query = {'project_ids': [1, 3]}
+    assert [row['project_id'] for row in service.get_page([], query)['rows']] == [1]
+    query['filters'] = {'project_id': {'mode': 'exclude', 'values': [1]}}
+    assert service.get_page([], query)['rows'] == []
+    assert service.get_page([], {'project_ids': []})['total'] == 0
+
+
 def test_portfolio_enrichment_is_bounded_and_component_input_is_normalized(
     runtime: RuntimeResources, access: BusinessAccess, authorized: AuthorizedFixture,
 ) -> None:

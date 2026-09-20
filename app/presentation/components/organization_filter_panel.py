@@ -102,7 +102,7 @@ def organization_filter_panel(
         }
         .st-key-organization_service_frame,
         .st-key-organization_filter_frames [data-testid="stExpanderDetails"] {
-            padding-block: 8px;
+            padding: 2px;
         }
         </style>
     """)
@@ -118,7 +118,21 @@ def organization_filter_panel(
             if selected != previous:
                 on_change()
             st.session_state[key] = selected
-            frame = st.container(border=True, key='organization_service_frame') if facet == 'service' else st.expander(title, expanded=False)
+            if facet == 'service':
+                frame = st.container(border=True, key='organization_service_frame')
+            else:
+                frame_key = 'organization_frame_' + facet
+                saved_key = 'organization_frame_state_' + facet
+                if frame_key not in st.session_state:
+                    st.session_state[frame_key] = st.session_state.get(saved_key, False)
+                frame = st.expander(title, key=frame_key, on_change='rerun')
+                st.session_state[saved_key] = frame.open
+                if selected:
+                    st.html(f'''<style>
+                        .st-key-{frame_key} details:not([open]) > summary {{
+                            background: #C41039; color: white;
+                        }}
+                    </style>''')
             with frame:
                 active[facet] = _buttons(title, options, names, key, on_change)
     return active

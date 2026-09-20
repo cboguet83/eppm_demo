@@ -23,9 +23,12 @@ def normalize_query(query: dict) -> dict:
     filters = query.get("filters")
     sort = query.get("sort")
     templates = query.get("templates")
+    project_ids = query.get("project_ids")
     return {
         "search": str(query.get("search") or "").strip(),
         "templates": [v for v in templates if isinstance(v, str)] if isinstance(templates, list) else [],
+        "project_ids": [v for v in project_ids if type(v) is int and 0 < v <= 9223372036854775807]
+        if isinstance(project_ids, list) else None,
         "filters": filters if isinstance(filters, dict) else {},
         "sort": {key: value for key, value in sort.items() if isinstance(value, str)}
         if isinstance(sort, dict) else {},

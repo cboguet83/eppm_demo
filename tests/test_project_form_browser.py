@@ -18,12 +18,12 @@ st.write(f"Shell runs: {st.session_state.shell_runs}")
 def open_form():
     st.session_state.form = dict(token="draft", title="Project form", tabs=["General", "More", "Useful links", "WBS"],
         links_tab="Useful links", wbs_tab="WBS", wbs=[],
-        wbs_options=[dict(id=1,code="FULL",description="Full capacity",available=100),dict(id=2,code="#SHARED",description="Shared capacity",available=40)],
+        wbs_options=[dict(id=1,code="FULL",description="Full capacity",available=100),dict(id=2,code="#SHARED",description="Shared capacity",available=40),dict(id=3,code="TAKEN",description="Fully allocated",available=0)],
         wbs_labels=dict(code="WBS code",allocation="Allocation (%)",available="Available: {percentage}%",add="Add WBS",remove="Remove WBS",select="Select a WBS",empty="No WBS"),
         fields=[dict(key=k,label=k,kind=kind,tab=tab,options=options,disabled=False)
                 for k,kind,tab,options in [
                     ("name","text",None,[]), ("amount","number",None,[]),
-                    ("due","date","General",[]), ("tags","tags","General",[]),
+                    ("due","date","General",[]), ("tags","tags","General",[("Initial","Initial"),("One","One"),("Two","Two")]),
                     ("choices","multi","More",[("one","One"),("two","Two")])]],
         values=dict(name="Draft",amount=100,due="2027-04-12",tags=["Initial"],choices=["one"]),
         links=[], messages={}, can_save=True,can_delete=True,error="",submit="Save",cancel="Cancel",
@@ -142,12 +142,23 @@ def test_project_fields_tabs_and_links_are_local_and_save_retries_without_page_r
             page.get_by_role("button", name="Open project").click()
             modal = page.get_by_role("dialog")
             expect(modal.get_by_role("button", name="Save", exact=True)).to_be_visible()
-            assert page.evaluate("window.openedForms") == [{"fields": 5, "buttons": 11, "title": "Project form"}]
+            assert page.evaluate("window.openedForms") == [{"fields": 8, "buttons": 11, "title": "Project form"}]
             assert modal.bounding_box()["height"] <= 800 * .9 + 2
             modal.get_by_label("name", exact=True).fill("")
             modal.get_by_label("amount").fill("123.45")
             modal.get_by_label("due").fill("2028-05-19")
-            modal.get_by_label("tags").fill("One\nTwo")
+            tags = modal.locator('.tag-dropdown')
+            expect(tags.locator('summary')).to_have_text('Initial')
+            expect(tags.get_by_role('checkbox', name='One', exact=True)).not_to_be_visible()
+            tags.locator('summary').click()
+            tags.get_by_role('checkbox', name='Initial', exact=True).uncheck()
+            tags.get_by_role('checkbox', name='One', exact=True).check()
+            tags.get_by_role('checkbox', name='Two', exact=True).check()
+            expect(tags.locator('summary')).to_have_text('One, Two')
+            page.screenshot(path='.local/project-tag-dropdown.png')
+            page.keyboard.press('Escape')
+            expect(modal).to_be_visible()
+            expect(tags.get_by_role('checkbox', name='One', exact=True)).not_to_be_visible()
             modal.get_by_role("tab", name="More").click()
             modal.get_by_label("choices").select_option(["one", "two"])
             expect(modal.get_by_role("button", name="Add link")).not_to_be_visible()
@@ -217,6 +228,7 @@ def test_wbs_rows_default_to_100_show_remaining_and_survive_tabs_and_validation(
             modal.get_by_role("button", name="Add WBS").click()
             expect(modal.get_by_label("Allocation (%)", exact=True)).to_have_value("100")
             modal.get_by_label("WBS code", exact=True).select_option("2")
+            expect(modal.get_by_label("WBS code", exact=True).locator('option[value="3"]')).to_have_count(0)
             expect(modal.get_by_text("Available: 40%", exact=True)).to_be_visible()
             expect(modal.get_by_label("WBS code", exact=True).locator("option:checked")).to_have_text("#SHARED — Shared capacity")
             modal.get_by_label("Allocation (%)", exact=True).fill("35")

@@ -141,7 +141,7 @@ def test_wbs_hidden_usage_and_late_failure_restore_the_whole_project_save(projec
     with pytest.raises(AccessDenied):
         reader.get_wbs_allocations(3)
     with pytest.raises(psycopg.errors.InsufficientPrivilege):
-        authorized.query('SELECT * FROM eppm.wbs_options(3)')
+        authorized.query('SELECT * FROM eppm.wbs_allocation_facts(3)')
     with pytest.raises(ValueError, match='only 40%'):
         update(reader, name='Rollback', strategic_priority_id=2, custom_links=[{'url': 'https://example.test', 'alias': 'Docs'}],
                wbs_allocations=[{'wbs_id': identity, 'percentage': 41}])

@@ -2,6 +2,7 @@
 
 from contextlib import nullcontext
 from datetime import date
+from decimal import Decimal
 from types import SimpleNamespace
 
 import pytest
@@ -9,6 +10,12 @@ import pytest
 from app.presentation.components.dashboard_resource_chart import finance_chart
 from app.presentation.i18n import SUPPORTED_LOCALES, load_locale_catalog, set_current_locale, t
 from app.presentation.pages import dashboard
+from app.domain.dashboard import AllocatedBudget
+from app.domain.financial_transactions import YearlyProjectFinancials
+
+
+def test_portuguese_finance_heading_preserves_cedilla():
+    assert load_locale_catalog('pt')['dashboard']['finance_overview'] == 'Finan\u00e7as'
 
 
 @pytest.mark.parametrize('locale', SUPPORTED_LOCALES)
@@ -29,11 +36,25 @@ def test_financial_chart_payload_and_card_help_follow_language(monkeypatch, loca
         assert [row['name'] for row in payloads[-1]['transactionSeries']] == [catalog['actual'], catalog['commitment']]
         dashboard._financial_indicators(SimpleNamespace(today=lambda: date(2026, 9, 19)),
                                         SimpleNamespace(budget=None, financials=None))
-        assert metrics[0][0] == (catalog['actual_ratio'], catalog['not_available'])
-        assert metrics[1][0][0] == catalog['committed_ratio']
-        assert metrics[0][1]['help'] == catalog['financial_help'].format(start=2024, end=2035)
+        assert metrics[0][0] == (catalog['actual_ratio'] + ' (2026)', catalog['not_available'])
+        assert metrics[1][0][0] == catalog['committed_ratio'] + ' (2026)'
+        assert metrics[0][1]['help'] == catalog['financial_help'].format(start=2026, end=2026)
         assert t('dashboard.late_help') == catalog['late_help']
         assert t('dashboard.issue_count', count=3) != 'dashboard.issue_count'
         assert t('organization_filters.multiselect_hint') == load_locale_catalog(locale)['organization_filters']['multiselect_hint']
     finally:
         set_current_locale('en')
+
+
+def test_financial_cards_exclude_other_years(monkeypatch):
+    metrics = []
+    monkeypatch.setattr(dashboard.st, 'container', lambda **kwargs: nullcontext())
+    monkeypatch.setattr(dashboard.st, 'metric', lambda *args, **kwargs: metrics.append(args))
+    report = SimpleNamespace(
+        budget=AllocatedBudget((), {2025: Decimal('9000'), 2026: Decimal('100'), 2027: Decimal('9999')}, ()),
+        financials=tuple(YearlyProjectFinancials(1, year, Decimal(actual), Decimal(commitment))
+                         for year, actual, commitment in [(2025, '8000', '0'), (2026, '30', '50'), (2027, '0', '8000')]),
+    )
+    dashboard._financial_indicators(SimpleNamespace(today=lambda: date(2026, 9, 20)), report)
+    assert metrics == [('Actual / Approved Budget (2026)', '30.0%'),
+                       ('(Actual + Commitment) / Approved Budget (2026)', '80.0%')]

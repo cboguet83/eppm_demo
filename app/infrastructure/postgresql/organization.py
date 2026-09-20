@@ -224,11 +224,12 @@ class PostgresOrganizationStore:
         """Flag the team while retaining its explicit memberships."""
         return self.connection.execute('UPDATE eppm.team SET deleted_flag=true WHERE team_id=%s AND NOT deleted_flag', (team_id,)).rowcount > 0
 
-    def get_all_employees(self) -> list[Employee]:
+    def get_all_employees(self, *, include_deleted: bool = False) -> list[Employee]:
         """Read private employee records through the shared-data policy."""
         employees = self._rows(Employee, 'SELECT employee_id,firstname,lastname,email,mobile,sigle,'
-                          'NULL::bigint AS function_id,occupation_percentage,landline FROM eppm.active_employee '
-                          "ORDER BY (upper(lastname) || ' ' || firstname) COLLATE \"C\",employee_id")
+                          'NULL::bigint AS function_id,occupation_percentage,landline,deleted_flag FROM eppm.employee '
+                          'WHERE (%s OR NOT deleted_flag) '
+                          "ORDER BY (upper(lastname) || ' ' || firstname) COLLATE \"C\",employee_id", (include_deleted,))
         return self._attach_employee_functions(employees)
 
     def _attach_employee_functions(self, employees: list[Employee]) -> list[Employee]:
@@ -280,6 +281,14 @@ class PostgresOrganizationStore:
     def delete_employee(self, emp_id: int) -> bool:
         """Flag the employee while retaining its calendar and mappings."""
         return self.connection.execute('UPDATE eppm.employee SET deleted_flag=true WHERE employee_id=%s AND NOT deleted_flag', (emp_id,)).rowcount > 0
+
+    def write_imported_employee(self, emp: Employee) -> None:
+        """Save imported profiles and deletion state without touching calendar history."""
+        self.connection.execute('UPDATE eppm.employee SET firstname=%s,lastname=%s,email=%s,mobile=%s,sigle=%s,'
+            'occupation_percentage=%s,landline=%s,deleted_flag=%s WHERE employee_id=%s',
+            (emp.firstname, emp.lastname, emp.email, emp.mobile, emp.sigle,
+             emp.occupation_percentage, emp.landline, emp.deleted_flag, emp.employee_id))
+        self._save_employee_functions(emp.employee_id, emp.assignments())
 
     def get_employee_calendar_exceptions(self, emp_id: int | None = None) -> list[CalendarExceptionRow]:
         """Return native calendar dates as explicit ISO presentation values."""

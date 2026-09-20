@@ -14,10 +14,12 @@ from app.application.services.dashboard import DashboardService
 from app.domain.access.models import AccessDenied
 from app.domain.dashboard import DashboardProject, financial_utilization, yearly_financial_amounts
 from app.presentation.components.action_table import action_table
-from app.presentation.components.checkbox_filter import checkbox_filter
 from app.presentation.components.dialog import dialog
 from app.presentation.components.dashboard_table import dashboard_table
-from app.presentation.components.organization_filter_panel import organization_filter_panel
+from app.presentation.components.project_filter_panel import (
+    render_project_filters as _filters, reset_page as _reset_page, clear_filters as _clear,
+    filter_catalog as _catalog,
+)
 from app.presentation.components.dashboard_resource_chart import finance_chart, resource_chart
 from app.presentation.navigation import PAGE_PLANNING, PAGE_SETTINGS
 from app.presentation.components.authorized_cache import authorized_cache
@@ -38,11 +40,6 @@ def _label(key: str) -> str:
     return t('dashboard.' + key)
 
 
-@authorized_cache(show_spinner=False, max_entries=32, ttl=300)
-def _catalog(_service: DashboardService, revision: tuple):
-    return _service.catalog()
-
-
 @authorized_cache(show_spinner=False, max_entries=128, ttl=300)
 def _report(_service: DashboardService, revision: tuple, ids: tuple[int, ...], status: str = 'Approved'):
     return _service.report(list(ids), status)
@@ -58,22 +55,6 @@ def _shortages(_service: DashboardService, revision: tuple, ids: tuple[int, ...]
 def _queue_pool_filter(pool_ids: list[str]) -> None:
     """Apply a chart selection before the top pool widget is rendered again."""
     st.session_state['dashboard_pending_pool_filter'] = pool_ids
-    _reset_page()
-
-
-def _reset_page() -> None:
-    st.session_state['dashboard_offset'] = 0
-    st.session_state.pop('dashboard_selected_project', None)
-
-
-def _clear() -> None:
-    st.session_state.pop('dashboard_pending_pool_filter', None)
-    for key in list(st.session_state):
-        if key.startswith('dashboard_filter_'):
-            del st.session_state[key]
-    st.session_state['dashboard_flex_fields'] = []
-    st.session_state['dashboard_match'] = 'Any'
-    st.session_state['dashboard_filter_status'] = ['In Progress']
     _reset_page()
 
 
@@ -105,84 +86,6 @@ def _issues(service: DashboardService, ids: tuple[int, ...]) -> None:
         st.error(_label('unavailable'))
 
 
-def _filters(service: DashboardService, catalog) -> tuple[dict[str, list[str]], bool]:
-    if 'dashboard_pending_pool_filter' in st.session_state:
-        st.session_state['dashboard_filter_pool'] = st.session_state.pop('dashboard_pending_pool_filter')
-    fixed = ('strategic_priority', 'status', 'service', 'division', 'org_team', 'org_manager', 'pool')
-    st.session_state.setdefault('dashboard_filter_status', ['In Progress'])
-    st.session_state['dashboard_filter_status'] = [
-        'In Progress' if value == 'Active' else value
-        for value in st.session_state['dashboard_filter_status']
-    ]
-    fields = {'name': _label('project'),
-              'project_manager': _label('manager'),
-              '_project_tags': t('planning.flex_filter_project_tags', default='Project tags')}
-    for parameter in catalog.parameters:
-        label = parameter.get('translations', {}).get(get_current_locale()) or parameter.get('alias') or parameter['param_name']
-        fields[parameter['param_id']] = label + (f" ({parameter['param_id']})" if label in fields.values() else '')
-    selected_fields = [key for key in st.session_state.get('dashboard_flex_fields', []) if key in fields]
-    st.session_state['dashboard_flex_fields'] = selected_fields
-    organization = organization_filter_panel(
-        lambda upstream, key: service.organization_choices(catalog, upstream, key), catalog.labels,
-        prefix='dashboard_filter_', on_change=_reset_page,
-    )
-    active = {key: st.session_state.get('dashboard_filter_' + key, []) for key in (*fixed, *selected_fields)}
-    active.update(organization)
-    match_all = st.session_state.get('dashboard_match', 'Any') == 'All'
-    restricted: dict[str, bool] = {}
-
-    def choose(key: str, label: str) -> None:
-        options = service.choices(catalog, active, key, match_all)
-        if key == 'status':
-            options = sorted((set(options) - {'Active'}) | {'In Progress'}, key=str.casefold)
-        state_key = 'dashboard_filter_' + key
-        if state_key in st.session_state:
-            st.session_state[state_key] = [value for value in st.session_state[state_key] if value in options]
-        labels = catalog.labels.get(key, {})
-        if key in {'status', 'strategic_priority', 'pool'}:
-            active[key] = checkbox_filter(label, options, labels, key=state_key, on_change=_reset_page)
-            restricted[key] = bool(active[key]) and set(active[key]) != set(options)
-        else:
-            active[key] = st.multiselect(label, options, key=state_key, on_change=_reset_page,
-                                         format_func=lambda value: labels.get(value, value) or _label('unassigned'))
-
-    columns = st.columns([3, 3, 3, 2, 2], vertical_alignment='top')
-    for column, key in zip(columns, ('status', 'strategic_priority', 'pool')):
-        with column:
-            choose(key, 'Strategic priority' if key == 'strategic_priority' else _label('project_status') if key == 'status' else _label(key))
-    with columns[3], st.container(key='dashboard_advanced_filter'), st.popover(
-        _label('advanced_filters'), width='stretch', icon=':material/filter_alt:',
-    ):
-        chosen = st.multiselect(t('planning.flex_filter_fields', default='Filter fields'), list(fields),
-                                format_func=fields.get, key='dashboard_flex_fields', on_change=_reset_page)
-        match_all = st.segmented_control(t('planning.flex_filter_match_label', default='When several values are selected'),
-                                         ['Any', 'All'], default='Any', key='dashboard_match', on_change=_reset_page) == 'All'
-        for key in chosen:
-            choose(key, fields[key])
-        active = {key: values for key, values in active.items() if key in fixed or key in chosen}
-    with columns[4]:
-        st.button(_label('reset_filters'), on_click=_clear, width='stretch',
-                  icon=':material/filter_alt_off:', key='dashboard_clear')
-    advanced_active = any(active.get(key) for key in chosen)
-    reset_needed = (set(active['status']) != {'In Progress'} or restricted['pool'] or restricted['strategic_priority']
-                    or advanced_active or any(organization.values())
-                    or st.session_state.get('dashboard_selected_project') is not None)
-    controls = {
-        '.st-key-dashboard_filter_status [data-testid="stPopoverButton"]': restricted['status'],
-        '.st-key-dashboard_filter_strategic_priority [data-testid="stPopoverButton"]': restricted['strategic_priority'],
-        '.st-key-dashboard_filter_pool [data-testid="stPopoverButton"]': restricted['pool'],
-        '.st-key-dashboard_advanced_filter [data-testid="stPopoverButton"]': advanced_active,
-        '.st-key-dashboard_clear button': reset_needed,
-    }
-    styles = []
-    for selector, is_active in controls.items():
-        background = '#C41039' if is_active else 'transparent'
-        color = 'white' if is_active else 'var(--st-text-color, #31333f)'
-        border = '#C41039' if is_active else 'var(--st-border-color, #cbd5e1)'
-        styles.append(f'{selector}{{background:{background}!important;color:{color}!important;'
-                      f'border-color:{border}!important}}')
-    st.html('<style>' + ''.join(styles) + '</style>')
-    return active, match_all
 
 
 @st.fragment
@@ -260,14 +163,14 @@ def _finance_chart(service: DashboardService, report, proposed) -> None:
 
 def _financial_indicators(service: DashboardService, report) -> None:
     """Show filtered utilization percentages with a consistent chart-period denominator."""
-    years = range(service.today().year - 2, service.today().year + 10)
+    years = range(service.today().year, service.today().year + 1)
     utilization = financial_utilization(report.budget, report.financials, years)
     for key, label, value in (
         ('actual', _label('actual_ratio'), utilization.actual_percentage),
         ('committed', _label('committed_ratio'), utilization.committed_percentage),
     ):
         with st.container(border=True, key=f'dashboard_{key}_ratio_card'):
-            st.metric(label, f'{value:.1f}%' if value is not None else _label('not_available'),
+            st.metric(f'{label} ({years.start})', f'{value:.1f}%' if value is not None else _label('not_available'),
                       help=t('dashboard.financial_help', start=years.start, end=years.stop - 1))
 
 

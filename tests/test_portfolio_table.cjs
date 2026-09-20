@@ -217,7 +217,7 @@ test('overallocation is an indicator and navigation uses the project context men
   const ordinaryRow = app.root.querySelectorAll('tr').find(r => r.dataset.projectId === '102');
   ordinaryRow.onkeydown({key: 'F10', shiftKey: true, preventDefault() {}, stopPropagation() {}});
   assert.equal(app.button('View resource overallocation in Gantt'), undefined);
-  assert.ok(app.button('Open project details'));
+  assert.equal(app.button('Open project details'), undefined);
   app.root.onkeydown({key: 'Escape'});
   assert.equal(app.root.querySelector('.project-context-menu'), undefined);
 });
@@ -232,11 +232,12 @@ test('a distant boundary jump loads visible rows before the preceding overscan p
   assert.equal(app.requests.at(-1).offset, 4900);
 });
 
-test('opening details from a context menu highlights that project without rerunning the grid', () => {
+test('clicking a row opens details without a redundant context menu action', () => {
   const app = harness(); app.render();
   const row = app.root.querySelectorAll('tr').find(item => item.dataset.projectId === '2');
   row.oncontextmenu({preventDefault() {}, stopPropagation() {}});
-  app.button('Open project details').onclick({stopPropagation() {}});
+  assert.equal(app.button('Open project details'), undefined);
+  row.onclick();
   assert.deepEqual(app.clicks, [2]);
   assert.equal(app.root._portfolio.selected, 2);
   assert.equal(app.root.querySelector('tr.selected').dataset.projectId, '2');

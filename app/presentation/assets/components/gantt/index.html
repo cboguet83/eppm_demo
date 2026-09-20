@@ -3146,12 +3146,33 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     // --------------------------------------------------------------------------
     // TOOLTIP & DIAGNOSTICS
     // --------------------------------------------------------------------------
-    function showTooltip(e, html) {
+    let tooltipTimer = null;
+    let tooltipTarget = null;
+    let tooltipPointer = null;
+    let tooltipContent = '';
+
+    function showTooltip(e, html, immediate = false) {
       const tt = document.getElementById('gantt-tooltip');
       if (!tt) return;
-      tt.innerHTML = html;
-      tt.style.display = 'block';
-      positionTooltip(e);
+      const target = e.currentTarget || e.target;
+      if (target !== tooltipTarget) hideTooltip();
+      tooltipTarget = target;
+      tooltipPointer = {clientX: e.clientX, clientY: e.clientY};
+      tooltipContent = html;
+      const reveal = () => {
+        tooltipTimer = null;
+        tt.innerHTML = tooltipContent;
+        tt.style.display = 'block';
+        positionTooltip(tooltipPointer);
+      };
+      if (immediate) {
+        clearTimeout(tooltipTimer);
+        reveal();
+      } else if (tt.style.display === 'block') {
+        reveal();
+      } else if (tooltipTimer === null) {
+        tooltipTimer = setTimeout(reveal, 1000);
+      }
     }
 
     function positionTooltip(e) {
@@ -3176,11 +3197,15 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     }
 
     function hideTooltip() {
+      clearTimeout(tooltipTimer);
+      tooltipTimer = null;
+      tooltipTarget = null;
       const tt = document.getElementById('gantt-tooltip');
       if (tt) tt.style.display = 'none';
     }
 
     function moveTooltip(e) {
+      tooltipPointer = {clientX: e.clientX, clientY: e.clientY};
       positionTooltip(e);
     }
 
@@ -3188,8 +3213,25 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       showHoverOverlay = Boolean(checked);
       if (!showHoverOverlay) {
         hideTooltip();
+        document.querySelectorAll('[data-native-tooltip]').forEach(node => {
+          node.setAttribute('title', node.dataset.nativeTooltip);
+          delete node.dataset.nativeTooltip;
+        });
       }
     }
+
+    // Native titles otherwise appear over the rich tooltip on timeline bars.
+    document.getElementById('timeline-canvas').addEventListener('mouseover', event => {
+      if (!showHoverOverlay) return;
+      let node = event.target;
+      while (node && node.id !== 'timeline-canvas') {
+        if (node.hasAttribute('title')) {
+          node.dataset.nativeTooltip = node.getAttribute('title');
+          node.removeAttribute('title');
+        }
+        node = node.parentElement;
+      }
+    });
 
     function scenarioTooltip(projectId, alternative = false) {
       if (!comparingScenario()) return '';
@@ -3269,7 +3311,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
                 <div style="font-size:10px; font-weight:700; color:#38bdf8; text-transform:uppercase; margin-bottom:3px; letter-spacing:0.03em;">Project Resource Pools</div>
                 <div style="display:flex; flex-wrap:wrap; gap:4px;">
                   ${pPools.map(pl => {
-                    return `<span style="background:rgba(2,132,199,0.2); border:1px solid #0284c7; color:#7dd3fc; font-size:10.5px; font-weight:600; padding:1px 6px; border-radius:10px; display:inline-flex; align-items:center;">${escapeHtml(pl.pool_name || 'Pool')} (${Number(pl.fte).toFixed(2)} FTE)</span>`;
+                    return `<span style="background:rgba(2,132,199,0.2); border:1px solid #0284c7; color:#7dd3fc; font-size:10.5px; font-weight:600; padding:1px 6px; border-radius:10px; display:inline-flex; align-items:center;">${escapeHtml(pl.pool_name || 'Pool')} (${Number(pl.fte).toFixed(1)} FTE)</span>`;
                   }).join('')}
                 </div>
               </div>
@@ -3335,7 +3377,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
                   ? 'background:rgba(220,38,38,0.25); border:1px solid #ef4444; color:#fca5a5;'
                   : 'background:rgba(14,165,233,0.15); border:1px solid #0284c7; color:#bae6fd;';
                 const badgeIcon = isOver ? '⚠️ ' : '🏊 ';
-                const capText = p.pool_capacity ? ` (Overassigned! Cap: ${Number(p.pool_capacity).toFixed(2)} FTE)` : ' (Overassigned!)';
+                const capText = p.pool_capacity ? ` (Overassigned! Cap: ${Number(p.pool_capacity).toFixed(1)} FTE)` : ' (Overassigned!)';
                 const extraInfo = isOver ? capText : '';
                 return `
                   <div style="${bgStyle} font-size:10.5px; font-weight:600; padding:2px 6px; border-radius:4px; display:flex; justify-content:space-between; align-items:center;">
@@ -4937,9 +4979,9 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       const over = pool.has_assigned_resources && assigned.max > defined + .0001;
       if (!under && !over) return pool.name;
       const lines = [pool.name,
-        `${getT('resource_grid.defined_capacity', 'Defined capacity')}: ${defined.toFixed(2)} FTE`];
-      if (under) lines.push(`${getT('resource_grid.min_assigned_capacity', 'Min assigned capacity')}: ${assigned.min.toFixed(2)} FTE`);
-      if (over) lines.push(`${getT('resource_grid.max_assigned_capacity', 'Max assigned capacity')}: ${assigned.max.toFixed(2)} FTE`);
+        `${getT('resource_grid.defined_capacity', 'Defined capacity')}: ${defined.toFixed(1)} FTE`];
+      if (under) lines.push(`${getT('resource_grid.min_assigned_capacity', 'Min assigned capacity')}: ${assigned.min.toFixed(1)} FTE`);
+      if (over) lines.push(`${getT('resource_grid.max_assigned_capacity', 'Max assigned capacity')}: ${assigned.max.toFixed(1)} FTE`);
       return lines.join('\n');
     }
 
@@ -5229,7 +5271,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       const visit = (node, depth) => {
         const key = String(node.key || `${node.node_type}:${node.group_id || node.pool_id}`);
         if (reset || !knownResourceNodes.has(key)) {
-          if (depth > 0 && node.node_type === 'group') collapsedResourceNodes.add(key); else collapsedResourceNodes.delete(key);
+          if (reset && depth > 0 && node.node_type === 'group') collapsedResourceNodes.add(key); else collapsedResourceNodes.delete(key);
           knownResourceNodes.add(key);
         }
         (node.children || []).forEach(child => visit(child, depth + 1));
@@ -5239,7 +5281,23 @@ button:not(.context-menu-item):disabled {opacity:.5;}
       roots.forEach(node => visit(node, 0));
     }
 
+    let resourceSelectionTimer = null;
+    function selectResourceAllocation(event) {
+      clearTimeout(resourceSelectionTimer);
+      if (event.detail > 1 || event.target.closest('button')) return;
+      const row = event.target.closest('[data-pool-id], [data-group-id]');
+      if (!row || row.dataset.scope?.startsWith('alternative')) return;
+      const data = row.dataset;
+      resourceSelectionTimer = setTimeout(() => {
+        Streamlit.setComponentValue({action: 'select_pool_allocations',
+          pool_id: data.poolId || null, group_id: data.groupId || null,
+          start_date: data.startDate || data.start || '', end_date: data.endDate || data.end || '',
+          allocation_scope: data.scope || 'total', nonce: Date.now() + '_' + Math.random()});
+      }, 300);
+    }
+
     function toggleResourceContainer(event, key) {
+      clearTimeout(resourceSelectionTimer);
       if (event.target.closest('button')) return;
       event.preventDefault();
       toggleResourceNode(key);
@@ -5581,7 +5639,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
           });
           leftHtml += `
             <div class="resource-left-row resource-group-row ${row.alternative ? 'alternative-resource-row' : ''}" data-scope="${row.alternative ? 'alternative_' + row.comparisonScope : 'total'}"
-                 onclick="toggleResourceContainer(event, '${escapeHtml(row.nodeKey)}')"
+                 ondblclick="toggleResourceContainer(event, '${escapeHtml(row.nodeKey)}')"
                  data-group-id="${Number(group.group_id)}" data-group-name="${escapeHtml(group.name)}"
                  oncontextmenu="handleGroupContextMenu(event)"
                  data-row-id="${escapeHtml(row.nodeKey)}${row.alternative ? '-alternative-' + row.comparisonScope : ''}"
@@ -5614,7 +5672,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
                     </div>`;
           }).join('');
           rightHtml += `<div class="resource-right-row resource-group-row ${row.alternative ? 'alternative-resource-row' : ''}"
-                            onclick="toggleResourceContainer(event, '${escapeHtml(row.nodeKey)}')"
+                            ondblclick="toggleResourceContainer(event, '${escapeHtml(row.nodeKey)}')"
                             style="width:${totalTimelineWidth}px;box-sizing:border-box;padding-left:${columnLeft}px;">${groupCells}</div>`;
           return;
         }
@@ -5637,7 +5695,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         if (row.rowType === 'pool_assigned') {
           leftHtml += `
             <div class="resource-left-row assigned-capacity-row ${assignedState} ${isFilterActive ? 'active-filter-row' : ''}"
-                 data-row-id="pool-${pool.id}-assigned" onclick="toggleResourceContainer(event, '${escapeHtml(row.nodeKey)}')" ${rowContext}>
+                 data-row-id="pool-${pool.id}-assigned" ondblclick="toggleResourceContainer(event, '${escapeHtml(row.nodeKey)}')" ${rowContext}>
               <div class="resource-pool-name" style="padding-left:${indent}px;">
                 <button class="resource-tree-toggle" type="button" aria-label="Collapse ${escapeHtml(pool.name)}"
                         onclick="toggleResourceNode('${row.nodeKey}')">${toggle}</button>
@@ -5666,7 +5724,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
                     </div>`;
           }).join('');
           rightHtml += `<div class="resource-right-row assigned-capacity-row ${isFilterActive ? 'active-filter-row' : ''}"
-                            onclick="toggleResourceContainer(event, '${escapeHtml(row.nodeKey)}')"
+                            ondblclick="toggleResourceContainer(event, '${escapeHtml(row.nodeKey)}')"
                             style="width:${totalTimelineWidth}px;box-sizing:border-box;padding-left:${columnLeft}px;">${assignedCells}</div>`;
           return;
         }
@@ -5678,8 +5736,8 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         const usage = isSelected ? pool.selected_projects_daily_usage : pool.daily_usage;
         leftHtml += `
           <div class="resource-left-row sub-row ${isFilterActive ? 'active-filter-row' : ''}"
-               data-row-id="pool-${pool.id}-${isSelected ? 'selected' : 'total'}"
-               ${row.collapsed ? `onclick="toggleResourceContainer(event, '${escapeHtml(row.nodeKey)}')"` : ''} ${rowContext}>
+               data-row-id="pool-${pool.id}-${isSelected ? 'selected' : 'total'}" data-scope="${isSelected ? 'selected' : 'total'}"
+               ${row.collapsed ? `ondblclick="toggleResourceContainer(event, '${escapeHtml(row.nodeKey)}')"` : ''} ${rowContext}>
             <div class="resource-pool-name" style="padding-left:${indent}px;">
               ${row.collapsed ? `<button class="resource-tree-toggle" type="button" aria-label="Expand ${escapeHtml(pool.name)}"
                 onclick="toggleResourceNode('${row.nodeKey}')">${toggle}</button><span class="r-name-text">${escapeHtml(pool.name)}</span>`
@@ -5690,12 +5748,14 @@ button:not(.context-menu-item):disabled {opacity:.5;}
         `;
         const demandCells = renderDemandCells(pool, usage, isSelected ? 'selected' : 'total');
         rightHtml += `<div class="resource-right-row sub-row ${isFilterActive ? 'active-filter-row' : ''}"
-                          ${row.collapsed ? `onclick="toggleResourceContainer(event, '${escapeHtml(row.nodeKey)}')"` : ''}
+                          ${row.collapsed ? `ondblclick="toggleResourceContainer(event, '${escapeHtml(row.nodeKey)}')"` : ''}
                           style="width:${totalTimelineWidth}px;box-sizing:border-box;padding-left:${columnLeft}px;">${demandCells}</div>`;
       });
 
       leftBody.innerHTML = leftHtml;
       rightBody.innerHTML = rightHtml;
+      leftBody.onclick = selectResourceAllocation;
+      rightBody.onclick = selectResourceAllocation;
 
     }
 
@@ -7149,7 +7209,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
           const sStr = formatDate(newStart);
           const eStr = formatDate(newEnd);
 
-          showTooltip(moveEvent, `<b>${escapeHtml(task.name)}</b><br>${sStr} &rarr; ${eStr}`);
+          showTooltip(moveEvent, `<b>${escapeHtml(task.name)}</b><br>${sStr} &rarr; ${eStr}`, true);
 
           const newStartX = dateToX(newStart);
           element.style.left = `${newStartX}px`;

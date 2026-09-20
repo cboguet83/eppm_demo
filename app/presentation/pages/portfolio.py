@@ -23,6 +23,7 @@ from app.presentation.i18n import get_current_locale, t
 from app.presentation.navigation import PAGE_PLANNING
 from app.presentation.components.property_labels import localize_parameters, parameter_groups, property_label
 from app.presentation.components.project_workspace import ProjectWorkspace
+from app.presentation.components.project_filter_panel import render_project_filters, matching_project_ids
 from app.presentation.components.project_type_frames import template_frame
 from app.presentation.components.portfolio_table import portfolio_project_table
 from app.presentation.components.portfolio_project_dialog import begin_project_dialog, render_project_modal
@@ -181,9 +182,12 @@ def _draw_project_details(selected_proj: pd.Series, workspace: ProjectWorkspace)
     actual = euro_amount(selected_proj.get("current_year_actual"))
     commitment = euro_amount(selected_proj.get("current_year_commitment"))
     variance = actual + commitment - approved
+    utilization = (actual + commitment) * 100 / approved if approved else None
+    utilization_label = f"{utilization:.1f}%" if utilization is not None else "N/A"
     variance_help = (
         f"Variance ({year}) = Actual ({year}) + Commitment ({year}) "
-        f"− Approved budget ({year}). Positive means over budget; negative means under budget."
+        f"− Approved budget ({year}). Positive means over budget; negative means under budget. "
+        "Percentage = (Actual + Commitment) / Approved budget × 100; N/A when budget is zero."
     )
 
     head_c1, head_c2 = st.columns([3, 2])
@@ -200,7 +204,7 @@ def _draw_project_details(selected_proj: pd.Series, workspace: ProjectWorkspace)
         (f"Approved budget ({year})", f"€{approved:,.2f}"),
         (f"Actual ({year})", f"€{actual:,.2f}"),
         (f"Commitment ({year})", f"€{commitment:,.2f}"),
-        (f"Variance ({year})", f"€{variance:,.2f}"),
+        (f"Variance ({year})", f"€{variance:,.2f} · {utilization_label}"),
     ]
     with st.container(key=f"project_details_summary_{proj_id}"):
         st.html(
@@ -373,18 +377,19 @@ def _render_portfolio_browser(workspace: ProjectWorkspace) -> None:
         > [data-testid="stVerticalBlock"] > [data-testid="stElementContainer"]:has(style) {
             display: none;
         }
+        .st-key-portfolio_create_action [data-testid="stButton"] {display:flex;justify-content:flex-end;}
+        .st-key-portfolio_create_action [data-testid="stElementContainer"]:has([data-testid="stButton"]) {
+            width:100% !important;
+        }
     </style>""")
     params = pd.DataFrame(workspace.portfolio.get_catalog(include_managers=False).parameters)
     columns = _portfolio_columns(localize_parameters(params, workspace.schema.alias_references(get_current_locale())))
-    status_col, clear_col = st.columns([5, 1], vertical_alignment="bottom")
-    with status_col:
-        st.multiselect(t("dashboard.project_status", default="Project status"), PROJECT_STATUSES,
-                       default=["In Progress"], key="portfolio_statuses")
-    with clear_col:
-        st.button(t("planning.clear_all_filters", default="Clear all filters"), on_click=_clear_portfolio_filters,
-                  key="portfolio_clear_filters", width="stretch")
-    with st.container(horizontal=True, horizontal_alignment="distribute", vertical_alignment="center"):
+    if workspace.dashboard is not None:
+        render_project_filters(workspace.dashboard)
+    heading, create_action = st.columns([3, 1], vertical_alignment="center")
+    with heading:
         st.subheader(t("portfolio.table_header"))
+    with create_action, st.container(key='portfolio_create_action'):
         _render_project_create_action(workspace)
     st.caption("Click a project to see its details. Scroll to load more projects automatically.")
 
@@ -405,11 +410,12 @@ def _render_portfolio_grid(workspace: ProjectWorkspace, columns: list[dict], sea
 def _portfolio_grid(workspace: ProjectWorkspace, columns: list[dict], search: str) -> None:
     """Serve a bounded row page under the current display and permission revision."""
     revision = workspace.portfolio.revision()
-    statuses = st.session_state.get("portfolio_statuses", ["In Progress"])
+    statuses = st.session_state.get("dashboard_filter_status", ["In Progress"])
+    matching_ids = matching_project_ids(workspace.dashboard) if workspace.dashboard is not None else None
     reset = st.session_state.get("portfolio_filter_reset", 0)
-    context = hashlib.sha256(json.dumps([revision, columns, search, statuses, reset],
+    context = hashlib.sha256(json.dumps([revision, columns, search, statuses, reset, matching_ids],
                                        sort_keys=True).encode()).hexdigest()
-    view_context = hashlib.sha256(json.dumps([columns, search, statuses, reset], sort_keys=True).encode()).hexdigest()
+    view_context = hashlib.sha256(json.dumps([columns, search, statuses, reset, matching_ids], sort_keys=True).encode()).hexdigest()
     component_state = st.session_state.get(_PORTFOLIO_TABLE_KEY, {})
     request = (component_state.get("request") if isinstance(component_state, dict)
                else getattr(component_state, "request", None)) or {}
@@ -421,6 +427,10 @@ def _portfolio_grid(workspace: ProjectWorkspace, columns: list[dict], search: st
     query["filters"].pop("status", None)
     if statuses:
         query["filters"]["status"] = {"mode": "include", "values": list(statuses)}
+    if matching_ids is not None:
+        query['project_ids'] = matching_ids
+    else:
+        query.pop('project_ids', None)
     current_request = request.get("context") == context
     # A committed edit invalidates cached rows, but the user's next scroll still
     # requests the same page. Query configuration changes retain the reset rule;

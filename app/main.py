@@ -161,6 +161,7 @@ def create_project_workspace(resources: RuntimeResources, *, access: BusinessAcc
         partial(render_project_budget, service=create_project_budget_service(resources, access=access)),
         partial(open_project_event_dialog, service=collaboration),
         render_plans,
+        dashboard=create_dashboard_service(resources, access=access),
     )
 
 

@@ -418,7 +418,8 @@
     "csv_replace_warning": "Der Import ersetzt den gesamten Projektplan. Bestehende Aufgaben, Abhängigkeiten (auch zu anderen Projekten) und Ressourcenzuweisungen an Projekt und Aufgaben werden gelöscht. Projektfelder und Weblinks bleiben erhalten. Erst nach erfolgreicher Prüfung und Klick auf Projektplan ersetzen werden Daten geändert.",
     "csv_replace_button": "Projektplan ersetzen",
     "clear_all_filters": "Alle Filter löschen",
-    "close_alternative_view": "Alternative Ansicht schließen"
+    "close_alternative_view": "Alternative Ansicht schließen",
+    "projects_to_display": "Anzuzeigende Projekte"
   },
   "gantt": {
     "columns": {
@@ -866,9 +867,9 @@
     "no_wbs": "Diesem Projekt sind keine PSP zugeordnet.",
     "unavailable": "Daten nicht verfügbar oder Zugriff geändert. Bitte neu laden.",
     "pool": "Ressourcenpools",
-    "finance_overview": "Finanzübersicht",
+    "finance_overview": "Finanzen",
     "approved_budget": "Genehmigtes Budget",
-    "resources_allocation": "Ressourcenzuweisung",
+    "resources_allocation": "Ressourcen",
     "capacity_overallocation": "Kapazität und Überbelegung",
     "overallocation": "Überbelegung",
     "total_capacity": "Gesamtkapazität der Pools",

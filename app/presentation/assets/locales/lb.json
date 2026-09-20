@@ -418,7 +418,8 @@
     "csv_replace_warning": "Den Import ersetzt de ganze Projetplang. Aufgaben, Ofhängegkeeten (och zu anere Projeten) a Ressourcenzouweisunge ginn geläscht. Projetsfelder a Weblinke bleiwen erhalen. Näischt gëtt geläscht ier d’Datei validéiert ass an Dir op Projetplang ersetzen klickt.",
     "csv_replace_button": "Projetplang ersetzen",
     "clear_all_filters": "All Filtere läschen",
-    "close_alternative_view": "Alternativ Vue zoumaachen"
+    "close_alternative_view": "Alternativ Vue zoumaachen",
+    "projects_to_display": "Projeten uweisen"
   },
   "gantt": {
     "columns": {
@@ -866,9 +867,9 @@
     "no_wbs": "Dëse Projet huet keng zougewisen WBS.",
     "unavailable": "Daten net disponibel oder Zougang geännert. Lued nei.",
     "pool": "Ressourcepools",
-    "finance_overview": "Finanziellen Iwwerbléck",
+    "finance_overview": "Finanzen",
     "approved_budget": "Geneemegte Budget",
-    "resources_allocation": "Ressourcenzouweisung",
+    "resources_allocation": "Ressourcen",
     "capacity_overallocation": "Kapazitéit an Iwwerbelaaschtung",
     "overallocation": "Iwwerbelaaschtung",
     "total_capacity": "Gesamtkapazitéit vun de Pools",

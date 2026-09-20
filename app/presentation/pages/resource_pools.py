@@ -96,6 +96,10 @@ def render_resource_pools(
     st.caption("Only active leaf pools have capacity and demand values. Summary counts exclude containers and deleted pools.")
     st.caption("Pools have a defined capacity (FTE) and can be assigned to projects and tasks.")
     st.caption("Employees defined in the system can be mapped to pools via their team memberships or directly, and their effective allocation is counted towards the pool’s assigned capacity.")
+    with st.container(horizontal=True, horizontal_alignment='right'):
+        if st.button('Create pool', key='create_root_pool'):
+            st.session_state.pop('parent_pool_None', None)
+            _open_add_pool_dialog(service)
     if not pool_records:
         event = resource_pool_tree(hierarchy, {}, 0)
         if event and event['action'] == 'create_root':
@@ -152,6 +156,7 @@ def render_resource_pools(
                 if warning:
                     st.warning(warning)
                 else:
+                    st.session_state['parent_pool_None'] = selected_pool_id
                     _open_add_pool_dialog(service, selected_pool_id)
         if selected_pool_id in active_hierarchy.pools:
             selected_leaves = active_hierarchy.descendants(selected_pool_id, leaves_only=True)

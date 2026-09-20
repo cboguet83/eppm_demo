@@ -56,7 +56,7 @@ def test_financial_stacks_legend_ratios_and_chart_axis_padding(authorized, tmp_p
                 assert abs(financial_year['x'] + financial_year['width'] / 2
                            - resource_year['x'] - resource_year['width'] / 2) < 1
             assert chart.locator('[data-axis=finance]').all_text_contents() == ['0', '0.1', '0.2', '0.3', '0.4']
-            page.get_by_role('heading', name='Finance overview', exact=True).hover()
+            page.get_by_role('heading', name='Finance', exact=True).hover()
             cards = [page.locator('.st-key-' + key) for key in (
                 'dashboard_late_card', 'dashboard_actual_ratio_card',
                 'dashboard_committed_ratio_card', 'dashboard_issue_card')]

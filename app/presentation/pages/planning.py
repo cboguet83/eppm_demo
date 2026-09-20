@@ -40,9 +40,9 @@ from app.domain.resources.capacity_rules import (
 )
 from app.domain.planning.rules import normalize_progress
 from app.domain.planning.plans import ProjectPlan
-from app.presentation.components.property_labels import property_label
 from app.presentation.components.planning_events import validate_event
 from app.presentation.components.planning_workspace import PlanningWorkspace
+from app.presentation.components.project_filter_panel import render_project_filters, matching_project_ids
 from app.presentation.components.planning_transport import planning_revision_token
 from app.presentation.components.project_dialogs import open_edit_project_dialog
 from app.presentation.components.resource_pool_frames import (
@@ -57,7 +57,6 @@ from app.presentation.components.tag_frames import (
     get_project_tag_group_tags_frame,
     get_task_tag_group_tags_frame,
 )
-from app.presentation.components.schema_frames import parameters_frame
 from app.presentation.components.planning_data import (
     load_planning_catalog,
     load_planning_project_metadata,
@@ -1609,6 +1608,8 @@ def _render_planning_chart(
                 )
             elif action == "clear_resource_pool_filter":
                 _handle_clear_resource_pool_filter(master_proj_ids)
+            elif action == "select_pool_allocations":
+                st.session_state['planning_pool_allocation_selection'] = gantt_event
             elif action == "show_pool_allocations":
                 _pool_allocations_dialog(int(gantt_event.get("pool_id") or 0), workspace,
                                          group_id=gantt_event.get("group_id"),
@@ -1711,6 +1712,13 @@ def _render_planning_chart(
             plan = selected_plan(alternative_event, workspace)
             download_project_csv(plan.project_id, str(alternative_event.get('nonce', plan.revision)),
                                  content=export_template(plan.content.tasks, plan.content.dependencies))
+    selection = st.session_state.get('planning_pool_allocation_selection')
+    if selection:
+        _render_pool_allocations(int(selection.get('pool_id') or 0), workspace,
+                                 group_id=selection.get('group_id'),
+                                 start=selection.get('start_date'), end=selection.get('end_date'),
+                                 project_ids=tuple(selected_projects) if selection.get('allocation_scope') == 'selected'
+                                 else status_project_ids)
     active_rf = st.session_state.get("active_resource_pool_filter")
     if active_rf and workspace.resources is not None:
         _render_filtered_active_allocations(
@@ -1738,9 +1746,6 @@ def render_planning_milestones(workspace: PlanningWorkspace) -> None:
             margin-top: 0 !important;
             margin-bottom: 0.25rem !important;
             padding-top: 0 !important;
-        }
-        div[data-testid="stVerticalBlock"] > div {
-            margin-bottom: 0.25rem !important;
         }
         /* Robust styling for multiselect selected item chips */
         div[data-baseweb="tag"],
@@ -1781,38 +1786,12 @@ def render_planning_milestones(workspace: PlanningWorkspace) -> None:
         _clear_all_planning_filters()
         st.session_state['ms_multi_projects'] = dashboard_projects
     revision = workspace.revision()
-    params = parameters_frame(workspace.schema.property_references())
-    alias_translations = workspace.schema.alias_references(get_current_locale())
-    chosen_fields = set(st.session_state.get("planning_flex_fields", []))
-    property_ids = tuple(
-        sorted(
-            (
-                str(p["param_id"])
-                for p in params.to_dict("records")
-                if str(p["param_id"]) in chosen_fields
-            )
-        )
-    )
-    df_projects, project_filter_frame, params, project_tag_records = load_planning_catalog(
-        workspace, revision, property_ids
-    )
+    df_projects, _, _, _ = load_planning_catalog(workspace, revision, ())
     if df_projects.empty:
         st.info(t("planning.no_projects_available", default="No projects available for planning."))
         return
     master_proj_ids = [int(p) for p in df_projects["id"].tolist()]
     proj_map = dict(zip(df_projects["id"], df_projects["name"]))
-    df_all_proj_tags = pd.DataFrame(project_tag_records)
-    project_tags_by_id: dict[int, list[str]] = {}
-    if not df_all_proj_tags.empty:
-        for r in project_tag_records:
-            t_name = r.get("tag_name")
-            f_name = r.get("free_tag")
-            if pd.notna(t_name) and str(t_name).strip():
-                tag_name = str(t_name).strip()
-                project_tags_by_id.setdefault(int(r["project_id"]), []).append(tag_name)
-            if pd.notna(f_name) and str(f_name).strip():
-                free_tag = str(f_name).strip()
-                project_tags_by_id.setdefault(int(r["project_id"]), []).append(free_tag)
     target_pid = st.session_state.pop("target_planning_project_id", None)
     if target_pid is not None:
         try:
@@ -1853,112 +1832,33 @@ def render_planning_milestones(workspace: PlanningWorkspace) -> None:
         with b_btn:
             if st.button("✖ Clear Filter", key="btn_clear_pool_filter_top", type="secondary"):
                 _handle_clear_resource_pool_filter(master_proj_ids)
-    project_filter_frame["_project_tags"] = project_filter_frame["id"].apply(
-        lambda project_id: project_tags_by_id.get(int(project_id), [])
-    )
-    flex_filter_fields: dict[str, str] = {
-        "name": t("portfolio.col_name", default="Project name"),
-        "project_manager": t("master_data.field_project_manager", default="Project Manager"),
-        "_project_tags": t("planning.flex_filter_project_tags", default="Project Tags"),
-    }
-    if not params.empty and "param_id" in params.columns:
-        for _, parameter in params.iterrows():
-            param_id = str(parameter["param_id"])
-            param_name = property_label(parameter.to_dict(), alias_translations)
-            target_column = param_id
-            if param_id not in project_filter_frame.columns:
-                project_filter_frame[param_id] = None
-            if target_column is not None:
-                field_label = param_name
-                if field_label in flex_filter_fields.values():
-                    field_label = f"{param_name} ({param_id})"
-                flex_filter_fields[target_column] = field_label
-    comparing = bool(st.session_state.get('planning_alternatives'))
-    filter_columns = st.columns([1.2, 1.6, 2.4, 0.6, 1.2] if comparing else [1.2, 1.6, 3.6, 0.6],
-                                vertical_alignment="bottom")
-    top_flex_col, top_status_col, top_sel_col, top_clear_col = filter_columns[:4]
-    with top_status_col:
-        statuses = st.multiselect(t("dashboard.project_status", default="Project status"), PROJECT_STATUSES,
-                                  default=["In Progress"], key="planning_statuses")
-    status_project_ids = tuple(int(row.id) for row in df_projects.itertuples()
-                               if not statuses or row.status in statuses)
-    st.session_state["planning_status_project_ids"] = status_project_ids
-    df_projects = df_projects[df_projects.id.isin(status_project_ids)]
-    project_filter_frame = project_filter_frame[project_filter_frame.id.isin(status_project_ids)]
-    st.session_state["planning_flex_fields"] = [field for field in st.session_state.get("planning_flex_fields", [])
-                                                if field in flex_filter_fields]
-    with top_clear_col:
-        st.button(t("planning.clear_all_filters", default="Clear all filters"),
-                  on_click=_clear_all_planning_filters, key="clear_all_planning_filters",
-                  width="stretch")
-    if comparing:
-        with filter_columns[4]:
+    project_filter_slot = None
+
+    def reserve_project_filter() -> None:
+        nonlocal project_filter_slot
+        project_filter_slot = st.container(key='planning_project_filter_slot')
+
+    if workspace.projects.dashboard is not None:
+        filters, match_all = render_project_filters(workspace.projects.dashboard,
+                                                    leading_filter=reserve_project_filter)
+        matching_ids = matching_project_ids(workspace.projects.dashboard)
+    else:
+        filters, match_all = {"status": ["In Progress"]}, False
+        matching_ids = df_projects.loc[df_projects.status == "In Progress", "id"].tolist()
+        reserve_project_filter()
+    statuses = filters.get('status', [])
+    st.session_state['planning_statuses'] = statuses
+    st.session_state['planning_status_project_ids'] = tuple(
+        int(row.id) for row in df_projects.itertuples() if not statuses or row.status in statuses)
+    df_projects = df_projects[df_projects.id.isin(matching_ids)]
+    flex_signature = (match_all, tuple(sorted((key, tuple(values)) for key, values in filters.items())))
+    previous_flex_signature = st.session_state.get('planning_last_flex_signature')
+    flex_filters_changed = previous_flex_signature is not None and previous_flex_signature != flex_signature
+    st.session_state['planning_last_flex_signature'] = flex_signature
+    with st.container(horizontal=True, horizontal_alignment='right', key='planning_scenario_controls'):
+        if st.session_state.get('planning_alternatives'):
             st.button(t('planning.close_alternative_view', default='Close alternative view'),
                       on_click=close_alternative_view, key='close_alternative_view', width='stretch')
-    active_flex_filters: dict[str, list[str]] = {}
-    with top_flex_col:
-        with st.popover(
-            t("planning.flex_filters", default="Flexible filters"),
-            icon=":material/filter_alt:",
-            width="stretch",
-        ):
-            selected_flex_fields = st.multiselect(
-                t("planning.flex_filter_fields", default="Filter fields"),
-                options=list(flex_filter_fields),
-                format_func=flex_filter_fields.get,
-                placeholder=t(
-                    "planning.flex_filter_fields_placeholder", default="Choose one or more fields"
-                ),
-                key="planning_flex_fields",
-            )
-            flex_match_mode = st.segmented_control(
-                t("planning.flex_filter_match_label", default="When several values are selected"),
-                options=["Any", "All"],
-                default="Any",
-                key="planning_flex_match_mode",
-                help=t(
-                    "planning.flex_filter_match_help",
-                    default="Fields use AND. This controls matching within each field.",
-                ),
-            )
-            for target_column in selected_flex_fields:
-                field_label = flex_filter_fields[target_column]
-                filter_options = _unique_planning_filter_options(
-                    project_filter_frame[target_column]
-                )
-                selected_values = st.multiselect(
-                    field_label,
-                    options=filter_options,
-                    placeholder=t("planning.flex_filter_all_values", default="All values"),
-                    key=f"planning_flex_values::{target_column}",
-                )
-                if selected_values:
-                    active_flex_filters[target_column] = selected_values
-            st.button(
-                t("planning.flex_filter_clear", default="Clear filters"),
-                on_click=_clear_planning_flex_filter_state,
-                width="stretch",
-                disabled=not selected_flex_fields,
-                key="btn_clear_planning_flex",
-            )
-    flex_signature = (
-        tuple(statuses),
-        flex_match_mode,
-        tuple(sorted(((column, tuple(values)) for column, values in active_flex_filters.items()))),
-    )
-    previous_flex_signature = st.session_state.get("planning_last_flex_signature")
-    flex_filters_changed = (
-        previous_flex_signature is not None and previous_flex_signature != flex_signature
-    )
-    st.session_state["planning_last_flex_signature"] = flex_signature
-    if active_flex_filters:
-        project_filter_frame = _apply_planning_flex_filters(
-            project_filter_frame, active_flex_filters, match_all_values=flex_match_mode == "All"
-        )
-        df_projects = df_projects[df_projects["id"].isin(project_filter_frame["id"].tolist())]
-        st.caption(
-            f"{len(active_flex_filters)} active flexible filter{('s' if len(active_flex_filters) != 1 else '')} · {len(df_projects)} matching projects"
-        )
     if df_projects.empty:
         st.info(
             t(
@@ -1980,7 +1880,8 @@ def render_planning_milestones(workspace: PlanningWorkspace) -> None:
         ]
     else:
         st.session_state["ms_multi_projects"] = []
-    with top_sel_col:
+    with project_filter_slot, st.popover(t('planning.projects_to_display'), width='stretch',
+                                        icon=':material/filter_alt:'):
         multi_header_label = f"🔍 {t('planning.select_multi_proj', default='Select Projects to Display in Multi-Gantt')} ({len(df_projects)} projects found)"
         selected_projects = st.multiselect(
             multi_header_label,
@@ -1990,6 +1891,16 @@ def render_planning_milestones(workspace: PlanningWorkspace) -> None:
         )
         if not selected_projects and not cur_active_rf:
             selected_projects = all_proj_ids
+    project_filter_active = set(selected_projects) != set(all_proj_ids)
+    background = '#C41039' if project_filter_active else 'transparent'
+    color = 'white' if project_filter_active else 'var(--st-text-color, #31333f)'
+    border = '#C41039' if project_filter_active else 'var(--st-border-color, #cbd5e1)'
+    st.html(f'''<style>
+        .st-key-planning_project_filter_slot [data-testid="stPopoverButton"],
+        .st-key-planning_project_filter_slot [data-testid="stPopoverButton"] > button {{
+            background:{background}!important;color:{color}!important;border-color:{border}!important;
+        }}
+        </style>''')
     if not selected_projects:
         if active_rf:
             st.warning(
@@ -2056,7 +1967,14 @@ def render_planning_milestones(workspace: PlanningWorkspace) -> None:
 def _pool_allocations_dialog(pool_id: int, workspace: PlanningWorkspace, group_id: int | None = None,
                              *, start: str | None = None, end: str | None = None,
                              project_ids: tuple[int, ...] | None = None) -> None:
-    """Reuse the Settings allocation projection for the chosen pool."""
+    """Show the shared allocation breakdown in a dialog."""
+    _render_pool_allocations(pool_id, workspace, group_id, start=start, end=end, project_ids=project_ids)
+
+
+def _render_pool_allocations(pool_id: int, workspace: PlanningWorkspace, group_id: int | None = None,
+                             *, start: str | None = None, end: str | None = None,
+                             project_ids: tuple[int, ...] | None = None) -> None:
+    """Render authorized allocation details below the grid or in its dialog."""
     from app.presentation.components.resource_pool_dialogs import _render_pool_assignments_table
     from app.presentation.navigation import PAGE_PLANNING
 

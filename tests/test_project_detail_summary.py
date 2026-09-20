@@ -25,5 +25,6 @@ def test_summary_renders_annual_budget_before_spending_and_variance_tooltip(monk
     assert markup.index('Approved budget (2026)') < markup.index('Actual (2026)') < markup.index('Commitment (2026)')
     assert '€100.00' in markup and '€25.00' in markup and '€80.00' in markup
     assert '€5.00' in markup and '9,999' not in markup
+    assert '105.0%' in markup
     assert 'title="Variance (2026) = Actual (2026) + Commitment (2026) − Approved budget (2026).' in markup
     assert 'Positive means over budget; negative means under budget.' in markup

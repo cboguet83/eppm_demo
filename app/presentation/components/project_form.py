@@ -20,6 +20,16 @@ _CSS = _MODAL_CSS + """
 .help {opacity:.75;font-size:.9rem;}
 [hidden] {display:none !important;}
 select[multiple] {min-height:90px;}
+.tag-dropdown {position:relative;min-width:0;}
+.tag-dropdown summary {cursor:pointer;border:1px solid var(--st-border-color);border-radius:6px;
+    padding:8px 10px;min-height:38px;box-sizing:border-box;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.tag-dropdown summary:focus-visible {outline:2px solid #C41039;outline-offset:2px;}
+.tag-options {position:absolute;left:0;right:0;z-index:20;max-height:220px;overflow:auto;
+    padding:8px;background:var(--st-background-color,#fff);border:1px solid var(--st-border-color);
+    border-radius:6px;box-shadow:0 4px 12px #0002;}
+.tag-options label {display:flex;flex-direction:row;align-items:center;gap:8px;padding:5px;cursor:pointer;}
+.tag-options input[type=checkbox] {width:16px;height:16px;min-height:0;margin:0;flex:none;}
+.tag-field {display:flex;flex-direction:column;gap:6px;min-width:0;grid-column:1/-1;}
 .danger {margin-right:auto;}
 @media(max-width:640px) {.link-row {grid-template-columns:1fr;} }
 """
@@ -60,7 +70,7 @@ export default function({data, parentElement, setTriggerValue}) {
     const read = () => Object.fromEntries([...controls].map(([key,{field,input}])=>{
         let value=input.value;
         if(field.kind==='number') value=value===''?null:Number(value);
-        if(field.kind==='multi') {
+        if(['multi','tags'].includes(field.kind)) {
             const selected=[...input.selectedOptions].map(option=>option.value);
             const original=data.values[key]||[];
             // selectedOptions follows option order, which may differ from storage.
@@ -68,7 +78,6 @@ export default function({data, parentElement, setTriggerValue}) {
                 && original.every(item=>selected.includes(item));
             value=unchanged?[...original]:selected;
         }
-        if(field.kind==='tags') value=value.split('\n').map(item=>item.trim()).filter(Boolean);
         return [key,value];
     }));
     const emit = kind => {
@@ -79,13 +88,32 @@ export default function({data, parentElement, setTriggerValue}) {
         for(const control of form.querySelectorAll('input,textarea,select,button')) control.disabled=true;
         setTriggerValue('action',{kind,token:data.token,values,links,wbs,dirty:[...draft.dirty]});
     };
+    const tagDropdown = (field,input) => {
+        input.hidden=true;input.removeAttribute('aria-label');
+        const dropdown=element('details');dropdown.className='tag-dropdown';
+        const summary=element('summary');summary.setAttribute('aria-label',field.label);
+        const options=element('div');options.className='tag-options';
+        const refresh=()=>{summary.textContent=[...input.selectedOptions].map(option=>option.textContent).join(', ')||field.label;};
+        for(const option of input.options) {
+            const row=element('label'),check=element('input');check.type='checkbox';
+            check.checked=option.selected;check.disabled=Boolean(field.disabled);
+            check.onchange=()=>{option.selected=check.checked;draft.dirty.add(field.key);refresh();};
+            row.append(check,element('span',option.textContent));options.append(row);
+        }
+        summary.onclick=event=>{if(field.disabled)event.preventDefault();};
+        summary.setAttribute('aria-disabled',String(Boolean(field.disabled)));
+        dropdown.onkeydown=event=>{if(event.key==='Escape'&&dropdown.open){event.preventDefault();event.stopPropagation();dropdown.open=false;summary.focus();}};
+        dropdown.onfocusout=event=>{if(!dropdown.contains(event.relatedTarget))dropdown.open=false;};
+        dropdown.append(summary,options);refresh();return dropdown;
+    };
     for(const field of data.fields) {
-        const label=element('label');if(!field.tab) label.className='compact';
+        const label=element(field.kind==='tags'?'div':'label');
+        if(field.kind==='tags')label.className='tag-field';else if(!field.tab)label.className='compact';
         label.append(element('span',field.label));
-        const input=element(['select','multi'].includes(field.kind)?'select':field.kind==='tags'?'textarea':'input');
+        const input=element(['select','multi','tags'].includes(field.kind)?'select':'input');
         input.name=field.key;input.setAttribute('aria-label',field.label);
-        if(['select','multi'].includes(field.kind)) {
-            input.multiple=field.kind==='multi';
+        if(['select','multi','tags'].includes(field.kind)) {
+            input.multiple=['multi','tags'].includes(field.kind);
             for(const [value,text] of field.options) {
                 const option=element('option',text);option.value=value;
                 if(input.multiple) option.selected=(data.values[field.key]||[]).includes(value);
@@ -95,11 +123,12 @@ export default function({data, parentElement, setTriggerValue}) {
             // Keep native numeric values as decimal strings through every event.
             input.type='text';input.inputMode='decimal';
         } else if(field.kind!=='tags') {input.type=field.kind; if(field.kind==='number') input.step='any';}
-        if(field.kind!=='multi') input.value=field.kind==='tags'?(data.values[field.key]||[]).join('\n'):(data.values[field.key]??'');
+        if(!['multi','tags'].includes(field.kind)) input.value=data.values[field.key]??'';
         input.disabled=Boolean(field.disabled);
         input.oninput=()=>draft.dirty.add(field.key);
         input.onchange=()=>{draft.dirty.add(field.key);if(field.key==='project_type_id') emit('type');};
-        label.append(input);if(field.kind==='tags') label.append(element('small','One tag per line'));
+        label.append(input);
+        if(field.kind==='tags')label.append(tagDropdown(field,input));
         (field.tab?panels.get(field.tab):core).append(label);controls.set(field.key,{field,input});
     }
     for(const [label,message] of Object.entries(data.messages||{})) panels.get(label)?.append(element('p',message));
@@ -125,7 +154,7 @@ export default function({data, parentElement, setTriggerValue}) {
         const row=element('div');row.className='wbs-row';
         const label=element('label',labels.code), select=element('select');select.setAttribute('aria-label',labels.code);
         const empty=element('option',labels.select);empty.value='';select.append(empty);
-        for(const choice of choices) {const option=element('option',choice.code+(choice.description?' — '+choice.description:''));option.value=choice.id;select.append(option);}
+        for(const choice of choices.filter(item=>item.available>0||item.id===value.wbs_id)) {const option=element('option',choice.code+(choice.description?' — '+choice.description:''));option.value=choice.id;select.append(option);}
         select.value=value.wbs_id||'';select.disabled=!data.can_save;
         const available=element('small');label.append(select,available);
         const share=element('label',labels.allocation), input=element('input');input.type='number';input.min=0;input.step=1;
@@ -136,7 +165,7 @@ export default function({data, parentElement, setTriggerValue}) {
         row.append(label,share,remove);wbsRows.append(row);
     };
     (data.wbs||[]).forEach(addWbs);
-    const addWbsButton=element('button',labels.add);addWbsButton.type='button';addWbsButton.disabled=!data.can_save||!choices.length;addWbsButton.onclick=()=>addWbs({});
+    const addWbsButton=element('button',labels.add);addWbsButton.type='button';addWbsButton.disabled=!data.can_save||!choices.some(item=>item.available>0);addWbsButton.onclick=()=>addWbs({});
     wbs.append(addWbsButton);if(!choices.length) wbs.append(element('p',labels.empty));
     panels.get(data.wbs_tab)?.append(wbs);
     if(data.error) {const error=element('p',data.error);error.className='error';error.setAttribute('role','alert');form.append(error);}
@@ -159,6 +188,9 @@ export default function({data, parentElement, setTriggerValue}) {
     dialog.replaceChildren(content);dialog.className='wide';
     dialog.oncancel=event=>{event.preventDefault();dismiss();};
     dialog.onclick=event=>{
+        for(const dropdown of dialog.querySelectorAll('.tag-dropdown[open]')) {
+            if(!dropdown.contains(event.target))dropdown.open=false;
+        }
         const r=dialog.getBoundingClientRect();
         if(event.target===dialog&&(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)) dismiss();
     };
