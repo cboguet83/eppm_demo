@@ -1,5 +1,5 @@
 {
-  "provenance": "Synthetic disposable PostgreSQL databases; updated for capped status quotas and completed schedules ending before the fixed reporting date 2026-09-14. Quotas and date rules are independently asserted by domain and integration tests.",
+  "provenance": "Disposable PostgreSQL seed snapshots after replacing stored project amounts and PRM_027 with native strategic priority. Status quotas and schedules are independently validated.",
   "cases": [
     {
       "request": {
@@ -10,33 +10,33 @@
       },
       "summary": {
         "projects_created": 20,
-        "tasks_created": 140,
-        "dependencies_created": 123,
+        "tasks_created": 138,
+        "dependencies_created": 124,
         "project_types": 5,
-        "property_values_created": 516,
-        "pools_created": 33,
-        "pool_groups_created": 7
+        "property_values_created": 496,
+        "pools_created": 40,
+        "container_pools_created": 7
       },
       "expected": {
         "projects": {
           "count": 20,
-          "sha256": "bcf17f94bad12f554718655d5b6659584361b302f308bbca4a1ccc05c6b73ce8"
+          "sha256": "728a94854ecbd0730cab6f5cbf7dac095e4b9a3240e2d5e4de3ea18567c73042"
         },
         "properties": {
-          "count": 516,
-          "sha256": "074de2fdc43884f822df0efc15e049b0684105bec2d86f8ddc006098f5299c79"
+          "count": 496,
+          "sha256": "4a764af7ae2fbc601e3ee63a9fab95f26cfce7daddcf0d985324bb4e0688314c"
         },
         "selections": {
           "count": 80,
-          "sha256": "9810d42d0bc04be4cf1b73b0d02ebb2c9582db4c292119366b5ff9238ca64eee"
+          "sha256": "b8a03cff5f18e8399dd47eab45d9ef597d2e6dc069b26574a99852eb6d529c0d"
         },
         "tasks": {
-          "count": 140,
-          "sha256": "4e25f627cf00efc209522630bfc08a6b2b6fca21fad0a514a00e786a09742c9c"
+          "count": 138,
+          "sha256": "6372701d9d1df43b49d69b86675074fcaca3720874337229ef8cf27c8b478d53"
         },
         "dependencies": {
-          "count": 123,
-          "sha256": "128b1b127cd8d9c8437c557501aa27123fb23037b28f87b1ebdc9ee9d91e9bd7"
+          "count": 124,
+          "sha256": "30eb5f04ad96b98f914113168286245b1429878f28dd61247a0b7f393e5d9192"
         }
       }
     },
@@ -50,32 +50,32 @@
       "summary": {
         "projects_created": 4,
         "tasks_created": 4,
-        "dependencies_created": 2,
+        "dependencies_created": 1,
         "project_types": 5,
-        "property_values_created": 98,
-        "pools_created": 33,
-        "pool_groups_created": 7
+        "property_values_created": 94,
+        "pools_created": 40,
+        "container_pools_created": 7
       },
       "expected": {
         "projects": {
           "count": 4,
-          "sha256": "1ab98429bda8a8eadb80485efd9d0aa9142ac529cc18f10f034193ca073a9da4"
+          "sha256": "cc8e130f99505d819b4f33091e9b15a0b4edc6f912c7434d1d0a4aef97df97f0"
         },
         "properties": {
-          "count": 98,
-          "sha256": "5de8fb62a8a087fb608490154616b16adb05481186c721ebb0b898c36fcae752"
+          "count": 94,
+          "sha256": "f74887c471f13c0388b3e5a44d6f514d8e07b9815d76a911b51df65dd6db42c5"
         },
         "selections": {
           "count": 16,
-          "sha256": "7d1c667316177362dfe584e9e4f0865d3b1ec15e2d45be52d8f4f31fc4270b4b"
+          "sha256": "c697532a3c345f8bb41ff49a9214e2b1d6b839616ebc0d74f4fb5d80f9b925c3"
         },
         "tasks": {
           "count": 4,
-          "sha256": "d5f6e8420f7bf682da1147b4a149679daba1d05e55ff855844140524625d38bc"
+          "sha256": "23596d9157703d918ffcdc5d488282f99db193398913851d837d5eda24603be3"
         },
         "dependencies": {
-          "count": 2,
-          "sha256": "f82376c8d7b872b64b1192efbeef78690bfa508201616bd7cf08731e75a88c3e"
+          "count": 1,
+          "sha256": "3357b2fb9418aee541fd0988ce156ad76f7b5629706cabc49d091a73e24a425d"
         }
       }
     },
@@ -91,26 +91,26 @@
         "tasks_created": 150,
         "dependencies_created": 30,
         "project_types": 5,
-        "property_values_created": 76,
-        "pools_created": 33,
-        "pool_groups_created": 7
+        "property_values_created": 73,
+        "pools_created": 40,
+        "container_pools_created": 7
       },
       "expected": {
         "projects": {
           "count": 3,
-          "sha256": "aff3d053bd72bcdf8cab24ba3a3c8e76c9b6fa6a4c977cfeb1a428a04252d4cf"
+          "sha256": "da9540693941dab57143dc841620aecaaea3bce64d3e3d37def73d8026712257"
         },
         "properties": {
-          "count": 76,
-          "sha256": "de1913c7b2d1f8f7e1ba10b45e65f72870821079284f3c52346439af5cffe42e"
+          "count": 73,
+          "sha256": "d4e02bfa8757ca677445f4411d33bcb7fb93fd0ff245a157bc48b93975457c8c"
         },
         "selections": {
           "count": 12,
-          "sha256": "f543e35ab851a24d34c686f173f3ac108b6f8d8ee34b8b317ba7a848a2757404"
+          "sha256": "f2680f647d8ed3d1ce5aedadd10b49f04b044a9adcffecc95a214911f0841484"
         },
         "tasks": {
           "count": 150,
-          "sha256": "56af9d87bf787f70a6d4a2bc6ba43f1fe4b11f55699fb5fc97d03fd28641ab2c"
+          "sha256": "331e7bcbb8316b8e235b5a358f4ad54e5a9f3f690d091b6090498925ab0e087d"
         },
         "dependencies": {
           "count": 30,
@@ -131,8 +131,8 @@
         "dependencies_created": 0,
         "project_types": 5,
         "property_values_created": 0,
-        "pools_created": 33,
-        "pool_groups_created": 7
+        "pools_created": 40,
+        "container_pools_created": 7
       },
       "expected": {
         "projects": {

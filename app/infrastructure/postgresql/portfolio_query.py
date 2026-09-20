@@ -5,6 +5,7 @@ from decimal import Decimal, InvalidOperation
 from psycopg import sql
 
 from app.application.ports.portfolio import PortfolioColumn
+from app.infrastructure.postgresql.project_financial_summary import FINANCIAL_CTES, FINANCIAL_JOINS
 
 
 def fold(expression: sql.Composable) -> sql.Composed:
@@ -43,11 +44,14 @@ def source(columns: list[PortfolioColumn]) -> tuple[sql.Composed, list[object], 
     expressions = {
         'project_id': sql.SQL('p.id'), 'name': sql.SQL('p.name'),
         'project_template': sql.SQL('t.name'), 'status': sql.SQL('p.status'),
-        'planned_budget': sql.SQL('p.planned_budget'), 'actual_budget': sql.SQL('p.actual_budget'),
+        'planned_budget': sql.SQL('coalesce(spending.planned_budget,0.00)'),
+        'actual_budget': sql.SQL('coalesce(spending.actual_budget,0.00)'),
+        'approved_budget': sql.SQL('coalesce(approved.approved_budget,0)'),
+        'strategic_priority': sql.SQL("coalesce(priority_label.label,priority.code,'')"),
         'project_manager': sql.SQL("coalesce(occupants.grid_label,f.name,'')"),
     }
     formats = {key: 'text' for key in expressions}
-    formats.update(project_id='number', planned_budget='currency', actual_budget='currency')
+    formats.update(project_id='number', planned_budget='currency', actual_budget='currency', approved_budget='currency')
     arguments: list[object] = []
     for column in columns:
         if column['key'] in expressions or not column.get('param_id'):
@@ -57,9 +61,12 @@ def source(columns: list[PortfolioColumn]) -> tuple[sql.Composed, list[object], 
         arguments.append(column['param_id'])
     projection = sql.SQL(',').join(sql.SQL('{} AS {}').format(value, sql.Identifier(key))
                                    for key, value in expressions.items())
-    query = sql.SQL("""WITH {}, portfolio AS NOT MATERIALIZED (SELECT {} FROM eppm.project p JOIN eppm.project_type t ON t.id=p.project_type_id
+    query = sql.SQL("""WITH {}, {}, portfolio AS NOT MATERIALIZED (SELECT {} FROM eppm.project p JOIN eppm.project_type t ON t.id=p.project_type_id
         LEFT JOIN eppm.active_function f ON f.function_id=p.function_id
-        LEFT JOIN occupants ON occupants.function_id=p.function_id) """).format(DIRECTORY, projection)
+        LEFT JOIN occupants ON occupants.function_id=p.function_id
+        LEFT JOIN eppm.strategic_priority priority ON priority.id=p.strategic_priority_id
+        LEFT JOIN eppm.strategic_priority_translation priority_label ON priority_label.strategic_priority_id=priority.id AND priority_label.locale='en'
+        {}) """).format(DIRECTORY, sql.SQL(FINANCIAL_CTES), projection, sql.SQL(FINANCIAL_JOINS))
     return query, arguments, formats
 
 

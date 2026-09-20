@@ -108,7 +108,7 @@ def _issues(service: DashboardService, ids: tuple[int, ...]) -> None:
 def _filters(service: DashboardService, catalog) -> tuple[dict[str, list[str]], bool]:
     if 'dashboard_pending_pool_filter' in st.session_state:
         st.session_state['dashboard_filter_pool'] = st.session_state.pop('dashboard_pending_pool_filter')
-    fixed = ('status', 'service', 'division', 'org_team', 'org_manager', 'pool')
+    fixed = ('strategic_priority', 'status', 'service', 'division', 'org_team', 'org_manager', 'pool')
     st.session_state.setdefault('dashboard_filter_status', ['In Progress'])
     st.session_state['dashboard_filter_status'] = [
         'In Progress' if value == 'Active' else value
@@ -139,18 +139,18 @@ def _filters(service: DashboardService, catalog) -> tuple[dict[str, list[str]], 
         if state_key in st.session_state:
             st.session_state[state_key] = [value for value in st.session_state[state_key] if value in options]
         labels = catalog.labels.get(key, {})
-        if key in {'status', 'pool'}:
+        if key in {'status', 'strategic_priority', 'pool'}:
             active[key] = checkbox_filter(label, options, labels, key=state_key, on_change=_reset_page)
             restricted[key] = bool(active[key]) and set(active[key]) != set(options)
         else:
             active[key] = st.multiselect(label, options, key=state_key, on_change=_reset_page,
                                          format_func=lambda value: labels.get(value, value) or _label('unassigned'))
 
-    columns = st.columns([3, 3, 2, 2], vertical_alignment='top')
-    for column, key in zip(columns, ('status', 'pool')):
+    columns = st.columns([3, 3, 3, 2, 2], vertical_alignment='top')
+    for column, key in zip(columns, ('status', 'strategic_priority', 'pool')):
         with column:
-            choose(key, _label('project_status') if key == 'status' else _label(key))
-    with columns[2], st.container(key='dashboard_advanced_filter'), st.popover(
+            choose(key, 'Strategic priority' if key == 'strategic_priority' else _label('project_status') if key == 'status' else _label(key))
+    with columns[3], st.container(key='dashboard_advanced_filter'), st.popover(
         _label('advanced_filters'), width='stretch', icon=':material/filter_alt:',
     ):
         chosen = st.multiselect(t('planning.flex_filter_fields', default='Filter fields'), list(fields),
@@ -160,15 +160,16 @@ def _filters(service: DashboardService, catalog) -> tuple[dict[str, list[str]], 
         for key in chosen:
             choose(key, fields[key])
         active = {key: values for key, values in active.items() if key in fixed or key in chosen}
-    with columns[3]:
+    with columns[4]:
         st.button(_label('reset_filters'), on_click=_clear, width='stretch',
                   icon=':material/filter_alt_off:', key='dashboard_clear')
     advanced_active = any(active.get(key) for key in chosen)
-    reset_needed = (set(active['status']) != {'In Progress'} or restricted['pool']
+    reset_needed = (set(active['status']) != {'In Progress'} or restricted['pool'] or restricted['strategic_priority']
                     or advanced_active or any(organization.values())
                     or st.session_state.get('dashboard_selected_project') is not None)
     controls = {
         '.st-key-dashboard_filter_status [data-testid="stPopoverButton"]': restricted['status'],
+        '.st-key-dashboard_filter_strategic_priority [data-testid="stPopoverButton"]': restricted['strategic_priority'],
         '.st-key-dashboard_filter_pool [data-testid="stPopoverButton"]': restricted['pool'],
         '.st-key-dashboard_advanced_filter [data-testid="stPopoverButton"]': advanced_active,
         '.st-key-dashboard_clear button': reset_needed,
@@ -262,14 +263,12 @@ def _financial_indicators(service: DashboardService, report) -> None:
     years = range(service.today().year - 2, service.today().year + 10)
     utilization = financial_utilization(report.budget, report.financials, years)
     for key, label, value in (
-        ('actual', 'Actual / Approved Budget', utilization.actual_percentage),
-        ('committed', '(Actual + Commitment) / Approved Budget', utilization.committed_percentage),
+        ('actual', _label('actual_ratio'), utilization.actual_percentage),
+        ('committed', _label('committed_ratio'), utilization.committed_percentage),
     ):
         with st.container(border=True, key=f'dashboard_{key}_ratio_card'):
-            st.metric(label, f'{value:.1f}%' if value is not None else 'N/A',
-                      help=f'Filtered projects, {years.start}–{years.stop - 1}, in EUR. '
-                           'Uses the latest approved budget with project WBS shares. '
-                           'N/A means the approved budget is missing or zero.')
+            st.metric(label, f'{value:.1f}%' if value is not None else _label('not_available'),
+                      help=t('dashboard.financial_help', start=years.start, end=years.stop - 1))
 
 
 def _planning_jump(service: DashboardService, ids: tuple[int, ...], quarter: str,
@@ -363,9 +362,9 @@ def render_dashboard(service: DashboardService) -> None:
         proposed = _measure('proposed_report', lambda: _report(service, revision, ids, 'Proposed'))
         finance, indicators = st.columns([8, 1.5], gap=None, vertical_alignment='top')
         with indicators, st.container(border=True, key='dashboard_late_card'):
-            st.metric('Late projects', f'{report.late_project_percentage:.1f}%',
-                      help='Projects with an active-plan task ending before today and less than 100% complete, among all projects in the dashboard filters.')
-            st.caption(f'{report.late_project_count} of {report.project_count} projects')
+            st.metric(_label('late_projects'), f'{report.late_project_percentage:.1f}%',
+                      help=_label('late_help'))
+            st.caption(t('dashboard.late_count', count=report.late_project_count, total=report.project_count))
         with indicators:
             _financial_indicators(service, report)
         with finance:

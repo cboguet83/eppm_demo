@@ -23,8 +23,8 @@ from app.presentation.components.context_menu import CONTEXT_MENU_CSS
 def database(runtime: RuntimeResources, access: BusinessAccess) -> RuntimeResources:
     """Name fixture projects through the native project service."""
     projects = create_project_service(runtime, access=access)
-    projects.update_project(1, "First", "Draft", 0, 0, {})
-    projects.update_project(2, "Second", "Draft", 0, 0, {})
+    projects.update_project(1, "First", "Draft", {})
+    projects.update_project(2, "Second", "Draft", {})
     return runtime
 
 

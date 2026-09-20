@@ -1,12 +1,10 @@
 """Validated operator project insertion and the accepted curated demo schedules."""
 
 from datetime import date
-from decimal import Decimal
 import random
 
 import psycopg
 
-from app.domain.projects.budgets import EuroInput, ZERO, euro_amount
 from app.domain.projects.project import normalize_project_name, prepare_project_values
 from app.domain.projects.project_types import PropertyValue
 from app.infrastructure.postgresql.projects import PostgresProjectStore
@@ -16,29 +14,33 @@ from app.infrastructure.postgresql.seed_plan import ensure_operator_plan
 
 
 def create_seed_project(connection: psycopg.Connection, *, name: str, status: str = 'Draft',
-                        project_id: int | None = None, planned_budget: EuroInput = ZERO,
-                        actual_budget: EuroInput = ZERO, dynamic_attributes: dict[str, PropertyValue] | None = None,
-                        function_id: int | None = None, project_type_id: int | None = None) -> int:
-    """Validate the effective template and exact euros in an operator transaction.
+                        project_id: int | None = None, dynamic_attributes: dict[str, PropertyValue] | None = None,
+                        function_id: int | None = None, project_type_id: int | None = None,
+                        strategic_priority_id: int | None = None) -> int:
+    """Validate the effective template and native attributes in an operator transaction.
 
     Operator creation uses native identity SQL. The runtime store's allocator
     intentionally requires a signed browser actor, so it is not bypassed or
     weakened to support deployment commands.
     """
     store = PostgresProjectStore(connection)
+    if strategic_priority_id is not None and (
+        type(strategic_priority_id) is not int or strategic_priority_id not in store.strategic_priorities('en')
+    ):
+        raise ValueError('Select a valid strategic priority.')
     identity = project_type_id if project_type_id is not None else store.default_type_id()
     values = prepare_project_values(store.template(identity), store.choices(), dynamic_attributes or {}, creating=True)
-    fields = (normalize_project_name(name), status, euro_amount(planned_budget), euro_amount(actual_budget), function_id, identity)
+    fields = (normalize_project_name(name), status, function_id, identity, strategic_priority_id)
     connection.execute("SELECT pg_advisory_xact_lock(hashtextextended('eppm:project-identity',0))")
     if project_id is None:
         advance_seed_sequences(connection, (('project', 'id'),))
-        result = connection.execute('INSERT INTO eppm.project(name,status,planned_budget,actual_budget,function_id,project_type_id) '
-                                    'VALUES (%s,%s,%s,%s,%s,%s) RETURNING id', fields).fetchone()[0]
+        result = connection.execute('INSERT INTO eppm.project(name,status,function_id,project_type_id,strategic_priority_id) '
+                                    'VALUES (%s,%s,%s,%s,%s) RETURNING id', fields).fetchone()[0]
     else:
         if type(project_id) is not int or project_id <= 0:
             raise ValueError('A seed project identity must be a positive integer.')
-        result = connection.execute('INSERT INTO eppm.project(id,name,status,planned_budget,actual_budget,function_id,project_type_id) '
-                                    'VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id', (project_id, *fields)).fetchone()[0]
+        result = connection.execute('INSERT INTO eppm.project(id,name,status,function_id,project_type_id,strategic_priority_id) '
+                                    'VALUES (%s,%s,%s,%s,%s,%s) RETURNING id', (project_id, *fields)).fetchone()[0]
         advance_seed_sequences(connection, (('project', 'id'),))
     write_values(connection, result, values)
     ensure_operator_plan(connection, result)
@@ -54,19 +56,19 @@ def seed_sample_projects(connection: psycopg.Connection) -> None:
         options.setdefault(identity, []).append(value)
     store = PostgresProjectStore(connection)
     samples = (
-        ('Digitalisation', 'NextGen ERP Modernization', '450000', '380000'),
-        ('Infrastructure', 'Northern Rail Capacity Upgrade', '280000', '210000'),
-        ('Compliance', 'Global Supply Chain Audit', '150000', '142000'),
-        ('Renovation', 'Central Station Renovation', '320000', '100000'),
-        ('General', 'Portfolio Governance Review', '50000', '10000'),
+        ('Digitalisation', 'NextGen ERP Modernization'),
+        ('Infrastructure', 'Northern Rail Capacity Upgrade'),
+        ('Compliance', 'Global Supply Chain Audit'),
+        ('Renovation', 'Central Station Renovation'),
+        ('General', 'Portfolio Governance Review'),
     )
     rng = random.Random(42)
     last_project = last_task = None
-    for index, (type_name, name, planned, actual) in enumerate(samples, 1):
+    for index, (type_name, name) in enumerate(samples, 1):
         type_id = types[type_name]
         project = create_seed_project(connection, name=name,
             status='In Progress',
-            planned_budget=Decimal(planned), actual_budget=Decimal(actual), project_type_id=type_id,
+            project_type_id=type_id, strategic_priority_id=(index - 1) % 4 + 1,
             function_id=managers[(index + 15) % len(managers)] if managers else None,
             dynamic_attributes=sample_values(store.template(type_id), options, index, rng))
         previous = None

@@ -50,8 +50,8 @@ def _project_form(workspace: ProjectWorkspace, draft: ProjectDraft, type_id: int
     project, references = draft.project, draft.references
     values = {
         "display_id": str(draft.project_id or ""),
-        "name": project.name, "status": project.status, "planned_budget": str(project.planned_budget),
-        "actual_budget": str(project.actual_budget), "function_id": str(project.function_id or ""),
+        "name": project.name, "status": project.status, "strategic_priority_id": str(project.strategic_priority_id or ""),
+        "function_id": str(project.function_id or ""),
         "project_type_id": str(type_id),
     }
     values.update({key: value for key, value in draft.form.get("values", {}).items() if not key.startswith("p:")})
@@ -66,8 +66,8 @@ def _project_form(workspace: ProjectWorkspace, draft: ProjectDraft, type_id: int
         options=[(str(key), label) for key, label in references.type_labels.items()])
     add("name", t("master_data.field_name"), "text")
     add("status", t("master_data.field_status"), "select", options=[(value, value) for value in PROJECT_STATUSES])
-    add("planned_budget", t("master_data.field_planned"), "money")
-    add("actual_budget", t("master_data.field_actual"), "money")
+    add("strategic_priority_id", "Strategic priority", "select",
+        options=[("", "Unassigned"), *[(str(key), label) for key, label in references.priorities.items()]])
     add("function_id", t("master_data.field_project_manager", default="Project Manager"), "select",
         options=[("", "— None —"), *[(str(key), label) for key, label in references.managers.items()]])
     params = _dialog_parameters(references, type_id, workspace)
@@ -134,7 +134,7 @@ def begin_project_dialog(workspace: ProjectWorkspace, project_id: int | None = N
         if not workspace.projects.permissions().allows(required, project_id):
             raise ValueError("You do not have permission to edit this project." if project_id else
                              "You do not have permission to create projects.")
-        project = Project(planned_budget=Decimal(150000)) if project_id is None else workspace.projects.get_project_by_id(project_id)
+        project = Project() if project_id is None else workspace.projects.get_project_by_id(project_id)
         if project is None:
             raise ValueError("The selected project no longer exists.")
         references = _dialog_references(workspace)
@@ -213,10 +213,8 @@ def _save(workspace: ProjectWorkspace, draft: ProjectDraft, values: dict[str, An
     name = values["name"].strip()
     if not name:
         raise ValueError(t("master_data.err_required_fields"))
-    if any(not isinstance(values[key], str) or not values[key].strip() for key in ("planned_budget", "actual_budget")):
-        raise ValueError("Enter planned and actual budget amounts.")
     arguments = dict(
-        name=name, status=values["status"], planned_budget=values["planned_budget"], actual_budget=values["actual_budget"],
+        name=name, status=values["status"], strategic_priority_id=int(values["strategic_priority_id"]) if values.get("strategic_priority_id") else None,
         function_id=int(values["function_id"]) if values["function_id"] else None,
         project_type_id=int(values["project_type_id"]),
         dynamic_attributes=_property_values(draft, values),

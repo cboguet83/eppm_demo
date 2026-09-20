@@ -67,8 +67,8 @@ with psycopg.connect(os.environ['DATABASE_OPERATOR_URL']) as connection:
         'JOIN eppm.resource_pool_assignment a ON a.project_id=t.project_id '
         'AND (a.task_id=t.id OR a.task_id IS NULL) ORDER BY t.id,a.id LIMIT 1').fetchone()
     hidden = connection.execute('SELECT id FROM eppm.project WHERE id<>%s ORDER BY id LIMIT 1', (project,)).fetchone()[0]
-    connection.execute('UPDATE eppm.project SET name=%s,planned_budget=%s,actual_budget=%s WHERE id=%s',
-                       ('Recovery retained project', '9007199254740993.1234567890123456789', '0.000000000000000000123456789', project))
+    connection.execute('UPDATE eppm.project SET name=%s WHERE id=%s', ('Recovery retained project', project))
+    connection.execute("INSERT INTO eppm.project_financial_transaction(project_id,fiscal_year,amount,currency,exchange_rate,amount_base_currency,financial_record_type,spending_type,wbs) VALUES (%s,2026,9007199254740993.01,'EUR',1,9007199254740993.01,'COMMITMENT','CAPEX','RECOVERY'),(%s,2026,.01,'EUR',1,.01,'ACTUAL','CAPEX','RECOVERY')", (project, project))
     connection.execute('UPDATE eppm.project_task SET task_name=%s WHERE id=%s', ('Recovery retained task', task))
     wbs = connection.execute("INSERT INTO eppm.wbs(code,description) VALUES ('RECOVERY','Approved recovery allocation') RETURNING id").fetchone()[0]
     connection.execute('INSERT INTO eppm.project_wbs(project_id,wbs_id,percentage) VALUES (%s,%s,37)', (project, wbs))
@@ -118,7 +118,7 @@ try:
     capacity = create_pool_capacity_service(resources, access=access).get_summaries([pool])
     finance = create_finance_service(resources, access=access).view(int(os.environ['RECOVERY_SNAPSHOT'])).selected
     money = resources.database.run(lambda connection: connection.execute(
-        'SELECT planned_budget::text,actual_budget::text FROM eppm.project WHERE id=%s', (project,)
+        "SELECT sum(amount_base_currency) FILTER(WHERE financial_record_type='COMMITMENT')::text,sum(amount_base_currency) FILTER(WHERE financial_record_type='ACTUAL')::text FROM eppm.project_financial_transaction WHERE project_id=%s", (project,)
     ).fetchone(), bind=ActorBinding(access, resources.key))
     print(json.dumps({'planning': planning, 'capacity': [asdict(row) for row in capacity],
                       'finance': asdict(finance), 'money': money}, default=str, sort_keys=True))

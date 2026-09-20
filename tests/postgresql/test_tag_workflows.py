@@ -29,7 +29,6 @@ class TestTagsSystem(unittest.TestCase):
         self.project_id = self.project_repo.create_project(
             name="Cloud Platform Alpha",
             status="In Progress",
-            planned_budget='500000.00',
         )
         self.task_id = self.milestone_repo.create_milestone(
             project_id=self.project_id,

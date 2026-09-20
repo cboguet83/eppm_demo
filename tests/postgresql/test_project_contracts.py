@@ -64,18 +64,18 @@ def test_type_switches_restore_values_without_reapplying_creation_defaults(datab
     projects = create_project_service(database, access=access)
     pid = projects.create_project(name="Line", project_type_id=special)
     assert projects.get_project_by_id(pid).dynamic_attributes == {"p": "Initial"}
-    projects.update_project(pid, "Line", "Draft", 10, 2, {"p": "Edited"})
-    projects.update_project(pid, "Line", "Draft", 10, 2, {}, project_type_id=1)
+    projects.update_project(pid, "Line", "Draft", {"p": "Edited"})
+    projects.update_project(pid, "Line", "Draft", {}, project_type_id=1)
     assert projects.get_project_by_id(pid).dynamic_attributes == {"p": "Edited"}
     assert pd.DataFrame(create_project_service(database, access=access).get_planning_catalog(tuple(parameter.param_id for parameter in create_schema_service(database, access=access).get_all_parameters()))).iloc[0].dynamic_attributes == {}
-    projects.update_project(pid, "Line", "Draft", 10, 2, {}, project_type_id=special)
+    projects.update_project(pid, "Line", "Draft", {}, project_type_id=special)
     assert projects.get_project_by_id(pid).dynamic_attributes == {"p": "Edited"}
     fresh = projects.create_project(name="No rail history")
     with pytest.raises(ValueError, match="Required property"):
-        projects.update_project(fresh, "Changed", "Draft", 0, 0, {}, project_type_id=special)
+        projects.update_project(fresh, "Changed", "Draft", {}, project_type_id=special)
     assert projects.get_project_by_id(fresh).name == "No rail history"
     with pytest.raises(AccessDenied):
-        projects.update_project(999, "", "Draft", 0, 0, {})
+        projects.update_project(999, "", "Draft", {})
     assert projects.delete_project(999) is False
     assert projects.get_project_by_id(999) is None
 
@@ -93,15 +93,15 @@ def test_partial_property_write_rolls_back_master_and_all_prior_values(database:
             FOR EACH ROW WHEN (NEW.param_id='b' AND NEW.text_value='reject') EXECUTE FUNCTION eppm.reject_second_value()""")
     for operation in (
         lambda: service.create_project(name="Must roll back", dynamic_attributes={"a": "new", "b": "reject"}),
-        lambda: service.update_project(pid, "Must roll back", "Draft", 99, 22, {"a": "new", "b": "reject"}),
+        lambda: service.update_project(pid, "Must roll back", "Draft", {"a": "new", "b": "reject"}),
     ):
         with pytest.raises(ProjectConflictError) as error:
             operation()
         assert error.value.__cause__ is None
         assert "internal failure" not in str(error.value)
     project = service.get_project_by_id(pid)
-    assert (project.name, project.planned_budget, project.dynamic_attributes) == (
-        "Original", 0, {"a": "old", "b": "old"},
+    assert (project.name, project.strategic_priority_id, project.dynamic_attributes) == (
+        "Original", None, {"a": "old", "b": "old"},
     )
     assert create_portfolio_service(database, access=access).get_metrics().total_projects == 1
     with pytest.raises(ProjectConflictError):

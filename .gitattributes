@@ -5,3 +5,4 @@ app/infrastructure/postgresql/pool_hierarchy_migration.py text eol=lf
 app/infrastructure/postgresql/project_plan_migration.py text eol=lf
 app/infrastructure/postgresql/direct_priority_migration.py text eol=lf
 app/infrastructure/postgresql/employee_function_migration.py text eol=lf
+app/infrastructure/postgresql/project_priority_migration.py text eol=lf

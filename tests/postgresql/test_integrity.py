@@ -19,6 +19,7 @@ from app.application.services.access import AuthorizationPolicy, SessionLimits
 from app.application.services.business_access import BusinessAccess
 from app.domain.access.models import Actor
 from app.shared.config.database import DatabaseConfig
+from tests.postgresql.financial_fixtures import set_project_amounts
 
 
 @dataclass(frozen=True)
@@ -65,18 +66,18 @@ def execute(database, source, parameters=(), *, write=False):
 
 
 def test_native_money_dates_booleans_and_json_round_trip_exactly(business):
-    amount = Decimal("9007199254740993.01234567890123456789")
-    execute(business, "UPDATE eppm.project SET planned_budget=%s WHERE id=1", (amount,), write=True)
-    assert execute(business, "SELECT planned_budget FROM eppm.project WHERE id=1") == [(amount,)]
+    amount = Decimal("9007199254740993.01")
+    business.run(lambda connection: set_project_amounts(connection, 1, amount), write=True)
+    assert execute(business, "SELECT amount_base_currency FROM eppm.project_financial_transaction WHERE project_id=1 AND financial_record_type='COMMITMENT'") == [(amount,)]
     rows = execute(business, "INSERT INTO eppm.project_task(project_id,task_name,start_date,end_date,project_plan_id) VALUES (1,'Task',%s,%s,(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)) RETURNING id,start_date,end_date", (date(2026, 1, 1), date(2026, 1, 2)), write=True)
     assert type(rows[0][0]) is int and rows[0][1:] == (date(2026, 1, 1), date(2026, 1, 2))
     assert execute(business, "SELECT is_general FROM eppm.project_type") == [(True,)]
 
 
 @pytest.mark.parametrize("value", [Decimal("NaN"), Decimal("Infinity"), Decimal("-Infinity")])
-def test_project_budgets_reject_nonfinite_amounts(business, value):
-    with pytest.raises(psycopg.errors.CheckViolation):
-        execute(business, "UPDATE eppm.project SET actual_budget=%s WHERE id=1", (value,), write=True)
+def test_project_transactions_reject_nonfinite_amounts(business, value):
+    with pytest.raises((psycopg.errors.CheckViolation, psycopg.errors.NumericValueOutOfRange)):
+        business.run(lambda connection: set_project_amounts(connection, 1, value), write=True)
 
 
 def test_runtime_direct_writes_require_serializable_transactions(pg_database, business):

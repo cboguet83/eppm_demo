@@ -14,12 +14,14 @@ from app.infrastructure.postgresql.financial_transactions import PostgresFinanci
 
 
 def seed_financial_transactions(connection: psycopg.Connection, *, today: date,
-                                seed: int, apply: bool = False) -> dict:
+                                seed: int, apply: bool = False,
+                                project_ids: tuple[int, ...] | None = None) -> dict:
     """Preview or append balancing transactions in the caller's operator transaction.
 
     Original records, source links, live budgets and approved snapshots remain
     intact. Identical reruns append nothing. Concurrent financial writes and
     changes to approved allocations are blocked while applying the seed.
+    When project_ids is supplied, other projects' spending remains untouched.
     """
     if apply:
         connection.execute('''LOCK TABLE eppm.finance_snapshot,eppm.finance_cancellation,
@@ -31,6 +33,7 @@ def seed_financial_transactions(connection: psycopg.Connection, *, today: date,
         ORDER BY s.number DESC LIMIT 1''').fetchone()
     if not approved:
         raise ValueError('No active approved budget is available for seeding.')
+    selected_projects = list(project_ids) if project_ids is not None else None
     with localcontext(prec=60):
         budgets = tuple(ApprovedProjectAmount(project, wbs, year,
             (amount * percentage / 100).quantize(Decimal('.01'), rounding=ROUND_HALF_UP))
@@ -38,8 +41,9 @@ def seed_financial_transactions(connection: psycopg.Connection, *, today: date,
                 SELECT pw.project_id,w.code,a.year,a.amount,pw.percentage
                 FROM eppm.project_wbs pw JOIN eppm.wbs w ON w.id=pw.wbs_id
                 JOIN eppm.finance_amount a ON a.code=w.code AND a.snapshot_id=%s
-                WHERE pw.percentage>0 AND a.amount>0
-                ORDER BY pw.project_id,a.year,w.code''', (approved[0],)))
+                WHERE pw.percentage>0 AND a.amount>=0
+                  AND (%s::bigint[] IS NULL OR pw.project_id=ANY(%s::bigint[]))
+                ORDER BY pw.project_id,a.year,w.code''', (approved[0], selected_projects, selected_projects)))
         targets = spending_targets(budgets, year=today.year, seed=seed)
         existing = {(project, wbs, year, kind): amount for project, wbs, year, kind, amount
                     in connection.execute('''SELECT project_id,wbs,fiscal_year,financial_record_type,

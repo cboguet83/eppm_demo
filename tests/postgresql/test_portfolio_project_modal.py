@@ -82,10 +82,10 @@ def test_project_save_closes_modal_and_refreshes_grid_and_selection_once(busines
 
 @pytest.mark.parametrize("changes,links,error", [
     ({"name": ""}, None, "required"),
-    ({"planned_budget": ""}, None, "budget"),
-    ({"planned_budget": None}, None, "Invalid project field"),
-    ({"planned_budget": True}, None, "Invalid project field"),
-    ({"planned_budget": 10 ** 400}, None, "Invalid project field"),
+    ({"strategic_priority_id": "999"}, None, "strategic priority"),
+    ({"strategic_priority_id": None}, None, "Invalid project field"),
+    ({"strategic_priority_id": True}, None, "Invalid project field"),
+    ({"strategic_priority_id": 10 ** 400}, None, "Invalid project field"),
     ({"name": "Retained"}, [{"url": "javascript:alert(1)", "alias": "Invalid"}], "URL"),
 ])
 def test_failed_project_save_keeps_draft_and_does_not_write(business, changes, links, error):

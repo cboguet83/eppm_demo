@@ -895,7 +895,18 @@
     "peak_day": "Spitzentag",
     "total_overallocation": "Gesamtüberbelegung",
     "total_allocation": "Gesamtzuweisung",
-    "total_capacity_short": "Mindestkapazität im Zeitraum"
+    "total_capacity_short": "Mindestkapazität im Zeitraum",
+    "actual": "Ist",
+    "commitment": "Obligo",
+    "actual_ratio": "Ist / Genehmigtes Budget",
+    "committed_ratio": "(Ist + Obligo) / Genehmigtes Budget",
+    "financial_help": "Gefilterte Projekte, {start}–{end}, in EUR. Verwendet das letzte genehmigte Budget entsprechend den WBS-Anteilen des Projekts. k. A. bedeutet, dass das genehmigte Budget fehlt oder null ist.",
+    "late_projects": "Verspätete Projekte",
+    "late_help": "Projekte mit einer Aufgabe im aktiven Plan, deren Enddatum vor heute liegt und die zu weniger als 100 % abgeschlossen ist, unter allen durch die Dashboard-Filter ausgewählten Projekten.",
+    "late_count": "{count} von {total} Projekten",
+    "not_available": "k. A.",
+    "fte_unit": "VZÄ",
+    "quarter_prefix": "Q"
   },
   "pool_exceptions": {
     "title": "Kapazitätsausnahmen",

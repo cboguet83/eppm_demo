@@ -1,5 +1,6 @@
 """Real PostgreSQL archives preserve business truth, grants and private actor binding."""
 
+from tests.postgresql.financial_fixtures import set_project_amounts
 from datetime import datetime, timezone
 from decimal import Decimal
 from pathlib import Path
@@ -21,7 +22,7 @@ from app.shared.config.database import DatabaseConfig
 
 def test_archive_restore_preserves_exact_finance_actor_scope_and_revision_incarnation(authorized, restore_target, tmp_path, clients):
     with psycopg.connect(authorized.setup.operator_url) as connection:
-        connection.execute('UPDATE eppm.project SET planned_budget=%s WHERE id=1', (Decimal('9007199254740993.01'),))
+        set_project_amounts(connection, 1, Decimal('9007199254740993.01'))
         connection.execute("INSERT INTO eppm.wbs(code) VALUES ('ARCHIVE')")
     access = authorized.binding(4).access
     finance = FinanceService(PostgresFinanceGateway(authorized.database, authorized.key, access=access))
@@ -34,7 +35,7 @@ def test_archive_restore_preserves_exact_finance_actor_scope_and_revision_incarn
     restored = Database(DatabaseConfig(restore_target.runtime_url, pool_min=1, pool_max=2))
     restored.open()
     try:
-        rows = restored.run(lambda connection: connection.execute('SELECT id,planned_budget FROM eppm.project ORDER BY id').fetchall(),
+        rows = restored.run(lambda connection: connection.execute("SELECT p.id,coalesce(t.amount_base_currency,0) FROM eppm.project p LEFT JOIN eppm.project_financial_transaction t ON t.project_id=p.id AND t.financial_record_type='COMMITMENT' ORDER BY p.id").fetchall(),
                             bind=ActorBinding(authorized.binding().access, authorized.key))
         assert rows[0] == (1, Decimal('9007199254740993.01')) and [row[0] for row in rows] == [1, 2]
         restored_finance = FinanceService(PostgresFinanceGateway(restored, authorized.key, access=access))

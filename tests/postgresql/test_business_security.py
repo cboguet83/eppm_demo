@@ -27,12 +27,13 @@ def portfolio(authorized):
         operator.execute("INSERT INTO eppm.project_property_value(project_id,param_id,kind,text_value) VALUES (1,'REGION','text','North'),(2,'REGION','text','South'),(3,'REGION','text','North')")
         operator.execute("INSERT INTO eppm.function(name) VALUES ('Manager')")
         operator.execute("INSERT INTO eppm.employee(firstname,lastname,email,mobile,function_id) VALUES ('Public','Manager','private@example.invalid','secret-phone',1)")
+        operator.execute('INSERT INTO eppm.employee_function(employee_id,function_id) VALUES (1,1)')
         operator.execute("UPDATE eppm.project SET function_id=1 WHERE id=1")
     return authorized
 
 
 def test_scope_filters_before_counts_paging_joins_and_totals(portfolio):
-    assert portfolio.query("SELECT count(*),sum(planned_budget) FROM eppm.project") == [(2, Decimal(0))]
+    assert portfolio.query("SELECT count(*),count(strategic_priority_id) FROM eppm.project") == [(2, Decimal(0))]
     assert portfolio.query("SELECT id FROM eppm.project ORDER BY id DESC LIMIT 1") == [(2,)]
     assert portfolio.query("SELECT p.id,t.task_name FROM eppm.project p JOIN eppm.project_task t ON t.project_id=p.id ORDER BY p.id") == [(1, "Editable task"), (2, "Read only task")]
     assert portfolio.query("SELECT sum(fte_assigned) FROM eppm.resource_pool_assignment") == [(1.0,)]
@@ -216,11 +217,12 @@ def test_every_business_table_has_rls_and_explicit_write_authorization(pg_databa
             EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid=c.oid AND p.polcmd IN ('a','*') AND p.polwithcheck IS NOT NULL)
             FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
             WHERE n.nspname='eppm' AND c.relkind='r' AND has_table_privilege('eppm_runtime',c.oid,'INSERT')""").fetchall()
-    policy_authorized = {'project_plan', 'project_plan_event',
+    policy_authorized = {'project_plan', 'project_plan_event', 'project_financial_transaction', 'pool_staffing_projection',
                          'task_dependencies', 'task_tag', 'project_dependency'}
     assert policy_authorized <= {name for name, _, _, _ in tables}
-    assert all(rls and (guarded or name in policy_authorized and policy)
-               for name, rls, guarded, policy in tables)
+    unguarded = [name for name, rls, guarded, policy in tables
+                 if not (rls and (guarded or name in policy_authorized and policy))]
+    assert not unguarded
 
 
 def test_pooled_reuse_discards_temporary_copies_of_another_actors_data(portfolio):

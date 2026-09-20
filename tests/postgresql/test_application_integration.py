@@ -39,8 +39,6 @@ class TestApplicationIntegration(unittest.TestCase):
             project_id=new_pid,
             name="Cloud Migration",
             status="In Progress",
-            planned_budget=100000,
-            actual_budget=40000,
             dynamic_attributes={"PRM_CLD": "GCP"},
         )
 

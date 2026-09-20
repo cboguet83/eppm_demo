@@ -97,7 +97,7 @@ def test_portfolio_cache_separates_databases_and_refreshes_after_project_writes(
             page = _load_portfolio_page(service.revision(), columns, {}, 0, service)
             assert page['rows'][0]['name'] == expected
         before = first.revision()
-        create_project_service(runtime, access=access).update_project(1, "Updated", "Draft", 0, 0, {})
+        create_project_service(runtime, access=access).update_project(1, "Updated", "Draft", {})
         assert first.revision() != before
         assert _load_portfolio_page(first.revision(), columns, {}, 0, first)['rows'][0]['name'] == 'Updated'
     finally:

@@ -57,3 +57,32 @@ def test_no_approved_budget_fails_without_writes(authorized):
         with pytest.raises(ValueError, match='No active approved'):
             seed_financial_transactions(connection, today=date(2026, 9, 18), seed=1, apply=True)
         assert connection.execute('SELECT count(*) FROM eppm.project_financial_transaction').fetchone() == (0,)
+
+
+def test_project_scope_leaves_other_projects_spending_untouched(authorized):
+    with psycopg.connect(authorized.setup.operator_url) as connection:
+        _install_snapshot(connection, 'Scoped', 'Approved', (BudgetRow('A', {2026: Decimal('1000')}),))
+        connection.execute("INSERT INTO eppm.wbs(code) VALUES('A')")
+        identity = connection.execute("SELECT id FROM eppm.wbs WHERE code='A'").fetchone()[0]
+        connection.execute('INSERT INTO eppm.project_wbs VALUES(1,%s,50),(2,%s,50)', (identity, identity))
+        result = seed_financial_transactions(connection, today=date(2026, 9, 19), seed=18,
+                                            apply=True, project_ids=(2,))
+        assert result['projects'] == 1
+        assert connection.execute('SELECT DISTINCT project_id FROM eppm.project_financial_transaction').fetchall() == [(2,)]
+        assert seed_financial_transactions(connection, today=date(2026, 9, 19), seed=18,
+                                          apply=True, project_ids=(2,))['adjustment_count'] == 0
+
+
+def test_budget_rounding_to_zero_clears_prior_spending_without_deleting_records(authorized):
+    with psycopg.connect(authorized.setup.operator_url) as connection:
+        _install_snapshot(connection, 'Zero', 'Approved', (BudgetRow('A', {2026: Decimal(0)}),))
+        wbs = connection.execute("INSERT INTO eppm.wbs(code) VALUES('A') RETURNING id").fetchone()[0]
+        connection.execute('INSERT INTO eppm.project_wbs VALUES(1,%s,100)', (wbs,))
+    finance = service(authorized)
+    identity = finance.create(transaction(wbs='A', amount=Decimal('100')))
+    with psycopg.connect(authorized.setup.operator_url) as connection:
+        result = seed_financial_transactions(connection, today=date(2026, 9, 19), seed=18, apply=True)
+        assert result['budget_cells'] == result['adjustment_count'] == 1
+        assert connection.execute('SELECT sum(amount_base_currency) FROM eppm.project_financial_transaction WHERE project_id=1').fetchone() == (0,)
+        assert seed_financial_transactions(connection, today=date(2026, 9, 19), seed=18)['adjustment_count'] == 0
+    assert finance.get(1, identity).amount == Decimal('100')

@@ -121,7 +121,7 @@ def matches(project: DashboardProject, filters: dict[str, list[str]], match_all:
             continue
         actual = {value.casefold() for value in project['fields'].get(key, [])}
         wanted = {value.casefold() for value in selected}
-        if match_all and key not in {'status', 'manager', 'org_manager', 'team', 'service', 'division', 'org_team', 'pool'}:
+        if match_all and key not in {'status', 'strategic_priority', 'manager', 'org_manager', 'team', 'service', 'division', 'org_team', 'pool'}:
             if not wanted <= actual:
                 return False
         elif not wanted & actual:

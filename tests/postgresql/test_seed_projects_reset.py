@@ -27,7 +27,7 @@ def test_curated_native_projects_have_exact_budgets_and_valid_dependency_owners(
     operator = OperatorDatabase(pg_database.operator_url)
     operator.run(install, write=True)
     with psycopg.connect(pg_database.operator_url) as connection:
-        assert connection.execute('SELECT count(*),sum(planned_budget),sum(actual_budget) FROM eppm.project').fetchone() == (5, Decimal('1250000'), Decimal('842000'))
+        assert connection.execute('SELECT count(*),count(strategic_priority_id) FROM eppm.project').fetchone() == (5, 5)
         assert connection.execute('SELECT count(*) FROM eppm.project_task').fetchone() == (15,)
         assert connection.execute('SELECT count(*) FROM eppm.task_dependencies').fetchone() == (14,)
         assert connection.execute('SELECT count(*) FROM eppm.task_dependencies WHERE predecessor_project_id IS NOT NULL').fetchone() == (4,)
@@ -37,7 +37,7 @@ def test_curated_native_projects_have_exact_budgets_and_valid_dependency_owners(
 
 
 @pytest.mark.parametrize('fields', [
-    {'name': ' '}, {'name': 'Invalid amount', 'planned_budget': 'NaN'},
+    {'name': ' '}, {'name': 'Invalid priority', 'strategic_priority_id': 999},
     {'name': 'Invalid ID', 'project_id': 0}, {'name': 'Invalid ID', 'project_id': True},
     {'name': 'Unknown template', 'project_type_id': 999},
 ])
@@ -58,11 +58,11 @@ def test_operator_creation_applies_required_template_defaults_and_advances_expli
     with pytest.raises(ValueError, match='code_line'):
         operator.run(lambda connection: create_seed_project(connection, name='Missing required line', project_type_id=infrastructure), write=True)
     identity = operator.run(lambda connection: create_seed_project(connection, project_id=100, name='Validated',
-        planned_budget='9007199254740993.01', project_type_id=infrastructure, dynamic_attributes={'PRM_017': '1'}), write=True)
+        strategic_priority_id=2, project_type_id=infrastructure, dynamic_attributes={'PRM_017': '1'}), write=True)
     assert identity == 100
     assert operator.run(lambda connection: create_seed_project(connection, name='Next'), write=True) == 101
     with psycopg.connect(pg_database.operator_url) as connection:
-        assert connection.execute('SELECT planned_budget FROM eppm.project WHERE id=100').fetchone() == (Decimal('9007199254740993.01'),)
+        assert connection.execute('SELECT strategic_priority_id FROM eppm.project WHERE id=100').fetchone() == (2,)
         assert 'railway' in connection.execute("SELECT text_value FROM eppm.project_property_value WHERE project_id=100 AND param_id='PRM_011'").fetchone()[0]
 
 

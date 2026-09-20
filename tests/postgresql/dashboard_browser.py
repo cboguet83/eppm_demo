@@ -61,7 +61,9 @@ def popup_server(authorized, tmp_path, request):
                            ('First line\nSecond line', blocker))
     finance = create_finance_service(RuntimeResources(authorized.database, authorized.key), access=authorized.binding(4).access)
     finance.today = lambda: date(2026, 6, 1)
-    finance.save([{'code': 'A', 'amounts': {'2026': '100.01', '2027': '200'}}],
+    amounts = ({'2026': '100010', '2027': '200000'} if request.param == 'shared-budget'
+               else {'2026': '100.01', '2027': '200'})
+    finance.save([{'code': 'A', 'amounts': amounts}],
                  base_id=None, name='Approved plan', status='Approved', year=2026)
     with native_server(authorized, tmp_path, _SCREEN) as server:
         yield server

@@ -116,7 +116,7 @@ def test_representative_deployed_restart_and_restore_preserve_truth_access_and_r
             snapshot_id = approved['snapshot']
             values = _probe_values(data, administrator, snapshot_id)
             expected = operator_json(deployment, WARM, stage='source cache calculation', variables=values)
-            assert expected['money'] == ['9007199254740993.1234567890123456789', '0.000000000000000000123456789']
+            assert expected['money'] == ['9007199254740993.01', '0.01']
             _planning_page(admin_page, deployment, data)
             _assert_browser_access(administrator, deployment, data, snapshot_id, scoped=False)
             _assert_browser_access(viewer, deployment, data, snapshot_id, scoped=True)

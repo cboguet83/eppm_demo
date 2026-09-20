@@ -40,6 +40,8 @@ def discover_migrations(directory: Path = MIGRATION_DIRECTORY) -> tuple[Migratio
         if not source.strip():
             raise MigrationError("Migration files cannot be empty.")
         checksum_content = content
+        if path.name == '0063_project_strategic_priority.sql':
+            checksum_content += Path(__file__).with_name('project_priority_migration.py').read_bytes()
         if path.name == '0040_pool_hierarchy.sql':
             checksum_content += Path(__file__).with_name('pool_hierarchy_migration.py').read_bytes()
         if path.name == '0041_project_plans.sql':
@@ -109,6 +111,9 @@ def migrate(url: str, *, directory: Path = MIGRATION_DIRECTORY) -> tuple[str, ..
                 for migration in migrations[applied:]:
                     current_name = migration.name
                     connection.execute(migration.sql)
+                    if migration.name == '0063_project_strategic_priority.sql':
+                        from app.infrastructure.postgresql.project_priority_migration import migrate_project_priority
+                        migrate_project_priority(connection)
                     if migration.name == '0056_direct_employee_priority.sql':
                         from app.infrastructure.postgresql.direct_priority_migration import refresh_direct_priority
                         refresh_direct_priority(connection)

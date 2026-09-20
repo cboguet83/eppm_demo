@@ -20,10 +20,10 @@ def test_past_current_and_future_ranges_and_consistent_wbs_distribution():
         elif year == 2026:
             total = target.actual + target.commitment
             assert amount * Decimal('.8') <= total <= amount
-            assert Decimal('.2') <= target.actual / total <= Decimal('.8')
+            assert Decimal('.3') <= target.actual / total <= Decimal('.8')
         else:
             assert target.actual == 0
-            assert 0 <= target.commitment <= amount * Decimal('.75')
+            assert amount * Decimal('.6') <= target.commitment <= amount * Decimal('.95')
         assert target.actual.as_tuple().exponent == target.commitment.as_tuple().exponent == -2
         if target.budget.wbs == 'B':
             first = lookup[target.budget.project_id, 'A', year]

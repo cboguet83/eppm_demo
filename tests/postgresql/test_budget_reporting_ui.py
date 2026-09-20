@@ -1,5 +1,6 @@
 """Decimal budget rules, native PostgreSQL reporting, and budget screen regressions."""
 
+from tests.postgresql.financial_fixtures import create_financed_project
 from decimal import Decimal
 
 import psycopg
@@ -93,8 +94,8 @@ def test_monetary_column_statistics_use_decimal_mean():
 
 def test_native_budget_report_and_portfolio_totals_share_decimal_rules(runtime, access, authorized):
     projects = create_project_service(runtime, access=access)
-    projects.create_project(name="Small A", planned_budget='0.1', actual_budget='0.01')
-    projects.create_project(name="Small B", planned_budget='0.2', actual_budget='0.02')
+    create_financed_project(projects, name="Small A", planned_budget='0.1', actual_budget='0.01')
+    create_financed_project(projects, name="Small B", planned_budget='0.2', actual_budget='0.02')
     report = create_budget_service(runtime, access=access).get_report()
     assert report.metrics == create_portfolio_service(runtime, access=access).get_metrics()
     assert report.metrics.total_planned == Decimal("0.3")
@@ -102,7 +103,7 @@ def test_native_budget_report_and_portfolio_totals_share_decimal_rules(runtime, 
     assert report.rows[0].project.amounts.planned_budget == Decimal("0.1")
     with psycopg.connect(authorized.setup.operator_url) as connection:
         assert (
-            connection.execute("SELECT pg_typeof(planned_budget)::text FROM eppm.project LIMIT 1").fetchone()[0]
+            connection.execute("SELECT pg_typeof(amount_base_currency)::text FROM eppm.project_financial_transaction LIMIT 1").fetchone()[0]
             == "numeric"
         )
     facet = PostgresPortfolioReader(runtime.database, runtime.key, access=access).get_facet(
@@ -117,8 +118,8 @@ def test_budget_report_rows_and_totals_share_a_concurrent_snapshot(runtime, acce
     import app.infrastructure.postgresql.budgets as adapter
 
     projects = create_project_service(runtime, access=access)
-    projects.create_project(name="First", planned_budget=10, actual_budget=1)
-    projects.create_project(name="Second", planned_budget=20, actual_budget=2)
+    create_financed_project(projects, name="First", planned_budget=10, actual_budget=1)
+    create_financed_project(projects, name="Second", planned_budget=20, actual_budget=2)
     convert = adapter.BudgetAmounts
     changed = False
 
@@ -127,7 +128,7 @@ def test_budget_report_rows_and_totals_share_a_concurrent_snapshot(runtime, acce
         if not changed:
             changed = True
             with psycopg.connect(authorized.setup.operator_url) as writer:
-                writer.execute("UPDATE eppm.project SET actual_budget=200 WHERE name='Second'")
+                writer.execute("UPDATE eppm.project_financial_transaction SET amount=200,amount_base_currency=200 WHERE financial_record_type='ACTUAL' AND project_id=(SELECT id FROM eppm.project WHERE name='Second')")
         return convert(planned, actual)
 
     with monkeypatch.context() as patch:
@@ -156,8 +157,8 @@ def render_budget(runtime, access):
 
 def test_budget_screen_renders_integer_project_ids_and_computed_health(runtime, access):
     projects = create_project_service(runtime, access=access)
-    first = projects.create_project(name="On track", planned_budget=100, actual_budget=10)
-    second = projects.create_project(name="Near", planned_budget=100, actual_budget=85)
+    first = create_financed_project(projects, name="On track", planned_budget=100, actual_budget=10)
+    second = create_financed_project(projects, name="Near", planned_budget=100, actual_budget=85)
     app = render_budget(runtime, access)
     assert not app.exception
     assert len(app.get("plotly_chart")) == 3
@@ -170,7 +171,7 @@ def test_budget_screen_renders_integer_project_ids_and_computed_health(runtime, 
 
 
 def test_budget_screen_displays_overspend_without_infinite_zero_budget_percentage(runtime, access):
-    create_project_service(runtime, access=access).create_project(
+    create_financed_project(create_project_service(runtime, access=access),
         name="No budget", planned_budget=0, actual_budget=5
     )
     report = create_budget_service(runtime, access=access).get_report()

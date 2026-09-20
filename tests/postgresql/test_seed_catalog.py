@@ -53,7 +53,7 @@ def test_native_demo_catalog_has_current_definitions_relationships_and_editable_
     operator = OperatorDatabase(pg_database.operator_url)
     operator.run(install, write=True)
     with psycopg.connect(pg_database.operator_url) as connection:
-        assert connection.execute('SELECT count(*) FROM eppm.schema_parameters').fetchone() == (31,)
+        assert connection.execute('SELECT count(*) FROM eppm.schema_parameters').fetchone() == (30,)
         assert connection.execute('SELECT count(*) FROM eppm.function').fetchone() == (60,)
         assert connection.execute('SELECT count(*) FROM eppm.employee').fetchone() == (50,)
         assert connection.execute('SELECT count(*) FROM eppm.team_function').fetchone() == (31,)

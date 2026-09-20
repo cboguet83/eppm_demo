@@ -24,7 +24,6 @@ def numeric_business(business):
     project = projects.get_project_by_id(1)
     projects.update_project(
         project_id=project.id, name=project.name, status=project.status,
-        planned_budget=project.planned_budget, actual_budget=project.actual_budget,
         project_type_id=project.project_type_id, function_id=project.function_id,
         dynamic_attributes=project.dynamic_attributes | {"quantity": Decimal(PRECISE)},
     )

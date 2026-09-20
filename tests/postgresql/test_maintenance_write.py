@@ -28,8 +28,8 @@ def test_native_pre_reset_archive_restores_original_projects_and_exact_budgets(p
     assert len(archives) == 1
     restore_database(archives[0], restore_target.operator_url, tools=clients)
     with psycopg.connect(restore_target.operator_url) as connection:
-        assert connection.execute('SELECT count(*),sum(planned_budget),sum(actual_budget) FROM eppm.project').fetchone() == (
-            5, Decimal('1250000'), Decimal('842000'),
+        assert connection.execute('SELECT count(*),count(strategic_priority_id) FROM eppm.project').fetchone() == (
+            5, 5,
         )
         assert connection.execute('SELECT count(*) FROM eppm.project_task').fetchone() == (15,)
         assert connection.execute('SELECT count(*) FROM eppm.employee').fetchone() == (50,)

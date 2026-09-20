@@ -53,7 +53,6 @@ class TestIntegration(unittest.TestCase):
         expected_allowed = {
             "phase",
             "code_line",
-            "strategic_priority",
             "category",
             "category_tags",
             "complexity",

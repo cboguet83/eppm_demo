@@ -894,7 +894,18 @@
     "peak_day": "Peak day",
     "total_overallocation": "Total overallocation",
     "total_allocation": "Total allocation",
-    "total_capacity_short": "Minimum capacity in period"
+    "total_capacity_short": "Minimum capacity in period",
+    "actual": "Actual",
+    "commitment": "Commitment",
+    "actual_ratio": "Actual / Approved Budget",
+    "committed_ratio": "(Actual + Commitment) / Approved Budget",
+    "financial_help": "Filtered projects, {start}–{end}, in EUR. Uses the latest approved budget with project WBS shares. N/A means the approved budget is missing or zero.",
+    "late_projects": "Late projects",
+    "late_help": "Projects with an active-plan task ending before today and less than 100% complete, among all projects in the dashboard filters.",
+    "late_count": "{count} of {total} projects",
+    "not_available": "N/A",
+    "fte_unit": "FTE",
+    "quarter_prefix": "Q"
   },
   "pool_exceptions": {
     "title": "Capacity exceptions",

@@ -1,5 +1,12 @@
 # Dashboard
 
+Dashboard chart tooltips and indicator help follow the selected application
+language (English, French, German, Luxembourgish or Portuguese), including
+Actual/Commitment labels, financial-ratio explanations, late-project definitions,
+and resource quarter/FTE labels. Changing language refreshes these labels without
+changing filters or financial values. User-entered project, pool and budget names
+retain their original text.
+
 After sign-in, Dashboard opens by default. It contains only projects you may read.
 Use Advanced filters below Resource pools, the four manager/team filters, or the resource-pool filter; selections within a fixed
 filter are alternatives, while different filters are combined. Clear all resets

@@ -256,8 +256,6 @@ class TestResourcePools(unittest.TestCase):
             project_id=9,
             name="Fallback Project",
             status="In Progress",
-            planned_budget=0,
-            actual_budget=0.0,
             dynamic_attributes={},
         )
         self.pool_repo.create_assignment(
@@ -317,8 +315,6 @@ class TestResourcePools(unittest.TestCase):
             project_id=11,
             name="Long Period Project",
             status="In Progress",
-            planned_budget=0,
-            actual_budget=0.0,
             dynamic_attributes={},
         )
         self.pool_repo.create_assignment(
@@ -375,8 +371,6 @@ class TestResourcePools(unittest.TestCase):
             project_id=10,
             name="Alpha Project",
             status="In Progress",
-            planned_budget=100000,
-            actual_budget=20000.0,
             dynamic_attributes={},
         )
         t1_id = self.milestone_repo.create_milestone(
@@ -453,8 +447,6 @@ class TestResourcePools(unittest.TestCase):
             project_id=20,
             name="Beta Project",
             status="In Progress",
-            planned_budget=50000,
-            actual_budget=10000.0,
             dynamic_attributes={},
         )
         t_id = self.milestone_repo.create_milestone(
@@ -495,8 +487,6 @@ class TestResourcePools(unittest.TestCase):
             project_id=30,
             name="Gamma Project",
             status="In Progress",
-            planned_budget=80000,
-            actual_budget=0.0,
             dynamic_attributes={},
         )
 
@@ -542,8 +532,6 @@ class TestResourcePools(unittest.TestCase):
             project_id=40,
             name="Project Gamma",
             status="Draft",
-            planned_budget=20000,
-            actual_budget=0.0,
             dynamic_attributes={},
         )
         t1_id = self.milestone_repo.create_milestone(
@@ -638,8 +626,6 @@ class TestResourcePools(unittest.TestCase):
             project_id=50,
             name="Architecture Revamp",
             status="In Progress",
-            planned_budget=100000,
-            actual_budget=0.0,
             dynamic_attributes={},
         )
         # Capacity = 2.0 FTE
@@ -737,8 +723,6 @@ class TestResourcePools(unittest.TestCase):
             project_id=60,
             name="PMO Transformation",
             status="In Progress",
-            planned_budget=50000,
-            actual_budget=0.0,
             dynamic_attributes={},
         )
         t_id = self.milestone_repo.create_milestone(
@@ -790,8 +774,6 @@ class TestResourcePools(unittest.TestCase):
             project_id=70,
             name="Interval Initiative",
             status="In Progress",
-            planned_budget=40000,
-            actual_budget=0.0,
             dynamic_attributes={},
         )
 
@@ -844,8 +826,6 @@ class TestResourcePools(unittest.TestCase):
             project_id=80,
             name="Timeline Initiative",
             status="In Progress",
-            planned_budget=75000,
-            actual_budget=0.0,
             dynamic_attributes={},
         )
         # Create a task defining project bounds from 2026-06-01 to 2026-06-30
@@ -919,8 +899,6 @@ class TestResourcePools(unittest.TestCase):
             project_id=81,
             name="Cloud Migration Project",
             status="In Progress",
-            planned_budget=120000,
-            actual_budget=0.0,
             dynamic_attributes={},
         )
         t_id_jan = self.milestone_repo.create_milestone(

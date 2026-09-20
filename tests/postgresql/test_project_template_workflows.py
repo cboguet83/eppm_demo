@@ -31,7 +31,7 @@ def database(runtime: RuntimeResources, access: BusinessAccess) -> RuntimeResour
     """Create a connected four-project schedule through native business services."""
     projects = create_project_service(runtime, access=access)
     for identity, name in enumerate(("Selected", "Predecessor", "Successor"), 1):
-        projects.update_project(identity, name, "Draft", 0, 0, {})
+        projects.update_project(identity, name, "Draft", {})
     assert projects.create_project(name="Unrelated") == 4
     planning = create_planning_service(runtime, access=access)
     for project in range(1, 5):
@@ -111,7 +111,7 @@ def test_legacy_predecessor_exports_preserve_local_and_external_dependency_refer
 def test_replacement_clears_old_schedule_and_allocations_but_preserves_project_links(database: RuntimeResources, access: BusinessAccess, authorized: AuthorizedFixture) -> None:
     projects = create_project_service(database, access=access)
     project = projects.get_project_by_id(1)
-    projects.update_project(1, project.name, project.status, 0, 0, {}, custom_links=[{"url":"https://example.test", "alias":"Useful"}])
+    projects.update_project(1, project.name, project.status, {}, custom_links=[{"url":"https://example.test", "alias":"Useful"}])
     service = create_planning_service(database, access=access)
     assert service.replace_project_template(1, VALID) == 2
     tasks = service.get_milestones_by_project(1)
@@ -240,10 +240,10 @@ def test_project_creation_and_update_save_custom_links_atomically(database: Runt
     project = service.create_project(name="With links", custom_links=[{"url":"https://example.test", "alias":"Docs"}])
     assert service.get_links(project)[0]["alias"] == "Docs"
     with pytest.raises(ValueError):
-        service.update_project(project, "Must not change", "Draft", 0, 0, {}, custom_links=[{"url":"bad", "alias":"Bad"}])
+        service.update_project(project, "Must not change", "Draft", {}, custom_links=[{"url":"bad", "alias":"Bad"}])
     assert service.get_project_by_id(project).name == "With links"
     assert service.get_links(project)[0]["alias"] == "Docs"
-    service.update_project(project, "Edited", "Draft", 0, 0, {}, custom_links=[{"url":"https://example.test/new", "alias":"New"}])
+    service.update_project(project, "Edited", "Draft", {}, custom_links=[{"url":"https://example.test/new", "alias":"New"}])
     assert service.get_links(project)[0]["alias"] == "New"
     with pytest.raises(ValueError):
         service.create_project(name="Must not exist", custom_links=[{"url":"bad", "alias":"Bad"}])

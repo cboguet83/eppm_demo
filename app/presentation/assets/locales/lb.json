@@ -895,7 +895,18 @@
     "peak_day": "Dag vum Maximum",
     "total_overallocation": "Total Iwwerbelaaschtung",
     "total_allocation": "Total Zoudeelung",
-    "total_capacity_short": "Minimal Kapazitéit am Zäitraum"
+    "total_capacity_short": "Minimal Kapazitéit am Zäitraum",
+    "actual": "Istkäschten",
+    "commitment": "Engagementer",
+    "actual_ratio": "Istkäschten / Geneemegte Budget",
+    "committed_ratio": "(Istkäschten + Engagementer) / Geneemegte Budget",
+    "financial_help": "Gefiltert Projeten, {start}–{end}, an EUR. Benotzt de leschte geneemegte Budget no de WBS-Undeeler vum Projet. n. v. bedeit, datt de geneemegte Budget feelt oder null ass.",
+    "late_projects": "Verspéit Projeten",
+    "late_help": "Projeten mat enger Aufgab am aktive Plang, där hiren Enndatum virun haut läit an déi zu manner wéi 100 % ofgeschloss ass, ënner alle Projete vun den Dashboard-Filteren.",
+    "late_count": "{count} vun {total} Projeten",
+    "not_available": "n. v.",
+    "fte_unit": "VZÄ",
+    "quarter_prefix": "Q"
   },
   "pool_exceptions": {
     "title": "Kapazitéitsausnamen",

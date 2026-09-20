@@ -1,6 +1,7 @@
 """Native bounded portfolio reads, exact facets and current scope enforcement."""
 
 from concurrent.futures import ThreadPoolExecutor
+from tests.postgresql.financial_fixtures import set_project_amounts
 from decimal import Decimal, localcontext
 from time import perf_counter
 from threading import Event
@@ -42,7 +43,9 @@ def portfolio(authorized):
                            "('date','Date','DATE',true),('tags','Tags','TAGS',true)")
         connection.execute("INSERT INTO eppm.project_type_property(project_type_id,param_id) VALUES (2,'phase')")
         connection.execute("INSERT INTO eppm.project(id,name) SELECT id,'Project' FROM generate_series(4,255) id")
-        connection.execute("UPDATE eppm.project SET name='Project ' || lpad(id::text,3,'0'),planned_budget=id,project_type_id=CASE WHEN id%2=1 THEN 2 ELSE 1 END")
+        connection.execute("UPDATE eppm.project SET name='Project ' || lpad(id::text,3,'0'),project_type_id=CASE WHEN id%2=1 THEN 2 ELSE 1 END")
+        for identity in range(1, 256):
+            set_project_amounts(connection, identity, identity)
         connection.execute("INSERT INTO eppm.project_property_value(project_id,param_id,kind,text_value) "
                            "SELECT id,'phase','text',CASE WHEN id>200 THEN 'Late' ELSE 'Early' END FROM eppm.project WHERE id%2=1")
         connection.execute("INSERT INTO eppm.project_property_value(project_id,param_id,kind,number_value) "
@@ -123,18 +126,18 @@ def test_scope_is_applied_before_counts_pages_facets_details_and_metrics(portfol
 
 
 def test_numeric_facets_and_filters_preserve_exact_decimal_wire_values(portfolio):
-    amount = Decimal('9007199254740993.01234567890123456789')
+    amount = Decimal('9007199254740993.01')
     with psycopg.connect(portfolio.setup.operator_url) as connection:
-        connection.execute('UPDATE eppm.project SET planned_budget=%s,actual_budget=%s WHERE id=1', (amount, amount))
+        set_project_amounts(connection, 1, amount, amount)
     browse = service(portfolio, 1)
     with localcontext() as context:
         context.prec = 4
         metrics = browse.get_metrics()
-        assert str(metrics.total_planned) == '9007199254740995.01234567890123456789'
+        assert str(metrics.total_planned) == '9007199254740995.01'
         assert metrics.variance == Decimal(2)
         stats = dict(browse.get_facet(COLUMNS, {}, 'planned_budget')['stats'])
         assert stats['Maximum'] == amount
-        assert str(stats['Average']) == '4503599627370497.506172839450617283945'
+        assert str(stats['Average']) == '4503599627370497.505'
     for value in (amount, str(amount)):
         page = browse.get_page(COLUMNS, {'filters': {'planned_budget': {'values': [value]}}})
         assert [row['project_id'] for row in page['rows']] == [1]
@@ -247,18 +250,20 @@ def test_storage_outage_is_safe_and_never_returns_a_cached_scope(portfolio, capl
 
 def test_numeric_zero_nulls_and_case_insensitive_order_match_existing_grid(portfolio):
     with psycopg.connect(portfolio.setup.operator_url) as connection:
-        connection.execute("UPDATE eppm.project SET name=CASE id WHEN 1 THEN 'zebra' WHEN 2 THEN 'Alpha' ELSE 'alpha' END,"
-                           'planned_budget=CASE id WHEN 1 THEN NULL WHEN 2 THEN 0 ELSE 10 END WHERE id<=3')
+        connection.execute("UPDATE eppm.project SET name=CASE id WHEN 1 THEN 'zebra' WHEN 2 THEN 'Alpha' ELSE 'alpha' END WHERE id<=3")
+        connection.execute('DELETE FROM eppm.project_financial_transaction WHERE project_id<=3')
+        set_project_amounts(connection, 2, 0)
+        set_project_amounts(connection, 3, 10)
         connection.execute("UPDATE eppm.project_property_value SET number_value=0 WHERE project_id=1 AND param_id='number'")
     browse = service(portfolio, 1)
     assert [row['project_id'] for row in browse.get_page(COLUMNS, {'sort': {'column': 'planned_budget'}})['rows']] == [1, 2]
-    assert [row['project_id'] for row in browse.get_page(COLUMNS, {'sort': {'column': 'planned_budget', 'direction': 'desc'}})['rows']] == [2, 1]
+    assert [row['project_id'] for row in browse.get_page(COLUMNS, {'sort': {'column': 'planned_budget', 'direction': 'desc'}})['rows']] == [1, 2]
     assert browse.get_page(COLUMNS, {'search': 'ALPHA'})['rows'][0]['project_id'] == 2
-    assert browse.get_page(COLUMNS, {'filters': {'planned_budget': {'values': ['']}}})['rows'][0]['project_id'] == 1
-    assert browse.get_page(COLUMNS, {'filters': {'planned_budget': {'values': [False]}}})['rows'][0]['project_id'] == 2
+    assert browse.get_page(COLUMNS, {'filters': {'planned_budget': {'values': ['']}}})['rows'] == []
+    assert browse.get_page(COLUMNS, {'filters': {'planned_budget': {'values': [False]}}})['rows'][0]['project_id'] == 1
     assert type(browse.get_page(COLUMNS, {'search': 'zebra'})['rows'][0]['property:number']) is Decimal
     stats = dict(browse.get_facet(COLUMNS, {}, 'planned_budget')['stats'])
-    assert stats['Empty'] == 1 and stats['Minimum'] == stats['Average'] == stats['Maximum'] == Decimal(0)
+    assert stats['Empty'] == 0 and stats['Minimum'] == stats['Average'] == stats['Maximum'] == Decimal(0)
     admin = service(portfolio)
     filtered = {'filters': {'project_id': {'values': [1, 2, 3]}}, 'sort': {'column': 'name'}}
     assert [row['project_id'] for row in admin.get_page(COLUMNS, filtered)['rows']] == [2, 3, 1]
@@ -268,14 +273,14 @@ def test_missing_display_metadata_keeps_text_facet_contract_and_json_parsing_is_
     browse = service(portfolio, 1)
     browse.get_page(COLUMNS, {})
     facet = browse.get_facet([], {}, 'planned_budget')
-    assert facet['format'] == 'text' and dict(facet['stats'])['Most common'] == '1 (1)'
+    assert facet['format'] == 'text' and dict(facet['stats'])['Most common'] == '1.00 (1)'
     assert type(portfolio.query('SELECT %s::jsonb', (Jsonb({'value': 1.5}),))[0][0]['value']) is float
     assert browse.revision()
 
 
 def test_large_portfolio_keeps_pages_and_facets_bounded_without_hydrating_all_values(portfolio, record_property):
     with psycopg.connect(portfolio.setup.operator_url) as connection:
-        connection.execute("INSERT INTO eppm.project(id,name,planned_budget) SELECT id,'Large ' || id,id FROM generate_series(256,10001) id")
+        connection.execute("INSERT INTO eppm.project(id,name) SELECT id,'Large ' || id FROM generate_series(256,10001) id")
         connection.execute("INSERT INTO eppm.project_property_value(project_id,param_id,kind,number_value) "
                            "SELECT id,'number','number',id+0.125 FROM eppm.project WHERE id>255")
     browse = service(portfolio)

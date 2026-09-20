@@ -134,8 +134,8 @@ def test_ten_distinct_editors_can_save_independent_project_titles(
             project = projects[index]
             return services[index].update_project(
                 project_id=project.id, name=f"Concurrent title {index}", status=project.status,
-                planned_budget=project.planned_budget, actual_budget=project.actual_budget,
                 dynamic_attributes=properties[index], function_id=project.function_id,
+                strategic_priority_id=project.strategic_priority_id,
                 project_type_id=project.project_type_id, custom_links=[], wbs_allocations=[],
             )
 

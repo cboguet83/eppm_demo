@@ -85,7 +85,7 @@ class TestDatabaseContracts(unittest.TestCase):
         self.assertEqual(count, 5)
 
     def test_seed_creates_all_categories_parameters_and_enums(self) -> None:
-        """Verify categories, 31 parameters, discrete enums and project-manager references."""
+        """Verify categories, 30 parameters, native priority and manager references."""
         migrate(self.setup.operator_url)
         self.maintenance.seed_defaults()
 
@@ -98,10 +98,10 @@ class TestDatabaseContracts(unittest.TestCase):
             expected_groups = ["basic info", "scoping", "localization", "useful links", "classification"]
             self.assertEqual(groups, expected_groups)
 
-            # Verify all 31 configured parameters independently of seed constants.
+            # Verify all 30 configured parameters independently of seed constants.
             cursor.execute("SELECT param_id, param_name, param_type, mandatory, alias FROM eppm.schema_parameters ORDER BY param_id")
             params = cursor.fetchall()
-            self.assertEqual(len(params), 31)
+            self.assertEqual(len(params), 30)
 
             param_names = {r[1] for r in params}
             expected_param_names = {
@@ -110,7 +110,7 @@ class TestDatabaseContracts(unittest.TestCase):
                 "start_date", "stop_Date", "lot", "phase",
                 "code_station", "code_line", "lat", "long", "section",
                 "station", "pk_start", "pk_stop", "acc_link", "pb_link",
-                "orga_link", "strategic_priority", "category", "category_tags", "complexity", "public_url", "delivery_channels"
+                "orga_link", "category", "category_tags", "complexity", "public_url", "delivery_channels"
             }
             self.assertEqual(param_names, expected_param_names)
 
@@ -139,9 +139,9 @@ class TestDatabaseContracts(unittest.TestCase):
             category_opts = [r[0] for r in cursor.fetchall()]
             self.assertEqual(category_opts, ["categ1", "categ2", "categ3"])
 
-            cursor.execute("SELECT option_value FROM eppm.schema_param_options WHERE param_id='PRM_027' ORDER BY display_order")
+            cursor.execute("SELECT label FROM eppm.strategic_priority_translation t JOIN eppm.strategic_priority p ON p.id=t.strategic_priority_id WHERE locale='en' ORDER BY display_order")
             strat_opts = [r[0] for r in cursor.fetchall()]
-            self.assertEqual(strat_opts, ["Critical", "High", "Medium", "Low"])
+            self.assertEqual(strat_opts, ["Strategic", "High", "Medium", "Low"])
 
             cursor.execute("SELECT COUNT(*) FROM eppm.schema_param_options WHERE param_id='PRM_016'")
             station_count = cursor.fetchone()[0]
@@ -171,7 +171,7 @@ class TestDatabaseContracts(unittest.TestCase):
                 "LEFT JOIN eppm.resource_pool parent ON parent.id=pool.parent_pool_id ORDER BY pool.name"
             ).fetchall()
             cursor.execute(
-                "INSERT INTO eppm.project (id, name, status, planned_budget, actual_budget) VALUES (999, 'Dummy Custom Project', 'Draft', 1000, 500)"
+                "INSERT INTO eppm.project (id, name, status) VALUES (999, 'Dummy Custom Project', 'Draft')"
             )
             cursor.execute(
                 "INSERT INTO eppm.schema_groups (id, group_name, display_order) VALUES (999, 'custom_group', 999)"
@@ -202,7 +202,7 @@ class TestDatabaseContracts(unittest.TestCase):
             cursor.execute("SELECT COUNT(*) FROM eppm.schema_groups")
             self.assertEqual(cursor.fetchone()[0], 5)
             cursor.execute("SELECT COUNT(*) FROM eppm.schema_parameters")
-            self.assertEqual(cursor.fetchone()[0], 31)
+            self.assertEqual(cursor.fetchone()[0], 30)
             cursor.execute("SELECT COUNT(*) FROM eppm.function")
             self.assertEqual(cursor.fetchone()[0], 60)
             cursor.execute("SELECT COUNT(*) FROM eppm.employee")

@@ -9,6 +9,7 @@ import pytest
 
 from app.main import create_finance_service
 from app.runtime import RuntimeResources
+from app.presentation.i18n import load_locale_catalog
 from tests.postgresql.browser import native_server
 from tests.postgresql.dashboard_browser import _SCREEN
 from tests.postgresql.test_financial_transactions import service
@@ -30,7 +31,9 @@ def test_financial_stacks_legend_ratios_and_chart_axis_padding(authorized, tmp_p
                  base_id=None, name='Delivery budget', status='Approved', year=2026)
     for kind, amount in [('ACTUAL', '20'), ('COMMITMENT', '130')]:
         service(authorized).create(transaction(financial_record_type=kind, amount=Decimal(amount)))
-    with native_server(authorized, tmp_path, _SCREEN) as server, sync_playwright() as playwright:
+    screen = _SCREEN.replace("set_current_locale('en')",
+                             "set_current_locale(st.selectbox('Test language', ['en', 'fr', 'de', 'lb', 'pt']))")
+    with native_server(authorized, tmp_path, screen) as server, sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
             page = server.new_page(browser, viewport={'width': 1600, 'height': 1200})
@@ -44,8 +47,8 @@ def test_financial_stacks_legend_ratios_and_chart_axis_padding(authorized, tmp_p
             point_box = chart.locator('circle').first.bounding_box()
             assert abs(bar_box['x'] + bar_box['width'] / 2 - point_box['x'] - point_box['width'] / 2) < 1
             chart.locator('[data-financial-type=actual]').hover()
-            expect(chart.get_by_role('tooltip')).to_contain_text('Actual: 0.02 kEUR')
-            expect(chart.get_by_role('tooltip')).to_contain_text('Commitment: 0.13 kEUR')
+            expect(chart.get_by_role('tooltip')).to_contain_text('Actual: 0 kEUR')
+            expect(chart.get_by_role('tooltip')).to_contain_text('Commitment: 0 kEUR')
             expect(chart.locator('[data-axis-title=finance]')).to_have_text('Budget (kEUR)')
             financial_year = chart.locator('[data-year="2026"]').bounding_box()
             for metric in ('allocation', 'overallocation'):
@@ -67,5 +70,14 @@ def test_financial_stacks_legend_ratios_and_chart_axis_padding(authorized, tmp_p
                 title = root.locator('[data-axis-title]')
                 assert title.bounding_box()['x'] >= root.bounding_box()['x']
             page.screenshot(path=str(Path('.local/dashboard-financial-chart.png').resolve()), full_page=True)
+            for locale in ('fr', 'de', 'lb', 'pt', 'en'):
+                page.get_by_role('combobox', name='Test language').click()
+                page.get_by_role('option', name=locale, exact=True).click()
+                labels = load_locale_catalog(locale)['dashboard']
+                expect(cards[0]).to_contain_text(labels['late_projects'])
+                expect(cards[1]).to_contain_text(labels['actual_ratio'])
+                chart.locator('[data-financial-type=actual]').hover()
+                expect(chart.get_by_role('tooltip')).to_contain_text(labels['actual'] + ': 0 kEUR')
+                expect(chart.get_by_role('tooltip')).to_contain_text(labels['commitment'] + ': 0 kEUR')
         finally:
             browser.close()

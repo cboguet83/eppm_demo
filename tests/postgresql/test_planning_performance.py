@@ -63,7 +63,7 @@ class PlanningPerformanceTests(unittest.TestCase):
         self.assertNotIn('custom_lazy', frame.columns)
         _, filtered, _, _ = load_planning_catalog(workspace, revision, ('custom_lazy',))
         self.assertEqual(filtered[filtered.id == pid].iloc[0]['custom_lazy'], 'Present')
-        repo.update_project(pid, 'Changed', 'Draft', 0, 0, {'custom_lazy': 'Updated'})
+        repo.update_project(pid, 'Changed', 'Draft', {'custom_lazy': 'Updated'})
         _, updated, _, _ = load_planning_catalog(workspace, create_planning_workspace(self.resources, access=self.access).revision(), ('custom_lazy',))
         self.assertEqual(updated[updated.id == pid].iloc[0]['custom_lazy'], 'Updated')
         first_project = int(projects.iloc[0].id)

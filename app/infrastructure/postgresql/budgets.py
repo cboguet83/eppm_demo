@@ -9,6 +9,7 @@ from app.domain.projects.budgets import BudgetAmounts
 from app.infrastructure.postgresql.business import run_business
 from app.infrastructure.postgresql.errors import DatabaseUnavailableError, TransactionRetryError
 from app.infrastructure.postgresql.pool import Database
+from app.infrastructure.postgresql.project_financial_summary import FINANCIAL_CTES, FINANCIAL_JOINS
 from app.shared.logging import get_logger
 
 logger = get_logger(__name__)
@@ -25,8 +26,9 @@ class PostgresBudgetReader:
         """Return native numeric amounts after row policies filter hidden projects."""
         def operation(connection: psycopg.Connection) -> list[ProjectBudget]:
             return [ProjectBudget(row[0], row[1], row[2], BudgetAmounts(row[3], row[4]))
-                    for row in connection.execute('SELECT id,name,status,COALESCE(planned_budget,0),COALESCE(actual_budget,0) '
-                                                  'FROM eppm.project ORDER BY id')]
+                    for row in connection.execute('WITH ' + FINANCIAL_CTES +
+                        ' SELECT p.id,p.name,p.status,coalesce(spending.planned_budget,0),coalesce(spending.actual_budget,0) '
+                        'FROM eppm.project p ' + FINANCIAL_JOINS + ' ORDER BY p.id')]
         try:
             return run_business(self.database, self.key, self.access, operation)
         except (psycopg.Error, DatabaseUnavailableError, TransactionRetryError) as error:

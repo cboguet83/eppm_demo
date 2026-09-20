@@ -93,8 +93,6 @@ class TestRepositories(unittest.TestCase):
             project_id=100,
             name="Modernization Core",
             status='In Progress',
-            planned_budget=250000,
-            actual_budget=100000,
             dynamic_attributes={"PRM_001": "Value"},
         )
         self.assertTrue(created)
@@ -168,7 +166,7 @@ class TestRepositories(unittest.TestCase):
 
     def test_bulk_create_milestones(self) -> None:
         """Verify bulk insertion of step records with predecessors."""
-        self.project_repo.create_project(200, "Bulk Proj", "Draft", 0, 0, {})
+        self.project_repo.create_project(200, "Bulk Proj", "Draft", {})
 
         payload = [
             {"project_id": 200, "task_name": "T1", "phase": "P1", "start_date": "2026-01-01", "end_date": "2026-01-10", "progress_pct": 0, "predecessor_id": None},
@@ -182,8 +180,8 @@ class TestRepositories(unittest.TestCase):
 
     def test_multi_dependencies_and_bounds(self) -> None:
         """Verify multi-predecessors, external dependencies, and project date bounds."""
-        self.project_repo.create_project(301, "Source Project", "Active", 0, 0, {})
-        self.project_repo.create_project(302, "Target Project", "Active", 0, 0, {})
+        self.project_repo.create_project(301, "Source Project", "Active", {})
+        self.project_repo.create_project(302, "Target Project", "Active", {})
 
         # Add steps to PRJ-301
         p301_s1 = self.milestone_repo.create_milestone(301, "Feasibility", "Phase 1", "2026-03-01", "2026-03-10", 100)
@@ -227,8 +225,8 @@ class TestRepositories(unittest.TestCase):
 
     def test_batch_milestone_queries(self) -> None:
         """Verify batch query methods across multiple projects."""
-        self.project_repo.update_project(1, "Batch 1", "Active", 0, 0, {})
-        self.project_repo.update_project(2, "Batch 2", "Active", 0, 0, {})
+        self.project_repo.update_project(1, "Batch 1", "Active", {})
+        self.project_repo.update_project(2, "Batch 2", "Active", {})
 
         m1 = self.milestone_repo.create_milestone(1, "Task 1", "Phase 1", "2026-01-01", "2026-01-10", 50)
         m2 = self.milestone_repo.create_milestone(1, "Task 2", "Phase 1", "2026-01-11", "2026-01-20", 0)
@@ -276,8 +274,6 @@ class TestRepositories(unittest.TestCase):
             project_id=101,
             name="PM Test Project",
             status="Active",
-            planned_budget=10000,
-            actual_budget=5000,
             dynamic_attributes={},
             function_id=10,
         )
@@ -294,8 +290,6 @@ class TestRepositories(unittest.TestCase):
             project_id=101,
             name="PM Test Project Updated",
             status="Completed",
-            planned_budget=12000,
-            actual_budget=6000,
             dynamic_attributes={},
             function_id=20,
         )

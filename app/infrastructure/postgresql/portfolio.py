@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 from dataclasses import replace
+from datetime import date
 from decimal import Decimal
 import json
 from typing import cast
@@ -23,6 +24,7 @@ from app.infrastructure.postgresql.errors import DatabaseUnavailableError, Trans
 from app.infrastructure.postgresql.pool import Database
 from app.infrastructure.postgresql.portfolio_query import DIRECTORY, facet_projection, order, source, where
 from app.infrastructure.postgresql.property_store import parameters
+from app.infrastructure.postgresql.project_financial_summary import FINANCIAL_CTES, FINANCIAL_JOINS
 from app.shared.logging import get_logger
 
 
@@ -48,14 +50,21 @@ class PostgresPortfolioReader:
 
     def revision(self) -> tuple:
         """Read compact, current access and source fingerprints in one snapshot."""
-        return self._run(lambda connection: tuple(
-            connection.execute('SELECT eppm.portfolio_cache_revision()').fetchone()[0]))
+        return self._run(lambda connection: (
+            *connection.execute('SELECT eppm.portfolio_cache_revision()').fetchone()[0],
+            connection.execute('''SELECT md5(coalesce(string_agg(concat_ws(':',id,project_id,
+                fiscal_year,financial_record_type,amount_base_currency),',' ORDER BY id),''))
+                FROM eppm.project_financial_transaction
+                WHERE financial_record_type IN ('COMMITMENT','ACTUAL')''').fetchone()[0],
+            connection.execute('SELECT coalesce(max(number),0) FROM eppm.finance_snapshot').fetchone()[0],
+            connection.execute('SELECT count(*) FROM eppm.finance_cancellation').fetchone()[0]))
 
     def get_metrics(self) -> PortfolioMetrics:
-        """Aggregate visible native euro amounts without hydrating project records."""
+        """Aggregate visible transaction totals without hydrating project records."""
         def operation(connection: psycopg.Connection) -> PortfolioMetrics:
-            count, planned, actual = connection.execute('SELECT count(*),coalesce(sum(planned_budget),0),'
-                'coalesce(sum(actual_budget),0) FROM eppm.project').fetchone()
+            count, planned, actual = connection.execute('WITH ' + FINANCIAL_CTES +
+                ' SELECT count(*),coalesce(sum(spending.planned_budget),0),coalesce(sum(spending.actual_budget),0) '
+                'FROM eppm.project p ' + FINANCIAL_JOINS).fetchone()
             return replace(summarize_budgets([BudgetAmounts(planned, actual)]), total_projects=count)
         return self._run(operation)
 
@@ -119,8 +128,28 @@ class PostgresPortfolioReader:
         prefix, arguments, _ = source([])
         def operation(connection: psycopg.Connection) -> PortfolioRow | None:
             with connection.cursor(row_factory=dict_row) as cursor:
-                return cast(PortfolioRow | None, cursor.execute(prefix + sql.SQL('SELECT * FROM portfolio WHERE project_id=%s'),
-                                                               arguments + [project_id]).fetchone())
+                row = cursor.execute(prefix + sql.SQL('SELECT * FROM portfolio WHERE project_id=%s'),
+                                     arguments + [project_id]).fetchone()
+                if row is not None:
+                    year = date.today().year
+                    financials = cursor.execute('''SELECT
+                        coalesce((SELECT sum(a.amount * pw.percentage / 100)
+                            FROM eppm.project_wbs pw JOIN eppm.wbs w ON w.id=pw.wbs_id
+                            JOIN eppm.finance_amount a ON a.code=w.code
+                            WHERE pw.project_id=%s AND a.year=%s AND a.snapshot_id=(
+                                SELECT s.id FROM eppm.finance_snapshot s
+                                WHERE s.status='Approved' AND s.sealed AND NOT EXISTS(
+                                    SELECT 1 FROM eppm.finance_cancellation c WHERE c.snapshot_id=s.id)
+                                ORDER BY s.number DESC LIMIT 1)),0) current_year_approved,
+                        coalesce(sum(amount_base_currency) FILTER (
+                            WHERE financial_record_type='ACTUAL'),0) current_year_actual,
+                        coalesce(sum(amount_base_currency) FILTER (
+                            WHERE financial_record_type='COMMITMENT'),0) current_year_commitment
+                        FROM eppm.project_financial_transaction
+                        WHERE project_id=%s AND fiscal_year=%s''',
+                        (project_id, year, project_id, year)).fetchone()
+                    row.update(financials, financial_year=year)
+                return cast(PortfolioRow | None, row)
         return self._run(operation)
 
     def get_catalog(self, *, include_managers: bool = True) -> ProjectCatalog:

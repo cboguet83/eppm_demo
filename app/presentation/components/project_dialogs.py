@@ -5,7 +5,6 @@ from copy import deepcopy
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import date
-from decimal import Decimal
 from functools import wraps
 from typing import Any, TypeVar
 
@@ -59,6 +58,7 @@ class ProjectDialogReferences:
     managers: dict[int, str]
     type_labels: dict[int, str]
     aliases: dict[str, str]
+    priorities: dict[int, str] = field(default_factory=dict)
     templates: dict[int, pd.DataFrame] = field(default_factory=dict)
 
 
@@ -70,6 +70,7 @@ def _dialog_references(workspace: ProjectWorkspace) -> ProjectDialogReferences:
         pd.DataFrame(catalog.options, columns=["id", "param_id", "option_value", "display_order"]),
         catalog.managers, dict(zip(types["id"], types["name"])),
         workspace.schema.alias_references(get_current_locale()),
+        priorities=workspace.projects.strategic_priorities(get_current_locale()),
     )
 
 
@@ -114,7 +115,7 @@ def _field_permissions(workspace: ProjectWorkspace, project_id: int | None) -> P
 def _render_project_basics(
     workspace: ProjectWorkspace, project_id: int, project: Project,
     references: ProjectDialogReferences, *, creating: bool, disabled: bool = False,
-) -> tuple[str, str, str, str, int | None]:
+) -> tuple[str, str, int | None, int | None]:
     """Edit core fields without rebuilding templates, custom links or the dialog."""
     permissions = _field_permissions(workspace, None if creating else project_id)
     disabled = disabled or (not creating and not permissions.allows(Permission.EDIT, project_id))
@@ -128,16 +129,17 @@ def _render_project_basics(
     status = status_col.selectbox(t("master_data.field_status"), STATUS_LIST,
         index=STATUS_LIST.index(project.status) if project.status in STATUS_LIST else 0,
         disabled=disabled, key=prefix + "_status")
-    planned_col, actual_col, manager_col = st.columns(3)
-    planned = planned_col.text_input(t("master_data.field_planned"),
-        value=str(project.planned_budget), disabled=disabled, key=prefix + "_planned")
-    actual = actual_col.text_input(t("master_data.field_actual"),
-        value=str(project.actual_budget), disabled=disabled, key=prefix + "_actual")
+    priority_col, manager_col = st.columns(2)
+    priority_options = [None, *references.priorities]
+    priority = priority_col.selectbox('Strategic priority', priority_options,
+        index=priority_options.index(project.strategic_priority_id) if project.strategic_priority_id in priority_options else 0,
+        format_func=lambda value: references.priorities.get(value, 'Unassigned'),
+        key=prefix + '_priority', disabled=disabled)
     manager = manager_col.selectbox(t("master_data.field_project_manager", default="Project Manager"),
         options=manager_options, index=manager_options.index(current_manager) if current_manager in manager_options else 0,
         format_func=lambda value: manager_labels.get(value, str(value)),
         key=f"portfolio_{'create' if creating else 'edit'}_manager_{project_id}", disabled=disabled)
-    return name, status, planned, actual, manager
+    return name, status, priority, manager
 
 
 @st.fragment
@@ -249,8 +251,8 @@ def _create_project_editor(workspace: ProjectWorkspace, project_id: int, referen
         p["param_id"]: p["default_value"] for _, p in params.iterrows() if p["has_default"]
     }
     with st.container():
-        name, status, planned, actual, manager = _render_project_basics(
-            workspace, project_id, Project(planned_budget=Decimal(150000)), references, creating=True,
+        name, status, priority, manager = _render_project_basics(
+            workspace, project_id, Project(), references, creating=True,
         )
         st.write(f"#### {t('project_types.template')}")
         sections, draft = _assignment_sections(workspace, None, [], f"portfolio_create_{project_id}")
@@ -266,8 +268,7 @@ def _create_project_editor(workspace: ProjectWorkspace, project_id: int, referen
                     workspace.projects.create_project,
                     name=clean_name,
                     status=status,
-                    planned_budget=planned,
-                    actual_budget=actual,
+                    strategic_priority_id=priority,
                     dynamic_attributes=dynamic_values,
                     function_id=manager,
                     project_type_id=int(type_id),
@@ -390,7 +391,7 @@ def _edit_project_editor(
     )
     params = _dialog_parameters(references, int(type_id), workspace)
     with st.container():
-        name, status, planned, actual, manager = _render_project_basics(
+        name, status, priority, manager = _render_project_basics(
             workspace, project_id, project, references, creating=False, disabled=disabled,
         )
         st.write(f"#### {t('project_types.template')}")
@@ -409,8 +410,7 @@ def _edit_project_editor(
                     project_id=project_id,
                     name=clean_name,
                     status=status,
-                    planned_budget=planned,
-                    actual_budget=actual,
+                    strategic_priority_id=priority,
                     dynamic_attributes=dynamic_values,
                     function_id=manager,
                     project_type_id=int(type_id),

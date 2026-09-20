@@ -31,14 +31,15 @@ def read_catalog(connection: psycopg.Connection, project_ids: list[int]) -> Dash
         organization_facets = manager_team_facets(organization, memberships)
         for team, function in memberships:
             teams.setdefault(function, []).append(str(team))
-        for row in cursor.execute("""SELECT p.id,p.name,p.status,p.function_id,t.name AS template
+        for row in cursor.execute("""SELECT p.id,p.name,p.status,p.function_id,p.strategic_priority_id,t.name AS template
             FROM eppm.project p JOIN eppm.project_type t ON t.id=p.project_type_id
             WHERE p.id=ANY(%s::bigint[]) ORDER BY p.id""", (project_ids,)):
             identity = row['function_id']
             fields = {'name': [row['name']], 'project_template': [row['template'] or ''], 'status': [row['status'] or ''],
                       'manager': [str(identity) if identity in functions else ''],
                       'team': teams.get(identity, ['']),
-                      'project_manager': [names.get(identity, '')]}
+                      'project_manager': [names.get(identity, '')],
+                      'strategic_priority': [str(row['strategic_priority_id']) if row['strategic_priority_id'] else '']}
             fields.update(organization_facets.get(identity, {key: [''] for key in ('service', 'division', 'org_team')}))
             fields['org_manager'] = [str(identity) if identity in functions else '']
             projects[row['id']] = DashboardProject(id=row['id'], name=row['name'], fields=fields)
@@ -67,6 +68,9 @@ def read_catalog(connection: psycopg.Connection, project_ids: list[int]) -> Dash
     labels[''] = ''
     team_names = {str(identity): name for identity, name in connection.execute('SELECT team_id,team_name FROM eppm.active_team')}
     safe_labels = {}
+    safe_labels['strategic_priority'] = dict(connection.execute('''SELECT p.id::text,coalesce(t.label,p.code)
+        FROM eppm.strategic_priority p LEFT JOIN eppm.strategic_priority_translation t
+        ON t.strategic_priority_id=p.id AND t.locale='en' ORDER BY p.display_order'''))
     for key in ('manager', 'org_manager', 'team', 'service', 'division', 'org_team', 'pool'):
         visible = {value for project in projects.values() for value in project['fields'].get(key, [])}
         source = pool_names if key == 'pool' else team_names if key in {'team', 'service', 'division', 'org_team'} else labels

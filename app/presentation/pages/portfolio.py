@@ -5,6 +5,7 @@ import html
 import json
 from contextvars import ContextVar
 from dataclasses import dataclass
+from datetime import date
 
 import pandas as pd
 import streamlit as st
@@ -15,7 +16,7 @@ from app.application.exceptions import ProjectStorageError, ProjectTypeStorageEr
 from app.application.services.portfolio import PortfolioService, portfolio_revision_token
 from app.application.services.project_types import ProjectTypeService
 from app.application.services.schema import SchemaService
-from app.domain.projects.budgets import BudgetAmounts, analyze_budget, euro_amount
+from app.domain.projects.budgets import euro_amount
 from app.domain.projects.links import normalize_link
 from app.domain.projects.project import Project, PROJECT_STATUSES
 from app.presentation.i18n import get_current_locale, t
@@ -29,7 +30,6 @@ from app.presentation.components.portfolio_project_dialog import begin_project_d
 ALLOWED_DYNAMIC_PARAMS: set[str] = {
     "phase",
     "code_line",
-    "strategic_priority",
     "category",
     "category_tags",
     "complexity",
@@ -176,11 +176,15 @@ def _draw_project_details(selected_proj: pd.Series, workspace: ProjectWorkspace)
     proj_name = selected_proj["name"]
     proj_status = selected_proj.get("status", "—")
     pm_name = selected_proj.get("project_manager", "—")
-    planned = euro_amount(selected_proj.get("planned_budget"))
-    actual = euro_amount(selected_proj.get("actual_budget"))
-    analysis = analyze_budget(BudgetAmounts(planned, actual))
-    variance = analysis.variance
-    burn_rate_label = f"{analysis.burn_rate:.1f}%" if analysis.burn_rate is not None else "—"
+    year = int(selected_proj.get("financial_year", date.today().year))
+    approved = euro_amount(selected_proj.get("current_year_approved"))
+    actual = euro_amount(selected_proj.get("current_year_actual"))
+    commitment = euro_amount(selected_proj.get("current_year_commitment"))
+    variance = actual + commitment - approved
+    variance_help = (
+        f"Variance ({year}) = Actual ({year}) + Commitment ({year}) "
+        f"− Approved budget ({year}). Positive means over budget; negative means under budget."
+    )
 
     head_c1, head_c2 = st.columns([3, 2])
     with head_c1:
@@ -192,16 +196,19 @@ def _draw_project_details(selected_proj: pd.Series, workspace: ProjectWorkspace)
     summary = [
         (t("portfolio.col_status", default="Status"), str(proj_status)),
         (t("master_data.field_project_manager", default="Project Manager"), str(pm_name)),
-        (t("portfolio.col_planned", default="Planned (€)"), f"€{planned:,.2f}"),
-        (t("portfolio.col_actual", default="Actual (€)"), f"€{actual:,.2f}"),
-        (t("portfolio.kpi_variance", default="Variance"), f"€{variance:,.2f} · {burn_rate_label} burn"),
+        ("Strategic priority", str(selected_proj.get("strategic_priority") or "Unassigned")),
+        (f"Approved budget ({year})", f"€{approved:,.2f}"),
+        (f"Actual ({year})", f"€{actual:,.2f}"),
+        (f"Commitment ({year})", f"€{commitment:,.2f}"),
+        (f"Variance ({year})", f"€{variance:,.2f}"),
     ]
     with st.container(key=f"project_details_summary_{proj_id}"):
         st.html(
             '<dl style="display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;'
             'font-size:.875rem;color:inherit;opacity:.7;margin:0">'
             + ''.join(
-                '<div style="min-width:0;overflow-wrap:anywhere">'
+                f'<div title="{html.escape(variance_help if label == f"Variance ({year})" else "", quote=True)}" '
+                'style="min-width:0;overflow-wrap:anywhere">'
                 f'<dt>{html.escape(label)}</dt><dd style="margin:1rem 0 0">{html.escape(value)}</dd></div>'
                 for label, value in summary
             ) + '</dl>'
@@ -334,6 +341,8 @@ def _portfolio_columns(params: pd.DataFrame) -> list[dict]:
         {"key": "project_template", "label": t("project_types.label"), "format": "text"},
         {"key": "project_manager", "label": t("master_data.field_project_manager"), "format": "text"},
         {"key": "status", "label": t("portfolio.col_status"), "format": "text"},
+        {"key": "strategic_priority", "label": "Strategic priority"},
+        {"key": "approved_budget", "label": "Budget (EUR)", "format": "currency"},
         {"key": "planned_budget", "label": t("portfolio.col_planned"), "format": "currency"},
         {"key": "actual_budget", "label": t("portfolio.col_actual"), "format": "currency"},
     ]

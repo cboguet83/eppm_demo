@@ -42,7 +42,6 @@ DEFAULT_SCHEMA_PARAMETERS: list[tuple[str, int, str, str, bool, str]] = [
     ("PRM_031", 4, "public_url", "URL", False, "Public URL"),
     ("PRM_032", 5, "delivery_channels", "MULTI_ENUM", False, "Delivery channels"),
     # classification
-    ("PRM_027", 5, "strategic_priority", "ENUM", False, "Strategic Priority"),
     ("PRM_028", 5, "category", "ENUM", False, "Category"),
     ("PRM_029", 5, "category_tags", "TAGS", False, "Category Tags"),
     ("PRM_030", 5, "complexity", "ENUM", False, "Complexity"),
@@ -91,7 +90,6 @@ DEFAULT_CATEGORY_TAGS: list[str] = [
     "Digital",
 ]
 
-DEFAULT_STRATEGIC_PRIORITY_OPTIONS: list[str] = ["Critical", "High", "Medium", "Low"]
 
 DEFAULT_STATION_OPTIONS: list[str] = [
     "Alzingen Al",
@@ -247,7 +245,6 @@ DEFAULT_PARAM_OPTIONS: dict[str, list[str]] = {
     "PRM_008": DEFAULT_PHASE_OPTIONS,
     "PRM_016": DEFAULT_STATION_OPTIONS,
     "PRM_017": DEFAULT_LINE_OPTIONS,
-    "PRM_027": DEFAULT_STRATEGIC_PRIORITY_OPTIONS,
     "PRM_028": DEFAULT_CATEGORY_OPTIONS,
     "PRM_029": DEFAULT_CATEGORY_TAGS,
     "PRM_030": DEFAULT_COMPLEXITY_OPTIONS,

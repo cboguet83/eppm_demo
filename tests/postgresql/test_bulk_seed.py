@@ -35,11 +35,7 @@ def test_bulk_generator_preserves_requested_schedule_bounds_native_links_tags_an
         assert (allocated > 0) == (result['tasks_created'] > 0)
         assert connection.execute('SELECT count(*) FROM eppm.resource_pool_assignment WHERE start_date IS NOT NULL OR end_date IS NOT NULL OR fte_assigned<.1 OR fte_assigned>5').fetchone() == (0,)
         assert connection.execute('SELECT count(*) FROM eppm.project_property_value').fetchone() == (result['property_values_created'],)
-        for planned, actual in connection.execute('SELECT planned_budget,actual_budget FROM eppm.project'):
-            assert isinstance(planned, Decimal) and isinstance(actual, Decimal)
-            assert Decimal(50_000) <= planned <= Decimal(3_000_000)
-            assert 0 <= actual <= planned
-            assert planned == planned.quantize(Decimal('0.01'))
+        assert connection.execute('SELECT count(*) FROM eppm.project WHERE strategic_priority_id NOT IN (1,2,3,4)').fetchone() == (0,)
         assert connection.execute('SELECT count(*) FROM eppm.project_task WHERE end_date<start_date').fetchone() == (0,)
         assert connection.execute('SELECT count(*) FROM eppm.task_dependencies d JOIN eppm.project_task t ON t.id=d.task_id '
                                   'JOIN eppm.project_task p ON p.id=d.predecessor_task_id '
@@ -62,7 +58,7 @@ def test_bulk_append_preserves_custom_templates_existing_records_and_sequence_ga
         connection.execute("INSERT INTO eppm.project_task(id,project_id,task_name,start_date,end_date,project_plan_id) VALUES (9999,999,'Keep','2026-01-01','2026-01-02',(SELECT id FROM eppm.project_plan WHERE project_id=999 AND is_current))")
         connection.execute("SELECT setval('eppm.project_id_seq',1099,true),setval('eppm.project_task_id_seq',10999,true)")
     result = operator.run(lambda c: generate_projects(c, SeedRequest(projects=4, min_tasks=1, max_tasks=1, clean_first=False), year=2026), write=True)
-    assert result == {'projects_created': 4, 'tasks_created': 4, 'dependencies_created': 1,
+    assert result == {'projects_created': 4, 'tasks_created': 4, 'dependencies_created': 0,
                       'project_types': 2, 'property_values_created': 4, 'pools_created': 0, 'container_pools_created': 0}
     with psycopg.connect(pg_database.operator_url) as connection:
         assert connection.execute('SELECT id FROM eppm.project ORDER BY id').fetchall() == [(999,), (1100,), (1101,), (1102,), (1103,)]

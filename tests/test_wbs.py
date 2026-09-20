@@ -8,7 +8,7 @@ from app.domain.projects.wbs import normalize_allocations, normalize_wbs
 def save_allocation(service, project_id, allocations, **overrides):
     project = service.get_project_by_id(project_id)
     arguments = dict(project_id=project_id, name=project.name, status=project.status,
-                     planned_budget=project.planned_budget, actual_budget=project.actual_budget,
+                     strategic_priority_id=project.strategic_priority_id,
                      dynamic_attributes=project.dynamic_attributes, wbs_allocations=allocations)
     return service.update_project(**(arguments | overrides))
 

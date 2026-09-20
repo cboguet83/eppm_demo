@@ -1,5 +1,6 @@
 """Database-side scrolling, global header filters, and lazy portfolio rendering."""
 
+from tests.postgresql.financial_fixtures import set_project_amounts
 import unittest
 import psycopg
 import pytest
@@ -34,13 +35,14 @@ class PortfolioPagingTests(unittest.TestCase):
             {'key': 'property:phase', 'param_id': 'phase', 'format': 'text'},
         ]
         for i in range(1, 4):
-            self.projects.update_project(i, f'Project {i:03d}', 'Draft', i, 0,
-                {'phase': 'Early'} if i % 2 else {}, project_type_id=self.special if i % 2 else 1)
+            self.projects.update_project(i, f'Project {i:03d}', 'Draft', {'phase': 'Early'} if i % 2 else {}, project_type_id=self.special if i % 2 else 1)
         with psycopg.connect(self.setup.operator_url) as connection:
             for i in range(4, 256):
                 create_seed_project(connection, name=f'Project {i:03d}',
-                    planned_budget=i, project_type_id=self.special if i % 2 else 1,
+                    project_type_id=self.special if i % 2 else 1,
                     dynamic_attributes={'phase': 'Late' if i > 200 else 'Early'} if i % 2 else {})
+            for i in range(1, 256):
+                set_project_amounts(connection, i, i)
 
     def test_bounded_pages_stable_global_sort_search_and_metrics(self):
         first = self.repo.get_page(self.columns, {})
@@ -82,7 +84,7 @@ class PortfolioPagingTests(unittest.TestCase):
 
     def test_inactive_values_are_hidden_and_cache_revision_tracks_writes(self):
         before = self.repo.revision()
-        self.projects.update_project(255, 'Changed', 'Draft', 255, 0, {}, project_type_id=1)
+        self.projects.update_project(255, 'Changed', 'Draft', {}, project_type_id=1)
         self.assertNotEqual(before, self.repo.revision())
         row = self.repo.get_page(self.columns, {'search': 'Changed'})['rows'][0]
         self.assertIsNone(row['property:phase'])

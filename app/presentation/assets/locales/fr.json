@@ -918,7 +918,18 @@
     "peak_day": "Jour du pic",
     "total_overallocation": "Surallocation totale",
     "total_allocation": "Allocation totale",
-    "total_capacity_short": "Capacité minimale sur la période"
+    "total_capacity_short": "Capacité minimale sur la période",
+    "actual": "Réalisé",
+    "commitment": "Engagé",
+    "actual_ratio": "Réalisé / Budget approuvé",
+    "committed_ratio": "(Réalisé + Engagé) / Budget approuvé",
+    "financial_help": "Projets filtrés, {start}–{end}, en EUR. Utilise le dernier budget approuvé selon les parts WBS du projet. N/D indique un budget approuvé absent ou nul.",
+    "late_projects": "Projets en retard",
+    "late_help": "Projets dont une tâche du plan actif se termine avant aujourd’hui et est achevée à moins de 100 %, parmi tous les projets retenus par les filtres du tableau de bord.",
+    "late_count": "{count} projets sur {total}",
+    "not_available": "N/D",
+    "fte_unit": "ETP",
+    "quarter_prefix": "T"
   },
   "pool_exceptions": {
     "title": "Exceptions de capacité",

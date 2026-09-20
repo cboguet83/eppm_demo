@@ -2,7 +2,6 @@
 
 from collections.abc import Iterable
 from datetime import date
-from decimal import Decimal, ROUND_HALF_EVEN, localcontext
 from itertools import batched
 import random
 
@@ -61,7 +60,7 @@ def _templates(connection: psycopg.Connection, identities: list[int]) -> dict[in
 
 
 def _projects(connection: psycopg.Connection, identities: list[int], rng: random.Random) -> tuple[list[Project], list[NativeRow], list[NativeRow]]:
-    """Generate exact budgets and validated typed values from the current catalog."""
+    """Generate native priorities and validated typed values from the catalog."""
     persisted = dict(connection.execute('SELECT name,id FROM eppm.project_type ORDER BY id'))
     types = [persisted[name] for name in DEMO_TYPES if name in persisted]
     types += [identity for identity in persisted.values() if identity not in types]
@@ -80,14 +79,11 @@ def _projects(connection: psycopg.Connection, identities: list[int], rng: random
         type_id = types[index % len(types)]
         name = normalize_project_name(f'{labels[type_id]} — {rng.choice(PROJECT_SUFFIXES)} #{identity}')
         status = statuses[index]
-        with localcontext(prec=38, rounding=ROUND_HALF_EVEN):
-            planned = (Decimal(50_000) + Decimal(2_950_000) * Decimal(str(rng.random()))).quantize(Decimal('0.01'))
-            actual = (planned * Decimal(str(rng.random()))).quantize(Decimal('0.01'))
         template = templates[type_id]
         submitted = sample_values(template, options, identity, rng)
         manager = rng.choice(managers) if managers else None
         values = prepare_project_values(template, choices, submitted, creating=True)
-        projects.append(Project(identity, name, status, planned, actual, values, manager, type_id))
+        projects.append(Project(identity, name, status, values, manager, type_id, index % 4 + 1))
         for parameter in template:
             pid = parameter['param_id']
             if pid not in values:
@@ -124,8 +120,8 @@ def generate_projects(connection: psycopg.Connection, request: SeedRequest, *, y
     tasks, dependencies = generate_schedules([(identity, project.status) for identity, project in zip(identities, projects)],
                                             request.min_tasks, request.max_tasks, rng, today=today)
     task_ids = _identities(connection, 'project_task', len(tasks))
-    _copy(connection, 'project', ('id', 'name', 'status', 'planned_budget', 'actual_budget', 'function_id', 'project_type_id'),
-          ((row.id, row.name, row.status, row.planned_budget, row.actual_budget, row.function_id, row.project_type_id) for row in projects))
+    _copy(connection, 'project', ('id', 'name', 'status', 'function_id', 'project_type_id', 'strategic_priority_id'),
+          ((row.id, row.name, row.status, row.function_id, row.project_type_id, row.strategic_priority_id) for row in projects))
     plans = dict(connection.execute('''INSERT INTO eppm.project_plan
         (project_id,version,name,status_id,is_current,author,created_at)
         SELECT id,1,'Initial plan',3,true,'operator',CURRENT_TIMESTAMP FROM eppm.project

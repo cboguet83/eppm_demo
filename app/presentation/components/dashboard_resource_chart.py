@@ -7,6 +7,7 @@ import streamlit as st
 from app.application.ports.dashboard import ResourceBreakdown
 
 from app.presentation.components.context_menu import CONTEXT_MENU_CSS
+from app.presentation.i18n import get_section_catalog
 
 PALETTE = ['#000000', '#399df4', '#09703e', '#b1343b', '#de00c3',
            '#ffd700', '#848486', '#0000f0', '#fa8775', '#8800d2',
@@ -64,8 +65,8 @@ export default function({data,parentElement,setTriggerValue}) {
     const valueAxis=axis(Math.max(0,...data.rows.map(row=>Math.max(pools.reduce((sum,pool)=>sum+Number(pool[data.metric][row.quarter]||0),0),showCapacity?capacity(row):0)),...budgetSeries.flatMap(series=>series.points.map(point=>point.value||0)),...transactions.map(row=>stackTotal(row,true))),
         Math.min(0,...transactions.map(row=>stackTotal(row,false))));
     const valueY=value=>bottom-height*(value-valueAxis.min)/(valueAxis.max-valueAxis.min);
-    const fmt=value=>Number(value).toLocaleString(data.locale,{minimumFractionDigits:1,maximumFractionDigits:1});
-    const money=value=>(Number(value)/1000).toLocaleString(data.locale,{minimumFractionDigits:2,maximumFractionDigits:2});
+    const fmt=value=>Number(value).toLocaleString(data.locale,{maximumFractionDigits:0});
+    const money=value=>(Number(value)/1000).toLocaleString(data.locale,{maximumFractionDigits:0});
     const tick=value=>Number(data.metric==='finance'?value/1000:value).toLocaleString(data.locale,{maximumFractionDigits:data.metric==='finance'?1:0});
     for(let i=0;i<=valueAxis.count;i++){
         const y=bottom-height*i/valueAxis.count;
@@ -76,8 +77,10 @@ export default function({data,parentElement,setTriggerValue}) {
     if(data.metric==='finance'){
         add('text',{transform:`translate(11 ${middle}) rotate(-90)`,'text-anchor':'middle',fill:'currentColor','data-axis-title':data.metric},data.valueLabel);
     }else{
-        add('text',{x:11,y:15,'text-anchor':'start',fill:'currentColor','data-axis-title':data.metric},data.valueLabel+' (FTE)');
+        add('text',{x:11,y:15,'text-anchor':'start',fill:'currentColor','data-axis-title':data.metric},data.valueLabel+' ('+(data.fteUnit||'FTE')+')');
     }
+    const fte=data.fteUnit||'FTE';
+    const quarterLabel=value=>value.replace('-Q','-'+(data.quarterPrefix||'Q'));
     let tip,menu;
     const closeTip=()=>{tip?.remove();tip=null;};
     const closeMenu=()=>{menu?.remove();menu=null;};
@@ -93,7 +96,7 @@ export default function({data,parentElement,setTriggerValue}) {
     };
     const showMenu=(row,pool,x,y)=>{
         closeMenu();closeTip();menu=document.createElement('div');menu.className='context-menu';menu.setAttribute('role','menu');
-        const heading=document.createElement('div');heading.className='context-menu-header';heading.textContent=pool.name+' - '+row.quarter;menu.appendChild(heading);
+        const heading=document.createElement('div');heading.className='context-menu-header';heading.textContent=pool.name+' - '+quarterLabel(row.quarter);menu.appendChild(heading);
         const item=document.createElement('button');item.className='context-menu-item';item.type='button';item.setAttribute('role','menuitem');item.textContent=data.goTo;
         item.onclick=()=>{closeMenu();document.dispatchEvent(new CustomEvent('eppm-navigation-start',{}));setTriggerValue('selection',{quarter:row.quarter,pool_id:pool.pool_id,metric:data.metric,action:'planning'});};menu.appendChild(item);
         const details=document.createElement('button');details.className='context-menu-item';details.type='button';details.setAttribute('role','menuitem');details.textContent=data.poolDetails;
@@ -117,15 +120,15 @@ export default function({data,parentElement,setTriggerValue}) {
             const barHeight=height*value/valueAxis.max;cumulative+=value;
             const bar=add('rect',{x:x-width/n*.36,y:bottom-height*cumulative/valueAxis.max,width:width/n*.72,height:barHeight,
                 fill:color(pool.pool_id),tabindex:0,role:'button','data-quarter':row.quarter,'data-pool-id':pool.pool_id,
-                'aria-label':pool.name+', '+row.quarter+': '+data.valueLabel+' '+fmt(value)});
+                'aria-label':pool.name+', '+quarterLabel(row.quarter)+': '+data.valueLabel+' '+fmt(value)});
             bar.onpointermove=event=>{if(menu)return;
                 showTip(data.metric==='overallocation'
-                    ? [[row.quarter],[data.valueLabel],[(data.portfolioPeakLabel||data.totalLabel)+': '+fmt(row.value)+' FTE'],
-                       [pool.name+': '+fmt(value)+' FTE',color(pool.pool_id)]]
-                    : [[row.quarter],...(showCapacity?[[data.totalCapacityLabel+': '+fmt(capacity(row))+' FTE']]:[]),
-                       [(data.portfolioPeakLabel||data.totalValueLabel)+': '+fmt(row.value)+' FTE'],
-                       [pool.name+' — '+data.allocatedLabel+': '+fmt(value)+' FTE',color(pool.pool_id)],
-                       [pool.name+' — '+data.availableLabel+': '+fmt(pool.available[row.quarter])+' FTE',color(pool.pool_id)]],event);};
+                    ? [[quarterLabel(row.quarter)],[data.valueLabel],[(data.portfolioPeakLabel||data.totalLabel)+': '+fmt(row.value)+' '+fte],
+                       [pool.name+': '+fmt(value)+' '+fte,color(pool.pool_id)]]
+                    : [[quarterLabel(row.quarter)],...(showCapacity?[[data.totalCapacityLabel+': '+fmt(capacity(row))+' '+fte]]:[]),
+                       [(data.portfolioPeakLabel||data.totalValueLabel)+': '+fmt(row.value)+' '+fte],
+                       [pool.name+' — '+data.allocatedLabel+': '+fmt(value)+' '+fte,color(pool.pool_id)],
+                       [pool.name+' — '+data.availableLabel+': '+fmt(pool.available[row.quarter])+' '+fte,color(pool.pool_id)]],event);};
             bar.onpointerleave=closeTip;
             bar.oncontextmenu=event=>{event.preventDefault();showMenu(row,pool,event.clientX,event.clientY);};
             bar.onkeydown=event=>{if(event.key==='ContextMenu'||event.key==='Enter'||(event.shiftKey&&event.key==='F10')){event.preventDefault();const rect=bar.getBoundingClientRect();showMenu(row,pool,rect.left,rect.top+20);}};
@@ -215,11 +218,13 @@ def resource_chart(series: ResourceBreakdown, *, today: str, year: int,
                 and event['pool_id'] in {pool['pool_id'] for pool in series['pools']}):
             on_pool_filter(event['pool_id'])
 
+    localized = get_section_catalog('dashboard', locale)
     rows = [{'quarter': key, 'value': float(value), 'capacity': float(series['capacity'][key])}
             for key, value in sorted(series[metric].items()) if year - 2 <= int(key[:4]) <= year + 9]
     result = component(data={'rows': rows, 'pools': series.get('individual_pools', series['pools']), 'metric': metric,
                              'today': today, 'start': f'{year-2}-01-01', 'end': f'{year+10}-01-01',
-                             'locale': locale, 'palette': PALETTE, **labels}, key=key,
+                             'locale': locale, 'palette': PALETTE, 'fteUnit': localized['fte_unit'],
+                             'quarterPrefix': localized['quarter_prefix'], **labels}, key=key,
                        on_selection_change=apply_filter, height='content')
     return getattr(result, 'selection', None)
 
@@ -229,10 +234,11 @@ def finance_chart(*, series: list[dict], transactions: list[dict], today: str, y
     """Render budget lines and yearly transaction stacks on the shared date scale."""
     component = st.components.v2.component('eppm_dashboard_resources',
         html='<div class="resource-chart"></div>', css=_CSS + CONTEXT_MENU_CSS, js=_JS)
+    localized = get_section_catalog('dashboard', locale)
     component(data={'rows': [], 'pools': [], 'metric': 'finance', 'budgetSeries': series,
                     'transactions': transactions, 'transactionSeries': [
-                        {'key': 'actual', 'name': 'Actual', 'color': '#C41049'},
-                        {'key': 'commitment', 'name': 'Commitment', 'color': '#6D6E70'}],
+                        {'key': 'actual', 'name': localized['actual'], 'color': '#C41049'},
+                        {'key': 'commitment', 'name': localized['commitment'], 'color': '#6D6E70'}],
                     'today': today, 'start': f'{year-2}-01-01', 'end': f'{year+10}-01-01',
                     'locale': locale, 'palette': PALETTE, 'title': title, 'valueLabel': value_label.replace('€', 'kEUR')},
               key='dashboard_finance_chart', height='content')

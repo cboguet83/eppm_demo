@@ -28,8 +28,8 @@ def test_complete_native_default_seed_contains_annotations_scenarios_and_one_res
         assert connection.execute('SELECT status,count(*) FROM eppm.project GROUP BY status').fetchall() == [('In Progress', 5)]
         assert connection.execute('SELECT count(*) FROM eppm.resource_pool_mapping').fetchone() == (0,)
         assert connection.execute('SELECT count(DISTINCT project_id) FROM eppm.resource_pool_assignment').fetchone() == (5,)
-        assert connection.execute('SELECT sum(planned_budget),sum(actual_budget) FROM eppm.project').fetchone() == (
-            Decimal('1250000'), Decimal('842000'),
+        assert connection.execute('SELECT count(*),count(strategic_priority_id) FROM eppm.project').fetchone() == (
+            5, 5,
         )
         assert connection.execute('SELECT count(*) FROM eppm.app_user').fetchone() == (0,)
     archives = list(tmp_path.glob('*.dump'))

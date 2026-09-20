@@ -36,26 +36,8 @@ def catalogs(authorized):
 
 def update(service, project_id=1, **changes):
     row = service.get_project_by_id(project_id)
-    fields = dict(project_id=project_id, name=row.name, status=row.status, planned_budget=row.planned_budget,
-                  actual_budget=row.actual_budget, dynamic_attributes={}, function_id=row.function_id)
+    fields = dict(project_id=project_id, name=row.name, status=row.status, strategic_priority_id=row.strategic_priority_id, dynamic_attributes={}, function_id=row.function_id)
     return service.update_project(**(fields | changes))
-
-
-def test_project_records_and_native_budget_columns_preserve_exact_euros(projects, authorized):
-    planned = Decimal('9007199254740993.12')
-    identity = projects.create_project(name=' Exact ', planned_budget=planned, actual_budget='0.10')
-    row = projects.get_project_by_id(identity)
-    assert row.name == 'Exact' and row.planned_budget == planned and row.actual_budget == Decimal('0.10')
-    assert type(row.planned_budget) is type(row.actual_budget) is Decimal
-    assert update(projects, identity, planned_budget=0.2, actual_budget=Decimal('-0.125'))
-    with psycopg.connect(authorized.setup.operator_url) as connection:
-        assert connection.execute('SELECT planned_budget,actual_budget FROM eppm.project WHERE id=%s', (identity,)).fetchone() == (Decimal('0.2'), Decimal('-0.125'))
-        connection.execute('UPDATE eppm.project SET planned_budget=NULL,actual_budget=NULL WHERE id=%s', (identity,))
-    assert projects.get_project_by_id(identity).planned_budget == Decimal(0)
-    assert Project(planned_budget=0.1).planned_budget == Decimal('0.1')
-    for invalid in (True, 'not an amount', Decimal('NaN'), float('inf')):
-        with pytest.raises(ValueError, match='finite numbers'):
-            projects.create_project(name='Invalid', planned_budget=invalid)
 
 
 def test_explicit_ids_sequence_preview_and_deleted_ids_are_preserved(projects, authorized):
@@ -101,7 +83,7 @@ def test_type_switches_keep_inactive_values_and_planning_loads_only_requested_ac
     with pytest.raises(ValueError, match='Unknown project type'):
         projects.create_project(name='Missing type', project_type_id=999)
     with pytest.raises(AccessDenied):
-        projects.update_project(999, '', 'Draft', 0, 0, {})
+        projects.update_project(999, '', 'Draft', {})
     assert not projects.delete_project(999) and not projects.exists(999)
 
 
@@ -116,13 +98,13 @@ def test_failed_property_batch_rolls_back_master_links_and_all_prior_values(proj
             RAISE EXCEPTION 'private failure detail' USING ERRCODE='23514'; END IF; RETURN NEW; END $$""")
         connection.execute('CREATE TRIGGER reject_project_value BEFORE INSERT ON eppm.project_property_value FOR EACH ROW EXECUTE FUNCTION eppm.reject_project_value()')
     for action in (lambda: projects.create_project(name='Rolled back', dynamic_attributes={'a': 'new', 'b': 'reject'}),
-                   lambda: update(projects, identity, name='Rolled back', planned_budget='99.99',
+                   lambda: update(projects, identity, name='Rolled back', strategic_priority_id=2,
                                   dynamic_attributes={'a': 'new', 'b': 'reject'}, custom_links=[{'url': 'https://example.test', 'alias': 'Docs'}])):
         with pytest.raises(ProjectConflictError) as error:
             action()
         assert 'private failure' not in str(error.value)
     row = projects.get_project_by_id(identity)
-    assert row.name == 'Original' and row.planned_budget == 0 and row.dynamic_attributes == {'a': 'old', 'b': 'old'}
+    assert row.name == 'Original' and row.strategic_priority_id is None and row.dynamic_attributes == {'a': 'old', 'b': 'old'}
     assert projects.get_links(identity) == []
     assert len(projects.get_planning_catalog()) == 4
 
@@ -140,7 +122,7 @@ def test_project_reads_and_permission_projection_keep_scopes_separate(projects, 
     assert [row['id'] for row in reader.get_planning_catalog(('p',))] == [1, 2]
     assert all(row['dynamic_attributes'] == {} for row in reader.get_planning_catalog(('p',)))
     for action in (lambda: reader.create_project(name='Denied'), lambda: reader.delete_project(1),
-                   lambda: reader.update_project(2, 'Denied', 'Draft', 0, 0, {})):
+                   lambda: reader.update_project(2, 'Denied', 'Draft', {})):
         with pytest.raises(AccessDenied):
             action()
     assert update(reader, name='Allowed', dynamic_attributes={'p': 'Visible'})
@@ -161,7 +143,7 @@ def test_wbs_hidden_usage_and_late_failure_restore_the_whole_project_save(projec
     with pytest.raises(psycopg.errors.InsufficientPrivilege):
         authorized.query('SELECT * FROM eppm.wbs_options(3)')
     with pytest.raises(ValueError, match='only 40%'):
-        update(reader, name='Rollback', planned_budget='99.95', custom_links=[{'url': 'https://example.test', 'alias': 'Docs'}],
+        update(reader, name='Rollback', strategic_priority_id=2, custom_links=[{'url': 'https://example.test', 'alias': 'Docs'}],
                wbs_allocations=[{'wbs_id': identity, 'percentage': 41}])
     assert reader.get_project_by_id(1).name == 'Editable' and reader.get_links(1) == []
     assert reader.get_wbs_allocations(1) == [{'wbs_id': identity, 'percentage': 20}]
@@ -235,7 +217,7 @@ def test_concurrent_wbs_claims_revalidate_the_global_remainder_after_retry(proje
     services, attempts = simultaneous_services(authorized)
     def claim(index):
         try:
-            services[index].update_project(index + 1, 'Saved', 'Draft', 0, 0, {},
+            services[index].update_project(index + 1, 'Saved', 'Draft', {},
                                            wbs_allocations=[{'wbs_id': identity, 'percentage': 60}])
             return 'saved'
         except ValueError as error:

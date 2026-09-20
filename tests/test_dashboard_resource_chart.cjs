@@ -39,6 +39,18 @@ function setup(){
   };
   return {build,listeners};
 }
+test('resource tooltips render translated labels, quarter and FTE unit',()=>{
+  const {build}=setup();
+  const chart=build('allocation',7,[],{locale:'fr',fteUnit:'ETP',quarterPrefix:'T',
+    totalCapacityLabel:'Capacité minimale',totalValueLabel:'Allocation totale',
+    allocatedLabel:'Allocation',availableLabel:'Disponible'});
+  chart.svg.children.find(e=>e.tag==='rect').onpointermove({clientX:500,clientY:100});
+  const text=chart.root.children.find(e=>e.className==='tip').children
+    .map(row=>row.children.map(child=>child.textContent||'').join('')).join('\n');
+  assert.equal(text,'2026-T1\nCapacité minimale: 7 ETP\nAllocation totale: 10 ETP\nPool X — Allocation: 10 ETP\nPool X — Disponible: -3 ETP');
+  chart.cleanup();
+});
+
 test('metric tooltips use the requested line order and omit peak dates',()=>{
   const {build}=setup();
   for(const metric of ['overallocation','allocation']){
@@ -47,8 +59,8 @@ test('metric tooltips use the requested line order and omit peak dates',()=>{
     const tip=chart.root.children.find(e=>e.className==='tip');
     const text=tip.children.map(row=>row.children.map(child=>child.textContent||'').join('')).join('\n');
     assert.equal(text,metric==='overallocation'
-      ?'2026-Q1\nOverallocation\nTotal: 3.0 FTE\nPool X: 3.0 FTE'
-      :'2026-Q1\nTotal capacity: 7.0 FTE\nTotal allocation: 10.0 FTE\nPool X — Allocation: 10.0 FTE\nPool X — Available: -3.0 FTE');
+      ?'2026-Q1\nOverallocation\nTotal: 3 FTE\nPool X: 3 FTE'
+      :'2026-Q1\nTotal capacity: 7 FTE\nTotal allocation: 10 FTE\nPool X — Allocation: 10 FTE\nPool X — Available: -3 FTE');
     assert.equal(tip.children[3].children[0].style['--series'],bar.attrs.fill);
     assert.equal(tip.children[3].children[0].className,'pool-swatch');
     assert.equal(chart.root.children.some(e=>e.className==='legend'),false);
@@ -64,11 +76,35 @@ test('finance legend follows the plot and either budget tooltip includes both va
   for(const marker of [markers[0],markers[2]]){
     marker.onpointermove({clientX:400,clientY:100});
     const text=chart.root.children.find(e=>e.className==='tip').children.map(row=>row.children[0].textContent);
-    assert.deepEqual(text,['2026','Approved: 0.10 kEUR','Proposed: 0.12 kEUR']);
+    assert.deepEqual(text,['2026','Approved: 0 kEUR','Proposed: 0 kEUR']);
   }
   markers[1].onpointermove({clientX:400,clientY:100});
   assert.equal(chart.root.children.find(e=>e.className==='tip').children[2].children[0].textContent,'Proposed: —');
   chart.cleanup();
+});
+
+test('tooltip rounding removes decimals without rounding the plotted data',()=>{
+  const {build}=setup();
+  const chart=build('finance',7,[],{
+    budgetSeries:[{name:'Approved',points:[{date:'2026-01-01',value:1234567.89}]}],
+    transactions:[{year:2026,actual:2345678.9}],
+    transactionSeries:[{key:'actual',name:'Actual',color:'#C41049'}]
+  });
+  const marker=chart.svg.children.find(e=>e.tag==='circle');
+  marker.onpointermove({clientX:400,clientY:100});
+  assert.equal(chart.root.children.find(e=>e.className==='tip').children[1].children[0].textContent,'Approved: 1,235 kEUR');
+  const bar=chart.svg.children.find(e=>e.attrs['data-financial-year']);
+  bar.onpointermove({clientX:400,clientY:100});
+  assert.equal(chart.root.children.find(e=>e.className==='tip').children[1].children[1].textContent,'Actual: 2,346 kEUR');
+  chart.cleanup();
+  const resource=build('allocation',7.6,[],{
+    pools:[{pool_id:1,name:'Pool X',allocation:{'2026-Q1':10.6},overallocation:{},available:{'2026-Q1':-3.4}}]
+  });
+  resource.svg.children.find(e=>e.tag==='rect').onpointermove({clientX:400,clientY:100});
+  const labels=resource.root.children.find(e=>e.className==='tip').children.map(row=>row.children.at(-1).textContent);
+  assert.ok(labels.some(text=>text.endsWith('11 FTE')));
+  assert.ok(labels.some(text=>text.endsWith('-3 FTE')));
+  resource.cleanup();
 });
 
 test('finance and resources align data positions and synchronize guides using the requested palette',()=>{
@@ -233,7 +269,7 @@ test('financial bars stack actual and commitment totals and support signed corre
   assert.equal(chart.root.children[1].children.filter(e=>e.className==='bar-series').length,2);
   bars[0].onpointermove({clientX:400,clientY:100});
   const tip=chart.root.children.find(e=>e.className==='tip');
-  assert.equal(tip.children[1].children[1].textContent,'Actual: 0.08 kEUR');
+  assert.equal(tip.children[1].children[1].textContent,'Actual: 0 kEUR');
   chart.cleanup();
   const signed=build('finance',7,[],{transactionSeries,transactions:[{year:2026,actual:-20,commitment:50}]});
   const signedBars=signed.svg.children.filter(e=>e.attrs['data-financial-year']);

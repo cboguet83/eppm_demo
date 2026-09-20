@@ -918,7 +918,18 @@
     "peak_day": "Dia do pico",
     "total_overallocation": "Sobrealocação total",
     "total_allocation": "Alocação total",
-    "total_capacity_short": "Capacidade mínima no período"
+    "total_capacity_short": "Capacidade mínima no período",
+    "actual": "Realizado",
+    "commitment": "Compromisso",
+    "actual_ratio": "Realizado / Orçamento aprovado",
+    "committed_ratio": "(Realizado + Compromisso) / Orçamento aprovado",
+    "financial_help": "Projetos filtrados, {start}–{end}, em EUR. Utiliza o último orçamento aprovado com as proporções WBS do projeto. N/D significa que o orçamento aprovado está em falta ou é zero.",
+    "late_projects": "Projetos em atraso",
+    "late_help": "Projetos com uma tarefa do plano ativo cuja data de fim é anterior a hoje e que está menos de 100% concluída, entre todos os projetos selecionados pelos filtros do painel.",
+    "late_count": "{count} de {total} projetos",
+    "not_available": "N/D",
+    "fte_unit": "ETI",
+    "quarter_prefix": "T"
   },
   "pool_exceptions": {
     "title": "Exceções de capacidade",

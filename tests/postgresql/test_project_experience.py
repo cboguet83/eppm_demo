@@ -32,7 +32,7 @@ def experience_database(runtime: RuntimeResources, access: BusinessAccess, autho
     organization = create_organization_service(runtime, access=access)
     organization.create_employee(Employee("Alice", "Smith", "alice@example.invalid", function_id=1, mobile="+352 621 111 111", landline="+352 27 111 111"))
     organization.create_employee(Employee("Bob", "Jones", "bob@example.invalid", function_id=2, mobile="+352 621 222 222", landline="+352 27 222 222"))
-    create_project_service(runtime, access=access).update_project(1, "Project", "Draft", 0, 0, {})
+    create_project_service(runtime, access=access).update_project(1, "Project", "Draft", {})
     return runtime
 
 

@@ -36,13 +36,13 @@ class PostgresProjectStore(PostgresWbsStore):
         self._initialize_plan = initialize_plan
 
     def find(self, project_id: int) -> Project | None:
-        """Read exact native budgets and all stored values, including inactive ones."""
-        row = self.connection.execute('SELECT id,name,status,planned_budget,actual_budget,function_id,project_type_id '
+        """Read project attributes and stored dynamic values, including inactive ones."""
+        row = self.connection.execute('SELECT id,name,status,function_id,project_type_id,strategic_priority_id '
                                       'FROM eppm.project WHERE id=%s', (project_id,)).fetchone()
         if row is None:
             return None
-        return Project(row[0], row[1], row[2], row[3], row[4],
-                       read_values(self.connection, owner_id=project_id).get(project_id, {}), row[5], row[6])
+        return Project(row[0], row[1], row[2],
+                       read_values(self.connection, owner_id=project_id).get(project_id, {}), row[3], row[4], row[5])
 
     def default_type_id(self) -> int:
         """Resolve General inside the current write snapshot."""
@@ -50,6 +50,14 @@ class PostgresProjectStore(PostgresWbsStore):
         if row is None:
             raise ValueError('The General project type is missing')
         return row[0]
+
+    def strategic_priorities(self, locale: str) -> dict[int, str]:
+        """Read stable priority identities with translated display labels."""
+        return dict(self.connection.execute('''SELECT p.id,coalesce(t.label,e.label,p.code)
+            FROM eppm.strategic_priority p
+            LEFT JOIN eppm.strategic_priority_translation t ON t.strategic_priority_id=p.id AND t.locale=%s
+            LEFT JOIN eppm.strategic_priority_translation e ON e.strategic_priority_id=p.id AND e.locale='en'
+            ORDER BY p.display_order''', (locale,)))
 
     def template(self, type_id: int) -> list[TemplateProperty]:
         """Resolve the current effective type using native template projections."""
@@ -67,12 +75,11 @@ class PostgresProjectStore(PostgresWbsStore):
         return result
 
     def insert(self, project: Project) -> int:
-        """Allocate one identity and persist native budgets and typed values atomically."""
+        """Allocate one identity and persist project attributes atomically."""
         identity = self.connection.execute('SELECT eppm.allocate_project_id(%s)', (project.id,)).fetchone()[0]
-        self.connection.execute('INSERT INTO eppm.project(id,name,status,planned_budget,actual_budget,function_id,project_type_id) '
-                                'VALUES (%s,%s,%s,%s,%s,%s,%s)',
-                                (identity, project.name, project.status, project.planned_budget, project.actual_budget,
-                                 project.function_id, project.project_type_id))
+        self.connection.execute('INSERT INTO eppm.project(id,name,status,function_id,project_type_id,strategic_priority_id) '
+                                'VALUES (%s,%s,%s,%s,%s,%s)',
+                                (identity, project.name, project.status, project.function_id, project.project_type_id, project.strategic_priority_id))
         write_values(self.connection, identity, project.dynamic_attributes)
         if self._initialize_plan is not None:
             self._initialize_plan(identity)
@@ -80,9 +87,8 @@ class PostgresProjectStore(PostgresWbsStore):
 
     def update(self, project: Project) -> None:
         """Update master data and submitted values while retaining inactive properties."""
-        self.connection.execute('UPDATE eppm.project SET name=%s,status=%s,planned_budget=%s,actual_budget=%s,function_id=%s,project_type_id=%s WHERE id=%s',
-                                (project.name, project.status, project.planned_budget, project.actual_budget,
-                                 project.function_id, project.project_type_id, project.id))
+        self.connection.execute('UPDATE eppm.project SET name=%s,status=%s,function_id=%s,project_type_id=%s,strategic_priority_id=%s WHERE id=%s',
+                                (project.name, project.status, project.function_id, project.project_type_id, project.strategic_priority_id, project.id))
         # The master UPDATE has already enforced owner permissions, even for an
         # unchanged form. Preserve full-form validation while avoiding repeated
         # value/item writes and their revision triggers for identical properties.

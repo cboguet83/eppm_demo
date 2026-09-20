@@ -33,7 +33,7 @@ def _service(authorized, user_id: int = 4) -> ProjectService:
 
 
 def _save(service: ProjectService, values: dict, *, project_id: int = 1, name: str = 'Saved') -> None:
-    assert service.update_project(project_id, name, 'Draft', Decimal(0), Decimal(0), values)
+    assert service.update_project(project_id, name, 'Draft', values)
 
 
 def _storage(authorized) -> dict:

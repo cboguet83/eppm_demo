@@ -23,8 +23,8 @@ class TestTaskDependencies(unittest.TestCase):
         """Use actual native planning and project services with a restricted actor."""
         self.project_repo = create_project_service(runtime, access=access)
         self.milestone_repo = create_planning_service(runtime, access=access)
-        self.project_repo.update_project(1, "Alpha Core", "Active", 100000, 50000, {})
-        self.project_repo.update_project(2, "Beta Subsystem", "Active", 80000, 20000, {})
+        self.project_repo.update_project(1, "Alpha Core", "Active", {})
+        self.project_repo.update_project(2, "Beta Subsystem", "Active", {})
 
     # --------------------------------------------------------------------------
     # 1. FINISH-TO-START (FS) TESTS
@@ -355,11 +355,11 @@ class TestTaskDependencies(unittest.TestCase):
         next_id_1 = self.project_repo.generate_project_id()
         self.assertEqual(next_id_1, 4)
 
-        self.project_repo.create_project(4, "Project 4", "Active", 10000, 0, {})
+        self.project_repo.create_project(4, "Project 4", "Active", {})
         next_id_2 = self.project_repo.generate_project_id()
         self.assertEqual(next_id_2, 5)
 
-        self.project_repo.create_project(9, "Project 9", "Active", 10000, 0, {})
+        self.project_repo.create_project(9, "Project 9", "Active", {})
         next_id_3 = self.project_repo.generate_project_id()
         self.assertEqual(next_id_3, 10)
 
