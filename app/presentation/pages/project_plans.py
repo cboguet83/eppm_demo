@@ -25,6 +25,21 @@ def _discard(project_id: int) -> None:
     st.session_state[f'project_plan_drafts_{project_id}'].pop(project_id, None)
 
 
+def _plan_selector(label: str, plans: dict[int, ProjectPlan], key: str,
+                   fallback: int, disabled: bool) -> int:
+    """Refresh displayed metadata while retaining the selected plan identity."""
+    identities = list(plans)
+    selected = st.session_state.get(key, fallback)
+    if selected not in plans:
+        selected = fallback
+    signature = '_'.join(f'{plan.id}-{plan.revision}' for plan in plans.values())
+    identity = st.selectbox(label, identities, index=identities.index(selected),
+        format_func=lambda value: _label(plans[value]), key=f'{key}_widget_{signature}',
+        disabled=disabled)
+    st.session_state[key] = identity
+    return identity
+
+
 def _new_draft(plan: ProjectPlan, content: PlanContent | None = None) -> dict:
     source = content if content is not None else plan.content
     return dict(source=plan.id, revision=plan.revision, base=deepcopy(source),
@@ -269,17 +284,19 @@ def render_project_plans(workspace: PlanningWorkspace, project_id: int) -> None:
             if key in st.session_state and st.session_state[key] not in by_id:
                 st.session_state[key] = fallback
         reference_col, alternative_col = st.columns(2)
-        reference_id = reference_col.selectbox('Reference plan', list(by_id), index=list(by_id).index(baseline.id),
-            format_func=lambda identity: _label(by_id[identity]), key=f'plan_reference_{project_id}', disabled=project_id in drafts)
-        alternative_id = alternative_col.selectbox('Alternative plan', list(by_id), index=list(by_id).index(current.id),
-            format_func=lambda identity: _label(by_id[identity]), key=f'plan_alternative_{project_id}', disabled=project_id in drafts)
+        with reference_col:
+            reference_id = _plan_selector('Reference plan', by_id, f'plan_reference_{project_id}',
+                baseline.id, project_id in drafts)
+        with alternative_col:
+            alternative_id = _plan_selector('Alternative plan', by_id, f'plan_alternative_{project_id}',
+                current.id, project_id in drafts)
         alternative, reference = by_id[alternative_id], by_id[reference_id]
         alternative_content = service.current_content(project_id) if alternative.is_current else alternative.content
         with st.container(horizontal=True):
             if st.button('Edit alternative', key=f'plan_edit_{project_id}', disabled=not editable or project_id in drafts):
                 drafts[project_id] = _new_draft(alternative, alternative_content)
                 st.rerun()
-            status = st.selectbox('Plan status', ['draft', 'proposed', 'approved', 'rejected', 'deleted'],
+            status = st.selectbox('Alternative Plan status', ['draft', 'proposed', 'approved', 'rejected', 'deleted'],
                 index=['draft', 'proposed', 'approved', 'rejected', 'deleted'].index(alternative.status),
                 format_func=str.title, key=f'plan_status_{project_id}_{alternative.id}_{alternative.revision}',
                 disabled=project_id in drafts or not (editable or approver))

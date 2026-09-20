@@ -22,7 +22,7 @@ def test_plan_gantt_draft_save_preserves_reference_and_current(authorized):
     app = native_screen(SCREEN, RuntimeResources(authorized.database, authorized.key), authorized.binding(4).access).run()
     assert not app.exception
     assert not app.error, [error.value for error in app.error]
-    app.selectbox(key='plan_alternative_1').set_value(alternative.id).run()
+    next(widget for widget in app.selectbox if widget.label == 'Alternative plan').set_value(alternative.id).run()
     app.button(key='plan_edit_1').click().run()
     assert not app.exception
     app.text_input(key='plan_name_1_0').set_value('Option B').run()
@@ -33,7 +33,7 @@ def test_plan_gantt_draft_save_preserves_reference_and_current(authorized):
     assert saved[0].status == 'draft'
     assert saved[0].content == saved[1].content
     assert saved[-1].is_current and not saved[0].is_current
-    assert app.selectbox(key='plan_alternative_1').value == saved[0].id
+    assert next(widget for widget in app.selectbox if widget.label == 'Alternative plan').value == saved[0].id
 
 
 def test_cancel_draft_does_not_create_a_version(authorized):

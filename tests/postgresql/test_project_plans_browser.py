@@ -28,6 +28,35 @@ render_project_plans(create_planning_workspace(runtime,access=access), 1)
 '''
 
 
+def test_status_change_refreshes_both_selected_plan_labels(authorized, tmp_path):
+    plans = service(authorized, 4)
+    initial = plans.initialize(1)
+    alternative = plans.save(1, initial.id, initial.revision, 'Status option', initial.content)
+    with native_server(authorized, tmp_path, SCREEN) as server, sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            page = server.new_page(browser, viewport={'width': 1700, 'height': 1200})
+            page.goto(server.origin)
+            for label in ('Reference plan', 'Alternative plan'):
+                page.get_by_role('combobox', name=label, exact=True).click(timeout=30000)
+                page.get_by_role('option', name=re.compile('Status option')).click()
+            status = page.locator(f'.st-key-plan_status_1_{alternative.id}_{alternative.revision}').get_by_role('combobox')
+            expect(status).to_be_visible()
+            status.click()
+            page.get_by_role('option', name='Proposed', exact=True).click()
+            page.get_by_role('button', name='Apply status', exact=True).click()
+            for prefix in ('plan_reference_1_widget_', 'plan_alternative_1_widget_'):
+                selected = page.locator(f'[class*="st-key-{prefix}"]').get_by_role('combobox')
+                expect(selected).to_have_value(re.compile('Status option.*Proposed'))
+            with psycopg.connect(authorized.setup.operator_url) as connection:
+                assert connection.execute('''SELECT s.code FROM eppm.project_plan p
+                    JOIN eppm.plan_status s ON s.id=p.status_id WHERE p.id=%s''',
+                    (alternative.id,)).fetchone() == ('proposed',)
+            expect(page.get_by_test_id('stException')).to_have_count(0)
+        finally:
+            browser.close()
+
+
 def test_paired_gantt_retains_missing_tasks_and_saves_drag_as_new_version(authorized, tmp_path):
     with psycopg.connect(authorized.setup.operator_url) as connection:
         connection.execute("INSERT INTO eppm.project_task(project_id,task_name,start_date,end_date,project_plan_id) VALUES (1,'Design','2027-01-01','2027-01-05',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(1,'Removed task','2027-01-06','2027-01-08',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current))")

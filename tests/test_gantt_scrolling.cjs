@@ -163,12 +163,12 @@ test('resource headers synchronize horizontally without scroll-driven vertical p
   assert.doesNotMatch(script, /syncResourceHeaders|resource-header-offset/);
 });
 
-test('resource grid rounds small values and truncates values from 100', () => {
+test('resource grid rounds to one decimal below 100 and whole numbers from 100', () => {
   const context = vm.createContext({});
   vm.runInContext(script.slice(script.indexOf('    function formatResourceValue('),
     script.indexOf('    function renderResourceGrid(')), context);
   for (const [value, expected] of [[0, '0.0'], [1.26, '1.3'], [99.94, '99.9'],
-    [100, '100'], [100.99, '100'], [999.99, '999']]) {
+    [100, '100'], [100.49, '100'], [100.5, '101'], [100.98, '101'], [999.99, '1000']]) {
     assert.equal(context.formatResourceValue(value), expected);
   }
   assert.deepEqual([...context.resourceRowOffsets([{rowType:'group_total'}, {rowType:'pool_total'}, {rowType:'group_total'}])], [0,23.8,47.6,71.4]);

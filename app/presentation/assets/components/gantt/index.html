@@ -5364,7 +5364,7 @@ button:not(.context-menu-item):disabled {opacity:.5;}
     }
 
     function formatResourceValue(value) {
-      return value >= 100 ? String(Math.trunc(value)) : value.toFixed(1);
+      return value >= 100 ? String(Math.round(value)) : value.toFixed(1);
     }
 
     function resourceComparisonDiffers(poolId, scope) {
