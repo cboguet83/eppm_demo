@@ -29,13 +29,14 @@ render_planning_milestones(create_planning_workspace(runtime, access=access))
     with patch('app.presentation.pages.planning._interactive_gantt', return_value=None):
         app.run()
         assert not app.exception and not app.error
-        assert app.multiselect(key='planning_statuses').value == ['In Progress']
+        assert app.session_state['dashboard_filter_status'] == ['In Progress']
         assert app.session_state['planning_status_project_ids'] == (1,)
-        app.multiselect(key='planning_statuses').set_value(['Completed']).run()
+        app.checkbox(key='dashboard_filter_status_option_In Progress').uncheck()
+        app.checkbox(key='dashboard_filter_status_option_Completed').check().run()
         assert not app.exception and not app.error
         assert app.session_state['ms_multi_projects'] == [2]
-        app.button(key='clear_all_planning_filters').click().run()
-        assert app.multiselect(key='planning_statuses').value == ['In Progress']
+        app.button(key='dashboard_clear').click().run()
+        assert app.session_state['dashboard_filter_status'] == ['In Progress']
         assert app.session_state['planning_status_project_ids'] == (1,)
     workspace = create_planning_workspace(status_data, access=access)
     active, _ = _load_planning_pool_payload(workspace, workspace.revision(), (1,), {}, status_project_ids=(1,))
@@ -55,11 +56,12 @@ render_portfolio_overview(create_project_workspace(runtime, access=access))
         app.run()
         assert not app.exception and not app.error
         assert [row['project_id'] for row in table.call_args.args[0]] == [1]
-        app.multiselect(key='portfolio_statuses').set_value(['Completed']).run()
+        app.checkbox(key='dashboard_filter_status_option_In Progress').uncheck()
+        app.checkbox(key='dashboard_filter_status_option_Completed').check().run()
         assert [row['project_id'] for row in table.call_args.args[0]] == [2]
-        app.button(key='portfolio_clear_filters').click().run()
+        app.button(key='dashboard_clear').click().run()
         assert not app.exception and not app.error
-        assert app.multiselect(key='portfolio_statuses').value == ['In Progress']
+        assert app.session_state['dashboard_filter_status'] == ['In Progress']
         assert [row['project_id'] for row in table.call_args.args[0]] == [1]
 
 
