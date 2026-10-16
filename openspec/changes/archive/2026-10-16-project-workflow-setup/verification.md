@@ -265,6 +265,8 @@ failures documented below. Merging has not occurred and is not approved.
 | 4.4 | `1cce50d` | test(project-workflow-setup): verify causal CSV browser acknowledgment (task 4.4) |
 | 3.48 | `1444f3d` | test(project-workflow-setup): wait for chart locale before financial tooltip hover (task 3.48) |
 | 4.5 | `a51ab75` | test(project-workflow-setup): verify chart locale timing prerequisite repair (task 4.5) |
+| 3.49 | `4a83295` | test(project-workflow-setup): acknowledge shared filter fragment and navigation completion (task 3.49) |
+| 4.6 | `0563e04` | test(project-workflow-setup): verify shared-filter browser completion prerequisite (task 4.6) |
 
 ## Clean-runner portability follow-up
 
