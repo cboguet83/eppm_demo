@@ -362,3 +362,10 @@ Task 4.4 retains all prior full acceptance evidence as historical, records this
 new failed reference honestly, and requires full CI on the newly archived setup
 revision before merge. The performance baseline must be restarted with fresh
 coverage data after this repair; no speedup is claimed from a failed reference.
+
+
+Task 4.4 checks: all four affected native CSV modules pass; twenty independent
+employee executions pass; all ten Node checks and strict change/five-main-spec
+validation pass; no DEBUG-eppm-csv probe remains. The diff against `d9dd152` for
+`app` and `pyproject.toml` is empty, and the consent/upload/database assertions
+remain intact. No partial reference coverage is treated as acceptance.

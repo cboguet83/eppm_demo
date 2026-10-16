@@ -85,7 +85,7 @@ Each numbered checkbox is one dedicated commit containing its changes, relevant 
 
 - [x] 4.3 Verify the focused allocation-form correction against its original browser path and existing full acceptance evidence, validate OpenSpec, review unchanged application/migration bytes and record actual results before rearchiving; require final PR CI to pass and keep merge approval pending.
 
-- [ ] 4.4 Verify the CSV synchronization prerequisite repair with real affected browser workflows, unchanged app/migration bytes and strict OpenSpec/Node checks; record the failed reference attempt and actual repair evidence, rearchive, and require final PR CI before any approved merge.
+- [x] 4.4 Verify the CSV synchronization prerequisite repair with real affected browser workflows, unchanged app/migration bytes and strict OpenSpec/Node checks; record the failed reference attempt and actual repair evidence, rearchive, and require final PR CI before any approved merge.
 
 ## Workflow follow-up
 
