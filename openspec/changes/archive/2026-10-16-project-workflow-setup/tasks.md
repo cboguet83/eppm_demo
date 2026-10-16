@@ -73,11 +73,15 @@ Each numbered checkbox is one dedicated commit containing its changes, relevant 
 - [x] 3.44 Replace the OIDC/recovery test fixture's host data bind mount with a project-scoped Docker volume initialized by the non-root application image; verify runtime write access, real operator backups, restart/restore parity and authenticated access without host-UID assumptions.
 - [x] 3.45 Enable fail-fast execution in the existing full CI pytest command, preserving collection of all required groups, no-skip enforcement, 95% coverage and all remaining checks on successful runs; validate and document the failure-only behavior change.
 
+- [x] 3.46 Stabilize the native allocation form browser interaction against option-list rerendering without disabling actionability or weakening the no-rerun/submission assertions; reproduce the failure, verify both dialog variants repeatedly and document the exact test-only correction.
+
 ## 4. Integrated acceptance
 
 - [x] 4.1 Run OpenSpec strict validation and the verify-change skill, full pytest with strict mode and at least 95% coverage using isolated PostgreSQL/OIDC, and `node --test tests/test_*.cjs`; review the final diff and task-to-commit history and record actual commands/results in `verification.md`. Keep this task incomplete if any required gate cannot execute or fails; distinguish partial results from full acceptance.
 
 - [x] 4.2 Verify the CI portability repairs with the complete benchmark module, deployed recovery and real OIDC workflows; retain the passing full application baseline, review unchanged application/migration bytes and updated artifacts, record the first CI failure and focused repair evidence, and validate OpenSpec before rearchiving. Require full CI on the final updated PR revision to pass before merge.
+
+- [x] 4.3 Verify the focused allocation-form correction against its original browser path and existing full acceptance evidence, validate OpenSpec, review unchanged application/migration bytes and record actual results before rearchiving; require final PR CI to pass and keep merge approval pending.
 
 ## Workflow follow-up
 

@@ -5,7 +5,7 @@ import pytest
 from streamlit.proto.BackMsg_pb2 import BackMsg
 
 from tests.test_dialog_browser import expect, sync_playwright
-from tests.postgresql.browser import native_server
+from tests.postgresql.browser import NativeBrowserServer, native_server
 
 
 _APP = '''
@@ -35,11 +35,15 @@ def popup_server(authorized, tmp_path, request):
         yield server
 
 
+@pytest.mark.parametrize('moving_options', [False, True], ids=['steady', 'moving'])
 @pytest.mark.parametrize('popup_server', [
     _APP.replace('OPEN_DIALOG', "_manage_project_resource_pools_dialog(1,'Project',workspace)"),
     _APP.replace('OPEN_DIALOG', "_manage_task_resource_pools_dialog(1,'Task',1,workspace)"),
 ], indirect=True, ids=['project', 'task'])
-def test_pool_and_fte_changes_do_not_send_a_rerun_until_submitted(popup_server):
+def test_pool_and_fte_changes_do_not_send_a_rerun_until_submitted(
+    popup_server: NativeBrowserServer, moving_options: bool,
+) -> None:
+    """Keep form edits local even when dropdown layout is unstable."""
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
@@ -52,18 +56,30 @@ def test_pool_and_fte_changes_do_not_send_a_rerun_until_submitted(popup_server):
                         reruns.append(message)
             page.on('websocket', lambda socket: socket.on('framesent', record))
             page.goto(popup_server.origin)
+            if moving_options:
+                page.add_style_tag(content='''
+                    @keyframes eppm-test-option-motion {
+                        from { transform: translateX(0); }
+                        to { transform: translateX(5px); }
+                    }
+                    [role="option"] {
+                        animation: eppm-test-option-motion .2s linear infinite alternate;
+                    }
+                ''')
             dialog = page.get_by_role('dialog')
             pool = dialog.get_by_role('combobox')
             expect(pool).to_be_visible(timeout=30000)
             page.wait_for_function("document.querySelector('[data-testid=stApp]').dataset.testScriptState === 'notRunning'")
             reruns.clear()
-            selection = dialog.get_by_test_id('stSelectbox')
             before = pool.input_value()
             pool.click()
             options = page.locator('[role=option]')
             expect(options.first).to_be_visible()
-            options.nth(1).click()
-            assert pool.input_value() != before
+            # Native keyboard selection remains usable while the virtualized
+            # option list moves; it does not require forcing a pointer click.
+            pool.press('ArrowDown')
+            pool.press('Enter')
+            expect(pool).not_to_have_value(before)
             fte = dialog.get_by_role('spinbutton')
             fte.fill('2.5')
             fte.press('Tab')

@@ -12,7 +12,7 @@ and five subtests**, with **zero failures, errors or skips**, in **2,436.50s
 
 | Dimension | Result |
 | --- | --- |
-| Completeness | 50/50 tasks; 12/12 requirements mapped |
+| Completeness | 52/52 tasks; 12/12 requirements mapped |
 | Correctness | All 19 scenarios mapped and covered by passing verification |
 | Coherence | Design and repository patterns reviewed; one optional-import finding corrected; no open implementation findings |
 
@@ -23,7 +23,7 @@ repairs, verified and rearchived before the PR update. No merge is approved.
 
 ## Completeness
 
-All 50 tracked tasks are complete in dedicated commits, including four CI portability and verification follow-ups. The initial tooling-only exemption was superseded by
+All 52 tracked tasks are complete in dedicated commits, including the runner portability and allocation-form follow-ups. The initial tooling-only exemption was superseded by
 approved application repairs. Five readable capability deltas contain 12
 requirements and 19 scenarios. None is intentionally skipped.
 
@@ -260,6 +260,9 @@ failures documented below. Merging has not occurred and is not approved.
 | 3.45 | `4499d2d` | test(project-workflow-setup): fail CI promptly without reducing green-run checks (task 3.45) |
 | 4.2 | `1c90f97` | test(project-workflow-setup): verify runner portability repairs and retain full baseline evidence (task 4.2) |
 
+| 3.46 | `eb28666` | Allocation form prerequisite repair and verification |
+| 4.3 | `56f39a9` | Allocation form prerequisite repair and verification |
+
 ## Clean-runner portability follow-up
 
 The first PR run ([38904081512](https://github.com/cboguet83/eppm_demo/actions/runs/38904081512))
@@ -301,3 +304,34 @@ validation passes for the change and all five main specs. `git diff d9dd152 --
 app pyproject.toml` is empty. No new application defect or business rule change
 was needed for the CI repairs. Final CI must execute on the archived published
 revision; its result must not be inferred from these focused checks.
+
+
+## Allocation form prerequisite repair
+
+The second full PR run ([38911540632](https://github.com/cboguet83/eppm_demo/actions/runs/38911540632))
+stopped after one failure and 1,487 passes in 21m15s. The project allocation form
+option became unstable/detached during `options.nth(1).click()`. This failed run
+is not full acceptance. The user explicitly approved a focused setup-branch
+repair before resuming the separate test-performance plan.
+
+The exact original module passed locally (two tests, 9.06s), so the CI-only
+failure cannot be claimed deterministic. A controlled moving-option case on the
+actual native form then reproduced the same actionability timeout: one failure,
+three deselected, 33.20s. It isolates layout motion as a sufficient cause, not
+proof of the precise source of CI layout changes.
+
+Task 3.46 changes test interaction to native combobox ArrowDown/Enter and adds
+stationary/moving option cases to both project and task dialogs. No forced click,
+retry or longer timeout is introduced. The selected pool must change, WebSocket
+reruns must stay empty before submit, and the submitted 2.50 FTE allocation must
+render. Application, migrations and coverage configuration are unchanged.
+
+The first corrected complete module run passed all four cases in 16.81s.
+A second complete run passed all four cases in 16.80s. Task 4.3 verified
+strict change/main-spec validation, ten passing Node checks and an empty
+`git diff d9dd152 -- app pyproject.toml`. The final diff preserves native
+actionability and every original form assertion; two additional moving-layout
+cases are collected. All five main-spec requirement/scenario blocks remain
+synchronized, with no product delta introduced by this repair. Final
+full PR CI is still required; the earlier full local acceptance remains historical
+baseline evidence and is not described as a run of this correction.
