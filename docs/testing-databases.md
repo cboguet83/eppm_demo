@@ -8,8 +8,20 @@ Never point these settings at an application deployment.
 ## Template lifecycle
 
 `tests/postgresql/template_database.py` provides `DatabaseTemplateFactory`.
-At this rollout stage it is verified support code; existing pytest database
-fixtures still use their original preparation path.
+The pytest fixtures use this owner for both preparation modes. The rollout
+default remains `fresh`; template preparation is explicitly selectable:
+
+```bash
+python -m pytest --postgres-test-db-mode=fresh
+python -m pytest --postgres-test-db-mode=template
+```
+
+Supply the same isolated test credentials and other prerequisites as for normal
+PostgreSQL verification. `pg_database` yields a new migrated database in either
+mode. `empty_database` always yields an independent unmigrated database, including
+when a test explicitly requests both fixtures. Existing imports of
+`PostgreSQLFixture` and `database_url` from the PostgreSQL conftest remain valid.
+Template mode does not bypass historical upgrade or rollback migrations.
 
 Each factory owns an invocation/worker-qualified namespace and records the exact
 databases it successfully creates. Its first `clone()` builds a fresh database

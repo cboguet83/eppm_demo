@@ -29,6 +29,12 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         action="store_true",
         help="Require PostgreSQL/browser prerequisites, collection, no skips.",
     )
+    parser.addoption(
+        "--postgres-test-db-mode",
+        choices=("fresh", "template"),
+        default="fresh",
+        help="Prepare PostgreSQL tests through fresh migrations or clones.",
+    )
 
 
 def pytest_configure(config: pytest.Config) -> None:
