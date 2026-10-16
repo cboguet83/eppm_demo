@@ -259,9 +259,10 @@ failures documented below. Merging has not occurred and is not approved.
 | 3.44 | `0e4d883` | test(project-workflow-setup): isolate recovery archives from host user ownership (task 3.44) |
 | 3.45 | `4499d2d` | test(project-workflow-setup): fail CI promptly without reducing green-run checks (task 3.45) |
 | 4.2 | `1c90f97` | test(project-workflow-setup): verify runner portability repairs and retain full baseline evidence (task 4.2) |
-
-| 3.46 | `eb28666` | Allocation form prerequisite repair and verification |
-| 4.3 | `56f39a9` | Allocation form prerequisite repair and verification |
+| 3.46 | `eb28666` | test(project-workflow-setup): select allocation form options without unstable pointer targets (task 3.46) |
+| 4.3 | `56f39a9` | test(project-workflow-setup): verify allocation form prerequisite repair (task 4.3) |
+| 3.47 | `07d8513` | test(project-workflow-setup): acknowledge CSV consent through server-rendered state (task 3.47) |
+| 4.4 | `1cce50d` | test(project-workflow-setup): verify causal CSV browser acknowledgment (task 4.4) |
 
 ## Clean-runner portability follow-up
 
