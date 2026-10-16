@@ -44,11 +44,16 @@ def _planning_page(page: 'Page', server: BrowserDeployment, data: dict[str, obje
     from playwright.sync_api import expect
 
     page.goto(server.origin + '/?' + urlencode({'nav': PAGE_PLANNING}))
-    projects = page.locator('.st-key-ms_multi_projects').get_by_role('combobox')
-    projects.click()
+    page.get_by_role('button', name='Advanced filters').click()
+    fields = page.get_by_role('combobox', name='Filter fields', exact=True)
+    fields.fill('Project')
+    page.get_by_role('option', name='Project', exact=True).click()
+    fields.press('Tab')
+    projects = page.get_by_role('combobox', name='Project', exact=True)
     projects.fill('Recovery retained project')
     page.get_by_role('option', name=re.compile('Recovery retained project')).click()
     projects.press('Tab')
+    page.keyboard.press('Escape')
     iframe = page.locator('iframe[title*="interactive_gantt"]')
     expect(iframe).to_be_visible()
     frame = iframe.element_handle().content_frame()
@@ -125,8 +130,9 @@ def test_representative_deployed_restart_and_restore_preserve_truth_access_and_r
             deployment.command('stop', 'app')
             before = operator_json(deployment, SNAPSHOT, stage='source snapshot')
             assert before['counts']['project'] == 10001
-            assert before['counts']['project_task'] == 73929
-            assert before['counts']['resource_pool_assignment'] == 10201
+            assert before['counts']['project_task'] == data['summary']['tasks_created']
+            assert before['counts']['resource_pool_assignment'] == data['assignments']
+            assert data['assignments'] >= 1000
             assert before['counts']['app_user'] == 2
             assert before['counts']['app_role_assignment'] == 3
             assert before['counts']['app_security_audit'] > 0

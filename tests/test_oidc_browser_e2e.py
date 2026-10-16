@@ -107,7 +107,8 @@ def deployment():
         target.writelines(f"{key}={value}\n" for key, value in values.items())
     image_override = directory / "image-only.yml"
     image_override.write_text(
-        "services:\n  app:\n    volumes: !override\n      - type: bind\n"
+        "services:\n  postgres:\n    ports: !reset []\n"
+        "  app:\n    volumes: !override\n      - type: bind\n"
         "        source: ${EPPM_DATA_DIRECTORY}\n        target: /app/data\n",
         encoding="utf-8",
     )
@@ -139,11 +140,14 @@ NATIVE_FIXTURE = """
 import os
 import psycopg
 from app.infrastructure.postgresql.seed_catalog import ensure_reference_catalog
+from app.infrastructure.postgresql.seed_plan import ensure_operator_plan
 
 with psycopg.connect(os.environ['DATABASE_OPERATOR_URL']) as connection:
     ensure_reference_catalog(connection)
-    connection.execute("INSERT INTO eppm.project(id,name) VALUES(1,'Visible browser project'),(2,'Hidden browser project')")
-    connection.execute("INSERT INTO eppm.project_task(project_id,task_name,start_date,end_date) VALUES(1,'Visible browser task','2026-01-01','2026-01-05'),(2,'Hidden browser task','2026-01-01','2026-01-05')")
+    connection.execute("INSERT INTO eppm.project(id,name,status) VALUES(1,'Visible browser project','In Progress'),(2,'Hidden browser project','In Progress')")
+    for project_id, label in ((1, 'Visible browser task'), (2, 'Hidden browser task')):
+        plan_id = ensure_operator_plan(connection, project_id)
+        connection.execute("INSERT INTO eppm.project_task(project_id,project_plan_id,task_name,start_date,end_date) VALUES(%s,%s,%s,'2026-01-01','2026-01-05')", (project_id, plan_id, label))
 """
 
 

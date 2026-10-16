@@ -24,8 +24,8 @@ Each numbered checkbox is one dedicated commit containing its changes, relevant 
 - [x] 3.9 Repair historical employee-function/code and financial migration fixtures to use the actual preceding schema and isolate the migration under test; preserve record, money, identity, ledger, and current-schema checks, and verify the three affected migration tests pass.
 - [x] 3.10 Refresh the existing staffing projection after direct fixture SQL changes in dashboard aggregate tests; retain the independent daily/domain oracle and exact peak/consumer assertions, and verify the complete dashboard aggregate module passes.
 - [x] 3.11 Update stale cancellation helper, accessible Gantt edit selector, annual finance metric labels, compact spacing expectation, and rollback exception assertions to the current contracts; verify affected dialog, browser, financial-report, and transaction-lease regressions without application rule changes.
-- [ ] 3.12 Remove host PostgreSQL port publication from uniquely isolated OIDC test deployments and initialize their project plan fixtures explicitly; verify the real authenticated browser and deployed recovery workflows can run alongside the full-suite PostgreSQL service without port collisions.
-- [ ] 3.13 Make selected-cache work measurements use the same six-query warm-up before and after ANALYZE invalidates plans; retain the exact 64-buffer growth limit and result-equivalence assertions, and verify planning/capacity performance regressions with recorded buffer metrics.
+- [x] 3.12 Remove host PostgreSQL port publication from uniquely isolated OIDC test deployments and initialize their project plan fixtures explicitly; align recovery selection with shared filters and compare seeded record counts before and after recovery; verify the real authenticated browser and deployed recovery workflows can run alongside the full-suite PostgreSQL service without port collisions.
+- [ ] 3.13 Restore bounded selected planning-cache lookups through a new migration while preserving bulk reads, current-plan projections, authorization, tokens and applied migration checksums; use symmetric warm-up measurements, retain the exact 64-buffer growth limit and result-equivalence assertions, capture the bounded-cache delta spec, and verify clean/upgrade, planning/capacity and security regressions with recorded metrics. Approved restoration of tested behavior; nested query plans confirmed portfolio-wide task scans.
 
 ## 4. Integrated acceptance
 
@@ -33,7 +33,7 @@ Each numbered checkbox is one dedicated commit containing its changes, relevant 
 
 ## Workflow follow-up
 
-- After every tracked task is complete and verification succeeds, sync the approved shared-filter and protected-helper delta specs and archive this change on the same branch. The original tooling-only spec exemption was superseded by approved application repairs. Inspect the archived artifacts and commit the archive/evidence in a dedicated lifecycle commit.
+- After every tracked task is complete and verification succeeds, sync the approved shared-filter, protected-helper and bounded-cache delta specs and archive this change on the same branch. The original tooling-only spec exemption was superseded by approved application repairs. Inspect the archived artifacts and commit the archive/evidence in a dedicated lifecycle commit.
 - Publish the branch and create a PR targeting `main` only after archive. Include task-to-commit evidence and verification outcomes, attach the PR to this chat, and require the full CI run on its final revision to pass.
 - Inspect GitHub protection and merge settings if accessible; report their verified state or limitations. Changing remote administrative settings is outside this plan.
 - Wait for the user's explicit approval of the concrete PR, then merge using a merge commit that preserves each task commit. Do not squash or rebase merge.
