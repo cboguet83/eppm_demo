@@ -93,7 +93,7 @@ Each numbered checkbox is one dedicated commit containing its changes, relevant 
 
 - [x] 4.5 Verify the chart locale synchronization prerequisite with real browser regressions, strict OpenSpec/Node checks and unchanged app/migration bytes, record previous successful and latest failed CI honestly, and rearchive before publishing the corrected setup PR revision.
 
-- [ ] 4.6 Verify the organization-frame acknowledgment prerequisite with the complete shared-filter browser module, strict OpenSpec/Node checks and unchanged app/migration bytes; record the failed frozen diagnostic honestly, rearchive and require full final-head PR CI before any approved merge.
+- [x] 4.6 Verify the organization-frame acknowledgment prerequisite with the complete shared-filter browser module, strict OpenSpec/Node checks and unchanged app/migration bytes; record the failed frozen diagnostic honestly, rearchive and require full final-head PR CI before any approved merge.
 
 ## Workflow follow-up
 
