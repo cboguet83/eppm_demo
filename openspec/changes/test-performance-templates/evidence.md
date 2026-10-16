@@ -68,3 +68,28 @@ Commands use the ignored explicit test-server environment with
 No failures/skips in these checks. Copied-epoch/OID recreation and transactional
 invalidation regressions remain unchanged and passed. These focused runs are
 correctness evidence, not controlled performance comparisons.
+
+## Task 3.1 — controller/worker full-suite proof
+
+Added development-only `pytest-xdist>=3.8,<4` and installed 3.8.0 with
+execnet 2.1.2 on Python 3.14.7. Published Python metadata permits this runtime;
+actual worker regressions establish compatibility rather than relying on a
+classifier. Runtime dependencies, application scope and coverage settings remain
+unchanged. CI remains serial pending scheduling and measured acceptance.
+
+The strict gate gathers complete ordered collections, rejects mismatches and
+duplicated IDs, requires both integration groups, forwards collection/runtime
+skips, and reconciles exactly-once call/final reports. Normal worker exits must
+include their skip proof. Missing reports, duplicate completions, missing worker
+proof or crashes fail; strict mode disables replacements even when requested.
+Existing serial skip/prerequisite behavior and nonzero exit codes are preserved.
+
+`python -m pytest tests/test_full_suite.py tests/test_full_suite_parallel.py -q -x`
+passes **48 cases in 11.07s**: 24 existing serial cases and 24 actual two-worker
+subprocess regressions. Cases include complete success, missing prerequisites or
+groups, deselection, required import/setup/call/teardown skips, divergence,
+missing reports, duplicate collection/completions, missing worker proof, crash,
+fail-fast, collection errors and successful subtests/optional skips. An initial
+duplicate-report probe accidentally shadowed gate registration; the corrected
+probe uses a distinct hook implementation and fails as intended. No failed
+diagnostic was counted as acceptance.

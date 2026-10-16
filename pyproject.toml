@@ -10,7 +10,7 @@ requires-python = ">=3.14,<3.15"
 dynamic = ["dependencies"]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "pytest-cov>=7"]
+dev = ["pytest>=8", "pytest-cov>=7", "pytest-xdist>=3.8,<4"]
 browser-tests = ["playwright==1.62.0"]
 
 [tool.setuptools.dynamic]

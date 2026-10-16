@@ -85,3 +85,22 @@ cleanup guarantee. After an uncontrolled worker kill, retain lifecycle logs,
 verify that the owning process has stopped and check the exact database identity
 and owner before targeted manual cleanup. Never sweep `eppm_test_%`, recreate
 shared roles or delete an unknown database to recover a run.
+
+## Full-suite proof with workers
+
+The development dependency is `pytest-xdist>=3.8,<4`; version 3.8.0 is exercised
+on the supported Python 3.14 runtime. See its [published package metadata](https://pypi.org/project/pytest-xdist/3.8.0/).
+Serial execution remains available, and CI remains serial until measured
+acceptance. Worker scheduling safety is a separate prerequisite to enabling
+parallel execution of the application suite.
+
+With `--require-full-suite`, the controller compares every worker's complete
+ordered collection, requires PostgreSQL and authenticated-browser groups, and
+reconciles exactly one call and final teardown per selected test. Setup skips
+or errors do not require a call report, but required skips still fail. Subtests
+retain their parent collection identity. Workers forward required collection
+skips as well as runtime skips; a normal exit without that proof fails. Missing
+or duplicate outcomes, divergent collections and worker loss cannot become a
+passing partial run. Strict mode disables worker replacements, including when a
+caller requests a restart allowance. Existing nonzero pytest statuses remain
+nonzero, and ordinary serial prerequisite/skip behavior remains unchanged.
