@@ -119,8 +119,13 @@ def settings_fragment_app(path, actor):
 
 
 
-def navigation_app(path, actor):
-    """Navigate composed protected pages while retaining the authorized shell."""
+def navigation_app(path: RuntimeResources, actor: Actor) -> None:
+    """Exercise sidebar navigation with a direct test identity.
+
+    Args:
+        path: Isolated runtime resources with a restricted database pool.
+        actor: Test identity supplied instead of the real OIDC account gate.
+    """
     import streamlit as st
     from app.application.services.access import AuthorizationPolicy, SessionLimits
     from app.application.services.business_access import BusinessAccess
@@ -128,8 +133,17 @@ def navigation_app(path, actor):
     from app.presentation.shell import render_application
 
     st.session_state["shell_runs"] = st.session_state.get("shell_runs", 0) + 1
+    from app.domain.access.models import AccessDenied
+
     access = BusinessAccess(actor, AuthorizationPolicy(lambda: 1000, SessionLimits()))
-    render_application(create_application_workspace(path, access=access))
+    try:
+        workspace = create_application_workspace(path, access=access)
+    except AccessDenied as error:
+        # This fixture injects an actor instead of the real OIDC account gate.
+        # Surface composition rejection safely for denial-payload checks.
+        st.error(str(error))
+        return
+    render_application(workspace)
 
 
 
