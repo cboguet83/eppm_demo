@@ -123,4 +123,4 @@ addition to restoring In Progress and unrestricted scoped project/resource reads
 Capture these real behavior contracts in focused delta specs; the initial
 tooling-only `skip_specs` exemption is superseded by the approved scope expansion.
 
-Land bootstrap inputs, policy/configuration, strict verification with tests, and PR triggering in distinct task commits on this branch. Complete gates and archive in a final task commit, then create the PR. Existing local test commands remain available; the documented completion command gains strict mode. Roll back through a reviewed revert PR if needed, preserving task history and avoiding runtime/database changes.
+Land bootstrap inputs, policy/configuration, strict verification with tests, and PR triggering in distinct task commits on this branch. Complete gates and archive in a final task commit, then create the PR. Existing local test commands remain available; the documented completion command gains strict mode. Roll back application and policy changes through a reviewed revert PR. Database corrections require a new migration; preserve all applied migration files and task history.
