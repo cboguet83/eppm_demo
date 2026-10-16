@@ -5,7 +5,7 @@ Each numbered checkbox is one dedicated commit containing its changes, relevant 
 ## 1. Planning and bootstrap
 
 - [x] 1.1 Capture the agreed setup proposal and design on `codex/project-workflow-setup`, explicitly skip product specs for this tooling-only change, and verify all required planning artifacts with `openspec status --change project-workflow-setup` and `openspec validate project-workflow-setup --strict`.
-- [ ] 1.2 Review and version the user-generated `.agents/skills/openspec-*/` files and initial `openspec/config.yaml` without rewriting generated skill bodies; verify the file inventory contains only intended bootstrap inputs, no credentials/local state, and OpenSpec resolves this repository's root.
+- [x] 1.2 Review and version the user-generated `.agents/skills/openspec-*/` files and initial `openspec/config.yaml` without rewriting generated skill bodies; verify the file inventory contains only intended bootstrap inputs, no credentials/local state, and OpenSpec resolves this repository's root.
 
 ## 2. Delivery policy
 
