@@ -1,6 +1,7 @@
 """Provision each test database separately; never reset application storage."""
 
 from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 import os
 import shutil
@@ -147,8 +148,24 @@ class AuthorizedFixture:
 
 
 @pytest.fixture
-def authorized(pg_database: PostgreSQLFixture) -> AuthorizedFixture:
+def authorized(pg_database: PostgreSQLFixture) -> Iterator[AuthorizedFixture]:
     """Seed actual accounts/sessions/grants as setup; exercise the restricted role."""
+    with authorized_database(pg_database) as fixture:
+        yield fixture
+
+
+@contextmanager
+def authorized_database(
+    pg_database: PostgreSQLFixture,
+) -> Iterator[AuthorizedFixture]:
+    """Seed and close an independent authorized test database.
+
+    Args:
+        pg_database: One test-owned migrated database, never shared state.
+
+    Yields:
+        The normal restricted pool and independently generated signing key.
+    """
     key = token_bytes(32)
     configure_signing_key(pg_database.operator_url, key.hex())
     with psycopg.connect(pg_database.operator_url) as operator:

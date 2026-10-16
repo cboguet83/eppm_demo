@@ -34,3 +34,37 @@ focused timings are not the final controlled whole-suite speedup comparison.
 The unchanged strict-suite gate checks also pass: **24 passed in 3.14s**.
 
 Fresh/template collection manifests are identical: **3,241 canonical test IDs**.
+
+## Task 2.3 — native clone and process isolation
+
+Reconciled setup prerequisite commit `bc18f05` through a merge commit, preserving
+its 58 dedicated task commits and the unrelated local environment/Compose edits.
+The setup PR remains unmerged; full CI and explicit merge approval remain gates.
+
+`authorized_database()` now supplies the same per-database key/account/session/
+grant seeding and restricted-pool teardown to ordinary fixtures and direct clone
+regressions. No application, migration or security contract changed. Native
+regressions prove sibling writes/sequences/revision generations, lifecycle/OID
+cache identities, signing-key rejection, local session revocation, pristine
+subsequent clones and two simultaneous independent factory invocations.
+Initialization faults and checksum changes fail closed. The process probe proves
+normal `-x` cleanup and controlled hard-exit leftovers, then recovers only exact
+recorded database names with matching OID/owner; a foreign database survives.
+Uncontrolled forced worker termination still cannot guarantee finalizers.
+
+Commands use the ignored explicit test-server environment with
+`python -m dotenv -f .local/workflow-tests.env run -- python -m pytest -q -x`:
+
+- Six modules: `test_template_database`, `test_template_isolation`,
+  `test_revisions`, `test_business_security`, `test_business_transaction_security`,
+  `test_authorization`: **270 passed in 149.87s**, template mode.
+- Eight cache modules: `test_authorized_cache`, `test_derived_cache`,
+  `test_bounded_cache_keys`, `test_cache_key_plans`, `test_revision_plans`,
+  `test_portfolio_revision`, `test_plan_import_revision`, `test_display_revision`:
+  **92 passed in 102.08s**, template mode.
+- New six isolation/process cases independently pass with fresh rollout setting:
+  **6 passed in 7.56s**. The tests explicitly request clones where appropriate.
+
+No failures/skips in these checks. Copied-epoch/OID recreation and transactional
+invalidation regressions remain unchanged and passed. These focused runs are
+correctness evidence, not controlled performance comparisons.

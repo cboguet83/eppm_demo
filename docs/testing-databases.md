@@ -58,3 +58,30 @@ exact identifiers when diagnosing a worker crash and inspect ownership before
 manual recovery. An unknown leftover is not permission to delete every matching
 database. Worker-crash and parallel-run behavior is verified separately before
 parallel CI is enabled.
+
+## Isolation and process failures
+
+`test_template_isolation.py` seeds two simultaneous clones through the same
+`authorized_database()` context used by the ordinary `authorized` fixture. Each
+seed creates its own signing key, sessions and grants after cloning. Native
+authorization rejects a sibling's signing key, session revocation stays local,
+business changes invalidate only their own cache snapshot, and generated project
+IDs and revision generations remain independent. A subsequent pristine clone
+proves that business and authentication seeds never reached the source.
+
+Concurrent factories deliberately use the same worker label: their random
+invocation identities remain distinct, and closing one leaves the other's live
+clone and template intact. New factories revalidate source checksums rather than
+finding a previously migrated template by name. An epoch initialization fault
+must fail before yielding a clone and clean up its exact registered resource.
+
+The process regression distinguishes normal pytest `-x` teardown from a hard
+process exit. Normal failure runs finalizers; hard exit leaves two owned
+resources. The test records only exact database names, OIDs and owner OIDs before
+the controlled crash. Its parent recovers those exact resources only when all
+three coordinates still match, and verifies that a foreign test database
+survives. This is a bounded test recovery procedure, not a production controller
+cleanup guarantee. After an uncontrolled worker kill, retain lifecycle logs,
+verify that the owning process has stopped and check the exact database identity
+and owner before targeted manual cleanup. Never sweep `eppm_test_%`, recreate
+shared roles or delete an unknown database to recover a run.

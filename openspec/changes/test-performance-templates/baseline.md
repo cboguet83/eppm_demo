@@ -59,6 +59,6 @@ is a required behavior gate, not a host coverage claim.
 
 ## Results
 
-The second reference stopped after 758 passes and a recovery setup error in 561.20s. Compose rejected newly added unrelated local pgAdmin variable requirements before starting its isolated services; no source fix is needed. This attempt is not acceptance. Verification is moving to a clean committed checkout, preserving the user configuration. The clean-checkout recovery preflight passed in 159.76s. The third full reference is now running from that same committed checkout. Node checks: ten passed, no failures/skips.
+The second reference stopped after 758 passes and a recovery setup error in 561.20s. Compose rejected newly added unrelated local pgAdmin variable requirements before starting its isolated services; no source fix is needed. This attempt is not acceptance. Verification is moving to a clean committed checkout, preserving the user configuration. The clean-checkout recovery preflight passed in 159.76s. The third local diagnostic finished with 2,378 passes, five passing subtests and one organization-frame navigation failure in 2,360.80s (39m20s). It is not acceptance. It ran the frozen pre-optimization fixture code, and the prerequisite acknowledgment failure is being repaired separately. Node checks: ten passed, no failures/skips.
 Sanitized setup/call/teardown timing and actual coverage will be recorded after
 completion. Historical setup measurements are motivation only, not this run.
