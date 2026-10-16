@@ -132,12 +132,32 @@ class PostgresPlanningStore:
         """Join predecessor metadata only after both dependency endpoints pass RLS."""
         label = ',task.task_name' if task_label else ''
         return self._rows(DependencySchedule, f'''WITH selected_tasks AS MATERIALIZED ({selected_tasks})
-            SELECT d.id,d.task_id,d.predecessor_task_id,d.predecessor_project_id,d.link_type,d.lag_days,
+            SELECT d.id,d.task_id,coalesce(pred.id,d.predecessor_task_id) AS predecessor_task_id,
+                   d.predecessor_project_id,d.link_type,d.lag_days,
                    pred.task_name AS predecessor_task_name,to_char(pred.start_date,'YYYY-MM-DD') AS pred_start_date,
                    to_char(pred.end_date,'YYYY-MM-DD') AS pred_end_date,pred.project_id AS pred_task_project_id,
                    p.name AS predecessor_project_name {label}
-            FROM selected_tasks task JOIN eppm.effective_task_dependencies d ON d.task_id=task.id
-            LEFT JOIN eppm.current_project_task pred ON pred.id=d.predecessor_task_id
+            FROM selected_tasks task
+            JOIN eppm.current_task_dependencies d ON d.task_id=task.id
+            LEFT JOIN eppm.project_task original ON original.id=d.predecessor_task_id
+            LEFT JOIN LATERAL (
+                SELECT coalesce(original.stable_task_id,original.id) AS logical_id OFFSET 0
+            ) identity_key ON true
+            LEFT JOIN LATERAL (
+                SELECT active.id,active.task_name,active.start_date,active.end_date,active.project_id
+                FROM eppm.project_task active
+                JOIN eppm.project_plan plan ON plan.id=active.project_plan_id AND plan.is_current
+                WHERE active.stable_task_id IS NOT NULL
+                    AND active.stable_task_id=identity_key.logical_id
+                    AND NOT active.is_deleted
+                UNION ALL
+                SELECT active.id,active.task_name,active.start_date,active.end_date,active.project_id
+                FROM eppm.project_task active
+                JOIN eppm.project_plan plan ON plan.id=active.project_plan_id AND plan.is_current
+                WHERE active.stable_task_id IS NULL
+                    AND active.id=identity_key.logical_id
+                    AND NOT active.is_deleted OFFSET 0
+            ) pred ON true
             LEFT JOIN eppm.project p ON p.id=d.predecessor_project_id ORDER BY d.id''', params)
 
     def get_dependencies_for_project(self, project_id: int) -> list[DependencySchedule]:
@@ -148,11 +168,11 @@ class PostgresPlanningStore:
         """Batch incoming links without enumerating unrelated projects."""
         if not project_ids:
             return []
-        return self._dependencies('SELECT id,task_name FROM eppm.current_project_task WHERE project_id=ANY(%s::bigint[])', (project_ids,))
+        return self._dependencies('SELECT id,task_name FROM eppm.project_task WHERE project_id=ANY(%s::bigint[]) AND NOT is_deleted AND project_plan_id IN (SELECT id FROM eppm.project_plan WHERE is_current)', (project_ids,))
 
     def get_task_dependencies(self, task_id: int) -> list[DependencySchedule]:
         """Read one task's incoming links with the existing minimal field contract."""
-        return self._dependencies('SELECT id,task_name FROM eppm.current_project_task WHERE id=%s', (task_id,), task_label=False)
+        return self._dependencies('SELECT id,task_name FROM eppm.project_task WHERE id=%s AND NOT is_deleted AND project_plan_id IN (SELECT id FROM eppm.project_plan WHERE is_current)', (task_id,), task_label=False)
 
     def get_project_date_bounds(self, project_id: int) -> tuple[str | None, str | None]:
         """Aggregate native dates and retain absent-project null bounds."""

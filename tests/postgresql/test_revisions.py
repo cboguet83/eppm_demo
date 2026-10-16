@@ -32,7 +32,7 @@ DISPLAY_SOURCE_TABLES = frozenset({
     'project_role', 'project_role_translation', 'project_tag', 'project_task', 'project_type',
     'project_type_property', 'project_type_property_default', 'project_type_property_default_item',
     'project_type_property_rule', 'resource_pool', 'resource_pool_assignment',
-    'resource_pool_mapping',
+    'resource_pool_mapping', 'pool_staffing_projection',
     'resource_pool_tag', 'schema_groups', 'schema_param_options', 'schema_parameter_translation',
     'schema_parameters', 'tag_dictionnary', 'tag_group', 'task_dependencies', 'task_tag',
     'team', 'team_function',

@@ -1,0 +1,103 @@
+# Tasks
+
+Each numbered checkbox is one dedicated commit containing its changes, relevant tests/docs, and completion marker. Commit subjects identify `project-workflow-setup` and the task ID. Archive and PR operations are follow-up steps rather than tracked prerequisites for archive.
+
+## 1. Planning and bootstrap
+
+- [x] 1.1 Capture the agreed setup proposal and design on `codex/project-workflow-setup`, explicitly skip product specs for this tooling-only change, and verify all required planning artifacts with `openspec status --change project-workflow-setup` and `openspec validate project-workflow-setup --strict`.
+- [x] 1.2 Review and version the user-generated `.agents/skills/openspec-*/` files and initial `openspec/config.yaml` without rewriting generated skill bodies; verify the file inventory contains only intended bootstrap inputs, no credentials/local state, and OpenSpec resolves this repository's root.
+
+## 2. Delivery policy
+
+- [x] 2.1 Add the agreed standing authorization and workflow pointer to AGENTS.md, create `docs/development-workflow.md`, and configure OpenSpec artifact rules and operation guidance for branch-before-planning, GrillMe discovery, per-task commits, explicit verification, archive-before-PR, human merge approval and merge commits; verify supported configuration with OpenSpec instructions/status/validation, check documentation links, and confirm this change follows the documented sequence. Keep the full-check command aligned with the strict option introduced by task 3.1.
+
+## 3. Full verification and automatic PR checks
+
+- [x] 3.1 Add opt-in `--require-full-suite` pytest hooks and isolated pytester regression tests for prerequisite validation, required-group collection, collection/setup/runtime skips, accepted full runs, failure propagation, and unchanged ordinary local runs; document its use in the contributor guide and verify the focused regressions pass without connecting to external services.
+- [x] 3.2 Add an unfiltered `pull_request` trigger alongside manual dispatch in `.github/workflows/tests.yml`, enable strict mode in its existing full pytest command, and correct README's manual-only CI description; verify the diff retains Python 3.14, isolated PostgreSQL with separate roles, browser opt-in, Docker image build, 95% coverage, Node checks and read-only permissions, and validate workflow syntax using available tooling.
+- [x] 3.3 Update stale FTE assertions in `tests/test_dashboard_resource_chart.cjs` and `tests/test_ui_menus.cjs` to the existing one-decimal UI behavior, preserving integer kEUR money display and fractional resource values; verify `node --test tests/test_*.cjs` passes without application changes. Added with explicit user approval after full verification exposed baseline failures.
+- [x] 3.4 Repair stale dashboard-label and bounded-cache upgrade assertions in `test_application_authentication_entry.py` and `test_bounded_cache_keys.py`, preserving authentication rejection checks and historical ledger/cache guarantees; verify focused real-PostgreSQL regressions pass. Approved baseline repair; scope the bounded-key upgrade to its own migration rather than all subsequent feature migrations.
+- [x] 3.5 Update existing planning UI/benchmark test harnesses to explicitly enter the current edit mode before permitted mutation events, preserving read-only/revocation assertions and source-database isolation; verify the affected business-transaction and benchmark regressions against real PostgreSQL. Approved baseline repair; application permission rules remain unchanged.
+- [x] 3.6 Update stale business-transaction fixtures/selectors to current employee-function, shared-filter, hierarchy event, and inactive CSV revision contracts, preserving hidden-owner and employee-detail non-disclosure assertions; verify all affected security cases against real PostgreSQL. Approved baseline repair; do not relax authorization or change application behavior.
+- [x] 3.7 Add a new migration setting the WBS and two hierarchy-cycle helpers' search_path to `pg_catalog, eppm, pg_temp` without changing their bodies or applied migrations, capture the protected-helper delta spec, and verify clean/upgrade migration behavior plus the unchanged privileged-helper assertion and WBS constraint regressions. Explicitly approved application hardening.
+- [x] 3.8 Restore free-text tags alongside dictionary tags in the scoped shared filter catalog, capture the shared-filter delta spec, and verify Any/All selection plus hidden-project/tag non-disclosure. Explicitly approved restoration of tested behavior.
+- [x] 3.9 Repair historical employee-function/code and financial migration fixtures to use the actual preceding schema and isolate the migration under test; preserve record, money, identity, ledger, and current-schema checks, and verify the three affected migration tests pass.
+- [x] 3.10 Refresh the existing staffing projection after direct fixture SQL changes in dashboard aggregate tests; retain the independent daily/domain oracle and exact peak/consumer assertions, and verify the complete dashboard aggregate module passes.
+- [x] 3.11 Update stale cancellation helper, accessible Gantt edit selector, annual finance metric labels, compact spacing expectation, and rollback exception assertions to the current contracts; verify affected dialog, browser, financial-report, and transaction-lease regressions without application rule changes.
+- [x] 3.12 Remove host PostgreSQL port publication from uniquely isolated OIDC test deployments and initialize their project plan fixtures explicitly; align recovery selection with shared filters and compare seeded record counts before and after recovery; verify the real authenticated browser and deployed recovery workflows can run alongside the full-suite PostgreSQL service without port collisions.
+- [x] 3.13 Restore bounded selected planning-cache lookups through a new migration while preserving bulk reads, current-plan projections, authorization, tokens and applied migration checksums; use symmetric warm-up measurements, retain the exact 64-buffer growth limit and result-equivalence assertions, capture the bounded-cache delta spec, and verify clean/upgrade, planning/capacity and security regressions with recorded metrics. Approved restoration of tested behavior; nested query plans confirmed portfolio-wide task scans.
+
+- [x] 3.14 Align retained-navigation/settings test harnesses with the intentional sidebar routing change; keep disabled/revoked access rejection and absence of project data in delivered component payloads, and verify actual Settings catalog-tab fragment isolation without application behavior changes.
+- [x] 3.15 Align Gantt browser edit selectors, explicit opt-in mutation harnesses and menu/expansion interactions with existing UI contracts; retain scenario-copy integrity, active/baseline isolation and revocation checks, and verify affected scenario, dependency, shared-panel and step-rerun modules.
+
+- [x] 3.16 Update stale organization-tree payload and sidebar Settings/deep-link assertions to the current component and route contracts; preserve hierarchy labels, lazy page loading and legacy-import exclusions, and verify affected native modules.
+- [x] 3.17 Update the exact runtime function allowlist from retired wbs_options to its scoped replacement wbs_allocation_facts, confirming the existing migration explicitly grants that reader while privileged trigger helpers remain private; verify integrity and authorization checks.
+
+- [x] 3.18 Align planning transaction tests with fail-closed missing-endpoint denial, soft deletion and new identities after destructive schedule replacement; retain complete rollback snapshots, link cleanup and CSV schedule/dependency equivalence, and verify both planning modules.
+- [x] 3.19 Verify operator reset preserves the complete current pool catalog, including hierarchy containers, instead of assuming a retired fixed pool count; retain native archive-count checks and verify operator wrappers.
+
+- [x] 3.20 Synchronize native project selection with the visible chart before closing its popover, preserving the active highlight and dashboard-aligned spacing assertions; verify the real browser regression without application behavior changes.
+- [x] 3.21 Restore bounded dependency metadata reads after current-plan views introduced portfolio-wide scans, adding a plain stable-reference index through a new migration with clean/upgrade checks; retain active endpoint remapping, native RLS and hidden-endpoint redaction, capture a focused delta spec, and verify the unchanged 64-buffer and two-row scan bounds plus planning authorization and HTTP contracts. Approved restoration of tested behavior.
+
+- [x] 3.22 Align lazy planning fixtures with the explicit In Progress/edit-mode contracts, retain missing-endpoint AccessDenied rollback/cache checks, and assert retired flexible-filter state is removed after drill-through; verify affected lazy/read/UI modules.
+- [x] 3.23 Align capacity exception tests with accepted direct-plus-indirect allocation and period-minimum decisions, refresh staffing after direct fixture SQL changes, and preserve independent overload/deduplication/source-switch assertions; verify exception and overallocation modules.
+- [x] 3.24 Isolate historical portfolio revision migration 0027 before later feature rewrites, preserve full ledger/security checks, update the pool-type upgrade tail inventory and verify financial components appended to portfolio revisions; verify both migration/revision modules.
+- [x] 3.25 Align portfolio layout/shortcut and scoped editor browser fixtures with shared filters, plain navigation labels and explicit In Progress setup, retaining click readiness, permission and unset-property preservation; verify both browser modules.
+- [x] 3.26 Restore bounded task-source fingerprints by changing active assignment task membership to an equivalent indexed correlated lookup in a new migration; preserve native invoker security, view grants/check option, record/ledger history and token equivalence, capture its focused spec scenarios, and verify unchanged task-source/cache growth limits and assignment/security regressions.
+
+- [x] 3.27 Restore independent concurrent title saves by avoiding global WBS reads and rewrites for unchanged or empty replacements and preserving actual seeded shares in title-only form workloads; retain authoritative authorization, deletion of existing shares, nonempty cap validation and serializable isolation, add regression/spec evidence, and verify all five ten-editor workloads plus WBS/security checks.
+- [x] 3.28 Align remaining scoped planning/portfolio collaboration UI harnesses with explicit edit consent, shared-filter/component identifiers and current typed link failures, preserving hidden-owner redaction, denied mutation checks and retained-scroll authorization; verify affected UI modules.
+- [x] 3.29 Repair remaining historical migration/source-trigger inventory assertions by isolating their target migration before later rewrites and retaining complete current-schema/ledger checks; verify affected priority, resource-soft-deletion, revision-plan and revision modules.
+- [x] 3.30 Refresh the direct-SQL staffing fixture used by shared-permission revocation races; preserve nonempty privileged staffing before revocation and complete redaction afterward, and verify the scoped capacity-race module.
+
+- [x] 3.31 Align retired financial-edit widget, project organization-expander, CSV edit-consent and shared-menu-style assertions with current UI contracts; retain readonly title controls, named inactive import behavior and complete menu-specific style checks, and verify affected project UI modules.
+- [x] 3.32 Restore the Gantt reset signal when clearing shared filters, retaining default In Progress state, unrestricted project/resource selection and authorization; update the focused shared-filter spec and verify reset regression plus shared-filter/browser cases.
+
+- [x] 3.33 Align seeded-title browser setup and status-scope tests with shared status checkboxes/reset controls while retaining original project statuses, property row versions and exact allocation/portfolio results; verify both modules.
+- [x] 3.34 Update audited popup/component inventories, allow only the shared logging facility in the presentation dependency rule, and align browser export checks with current typed organization endpoints; preserve all storage/legacy dependency bans and verify the four affected checks.
+- [x] 3.35 Align tag missing-reference expectations and concurrent-snapshot instrumentation with current typed errors and active task-tag projection; preserve foreign-key rejection and one-snapshot count/row guarantees and verify the complete tag contract module.
+- [x] 3.36 Refresh task-pool dialog fixtures after raw staffing/calendar changes and select task tags through current Settings section/tab state, retaining bounded reads, warning freshness and lazy editor checks; verify both modules.
+
+- [x] 3.37 Increase the full CI job timeout to 90 minutes based on the measured 47-minute-47-second local suite, preserving every prerequisite, coverage threshold and test group; validate the workflow and require the eventual PR run to pass.
+
+- [x] 3.38 Align scoped resource Settings tests with native tree actions and current multi-row mapping controls, preserving real dialog execution, unchanged database snapshots, empty catalog membership and rejection of fabricated mapping targets; verify the complete scoped resource Settings module.
+
+- [x] 3.39 Update the dashboard reset-state regression to assert the newly restored planning reset counter while retaining the exact default/filter state checks; verify the complete dashboard presentation module.
+- [x] 3.40 Synchronize CSV dismissal, Settings navigation and authenticated scope selection with a completed native Streamlit rerun rather than a pre-event idle snapshot; retain all upload-reset, hierarchy CRUD, role-grant and revocation assertions and verify the affected real browser workflows.
+
+- [x] 3.41 Restore coverage collection from existing native browser subprocesses using the installed pytest-cov 7/coverage-supported subprocess patch and graceful termination collection, declare its tooling minimum and document the measurement; verify actual child-process application lines are collected and strict pytester/browser checks pass without lowering coverage thresholds or exclusions.
+
+- [x] 3.42 Preserve optional-browser collection behavior by loading the existing Playwright skip gate before the new rerun helper in the hierarchy browser module; verify collection skips with Playwright blocked and the installed-browser module still passes. This import-order-only correction does not change application or installed-browser test behavior.
+
+- [x] 3.43 Configure the native benchmark test to accept a validated explicit browser executable and select the runner's installed Google Chrome in CI, retaining sandboxing, native payload/cleanup assertions and local Playwright fallback; verify the real benchmark using the override and validate workflow configuration.
+- [x] 3.44 Replace the OIDC/recovery test fixture's host data bind mount with a project-scoped Docker volume initialized by the non-root application image; verify runtime write access, real operator backups, restart/restore parity and authenticated access without host-UID assumptions.
+- [x] 3.45 Enable fail-fast execution in the existing full CI pytest command, preserving collection of all required groups, no-skip enforcement, 95% coverage and all remaining checks on successful runs; validate and document the failure-only behavior change.
+
+- [x] 3.46 Stabilize the native allocation form browser interaction against option-list rerendering without disabling actionability or weakening the no-rerun/submission assertions; reproduce the failure, verify both dialog variants repeatedly and document the exact test-only correction.
+
+- [x] 3.47 Diagnose and repair the shared CSV deletion-consent browser acknowledgment using causal server-rendered evidence while retaining upload/reset, consent and no-unsubmitted-save assertions; verify all four real catalog workflows and repeat the employee case, without application changes or retry masking.
+
+- [x] 3.48 Reproduce locale-change chart timing with delayed native component rendering and wait for the chart-specific translated accessibility label before tooltip hover; retain all five-locale, geometry, legend, color, ratio and tooltip assertions and verify immediate/delayed browser cases without application changes or retries.
+
+- [x] 3.49 Reproduce organization-frame navigation timing with a delayed native test screen, acknowledge completed expander/filter/view reruns through a test-only end-of-render marker, and retain every cross-view open-state and collapsed-filter highlight assertion; verify immediate/delayed browser cases without application changes or retry masking.
+
+## 4. Integrated acceptance
+
+- [x] 4.1 Run OpenSpec strict validation and the verify-change skill, full pytest with strict mode and at least 95% coverage using isolated PostgreSQL/OIDC, and `node --test tests/test_*.cjs`; review the final diff and task-to-commit history and record actual commands/results in `verification.md`. Keep this task incomplete if any required gate cannot execute or fails; distinguish partial results from full acceptance.
+
+- [x] 4.2 Verify the CI portability repairs with the complete benchmark module, deployed recovery and real OIDC workflows; retain the passing full application baseline, review unchanged application/migration bytes and updated artifacts, record the first CI failure and focused repair evidence, and validate OpenSpec before rearchiving. Require full CI on the final updated PR revision to pass before merge.
+
+- [x] 4.3 Verify the focused allocation-form correction against its original browser path and existing full acceptance evidence, validate OpenSpec, review unchanged application/migration bytes and record actual results before rearchiving; require final PR CI to pass and keep merge approval pending.
+
+- [x] 4.4 Verify the CSV synchronization prerequisite repair with real affected browser workflows, unchanged app/migration bytes and strict OpenSpec/Node checks; record the failed reference attempt and actual repair evidence, rearchive, and require final PR CI before any approved merge.
+
+- [x] 4.5 Verify the chart locale synchronization prerequisite with real browser regressions, strict OpenSpec/Node checks and unchanged app/migration bytes, record previous successful and latest failed CI honestly, and rearchive before publishing the corrected setup PR revision.
+
+- [x] 4.6 Verify the organization-frame acknowledgment prerequisite with the complete shared-filter browser module, strict OpenSpec/Node checks and unchanged app/migration bytes; record the failed frozen diagnostic honestly, rearchive and require full final-head PR CI before any approved merge.
+
+## Workflow follow-up
+
+- After every tracked task is complete and verification succeeds, sync the approved shared-filter, protected-helper, bounded-cache, bounded-dependency and independent-save delta specs and archive this change on the same branch. The original tooling-only spec exemption was superseded by approved application repairs. Inspect the archived artifacts and commit the archive/evidence in a dedicated lifecycle commit.
+- Publish the branch and create a PR targeting `main` only after archive. Include task-to-commit evidence and verification outcomes, attach the PR to this chat, and require the full CI run on its final revision to pass.
+- Inspect GitHub protection and merge settings if accessible; report their verified state or limitations. Changing remote administrative settings is outside this plan.
+- Wait for the user's explicit approval of the concrete PR, then merge using a merge commit that preserves each task commit. Do not squash or rebase merge.

@@ -117,12 +117,26 @@ def test_task_batches_without_assigned_pools_do_not_load_capacity(pg_database, t
     assert len(response.json()["tasks"]) == (0 if empty_project else 1)
 
 
-def test_dependency_query_work_does_not_grow_with_unrelated_visible_tasks(task_browser, pg_database, monkeypatch):
+@pytest.mark.parametrize('copied_predecessor', [False, True])
+def test_dependency_query_work_does_not_grow_with_unrelated_visible_tasks(task_browser, pg_database, monkeypatch, copied_predecessor, record_property):
     """Measure native execution buffers on the actual restricted dependency query."""
     from app.infrastructure.postgresql.planning import PostgresPlanningStore
 
     _, service, admin, actor, _, resources, _, _ = task_browser
     service.grant(admin, actor.user_id, "project_viewer", {"kind": "projects", "project_ids": [2]})
+    expected_predecessor = 20
+    if copied_predecessor:
+        with psycopg.connect(pg_database.operator_url) as connection:
+            connection.execute('UPDATE eppm.project_plan SET is_current=false WHERE project_id=2')
+            plan_id = connection.execute(
+                "INSERT INTO eppm.project_plan(project_id,version,name,status_id,is_current,author,created_at) "
+                "VALUES (2,2,'Active copy',3,true,'test setup',CURRENT_TIMESTAMP) RETURNING id"
+            ).fetchone()[0]
+            connection.execute(
+                "INSERT INTO eppm.project_task(id,project_id,project_plan_id,stable_task_id,task_name,start_date,end_date) "
+                "VALUES (30,2,%s,20,'Copied predecessor','2026-01-01','2026-01-05')", (plan_id,)
+            )
+        expected_predecessor = 30
     workspace = create_planning_workspace(resources, access=BusinessAccess(actor, service.policy))
     plans = []
     original = PostgresPlanningStore._rows
@@ -135,7 +149,7 @@ def test_dependency_query_work_does_not_grow_with_unrelated_visible_tasks(task_b
 
     monkeypatch.setattr(PostgresPlanningStore, "_rows", measured_rows)
     before = workspace.planning.get_dependencies_for_projects([1])
-    assert len(before) == 1 and before[0]["predecessor_task_id"] == 20
+    assert len(before) == 1 and before[0]["predecessor_task_id"] == expected_predecessor
     assert workspace.planning.get_dependencies_for_projects([1, 1]) == before
     before_plan = plans[-1]
     with psycopg.connect(pg_database.operator_url) as connection:
@@ -149,10 +163,12 @@ def test_dependency_query_work_does_not_grow_with_unrelated_visible_tasks(task_b
     after_plan = plans[-1]
     before_blocks = before_plan["Shared Hit Blocks"] + before_plan["Shared Read Blocks"]
     after_blocks = after_plan["Shared Hit Blocks"] + after_plan["Shared Read Blocks"]
+    record_property('before_dependency_blocks', before_blocks)
+    record_property('after_dependency_blocks', after_blocks)
     # Allow index depth and small-table planner changes, not 5,000-row scans.
     def scans(plan):
         selected = {key: plan[key] for key in (
-            "Node Type", "Relation Name", "Actual Rows", "Actual Loops", "Rows Removed by Filter", "Shared Hit Blocks"
+            "Node Type", "Relation Name", "Alias", "Index Name", "Actual Rows", "Actual Loops", "Rows Removed by Filter", "Shared Hit Blocks"
         ) if key in plan}
         return [selected] + [item for child in plan.get("Plans", []) for item in scans(child)]
 

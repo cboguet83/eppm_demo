@@ -10,7 +10,9 @@ import pytest
 from app.application.services.business_access import BusinessAccess
 from app.application.services.wbs import WbsService
 from app.domain.access.models import AccessDenied
+from app.domain.projects.wbs import WbsOption
 from app.infrastructure.postgresql.migration import discover_migrations, migrate
+from app.infrastructure.postgresql.wbs import PostgresWbsStore
 from app.main import create_project_service, create_settings_workspace
 from app.operator_services import create_maintenance_service
 from app.runtime import RuntimeResources
@@ -254,3 +256,26 @@ def test_migration_is_repeatable_and_backed_up_resets_leave_no_orphan_allocation
         assert connection.execute("SELECT count(*) FROM eppm.wbs").fetchone() == (0,)
         assert connection.execute("SELECT count(*) FROM eppm.project_wbs").fetchone() == (0,)
     assert len(list(tmp_path.glob("*.dump"))) == 2
+
+
+def test_unchanged_and_empty_wbs_replacements_avoid_global_capacity_reads(
+    business: tuple[RuntimeResources, object, object, BusinessAccess, BusinessAccess],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Clear authorized shares without unrelated reads or an authorization bypass."""
+    resources, _, _, editor, manager = business
+    identity = catalog(resources, manager).save('CLEAR')
+    projects = create_project_service(resources, access=editor)
+    save_allocation(projects, 1, [{'wbs_id': identity, 'percentage': 35}])
+
+    def reject_global_read(_store: PostgresWbsStore, _project_id: int | None) -> list[WbsOption]:
+        raise AssertionError('No-op or empty replacement must not read global WBS facts')
+
+    monkeypatch.setattr(PostgresWbsStore, 'wbs_options', reject_global_read)
+    assert save_allocation(projects, 1, [{'wbs_id': identity, 'percentage': 35}],
+                           name='Title retaining shares')
+    assert projects.get_wbs_allocations(1) == [{'wbs_id': identity, 'percentage': 35}]
+    assert save_allocation(projects, 1, [], name='Independent title')
+    assert projects.get_wbs_allocations(1) == []
+    with pytest.raises(AccessDenied):
+        projects.update_project(2, 'Forbidden', 'In Progress', {}, wbs_allocations=[])

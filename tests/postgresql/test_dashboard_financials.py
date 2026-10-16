@@ -71,8 +71,8 @@ def test_dashboard_stacks_and_utilization_follow_status_filters(business, author
     assert next(row for row in chart()['transactions'] if row['year'] == 2026) == {
         'year': 2026, 'actual': 20.0, 'commitment': 30.0}
     assert [item['color'] for item in chart()['transactionSeries']] == ['#C41049', '#6D6E70']
-    assert ratios() == {'Actual / Approved Budget': '20.0%', '(Actual + Commitment) / Approved Budget': '50.0%'}
+    assert ratios() == {'Actual / Approved Budget (2026)': '20.0%', '(Actual + Commitment) / Approved Budget (2026)': '50.0%'}
     app.checkbox(key='dashboard_filter_status_option_Completed').check().run()
     assert next(row for row in chart()['transactions'] if row['year'] == 2026) == {
         'year': 2026, 'actual': 80.0, 'commitment': 70.0}
-    assert ratios() == {'Actual / Approved Budget': '40.0%', '(Actual + Commitment) / Approved Budget': '75.0%'}
+    assert ratios() == {'Actual / Approved Budget (2026)': '40.0%', '(Actual + Commitment) / Approved Budget (2026)': '75.0%'}

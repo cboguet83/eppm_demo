@@ -258,8 +258,9 @@ def test_protected_trigger_helpers_are_not_publicly_executable(business):
         "session_activity", "session_logout", "policy_scope_projects",
         "project_contacts", "pool_staffing", "display_cache_revisions", "read_derived_cache", "publish_derived_cache",
         "dashboard_revision", "dashboard_resources", "dashboard_resource_breakdown", "pool_effective_capacity", "assignment_period",
-        "wbs_options", "project_id_preview", "allocate_project_id",
+        "wbs_allocation_facts", "project_id_preview", "allocate_project_id",
         "planning_task_source_keys", "portfolio_cache_revision",
         # Explicit runtime grants added by migrations 0042, 0049 and 0054.
+        # Migration 0064 replaces wbs_options with scoped wbs_allocation_facts.
         "runtime_session", "dashboard_resource_breakdown_scoped", "dashboard_resource_breakdown_with_capacity",
     }

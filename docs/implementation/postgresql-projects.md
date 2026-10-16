@@ -113,3 +113,10 @@ same integer percentages required by their existing application contracts.
 The native WBS workflow tests verify upgrade preservation, fractional and
 nonfinite rejection, scope/ownership checks, concurrent capacity claims,
 backed-up resets and the actual Settings/project editors.
+
+Project title saves preserve unchanged WBS rows. The native store compares the
+normalized requested shares with the project's existing shares before loading
+global capacity facts or rewriting allocations. Explicit empty replacements still
+clear existing shares; changed nonempty allocations and cancelled-project
+reactivation retain their fresh capacity validation. Master edit authorization,
+serializable isolation and native integrity constraints remain authoritative.

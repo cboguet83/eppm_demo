@@ -33,9 +33,11 @@ def test_service_frame_spacing_in_full_shell(popup_server):
                     choices = page.locator('.st-key-ms_multi_projects')
                     choices.get_by_role('combobox').click()
                     page.get_by_role('option', name=re.compile('Project 0001')).click()
+                    chart = page.frame_locator('iframe[title*="interactive_gantt"]')
+                    expect(chart.locator('#badge-projects-count-text')).to_have_text('1 Project', timeout=15000)
                     page.keyboard.press('Escape')
                     page.keyboard.press('Escape')
-                    expect(control).to_have_css('background-color', 'rgb(196, 16, 57)')
+                    expect(control).to_have_css('background-color', 'rgb(196, 16, 57)', timeout=15000)
             assert abs(tops[0] - tops[1]) <= 4, tops
         finally:
             browser.close()

@@ -67,12 +67,13 @@ with psycopg.connect(os.environ['DATABASE_OPERATOR_URL']) as connection:
         'JOIN eppm.resource_pool_assignment a ON a.project_id=t.project_id '
         'AND (a.task_id=t.id OR a.task_id IS NULL) ORDER BY t.id,a.id LIMIT 1').fetchone()
     hidden = connection.execute('SELECT id FROM eppm.project WHERE id<>%s ORDER BY id LIMIT 1', (project,)).fetchone()[0]
+    assignments = connection.execute('SELECT count(*) FROM eppm.resource_pool_assignment').fetchone()[0]
     connection.execute('UPDATE eppm.project SET name=%s WHERE id=%s', ('Recovery retained project', project))
     connection.execute("INSERT INTO eppm.project_financial_transaction(project_id,fiscal_year,amount,currency,exchange_rate,amount_base_currency,financial_record_type,spending_type,wbs) VALUES (%s,2026,9007199254740993.01,'EUR',1,9007199254740993.01,'COMMITMENT','CAPEX','RECOVERY'),(%s,2026,.01,'EUR',1,.01,'ACTUAL','CAPEX','RECOVERY')", (project, project))
     connection.execute('UPDATE eppm.project_task SET task_name=%s WHERE id=%s', ('Recovery retained task', task))
     wbs = connection.execute("INSERT INTO eppm.wbs(code,description) VALUES ('RECOVERY','Approved recovery allocation') RETURNING id").fetchone()[0]
     connection.execute('INSERT INTO eppm.project_wbs(project_id,wbs_id,percentage) VALUES (%s,%s,37)', (project, wbs))
-print(json.dumps({'summary': summary, 'project': project, 'task': task, 'pool': pool, 'hidden_project': hidden}))
+print(json.dumps({'summary': summary, 'project': project, 'task': task, 'pool': pool, 'hidden_project': hidden, 'assignments': assignments}))
 '''
 
 

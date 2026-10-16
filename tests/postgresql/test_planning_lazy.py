@@ -17,6 +17,7 @@ def lazy_app(resources, access):
     import streamlit as st
     from app.main import create_planning_workspace
     from app.presentation.pages.planning import render_planning_milestones, _handle_gantt_component_change
+    st.session_state.setdefault('planning_edit_enabled', True)
     workspace = create_planning_workspace(resources, access=access)
     event = st.session_state.pop('test_event', None)
     if event:
@@ -32,7 +33,7 @@ class LazyPlanningTests(TestCase):
         self.resources, self.access = runtime, access
         self.projects = create_project_service(runtime, access=access)
         self.tasks = create_planning_service(runtime, access=access)
-        self.pids = [self.projects.create_project(name='Lazy '+str(i), dynamic_attributes={}) for i in range(3)]
+        self.pids = [self.projects.create_project(name='Lazy '+str(i), status='In Progress', dynamic_attributes={}) for i in range(3)]
         self.a = self.tasks.create_milestone(self.pids[0], 'Predecessor', 'General', '2026-01-01', '2026-01-10', 0)
         self.b = self.tasks.create_milestone(self.pids[1], 'Successor', 'General', '2026-01-05', '2026-01-06', 0,
             dependencies=[{'predecessor_task_id':self.a, 'link_type':'FS','lag_days':0}])

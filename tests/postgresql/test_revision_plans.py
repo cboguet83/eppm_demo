@@ -69,11 +69,14 @@ def test_revision_plan_upgrade_preserves_existing_schema_history_and_function_se
         before_function = connection.execute(metadata).fetchone()
         before_ledger = connection.execute(ledger).fetchall()
 
-    assert migrate(empty_database.operator_url) == tuple(item.name for item in migrations[22:])
+    # Verify 0023 in isolation before later dependency/plan view rewrites.
+    (tmp_path / migrations[22].name).write_bytes(migrations[22].sql.encode('utf-8'))
+    assert migrate(empty_database.operator_url, directory=tmp_path) == (migrations[22].name,)
 
     with psycopg.connect(empty_database.operator_url) as connection:
         assert connection.execute(metadata).fetchone() == before_function
         assert connection.execute(ledger).fetchall()[:22] == before_ledger
+    assert migrate(empty_database.operator_url) == tuple(item.name for item in migrations[23:])
     with psycopg.connect(empty_database.runtime_url) as connection:
         check_schema(connection)
         with pytest.raises(psycopg.errors.InsufficientPrivilege):

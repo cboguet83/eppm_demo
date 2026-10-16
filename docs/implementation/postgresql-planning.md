@@ -161,3 +161,17 @@ Selected uses the server-side current project selection and Total uses the
 status-qualified population. Date resolution still follows the assignment's
 current fixed, inherited or offset/duration schedule. Row-level actions without
 a period retain an unrestricted date range.
+
+## Bounded dependency endpoint reads
+
+Dependency metadata reads select minimal current owner-task fields under native
+RLS, then resolve only their predecessor identities. Precomputing the logical
+identity before the lateral lookup allows leakproof indexed comparisons through
+RLS. Separate plain and copied task cases retain active-plan remapping and
+hidden endpoint redaction. Migration 0067 adds a partial index on non-null stable
+references; it changes no task records or prior migration bytes.
+
+The real HTTP/query regression checks direct and copied predecessors, exact
+result equivalence after 5,000 unrelated rows, a maximum 64-buffer increase and
+no task/dependency scan exceeding two rows. Native planning and plan lifecycle
+regressions retain transaction, authorization and active/baseline isolation checks.

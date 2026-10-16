@@ -11,6 +11,7 @@ import pytest
 from app.application.exceptions import ResourcePoolStorageError
 from app.infrastructure.postgresql.derived_cache import DerivedCacheState
 from app.infrastructure.postgresql.capacity_cache import PostgresCapacityCache
+from app.infrastructure.postgresql.staffing_projection import refresh_staffing
 from app.main import create_pool_capacity_service
 from tests.postgresql.business import business
 
@@ -52,6 +53,7 @@ def test_capacity_cache_redacts_staffing_after_shared_permission_is_revoked(pg_d
     with psycopg.connect(pg_database.operator_url) as connection:
         connection.execute("INSERT INTO eppm.employee(employee_id,firstname,lastname,email) VALUES(1,'Resource','Person','resource@example.test')")
         connection.execute("INSERT INTO eppm.resource_pool_mapping(pool_id,target_type,target_id) VALUES(1,'employee',1)")
+        refresh_staffing(connection)
     state = DerivedCacheState()
     cache = PostgresCapacityCache(path.database, path.key, state, lambda: date(2026, 1, 2), access=manager)
     capacity = create_pool_capacity_service(path, access=manager)

@@ -3,6 +3,7 @@
 import pytest
 
 from tests.test_dialog_browser import popup_server, sync_playwright, expect
+from tests.browser_reruns import completed_rerun
 
 _APP = '''
 from dataclasses import replace
@@ -48,7 +49,8 @@ def test_inline_navigation_and_hierarchy_table_crud(popup_server, tmp_path):
             page.goto(popup_server)
             nav = page.locator(".st-key-app_sidebar_nav")
             expect(nav.get_by_text("Organization Structure", exact=True)).to_have_count(0)
-            nav.get_by_text("Settings", exact=True).click()
+            with completed_rerun(page):
+                nav.get_by_text("Settings", exact=True).click()
             organization = nav.get_by_text("Organization Structure", exact=True)
             expect(organization).to_be_visible()
             expect(nav.get_by_role("radio", name="Organization Structure")).to_be_checked()

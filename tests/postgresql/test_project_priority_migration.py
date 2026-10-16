@@ -24,7 +24,7 @@ def test_priority_upgrade_is_atomic_and_preserves_assignments(empty_database, tm
             assert connection.execute('SELECT planned_budget,actual_budget FROM eppm.project WHERE id=1').fetchone() == (1, 2)
             assert connection.execute('SELECT max(version) FROM eppm.schema_migration').fetchone() == (62,)
         return
-    assert migrate(empty_database.operator_url) == (migrations[-1].name,)
+    assert migrate(empty_database.operator_url) == tuple(item.name for item in migrations[62:])
     with psycopg.connect(empty_database.operator_url) as connection:
         check_schema(connection)
         assert connection.execute('SELECT strategic_priority_id FROM eppm.project ORDER BY id').fetchall() == [(1,), (None,)]

@@ -47,7 +47,9 @@ def test_selected_cache_work_does_not_grow_with_unrelated_tasks(warm_cache_workl
 
     def inspect_after(connection: psycopg.Connection) -> dict:
         parameters = (kind, [2], date(2026, 1, 3))
-        assert connection.execute(query, parameters).fetchall() == expected
+        # ANALYZE invalidates cached plans; warm both measurements equally.
+        for _ in range(6):
+            assert connection.execute(query, parameters).fetchall() == expected
         return connection.execute('EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ' + query, parameters).fetchone()[0][0]
 
     plans['after_unrelated_tasks'] = run_business(fixture.database, fixture.key, fixture.binding(4).access, inspect_after)

@@ -62,6 +62,10 @@ def test_planning_events_and_modal_reruns_use_only_the_restricted_restored_copy(
             'scope_token': app.session_state['planning_chart_snapshot']['token'], 'nonce': 'load',
         }
         run_app(app)
+        app.session_state['benchmark_event'] = {
+            'action': 'toggle_edit', 'enabled': True, 'nonce': 'enable-edit',
+        }
+        run_app(app)
         app.session_state['benchmark_event'] = {'action': 'update_progress', 'id': 10, 'progress': 63, 'nonce': 'edit'}
         run_app(app)
         assert service.get_milestone_by_id(10)['progress_pct'] == 63
@@ -110,7 +114,12 @@ def test_gantt_browser_driver_consumes_native_session_payloads_and_cleans_up(bus
     import subprocess
     from playwright.async_api import async_playwright
 
-    async def executable():
+    async def executable() -> str:
+        if configured := os.environ.get('EPPM_BENCHMARK_BROWSER'):
+            path = Path(configured)
+            if not path.is_absolute() or not path.is_file() or not os.access(path, os.X_OK):
+                raise ValueError('EPPM_BENCHMARK_BROWSER must be an absolute executable file')
+            return str(path)
         async with async_playwright() as playwright:
             path = playwright.chromium.executable_path
             # Let the driver's initialization task finish before stopping it;
@@ -164,12 +173,17 @@ def test_operator_cli_outputs_native_results_and_removes_its_copy(module, busine
     if module == 'benchmark_planning':
         arguments.extend(['--projects', '1', '--dump-payload', '--no-profile'])
     monkeypatch.setattr(sys, 'argv', arguments)
-    monkeypatch.setattr(sys, 'stdin', StringIO('{"action":"update_progress","id":10,"progress":47,"nonce":"cli"}\n'))
+    monkeypatch.setattr(sys, 'stdin', StringIO(
+        '{"action":"toggle_edit","enabled":true,"nonce":"enable-edit"}\n'
+        '{"action":"update_progress","id":10,"progress":47,"nonce":"cli"}\n'
+    ))
     import_module('scripts.' + module).main()
     records = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
     assert records
     if module == 'benchmark_planning_session':
-        assert len(records) == 2 and all(row['server_seconds'] > 0 for row in records)
+        assert len(records) == 3 and all(
+            row['server_seconds'] > 0 for row in records
+        )
     elif module == 'benchmark_task_pool_dialog':
         assert records[0]['tasks'] == 2 and records[0]['pools'] == 1
         assert records[0]['period_refresh_total_seconds'] > 0

@@ -98,17 +98,17 @@ def deployment():
     )
     identity = uuid4().hex[:12]
     directory = ROOT / ".local" / "oidc-e2e" / identity
-    data = directory / "data"
-    data.mkdir(parents=True)
-    values["EPPM_DATA_DIRECTORY"] = data.as_posix()
+    directory.mkdir(parents=True)
     environment_path = directory / "compose.env"
     descriptor = os.open(environment_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as target:
         target.writelines(f"{key}={value}\n" for key, value in values.items())
     image_override = directory / "image-only.yml"
     image_override.write_text(
-        "services:\n  app:\n    volumes: !override\n      - type: bind\n"
-        "        source: ${EPPM_DATA_DIRECTORY}\n        target: /app/data\n",
+        "services:\n  postgres:\n    ports: !reset []\n"
+        "  app:\n    volumes: !override\n      - type: volume\n"
+        "        source: browser-test-data\n        target: /app/data\n"
+        "volumes:\n  browser-test-data:\n",
         encoding="utf-8",
     )
     server = BrowserDeployment(origin,
@@ -127,7 +127,11 @@ def deployment():
         wait_for_server(origin + "/_stcore/health")
         server.command("exec", "-T", "app", "python", "-c",
                        "import os; assert 'DATABASE_OPERATOR_URL' not in os.environ; "
-                       "assert 'EPPM_RUNTIME_PASSWORD' not in os.environ")
+                       "assert 'EPPM_RUNTIME_PASSWORD' not in os.environ; "
+                       "assert os.getuid() != 0; "
+                       "from pathlib import Path; "
+                       "probe = Path('/app/data/.runtime-write-probe'); "
+                       "probe.touch(exist_ok=False); probe.unlink()")
         yield server
     finally:
         # Only the unique Compose project's resources are removed; host fixtures remain ignored.
@@ -139,11 +143,14 @@ NATIVE_FIXTURE = """
 import os
 import psycopg
 from app.infrastructure.postgresql.seed_catalog import ensure_reference_catalog
+from app.infrastructure.postgresql.seed_plan import ensure_operator_plan
 
 with psycopg.connect(os.environ['DATABASE_OPERATOR_URL']) as connection:
     ensure_reference_catalog(connection)
-    connection.execute("INSERT INTO eppm.project(id,name) VALUES(1,'Visible browser project'),(2,'Hidden browser project')")
-    connection.execute("INSERT INTO eppm.project_task(project_id,task_name,start_date,end_date) VALUES(1,'Visible browser task','2026-01-01','2026-01-05'),(2,'Hidden browser task','2026-01-01','2026-01-05')")
+    connection.execute("INSERT INTO eppm.project(id,name,status) VALUES(1,'Visible browser project','In Progress'),(2,'Hidden browser project','In Progress')")
+    for project_id, label in ((1, 'Visible browser task'), (2, 'Hidden browser task')):
+        plan_id = ensure_operator_plan(connection, project_id)
+        connection.execute("INSERT INTO eppm.project_task(project_id,project_plan_id,task_name,start_date,end_date) VALUES(%s,%s,%s,'2026-01-01','2026-01-05')", (project_id, plan_id, label))
 """
 
 
@@ -173,16 +180,20 @@ def select_option(page, label: str, name: str | re.Pattern[str]) -> None:
 
     stage = "opening field"
     try:
-        page.get_by_role("combobox", name=label, exact=True).click()
+        from contextlib import nullcontext
+        from tests.browser_reruns import completed_rerun
+
+        action = nullcontext() if label == "Account status" else completed_rerun(page)
+        with action:
+            page.get_by_role("combobox", name=label, exact=True).click()
+            if label == "Projects":
+                page.get_by_role("combobox", name=label, exact=True).fill("Visible browser project")
+            stage = "selecting option"
+            page.get_by_role("option", name=name, exact=isinstance(name, str)).click()
+            stage = "waiting for rendered selection"
         if label == "Projects":
-            page.get_by_role("combobox", name=label, exact=True).fill("Visible browser project")
-        stage = "selecting option"
-        page.get_by_role("option", name=name, exact=isinstance(name, str)).click()
-        if label == "Projects":
-            stage = "closing dropdown"
+            stage = "closing dropdown after selection is acknowledged"
             page.get_by_role("combobox", name=label, exact=True).press("Tab")
-        stage = "waiting for rendered selection"
-        expect(page.get_by_test_id("stApp")).to_have_attribute("data-test-script-state", "notRunning")
     except Error:
         # This helper is used only on post-login fields in the fictional test database.
         raise AssertionError(f"Unable to select {label} while {stage}.\n" + page.locator("body").aria_snapshot()) from None

@@ -41,7 +41,7 @@ def test_project_menu_panel_saves_cancels_and_retains_stale_drafts_without_step_
             page.on('pageerror', lambda error: errors.append(str(error)))
             page.goto(server.origin)
             frame = page.frame_locator('iframe[title*="interactive_gantt"]')
-            frame.get_by_role('checkbox', name='Enable edit mode', exact=True).check(timeout=40000)
+            frame.get_by_role('checkbox', name=re.compile('Enable edit mode')).check(timeout=40000)
             label = frame.locator('#frozen-row-proj-1 .project-group-title')
             label.click(button='right', timeout=40000)
             frame.locator('#ctx-project-dependencies').click()

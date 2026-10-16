@@ -39,10 +39,15 @@ def test_upgrade_retains_existing_finance_and_project_data(empty_database, tmp_p
         connection.execute('UPDATE eppm.finance_snapshot SET sealed=true WHERE id=1')
         before = connection.execute('SELECT to_jsonb(p) FROM eppm.project p ORDER BY id').fetchall()
         budget_before = connection.execute('SELECT to_jsonb(s) FROM eppm.finance_snapshot s').fetchall()
-    assert migrate(empty_database.operator_url) == tuple(item.name for item in migrations[60:])
-    assert migrate(empty_database.operator_url) == ()
+    # Isolate 0061's preservation contract from later intentional project changes.
+    transaction_schema = migrations[60]
+    with (tmp_path / transaction_schema.name).open('w', encoding='utf-8') as stream:
+        stream.write(transaction_schema.sql)
+    assert migrate(empty_database.operator_url, directory=tmp_path) == (
+        transaction_schema.name,
+    )
+    assert migrate(empty_database.operator_url, directory=tmp_path) == ()
     with psycopg.connect(empty_database.operator_url) as connection:
-        check_schema(connection)
         assert connection.execute('SELECT to_jsonb(p) FROM eppm.project p ORDER BY id').fetchall() == before
         assert connection.execute('SELECT to_jsonb(s) FROM eppm.finance_snapshot s').fetchall() == budget_before
         assert connection.execute('SELECT amount::text FROM eppm.finance_amount').fetchall() == [('123.45',)]
@@ -56,6 +61,14 @@ def test_upgrade_retains_existing_finance_and_project_data(empty_database, tmp_p
         foreign_tables = {row[0] for row in connection.execute("""SELECT confrelid::regclass::text
             FROM pg_constraint WHERE conrelid='eppm.project_financial_transaction'::regclass AND contype='f'""")}
         assert foreign_tables == {'eppm.project', 'eppm.project_financial_transaction'}
+
+    assert migrate(empty_database.operator_url) == tuple(
+        item.name for item in migrations[61:]
+    )
+    with psycopg.connect(empty_database.operator_url) as connection:
+        check_schema(connection)
+        assert connection.execute('SELECT to_jsonb(s) FROM eppm.finance_snapshot s').fetchall() == budget_before
+        assert connection.execute('SELECT amount::text FROM eppm.finance_amount').fetchall() == [('123.45',)]
 
 
 @pytest.mark.parametrize(('field', 'value'), [

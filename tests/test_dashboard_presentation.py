@@ -29,6 +29,7 @@ def test_clear_restores_default_status_and_removes_other_filters(monkeypatch):
     assert state.pop('shared_project_filters') == {
         'dashboard_filter_status': ['In Progress'], 'dashboard_flex_fields': [], 'dashboard_match': 'Any'}
     assert state.pop('portfolio_filter_reset') == 1
+    assert state.pop('planning_filter_reset') == 1
     assert state == {'dashboard_filter_status': ['In Progress'],
                      'dashboard_flex_fields': [], 'dashboard_match': 'Any',
                      'dashboard_offset': 0}

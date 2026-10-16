@@ -1,6 +1,7 @@
 """Alternative scenarios use the same panels and tooltip rendering as active plans."""
 
 from copy import deepcopy
+import re
 
 import psycopg
 import pytest
@@ -53,7 +54,7 @@ def test_alternative_tooltips_project_dependencies_tags_and_csv_reuse_shared_pan
             expect(tooltip).to_contain_text(f'Scenario: {active.name}')
             expect(frame.locator('.project-group-count')).to_have_attribute('title', f'Tasks in {active.name}')
             expect(frame.locator('.alternative-project-count')).to_have_attribute('title', 'Tasks in Option A')
-            frame.get_by_role('checkbox', name='Enable edit mode', exact=True).check()
+            frame.get_by_role('checkbox', name=re.compile('Enable edit mode')).check()
             frame.locator('#frozen-row-proj-1').click(button='right')
             frame.locator('#ctx-project-dependencies').click()
             expect(frame.locator('#modal-title-header')).to_have_text('Manage dependencies — Editable')

@@ -38,6 +38,10 @@ def test_project_editor_title_saves_preserve_properties_across_seeded_templates(
         try:
             page = server.new_page(browser, viewport={"width": 1500, "height": 1100})
             page.goto(server.origin + "/?nav=portfolio")
+            page.locator('.st-key-dashboard_filter_status [data-testid="stPopoverButton"]').click()
+            page.locator('.st-key-dashboard_filter_status_clear button').click()
+            expect(page.locator('.st-key-portfolio_master_table tr[data-project-id]')).to_have_count(10)
+            page.keyboard.press('Escape')
             for project_id in project_ids:
                 page.locator(f'.st-key-portfolio_master_table tr[data-project-id="{project_id}"]').click()
                 details = page.locator(f".st-key-project_details_panel_{project_id}")

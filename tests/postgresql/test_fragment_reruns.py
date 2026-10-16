@@ -1,6 +1,7 @@
 """Native storage authorization during real Streamlit fragment reruns."""
 
 from unittest.mock import patch
+import json
 import psycopg
 import pytest
 from streamlit.testing.v1 import AppTest
@@ -87,7 +88,7 @@ def test_account_selection_rerun_does_not_reload_audit_or_sidebar(access_ui, pg_
 
 
 @pytest.mark.parametrize("change", ["disabled", "revoked"])
-def test_retained_navigation_rechecks_current_access_before_loading_the_next_page(business, change):
+def test_sidebar_navigation_rechecks_current_access_before_loading_the_next_page(business, change):
     path, service, admin, editor, _ = business
     app = AppTest.from_function(navigation_app, args=(path, editor.actor))
 
@@ -100,18 +101,45 @@ def test_retained_navigation_rechecks_current_access_before_loading_the_next_pag
 
     rerun = FragmentRun("app_sidebar_nav", remove_access, widget_index=2, full_app_request=True)
     rerun.run(app)
-    assert app.session_state["shell_runs"] == 1
-    assert "not permitted" in app.error[0].value
+    assert app.session_state["shell_runs"] == 2
+    if change == "disabled":
+        assert "not permitted" in app.error[0].value
+    else:
+        from app.domain.access.models import AccessDenied
+        from app.main import create_planning_service
+
+        assert app.radio(key="app_sidebar_nav").options == ["Dashboard", "Finance"]
+        with pytest.raises(AccessDenied):
+            create_planning_service(path, access=editor).get_totals()
     deltas = [message for message in rerun.messages if message.WhichOneof("type") == "delta"]
-    assert deltas and all(message.metadata.delta_path[0] == 0 for message in deltas)
+    assert deltas
     assert not any(message.delta.new_element.component_instance.id for message in deltas)
+    for message in deltas:
+        component = message.delta.new_element.bidi_component
+        if not component.id:
+            continue
+        if component.id.endswith("-dashboard_project_table"):
+            payload = json.loads(component.json)
+            assert payload["rows"] == [] and payload["total"] == 0
+        else:
+            assert (
+                component.id.endswith("-eppm_page_transition")
+                or "-dashboard_filter_" in component.id
+            )
+    if change == "revoked":
+        assert any(
+            message.delta.new_element.bidi_component.id.endswith(
+                "-dashboard_project_table"
+            ) for message in deltas
+        )
+    assert not any(message.delta.new_element.HasField("dataframe") for message in deltas)
 
 
 
-def test_settings_section_rerun_does_not_rerun_application_shell(business):
+def test_settings_catalog_tab_rerun_does_not_rerun_application_shell(business):
     path, _, _, _, manager = business
     app = AppTest.from_function(settings_fragment_app, args=(path, manager.actor))
-    rerun = FragmentRun("rb_settings_section")
+    rerun = FragmentRun("settings_tab_selection")
     rerun.run(app)
     rerun.assert_isolated()
     assert not app.error

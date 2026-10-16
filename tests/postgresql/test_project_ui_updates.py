@@ -7,6 +7,7 @@ from unittest.mock import patch
 import pytest
 
 from app.domain.access.models import AccessDenied
+from app.application.exceptions import CollaborationConflictError
 from app.application.services.business_access import BusinessAccess
 from app.infrastructure.postgresql.migration import migrate
 from app.operator_services import create_maintenance_service
@@ -41,7 +42,7 @@ def test_links_have_no_fixed_slot_limit_and_updates_are_project_scoped(database:
     assert len(service.list_links(1)) == 120
     service.delete_link(1, ids[0])
     assert len(service.list_links(1)) == 119
-    with pytest.raises(AccessDenied):
+    with pytest.raises(CollaborationConflictError):
         service.save_link(999, "https://example.test", "Missing project")
     create_project_service(database, access=access).delete_project(1)
     assert service.list_links(1) == []
@@ -124,22 +125,27 @@ def test_csv_menu_opens_only_the_requested_project_dialog(database: RuntimeResou
 from app.main import create_planning_workspace
 from app.presentation.pages.planning import render_planning_milestones
 import streamlit as st
-st.session_state['planning_statuses'] = ['Draft']
+st.session_state['dashboard_filter_status'] = ['Draft']
+st.session_state['planning_edit_enabled'] = True
 render_planning_milestones(create_planning_workspace(runtime, access=access))
 ''', database, access).run()
     assert not app.exception and not app.error
     if action == "import_csv_template":
         assert dialog.call_args.args[1:] == (2, action)
-        assert "Nothing is deleted" in app.warning[0].value
+        assert any("Import creates a new plan revision" in item.value for item in app.info)
         assert any("eppm_csv_upload" in str(widget.proto) for widget in app.get("bidi_component"))
     else:
         dialog.assert_not_called()
         assert len(app.get("bidi_component")) > 0
     assert not any(widget.key == "sb_manage_target_project" for widget in app.selectbox)
-    assert len(app.get("download_button")) == 0
+    assert [item.label for item in app.get("download_button")] == (
+        ["Download import template"] if action == "import_csv_template" else []
+    )
     assert not app.get("file_uploader")
 
 
 def test_every_existing_context_menu_uses_the_shared_visual_standard() -> None:
+    # Generic button colors were added later; this contract covers menus only.
+    menu_css = CONTEXT_MENU_CSS[CONTEXT_MENU_CSS.index('.context-menu {'):]
     for path in Path("app/presentation/assets/components").glob("*/index.html"):
-        assert CONTEXT_MENU_CSS in path.read_text(encoding="utf-8"), path
+        assert menu_css in path.read_text(encoding="utf-8"), path

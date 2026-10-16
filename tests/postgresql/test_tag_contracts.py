@@ -113,7 +113,7 @@ def test_dictionary_deletion_rolls_back_earlier_assignment_deletes_on_failure(
 
 def test_assignment_foreign_keys_and_missing_record_results(database: RuntimeResources, access: BusinessAccess) -> None:
     service = create_tag_service(database, access=access)
-    with pytest.raises(AccessDenied):
+    with pytest.raises(TagConflictError):
         service.create_project_tag(ProjectTag(project_id=99, free_tag="Missing"))
     with pytest.raises(TagConflictError):
         service.create_task_tag(TaskTag(task_id=1, tag_id=99))
@@ -187,7 +187,7 @@ def test_page_counts_and_rows_share_one_snapshot_during_concurrent_write(databas
 
     def insert_between_counts_and_rows(store, model, query, parameters=()):
         nonlocal changed
-        if not changed and 'FROM eppm.task_tag tt' in query:
+        if not changed and 'FROM eppm.current_task_tag tt' in query:
             changed = True
             with psycopg.connect(authorized.setup.operator_url) as writer:
                 writer.execute("INSERT INTO eppm.task_tag(task_id,free_tag) VALUES(1,'Match')")

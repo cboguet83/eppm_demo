@@ -17,7 +17,7 @@ class Catalog:
     def organization_choices(self, catalog, active, key): return []
     def choices(self, catalog, active, key, match_all):
         return ['In Progress'] if key == 'status' else []
-    def get_all_functions(self): return []
+    def get_all_functions(self, *, include_deleted=False): return []
     def get_all_function_types(self): return []
     def get_all_teams(self): return []
     def team_overview(self, **kwargs): return TeamOverview([], [], {}, [])
@@ -47,11 +47,13 @@ def test_filter_buttons_align_and_settings_tabs_have_plain_labels(popup_server):
                                     ('Teams', 'teams'), ('Employees', 'employees')]:
                 page.get_by_role('tab', name=label, exact=True).click()
                 link = page.get_by_role('link', name='Export CSV')
-                if catalog == 'teams':
-                    expect(link).to_have_attribute('href', '/downloads/teams/teams.csv?include_deleted=false')
-                    expect(page.get_by_role('tree', name='Teams', exact=True)).to_be_visible()
+                if catalog in {'teams', 'functions'}:
+                    expect(link).to_have_attribute('href', f'/downloads/{catalog}/{catalog}.csv?include_deleted=false')
+                    expect(page.get_by_role('tree', name=label, exact=True)).to_be_visible()
                 else:
-                    expect(link).to_have_attribute('href', f'/downloads/organization/{catalog}.csv')
+                    expected = (f'/downloads/employees/employees.csv?include_deleted=false'
+                                if catalog == 'employees' else f'/downloads/organization/{catalog}.csv')
+                    expect(link).to_have_attribute('href', expected)
                     frame = page.frame_locator('iframe').last
                     expect(frame.locator('.search-icon,.ctx-icon')).to_have_count(0)
         finally:

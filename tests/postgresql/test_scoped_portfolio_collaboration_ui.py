@@ -174,6 +174,8 @@ def test_scroll_after_another_committed_edit_preserves_page_only_for_the_same_vi
     path, _, _, _, manager = business
     with psycopg.connect(pg_database.operator_url) as connection:
         connection.execute("INSERT INTO eppm.project(id,name,status) SELECT id,'Page entry '||id,'In Progress' FROM generate_series(3,232) id")
+        if filter_changed:
+            connection.execute("INSERT INTO eppm.project(id,name,status) VALUES(233,'Completed page entry','Completed')")
     with patch('app.presentation.pages.portfolio.portfolio_project_table') as table:
         app = AppTest.from_function(portfolio_app, args=(path, manager.actor)).run()
         previous = table.call_args.kwargs['page_info']
@@ -184,9 +186,9 @@ def test_scroll_after_another_committed_edit_preserves_page_only_for_the_same_vi
         with psycopg.connect(pg_database.operator_url) as connection:
             connection.execute("UPDATE eppm.project SET name='Updated by another editor' WHERE id=2")
         assert not any(widget.key == 'portfolio_search' for widget in app.text_input)
-        assert app.multiselect(key='portfolio_statuses').value == ['In Progress']
+        assert app.session_state['dashboard_filter_status'] == ['In Progress']
         if filter_changed:
-            app.multiselect(key='portfolio_statuses').set_value(['In Progress', 'Completed'])
+            app.checkbox(key='dashboard_filter_status_option_Completed').check()
         app.run()
         assert not app.exception and not app.error
         current = table.call_args.kwargs['page_info']
@@ -220,7 +222,9 @@ def test_retained_scroll_rechecks_scope_after_a_read_grant_is_revoked(business):
         app.run()
         assert not app.exception and not app.error
         current = table.call_args.kwargs['page_info']
-        assert current['request_id'] == 'read-after-revoke' and current['total'] == 1
+        assert current['request_id'] is None and current['total'] == 1
+        assert current['view_context'] != previous['view_context']
+        assert not current['preserve_position'] and current['offset'] == 0
         assert {row['project_id'] for row in table.call_args.args[0]} == {1}
 
 

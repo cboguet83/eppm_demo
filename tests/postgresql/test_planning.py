@@ -3,6 +3,8 @@
 from tests.postgresql.plan_fixtures import seed_test_plans
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
+import csv
+import io
 from threading import Barrier, Event
 
 import psycopg
@@ -409,7 +411,13 @@ def test_replacement_cleans_related_links_tags_and_allocations_and_round_trips_t
     assert authorized.query('SELECT task_id FROM eppm.task_tag') == []
     exported = schedule.export_project_template(1)
     assert schedule.replace_project_template(1, exported) == 2
-    assert schedule.export_project_template(1) == exported
+    before_rows = list(csv.DictReader(io.StringIO(exported)))
+    after_rows = list(csv.DictReader(io.StringIO(schedule.export_project_template(1))))
+    old_ids = {row.pop('task_correlation_id') for row in before_rows}
+    new_ids = {row.pop('task_correlation_id') for row in after_rows}
+    # Replacement creates new task identities; schedule values/links round-trip.
+    assert old_ids.isdisjoint(new_ids)
+    assert after_rows == before_rows
     assert 'New first' in schedule.export_schedule(1)
     assert schedule.get_milestone_by_id(tasks[0]['id']) is None
     for reference in ('task:1', 'project:1', 'task:999', 'project:999'):

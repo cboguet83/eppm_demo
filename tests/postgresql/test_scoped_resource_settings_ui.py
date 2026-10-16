@@ -1,5 +1,6 @@
 """Resource Settings entry points retain role, pool and allocation boundaries."""
 
+from collections.abc import Iterator
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -31,19 +32,22 @@ def resource_settings_app(path: RuntimeResources, actor: Actor) -> None:
 
 
 @pytest.fixture
-def expanded_groups():
-    """Adapt only expander scheduling: AppTest does not serialize native expanders."""
-    real_expander = st.expander
+def pool_tree_component() -> Iterator[Mock]:
+    """Send real tree actions while retaining production payload validation."""
+    component = Mock(return_value=SimpleNamespace(action=None))
+    register = st.components.v2.component
 
-    def expanded(*args, **kwargs):
-        return real_expander(*args, **{**kwargs, "expanded": True})
+    def register_component(name: str, **kwargs: object) -> object:
+        if name == 'eppm_resource_pool_tree':
+            return component
+        return register(name, **kwargs)
 
-    with patch("streamlit.expander", side_effect=expanded):
-        yield
+    with patch('streamlit.components.v2.component', side_effect=register_component):
+        yield component
 
 
 @pytest.mark.parametrize("action", ["create_pool", "edit_pool", "delete_pool", "add_mapping"])
-def test_business_administrator_resource_controls_open_actual_dialogs_without_premature_writes(pg_database, business, expanded_groups, action):
+def test_business_administrator_resource_controls_open_actual_dialogs_without_premature_writes(pg_database, business, pool_tree_component, action):
     path, _, _, _, manager = business
     with psycopg.connect(pg_database.operator_url) as connection:
         connection.execute("INSERT INTO eppm.tag_dictionnary(id,tag) VALUES(1,'Priority')")
@@ -54,16 +58,16 @@ def test_business_administrator_resource_controls_open_actual_dialogs_without_pr
         )}
     app = AppTest.from_function(resource_settings_app, args=(path, manager.actor), default_timeout=30).run()
     assert not app.exception and not app.error
-    if action in {"edit_pool", "delete_pool", "add_mapping"}:
-        key = {"edit_pool": "btn_edit_pool_1", "delete_pool": "btn_del_pool_1", "add_mapping": "btn_add_map_1"}[action]
-        button = app.button(key=key)
+    if action == 'create_pool':
+        app.button(key='create_root_pool').click().run()
     else:
-        suffix = {"create_pool": "Create Pool", "new_group": "New group", "edit_group": "Edit", "delete_group": "Delete"}[action]
-        button = next(item for item in app.button if item.label.endswith(suffix))
-    button.click().run()
+        tree_action = {'edit_pool': 'edit', 'delete_pool': 'delete', 'add_mapping': 'map'}[action]
+        pool_tree_component.return_value = SimpleNamespace(action={'id': 1, 'action': tree_action})
+        app.run()
     assert not app.exception and not app.error and app.get("dialog")
     if action == "add_mapping":
-        assert any("No teams available" in item.value for item in app.warning)
+        assert app.multiselect(key='mapping_teams_1').options == []
+        assert not app.number_input
     elif action in {"delete_pool", "delete_group"}:
         assert app.warning
     else:
@@ -72,13 +76,13 @@ def test_business_administrator_resource_controls_open_actual_dialogs_without_pr
         assert {table: connection.execute(f"SELECT * FROM eppm.{table} ORDER BY 1").fetchall() for table in before} == before
 
 
-def test_empty_resource_group_inspector_does_not_invent_members_or_offer_editing(business, expanded_groups):
+def test_pool_tree_keeps_real_members_without_retired_group_selector(business, pool_tree_component):
     path, _, _, _, manager = business
     app = AppTest.from_function(resource_settings_app, args=(path, manager.actor), default_timeout=30).run()
     assert not app.exception and not app.error
-    assert any("Pools form a hierarchy" in item.value for item in app.caption)
+    assert any("Summary counts exclude containers and deleted pools" in item.value for item in app.caption)
     assert not any(item.key == "selected_resource_pool_group" for item in app.selectbox)
-    assert app.button(key="btn_edit_pool_1")
+    assert {row['id'] for row in pool_tree_component.call_args.kwargs['data']['rows']} == {1}
 
 
 def test_mapping_dialog_empty_employee_branch_prevents_saving_an_invalid_target(pg_database, business):
@@ -95,10 +99,12 @@ def test_mapping_dialog_empty_employee_branch_prevents_saving_an_invalid_target(
         _open_add_pool_mapping_dialog(create_resource_pool_service(path, access=access), 1, pd.DataFrame(), pd.DataFrame())
 
     app = AppTest.from_function(dialog, args=(path, manager.actor)).run()
-    app.get("button_group")[0].set_value("employee").run()
+    app.checkbox(key='direct_employee_mapping_mode_1').check().run()
     assert not app.exception and not app.error
-    assert any("No employees available" in item.value for item in app.warning)
-    assert not app.button and not app.selectbox
+    assert app.multiselect(key='mapping_employees_1').options == []
+    assert not app.number_input and not app.selectbox
+    next(item for item in app.button if item.label == 'Save mappings').click().run()
+    assert not app.exception and not app.error
     with psycopg.connect(pg_database.operator_url) as connection:
         assert connection.execute("SELECT * FROM eppm.resource_pool_mapping").fetchall() == []
 

@@ -57,6 +57,7 @@ def clear_filters() -> None:
     st.session_state['dashboard_flex_fields'] = []
     st.session_state['dashboard_match'] = 'Any'
     st.session_state['dashboard_filter_status'] = ['In Progress']
+    st.session_state['planning_filter_reset'] = st.session_state.get('planning_filter_reset', 0) + 1
     reset_page()
 
 

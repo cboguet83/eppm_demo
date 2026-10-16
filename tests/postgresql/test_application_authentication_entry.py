@@ -16,6 +16,7 @@ from app.runtime import RuntimeResources
 from app.security import create_access_service
 from app.shared.config.authentication import AuthenticationConfig
 from scripts.configure_local_oidc import local_environment
+from tests.postgresql.conftest import PostgreSQLFixture
 
 
 def application_entry(cookie: str = "", binding: str = "") -> None:
@@ -100,7 +101,12 @@ def test_valid_cookie_cannot_bypass_the_application_transport_binding(configured
     assert len(app.error) == 1 and "ASGI authentication launcher" in app.error[0].value
 
 
-def test_security_revision_change_requires_a_fresh_runtime_before_admin_rendering(configured_entry):
+def test_security_revision_change_requires_a_fresh_runtime_before_admin_rendering(
+    configured_entry: tuple[
+        PostgreSQLFixture, RuntimeResources, AuthenticationConfig
+    ],
+) -> None:
+    """Keep the dashboard empty and reject a stale post-bootstrap binding."""
     setup, runtime, settings = configured_entry
     service, cookie, actor = active_browser(setup, runtime, settings)
     current, status, revision = service.browser_identity(cookie)
@@ -109,7 +115,7 @@ def test_security_revision_change_requires_a_fresh_runtime_before_admin_renderin
     assert not app.exception and not app.error
     assert app.radio(key="app_sidebar_nav").options == ["Dashboard", "Finance"]
     assert not app.header
-    assert app.expander[0].label == "0 matching projects"
+    assert any(item.label == "0 matching projects" for item in app.expander)
 
     create_deployment_access_service(setup.operator_url).bootstrap(actor.user_id)
     app.run()

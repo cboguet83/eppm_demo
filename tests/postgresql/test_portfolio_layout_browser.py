@@ -63,11 +63,13 @@ def test_master_layout_has_no_top_gap_or_template_caption_and_colors_only_applie
             table = page.locator('.st-key-portfolio_master_table')
             expect(table.locator('tbody tr').first).to_be_visible(timeout=30000)
             expect(table.locator('.project-menu-button')).to_have_count(0)
-            search = page.get_by_role('textbox', name='Search by Project Name or Code')
-            assert page.get_by_test_id('stTextInput').first.bounding_box()['y'] <= 4
-            # The native header must not obscure the field after removing padding.
-            search.click()
-            expect(search).to_be_focused()
+            filters = page.locator('.st-key-organization_service_frame')
+            assert filters.bounding_box()['y'] <= 4
+            # Shared filters replaced the old standalone search field.
+            advanced = page.get_by_role('button', name='Advanced filters', exact=False)
+            advanced.click()
+            expect(page.get_by_role('combobox', name='Filter fields', exact=True)).to_be_visible()
+            page.keyboard.press('Escape')
             table.locator('tbody tr').first.click()
             heading = page.get_by_role('heading', name='Project Details:', exact=False)
             expect(heading).to_be_visible()
@@ -116,10 +118,11 @@ def test_project_details_shortcut_opens_planning_filtered_to_the_selected_projec
             expect(planning).to_be_visible()
             assert abs(edit.bounding_box()['y'] - planning.bounding_box()['y']) < 5
             planning.click()
-            expect(page.get_by_role('radio', name='2. 📅 Planning & Milestones')).to_be_checked(timeout=30000)
-            selected = page.get_by_test_id('stMultiSelect').get_by_role('group', name='Selected values').locator('[data-tag]')
-            expect(selected).to_have_count(1)
-            expect(selected).to_contain_text(project_id + ' - ')
+            expect(page.get_by_role('radio', name='Planning & Milestones', exact=True)).to_be_checked(timeout=30000)
+            chart = page.frame_locator('iframe[title*="interactive_gantt"]')
+            expect(chart.locator('#badge-projects-count-text')).to_have_text('1 Project')
+            expect(chart.locator('.project-group-row[id^="frozen-row-proj-"]')).to_have_count(1)
+            expect(chart.locator('#frozen-row-proj-' + project_id)).to_be_visible()
             assert len(page.context.pages) == 1
         finally:
             browser.close()

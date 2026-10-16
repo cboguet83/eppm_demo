@@ -1,0 +1,21 @@
+schema: spec-driven
+
+rules:
+  proposal:
+    - State the agreed outcome, boundaries, and unresolved material decisions.
+    - For tooling-only changes with no product behavior change, declare skip_specs in change metadata rather than inventing product requirements.
+  design:
+    - Ground decisions in existing implementation and tests; distinguish local instructions from remote enforcement.
+  tasks:
+    - Each numbered checkbox must be a coherent dedicated commit with its relevant tests, documentation, and explicit completion check.
+    - Include the change name and task ID in commit subjects; record follow-up corrections as new tasks and commits.
+    - Keep archive, PR creation, and merge steps as plain workflow follow-up bullets outside tracked implementation tasks.
+operations:
+  apply:
+    guidance:
+      - Follow docs/development-workflow.md; preserve the dedicated feature branch and commit each completed task separately.
+      - Record actual verification evidence; leave tasks incomplete when required checks fail or cannot run.
+  archive:
+    guidance:
+      - Follow docs/development-workflow.md; verify all tracked tasks and required checks before archiving on the feature branch.
+      - Commit the archive separately, create the PR to main, and wait for explicit user approval before a merge commit.

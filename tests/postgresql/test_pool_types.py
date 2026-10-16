@@ -20,7 +20,7 @@ def test_upgrade_maps_existing_pools_to_human_and_keeps_their_data(empty_databas
     migrate(empty_database.operator_url, directory=tmp_path)
     with psycopg.connect(empty_database.operator_url) as connection:
         identity = connection.execute("INSERT INTO eppm.resource_pool(name,capacity_fte) VALUES ('Existing',3.5) RETURNING id").fetchone()[0]
-    assert migrate(empty_database.operator_url) == ('0039_pool_types.sql', '0040_pool_hierarchy.sql')
+    assert migrate(empty_database.operator_url) == tuple(item.name for item in migrations[38:])
     assert migrate(empty_database.operator_url) == ()
     with psycopg.connect(empty_database.operator_url) as connection:
         assert connection.execute('SELECT id,name,capacity_fte,pool_type_id FROM eppm.resource_pool').fetchall() == [(identity,'Existing',3.5,1)]

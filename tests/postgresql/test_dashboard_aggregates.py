@@ -9,6 +9,7 @@ import pytest
 
 from app.domain.dashboard import quarterly_capacity, quarterly_shortfall
 from app.infrastructure.postgresql.migration import MIGRATION_DIRECTORY
+from app.infrastructure.postgresql.staffing_projection import refresh_staffing
 from tests.postgresql.test_dashboard import DAY, reference_details, service
 from tests.postgresql.test_pool_capacity import staffing
 
@@ -100,8 +101,10 @@ def test_calendar_peaks_are_concurrent_and_full_quarter_overrides_replace_baseli
             (1,'2026-01-01','2026-01-01',100),(4,'2026-02-01','2026-02-01',100),
             (1,'2026-04-01','2026-06-30',0),(4,'2026-04-01','2026-06-30',0)''')
         connection.execute("INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,fte_assigned,start_date,end_date,project_plan_id) VALUES (1,1,2,'2026-01-01','2026-06-30',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(2,1,3,'2026-01-01','2026-06-30',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current))")
+        refresh_staffing(connection)
     actual = assert_resources_match_domain(staffing, [1])
-    assert actual['capacity']['2026-Q1'] == 1.2
+    # ADR 0059 displays the quarter's minimum capacity, not its one-day peak.
+    assert actual['capacity']['2026-Q1'] == 0.4
     assert actual['capacity']['2026-Q2'] == 0
     assert actual['capacity']['2026-Q3'] == 0.4
     assert actual['overallocation']['2026-Q2'] == 5
@@ -180,6 +183,7 @@ def test_change_points_preserve_concurrent_pools_quarter_ties_and_leap_day(staff
         connection.execute("""INSERT INTO eppm.resource_pool_capacity_exception
             (pool_id,start_date,end_date,reduction_fte) VALUES
             (1,'2024-02-29','2024-02-29',2)""")
+        refresh_staffing(connection)
     args = ([1], date(2024, 1, 1), '2024-Q1', 1, 'overallocation')
     current = staffing.query('SELECT eppm.dashboard_resource_breakdown(%s,%s,%s,%s,%s)', args)[0][0]
     baseline = staffing.query('SELECT eppm.dashboard_resource_breakdown_daily_baseline(%s,%s,%s,%s,%s)', args)[0][0]
@@ -201,6 +205,7 @@ def test_warning_lists_all_overallocated_pools_not_just_the_total_peak(staffing)
         connection.execute('DELETE FROM eppm.resource_pool_mapping')
         connection.execute('UPDATE eppm.resource_pool SET capacity_fte=1')
         connection.execute("INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,fte_assigned,start_date,end_date,project_plan_id) VALUES (1,1,10,'2026-01-01','2026-01-01',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(2,1,2,'2026-02-01','2026-02-01',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(3,1,.5,'2026-02-01','2026-02-01',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current)),(4,3,20,'2026-02-01','2026-02-01',(SELECT id FROM eppm.project_plan WHERE project_id=3 AND is_current)),(5,1,20,'2020-02-01','2020-02-01',(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current))")
+        refresh_staffing(connection)
     report = staffing.query('SELECT eppm.dashboard_resource_breakdown(%s,%s)', ([1], DAY))[0][0]
     assert {pool['pool_id'] for pool in report['overallocated_pools']} == {1, 2}
     assert all(set(pool) == {'pool_id', 'name'} for pool in report['overallocated_pools'])

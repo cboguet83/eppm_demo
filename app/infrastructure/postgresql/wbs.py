@@ -29,7 +29,19 @@ class PostgresWbsStore:
             'SELECT wbs_id,percentage::integer FROM eppm.project_wbs WHERE project_id=%s ORDER BY wbs_id', (project_id,))]
 
     def replace_wbs(self, project_id: int, allocations: list[WbsAllocation]) -> None:
-        """Revalidate the global cap in the write snapshot before replacing shares."""
+        """Validate changed shares while avoiding unrelated reads for a no-op.
+
+        Args:
+            project_id: Project whose master mutation already checked edit access.
+            allocations: Normalized requested whole-percentage shares.
+        """
+        if sorted(allocations, key=lambda row: row['wbs_id']) == self.wbs_allocations(project_id):
+            return
+        if not allocations:
+            # Empty replacement cannot consume global capacity. Keep the owner-
+            # authorized delete without reading unrelated project status rows.
+            self.connection.execute('DELETE FROM eppm.project_wbs WHERE project_id=%s', (project_id,))
+            return
         options = self.wbs_options(project_id)
         status = self.connection.execute('SELECT status FROM eppm.project WHERE id=%s', (project_id,)).fetchone()[0]
         if status == 'Cancelled':

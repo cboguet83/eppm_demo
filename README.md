@@ -149,7 +149,7 @@ and a current `eppm-demo:local` image for authenticated browser tests.
 # Run against the isolated PostgreSQL test environment
 $env:POSTGRES_TEST_CLIENT_CONTAINER = 'eppm_demo-postgres-1'
 $env:EPPM_RUN_OIDC_E2E = '1'
-python -m dotenv -f .local/postgresql.env run -- python -m pytest -q --cov=app --cov-fail-under=95
+python -m dotenv -f .local/postgresql.env run -- python -m pytest -q --require-full-suite --cov=app --cov-fail-under=95
 
 # Run custom-component regressions
 node --test tests/*.cjs
@@ -157,9 +157,16 @@ node --test tests/*.cjs
 
 ---
 
-GitHub Actions runs only on manual request. Open **Actions → Application and
-PostgreSQL checks → Run workflow**, choose the branch, and start the checks.
-Pushes and pull requests do not start CI automatically.
+GitHub Actions runs the full suite automatically on every pull request, including
+PostgreSQL, authenticated browser, JavaScript, and 95% application coverage checks.
+Manual runs remain available under **Actions → Application and PostgreSQL checks
+→ Run workflow**. The strict pytest option rejects missing PostgreSQL/browser
+prerequisites or collection and fails required skips; ordinary partial local
+runs can omit it.
+
+Follow the [OpenSpec development workflow](docs/development-workflow.md) for
+GrillMe discovery, dedicated feature branches, per-task commits, verification,
+archive, PR creation, and approval before a merge commit into `main`.
 
 ## Project types and custom properties
 
