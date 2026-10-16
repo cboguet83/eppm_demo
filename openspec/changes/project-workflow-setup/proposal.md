@@ -10,6 +10,7 @@ EPPM has substantial regression coverage but no recorded OpenSpec delivery lifec
 - Record the agreed workflow in AGENTS.md and a linked contributor guide: GrillMe requirements discovery, one dedicated feature branch per change before planning, one focused commit per numbered task, complete verification, archive, PR, and explicit user approval before merging.
 - Add project-specific OpenSpec artifact rules and apply/archive guidance without editing generated skill bodies.
 - Enable the existing full GitHub Actions suite on every PR, retaining manual dispatch and Python 3.14, isolated PostgreSQL, authenticated browser coverage, JavaScript checks, and the 95% application coverage threshold.
+- Collect coverage from existing native browser subprocesses using the supported pytest-cov 7 configuration, retaining the 95% threshold and source/exclusion scope.
 - Add a strict full-suite mode that fails when required PostgreSQL or authenticated browser tests skip, while preserving convenient partial local runs.
 - Correct pre-existing JavaScript assertions for the existing one-decimal FTE display so the required full check reflects current UI behavior; leave application formatting unchanged (approved during apply).
 - Repair baseline Python fixtures and assertions for current dashboard labels, bounded-key migration scope, planning edit-mode interactions, employee-function relationships, and shared-filter selectors. Preserve security and data-integrity assertions (approved during apply).

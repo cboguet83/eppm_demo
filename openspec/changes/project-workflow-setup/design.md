@@ -56,6 +56,17 @@ Stop for the user's explicit approval of that PR before merging. Use a merge com
 - Strict pytest hooks can accidentally mask failures or affect local runs. Regression-test exit status and opt-in isolation, and preserve existing failing exit codes.
 - Full verification needs Docker, Chromium, database services, and installed dependencies. If unavailable, record the precise blocker and leave verification/archive tasks pending.
 
+## Coverage measurement
+
+The installed pytest-cov 7.1.0 no longer supplies its former subprocess
+instrumentation. Use coverage's supported `patch = ["subprocess"]` and graceful
+termination collection so existing native browser servers contribute their
+executed application lines. Declare pytest-cov >=7, whose coverage dependency
+supports that patch. Keep source selection, exclusions and the 95% threshold
+unchanged. Verify actual child application coverage and isolated strict-gate
+regressions before final acceptance. Containerized OIDC remains a separate
+required behavior gate, without claiming its execution as host coverage.
+
 ## Migration Plan
 
 Verification exposed stale resource-tooltip assertions in two JavaScript test

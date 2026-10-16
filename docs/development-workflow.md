@@ -88,6 +88,12 @@ Collection-only invocation is rejected in strict mode because it does not
 execute tests. Strict failures identify missing variable names or skipped test
 identifiers without displaying connection strings or skip reasons.
 
+Coverage includes application code executed by the native browser servers. The
+pytest-cov 7 tooling minimum and coverage subprocess patch collect those child
+processes; graceful server termination retains their measurements. Keep the 95%
+threshold and existing source/exclusion scope. Containerized OIDC execution is
+a separate required behavior gate and is not claimed as host-process coverage.
+
 Run the verify-change skill against the proposal, design, task evidence, and any
 applicable spec scenarios. Record commands, results, coverage, skips, and the
 task-to-commit mapping in the change's `verification.md`. If a required check
