@@ -5,25 +5,25 @@ Branch: `codex/project-workflow-setup`. Baseline main:
 
 ## Acceptance status
 
-The original required pre-archive checks passed; follow-up CI portability repairs are now in progress. The clean run completed **3,219 tests
+The original required pre-archive checks passed, and the focused CI portability repairs are verified locally. Final updated PR CI is pending. The clean run completed **3,219 tests
 and five subtests**, with **zero failures, errors or skips**, in **2,436.50s
 (40m36s)**. Application statement coverage is **97.69%** (16,926 statements,
 391 missing), above the unchanged 95% gate. All **10 JavaScript checks** pass.
 
 | Dimension | Result |
 | --- | --- |
-| Completeness | 46/46 tasks; 12/12 requirements mapped |
+| Completeness | 50/50 tasks; 12/12 requirements mapped |
 | Correctness | All 19 scenarios mapped and covered by passing verification |
 | Coherence | Design and repository patterns reviewed; one optional-import finding corrected; no open implementation findings |
 
 The original five main specs remain synchronized. PR #1 full CI subsequently
 reported two runner-specific fixture failures (3,217 passed, two failed, five
-subtests passed; 97.68% coverage; 41m24s). The change is reopened for focused
-repairs and must be verified and rearchived before the PR update. No merge is approved.
+subtests passed; 97.68% coverage; 41m24s). The change was reopened for focused
+repairs, verified and rearchived before the PR update. No merge is approved.
 
 ## Completeness
 
-46 tracked tasks were complete in separate commits. Four CI portability and verification tasks have been added and remain pending. The initial tooling-only exemption was superseded by
+All 50 tracked tasks are complete in dedicated commits, including four CI portability and verification follow-ups. The initial tooling-only exemption was superseded by
 approved application repairs. Five readable capability deltas contain 12
 requirements and 19 scenarios. None is intentionally skipped.
 
@@ -202,7 +202,8 @@ plan. Local policy requires explicit human approval of the concrete PR and a
 merge commit preserving task commits; it does not claim server enforcement.
 
 The full CI on the eventual final PR revision remains an additional delivery
-gate. PR creation and merging have not occurred at this report stage.
+gate. PR #1 exists as a draft; its first CI run exposed the two portability
+failures documented below. Merging has not occurred and is not approved.
 
 ## Task-to-commit evidence
 
@@ -254,3 +255,46 @@ gate. PR creation and merging have not occurred at this report stage.
 | 3.41 | `d9dd152` | test(project-workflow-setup): collect native browser subprocess coverage (task 3.41) |
 | 3.42 | `969dae8` | test(project-workflow-setup): preserve optional browser collection skip (task 3.42) |
 | 4.1 | `20fd0a0` | Clean full verification and final evidence |
+
+
+## Clean-runner portability follow-up
+
+The first PR run ([38904081512](https://github.com/cboguet83/eppm_demo/actions/runs/38904081512))
+completed with 3,217 passed, two failed, five subtests passed and 97.68%
+coverage in 41m24s. SonarCloud Code Analysis passed. This failed run is not
+acceptance. The failures were the raw browser benchmark startup and an operator
+backup archive write in the deployed recovery fixture.
+
+- Task 3.43: validate an optional absolute executable browser path and use the
+  Ubuntu runner's installed Google Chrome for the raw benchmark. Keep the local
+  Playwright fallback and every source/cleanup/native payload assertion. No
+  sandbox flags changed. The complete benchmark module using the explicit local
+  Chromium executable passed: **14 passed in 21.22s**. Workflow parsing confirms
+  the runner override and unfiltered automatic PR trigger. The exact runner
+  Chromium namespace cause is inferred from its security profile; startup failure
+  itself was directly observed.
+- Task 3.44: replace the fixture's host data bind with a Compose project-scoped
+  named volume. Image ownership initializes its data directory independently of
+  the host UID. Verify non-root execution and create/remove a runtime-owned probe
+  before yielding the deployment, retaining secret-isolation checks. Real backup,
+  restart, restored application and OIDC verification: **2 passed in 192.11s**,
+  including real operator archives, restored business/access parity, login,
+  bootstrap and access administration. Both isolated deployments cleaned up.
+- Task 3.45: add pytest `-x` to the same full CI command. First failures terminate
+  promptly; green runs still execute every test, required database/OIDC groups,
+  no-skip enforcement, 95% coverage and JavaScript checks. All **24 strict gate
+  tests passed in 3.04s**; parsed command verification confirms all gates, no
+  selection filter and the unchanged Node command.
+
+Application, migration and coverage configuration bytes are unchanged from the
+successful full baseline (`d9dd152`); focused portability checks complement that
+baseline and do not claim a second full run. Both independent follow-up standards
+and spec reviews found no actionable findings. All five synchronized main specs
+remain unchanged. Final updated PR CI is still required before merge.
+
+Task 4.2: benchmark (14), deployed recovery/OIDC (2), strict-suite gates (24),
+and JavaScript (10) checks pass with no failures or skips. OpenSpec strict
+validation passes for the change and all five main specs. `git diff d9dd152 --
+app pyproject.toml` is empty. No new application defect or business rule change
+was needed for the CI repairs. Final CI must execute on the archived published
+revision; its result must not be inferred from these focused checks.
