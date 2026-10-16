@@ -90,10 +90,13 @@ def test_compact_revision_upgrade_preserves_applied_history_and_calculation_fing
         before_function = connection.execute(metadata).fetchone()
         before_ledger = connection.execute(ledger).fetchall()
 
-    assert migrate(empty_database.operator_url) == tuple(item.name for item in migrations[26:])
+    # Isolate 0027 before later relational-plan/soft-deletion rewrites.
+    (tmp_path / migrations[26].name).write_bytes(migrations[26].sql.encode('utf-8'))
+    assert migrate(empty_database.operator_url, directory=tmp_path) == (migrations[26].name,)
     with psycopg.connect(empty_database.operator_url) as connection:
         assert connection.execute(metadata).fetchone() == before_function
         assert connection.execute(ledger).fetchall()[:26] == before_ledger
+    assert migrate(empty_database.operator_url) == tuple(item.name for item in migrations[27:])
     with psycopg.connect(empty_database.runtime_url) as connection:
         check_schema(connection)
         with pytest.raises(psycopg.errors.InsufficientPrivilege):
@@ -123,7 +126,9 @@ def test_compact_revision_payload_and_query_work_remain_bounded_on_a_large_graph
     assert blocks['portfolio_cache_revision'] < blocks['display_cache_revisions'] / 2, blocks
     reader = PostgresPortfolioReader(fixture.database, fixture.key, access=fixture.binding(4).access)
     before = reader.revision()
-    assert before == tuple(payload)
+    assert before[:2] == tuple(payload)
+    # The reader appends financial transaction/snapshot/cancellation revisions.
+    assert before[2:] == ('d41d8cd98f00b204e9800998ecf8427e', 0, 0)
     fixture.query("UPDATE eppm.project SET name='Changed final project' WHERE id=10001", user_id=4, write=True)
     after = reader.revision()
     assert after[0] == before[0] and after[1] != before[1]
