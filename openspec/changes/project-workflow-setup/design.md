@@ -170,3 +170,15 @@ an intermediate running state. For this checkbox, wait for the warning that the
 server emits only after processing consent; require its absence before the click.
 Retain fresh upload/reset checks, checked state, pending filename and submit
 control checks, with no unsubmitted import. Application code remains unchanged.
+
+
+### Financial chart locale acknowledgment prerequisite repair
+
+A later CI run hovered the previous English SVG after translated summary cards
+arrived but before the chart component committed its French update. Its tooltip
+then disappeared on chart replacement. The exact module passes locally without
+controlled delay; a test-only native component render delay of 250ms reproduces
+the same French tooltip failure in 9.32s. Wait for the bar's translated aria-label
+before hovering, retaining all original financial/layout/five-locale assertions.
+Both immediate and delayed rendering remain real browser regressions. No
+application code, labels or business values are changed.

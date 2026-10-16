@@ -11,6 +11,7 @@ from app.main import create_finance_service
 from app.runtime import RuntimeResources
 from app.presentation.i18n import load_locale_catalog
 from tests.postgresql.browser import native_server
+from tests.postgresql.conftest import AuthorizedFixture
 from tests.postgresql.dashboard_browser import _SCREEN
 from tests.postgresql.test_financial_transactions import service
 from tests.test_financial_transactions import transaction
@@ -19,7 +20,11 @@ playwright_api = pytest.importorskip('playwright.sync_api')
 expect, sync_playwright = playwright_api.expect, playwright_api.sync_playwright
 
 
-def test_financial_stacks_legend_ratios_and_chart_axis_padding(authorized, tmp_path):
+@pytest.mark.parametrize('chart_delay', [0, 250], ids=['immediate', 'delayed'])
+def test_financial_stacks_legend_ratios_and_chart_axis_padding(
+    authorized: AuthorizedFixture, tmp_path: Path, chart_delay: int,
+) -> None:
+    """Keep localized financial hovers accurate across asynchronous chart updates."""
     with psycopg.connect(authorized.setup.operator_url) as connection:
         connection.execute("UPDATE eppm.project SET status='In Progress'")
         connection.execute("INSERT INTO eppm.wbs(id,code) VALUES(1,'A')")
@@ -33,6 +38,20 @@ def test_financial_stacks_legend_ratios_and_chart_axis_padding(authorized, tmp_p
         service(authorized).create(transaction(financial_record_type=kind, amount=Decimal(amount)))
     screen = _SCREEN.replace("set_current_locale('en')",
                              "set_current_locale(st.selectbox('Test language', ['en', 'fr', 'de', 'lb', 'pt']))")
+    if chart_delay:
+        screen = '''
+import app.presentation.components.dashboard_resource_chart as chart_module
+if not getattr(chart_module, '_eppm_test_delayed_render', False):
+    chart_module._eppm_test_delayed_render = True
+    chart_module._JS = chart_module._JS.replace('export default function', 'function renderChart', 1)
+    chart_module._JS += """
+export default function(args) {
+    let cleanup;
+    const timer = setTimeout(() => { cleanup = renderChart(args); }, 250);
+    return () => { clearTimeout(timer); cleanup?.(); };
+}
+"""
+''' + screen
     with native_server(authorized, tmp_path, screen) as server, sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
@@ -76,7 +95,9 @@ def test_financial_stacks_legend_ratios_and_chart_axis_padding(authorized, tmp_p
                 labels = load_locale_catalog(locale)['dashboard']
                 expect(cards[0]).to_contain_text(labels['late_projects'])
                 expect(cards[1]).to_contain_text(labels['actual_ratio'])
-                chart.locator('[data-financial-type=actual]').hover()
+                bar = chart.locator('[data-financial-type=actual]')
+                expect(bar).to_have_attribute('aria-label', '2026, ' + labels['actual'] + ': 0 kEUR')
+                bar.hover()
                 expect(chart.get_by_role('tooltip')).to_contain_text(labels['actual'] + ': 0 kEUR')
                 expect(chart.get_by_role('tooltip')).to_contain_text(labels['commitment'] + ': 0 kEUR')
         finally:
