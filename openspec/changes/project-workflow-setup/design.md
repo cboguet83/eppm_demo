@@ -182,3 +182,18 @@ the same French tooltip failure in 9.32s. Wait for the bar's translated aria-lab
 before hovering, retaining all original financial/layout/five-locale assertions.
 Both immediate and delayed rendering remain real browser regressions. No
 application code, labels or business values are changed.
+
+
+### Shared-filter browser acknowledgment prerequisite repair
+
+The frozen performance diagnostic stopped after 2,378 passing tests and five
+subtests when navigation inspected Teams before its replacement render completed.
+The original focused test passes, but delaying the native Teams expander return
+by 500ms reproduces an earlier collapsed-highlight failure in the same workflow.
+The regression retains both immediate and delayed native rendering. Test-owned
+persistent completion counters acknowledge filter fragment actions and full-page
+view changes. Dashboard fragment reruns do not advance the root-screen counter;
+the two scopes therefore require distinct signals. All original state, red
+highlight, status, layout and authorization assertions remain. Layout-sensitive
+status checks use only the page marker outside the filter panel. No application
+code, retry policy or production delay is introduced.
