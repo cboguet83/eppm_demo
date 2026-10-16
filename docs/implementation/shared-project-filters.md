@@ -69,3 +69,7 @@ function configuration: executable bodies, existing allocation and hierarchy
 rules, stored business records, and prior migration checksums are preserved.
 Apply it through the explicit operator migration command before starting this
 application revision; normal startup does not migrate the database.
+
+Clearing shared filters also advances the Gantt reset signal. It restores In
+Progress, removes project/resource restrictions and resets retained chart filter
+state while subsequent data reads continue to enforce the current actor's scope.

@@ -334,14 +334,16 @@ from app.presentation.pages.planning import render_planning_milestones
 if "initialized" not in st.session_state:
     st.session_state.initialized = True
     st.session_state.ms_multi_projects = [1]
-    st.session_state.ms_planning_tag_filter = ["Stale tag"]
+    st.session_state.dashboard_flex_fields = ["name"]
+    st.session_state.dashboard_filter_name = ["Selected"]
 render_planning_milestones(create_planning_workspace(runtime, access=access))
 ''', database, access).run()
         assert not app.exception
         assert not any(widget.key == "ms_planning_tag_filter" for widget in app.multiselect)
-        next(button for button in app.button if button.label == "Clear all filters").click().run()
+        app.button(key="dashboard_clear").click().run()
         assert not app.exception
-        assert app.session_state["ms_multi_projects"] == []
-        assert app.session_state["ms_planning_tag_filter"] == []
+        assert app.session_state["ms_multi_projects"] == [1, 2, 3, 4]
+        assert app.session_state["dashboard_flex_fields"] == []
+        assert app.session_state["dashboard_filter_status"] == ['In Progress']
         assert chart.call_args.kwargs["filter_reset"] == 1
     assert create_planning_service(database, access=access).related_project_ids([1, 4], "all") == [1, 2, 3, 4]

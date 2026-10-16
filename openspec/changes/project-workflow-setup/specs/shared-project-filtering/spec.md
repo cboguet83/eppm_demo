@@ -23,3 +23,10 @@ The system SHALL limit tag choices and matching results to the current user's re
 #### Scenario: Hidden project tags remain private
 - **WHEN** an unreadable project has a tag absent from readable projects
 - **THEN** the tag does not appear in choices or delivered project payloads and resetting filters does not expose the hidden project
+
+### Requirement: Clearing shared filters resets the planning view
+Clearing shared filters SHALL restore In Progress, remove project/resource restrictions and signal the Gantt view to reset retained filter state without changing authorization.
+
+#### Scenario: Clear a restricted planning view
+- **WHEN** the user clears shared filters after restricting project and resource selections
+- **THEN** matching authorized projects are unrestricted within In Progress, resource restrictions are removed and the chart receives a new reset signal
