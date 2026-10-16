@@ -324,6 +324,11 @@ reruns must stay empty before submit, and the submitted 2.50 FTE allocation must
 render. Application, migrations and coverage configuration are unchanged.
 
 The first corrected complete module run passed all four cases in 16.81s.
-Repeat verification and task 4.3 evidence are recorded before rearchive. Final
+A second complete run passed all four cases in 16.80s. Task 4.3 verified
+strict change/main-spec validation, ten passing Node checks and an empty
+`git diff d9dd152 -- app pyproject.toml`. The final diff preserves native
+actionability and every original form assertion; two additional moving-layout
+cases are collected. All five main-spec requirement/scenario blocks remain
+synchronized, with no product delta introduced by this repair. Final
 full PR CI is still required; the earlier full local acceptance remains historical
 baseline evidence and is not described as a run of this correction.

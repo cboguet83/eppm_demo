@@ -81,7 +81,7 @@ Each numbered checkbox is one dedicated commit containing its changes, relevant 
 
 - [x] 4.2 Verify the CI portability repairs with the complete benchmark module, deployed recovery and real OIDC workflows; retain the passing full application baseline, review unchanged application/migration bytes and updated artifacts, record the first CI failure and focused repair evidence, and validate OpenSpec before rearchiving. Require full CI on the final updated PR revision to pass before merge.
 
-- [ ] 4.3 Verify the focused allocation-form correction against its original browser path and existing full acceptance evidence, validate OpenSpec, review unchanged application/migration bytes and record actual results before rearchiving; require final PR CI to pass and keep merge approval pending.
+- [x] 4.3 Verify the focused allocation-form correction against its original browser path and existing full acceptance evidence, validate OpenSpec, review unchanged application/migration bytes and record actual results before rearchiving; require final PR CI to pass and keep merge approval pending.
 
 ## Workflow follow-up
 
