@@ -45,13 +45,26 @@ Each numbered checkbox is one dedicated commit containing its changes, relevant 
 - [x] 3.25 Align portfolio layout/shortcut and scoped editor browser fixtures with shared filters, plain navigation labels and explicit In Progress setup, retaining click readiness, permission and unset-property preservation; verify both browser modules.
 - [x] 3.26 Restore bounded task-source fingerprints by changing active assignment task membership to an equivalent indexed correlated lookup in a new migration; preserve native invoker security, view grants/check option, record/ledger history and token equivalence, capture its focused spec scenarios, and verify unchanged task-source/cache growth limits and assignment/security regressions.
 
+- [x] 3.27 Restore independent concurrent title saves by avoiding global WBS reads and rewrites for unchanged or empty replacements and preserving actual seeded shares in title-only form workloads; retain authoritative authorization, deletion of existing shares, nonempty cap validation and serializable isolation, add regression/spec evidence, and verify all five ten-editor workloads plus WBS/security checks.
+- [ ] 3.28 Align remaining scoped planning/portfolio collaboration UI harnesses with explicit edit consent, shared-filter/component identifiers and current typed link failures, preserving hidden-owner redaction, denied mutation checks and retained-scroll authorization; verify affected UI modules.
+- [ ] 3.29 Repair remaining historical migration/source-trigger inventory assertions by isolating their target migration before later rewrites and retaining complete current-schema/ledger checks; verify affected priority, resource-soft-deletion, revision-plan and revision modules.
+- [ ] 3.30 Refresh the direct-SQL staffing fixture used by shared-permission revocation races; preserve nonempty privileged staffing before revocation and complete redaction afterward, and verify the scoped capacity-race module.
+
+- [ ] 3.31 Align retired financial-edit widget, project organization-expander, CSV edit-consent and shared-menu-style assertions with current UI contracts; retain readonly title controls, named inactive import behavior and complete menu-specific style checks, and verify affected project UI modules.
+- [ ] 3.32 Restore the Gantt reset signal when clearing shared filters, retaining default In Progress state, unrestricted project/resource selection and authorization; update the focused shared-filter spec and verify reset regression plus shared-filter/browser cases.
+
+- [ ] 3.33 Align seeded-title browser setup and status-scope tests with shared status checkboxes/reset controls while retaining original project statuses, property row versions and exact allocation/portfolio results; verify both modules.
+- [ ] 3.34 Update audited popup/component inventories, allow only the shared logging facility in the presentation dependency rule, and align browser export checks with current typed organization endpoints; preserve all storage/legacy dependency bans and verify the four affected checks.
+- [ ] 3.35 Align tag missing-reference expectations and concurrent-snapshot instrumentation with current typed errors and active task-tag projection; preserve foreign-key rejection and one-snapshot count/row guarantees and verify the complete tag contract module.
+- [ ] 3.36 Refresh task-pool dialog fixtures after raw staffing/calendar changes and select task tags through current Settings section/tab state, retaining bounded reads, warning freshness and lazy editor checks; verify both modules.
+
 ## 4. Integrated acceptance
 
 - [ ] 4.1 Run OpenSpec strict validation and the verify-change skill, full pytest with strict mode and at least 95% coverage using isolated PostgreSQL/OIDC, and `node --test tests/test_*.cjs`; review the final diff and task-to-commit history and record actual commands/results in `verification.md`. Keep this task incomplete if any required gate cannot execute or fails; distinguish partial results from full acceptance.
 
 ## Workflow follow-up
 
-- After every tracked task is complete and verification succeeds, sync the approved shared-filter, protected-helper, bounded-cache and bounded-dependency delta specs and archive this change on the same branch. The original tooling-only spec exemption was superseded by approved application repairs. Inspect the archived artifacts and commit the archive/evidence in a dedicated lifecycle commit.
+- After every tracked task is complete and verification succeeds, sync the approved shared-filter, protected-helper, bounded-cache, bounded-dependency and independent-save delta specs and archive this change on the same branch. The original tooling-only spec exemption was superseded by approved application repairs. Inspect the archived artifacts and commit the archive/evidence in a dedicated lifecycle commit.
 - Publish the branch and create a PR targeting `main` only after archive. Include task-to-commit evidence and verification outcomes, attach the PR to this chat, and require the full CI run on its final revision to pass.
 - Inspect GitHub protection and merge settings if accessible; report their verified state or limitations. Changing remote administrative settings is outside this plan.
 - Wait for the user's explicit approval of the concrete PR, then merge using a merge commit that preserves each task commit. Do not squash or rebase merge.

@@ -17,6 +17,8 @@ EPPM has substantial regression coverage but no recorded OpenSpec delivery lifec
 - Restore bounded selected planning-cache work through an append-only migration, retaining current-plan selection, authorization, cache tokens and the unchanged performance regression (approved restoration of tested behavior).
 - Restore bounded dependency metadata queries under native RLS and add a stable-reference lookup index in migration 0067, preserving active-plan endpoint remapping and hidden endpoint privacy (approved restoration of tested behavior).
 - Restore bounded task-source fingerprint work by retaining active assignment membership through an indexed correlated lookup in migration 0068, preserving invoker security, NULL/deleted/inactive semantics and view grants/check options.
+- Restore independent title saves by omitting global WBS reads and rewrites for unchanged shares, preserving explicit clearing, edit authorization, nonempty allocation constraints and cancelled-project reactivation checks.
+- Restore the Gantt reset signal when shared filters are cleared, preserving default status and scoped matching.
 - Document task-to-commit evidence, archive/PR sequencing, and merge commits that preserve task history. PR creation is authorized by this standing workflow; merging always requires the user's explicit approval of the concrete PR.
 
 ## Capabilities
@@ -33,6 +35,8 @@ this does not attempt to specify the entire existing application.
 - `bounded-planning-cache`: Selected planning-cache work remains bounded when unrelated tasks are added, preserving bulk/scoped token equivalence.
 
 - `bounded-planning-dependencies`: Scoped dependency metadata remains bounded for direct and copied active endpoints under native RLS.
+
+- `independent-project-saves`: Serializable title saves preserve unchanged WBS shares and avoid unrelated capacity contention.
 
 ### Modified Capabilities
 

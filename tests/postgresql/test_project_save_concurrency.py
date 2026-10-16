@@ -88,11 +88,18 @@ def test_ten_distinct_editors_can_save_independent_project_titles(
         services = [create_project_service(resources, access=access) for access in accesses]
         projects = [service.get_project_by_id(project_id) for service, project_id in zip(services, project_ids)]
         properties = [project.dynamic_attributes for project in projects]
+        shares = [service.get_wbs_allocations(project_id)
+                  for service, project_id in zip(services, project_ids)]
+        with psycopg.connect(authorized.setup.operator_url) as connection:
+            before_wbs = connection.execute(
+                'SELECT project_id,wbs_id,percentage FROM eppm.project_wbs ORDER BY project_id,wbs_id'
+            ).fetchall()
         if payload_kind == "browser-form":
             properties = []
             for index, project in enumerate(projects):
                 workspace = create_project_workspace(resources, access=accesses[index])
                 draft = ProjectDraft(project.id, project, _dialog_references(workspace))
+                draft.form['wbs'] = shares[index]
                 draft.form = _project_form(workspace, draft, project.project_type_id)
                 values = dict(draft.form["values"])
                 for field in draft.form["fields"]:
@@ -100,7 +107,7 @@ def test_ten_distinct_editors_can_save_independent_project_titles(
                         value = values[field["key"]]
                         values[field["key"]] = "" if value is None else str(value)
                 values["name"] = f"Concurrent title {index}"
-                _accept_values(draft, {"values": values, "dirty": ["name"], "links": [], "wbs": []})
+                _accept_values(draft, {"values": values, "dirty": ["name"], "links": [], "wbs": shares[index]})
                 properties.append(_property_values(draft, values))
             assert all(value == project.dynamic_attributes.get(key)
                        for project, values in zip(projects, properties) for key, value in values.items())
@@ -136,7 +143,7 @@ def test_ten_distinct_editors_can_save_independent_project_titles(
                 project_id=project.id, name=f"Concurrent title {index}", status=project.status,
                 dynamic_attributes=properties[index], function_id=project.function_id,
                 strategic_priority_id=project.strategic_priority_id,
-                project_type_id=project.project_type_id, custom_links=[], wbs_allocations=[],
+                project_type_id=project.project_type_id, custom_links=[], wbs_allocations=shares[index],
             )
 
         errors = []
@@ -153,6 +160,9 @@ def test_ten_distinct_editors_can_save_independent_project_titles(
         assert not errors, errors
         assert all(result is True for result in results), results
         with psycopg.connect(authorized.setup.operator_url) as connection:
+            assert connection.execute(
+                'SELECT project_id,wbs_id,percentage FROM eppm.project_wbs ORDER BY project_id,wbs_id'
+            ).fetchall() == before_wbs
             assert connection.execute("SELECT id,name FROM eppm.project WHERE id=ANY(%s) ORDER BY id",
                                       (project_ids,)).fetchall() == [
                 (project_id, f"Concurrent title {index}") for index, project_id in enumerate(project_ids)]

@@ -100,6 +100,15 @@ correlated indexed EXISTS lookup while preserving security_invoker, view grants,
 local check option and NULL/deleted/inactive task semantics. Compare upgraded
 membership and metadata, and retain the independent revision oracle and exact
 64-buffer growth limit. No record rewrite or prior migration changes are needed.
+Concurrent title saves also read global WBS facts unnecessarily, and the old
+concurrency fixture cleared seeded WBS shares instead of submitting a title-only
+form. Preserve the loaded shares in the workload and assert exact before/after
+allocation equality. The native WBS store skips global reads and rewrites for
+unchanged shares; an explicit empty replacement still clears existing shares
+without consuming capacity. Master authorization, serializable isolation, changed
+nonempty cap checks and cancelled-project reactivation checks remain unchanged.
+Shared Clear filters must also advance the planning chart reset signal, in
+addition to restoring In Progress and unrestricted scoped project/resource reads.
 Capture these real behavior contracts in focused delta specs; the initial
 tooling-only `skip_specs` exemption is superseded by the approved scope expansion.
 
