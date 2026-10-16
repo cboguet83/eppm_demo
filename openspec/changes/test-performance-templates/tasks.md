@@ -5,7 +5,7 @@ Each checkbox is one dedicated commit, with relevant tests, documentation and co
 ## 1. Plan and establish the reference
 
 - [x] 1.1 Create and review the proposal, design and task plan on `codex/test-performance-templates`, recording the explicitly approved dependency on setup PR #1, tooling-only spec exemption and unchanged delivery gates; verify `openspec validate test-performance-templates --strict`, all expected artifacts and a planning-only staged diff before committing.
-- [ ] 1.2 Reconcile prerequisite setup corrections without rewriting commits, establish a passing serial/fresh full baseline on an exact revision, and record collection/fixture inventory, migration counts/checksums, resource versions, wall-time/setup breakdown and full coverage; verify all required PostgreSQL/OIDC groups and Node checks pass, stop on upstream failures, and commit sanitized baseline/measurement documentation only.
+- [x] 1.2 Reconcile prerequisite setup corrections without rewriting commits, establish a passing serial/fresh full baseline on an exact revision, and record collection/fixture inventory, migration counts/checksums, resource versions, wall-time/setup breakdown and full coverage; verify all required PostgreSQL/OIDC groups and Node checks pass, stop on upstream failures, and commit sanitized baseline/measurement documentation only.
 
 ## 2. Build isolated migrated database templates
 
