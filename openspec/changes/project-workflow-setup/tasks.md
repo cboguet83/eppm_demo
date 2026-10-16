@@ -55,7 +55,7 @@ Each numbered checkbox is one dedicated commit containing its changes, relevant 
 
 - [x] 3.33 Align seeded-title browser setup and status-scope tests with shared status checkboxes/reset controls while retaining original project statuses, property row versions and exact allocation/portfolio results; verify both modules.
 - [x] 3.34 Update audited popup/component inventories, allow only the shared logging facility in the presentation dependency rule, and align browser export checks with current typed organization endpoints; preserve all storage/legacy dependency bans and verify the four affected checks.
-- [ ] 3.35 Align tag missing-reference expectations and concurrent-snapshot instrumentation with current typed errors and active task-tag projection; preserve foreign-key rejection and one-snapshot count/row guarantees and verify the complete tag contract module.
+- [x] 3.35 Align tag missing-reference expectations and concurrent-snapshot instrumentation with current typed errors and active task-tag projection; preserve foreign-key rejection and one-snapshot count/row guarantees and verify the complete tag contract module.
 - [ ] 3.36 Refresh task-pool dialog fixtures after raw staffing/calendar changes and select task tags through current Settings section/tab state, retaining bounded reads, warning freshness and lazy editor checks; verify both modules.
 
 ## 4. Integrated acceptance
