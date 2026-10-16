@@ -112,7 +112,8 @@ schema = create_schema_service(runtime, access=access)
         self.assertNotIn("Filter by project template", [w.label for w in portfolio.multiselect])
         self.assertIn("Project Contacts", [tab.label for tab in portfolio.tabs])
         self.assertIn("Project log", [tab.label for tab in portfolio.tabs])
-        self.assertFalse(portfolio.expander)
+        self.assertEqual([item.label for item in portfolio.expander],
+                         ["Divisions", "Teams", "Project managers"])
         self.assertFalse(portfolio.metric)
 
     def test_all_template_property_types_are_exposed_in_create_edit_and_details(self):

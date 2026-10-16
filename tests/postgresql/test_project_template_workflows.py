@@ -258,14 +258,15 @@ open_edit_project_dialog(1, create_project_workspace(runtime, access=access), re
 ''', database, access).run()
     assert not app.exception
     assert all(widget.disabled for widget in app.text_input)
-    assert app.text_input(key="portfolio_edit_1_planned").disabled
-    assert app.text_input(key="portfolio_edit_1_actual").disabled
+    assert app.text_input(key="portfolio_edit_1_name").disabled
+    assert not any(widget.key in {"portfolio_edit_1_planned", "portfolio_edit_1_actual"}
+                   for widget in app.text_input)
     next(button for button in app.button if button.label == "Edit project").click().run()
     assert not app.exception
     assert any(not widget.disabled for widget in app.text_input)
-    assert not app.text_input(key="portfolio_edit_1_planned").disabled
-    assert not app.text_input(key="portfolio_edit_1_actual").disabled
-    assert len(app.dataframe) == 1
+    assert not app.text_input(key="portfolio_edit_1_name").disabled
+    assert not any(widget.key in {"portfolio_edit_1_planned", "portfolio_edit_1_actual"}
+                   for widget in app.text_input)
 
 
 def test_group_popup_includes_allocations_from_descendants(database: RuntimeResources, access: BusinessAccess, authorized: AuthorizedFixture) -> None:

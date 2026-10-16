@@ -50,7 +50,7 @@ Each numbered checkbox is one dedicated commit containing its changes, relevant 
 - [x] 3.29 Repair remaining historical migration/source-trigger inventory assertions by isolating their target migration before later rewrites and retaining complete current-schema/ledger checks; verify affected priority, resource-soft-deletion, revision-plan and revision modules.
 - [x] 3.30 Refresh the direct-SQL staffing fixture used by shared-permission revocation races; preserve nonempty privileged staffing before revocation and complete redaction afterward, and verify the scoped capacity-race module.
 
-- [ ] 3.31 Align retired financial-edit widget, project organization-expander, CSV edit-consent and shared-menu-style assertions with current UI contracts; retain readonly title controls, named inactive import behavior and complete menu-specific style checks, and verify affected project UI modules.
+- [x] 3.31 Align retired financial-edit widget, project organization-expander, CSV edit-consent and shared-menu-style assertions with current UI contracts; retain readonly title controls, named inactive import behavior and complete menu-specific style checks, and verify affected project UI modules.
 - [ ] 3.32 Restore the Gantt reset signal when clearing shared filters, retaining default In Progress state, unrestricted project/resource selection and authorization; update the focused shared-filter spec and verify reset regression plus shared-filter/browser cases.
 
 - [ ] 3.33 Align seeded-title browser setup and status-scope tests with shared status checkboxes/reset controls while retaining original project statuses, property row versions and exact allocation/portfolio results; verify both modules.
