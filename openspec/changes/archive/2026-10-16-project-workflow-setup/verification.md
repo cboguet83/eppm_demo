@@ -12,7 +12,7 @@ and five subtests**, with **zero failures, errors or skips**, in **2,436.50s
 
 | Dimension | Result |
 | --- | --- |
-| Completeness | 54/54 tasks; 12/12 requirements mapped |
+| Completeness | 56/56 tasks; 12/12 requirements mapped |
 | Correctness | All 19 scenarios mapped and covered by passing verification |
 | Coherence | Design and repository patterns reviewed; one optional-import finding corrected; no open implementation findings |
 
@@ -23,7 +23,7 @@ repairs, verified and rearchived before the PR update. No merge is approved.
 
 ## Completeness
 
-All 54 tracked tasks are complete in dedicated commits, including runner portability and native form/CSV synchronization follow-ups. The initial tooling-only exemption was superseded by
+All 56 tracked tasks are complete in dedicated commits, including runner portability and native form/CSV synchronization follow-ups. The initial tooling-only exemption was superseded by
 approved application repairs. Five readable capability deltas contain 12
 requirements and 19 scenarios. None is intentionally skipped.
 
@@ -263,6 +263,8 @@ failures documented below. Merging has not occurred and is not approved.
 | 4.3 | `56f39a9` | test(project-workflow-setup): verify allocation form prerequisite repair (task 4.3) |
 | 3.47 | `07d8513` | test(project-workflow-setup): acknowledge CSV consent through server-rendered state (task 3.47) |
 | 4.4 | `1cce50d` | test(project-workflow-setup): verify causal CSV browser acknowledgment (task 4.4) |
+| 3.48 | `1444f3d` | test(project-workflow-setup): wait for chart locale before financial tooltip hover (task 3.48) |
+| 4.5 | `a51ab75` | test(project-workflow-setup): verify chart locale timing prerequisite repair (task 4.5) |
 
 ## Clean-runner portability follow-up
 
@@ -370,3 +372,42 @@ employee executions pass; all ten Node checks and strict change/five-main-spec
 validation pass; no DEBUG-eppm-csv probe remains. The diff against `d9dd152` for
 `app` and `pyproject.toml` is empty, and the consent/upload/database assertions
 remain intact. No partial reference coverage is treated as acceptance.
+
+
+## Financial chart locale prerequisite repair
+
+Setup commit `4b0d43e` completed full CI run
+[38927759504](https://github.com/cboguet83/eppm_demo/actions/runs/38927759504):
+**3,221 tests and five subtests passed in 2,329.46s (38m49s), 97.68% application
+coverage; 108 JavaScript cases passed, zero failures**. Python was 3.14.8, pytest
+9.1.1, pytest-cov 7.1.0, coverage 7.16.2 and Playwright 1.62.0. This is a passing
+serial/fresh upstream reference with every required group; it predates the CSV
+and chart test-only synchronizations and does not assert their final CI outcome.
+
+The subsequent run at `9d6c527`
+([38930870629](https://github.com/cboguet83/eppm_demo/actions/runs/38930870629))
+stopped after 687 passes and a financial-chart tooltip failure in 647.40s. The
+trace showed the old English tooltip followed by a missing tooltip while the new
+French bar already had the correct translated accessibility label. It is not
+acceptance. The original exact browser module passed locally in 5.47s. A native
+component render delay reproduced the same French tooltip failure (one failed,
+one deselected, 9.32s).
+
+Task 3.48 waits for the chart-specific translated bar label before hovering,
+instead of treating translated summary cards as chart readiness. Immediate and
+250ms delayed component rendering both pass: **2 passed in 11.79s**, including
+all five locales, tooltip series labels, geometry, colors, legends and ratios.
+The delay is test-only and retains native component cleanup. There are no retries,
+forced pointer events or longer waits. Application/migration/configuration bytes
+remain unchanged. The performance reference is frozen in its separate committed
+checkout; final performance comparisons must use identical final sources and
+uncontended conditions, not a mixture of these diagnostic runs.
+
+
+Task 4.5: strict change and all five main specs validate, `git diff d9dd152 --
+app pyproject.toml` is empty, and the chart diff retains every existing semantic
+assertion. The original Node command passes all ten files on local Node 26.11.1;
+a supplemental in-process run passes all 108 individual cases explicitly. No user
+Compose or environment-example changes are staged. The corrected final setup
+revision still requires its own full PR CI; prior-head success is not claimed
+as final-head acceptance.

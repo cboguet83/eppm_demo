@@ -77,6 +77,8 @@ Each numbered checkbox is one dedicated commit containing its changes, relevant 
 
 - [x] 3.47 Diagnose and repair the shared CSV deletion-consent browser acknowledgment using causal server-rendered evidence while retaining upload/reset, consent and no-unsubmitted-save assertions; verify all four real catalog workflows and repeat the employee case, without application changes or retry masking.
 
+- [x] 3.48 Reproduce locale-change chart timing with delayed native component rendering and wait for the chart-specific translated accessibility label before tooltip hover; retain all five-locale, geometry, legend, color, ratio and tooltip assertions and verify immediate/delayed browser cases without application changes or retries.
+
 ## 4. Integrated acceptance
 
 - [x] 4.1 Run OpenSpec strict validation and the verify-change skill, full pytest with strict mode and at least 95% coverage using isolated PostgreSQL/OIDC, and `node --test tests/test_*.cjs`; review the final diff and task-to-commit history and record actual commands/results in `verification.md`. Keep this task incomplete if any required gate cannot execute or fails; distinguish partial results from full acceptance.
@@ -86,6 +88,8 @@ Each numbered checkbox is one dedicated commit containing its changes, relevant 
 - [x] 4.3 Verify the focused allocation-form correction against its original browser path and existing full acceptance evidence, validate OpenSpec, review unchanged application/migration bytes and record actual results before rearchiving; require final PR CI to pass and keep merge approval pending.
 
 - [x] 4.4 Verify the CSV synchronization prerequisite repair with real affected browser workflows, unchanged app/migration bytes and strict OpenSpec/Node checks; record the failed reference attempt and actual repair evidence, rearchive, and require final PR CI before any approved merge.
+
+- [x] 4.5 Verify the chart locale synchronization prerequisite with real browser regressions, strict OpenSpec/Node checks and unchanged app/migration bytes, record previous successful and latest failed CI honestly, and rearchive before publishing the corrected setup PR revision.
 
 ## Workflow follow-up
 
