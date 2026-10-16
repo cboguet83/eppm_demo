@@ -108,15 +108,15 @@ test('pool hover details show both assignment extremes while purple stays on a b
   const pool={name:'Full pool name',theoretical_capacity:2,has_assigned_resources:true};
   const details=context.poolAssignmentDetails(pool,'2026-01-01','2026-01-31');
   assert.match(details,/Full pool name/);
-  assert.equal(details,'Full pool name\nDefined capacity: 2.00 FTE\nMin assigned capacity: 1.00 FTE\nMax assigned capacity: 4.00 FTE');
+  assert.equal(details,'Full pool name\nDefined capacity: 2.0 FTE\nMin assigned capacity: 1.0 FTE\nMax assigned capacity: 4.0 FTE');
   context.getAssignedCapacityForPeriod = () => ({min:2,max:2});
   assert.equal(context.poolAssignmentDetails(pool,'2026-01-01','2026-01-31'),'Full pool name');
   context.getAssignedCapacityForPeriod = () => ({min:1,max:2});
   assert.equal(context.poolAssignmentDetails(pool,'2026-01-01','2026-01-31'),
-    'Full pool name\nDefined capacity: 2.00 FTE\nMin assigned capacity: 1.00 FTE');
+    'Full pool name\nDefined capacity: 2.0 FTE\nMin assigned capacity: 1.0 FTE');
   context.getAssignedCapacityForPeriod = () => ({min:2,max:4});
   assert.equal(context.poolAssignmentDetails(pool,'2026-01-01','2026-01-31'),
-    'Full pool name\nDefined capacity: 2.00 FTE\nMax assigned capacity: 4.00 FTE');
+    'Full pool name\nDefined capacity: 2.0 FTE\nMax assigned capacity: 4.0 FTE');
   const badges=context.poolAssignmentBadges(pool,{min:1,max:4},2);
   assert.match(badges,/underassignment-badge/);
   assert.match(badges,/overassignment-badge/);

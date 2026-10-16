@@ -11,6 +11,7 @@ EPPM has substantial regression coverage but no recorded OpenSpec delivery lifec
 - Add project-specific OpenSpec artifact rules and apply/archive guidance without editing generated skill bodies.
 - Enable the existing full GitHub Actions suite on every PR, retaining manual dispatch and Python 3.14, isolated PostgreSQL, authenticated browser coverage, JavaScript checks, and the 95% application coverage threshold.
 - Add a strict full-suite mode that fails when required PostgreSQL or authenticated browser tests skip, while preserving convenient partial local runs.
+- Correct pre-existing JavaScript assertions for the existing one-decimal FTE display so the required full check reflects current UI behavior; leave application formatting unchanged (approved during apply).
 - Document task-to-commit evidence, archive/PR sequencing, and merge commits that preserve task history. PR creation is authorized by this standing workflow; merging always requires the user's explicit approval of the concrete PR.
 
 ## Capabilities

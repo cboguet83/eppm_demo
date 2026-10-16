@@ -58,4 +58,10 @@ Stop for the user's explicit approval of that PR before merging. Use a merge com
 
 ## Migration Plan
 
+Verification exposed stale resource-tooltip assertions in two JavaScript test
+files: the current application already displays one-decimal FTE, while tests
+still expect whole values or two decimals. The user approved task 3.3 to align
+those assertions and retain fractional values; integer kEUR display stays as-is.
+This is a test-only correction with its own commit, not a UI behavior change.
+
 Land bootstrap inputs, policy/configuration, strict verification with tests, and PR triggering in distinct task commits on this branch. Complete gates and archive in a final task commit, then create the PR. Existing local test commands remain available; the documented completion command gains strict mode. Roll back through a reviewed revert PR if needed, preserving task history and avoiding runtime/database changes.

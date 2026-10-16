@@ -15,6 +15,7 @@ Each numbered checkbox is one dedicated commit containing its changes, relevant 
 
 - [x] 3.1 Add opt-in `--require-full-suite` pytest hooks and isolated pytester regression tests for prerequisite validation, required-group collection, collection/setup/runtime skips, accepted full runs, failure propagation, and unchanged ordinary local runs; document its use in the contributor guide and verify the focused regressions pass without connecting to external services.
 - [x] 3.2 Add an unfiltered `pull_request` trigger alongside manual dispatch in `.github/workflows/tests.yml`, enable strict mode in its existing full pytest command, and correct README's manual-only CI description; verify the diff retains Python 3.14, isolated PostgreSQL with separate roles, browser opt-in, Docker image build, 95% coverage, Node checks and read-only permissions, and validate workflow syntax using available tooling.
+- [x] 3.3 Update stale FTE assertions in `tests/test_dashboard_resource_chart.cjs` and `tests/test_ui_menus.cjs` to the existing one-decimal UI behavior, preserving integer kEUR money display and fractional resource values; verify `node --test tests/test_*.cjs` passes without application changes. Added with explicit user approval after full verification exposed baseline failures.
 
 ## 4. Integrated acceptance
 

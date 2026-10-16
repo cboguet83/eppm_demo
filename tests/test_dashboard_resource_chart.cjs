@@ -47,7 +47,7 @@ test('resource tooltips render translated labels, quarter and FTE unit',()=>{
   chart.svg.children.find(e=>e.tag==='rect').onpointermove({clientX:500,clientY:100});
   const text=chart.root.children.find(e=>e.className==='tip').children
     .map(row=>row.children.map(child=>child.textContent||'').join('')).join('\n');
-  assert.equal(text,'2026-T1\nCapacité minimale: 7 ETP\nAllocation totale: 10 ETP\nPool X — Allocation: 10 ETP\nPool X — Disponible: -3 ETP');
+  assert.equal(text,'2026-T1\nCapacité minimale: 7,0 ETP\nAllocation totale: 10,0 ETP\nPool X — Allocation: 10,0 ETP\nPool X — Disponible: -3,0 ETP');
   chart.cleanup();
 });
 
@@ -59,8 +59,8 @@ test('metric tooltips use the requested line order and omit peak dates',()=>{
     const tip=chart.root.children.find(e=>e.className==='tip');
     const text=tip.children.map(row=>row.children.map(child=>child.textContent||'').join('')).join('\n');
     assert.equal(text,metric==='overallocation'
-      ?'2026-Q1\nOverallocation\nTotal: 3 FTE\nPool X: 3 FTE'
-      :'2026-Q1\nTotal capacity: 7 FTE\nTotal allocation: 10 FTE\nPool X — Allocation: 10 FTE\nPool X — Available: -3 FTE');
+      ?'2026-Q1\nOverallocation\nTotal: 3.0 FTE\nPool X: 3.0 FTE'
+      :'2026-Q1\nTotal capacity: 7.0 FTE\nTotal allocation: 10.0 FTE\nPool X — Allocation: 10.0 FTE\nPool X — Available: -3.0 FTE');
     assert.equal(tip.children[3].children[0].style['--series'],bar.attrs.fill);
     assert.equal(tip.children[3].children[0].className,'pool-swatch');
     assert.equal(chart.root.children.some(e=>e.className==='legend'),false);
@@ -83,7 +83,7 @@ test('finance legend follows the plot and either budget tooltip includes both va
   chart.cleanup();
 });
 
-test('tooltip rounding removes decimals without rounding the plotted data',()=>{
+test('finance tooltips round kEUR while resource tooltips retain one decimal',()=>{
   const {build}=setup();
   const chart=build('finance',7,[],{
     budgetSeries:[{name:'Approved',points:[{date:'2026-01-01',value:1234567.89}]}],
@@ -102,8 +102,8 @@ test('tooltip rounding removes decimals without rounding the plotted data',()=>{
   });
   resource.svg.children.find(e=>e.tag==='rect').onpointermove({clientX:400,clientY:100});
   const labels=resource.root.children.find(e=>e.className==='tip').children.map(row=>row.children.at(-1).textContent);
-  assert.ok(labels.some(text=>text.endsWith('11 FTE')));
-  assert.ok(labels.some(text=>text.endsWith('-3 FTE')));
+  assert.ok(labels.some(text=>text.endsWith('10.6 FTE')));
+  assert.ok(labels.some(text=>text.endsWith('-3.4 FTE')));
   resource.cleanup();
 });
 
