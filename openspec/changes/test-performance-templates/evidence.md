@@ -176,3 +176,40 @@ present also passes under outer coverage: **7 passed in 7.37s**. These checks
 exercise both the supported coverage configuration and nested instrumentation
 used by full verification. Complete 95% application runs remain required in
 task 4.1; coverage-related fixture success does not substitute for them.
+
+## Task 3.4 — bounded observation of pool backend shutdown
+
+The first serial/template full attempt was interrupted by an external sampler
+race (`pg_database_size()` observed an OID concurrently dropped by a test).
+The corrected sampler counts that missed observation instead of stopping tests;
+a controlled fault-injection probe verifies child completion and the counter.
+The restarted full run then failed the existing immediate shutdown assertion:
+**1 failed, 1,000 passed in 673.72s**. Neither attempt is acceptance evidence.
+
+A tight loop calling the actual shutdown test reproduced three failures in
+107 template-mode iterations and three in 83 fresh-mode iterations. In every
+case, a new observer found zero remaining sessions about 8–11 ms later. Thus
+this is an existing server-observation race, not template-only session leakage.
+The application simply delegates closure to the pool; its implementation and
+security configuration remain unchanged. The [pool API contract](https://www.psycopg.org/psycopg3/docs/api/pool.html#psycopg_pool.ConnectionPool.close)
+closes the pool and waits for worker threads; it does not promise an immediately
+updated remote `pg_stat_activity` view.
+
+The user explicitly approved adding this corrective task and rerunning the
+comparison. The real test still requires both initial pool sessions and
+immediate closed-pool state. It observes disappearance of those exact backend
+PIDs, restricted to its database, with a two-second deadline and 10 ms polling.
+There is no retry of application operations or failed tests. A `finally` closes
+the resource even on assertion failure. A persistent session remains a failure.
+
+The delayed-observation regression first failed against the immediate-assertion
+implementation, then passed after bounded observation; a deterministic deadline
+regression rejects a persistent backend. Both pass in **0.07s**. The complete
+foundation module passes **51 cases in fresh mode (10.42s)** and **51 in template
+mode (6.17s)**. The original real-shutdown loop then passes **300 iterations per
+mode**, with no failures. Application and migration diffs remain empty.
+
+All previously collected performance numbers are diagnostic history, including
+the successful 3,291-case serial/fresh run. Task 4.1 requires a new interleaved
+cohort and full A/B/C/repeated-C series on these revised final test sources.
+CI remains serial until that series passes every correctness and speed gate.
