@@ -91,6 +91,9 @@ test URLs, `EPPM_RUN_OIDC_E2E=1`, collection of PostgreSQL and authenticated bro
 tests, and no skips in those required groups. It preserves failing pytest exit
 codes. Ordinary local runs without the option retain existing partial-run/skip
 behavior. Unrelated conditional skips must still be recorded in evidence.
+CI uses pytest `-x` to stop at the first failure. Successful runs still execute
+the complete suite and all subsequent gates; an interrupted failing run is never
+full acceptance.
 Collection-only invocation is rejected in strict mode because it does not
 execute tests. Strict failures identify missing variable names or skipped test
 identifiers without displaying connection strings or skip reasons.

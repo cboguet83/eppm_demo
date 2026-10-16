@@ -71,7 +71,7 @@ Each numbered checkbox is one dedicated commit containing its changes, relevant 
 
 - [x] 3.43 Configure the native benchmark test to accept a validated explicit browser executable and select the runner's installed Google Chrome in CI, retaining sandboxing, native payload/cleanup assertions and local Playwright fallback; verify the real benchmark using the override and validate workflow configuration.
 - [x] 3.44 Replace the OIDC/recovery test fixture's host data bind mount with a project-scoped Docker volume initialized by the non-root application image; verify runtime write access, real operator backups, restart/restore parity and authenticated access without host-UID assumptions.
-- [ ] 3.45 Enable fail-fast execution in the existing full CI pytest command, preserving collection of all required groups, no-skip enforcement, 95% coverage and all remaining checks on successful runs; validate and document the failure-only behavior change.
+- [x] 3.45 Enable fail-fast execution in the existing full CI pytest command, preserving collection of all required groups, no-skip enforcement, 95% coverage and all remaining checks on successful runs; validate and document the failure-only behavior change.
 
 ## 4. Integrated acceptance
 
