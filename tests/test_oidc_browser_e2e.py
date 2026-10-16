@@ -98,9 +98,7 @@ def deployment():
     )
     identity = uuid4().hex[:12]
     directory = ROOT / ".local" / "oidc-e2e" / identity
-    data = directory / "data"
-    data.mkdir(parents=True)
-    values["EPPM_DATA_DIRECTORY"] = data.as_posix()
+    directory.mkdir(parents=True)
     environment_path = directory / "compose.env"
     descriptor = os.open(environment_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as target:
@@ -108,8 +106,9 @@ def deployment():
     image_override = directory / "image-only.yml"
     image_override.write_text(
         "services:\n  postgres:\n    ports: !reset []\n"
-        "  app:\n    volumes: !override\n      - type: bind\n"
-        "        source: ${EPPM_DATA_DIRECTORY}\n        target: /app/data\n",
+        "  app:\n    volumes: !override\n      - type: volume\n"
+        "        source: browser-test-data\n        target: /app/data\n"
+        "volumes:\n  browser-test-data:\n",
         encoding="utf-8",
     )
     server = BrowserDeployment(origin,
@@ -128,7 +127,11 @@ def deployment():
         wait_for_server(origin + "/_stcore/health")
         server.command("exec", "-T", "app", "python", "-c",
                        "import os; assert 'DATABASE_OPERATOR_URL' not in os.environ; "
-                       "assert 'EPPM_RUNTIME_PASSWORD' not in os.environ")
+                       "assert 'EPPM_RUNTIME_PASSWORD' not in os.environ; "
+                       "assert os.getuid() != 0; "
+                       "from pathlib import Path; "
+                       "probe = Path('/app/data/.runtime-write-probe'); "
+                       "probe.touch(exist_ok=False); probe.unlink()")
         yield server
     finally:
         # Only the unique Compose project's resources are removed; host fixtures remain ignored.

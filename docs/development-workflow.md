@@ -78,6 +78,8 @@ Credentials remain in ignored `.local/` files. Do not display or commit them.
 Use the matching container name for a different Compose project. The browser
 fixtures create their own disposable application/provider/database deployment.
 Never point the test runner at an application database.
+The fixture's application data uses a disposable Compose project volume so the
+non-root image can write backups regardless of the host runner's user ID.
 
 The native Gantt benchmark defaults to Playwright's installed Chromium. Set
 `EPPM_BENCHMARK_BROWSER` to an absolute executable path to select another locally
