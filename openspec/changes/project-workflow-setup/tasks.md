@@ -31,7 +31,7 @@ Each numbered checkbox is one dedicated commit containing its changes, relevant 
 - [ ] 3.15 Align Gantt browser edit selectors, explicit opt-in mutation harnesses and menu/expansion interactions with existing UI contracts; retain scenario-copy integrity, active/baseline isolation and revocation checks, and verify affected scenario, dependency, shared-panel and step-rerun modules.
 
 - [x] 3.16 Update stale organization-tree payload and sidebar Settings/deep-link assertions to the current component and route contracts; preserve hierarchy labels, lazy page loading and legacy-import exclusions, and verify affected native modules.
-- [ ] 3.17 Update the exact runtime function allowlist from retired wbs_options to its scoped replacement wbs_allocation_facts, confirming the existing migration explicitly grants that reader while privileged trigger helpers remain private; verify integrity and authorization checks.
+- [x] 3.17 Update the exact runtime function allowlist from retired wbs_options to its scoped replacement wbs_allocation_facts, confirming the existing migration explicitly grants that reader while privileged trigger helpers remain private; verify integrity and authorization checks.
 
 ## 4. Integrated acceptance
 
