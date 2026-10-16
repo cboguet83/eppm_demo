@@ -42,6 +42,8 @@ def test_migrated_presentation_cannot_open_storage_or_construct_repositories() -
     """Every presentation module receives services instead of constructing storage."""
     for path in (ROOT / "app" / "presentation").rglob("*.py"):
         for module in imports(path):
+            if module == "app.shared.logging":
+                continue  # Cross-cutting logging does not construct storage.
             assert not module.startswith(
                 ("src", "sqlite3", "app.infrastructure", "app.main", "app.shared",
                  "app.operator_services", "app.security", "app.application.services.maintenance")

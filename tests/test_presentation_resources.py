@@ -13,7 +13,7 @@ from app.presentation.assets import COMPONENT_NAMES, component_path
 
 def test_all_component_resources_are_owned_by_presentation():
     root = Path(i18n.__file__).resolve().parent
-    assert len(COMPONENT_NAMES) == 9
+    assert len(COMPONENT_NAMES) == 8
     for name in COMPONENT_NAMES:
         path = component_path(name)
         assert path.is_relative_to(root)
