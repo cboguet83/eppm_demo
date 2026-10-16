@@ -89,7 +89,7 @@ Each numbered checkbox is one dedicated commit containing its changes, relevant 
 
 - [x] 4.4 Verify the CSV synchronization prerequisite repair with real affected browser workflows, unchanged app/migration bytes and strict OpenSpec/Node checks; record the failed reference attempt and actual repair evidence, rearchive, and require final PR CI before any approved merge.
 
-- [ ] 4.5 Verify the chart locale synchronization prerequisite with real browser regressions, strict OpenSpec/Node checks and unchanged app/migration bytes, record previous successful and latest failed CI honestly, and rearchive before publishing the corrected setup PR revision.
+- [x] 4.5 Verify the chart locale synchronization prerequisite with real browser regressions, strict OpenSpec/Node checks and unchanged app/migration bytes, record previous successful and latest failed CI honestly, and rearchive before publishing the corrected setup PR revision.
 
 ## Workflow follow-up
 

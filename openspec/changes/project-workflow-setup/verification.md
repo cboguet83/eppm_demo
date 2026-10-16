@@ -400,3 +400,12 @@ forced pointer events or longer waits. Application/migration/configuration bytes
 remain unchanged. The performance reference is frozen in its separate committed
 checkout; final performance comparisons must use identical final sources and
 uncontended conditions, not a mixture of these diagnostic runs.
+
+
+Task 4.5: strict change and all five main specs validate, `git diff d9dd152 --
+app pyproject.toml` is empty, and the chart diff retains every existing semantic
+assertion. The original Node command passes all ten files on local Node 26.11.1;
+a supplemental in-process run reports the individual cases explicitly. No user
+Compose or environment-example changes are staged. The corrected final setup
+revision still requires its own full PR CI; prior-head success is not claimed
+as final-head acceptance.
