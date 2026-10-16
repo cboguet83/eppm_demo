@@ -109,7 +109,7 @@ def test_migration_backfills_false_and_rejects_null_flags(empty_database, tmp_pa
     migrate(empty_database.operator_url, directory=tmp_path)
     with psycopg.connect(empty_database.operator_url) as connection:
         connection.execute("INSERT INTO eppm.team(team_name) VALUES ('Existing')")
-        connection.execute("INSERT INTO eppm.function(name) VALUES ('Existing')")
+        connection.execute("INSERT INTO eppm.function(name,hierarchy_level) VALUES ('Existing',1)")
         connection.execute("INSERT INTO eppm.employee(firstname,lastname,email,employee_code) VALUES ('Existing','Employee','old@example.test','OLD')")
         connection.execute("INSERT INTO eppm.resource_pool(name) VALUES ('Existing')")
         connection.execute("INSERT INTO eppm.function_type(function_type) VALUES ('Existing')")
