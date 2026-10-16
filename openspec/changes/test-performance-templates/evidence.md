@@ -152,3 +152,27 @@ checkouts/coverage paths. No shared password/security assertion changed.
 After the complete heavy run: zero test/benchmark databases and zero other
 client connections remain on the isolated test server. User-staged Compose and
 environment-example edits were preserved through an explicit-path task commit.
+
+## Task 3.3 — combined worker/native subprocess coverage
+
+New probes execute distinct existing `app.domain.tags.rules` branches in an
+ordinary worker, a second worker hosting the native browser test, and its actual
+Streamlit child. Fresh per-test coverage files combine all three branches under
+one application source path. Worker identity files prove the parallel branches
+came from two different processes; the same proof also passes serially. Native
+shutdown uses the existing graceful termination and coverage subprocess patch.
+
+Negative two-worker coverage runs reject missing final reports and worker loss;
+a passing partial fake suite with the existing 95% threshold fails specifically
+for insufficient coverage. No threshold, source, exclusion or security setting
+was changed. Focused probes omit the whole-application threshold except for its
+explicit negative regression; they are not full acceptance. Containerized OIDC
+remains a separate behavior gate, not host coverage evidence.
+
+`pytest tests/postgresql/test_parallel_coverage.py -q -x`: **5 passed in 11.14s**.
+The same five cases under outer `--cov=app` with a fresh data file and JSON report:
+**5 passed in 12.36s**. Full collection/scheduling parity with the new probes
+present also passes under outer coverage: **7 passed in 7.37s**. These checks
+exercise both the supported coverage configuration and nested instrumentation
+used by full verification. Complete 95% application runs remain required in
+task 4.1; coverage-related fixture success does not substitute for them.

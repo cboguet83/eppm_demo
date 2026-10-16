@@ -154,3 +154,23 @@ Reserve a conservative 40 test-client connection budget, including setup,
 nested verification probes and monitoring; record actual peaks during focused
 and full runs. Full two-worker memory/disk/connection evidence remains required
 before CI promotion, and a repeat failure or resource conflict blocks promotion.
+
+## Combined coverage
+
+Keep the existing `--cov=app --cov-fail-under=95` full-suite command, coverage
+source/exclusions, `patch = ["subprocess"]` and `sigterm = true`. Pytest-cov
+combines the worker measurements; native Streamlit children save their data on
+graceful termination. Apply the 95% threshold to the aggregate report. A worker's
+individual percentage is not an additional gate or the whole-suite result.
+
+`test_parallel_coverage.py` verifies exclusive existing application branches in
+two distinct worker processes and one native Streamlit child. It checks the
+combined report contains all three branches under one source path, with fresh
+per-test coverage files. The same proof also runs serially and under outer
+coverage instrumentation. Missing reports, a worker crash and a deliberately
+incomplete measurement with the unchanged 95% gate all remain nonzero.
+
+These focused branch probes do not assert whole-application acceptance. Full
+runs must still meet 95% across `app` with no required skips. Real containerized
+OIDC/recovery remains a separate behavior gate; container application execution
+is not attributed to the host's native-subprocess coverage.
