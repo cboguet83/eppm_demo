@@ -9,7 +9,17 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 from tests.postgresql.business import business
-from tests.business_ui import scoped_planning_app
+from app.runtime import RuntimeResources
+from app.domain.access.models import Actor
+
+
+def scoped_planning_app(path: RuntimeResources, actor: Actor) -> None:
+    """Run mutation-focused cases after explicit edit-mode consent."""
+    import streamlit as st
+    from tests.business_ui import scoped_planning_app as render_scoped_planning
+
+    st.session_state.setdefault('planning_edit_enabled', True)
+    render_scoped_planning(path, actor)
 
 
 def filtered_planning_app(path, actor):
@@ -276,15 +286,15 @@ def test_numeric_flex_filters_preserve_null_values_and_replace_an_incompatible_s
     service.grant(admin, editor.actor.user_id, "project_viewer", {"kind": "projects", "project_ids": [3]})
     with patch("app.presentation.pages.planning._interactive_gantt", return_value=None) as component:
         app = AppTest.from_function(scoped_planning_app, args=(path, editor.actor), default_timeout=30)
-        app.session_state["planning_flex_fields"] = ["SCORE"]
+        app.session_state["dashboard_flex_fields"] = ["SCORE"]
         app.session_state["ms_multi_projects"] = [3]
         app.run()
         assert not app.exception and not app.error
-        options = app.multiselect(key="planning_flex_fields").options
+        options = app.multiselect(key="dashboard_flex_fields").options
         assert "Score" in options and "Score (WEIGHT)" in options
-        choices = app.multiselect(key="planning_flex_values::SCORE").options
+        choices = app.multiselect(key="dashboard_filter_SCORE").options
         assert len(choices) == 1 and float(choices[0]) == 42
-        app.multiselect(key="planning_flex_values::SCORE").set_value(choices).run()
+        app.multiselect(key="dashboard_filter_SCORE").set_value(choices).run()
         assert not app.exception and not app.error
         assert app.session_state["ms_multi_projects"] == [1]
         assert "Hidden" not in json.dumps(component.call_args.kwargs, default=str)
