@@ -60,6 +60,8 @@ Each numbered checkbox is one dedicated commit containing its changes, relevant 
 
 - [x] 3.37 Increase the full CI job timeout to 90 minutes based on the measured 47-minute-47-second local suite, preserving every prerequisite, coverage threshold and test group; validate the workflow and require the eventual PR run to pass.
 
+- [x] 3.38 Align scoped resource Settings tests with native tree actions and current multi-row mapping controls, preserving real dialog execution, unchanged database snapshots, empty catalog membership and rejection of fabricated mapping targets; verify the complete scoped resource Settings module.
+
 ## 4. Integrated acceptance
 
 - [ ] 4.1 Run OpenSpec strict validation and the verify-change skill, full pytest with strict mode and at least 95% coverage using isolated PostgreSQL/OIDC, and `node --test tests/test_*.cjs`; review the final diff and task-to-commit history and record actual commands/results in `verification.md`. Keep this task incomplete if any required gate cannot execute or fails; distinguish partial results from full acceptance.
