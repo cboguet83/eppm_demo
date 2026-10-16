@@ -44,7 +44,7 @@ Alternative: environment preflight alone. Rejected because nonempty variables ca
 
 After implementation, run OpenSpec validation and the verify-change workflow against the artifacts, the full pytest command with coverage and strict mode, and Node checks. Record commands, outcomes, skipped tests, and task-to-commit evidence in `verification.md` inside the change. Any unavailable required gate leaves the change incomplete; partial validation is labeled accurately.
 
-Only after successful verification, sync any applicable product spec deltas and archive the change on the same branch. This tooling change has no deltas to sync. Archive and PR operations belong in the plain workflow follow-up section, outside the tracked implementation checklist, so archive does not depend on its own completion. Give the archive and its evidence a separate lifecycle commit. Then publish the branch and create a PR targeting main, with validation evidence and task history in its description. New commits after verification require relevant revalidation; full PR CI must pass on the final PR revision, including archive changes.
+Only after successful verification, sync applicable product spec deltas and archive the change on the same branch. The approved tag-filter and helper-hardening repairs now have focused deltas to sync. Archive and PR operations belong in the plain workflow follow-up section, outside the tracked implementation checklist, so archive does not depend on its own completion. Give the archive and its evidence a separate lifecycle commit. Then publish the branch and create a PR targeting main, with validation evidence and task history in its description. New commits after verification require relevant revalidation; full PR CI must pass on the final PR revision, including archive changes.
 
 Stop for the user's explicit approval of that PR before merging. Use a merge commit to preserve all task commits. A request to apply or create a PR is not merge approval. Document recommended GitHub settings: PR-required changes to main, required full-suite status check, merge commits enabled, and squash/rebase merge methods disabled. Inspect remote settings during delivery if accessible; report unverified or missing protection separately rather than claiming local documentation enforces it. Changing those settings is outside this implementation scope.
 
@@ -71,7 +71,15 @@ assume it is first; the bounded-key migration regression must isolate migration
 planning harnesses must enter the existing edit mode before allowed mutation
 events; employee-function fixtures and shared-filter selectors must follow
 current contracts. Preserve all non-disclosure, revocation, ledger, and source
-isolation assertions. Do not fix the SQL helper search-path failure by relaxing
-its security assertion; a new migration is a separate pending scope decision.
+isolation assertions. CSV import tests follow the current named, inactive revision
+contract rather than expecting destructive replacement of the active schedule.
+
+The user approved two application repairs: include free-text tags through a
+scoped left join alongside dictionary labels, and add migration 0065 setting the
+explicit trusted-before-temporary search path on the WBS and two hierarchy-cycle
+helpers identified by the unchanged security assertion. Preserve helper bodies,
+prior migration bytes/checksums, allocation constraints, and hierarchy rules.
+Capture these real behavior contracts in focused delta specs; the initial
+tooling-only `skip_specs` exemption is superseded by the approved scope expansion.
 
 Land bootstrap inputs, policy/configuration, strict verification with tests, and PR triggering in distinct task commits on this branch. Complete gates and archive in a final task commit, then create the PR. Existing local test commands remain available; the documented completion command gains strict mode. Roll back through a reviewed revert PR if needed, preserving task history and avoiding runtime/database changes.

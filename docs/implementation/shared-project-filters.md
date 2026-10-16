@@ -57,3 +57,12 @@ Division, team, and project manager frames preserve their expanded state across
 page navigation, including intervening pages without the filter panel. Collapsed
 frames with selected filters use a red header. Resource chart tooltips and Gantt
 resource overlays display FTE to one decimal place without rounding calculations.
+
+## Privileged helper hardening
+
+Migration 0065 restores the explicit `pg_catalog, eppm, pg_temp` search path on
+the WBS allocation guard and the team/pool-type cycle guards. It changes only
+function configuration: executable bodies, existing allocation and hierarchy
+rules, stored business records, and prior migration checksums are preserved.
+Apply it through the explicit operator migration command before starting this
+application revision; normal startup does not migrate the database.

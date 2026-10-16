@@ -19,6 +19,8 @@ Each numbered checkbox is one dedicated commit containing its changes, relevant 
 - [x] 3.4 Repair stale dashboard-label and bounded-cache upgrade assertions in `test_application_authentication_entry.py` and `test_bounded_cache_keys.py`, preserving authentication rejection checks and historical ledger/cache guarantees; verify focused real-PostgreSQL regressions pass. Approved baseline repair; scope the bounded-key upgrade to its own migration rather than all subsequent feature migrations.
 - [x] 3.5 Update existing planning UI/benchmark test harnesses to explicitly enter the current edit mode before permitted mutation events, preserving read-only/revocation assertions and source-database isolation; verify the affected business-transaction and benchmark regressions against real PostgreSQL. Approved baseline repair; application permission rules remain unchanged.
 - [ ] 3.6 Update stale business-transaction test data and selector expectations to current employee-function and shared-filter contracts, preserving hidden-owner and employee-detail non-disclosure assertions; verify the affected security test module against real PostgreSQL. Approved baseline repair; do not relax authorization or change application behavior.
+- [x] 3.7 Add a new migration setting the WBS and two hierarchy-cycle helpers' search_path to `pg_catalog, eppm, pg_temp` without changing their bodies or applied migrations, capture the protected-helper delta spec, and verify clean/upgrade migration behavior plus the unchanged privileged-helper assertion and WBS constraint regressions. Explicitly approved application hardening.
+- [ ] 3.8 Restore free-text tags alongside dictionary tags in the scoped shared filter catalog, capture the shared-filter delta spec, and verify Any/All selection plus hidden-project/tag non-disclosure. Explicitly approved restoration of tested behavior.
 
 ## 4. Integrated acceptance
 
@@ -26,7 +28,7 @@ Each numbered checkbox is one dedicated commit containing its changes, relevant 
 
 ## Workflow follow-up
 
-- After every tracked task is complete and verification succeeds, archive this change on the same branch; product spec sync is inapplicable because `skip_specs: true`. Inspect the archived artifacts and commit the archive/evidence in a dedicated lifecycle commit.
+- After every tracked task is complete and verification succeeds, sync the approved shared-filter and protected-helper delta specs and archive this change on the same branch. The original tooling-only spec exemption was superseded by approved application repairs. Inspect the archived artifacts and commit the archive/evidence in a dedicated lifecycle commit.
 - Publish the branch and create a PR targeting `main` only after archive. Include task-to-commit evidence and verification outcomes, attach the PR to this chat, and require the full CI run on its final revision to pass.
 - Inspect GitHub protection and merge settings if accessible; report their verified state or limitations. Changing remote administrative settings is outside this plan.
 - Wait for the user's explicit approval of the concrete PR, then merge using a merge commit that preserves each task commit. Do not squash or rebase merge.
