@@ -13,7 +13,7 @@ Each numbered checkbox is one dedicated commit containing its changes, relevant 
 
 ## 3. Full verification and automatic PR checks
 
-- [ ] 3.1 Add opt-in `--require-full-suite` pytest hooks and isolated pytester regression tests for prerequisite validation, required-group collection, collection/setup/runtime skips, accepted full runs, failure propagation, and unchanged ordinary local runs; document its use in the contributor guide and verify the focused regressions pass without connecting to external services.
+- [x] 3.1 Add opt-in `--require-full-suite` pytest hooks and isolated pytester regression tests for prerequisite validation, required-group collection, collection/setup/runtime skips, accepted full runs, failure propagation, and unchanged ordinary local runs; document its use in the contributor guide and verify the focused regressions pass without connecting to external services.
 - [ ] 3.2 Add an unfiltered `pull_request` trigger alongside manual dispatch in `.github/workflows/tests.yml`, enable strict mode in its existing full pytest command, and correct README's manual-only CI description; verify the diff retains Python 3.14, isolated PostgreSQL with separate roles, browser opt-in, Docker image build, 95% coverage, Node checks and read-only permissions, and validate workflow syntax using available tooling.
 
 ## 4. Integrated acceptance
