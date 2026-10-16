@@ -751,15 +751,23 @@ def test_gantt_context_menu_dialogs_resolve_owners_using_the_current_scope(busin
         "task_name": "Forged task title", "nonce": "modal-event",
     }
     with patch("app.presentation.pages.planning._interactive_gantt", return_value=event) as component:
-        app = AppTest.from_function(scoped_planning_app, args=(path, editor.actor), default_timeout=30).run()
+        app = AppTest.from_function(
+            scoped_planning_app, args=(path, editor.actor), default_timeout=30,
+        )
+        app.session_state['planning_edit_enabled'] = True
+        app.run()
     assert not app.exception
     assert "Hidden" not in json.dumps([call.kwargs for call in component.call_args_list], default=str)
     displayed = "\n".join(item.value for item in app.markdown)
     assert "Hidden" not in displayed and "Forged task title" not in displayed
+    dialog_inputs = [
+        item for item in app.text_input
+        if not (item.key or '').startswith('dashboard_filter_')
+    ]
     if visible:
         assert not app.error
         if action == "edit_project_details":
-            assert all(item.disabled for item in app.text_input)
+            assert dialog_inputs and all(item.disabled for item in dialog_inputs)
             assert any(item.label == "Edit project" for item in app.button)
         elif "tags" in action:
             assert any(item.key and item.key.startswith("ti_attach_") for item in app.text_input)
@@ -767,7 +775,7 @@ def test_gantt_context_menu_dialogs_resolve_owners_using_the_current_scope(busin
             assert any(item.key and item.key.startswith("ni_assign_") for item in app.number_input)
     else:
         assert app.error or any("read-only" in item.value for item in app.info)
-        assert not app.text_input and not app.number_input
+        assert not dialog_inputs and not app.number_input
 
 
 @pytest.mark.parametrize("surface", ["group", "dictionary", "project", "task"])
