@@ -53,8 +53,13 @@ def read_catalog(connection: psycopg.Connection, project_ids: list[int]) -> Dash
     for project in projects.values():
         project['fields'].setdefault('pool', [''])
     _properties(connection, projects, ids)
-    for project_id, tag in connection.execute('''SELECT pt.project_id,t.tag FROM eppm.project_tag pt
-        JOIN eppm.tag_dictionnary t ON t.id=pt.tag_id WHERE pt.project_id=ANY(%s::bigint[]) ORDER BY pt.project_id,pt.tag_id''', (ids,)):
+    for project_id, tag in connection.execute('''
+        SELECT pt.project_id,coalesce(t.tag,nullif(pt.free_tag,''))
+        FROM eppm.project_tag pt
+        LEFT JOIN eppm.tag_dictionnary t ON t.id=pt.tag_id
+        WHERE pt.project_id=ANY(%s::bigint[])
+            AND coalesce(t.tag,nullif(pt.free_tag,'')) IS NOT NULL
+        ORDER BY pt.project_id,pt.id''', (ids,)):
         projects[project_id]['fields'].setdefault('_project_tags', []).append(tag)
     definitions = [dict(row) for row in parameters(connection)]
     aliases: dict[str, dict[str, str]] = {}

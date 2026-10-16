@@ -7,6 +7,9 @@ page without the panel. Reset restores In Progress and clears the other filters.
 Only selections are persisted; transient button events are not restored.
 Each page reauthorizes its matching projects. Portfolio keeps server-side paging
 and column filters; Planning retains its project/dependency focus controls.
+Project tag choices include dictionary-backed labels and nonempty free-text
+tags. Both participate in Any/All matching, and tags belonging only to hidden
+projects remain unavailable to the current user.
 The panel uses the same compact spacing on all three pages. Its filter controls
 match the height of the collapsed manager frame. Planning's project selector is
 the first dropdown in the filter row; Portfolio's create action aligns with the

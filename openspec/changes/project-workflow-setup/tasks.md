@@ -20,7 +20,7 @@ Each numbered checkbox is one dedicated commit containing its changes, relevant 
 - [x] 3.5 Update existing planning UI/benchmark test harnesses to explicitly enter the current edit mode before permitted mutation events, preserving read-only/revocation assertions and source-database isolation; verify the affected business-transaction and benchmark regressions against real PostgreSQL. Approved baseline repair; application permission rules remain unchanged.
 - [ ] 3.6 Update stale business-transaction test data and selector expectations to current employee-function and shared-filter contracts, preserving hidden-owner and employee-detail non-disclosure assertions; verify the affected security test module against real PostgreSQL. Approved baseline repair; do not relax authorization or change application behavior.
 - [x] 3.7 Add a new migration setting the WBS and two hierarchy-cycle helpers' search_path to `pg_catalog, eppm, pg_temp` without changing their bodies or applied migrations, capture the protected-helper delta spec, and verify clean/upgrade migration behavior plus the unchanged privileged-helper assertion and WBS constraint regressions. Explicitly approved application hardening.
-- [ ] 3.8 Restore free-text tags alongside dictionary tags in the scoped shared filter catalog, capture the shared-filter delta spec, and verify Any/All selection plus hidden-project/tag non-disclosure. Explicitly approved restoration of tested behavior.
+- [x] 3.8 Restore free-text tags alongside dictionary tags in the scoped shared filter catalog, capture the shared-filter delta spec, and verify Any/All selection plus hidden-project/tag non-disclosure. Explicitly approved restoration of tested behavior.
 
 ## 4. Integrated acceptance
 
