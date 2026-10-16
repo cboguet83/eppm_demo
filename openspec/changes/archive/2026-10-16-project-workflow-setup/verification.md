@@ -12,7 +12,7 @@ and five subtests**, with **zero failures, errors or skips**, in **2,436.50s
 
 | Dimension | Result |
 | --- | --- |
-| Completeness | 56/56 tasks; 12/12 requirements mapped |
+| Completeness | 58/58 tasks; 12/12 requirements mapped |
 | Correctness | All 19 scenarios mapped and covered by passing verification |
 | Coherence | Design and repository patterns reviewed; one optional-import finding corrected; no open implementation findings |
 
@@ -23,7 +23,7 @@ repairs, verified and rearchived before the PR update. No merge is approved.
 
 ## Completeness
 
-All 56 tracked tasks are complete in dedicated commits, including runner portability and native form/CSV synchronization follow-ups. The initial tooling-only exemption was superseded by
+All 58 tracked tasks are complete in dedicated commits, including runner portability and native form/CSV synchronization follow-ups. The initial tooling-only exemption was superseded by
 approved application repairs. Five readable capability deltas contain 12
 requirements and 19 scenarios. None is intentionally skipped.
 
@@ -265,6 +265,8 @@ failures documented below. Merging has not occurred and is not approved.
 | 4.4 | `1cce50d` | test(project-workflow-setup): verify causal CSV browser acknowledgment (task 4.4) |
 | 3.48 | `1444f3d` | test(project-workflow-setup): wait for chart locale before financial tooltip hover (task 3.48) |
 | 4.5 | `a51ab75` | test(project-workflow-setup): verify chart locale timing prerequisite repair (task 4.5) |
+| 3.49 | `4a83295` | test(project-workflow-setup): acknowledge shared filter fragment and navigation completion (task 3.49) |
+| 4.6 | `0563e04` | test(project-workflow-setup): verify shared-filter browser completion prerequisite (task 4.6) |
 
 ## Clean-runner portability follow-up
 
@@ -411,3 +413,29 @@ a supplemental in-process run passes all 108 individual cases explicitly. No use
 Compose or environment-example changes are staged. The corrected final setup
 revision still requires its own full PR CI; prior-head success is not claimed
 as final-head acceptance.
+
+
+## Shared-filter fragment/navigation synchronization prerequisite
+
+The frozen local serial/fresh diagnostic at `a2c77dd` ended with 2,378 passed,
+five subtests passed and one organization-frame failure in 2,360.80s. This
+failed run is diagnostic only, not a performance acceptance baseline. The
+focused original test passed in 6.39s. A 500ms delay after native Teams expander
+creation reproduced an earlier collapsed-highlight assertion in this workflow
+(8.20s). Both immediate and delayed native paths now remain regression cases.
+
+Task 3.49 observes persistent server completion markers at the appropriate
+scope: organization actions rerun a Dashboard fragment; navigation reruns the
+root test screen. The layout-sensitive status case uses only the root marker,
+so no new filter-panel element changes its geometry. All original open-state,
+highlight, status, project row, Gantt, layout and exception assertions remain;
+no production behavior or retry was added. A full module run passed all three
+cases in 23.48s; an independent complete repeat passed all three in 24.14s.
+
+Task 4.6 verifies the complete module, strict change validation and all five
+main specs. Node default and supplementary in-process commands each pass 108
+cases, with no failures or skips on this installed runtime. Application and
+dependency metadata are byte-identical to `d9dd152`; prior migrations remain
+unchanged. Requirement/scenario mapping and prior full coverage evidence above
+remain historical evidence; final updated-head CI is still a merge prerequisite.
+The setup PR remains unmerged and requires explicit approval.
