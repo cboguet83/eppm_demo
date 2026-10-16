@@ -8,13 +8,21 @@ from datetime import date
 import psycopg
 import pytest
 
+from app.application.services.access import AccessService
 from app.application.services.business_access import BusinessAccess
-from app.domain.access.models import AccessDenied, VerifiedIdentity
+from app.domain.access.models import AccessDenied, Actor, VerifiedIdentity
 from app.infrastructure.postgresql.business import run_business
+from app.runtime import RuntimeResources
 from tests.postgresql.business import business
+from tests.postgresql.conftest import PostgreSQLFixture
 from tests.business_ui import (
     project_permission_dialog, permission_control_app, scoped_planning_app, tag_catalog_app, shared_catalog_app, shared_directory_dialog_app,
 )
+
+
+type BusinessFixture = tuple[
+    RuntimeResources, AccessService, Actor, BusinessAccess, BusinessAccess
+]
 
 
 def test_scope_is_applied_before_pages_totals_groups_and_relationship_labels(business):
@@ -232,7 +240,10 @@ def test_public_shared_catalog_and_create_previews_deny_project_editors(business
     assert getattr(getattr(main, factory)(path, access=manager), operation)() is not None
 
 
-def test_public_reads_and_references_never_expose_hidden_owners_or_employee_details(pg_database, business):
+def test_public_reads_and_references_never_expose_hidden_owners_or_employee_details(
+    pg_database: PostgreSQLFixture, business: BusinessFixture,
+) -> None:
+    """Expose authorized name references without private contact fields."""
     from dataclasses import asdict
     from app import main
 
@@ -240,6 +251,10 @@ def test_public_reads_and_references_never_expose_hidden_owners_or_employee_deta
     with psycopg.connect(pg_database.operator_url) as conn:
         conn.execute("INSERT INTO eppm.function(function_id,name) VALUES(1,'Manager')")
         conn.execute("INSERT INTO eppm.employee(firstname,lastname,email,mobile,landline,function_id) VALUES('Fictional','Person','private@example.test','private-mobile','private-line',1)")
+        conn.execute(
+            "INSERT INTO eppm.employee_function(employee_id,function_id) "
+            "VALUES (1,1)"
+        )
         conn.execute("INSERT INTO eppm.resource_pool_mapping(pool_id,target_type,target_id,allocation_pct) VALUES(1,'employee',1,100)")
     projects = main.create_project_service(path, access=editor)
     assert projects.get_project_by_id(2) is None
@@ -540,25 +555,34 @@ def test_allocation_popups_explain_when_the_selection_has_no_pools(pg_database, 
     assert app.info[0].value == "No resource pools found in this selection."
 
 
-@pytest.mark.parametrize("scenario", ["invalid", "preview", "cross_project", "revoked", "replace"])
-def test_csv_import_validates_preview_and_rechecks_every_affected_project_before_replacement(pg_database, business, scenario):
+@pytest.mark.parametrize("scenario", ["invalid", "preview", "cross_project", "revoked", "import"])
+def test_csv_import_validates_preview_and_rechecks_revision_ownership(
+    pg_database: PostgreSQLFixture, business: BusinessFixture, scenario: str,
+) -> None:
+    """Imports append an inactive revision without replacing the live schedule."""
     from types import SimpleNamespace
     from unittest.mock import patch
     from streamlit.testing.v1 import AppTest
+    from app.main import create_planning_workspace
 
     path, service, admin, editor, _ = business
-    header = "step_number,task_name,start_date,end_date,progress_pct,preceding_step,dependency_type,dependency_lag\n"
-    content = header + "1,Replacement first,13/02/2026,14/02/2026,0,,,\n2,Replacement second,15/02/2026,16/02/2026,50,1,FS,0\n"
+    header = "step_number,task_correlation_id,task_name,start_date,end_date,progress_pct,preceding_step,dependency_type,dependency_lag\n"
+    first_id = "20" if scenario == "cross_project" else ""
+    content = header + f"1,{first_id},Imported first,13/02/2026,14/02/2026,0,,,\n2,,Imported second,15/02/2026,16/02/2026,50,1,FS,0\n"
     if scenario == "invalid":
         content = content.replace("13/02/2026", "31/02/2026")
     service.grant(admin, editor.actor.user_id, "project_viewer", {"kind": "all"})
-    if scenario == "replace":
-        service.grant(admin, editor.actor.user_id, "project_editor", {"kind": "projects", "project_ids": [2]})
+    plans = create_planning_workspace(path, access=editor).plans
+    assert plans is not None
+    original_plans = plans.list_plans(1)
 
-    def snapshot():
+    def snapshot() -> dict[str, list[tuple[object, ...]]]:
         with psycopg.connect(pg_database.operator_url) as connection:
-            return {table: connection.execute(f"SELECT * FROM eppm.{table} ORDER BY id").fetchall()
-                    for table in ("project_task", "task_dependencies", "resource_pool_assignment")}
+            return {
+                "tasks": connection.execute("SELECT * FROM eppm.current_project_task ORDER BY id").fetchall(),
+                "dependencies": connection.execute("SELECT * FROM eppm.task_dependencies WHERE task_id IN (SELECT id FROM eppm.current_project_task) ORDER BY id").fetchall(),
+                "assignments": connection.execute("SELECT * FROM eppm.resource_pool_assignment WHERE project_plan_id IN (SELECT id FROM eppm.project_plan WHERE is_current) ORDER BY id").fetchall(),
+            }
 
     before = snapshot()
     with patch("streamlit.components.v2.component") as factory:
@@ -569,7 +593,7 @@ def test_csv_import_validates_preview_and_rechecks_every_affected_project_before
         assert not app.exception
         assert snapshot() == before
         assert app.selectbox(key="template_date_format_1").value == "DD/MM/YYYY"
-        assert "Nothing is deleted" in app.warning[0].value
+        assert any("Existing revisions are retained" in item.value for item in app.info)
         if scenario == "invalid":
             assert "Row 2" in app.error[0].value and "start_date" in app.error[0].value
             assert not app.dataframe and not app.button
@@ -578,26 +602,29 @@ def test_csv_import_validates_preview_and_rechecks_every_affected_project_before
         preview = app.dataframe[0].value
         assert preview["start_date"].tolist() == ["2026-02-13", "2026-02-15"]
         assert preview["end_date"].tolist() == ["2026-02-14", "2026-02-16"]
+        assert app.button[0].disabled
         if scenario == "preview":
             return
+        app.text_input(key="import_version_name_1").set_value("Reviewed CSV revision").run()
         if scenario == "revoked":
             assignment = next(item for item in service.assignments(admin, editor.actor.user_id) if item["role"] == "project_editor")
             service.revoke(admin, assignment["id"])
         app.button[0].click().run()
     assert not app.exception
-    if scenario == "replace":
+    assert snapshot() == before
+    current_plans = plans.list_plans(1)
+    if scenario == "import":
         assert not app.error
-        with psycopg.connect(pg_database.operator_url) as connection:
-            assert connection.execute("SELECT task_name,start_date,end_date FROM eppm.current_project_task WHERE project_id=1 ORDER BY id").fetchall() == [
-                ("Replacement first", date(2026, 2, 13), date(2026, 2, 14)), ("Replacement second", date(2026, 2, 15), date(2026, 2, 16)),
-            ]
-            assert connection.execute("SELECT id FROM eppm.resource_pool_assignment").fetchall() == [(2,)]
-            assert connection.execute("SELECT count(*) FROM eppm.task_dependencies").fetchone()[0] == 1
-            assert connection.execute("SELECT text_value FROM eppm.project_property_value WHERE project_id=1 AND param_id='DEPT'").fetchone()[0] == "Finance"
-            assert connection.execute("SELECT task_name FROM eppm.project_task WHERE id=20").fetchone()[0] == "Hidden task"
-            connection.execute("SET CONSTRAINTS ALL IMMEDIATE")
+        new_plans = [plan for plan in current_plans if plan.id not in {item.id for item in original_plans}]
+        assert len(new_plans) == 1
+        saved = new_plans[0]
+        assert saved.name == "Reviewed CSV revision"
+        assert saved.status == "draft" and not saved.is_current and not saved.is_baseline
+        assert [task["task_name"] for task in saved.content.tasks] == ["Imported first", "Imported second"]
+        assert [task["start_date"] for task in saved.content.tasks] == ["2026-02-13", "2026-02-15"]
+        assert len(saved.content.dependencies) == 1
     else:
-        assert snapshot() == before
+        assert current_plans == original_plans
         if scenario == "revoked":
             assert "read-only" in app.info[0].value and not app.button
         else:
@@ -605,7 +632,11 @@ def test_csv_import_validates_preview_and_rechecks_every_affected_project_before
 
 
 @pytest.mark.parametrize("mode,expected", [("Any", [1, 3]), ("All", [1])])
-def test_flexible_filters_offer_only_visible_values_and_clear_without_widening_authorization(pg_database, business, mode, expected):
+def test_flexible_filters_offer_only_visible_values_and_clear_without_widening_authorization(
+    pg_database: PostgreSQLFixture, business: BusinessFixture,
+    mode: str, expected: list[int],
+) -> None:
+    """Use the shared selectors without expanding project or tag visibility."""
     import json
     from unittest.mock import patch
     from streamlit.testing.v1 import AppTest
@@ -619,19 +650,19 @@ def test_flexible_filters_offer_only_visible_values_and_clear_without_widening_a
     service.grant(admin, editor.actor.user_id, "project_viewer", {"kind": "projects", "project_ids": [3]})
     with patch("app.presentation.pages.planning._interactive_gantt", return_value=None) as component:
         app = AppTest.from_function(scoped_planning_app, args=(path, editor.actor), default_timeout=30)
-        app.session_state["planning_flex_fields"] = ["DEPT", "_project_tags"]
-        app.session_state["planning_flex_values::DEPT"] = ["Finance"]
-        app.session_state["planning_flex_values::_project_tags"] = ["Alpha", "Beta"]
-        app.session_state["planning_flex_match_mode"] = mode
+        app.session_state["dashboard_flex_fields"] = ["DEPT", "_project_tags"]
+        app.session_state["dashboard_filter_DEPT"] = ["Finance"]
+        app.session_state["dashboard_filter__project_tags"] = ["Alpha", "Beta"]
+        app.session_state["dashboard_match"] = mode
         app.run()
         assert not app.exception and not app.error
-        assert app.multiselect(key="planning_flex_values::DEPT").options == ["Finance"]
-        assert app.multiselect(key="planning_flex_values::_project_tags").options == ["Alpha", "Beta"]
+        assert app.multiselect(key="dashboard_filter_DEPT").options == ["Finance"]
+        assert app.multiselect(key="dashboard_filter__project_tags").options == ["Alpha", "Beta"]
         assert [int(item["id"]) for item in component.call_args.kwargs["all_projects"]] == expected
         assert "Private tag" not in json.dumps(component.call_args.kwargs, default=str)
-        app.button(key="clear_all_planning_filters").click().run()
+        app.button(key="dashboard_clear").click().run()
         assert not app.exception and not app.error
-        assert app.multiselect(key="planning_flex_fields").value == []
+        assert app.multiselect(key="dashboard_flex_fields").value == []
         assert [int(item["id"]) for item in component.call_args.kwargs["all_projects"]] == [1, 3]
         assert "Hidden" not in json.dumps(component.call_args.kwargs, default=str)
 
@@ -986,9 +1017,11 @@ def test_assignment_dialog_with_no_configured_pools_explains_why_assignment_is_u
     ("employees", "employee", "Rae"),
 ])
 @pytest.mark.parametrize("action", ["add", "edit", "delete"])
-def test_business_admin_catalog_menu_opens_the_requested_record_and_consumes_the_event_once(pg_database,
-    business, surface, entity, display, action,
-):
+def test_business_admin_catalog_menu_opens_the_requested_record_and_consumes_the_event_once(
+    pg_database: PostgreSQLFixture, business: BusinessFixture,
+    surface: str, entity: str, display: str, action: str,
+) -> None:
+    """Exercise the current hierarchy/table event protocol for each catalog."""
     from unittest.mock import patch
     from streamlit.testing.v1 import AppTest
 
@@ -1003,18 +1036,38 @@ def test_business_admin_catalog_menu_opens_the_requested_record_and_consumes_the
         "action": action + "_" + entity, entity + "_id": 10,
         entity + "_name": display, "nonce": "open-record",
     }
-    with patch("app.presentation.pages.organization._table", return_value=event) as component:
+    target = {
+        "functions": "app.presentation.pages.organization.function_tree",
+        "teams": "app.presentation.pages.teams.team_tree",
+    }.get(surface, "app.presentation.pages.organization._table")
+    hierarchy = surface in {"functions", "teams"}
+    if hierarchy:
+        event = {
+            "id": 0 if action == "add" else 10,
+            "action": "create_root" if action == "add" else action,
+        }
+    # V2 trigger events clear after delivery; legacy tables retain their nonce.
+    delivery = {"side_effect": [event, None]} if hierarchy else {"return_value": event}
+    with patch(target, **delivery) as component:
         app = AppTest.from_function(
             shared_catalog_app, args=(path, manager.actor, surface), default_timeout=30,
         ).run()
         assert not app.exception and not app.error
-        payload = component.call_args.kwargs
-        assert len(payload["types" if surface == "function_types" else surface]) == 1
+        if hierarchy:
+            records = component.call_args.args[0]
+            assert len(records.teams if surface == "teams" else records) == 1
+        else:
+            payload = component.call_args.kwargs
+            assert len(payload["types" if surface == "function_types" else surface]) == 1
         if action == "edit":
             assert any(item.value == display for item in app.text_input)
         assert app.button
         app.run()
-        assert not app.exception and not app.error and not app.button and not app.text_input
+        assert not app.exception and not app.error and not app.text_input
+        assert all(
+            item.key in {"function_csv_import", "team_csv_import", "employee_csv_import"}
+            for item in app.button
+        )
     with psycopg.connect(pg_database.operator_url) as connection:
         assert connection.execute("SELECT count(*) FROM eppm.function").fetchone()[0] == 1
         assert connection.execute("SELECT count(*) FROM eppm.employee").fetchone()[0] == 1
@@ -1023,21 +1076,35 @@ def test_business_admin_catalog_menu_opens_the_requested_record_and_consumes_the
 
 
 @pytest.mark.parametrize("surface", ["function_types", "functions", "teams", "employees"])
-def test_project_editor_cannot_render_shared_directory_payloads_or_open_forged_catalog_actions(business, surface):
+def test_project_editor_cannot_render_shared_directory_payloads_or_open_forged_catalog_actions(
+    business: BusinessFixture, surface: str,
+) -> None:
+    """Deny record payloads and forms while allowing generic CSV controls."""
     from unittest.mock import patch
     from streamlit.testing.v1 import AppTest
 
     path, _, _, editor, _ = business
-    with patch("app.presentation.pages.organization._table", return_value={"action": "add_employee", "nonce": "forged"}) as component:
+    target = {
+        "functions": "app.presentation.pages.organization.function_tree",
+        "teams": "app.presentation.pages.teams.team_tree",
+    }.get(surface, "app.presentation.pages.organization._table")
+    with patch(target, return_value={"action": "add_employee", "nonce": "forged"}) as component:
         app = AppTest.from_function(
             shared_catalog_app, args=(path, editor.actor, surface), default_timeout=30,
         ).run()
-    assert not app.exception and app.error and not app.button and not app.text_input
+    assert not app.exception and app.error and not app.text_input
+    assert all(
+        item.key in {"function_csv_import", "team_csv_import", "employee_csv_import"}
+        for item in app.button
+    )
     component.assert_not_called()
 
 
 @pytest.mark.parametrize("entity", ["type", "employee"])
-def test_business_only_administrator_can_manage_directory_records_without_changing_application_identities(pg_database, business, entity):
+def test_business_only_administrator_can_manage_directory_records_without_changing_application_identities(
+    pg_database: PostgreSQLFixture, business: BusinessFixture, entity: str,
+) -> None:
+    """Keep business directory edits independent of application identities."""
     from streamlit.testing.v1 import AppTest
     from app.main import create_organization_service
 
@@ -1076,7 +1143,10 @@ def test_business_only_administrator_can_manage_directory_records_without_changi
         app.text_input[0].set_value("Renamed type")
     else:
         next(item for item in app.text_input if "First Name" in item.label).set_value("Robin")
-        next(item for item in app.number_input if "Occupation" in item.label).set_value(60.0)
+        next(
+            item for item in app.number_input
+            if "occupation" in item.label.casefold()
+        ).set_value(60.0)
     next(item for item in app.button if "Save Changes" in item.label).click().run()
     assert not app.exception and not app.error
     if entity == "type":
