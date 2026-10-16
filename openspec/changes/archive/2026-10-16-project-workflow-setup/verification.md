@@ -260,6 +260,9 @@ failures documented below. Merging has not occurred and is not approved.
 | 3.45 | `4499d2d` | test(project-workflow-setup): fail CI promptly without reducing green-run checks (task 3.45) |
 | 4.2 | `1c90f97` | test(project-workflow-setup): verify runner portability repairs and retain full baseline evidence (task 4.2) |
 
+| 3.46 | `eb28666` | Allocation form prerequisite repair and verification |
+| 4.3 | `56f39a9` | Allocation form prerequisite repair and verification |
+
 ## Clean-runner portability follow-up
 
 The first PR run ([38904081512](https://github.com/cboguet83/eppm_demo/actions/runs/38904081512))
