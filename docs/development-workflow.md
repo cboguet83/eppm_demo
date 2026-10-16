@@ -79,6 +79,11 @@ Use the matching container name for a different Compose project. The browser
 fixtures create their own disposable application/provider/database deployment.
 Never point the test runner at an application database.
 
+The native Gantt benchmark defaults to Playwright's installed Chromium. Set
+`EPPM_BENCHMARK_BROWSER` to an absolute executable path to select another locally
+installed browser. CI selects `/usr/bin/google-chrome`, whose sandbox is supported
+by the Ubuntu runner's security profile; no sandbox protections are disabled.
+
 `--require-full-suite` is an opt-in completion gate. It requires both PostgreSQL
 test URLs, `EPPM_RUN_OIDC_E2E=1`, collection of PostgreSQL and authenticated browser
 tests, and no skips in those required groups. It preserves failing pytest exit

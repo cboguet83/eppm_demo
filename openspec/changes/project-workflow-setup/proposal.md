@@ -20,6 +20,7 @@ EPPM has substantial regression coverage but no recorded OpenSpec delivery lifec
 - Restore bounded task-source fingerprint work by retaining active assignment membership through an indexed correlated lookup in migration 0068, preserving invoker security, NULL/deleted/inactive semantics and view grants/check options.
 - Restore independent title saves by omitting global WBS reads and rewrites for unchanged shares, preserving explicit clearing, edit authorization, nonempty allocation constraints and cancelled-project reactivation checks.
 - Restore the Gantt reset signal when shared filters are cleared, preserving default status and scoped matching.
+- Make browser executable selection and test archive storage portable across hosted runners, and fail CI immediately on a test failure while retaining all successful-run gates.
 - Document task-to-commit evidence, archive/PR sequencing, and merge commits that preserve task history. PR creation is authorized by this standing workflow; merging always requires the user's explicit approval of the concrete PR.
 
 ## Capabilities

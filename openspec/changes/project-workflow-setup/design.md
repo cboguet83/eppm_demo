@@ -124,3 +124,24 @@ Capture these real behavior contracts in focused delta specs; the initial
 tooling-only `skip_specs` exemption is superseded by the approved scope expansion.
 
 Land bootstrap inputs, policy/configuration, strict verification with tests, and PR triggering in distinct task commits on this branch. Complete gates and archive in a final task commit, then create the PR. Existing local test commands remain available; the documented completion command gains strict mode. Roll back application and policy changes through a reviewed revert PR. Database corrections require a new migration; preserve all applied migration files and task history.
+
+## Clean-runner portability follow-up
+
+The first full PR CI reported 3,217 passes and two failures: raw bundled Chromium
+did not start, and the deployed recovery seed reached a backup filesystem error.
+Use the hosted runner's installed Chrome for the raw benchmark with its normal
+sandbox support, keeping the existing local Playwright fallback. Accept the
+explicit executable through a validated test-only environment value.
+
+A host bind directory assumes host and container user IDs match. Use a unique
+Compose-project Docker volume for fixture data, retaining the image's non-root
+ownership and sharing archives across operator/runtime restart and restore.
+Assert runtime writability before yielding the deployment; clean up only the
+fixture project's volumes. Keep the runtime credential non-disclosure check.
+
+Fail-fast CI still collects the complete suite and executes every required group
+on successful runs. A failure exits red immediately; it cannot produce full
+acceptance or bypass the 95% threshold. Reuse the verified application baseline
+for these test/workflow-only corrections and run all affected real workflows,
+then rearchive before publishing the updated PR revision. Full PR CI remains
+required before merge.

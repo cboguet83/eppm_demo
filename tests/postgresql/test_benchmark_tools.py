@@ -114,7 +114,12 @@ def test_gantt_browser_driver_consumes_native_session_payloads_and_cleans_up(bus
     import subprocess
     from playwright.async_api import async_playwright
 
-    async def executable():
+    async def executable() -> str:
+        if configured := os.environ.get('EPPM_BENCHMARK_BROWSER'):
+            path = Path(configured)
+            if not path.is_absolute() or not path.is_file() or not os.access(path, os.X_OK):
+                raise ValueError('EPPM_BENCHMARK_BROWSER must be an absolute executable file')
+            return str(path)
         async with async_playwright() as playwright:
             path = playwright.chromium.executable_path
             # Let the driver's initialization task finish before stopping it;

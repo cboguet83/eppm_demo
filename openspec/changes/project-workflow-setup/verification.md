@@ -5,7 +5,7 @@ Branch: `codex/project-workflow-setup`. Baseline main:
 
 ## Acceptance status
 
-All required pre-archive checks passed. The clean run completed **3,219 tests
+The original required pre-archive checks passed; follow-up CI portability repairs are now in progress. The clean run completed **3,219 tests
 and five subtests**, with **zero failures, errors or skips**, in **2,436.50s
 (40m36s)**. Application statement coverage is **97.69%** (16,926 statements,
 391 missing), above the unchanged 95% gate. All **10 JavaScript checks** pass.
@@ -16,13 +16,14 @@ and five subtests**, with **zero failures, errors or skips**, in **2,436.50s
 | Correctness | All 19 scenarios mapped and covered by passing verification |
 | Coherence | Design and repository patterns reviewed; one optional-import finding corrected; no open implementation findings |
 
-All pre-archive checks passed. Five main specs were synchronized and checked
-against every delta before this change was archived. PR CI remains an additional
-gate on the final archived revision before any approved merge.
+The original five main specs remain synchronized. PR #1 full CI subsequently
+reported two runner-specific fixture failures (3,217 passed, two failed, five
+subtests passed; 97.68% coverage; 41m24s). The change is reopened for focused
+repairs and must be verified and rearchived before the PR update. No merge is approved.
 
 ## Completeness
 
-All 46 tracked tasks are complete in separate commits, including integrated acceptance. The initial tooling-only exemption was superseded by
+46 tracked tasks were complete in separate commits. Four CI portability and verification tasks have been added and remain pending. The initial tooling-only exemption was superseded by
 approved application repairs. Five readable capability deltas contain 12
 requirements and 19 scenarios. None is intentionally skipped.
 
