@@ -33,7 +33,7 @@ def database(runtime: RuntimeResources, authorized: AuthorizedFixture) -> Runtim
 
 def test_task_creation_and_dependency_edit_roll_back_together(database: RuntimeResources, access: BusinessAccess) -> None:
     service = create_planning_service(database, access=access)
-    with pytest.raises(PlanningConflictError) as failure:
+    with pytest.raises(AccessDenied) as failure:
         service.create_milestone(
             1,
             "Failed",
@@ -51,7 +51,7 @@ def test_task_creation_and_dependency_edit_roll_back_together(database: RuntimeR
     )
     original = service.get_milestone_by_id(successor)
     links = service.get_task_dependencies(successor)
-    with pytest.raises(PlanningConflictError):
+    with pytest.raises(AccessDenied):
         service.update_milestone(
             successor,
             "Changed",
@@ -111,8 +111,8 @@ def test_deletion_rollback_restores_links_and_legacy_predecessor_columns(databas
     with psycopg.connect(authorized.setup.operator_url) as connection:
         connection.execute("""CREATE FUNCTION eppm.reject_task_delete() RETURNS trigger LANGUAGE plpgsql AS $$
             BEGIN RAISE EXCEPTION 'internal details' USING ERRCODE='23514'; END $$""")
-        connection.execute(f"""CREATE TRIGGER reject_task_delete BEFORE DELETE ON eppm.project_task
-            FOR EACH ROW WHEN (OLD.id={first}) EXECUTE FUNCTION eppm.reject_task_delete()""")
+        connection.execute(f"""CREATE TRIGGER reject_task_delete BEFORE UPDATE OF is_deleted ON eppm.project_task
+            FOR EACH ROW WHEN (OLD.id={first} AND NOT OLD.is_deleted AND NEW.is_deleted) EXECUTE FUNCTION eppm.reject_task_delete()""")
     with pytest.raises(PlanningConflictError):
         service.delete_milestone(first)
     assert service.get_task_dependencies(second)[0]["predecessor_task_id"] == first

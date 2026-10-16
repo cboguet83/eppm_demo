@@ -33,6 +33,12 @@ Each numbered checkbox is one dedicated commit containing its changes, relevant 
 - [x] 3.16 Update stale organization-tree payload and sidebar Settings/deep-link assertions to the current component and route contracts; preserve hierarchy labels, lazy page loading and legacy-import exclusions, and verify affected native modules.
 - [x] 3.17 Update the exact runtime function allowlist from retired wbs_options to its scoped replacement wbs_allocation_facts, confirming the existing migration explicitly grants that reader while privileged trigger helpers remain private; verify integrity and authorization checks.
 
+- [x] 3.18 Align planning transaction tests with fail-closed missing-endpoint denial, soft deletion and new identities after destructive schedule replacement; retain complete rollback snapshots, link cleanup and CSV schedule/dependency equivalence, and verify both planning modules.
+- [ ] 3.19 Verify operator reset preserves the complete current pool catalog, including hierarchy containers, instead of assuming a retired fixed pool count; retain native archive-count checks and verify operator wrappers.
+
+- [ ] 3.20 Diagnose the shared planning project-filter active state and preserve its tested selection/highlight and dashboard-aligned spacing behavior; verify the native browser regression without relaxing its semantic assertions.
+- [ ] 3.21 Restore bounded dependency metadata reads after current-plan views introduced portfolio-wide scans, adding a plain stable-reference index through a new migration with clean/upgrade checks; retain active endpoint remapping, native RLS and hidden-endpoint redaction, capture a focused delta spec, and verify the unchanged 64-buffer and two-row scan bounds plus planning authorization and HTTP contracts. Approved restoration of tested behavior.
+
 ## 4. Integrated acceptance
 
 - [ ] 4.1 Run OpenSpec strict validation and the verify-change skill, full pytest with strict mode and at least 95% coverage using isolated PostgreSQL/OIDC, and `node --test tests/test_*.cjs`; review the final diff and task-to-commit history and record actual commands/results in `verification.md`. Keep this task incomplete if any required gate cannot execute or fails; distinguish partial results from full acceptance.
