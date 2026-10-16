@@ -75,7 +75,7 @@ def test_dashboard_drill_through_replaces_stale_planning_filters(database: Runti
     assert not app.exception and not app.error
     assert app.session_state["ms_multi_projects"] == [1, 2]
     assert app.session_state["ms_planning_tag_filter"] == []
-    assert app.session_state["planning_flex_fields"] == []
+    assert "planning_flex_fields" not in app.session_state
     assert "active_resource_pool_filter" not in app.session_state
     assert "dashboard_planning_projects" not in app.session_state
 

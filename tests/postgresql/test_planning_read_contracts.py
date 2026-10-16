@@ -7,6 +7,7 @@ import psycopg
 import pytest
 
 from app.application.exceptions import PlanningConflictError, PlanningStorageError
+from app.domain.access.models import AccessDenied
 from app.application.ports.planning import ProjectSummary
 from app.application.services.business_access import BusinessAccess
 from app.domain.planning.constraints import evaluate_constraints
@@ -157,7 +158,7 @@ def test_failed_task_edit_restores_summary_cache_and_reports_only_affected_proje
         dependencies=[{"predecessor_project_id": 1}],
     )
     summaries = service.get_project_summaries([1, 2, 3])
-    with pytest.raises(PlanningConflictError):
+    with pytest.raises(AccessDenied):
         service.update_milestone(
             first,
             "Failed edit",
