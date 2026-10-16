@@ -50,7 +50,7 @@ Stop for the user's explicit approval of that PR before merging. Use a merge com
 
 ## Risks / Trade-offs
 
-- Full CI includes Docker/PostgreSQL/OIDC and may exceed the current 30-minute timeout. Measure the actual PR run before adjusting the timeout; never remove required checks to fit it.
+- The measured full local run took 47 minutes 47 seconds, exceeding the former 30-minute CI limit. Give the job 90 minutes for dependency installation, image build and all PostgreSQL/OIDC/browser checks, and verify the actual PR run without removing required gates.
 - First PR introduces its own CI definition. Review the workflow diff and require a successful run on its final revision before merge approval.
 - Local instructions cannot stop a privileged direct push or squash merge. Document remote protection requirements and accurately report enforcement status.
 - Strict pytest hooks can accidentally mask failures or affect local runs. Regression-test exit status and opt-in isolation, and preserve existing failing exit codes.

@@ -58,6 +58,8 @@ Each numbered checkbox is one dedicated commit containing its changes, relevant 
 - [x] 3.35 Align tag missing-reference expectations and concurrent-snapshot instrumentation with current typed errors and active task-tag projection; preserve foreign-key rejection and one-snapshot count/row guarantees and verify the complete tag contract module.
 - [x] 3.36 Refresh task-pool dialog fixtures after raw staffing/calendar changes and select task tags through current Settings section/tab state, retaining bounded reads, warning freshness and lazy editor checks; verify both modules.
 
+- [x] 3.37 Increase the full CI job timeout to 90 minutes based on the measured 47-minute-47-second local suite, preserving every prerequisite, coverage threshold and test group; validate the workflow and require the eventual PR run to pass.
+
 ## 4. Integrated acceptance
 
 - [ ] 4.1 Run OpenSpec strict validation and the verify-change skill, full pytest with strict mode and at least 95% coverage using isolated PostgreSQL/OIDC, and `node --test tests/test_*.cjs`; review the final diff and task-to-commit history and record actual commands/results in `verification.md`. Keep this task incomplete if any required gate cannot execute or fails; distinguish partial results from full acceptance.
