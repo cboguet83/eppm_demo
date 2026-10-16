@@ -145,3 +145,15 @@ acceptance or bypass the 95% threshold. Reuse the verified application baseline
 for these test/workflow-only corrections and run all affected real workflows,
 then rearchive before publishing the updated PR revision. Full PR CI remains
 required before merge.
+
+
+### Allocation form browser portability follow-up
+
+The second PR CI run exposed a pointer actionability timeout while selecting an
+option in the native allocation form. A controlled animation reproduces that
+unstable-option failure on the actual form. Use native combobox keyboard
+selection and exercise both project/task forms with steady and moving options;
+keep the no-websocket-rerun-before-submit and persisted 2.50 FTE checks intact.
+This test-only correction does not change application behavior or browser
+security. The performance-plan implementation remains dependent on a clean
+setup baseline; this focused prerequisite repair was explicitly authorized.
