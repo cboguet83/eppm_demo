@@ -43,11 +43,16 @@ def test_employee_code_migration_preserves_identity_membership_and_calendar(empt
         (tmp_path / migration.name).write_bytes(migration.sql.encode('utf-8'))
     migrate(empty_database.operator_url, directory=tmp_path)
     with psycopg.connect(empty_database.operator_url) as connection:
-        connection.execute("INSERT INTO eppm.function(function_id,name) VALUES (1,'Engineer')")
+        connection.execute(
+            "INSERT INTO eppm.function(function_id,name,hierarchy_level) "
+            "VALUES (1,'Engineer',1)"
+        )
         connection.execute("INSERT INTO eppm.employee(employee_id,firstname,lastname,email,employee_code) VALUES (7,'Ada','One','a@profile.test','OLD')")
         connection.execute('INSERT INTO eppm.employee_function VALUES (7,1,80)')
         connection.execute("INSERT INTO eppm.employee_calendar_exception(employee_id,start_date,end_date,occupation_percentage) VALUES (7,'2026-01-01','2026-01-03',50)")
-    assert migrate(empty_database.operator_url) == ('0057_remove_employee_code.sql',)
+    assert migrate(empty_database.operator_url) == tuple(
+        item.name for item in discover_migrations()[56:]
+    )
     with psycopg.connect(empty_database.operator_url) as connection:
         assert not connection.execute("SELECT 1 FROM information_schema.columns WHERE table_schema='eppm' AND table_name='employee' AND column_name='employee_code'").fetchall()
         assert connection.execute('SELECT employee_id,firstname FROM eppm.active_employee').fetchall() == [(7, 'Ada')]
