@@ -32,10 +32,15 @@ def test_default_bulk_pool_scenario_and_reset_wrappers_keep_native_archive_polic
         command.main()
     assert service.counts()['projects'] == 2
     assert len(list(tmp_path.glob('*.dump'))) == 2
+    with psycopg.connect(pg_database.operator_url) as connection:
+        pools = connection.execute('SELECT * FROM eppm.resource_pool ORDER BY id').fetchall()
+    assert pools
     monkeypatch.setattr('sys.argv', ['operator'] + operator_arguments + ['--yes'])
     flush_database.main()
     assert service.counts()['projects'] == 0
-    assert service.counts()['pools'] == 33
+    assert service.counts()['pools'] == len(pools)
+    with psycopg.connect(pg_database.operator_url) as connection:
+        assert connection.execute('SELECT * FROM eppm.resource_pool ORDER BY id').fetchall() == pools
     assert len(list(tmp_path.glob('*.dump'))) == 3
 
 
