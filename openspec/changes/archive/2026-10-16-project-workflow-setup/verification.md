@@ -16,8 +16,9 @@ and five subtests**, with **zero failures, errors or skips**, in **2,436.50s
 | Correctness | All 19 scenarios mapped and covered by passing verification |
 | Coherence | Design and repository patterns reviewed; one optional-import finding corrected; no open implementation findings |
 
-All checks passed. Ready for spec synchronization and archive. PR CI remains an
-additional gate on the eventual archived revision before any approved merge.
+All pre-archive checks passed. Five main specs were synchronized and checked
+against every delta before this change was archived. PR CI remains an additional
+gate on the final archived revision before any approved merge.
 
 ## Completeness
 
@@ -251,4 +252,4 @@ gate. PR creation and merging have not occurred at this report stage.
 | 3.40 | `b0c3e44` | test(project-workflow-setup): synchronize native browser reruns (task 3.40) |
 | 3.41 | `d9dd152` | test(project-workflow-setup): collect native browser subprocess coverage (task 3.41) |
 | 3.42 | `969dae8` | test(project-workflow-setup): preserve optional browser collection skip (task 3.42) |
-| 4.1 | Acceptance commit (recorded during archive) | Clean full verification and final evidence |
+| 4.1 | `20fd0a0` | Clean full verification and final evidence |

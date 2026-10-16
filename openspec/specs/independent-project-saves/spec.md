@@ -1,0 +1,25 @@
+# independent-project-saves Specification
+
+## Purpose
+
+Keep independent project title saves reliable under serializable transactions while preserving existing WBS shares, authoritative edit authorization, reactivation validation and global allocation constraints.
+
+## Requirements
+
+### Requirement: Unchanged WBS shares do not add global save contention
+Project saves SHALL avoid global WBS capacity reads and share rewrites when the submitted shares are unchanged. Empty replacements SHALL clear existing authorized shares without reading unrelated capacity facts. Serializable isolation and authoritative project edit checks SHALL remain enabled.
+
+#### Scenario: Ten independent title saves
+- **WHEN** ten distinct authorized editors concurrently save separate project titles using stored or browser-form values in small and 10,001-project portfolios
+- **THEN** all saves succeed, property values remain unchanged and existing WBS allocations are preserved
+
+#### Scenario: Clear or retain authorized shares
+- **WHEN** an authorized editor submits unchanged shares or an empty replacement
+- **THEN** existing unchanged shares are retained or explicitly cleared as requested, without global capacity reads
+
+### Requirement: Allocation integrity survives no-op optimization
+Changed nonempty WBS allocations and reactivation of cancelled projects SHALL retain fresh global capacity validation and native constraints. Empty or unchanged shares SHALL not bypass project authorization.
+
+#### Scenario: Reject invalid or unauthorized edits
+- **WHEN** a caller lacks edit permission, exceeds available WBS capacity, or reactivates a cancelled project with conflicting shares
+- **THEN** the save is rejected and all project fields and allocations remain atomic
