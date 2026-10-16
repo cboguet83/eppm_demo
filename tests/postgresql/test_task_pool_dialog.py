@@ -13,6 +13,7 @@ from streamlit.testing.v1 import AppTest
 from app.application.services.business_access import BusinessAccess
 from app.main import create_resource_pool_service
 from app.runtime import RuntimeResources
+from app.infrastructure.postgresql.staffing_projection import refresh_staffing
 from tests.postgresql.ui import runtime as runtime, access as access
 
 
@@ -77,6 +78,7 @@ class TaskPoolDialogTests(unittest.TestCase):
             cursor.executemany(
                 'INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,task_id,fte_assigned,project_plan_id) VALUES (1,1,1,%s,(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current))', [(0.25,), (0.25,)],
             )
+            refresh_staffing(conn)
 
     def app(self, task_id: int = 1) -> AppTest:
         """Build a dialog test session.
@@ -129,6 +131,7 @@ class TaskPoolDialogTests(unittest.TestCase):
                 'INSERT INTO eppm.resource_pool_mapping(pool_id,target_type,target_id) '
                 "VALUES(4,'employee',1)"
             )
+            refresh_staffing(conn)
         from app.application.services.pool_capacity import PoolCapacityService
         _batch_calculate = PoolCapacityService.calculate_many
 
@@ -147,6 +150,7 @@ class TaskPoolDialogTests(unittest.TestCase):
                 "VALUES(1,'2026-06-15','2026-06-15',0)"
             )
             conn.execute("UPDATE eppm.resource_pool SET capacity_fte=5 WHERE id=2")
+            refresh_staffing(conn)
         app.run()
         self.assert_healthy(app)
         self.assertEqual(sum('Overassigned (Peak: 0.50' in item.value for item in app.markdown), 2)

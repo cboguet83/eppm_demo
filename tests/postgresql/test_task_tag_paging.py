@@ -58,7 +58,8 @@ class TaskTagPagingTests(unittest.TestCase):
 
     def test_settings_loads_one_page_and_no_editor_data_until_opened(self):
         app = AppTest.from_function(settings_app, args=(self.resources, self.access))
-        app.session_state['settings_tab_selection'] = '📋 Task Tags'
+        app.session_state['rb_settings_section'] = 'tag_management'
+        app.session_state['tag_management_tab'] = 'Task Tags'
         with patch.object(TagService, 'get_all_task_tags', side_effect=AssertionError('All tags loaded')), \
              patch.object(PlanningService, 'get_all_milestones', side_effect=AssertionError('All tasks loaded')), \
              patch.object(TagService, 'get_task_tag_group_tags', side_effect=AssertionError('Unopened editor loaded')), \
