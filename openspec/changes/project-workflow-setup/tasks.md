@@ -62,6 +62,9 @@ Each numbered checkbox is one dedicated commit containing its changes, relevant 
 
 - [x] 3.38 Align scoped resource Settings tests with native tree actions and current multi-row mapping controls, preserving real dialog execution, unchanged database snapshots, empty catalog membership and rejection of fabricated mapping targets; verify the complete scoped resource Settings module.
 
+- [x] 3.39 Update the dashboard reset-state regression to assert the newly restored planning reset counter while retaining the exact default/filter state checks; verify the complete dashboard presentation module.
+- [ ] 3.40 Synchronize CSV dismissal, Settings navigation and authenticated scope selection with a completed native Streamlit rerun rather than a pre-event idle snapshot; retain all upload-reset, hierarchy CRUD, role-grant and revocation assertions and verify the affected real browser workflows.
+
 ## 4. Integrated acceptance
 
 - [ ] 4.1 Run OpenSpec strict validation and the verify-change skill, full pytest with strict mode and at least 95% coverage using isolated PostgreSQL/OIDC, and `node --test tests/test_*.cjs`; review the final diff and task-to-commit history and record actual commands/results in `verification.md`. Keep this task incomplete if any required gate cannot execute or fails; distinguish partial results from full acceptance.
