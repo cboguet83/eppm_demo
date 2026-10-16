@@ -254,8 +254,11 @@ failures documented below. Merging has not occurred and is not approved.
 | 3.40 | `b0c3e44` | test(project-workflow-setup): synchronize native browser reruns (task 3.40) |
 | 3.41 | `d9dd152` | test(project-workflow-setup): collect native browser subprocess coverage (task 3.41) |
 | 3.42 | `969dae8` | test(project-workflow-setup): preserve optional browser collection skip (task 3.42) |
-| 4.1 | `20fd0a0` | Clean full verification and final evidence |
-
+| 4.1 | `20fd0a0` | test(project-workflow-setup): verify full acceptance (task 4.1) |
+| 3.43 | `137bc7d` | test(project-workflow-setup): select a sandbox-compatible CI benchmark browser (task 3.43) |
+| 3.44 | `0e4d883` | test(project-workflow-setup): isolate recovery archives from host user ownership (task 3.44) |
+| 3.45 | `4499d2d` | test(project-workflow-setup): fail CI promptly without reducing green-run checks (task 3.45) |
+| 4.2 | `1c90f97` | test(project-workflow-setup): verify runner portability repairs and retain full baseline evidence (task 4.2) |
 
 ## Clean-runner portability follow-up
 
