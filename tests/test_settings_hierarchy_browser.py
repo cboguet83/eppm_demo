@@ -2,9 +2,8 @@
 
 import pytest
 
-from tests.browser_reruns import completed_rerun
-
 from tests.test_dialog_browser import popup_server, sync_playwright, expect
+from tests.browser_reruns import completed_rerun
 
 _APP = '''
 from dataclasses import replace

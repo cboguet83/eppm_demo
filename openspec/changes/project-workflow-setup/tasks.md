@@ -67,6 +67,8 @@ Each numbered checkbox is one dedicated commit containing its changes, relevant 
 
 - [x] 3.41 Restore coverage collection from existing native browser subprocesses using the installed pytest-cov 7/coverage-supported subprocess patch and graceful termination collection, declare its tooling minimum and document the measurement; verify actual child-process application lines are collected and strict pytester/browser checks pass without lowering coverage thresholds or exclusions.
 
+- [x] 3.42 Preserve optional-browser collection behavior by loading the existing Playwright skip gate before the new rerun helper in the hierarchy browser module; verify collection skips with Playwright blocked and the installed-browser module still passes. This import-order-only correction does not change application or installed-browser test behavior.
+
 ## 4. Integrated acceptance
 
 - [ ] 4.1 Run OpenSpec strict validation and the verify-change skill, full pytest with strict mode and at least 95% coverage using isolated PostgreSQL/OIDC, and `node --test tests/test_*.cjs`; review the final diff and task-to-commit history and record actual commands/results in `verification.md`. Keep this task incomplete if any required gate cannot execute or fails; distinguish partial results from full acceptance.
