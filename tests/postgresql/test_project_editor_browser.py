@@ -12,7 +12,7 @@ def test_scoped_editor_repeated_title_saves_preserve_absent_and_null_enums(autho
     with psycopg.connect(authorized.setup.operator_url) as connection:
         ensure_reference_catalog(connection)
         install_schema_catalog(connection)
-        connection.execute("UPDATE eppm.project SET project_type_id=(SELECT id FROM eppm.project_type WHERE is_general) WHERE id=1")
+        connection.execute("UPDATE eppm.project SET status='In Progress',project_type_id=(SELECT id FROM eppm.project_type WHERE is_general) WHERE id=1")
         connection.execute("INSERT INTO eppm.schema_parameters(param_id,param_name,param_type) "
                            "VALUES('scope_absent','Absent scope','ENUM'),('scope_null','Null scope','ENUM')")
         connection.execute("INSERT INTO eppm.project_property_value(project_id,param_id,kind) VALUES(1,'scope_null','null')")
