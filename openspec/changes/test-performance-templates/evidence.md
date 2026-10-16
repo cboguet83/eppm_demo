@@ -93,3 +93,62 @@ fail-fast, collection errors and successful subtests/optional skips. An initial
 duplicate-report probe accidentally shadowed gate registration; the corrected
 probe uses a distinct hook implementation and fails as intended. No failed
 diagnostic was counted as acceptance.
+
+## Task 3.2 — audited two-worker/loadgroup scheduling
+
+Parallel execution requires exactly two workers with `--dist=loadgroup`; serial
+`-n 0` remains available. Native browser/benchmark filenames, audited native
+callers without those names, recovery and subprocess harnesses share one heavy
+group. The controller rejects conflicting combined marks before dispatch.
+Direct-creator source audits and actual full-repository worker collection parity
+regressions preserve every canonical ID; a real scheduler execution probe proves
+heavy members share a worker and selected IDs execute exactly once.
+
+All benchmark creators/cluster-wide observers (including indirect operator CLI
+callers) live in `test_benchmark_tools.py`. Grouping does not coordinate another
+invocation, so its autouse fixture also holds a maintenance-database advisory
+lock with a bounded 180-second acquisition timeout. Real independent workers
+prove distinct process IDs, simultaneously live isolated clones/templates, local
+business rows, non-overlapping shared lock intervals and exact cleanup. Timeout
+regression verifies bounded sanitized failure and subsequent lock release.
+
+Actual commands/results:
+
+- `pytest tests/test_test_scheduling.py tests/test_full_suite.py
+  tests/test_full_suite_parallel.py -q -x`: **55 passed in 16.34s**. Updated
+  collection fault probes compose with the policy hook instead of replacing it.
+  The final scheduling-only repeat passes **7 cases in 5.22s**.
+- `pytest tests/postgresql/test_parallel_resources.py
+  tests/postgresql/test_benchmark_tools.py -q -x -n 2 --dist=loadgroup
+  --postgres-test-db-mode=template`, with the explicit test-client container and
+  browser path: **16 passed in 20.26s**, no skips. An initial diagnostic omitted
+  the required client-container variable; its missing-client failure/skips were
+  corrected in the invocation and are not acceptance.
+- Complete audited heavy group in the isolated verification checkout:
+  `pytest -q -x -p no:cacheprovider -n 2 --dist=loadgroup
+  --postgres-test-db-mode=template -m xdist_group`, with real OIDC enabled and
+  the explicit client/browser prerequisites: **224 passed in 679.37s**, no
+  failures/skips. This included all native browser, benchmark, real OIDC/recovery
+  and then-present subprocess harness cases. Subsequent policy error-path and
+  formatting changes preserve the tested workload grouping; their regressions
+  pass separately. The future coverage probe is verified in task 3.3.
+
+The one-second sampler included fixture/worker startup and observed peaks of
+**7 client connections**, **76,805,066 bytes** of test/benchmark databases and
+**2,229,428 KiB** host test-process aggregate RSS (shared pages counted per
+process). Wall time including monitoring was 680.07s, 670 samples. Docker
+container memory is separate and was not captured as a peak in this focused
+run. Dedicated server capacity is 100 connections; provisional full-run budget
+is 40 test clients on the existing Docker 8-CPU/about-7.48-GiB allocation.
+Full cross-group connection, memory/disk and repeated-runtime evidence remains
+mandatory in task 4.1 before any CI promotion.
+
+Role changes are UUID-owned or database-specific, backend termination is
+owned-pool-specific, temporary scripts/logs use per-test directories and
+deployments use UUID project/volume names with candidate dynamic ports. Diagnostic
+screenshots are outputs only; concurrent full invocations need separate
+checkouts/coverage paths. No shared password/security assertion changed.
+
+After the complete heavy run: zero test/benchmark databases and zero other
+client connections remain on the isolated test server. User-staged Compose and
+environment-example edits were preserved through an explicit-path task commit.

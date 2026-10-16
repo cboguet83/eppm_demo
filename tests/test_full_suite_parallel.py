@@ -10,7 +10,7 @@ pytest_plugins = ("pytester",)
 
 def _run(suite: pytest.Pytester, *arguments: str) -> pytest.RunResult:
     return suite.runpytest_subprocess(
-        "-p", "xdist.plugin", "-n", "2", "--dist=load",
+        "-p", "xdist.plugin", "-n", "2", "--dist=loadgroup",
         "--require-full-suite", "-q", *arguments, timeout=45,
     )
 
@@ -92,7 +92,8 @@ def test_parallel_gate_rejects_divergent_worker_collections(
 ) -> None:
     """Different worker collections cannot establish complete execution."""
     _append_plugin(suite, '''
-def pytest_collection_modifyitems(config, items):
+@pytest.hookimpl(specname='pytest_collection_modifyitems')
+def pytest_collection_modifyitems_divergence_probe(config, items):
     if config.workerinput['workerid'] == 'gw1':
         items.pop()
 ''')
@@ -162,7 +163,8 @@ def test_parallel_gate_rejects_duplicate_collected_identifiers(
 ) -> None:
     """Duplicate collection cannot satisfy exactly-once execution."""
     _append_plugin(suite, '''
-def pytest_collection_modifyitems(items):
+@pytest.hookimpl(specname='pytest_collection_modifyitems')
+def pytest_collection_modifyitems_duplicate_probe(items):
     items.append(items[0])
 ''')
     result = _run(suite)

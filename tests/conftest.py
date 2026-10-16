@@ -12,6 +12,44 @@ if TYPE_CHECKING:
 
 
 REQUIRED_GROUPS = ("PostgreSQL", "authenticated browser")
+HEAVY_GROUP = "browser-benchmark-deployment"
+HEAVY_MODULES = frozenset({
+    "test_direct_employee_priority.py", "test_employee_functions.py",
+    "test_employee_profile_cleanup.py", "test_mapping_allocation.py",
+    "test_seeded_project_forms.py", "test_deployed_recovery.py",
+    "test_parallel_resources.py", "test_full_suite.py",
+    "test_full_suite_parallel.py", "test_test_scheduling.py",
+})
+
+
+def _execution_group(nodeid: str) -> str | None:
+    """Identify audited native browser, benchmark and deployment modules."""
+    path = nodeid.replace("\\", "/").split("::", 1)[0]
+    filename = path.rsplit("/", 1)[-1]
+    if ("browser" in filename or "benchmark" in filename
+            or filename in HEAVY_MODULES):
+        return HEAVY_GROUP
+    return None
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    """Group shared observers and native processes without deselection."""
+    for item in items:
+        group = _execution_group(item.nodeid)
+        if group:
+            item.add_marker(pytest.mark.xdist_group(name=group))
+
+
+@pytest.hookimpl(optionalhook=True)
+def pytest_xdist_node_collection_finished(ids: Sequence[str]) -> None:
+    """Reject conflicting groups at the controller before dispatch."""
+    for nodeid in ids:
+        group = _execution_group(nodeid)
+        if group and not nodeid.endswith("@" + group):
+            raise pytest.UsageError(
+                "Heavy workloads cannot combine conflicting xdist groups."
+            )
 
 
 def _required_group(nodeid: str) -> str | None:
@@ -44,7 +82,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 
 
 def pytest_configure(config: pytest.Config) -> None:
-    """Enable strict verification only when explicitly requested.
+    """Bound parallel scheduling and enable explicitly requested strict proof.
 
     Args:
         config: The current pytest configuration.
@@ -52,6 +90,15 @@ def pytest_configure(config: pytest.Config) -> None:
     Raises:
         pytest.UsageError: Required prerequisites are missing or invalid.
     """
+    config.addinivalue_line(
+        "markers", "xdist_group(name): audited worker group",
+    )
+    workers = getattr(config.option, "numprocesses", 0)
+    if workers and (workers != 2 or config.option.dist != "loadgroup"):
+        raise pytest.UsageError(
+            "Parallel test execution requires -n 2 --dist=loadgroup; "
+            "use -n 0 for serial diagnostics."
+        )
     if not config.getoption("--require-full-suite"):
         return
 

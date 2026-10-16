@@ -104,3 +104,53 @@ or duplicate outcomes, divergent collections and worker loss cannot become a
 passing partial run. Strict mode disables worker replacements, including when a
 caller requests a restart allowance. Existing nonzero pytest statuses remain
 nonzero, and ordinary serial prerequisite/skip behavior remains unchanged.
+
+## Audited scheduling and shared resources
+
+Parallel application verification supports exactly `-n 2 --dist=loadgroup`.
+Use `-n 0` for serial diagnostics; `auto`, larger worker counts and other
+schedulers are rejected before worker startup. Modules whose names contain
+`browser` or `benchmark`, deployed recovery, the five native browser callers
+without browser filenames, and subprocess verification harnesses share
+`browser-benchmark-deployment`. The policy lives in `tests/conftest.py`.
+The controller rejects conflicting combined group marks before dispatch.
+
+The source audit checks all direct native browser/benchmark creators. Collection
+regressions compare the complete repository manifest with both actual worker
+collections; a separate execution probe proves heavy members share a worker and
+every selected ID executes once. Grouping serializes its own members only: the
+other worker continues ordinary database/unit work. It is not an exclusive
+barrier and does not coordinate a second pytest invocation.
+
+`test_benchmark_tools.py` contains both cluster-wide `eppm_benchmark_%` observers
+and every direct/indirect test creator, including operator CLI calls. Its
+autouse fixture takes a session advisory lock on the explicit test server's
+maintenance database, with a bounded 180-second acquisition timeout, before
+observing or creating benchmark copies. This also serializes cooperating test
+invocations. A contended-lock regression verifies bounded failure and release;
+independent real worker processes verify non-overlapping lock intervals.
+
+The audit found no shared-role password/grant mutation in workers. The foundation
+security test creates UUID-qualified roles and removes only those roles. Template
+role settings are database-specific; ordinary grant/revoke tests change ACLs in
+their own database. Backend termination targets a PID selected from the same
+owned pool. Cache/process environment changes are process-local and restored.
+Native servers use candidate loopback ports and per-test directories; ports are
+released before startup, so they are not persistent reservations. Deployed OIDC
+and recovery use distinct UUID-qualified Compose projects/volumes and ports.
+
+Browser screenshot paths are diagnostic outputs, not inputs or shared state
+assertions; one heavy worker writes them within a run. Use separate checkouts
+for simultaneous complete runs so fixed `.local` diagnostic paths and coverage
+outputs do not overwrite each other. Do not run unrelated manual benchmark
+commands against the isolated verification server while its test observers run.
+
+The initial budget is two application workers on the 8-CPU Docker host with
+about 7.48 GiB allocated memory and PostgreSQL `max_connections=100`. Most pools
+use at most two connections; native component children allow four. The largest
+deliberate concurrency regression has one ten-connection pool plus its normal
+fixture pool; the sixteen-thread composition case constructs a closed pool.
+Reserve a conservative 40 test-client connection budget, including setup,
+nested verification probes and monitoring; record actual peaks during focused
+and full runs. Full two-worker memory/disk/connection evidence remains required
+before CI promotion, and a repeat failure or resource conflict blocks promotion.
