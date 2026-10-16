@@ -177,16 +177,20 @@ def select_option(page, label: str, name: str | re.Pattern[str]) -> None:
 
     stage = "opening field"
     try:
-        page.get_by_role("combobox", name=label, exact=True).click()
+        from contextlib import nullcontext
+        from tests.browser_reruns import completed_rerun
+
+        action = nullcontext() if label == "Account status" else completed_rerun(page)
+        with action:
+            page.get_by_role("combobox", name=label, exact=True).click()
+            if label == "Projects":
+                page.get_by_role("combobox", name=label, exact=True).fill("Visible browser project")
+            stage = "selecting option"
+            page.get_by_role("option", name=name, exact=isinstance(name, str)).click()
+            stage = "waiting for rendered selection"
         if label == "Projects":
-            page.get_by_role("combobox", name=label, exact=True).fill("Visible browser project")
-        stage = "selecting option"
-        page.get_by_role("option", name=name, exact=isinstance(name, str)).click()
-        if label == "Projects":
-            stage = "closing dropdown"
+            stage = "closing dropdown after selection is acknowledged"
             page.get_by_role("combobox", name=label, exact=True).press("Tab")
-        stage = "waiting for rendered selection"
-        expect(page.get_by_test_id("stApp")).to_have_attribute("data-test-script-state", "notRunning")
     except Error:
         # This helper is used only on post-login fields in the fictional test database.
         raise AssertionError(f"Unable to select {label} while {stage}.\n" + page.locator("body").aria_snapshot()) from None

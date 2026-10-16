@@ -63,7 +63,7 @@ Each numbered checkbox is one dedicated commit containing its changes, relevant 
 - [x] 3.38 Align scoped resource Settings tests with native tree actions and current multi-row mapping controls, preserving real dialog execution, unchanged database snapshots, empty catalog membership and rejection of fabricated mapping targets; verify the complete scoped resource Settings module.
 
 - [x] 3.39 Update the dashboard reset-state regression to assert the newly restored planning reset counter while retaining the exact default/filter state checks; verify the complete dashboard presentation module.
-- [ ] 3.40 Synchronize CSV dismissal, Settings navigation and authenticated scope selection with a completed native Streamlit rerun rather than a pre-event idle snapshot; retain all upload-reset, hierarchy CRUD, role-grant and revocation assertions and verify the affected real browser workflows.
+- [x] 3.40 Synchronize CSV dismissal, Settings navigation and authenticated scope selection with a completed native Streamlit rerun rather than a pre-event idle snapshot; retain all upload-reset, hierarchy CRUD, role-grant and revocation assertions and verify the affected real browser workflows.
 
 ## 4. Integrated acceptance
 
