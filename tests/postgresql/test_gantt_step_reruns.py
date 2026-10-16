@@ -31,6 +31,7 @@ def test_step_form_commits_before_one_chart_patch_and_preserves_the_shell(busine
     path, _, _, _, manager = business
     app = AppTest.from_function(planning_app, args=(path, manager.actor), default_timeout=30)
     app.session_state["ms_multi_projects"] = [1]
+    app.session_state["planning_edit_enabled"] = True
     event = dict(action=action, id=10, project_id=1, task_name="Single update", phase="General",
                  start_date="2026-01-06", end_date="2026-01-08", progress_pct=25,
                  dependencies=[], description="Saved once", nonce="step-form")
@@ -57,6 +58,7 @@ def test_retained_gantt_create_rechecks_current_project_edit_scope(business):
     path, service, admin, editor, _ = business
     app = AppTest.from_function(planning_app, args=(path, editor.actor), default_timeout=30)
     app.session_state["ms_multi_projects"] = [1]
+    app.session_state["planning_edit_enabled"] = True
 
     def revoke():
         service.grant(admin, editor.actor.user_id, "project_viewer", {"kind": "projects", "project_ids": [1]})
