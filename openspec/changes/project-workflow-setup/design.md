@@ -94,6 +94,12 @@ plain/copy cases through indexed lateral lookups. Migration 0067 adds a partial
 index on non-null stable references. Keep RLS, current-plan remapping and hidden
 endpoint privacy; retain exact 64-buffer growth and two-row scan limits, including
 copied predecessors. Verify index initialization/upgrade preserves records/ledger.
+Task-source fingerprints also expanded all live task IDs through assignment-view
+membership. Migration 0068 replaces the equivalent membership subquery with a
+correlated indexed EXISTS lookup while preserving security_invoker, view grants,
+local check option and NULL/deleted/inactive task semantics. Compare upgraded
+membership and metadata, and retain the independent revision oracle and exact
+64-buffer growth limit. No record rewrite or prior migration changes are needed.
 Capture these real behavior contracts in focused delta specs; the initial
 tooling-only `skip_specs` exemption is superseded by the approved scope expansion.
 

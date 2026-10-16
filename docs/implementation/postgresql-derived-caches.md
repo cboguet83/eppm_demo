@@ -136,3 +136,10 @@ The real PostgreSQL regression retains a maximum of 64 additional shared-buffer
 accesses after adding 5,000 unrelated tasks and dependencies. Both measurements
 use the same warm-up after query-plan invalidation. Clean/upgrade tests also
 check prior ledger entries, records, helper privileges and trusted search path.
+
+Migration 0068 also bounds active assignment task membership through correlated
+indexed existence checks. The assignment view retains invoker security, existing
+grants and local check option. NULL tasks remain eligible; deleted tasks and
+inactive plans remain excluded. Clean/upgrade membership and security checks plus
+the independent task-source revision oracle verify equivalent results and bounded
+buffer work after unrelated task growth.

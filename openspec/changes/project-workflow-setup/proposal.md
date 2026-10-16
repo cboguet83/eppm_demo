@@ -16,6 +16,7 @@ EPPM has substantial regression coverage but no recorded OpenSpec delivery lifec
 - Restore free-text project tags in the scoped shared filter catalog and harden the WBS constraint helper through a new migration, preserving the existing function body and all applied migration checksums (approved during apply).
 - Restore bounded selected planning-cache work through an append-only migration, retaining current-plan selection, authorization, cache tokens and the unchanged performance regression (approved restoration of tested behavior).
 - Restore bounded dependency metadata queries under native RLS and add a stable-reference lookup index in migration 0067, preserving active-plan endpoint remapping and hidden endpoint privacy (approved restoration of tested behavior).
+- Restore bounded task-source fingerprint work by retaining active assignment membership through an indexed correlated lookup in migration 0068, preserving invoker security, NULL/deleted/inactive semantics and view grants/check options.
 - Document task-to-commit evidence, archive/PR sequencing, and merge commits that preserve task history. PR creation is authorized by this standing workflow; merging always requires the user's explicit approval of the concrete PR.
 
 ## Capabilities

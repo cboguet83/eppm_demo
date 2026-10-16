@@ -43,7 +43,7 @@ Each numbered checkbox is one dedicated commit containing its changes, relevant 
 - [x] 3.23 Align capacity exception tests with accepted direct-plus-indirect allocation and period-minimum decisions, refresh staffing after direct fixture SQL changes, and preserve independent overload/deduplication/source-switch assertions; verify exception and overallocation modules.
 - [x] 3.24 Isolate historical portfolio revision migration 0027 before later feature rewrites, preserve full ledger/security checks, update the pool-type upgrade tail inventory and verify financial components appended to portfolio revisions; verify both migration/revision modules.
 - [x] 3.25 Align portfolio layout/shortcut and scoped editor browser fixtures with shared filters, plain navigation labels and explicit In Progress setup, retaining click readiness, permission and unset-property preservation; verify both browser modules.
-- [ ] 3.26 Restore bounded task-source fingerprints by changing active assignment task membership to an equivalent indexed correlated lookup in a new migration; preserve native invoker security, view grants/check option, record/ledger history and token equivalence, capture its focused spec scenarios, and verify unchanged task-source/cache growth limits and assignment/security regressions.
+- [x] 3.26 Restore bounded task-source fingerprints by changing active assignment task membership to an equivalent indexed correlated lookup in a new migration; preserve native invoker security, view grants/check option, record/ledger history and token equivalence, capture its focused spec scenarios, and verify unchanged task-source/cache growth limits and assignment/security regressions.
 
 ## 4. Integrated acceptance
 
@@ -51,7 +51,7 @@ Each numbered checkbox is one dedicated commit containing its changes, relevant 
 
 ## Workflow follow-up
 
-- After every tracked task is complete and verification succeeds, sync the approved shared-filter, protected-helper and bounded-cache delta specs and archive this change on the same branch. The original tooling-only spec exemption was superseded by approved application repairs. Inspect the archived artifacts and commit the archive/evidence in a dedicated lifecycle commit.
+- After every tracked task is complete and verification succeeds, sync the approved shared-filter, protected-helper, bounded-cache and bounded-dependency delta specs and archive this change on the same branch. The original tooling-only spec exemption was superseded by approved application repairs. Inspect the archived artifacts and commit the archive/evidence in a dedicated lifecycle commit.
 - Publish the branch and create a PR targeting `main` only after archive. Include task-to-commit evidence and verification outcomes, attach the PR to this chat, and require the full CI run on its final revision to pass.
 - Inspect GitHub protection and merge settings if accessible; report their verified state or limitations. Changing remote administrative settings is outside this plan.
 - Wait for the user's explicit approval of the concrete PR, then merge using a merge commit that preserves each task commit. Do not squash or rebase merge.
