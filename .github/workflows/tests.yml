@@ -1,6 +1,7 @@
 name: Application and PostgreSQL checks
 
 on:
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -31,6 +32,6 @@ jobs:
         env:
           EPPM_RUN_OIDC_E2E: '1'
           POSTGRES_TEST_CLIENT_CONTAINER: eppm-tests-postgres-1
-        run: python -m dotenv -f .local/postgresql.env run -- python -m pytest -q -p no:cacheprovider --cov=app --cov-report=term --cov-fail-under=95
+        run: python -m dotenv -f .local/postgresql.env run -- python -m pytest -q -p no:cacheprovider --require-full-suite --cov=app --cov-report=term --cov-fail-under=95
       - name: JavaScript component checks
         run: node --test tests/test_*.cjs
