@@ -15,6 +15,7 @@ EPPM has substantial regression coverage but no recorded OpenSpec delivery lifec
 - Repair baseline Python fixtures and assertions for current dashboard labels, bounded-key migration scope, planning edit-mode interactions, employee-function relationships, and shared-filter selectors. Preserve security and data-integrity assertions (approved during apply).
 - Restore free-text project tags in the scoped shared filter catalog and harden the WBS constraint helper through a new migration, preserving the existing function body and all applied migration checksums (approved during apply).
 - Restore bounded selected planning-cache work through an append-only migration, retaining current-plan selection, authorization, cache tokens and the unchanged performance regression (approved restoration of tested behavior).
+- Restore bounded dependency metadata queries under native RLS and add a stable-reference lookup index in migration 0067, preserving active-plan endpoint remapping and hidden endpoint privacy (approved restoration of tested behavior).
 - Document task-to-commit evidence, archive/PR sequencing, and merge commits that preserve task history. PR creation is authorized by this standing workflow; merging always requires the user's explicit approval of the concrete PR.
 
 ## Capabilities
@@ -29,6 +30,8 @@ application regression repairs now require these focused capability deltas;
 this does not attempt to specify the entire existing application.
 
 - `bounded-planning-cache`: Selected planning-cache work remains bounded when unrelated tasks are added, preserving bulk/scoped token equivalence.
+
+- `bounded-planning-dependencies`: Scoped dependency metadata remains bounded for direct and copied active endpoints under native RLS.
 
 ### Modified Capabilities
 

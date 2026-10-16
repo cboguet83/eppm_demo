@@ -37,7 +37,7 @@ Each numbered checkbox is one dedicated commit containing its changes, relevant 
 - [x] 3.19 Verify operator reset preserves the complete current pool catalog, including hierarchy containers, instead of assuming a retired fixed pool count; retain native archive-count checks and verify operator wrappers.
 
 - [x] 3.20 Synchronize native project selection with the visible chart before closing its popover, preserving the active highlight and dashboard-aligned spacing assertions; verify the real browser regression without application behavior changes.
-- [ ] 3.21 Restore bounded dependency metadata reads after current-plan views introduced portfolio-wide scans, adding a plain stable-reference index through a new migration with clean/upgrade checks; retain active endpoint remapping, native RLS and hidden-endpoint redaction, capture a focused delta spec, and verify the unchanged 64-buffer and two-row scan bounds plus planning authorization and HTTP contracts. Approved restoration of tested behavior.
+- [x] 3.21 Restore bounded dependency metadata reads after current-plan views introduced portfolio-wide scans, adding a plain stable-reference index through a new migration with clean/upgrade checks; retain active endpoint remapping, native RLS and hidden-endpoint redaction, capture a focused delta spec, and verify the unchanged 64-buffer and two-row scan bounds plus planning authorization and HTTP contracts. Approved restoration of tested behavior.
 
 ## 4. Integrated acceptance
 

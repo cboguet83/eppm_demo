@@ -87,6 +87,13 @@ non-deleted owner tasks before resolving their logical dependency endpoints,
 matching the existing views without expanding unrelated rows. Preserve the existing 64-buffer
 growth limit, use symmetric warm-up, and verify scoped/full token equivalence,
 clean initialization and append-only upgrade safety.
+The same view expansion affected dependency metadata reads under runtime RLS.
+Select minimal owner-task fields from active non-deleted rows under their existing
+policies, precompute the predecessor logical identity, and resolve the disjoint
+plain/copy cases through indexed lateral lookups. Migration 0067 adds a partial
+index on non-null stable references. Keep RLS, current-plan remapping and hidden
+endpoint privacy; retain exact 64-buffer growth and two-row scan limits, including
+copied predecessors. Verify index initialization/upgrade preserves records/ledger.
 Capture these real behavior contracts in focused delta specs; the initial
 tooling-only `skip_specs` exemption is superseded by the approved scope expansion.
 
