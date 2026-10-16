@@ -263,6 +263,8 @@ failures documented below. Merging has not occurred and is not approved.
 | 4.3 | `56f39a9` | test(project-workflow-setup): verify allocation form prerequisite repair (task 4.3) |
 | 3.47 | `07d8513` | test(project-workflow-setup): acknowledge CSV consent through server-rendered state (task 3.47) |
 | 4.4 | `1cce50d` | test(project-workflow-setup): verify causal CSV browser acknowledgment (task 4.4) |
+| 3.48 | `1444f3d` | test(project-workflow-setup): wait for chart locale before financial tooltip hover (task 3.48) |
+| 4.5 | `a51ab75` | test(project-workflow-setup): verify chart locale timing prerequisite repair (task 4.5) |
 
 ## Clean-runner portability follow-up
 
@@ -405,7 +407,7 @@ uncontended conditions, not a mixture of these diagnostic runs.
 Task 4.5: strict change and all five main specs validate, `git diff d9dd152 --
 app pyproject.toml` is empty, and the chart diff retains every existing semantic
 assertion. The original Node command passes all ten files on local Node 26.11.1;
-a supplemental in-process run reports the individual cases explicitly. No user
+a supplemental in-process run passes all 108 individual cases explicitly. No user
 Compose or environment-example changes are staged. The corrected final setup
 revision still requires its own full PR CI; prior-head success is not claimed
 as final-head acceptance.
