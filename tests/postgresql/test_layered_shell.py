@@ -31,16 +31,19 @@ def test_shell_never_exposes_deployment_maintenance_or_reseeds_on_rerun(runtime,
 
 
 def test_schema_deep_link_selects_parameters_after_settings_was_already_open(runtime, access):
-    from tests.test_fragment_reruns import FragmentRun
+    from app.presentation.navigation import PAGE_SETTINGS
 
     app = native_screen(APPLICATION, runtime, access)
-    FragmentRun("app_sidebar_nav", widget_index=3, full_app_request=True).run(app)
+    app.session_state["app_sidebar_nav"] = PAGE_SETTINGS
+    app.run()
     assert not app.exception
-    assert app.radio(key="rb_settings_section").value == "org_structure"
+    assert app.radio(key="app_sidebar_nav").value == "settings:org_structure"
+    assert app.session_state["rb_settings_section"] == "org_structure"
     app.query_params.update(nav="schema")
     app.run()
     assert not app.exception
-    assert app.radio(key="rb_settings_section").value == "param_def"
+    assert app.radio(key="app_sidebar_nav").value == "settings:param_def"
+    assert app.session_state["rb_settings_section"] == "param_def"
 
 
 def test_real_application_pages_run_without_importing_legacy_modules(runtime, authorized, tmp_path):
@@ -91,7 +94,8 @@ try:
         app.session_state['app_sidebar_nav'] = page
         app.run()
         assert not app.exception, list(app.exception)
-        assert app.radio(key='app_sidebar_nav').value == page
+        expected = 'settings:org_structure' if page == PAGE_SETTINGS else page
+        assert app.radio(key='app_sidebar_nav').value == expected
     forbidden = ('src', 'app.infrastructure.database', 'app.infrastructure.repositories',
                  'app.infrastructure.authentication.state')
     loaded = sorted(name for name in sys.modules

@@ -4,6 +4,7 @@ from streamlit.testing.v1 import AppTest
 import psycopg
 import pytest
 from unittest.mock import patch
+import json
 
 from app.domain.organization.models import Team
 from app.infrastructure.postgresql.seed_catalog import ensure_reference_catalog
@@ -173,7 +174,9 @@ def test_team_table_includes_shared_hierarchy_labels_and_empty_assignments(datab
     service = create_organization_service(database, access=access)
     service.create_team(Team("Assigned", hierarchy_type_id=4))
     service.create_team(Team("Unassigned"))
-    with patch("app.presentation.pages.organization._table", return_value=None) as table:
-        app = AppTest.from_function(team_screen, args=(database, access)).run()
+    app = AppTest.from_function(team_screen, args=(database, access)).run()
     assert not app.exception
-    assert [row["hierarchy_type"] for row in table.call_args.kwargs["teams"]] == ["equipe", ""]
+    tree = next(item for item in app.get("bidi_component")
+                if item.proto.id.endswith("-team_hierarchy"))
+    rows = json.loads(tree.proto.json)["rows"]
+    assert [row["hierarchy_type"] for row in rows] == ["equipe", "—"]
