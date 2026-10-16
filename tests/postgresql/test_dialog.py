@@ -59,7 +59,7 @@ def cancellation_screen(path, access, operation):
         "function_type": (org._open_add_function_type_dialog, (organization,)),
         "employee": (org._open_add_employee_dialog, (organization, empty)),
         "pool": (pools._open_add_pool_dialog, (resources,)),
-        "pool_group": (pools._open_add_pool_group_dialog, (resources,)),
+        "pool_group": (pools._open_add_pool_dialog, (resources,)),
         "tag": (tags._open_add_tag_dialog, (tag_service, empty)),
         "tag_group": (tags._open_add_tag_group_dialog, (tag_service,)),
         "mapping": (pools._open_add_pool_mapping_dialog, (

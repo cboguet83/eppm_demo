@@ -34,7 +34,9 @@ def test_current_portfolio_drag_and_baseline_overlay(authorized, tmp_path):
             page.on('pageerror', lambda error: errors.append(str(error)))
             page.goto(server.origin)
             frame = page.frame_locator('iframe[title*="interactive_gantt"]')
-            frame.get_by_role('checkbox', name='Enable edit mode', exact=True).check(timeout=40000)
+            frame.get_by_role(
+                'checkbox', name=re.compile('Enable edit mode'),
+            ).check(timeout=40000)
             expect(frame.get_by_role('checkbox', name='Show baseline', exact=True)).to_have_count(0)
             expect(frame.locator('#frozen-row-1')).to_be_visible()
             frame.locator('#frozen-row-1').click(button='right')

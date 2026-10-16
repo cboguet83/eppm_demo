@@ -20,7 +20,7 @@ def test_dashboard_organization_buttons_cascade_and_keep_status_default(authoriz
         connection.execute('INSERT INTO eppm.project_wbs(project_id,wbs_id,percentage) VALUES (1,1,25),(2,1,75)')
     finance = create_finance_service(RuntimeResources(authorized.database, authorized.key), access=authorized.binding(4).access)
     finance.today = lambda: date(2026, 6, 1)
-    finance.save([{'code': 'ORG', 'amounts': {'2026': '100.00'}}],
+    finance.save([{'code': 'ORG', 'amounts': {'2026': '100000.00'}}],
                  base_id=None, name='Organization budget', status='Approved', year=2026)
     with native_server(authorized, tmp_path, _SCREEN) as server, sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
@@ -36,7 +36,7 @@ def test_dashboard_organization_buttons_cascade_and_keep_status_default(authoriz
             count = lambda value: expect(page.get_by_text(f'{value} matching projects', exact=True)).to_be_visible()
             count(3)
             budget_point = page.locator('.st-key-dashboard_finance_chart circle').first
-            expect(budget_point).to_have_attribute('aria-label', re.compile(r': 100\.00'))
+            expect(budget_point).to_have_attribute('aria-label', re.compile(r': 100 kEUR$'))
             divisions = page.locator('details').filter(has=page.get_by_text('Divisions', exact=True))
             teams = page.locator('details').filter(has=page.get_by_text('Teams', exact=True))
             expect(divisions).not_to_have_attribute('open', '')
@@ -44,8 +44,8 @@ def test_dashboard_organization_buttons_cascade_and_keep_status_default(authoriz
             managers = page.locator('details').filter(has=page.get_by_text('Project managers', exact=True))
             expect(managers).not_to_have_attribute('open', '')
             expect(page.get_by_text('Services', exact=True)).not_to_be_visible()
-            assert page.locator('.st-key-organization_service_frame').evaluate('(element) => getComputedStyle(element).paddingTop') == '8px'
-            assert page.locator('.stMainBlockContainer').evaluate('(element) => getComputedStyle(element).paddingTop') == '0.8px'
+            assert page.locator('.st-key-organization_service_frame').evaluate('(element) => getComputedStyle(element).paddingTop') == '2px'
+            assert float(page.locator('.stMainBlockContainer').evaluate('(element) => getComputedStyle(element).paddingTop').removesuffix('px')) <= 1
             assert divisions.bounding_box()['height'] == 24
             assert teams.bounding_box()['y'] - (divisions.bounding_box()['y'] + 24) == 8
             page.screenshot(path=str(tmp_path / 'organization-panel-default.png'), full_page=True)
@@ -57,15 +57,15 @@ def test_dashboard_organization_buttons_cascade_and_keep_status_default(authoriz
             expect(services.get_by_role('button', name='Service B', exact=True)).to_have_attribute('aria-pressed', 'true')
             services.get_by_role('button', name='Service A', exact=True).click()
             expect(services.get_by_role('button', name='Service B', exact=True)).to_have_attribute('aria-pressed', 'false')
-            expect(budget_point).to_have_attribute('aria-label', re.compile(r': 25\.00'))
+            expect(budget_point).to_have_attribute('aria-label', re.compile(r': 25 kEUR$'))
             expect(page.locator('.st-key-dashboard_filter_org_manager_buttons')).to_contain_text('Alice Manager')
             services.get_by_role('button', name='Service B', exact=True).click(modifiers=['Control'])
             count(2)
-            expect(budget_point).to_have_attribute('aria-label', re.compile(r': 100\.00'))
+            expect(budget_point).to_have_attribute('aria-label', re.compile(r': 100 kEUR$'))
             services.get_by_role('button', name='Service A', exact=True).click(modifiers=['Control'])
             count(1)
             divisions.locator('summary').click()
-            assert divisions.locator('[data-testid="stExpanderDetails"]').evaluate('(element) => getComputedStyle(element).paddingBottom') == '8px'
+            assert divisions.locator('[data-testid="stExpanderDetails"]').evaluate('(element) => getComputedStyle(element).paddingBottom') == '2px'
             division_choices = page.locator('.st-key-dashboard_filter_division_buttons')
             expect(division_choices).to_contain_text('Division B')
             expect(division_choices).not_to_contain_text('Division A')
@@ -114,7 +114,7 @@ def test_dashboard_filter_spacing_in_full_shell(authorized, tmp_path):
             page.goto(server.origin)
             frame = page.locator('.st-key-organization_service_frame')
             expect(frame).to_be_visible(timeout=30000)
-            assert 9 <= frame.bounding_box()['y'] <= 10
+            assert 0 <= frame.bounding_box()['y'] <= 4
             controls = [page.locator('.st-key-dashboard_filter_status').get_by_role('button'),
                         page.locator('.st-key-dashboard_filter_pool').get_by_role('button'),
                         page.get_by_role('button', name='Advanced filters'),

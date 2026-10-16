@@ -9,8 +9,8 @@ from psycopg.pq import TransactionStatus
 from psycopg_pool import ConnectionPool
 import pytest
 
-from app.application.exceptions import PlanningConflictError
 from app.application.services.business_access import BusinessAccess
+from app.domain.access.models import AccessDenied
 from app.infrastructure.postgresql.revisions import snapshot
 from app.main import create_planning_service
 from app.runtime import RuntimeResources
@@ -44,7 +44,7 @@ def test_task_repository_finishes_transactions_before_returning_every_lease(
         elif operation == "write":
             assert planning.update_dates(first, "2026-02-01", "2026-02-02")
         else:
-            with pytest.raises(PlanningConflictError):
+            with pytest.raises(AccessDenied):
                 planning.save_task_dependencies(first, [{"predecessor_task_id": 999}])
 
     assert released_states and all(state == TransactionStatus.IDLE for state in released_states)

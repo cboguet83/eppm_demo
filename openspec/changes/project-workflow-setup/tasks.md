@@ -23,8 +23,9 @@ Each numbered checkbox is one dedicated commit containing its changes, relevant 
 - [x] 3.8 Restore free-text tags alongside dictionary tags in the scoped shared filter catalog, capture the shared-filter delta spec, and verify Any/All selection plus hidden-project/tag non-disclosure. Explicitly approved restoration of tested behavior.
 - [x] 3.9 Repair historical employee-function/code and financial migration fixtures to use the actual preceding schema and isolate the migration under test; preserve record, money, identity, ledger, and current-schema checks, and verify the three affected migration tests pass.
 - [x] 3.10 Refresh the existing staffing projection after direct fixture SQL changes in dashboard aggregate tests; retain the independent daily/domain oracle and exact peak/consumer assertions, and verify the complete dashboard aggregate module passes.
-- [ ] 3.11 Update stale cancellation helper, accessible Gantt edit selector, annual finance metric labels, compact spacing expectation, and rollback exception assertions to the current contracts; verify affected dialog, browser, financial-report, and transaction-lease regressions without application rule changes.
+- [x] 3.11 Update stale cancellation helper, accessible Gantt edit selector, annual finance metric labels, compact spacing expectation, and rollback exception assertions to the current contracts; verify affected dialog, browser, financial-report, and transaction-lease regressions without application rule changes.
 - [ ] 3.12 Remove host PostgreSQL port publication from uniquely isolated OIDC test deployments and initialize their project plan fixtures explicitly; verify the real authenticated browser and deployed recovery workflows can run alongside the full-suite PostgreSQL service without port collisions.
+- [ ] 3.13 Make selected-cache work measurements use the same six-query warm-up before and after ANALYZE invalidates plans; retain the exact 64-buffer growth limit and result-equivalence assertions, and verify planning/capacity performance regressions with recorded buffer metrics.
 
 ## 4. Integrated acceptance
 
