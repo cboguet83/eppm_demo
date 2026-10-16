@@ -64,4 +64,14 @@ still expect whole values or two decimals. The user approved task 3.3 to align
 those assertions and retain fractional values; integer kEUR display stays as-is.
 This is a test-only correction with its own commit, not a UI behavior change.
 
+The user also approved focused baseline Python repairs after independent
+reproduction: dashboard selectors must find the intended expander rather than
+assume it is first; the bounded-key migration regression must isolate migration
+0024 from later feature migrations that deliberately invalidate cache tokens;
+planning harnesses must enter the existing edit mode before allowed mutation
+events; employee-function fixtures and shared-filter selectors must follow
+current contracts. Preserve all non-disclosure, revocation, ledger, and source
+isolation assertions. Do not fix the SQL helper search-path failure by relaxing
+its security assertion; a new migration is a separate pending scope decision.
+
 Land bootstrap inputs, policy/configuration, strict verification with tests, and PR triggering in distinct task commits on this branch. Complete gates and archive in a final task commit, then create the PR. Existing local test commands remain available; the documented completion command gains strict mode. Roll back through a reviewed revert PR if needed, preserving task history and avoiding runtime/database changes.

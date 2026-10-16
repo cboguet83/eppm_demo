@@ -3,6 +3,7 @@
 from datetime import date
 from hashlib import sha256
 import json
+from pathlib import Path
 from secrets import token_bytes
 
 import psycopg
@@ -17,6 +18,7 @@ from app.infrastructure.postgresql.authorization import ActorBinding, ServerRequ
 from app.infrastructure.postgresql.migration import check_schema, discover_migrations, migrate
 from tests.postgresql.test_derived_cache import DAY, cache
 from tests.postgresql.test_pool_capacity import staffing as staffing
+from tests.postgresql.conftest import PostgreSQLFixture
 
 
 @pytest.mark.parametrize('kind,error', [('planning', PlanningStorageError), ('capacity', ResourcePoolStorageError)])
@@ -45,7 +47,10 @@ def test_missing_hidden_project_revision_does_not_change_reader_cache_keys(staff
         assert derived.read(kind, [1], DAY, False, []) == expected
 
 
-def test_cache_key_upgrade_preserves_published_entries_and_ledger_checksums(empty_database, tmp_path):
+def test_cache_key_upgrade_preserves_published_entries_and_ledger_checksums(
+    empty_database: PostgreSQLFixture, tmp_path: Path
+) -> None:
+    """Keep cached reads stable across 0024 and preserve older ledger entries."""
     migrations = discover_migrations()
     for migration in migrations[:23]:
         (tmp_path / migration.name).write_bytes(migration.sql.encode('utf-8'))
@@ -79,13 +84,25 @@ def test_cache_key_upgrade_preserves_published_entries_and_ledger_checksums(empt
             before[kind] = connection.execute(query, (kind, date(2026, 1, 3))).fetchall()
             assert before[kind][0][3]
 
-    assert migrate(empty_database.operator_url) == tuple(item.name for item in migrations[23:])
+    bounded_keys = migrations[23]
+    with (tmp_path / bounded_keys.name).open('wb') as stream:
+        stream.write(bounded_keys.sql.encode('utf-8'))
+    assert migrate(empty_database.operator_url, directory=tmp_path) == (
+        bounded_keys.name,
+    )
 
     with psycopg.connect(empty_database.operator_url) as connection:
         assert connection.execute('SELECT version,name,checksum FROM eppm.schema_migration ORDER BY version').fetchall()[:23] == ledger
     with psycopg.connect(empty_database.runtime_url) as connection:
         connection.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
         binding(connection)
-        check_schema(connection)
         for kind, expected in before.items():
             assert connection.execute(query, (kind, date(2026, 1, 3))).fetchall() == expected
+
+    # Later feature migrations may legitimately invalidate derived cache tokens.
+    # Check their ledger/runtime compatibility separately from the 0024 contract.
+    assert migrate(empty_database.operator_url) == tuple(item.name for item in migrations[24:])
+    with psycopg.connect(empty_database.operator_url) as connection:
+        assert connection.execute('SELECT version,name,checksum FROM eppm.schema_migration ORDER BY version').fetchall()[:23] == ledger
+    with psycopg.connect(empty_database.runtime_url) as connection:
+        check_schema(connection)
