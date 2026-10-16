@@ -5,6 +5,7 @@ import psycopg
 from app.application.services.business_access import BusinessAccess
 from app.main import create_project_overallocation_service, create_project_service
 from app.runtime import RuntimeResources
+from app.infrastructure.postgresql.staffing_projection import refresh_staffing
 from tests.postgresql.conftest import AuthorizedFixture
 from tests.postgresql.ui import runtime as runtime, access as access
 
@@ -49,9 +50,11 @@ def test_staffed_pool_uses_assigned_capacity_and_exception_zero_not_theory(
         connection.execute("INSERT INTO eppm.resource_pool_mapping(pool_id,target_type,target_id) VALUES (1,'employee',1)")
         connection.execute("""INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,fte_assigned,start_date,end_date,project_plan_id)
             VALUES (1,%s,0.5,'2027-01-01','2027-12-31',(SELECT id FROM eppm.project_plan WHERE project_id=%s AND is_current))""", (project, project))
+        refresh_staffing(connection)
     service = create_project_overallocation_service(runtime, access=access)
     assert service.overallocated_project_ids([project]) == set()
     with psycopg.connect(authorized.setup.operator_url) as connection:
         connection.execute("""INSERT INTO eppm.employee_calendar_exception(employee_id,start_date,end_date,occupation_percentage)
             VALUES (1,'2027-06-10','2027-06-10',0)""")
+        refresh_staffing(connection)
     assert service.overallocated_project_ids([project]) == {project}
