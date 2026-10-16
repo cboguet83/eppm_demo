@@ -9,7 +9,7 @@ Each numbered checkbox is one dedicated commit containing its changes, relevant 
 
 ## 2. Delivery policy
 
-- [ ] 2.1 Add the agreed standing authorization and workflow pointer to AGENTS.md, create `docs/development-workflow.md`, and configure OpenSpec artifact rules and operation guidance for branch-before-planning, GrillMe discovery, per-task commits, explicit verification, archive-before-PR, human merge approval and merge commits; verify supported configuration with OpenSpec instructions/status/validation, check documentation links, and confirm this change follows the documented sequence. Keep the full-check command aligned with the strict option introduced by task 3.1.
+- [x] 2.1 Add the agreed standing authorization and workflow pointer to AGENTS.md, create `docs/development-workflow.md`, and configure OpenSpec artifact rules and operation guidance for branch-before-planning, GrillMe discovery, per-task commits, explicit verification, archive-before-PR, human merge approval and merge commits; verify supported configuration with OpenSpec instructions/status/validation, check documentation links, and confirm this change follows the documented sequence. Keep the full-check command aligned with the strict option introduced by task 3.1.
 
 ## 3. Full verification and automatic PR checks
 

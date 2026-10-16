@@ -315,9 +315,14 @@ Never invent missing types or dependencies.
 - Inspect Git state before significant changes.
 - Review diffs before completion.
 - Do not rewrite applied migrations.
-- Do not create pull requests unless explicitly requested.
-
-When the user explicitly requests a commit, make a focused commit with a meaningful message.
+- For OpenSpec planning, implementation, verification, archiving, or PR delivery,
+  read and follow [the development workflow](docs/development-workflow.md).
+- Create `codex/<change-name>` from current `main` before writing a new plan.
+- The standing workflow authorizes one focused commit per numbered task and a
+  PR to `main` after successful verification and archive.
+- Wait for the user's explicit approval of the concrete PR before merging;
+  use a merge commit to preserve every task commit.
+- Outside this standing workflow, create commits and PRs only when requested.
 
 ---
 
