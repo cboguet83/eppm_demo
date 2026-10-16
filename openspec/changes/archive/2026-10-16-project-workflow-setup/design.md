@@ -157,3 +157,16 @@ keep the no-websocket-rerun-before-submit and persisted 2.50 FTE checks intact.
 This test-only correction does not change application behavior or browser
 security. The performance-plan implementation remains dependent on a clean
 setup baseline; this focused prerequisite repair was explicitly authorized.
+
+
+### CSV consent acknowledgment prerequisite repair
+
+The performance reference run exposed a false browser failure in CSV consent
+synchronization. The minimized employee case failed on repetition 12, then again
+on the first instrumented run. A targeted failure probe reported the checkbox
+checked, the server-rendered deletion warning present and the app idle while the
+DOM running-transition observer timed out. Fast fragment updates need not expose
+an intermediate running state. For this checkbox, wait for the warning that the
+server emits only after processing consent; require its absence before the click.
+Retain fresh upload/reset checks, checked state, pending filename and submit
+control checks, with no unsubmitted import. Application code remains unchanged.

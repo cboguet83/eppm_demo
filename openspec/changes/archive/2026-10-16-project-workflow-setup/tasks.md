@@ -75,6 +75,8 @@ Each numbered checkbox is one dedicated commit containing its changes, relevant 
 
 - [x] 3.46 Stabilize the native allocation form browser interaction against option-list rerendering without disabling actionability or weakening the no-rerun/submission assertions; reproduce the failure, verify both dialog variants repeatedly and document the exact test-only correction.
 
+- [x] 3.47 Diagnose and repair the shared CSV deletion-consent browser acknowledgment using causal server-rendered evidence while retaining upload/reset, consent and no-unsubmitted-save assertions; verify all four real catalog workflows and repeat the employee case, without application changes or retry masking.
+
 ## 4. Integrated acceptance
 
 - [x] 4.1 Run OpenSpec strict validation and the verify-change skill, full pytest with strict mode and at least 95% coverage using isolated PostgreSQL/OIDC, and `node --test tests/test_*.cjs`; review the final diff and task-to-commit history and record actual commands/results in `verification.md`. Keep this task incomplete if any required gate cannot execute or fails; distinguish partial results from full acceptance.
@@ -82,6 +84,8 @@ Each numbered checkbox is one dedicated commit containing its changes, relevant 
 - [x] 4.2 Verify the CI portability repairs with the complete benchmark module, deployed recovery and real OIDC workflows; retain the passing full application baseline, review unchanged application/migration bytes and updated artifacts, record the first CI failure and focused repair evidence, and validate OpenSpec before rearchiving. Require full CI on the final updated PR revision to pass before merge.
 
 - [x] 4.3 Verify the focused allocation-form correction against its original browser path and existing full acceptance evidence, validate OpenSpec, review unchanged application/migration bytes and record actual results before rearchiving; require final PR CI to pass and keep merge approval pending.
+
+- [x] 4.4 Verify the CSV synchronization prerequisite repair with real affected browser workflows, unchanged app/migration bytes and strict OpenSpec/Node checks; record the failed reference attempt and actual repair evidence, rearchive, and require final PR CI before any approved merge.
 
 ## Workflow follow-up
 

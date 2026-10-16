@@ -12,7 +12,7 @@ and five subtests**, with **zero failures, errors or skips**, in **2,436.50s
 
 | Dimension | Result |
 | --- | --- |
-| Completeness | 52/52 tasks; 12/12 requirements mapped |
+| Completeness | 54/54 tasks; 12/12 requirements mapped |
 | Correctness | All 19 scenarios mapped and covered by passing verification |
 | Coherence | Design and repository patterns reviewed; one optional-import finding corrected; no open implementation findings |
 
@@ -23,7 +23,7 @@ repairs, verified and rearchived before the PR update. No merge is approved.
 
 ## Completeness
 
-All 52 tracked tasks are complete in dedicated commits, including the runner portability and allocation-form follow-ups. The initial tooling-only exemption was superseded by
+All 54 tracked tasks are complete in dedicated commits, including runner portability and native form/CSV synchronization follow-ups. The initial tooling-only exemption was superseded by
 approved application repairs. Five readable capability deltas contain 12
 requirements and 19 scenarios. None is intentionally skipped.
 
@@ -259,9 +259,10 @@ failures documented below. Merging has not occurred and is not approved.
 | 3.44 | `0e4d883` | test(project-workflow-setup): isolate recovery archives from host user ownership (task 3.44) |
 | 3.45 | `4499d2d` | test(project-workflow-setup): fail CI promptly without reducing green-run checks (task 3.45) |
 | 4.2 | `1c90f97` | test(project-workflow-setup): verify runner portability repairs and retain full baseline evidence (task 4.2) |
-
-| 3.46 | `eb28666` | Allocation form prerequisite repair and verification |
-| 4.3 | `56f39a9` | Allocation form prerequisite repair and verification |
+| 3.46 | `eb28666` | test(project-workflow-setup): select allocation form options without unstable pointer targets (task 3.46) |
+| 4.3 | `56f39a9` | test(project-workflow-setup): verify allocation form prerequisite repair (task 4.3) |
+| 3.47 | `07d8513` | test(project-workflow-setup): acknowledge CSV consent through server-rendered state (task 3.47) |
+| 4.4 | `1cce50d` | test(project-workflow-setup): verify causal CSV browser acknowledgment (task 4.4) |
 
 ## Clean-runner portability follow-up
 
@@ -335,3 +336,37 @@ cases are collected. All five main-spec requirement/scenario blocks remain
 synchronized, with no product delta introduced by this repair. Final
 full PR CI is still required; the earlier full local acceptance remains historical
 baseline evidence and is not described as a run of this correction.
+
+
+## CSV consent acknowledgment prerequisite repair
+
+The first performance reference attempt at `538f51d` stopped after 858 passes
+and one employee CSV browser failure in 812.43s. This is a failed diagnostic run,
+not performance or full-suite acceptance. The short exact employee workflow
+passed once in 3.88s, then reproduced the timeout on iteration 12 (34.03s).
+A single targeted probe reproduced it again and reported `checked=True`, one
+server deletion warning and `state=notRunning` after the observer timeout.
+The server had processed consent; the helper's transient DOM-state requirement
+caused a false failure. React batching is a plausible mechanism, not a proven
+internal root cause.
+
+Task 3.47 requires the warning to be absent before the consent click and visible
+afterward. This server-rendered message is emitted only after checked consent.
+It retains checked-state, filename, submit-control, dismissal/reopening reset
+and database no-unsubmitted-save assertions. The actual employee, resource-pool,
+team and function browser workflows pass: **4 passed in 22.58s**. The temporary
+probe is removed. No retry, forced action, application or migration change is
+introduced. Twenty consecutive fresh employee executions pass without retries
+(76.70s cumulative pytest time; each result checked independently).
+
+Task 4.4 retains all prior full acceptance evidence as historical, records this
+new failed reference honestly, and requires full CI on the newly archived setup
+revision before merge. The performance baseline must be restarted with fresh
+coverage data after this repair; no speedup is claimed from a failed reference.
+
+
+Task 4.4 checks: all four affected native CSV modules pass; twenty independent
+employee executions pass; all ten Node checks and strict change/five-main-spec
+validation pass; no DEBUG-eppm-csv probe remains. The diff against `d9dd152` for
+`app` and `pyproject.toml` is empty, and the consent/upload/database assertions
+remain intact. No partial reference coverage is treated as acceptance.

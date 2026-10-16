@@ -19,8 +19,12 @@ def check_fresh_import_dialog(page: Page, filename: str, submit_label: str, cont
     })
     expect(dialog.get_by_text(filename, exact=True)).to_be_visible()
     checkbox = dialog.get_by_role('checkbox')
-    with completed_rerun(page):
-        dialog.get_by_text(checkbox.get_attribute('aria-label'), exact=True).click()
+    warning = dialog.get_by_test_id('stAlert').filter(has_text='will be marked deleted.')
+    expect(warning).to_have_count(0)
+    dialog.get_by_text(checkbox.get_attribute('aria-label'), exact=True).click()
+    # The server emits this warning only after processing checked consent.
+    # A fast fragment run need not commit an intermediate DOM running state.
+    expect(warning).to_be_visible(timeout=30000)
     expect(checkbox).to_be_checked()
     expect(dialog.get_by_text(filename, exact=True)).to_be_visible()
     expect(dialog.get_by_role('button', name=submit_label, exact=True)).to_be_visible()
