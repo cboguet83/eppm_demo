@@ -79,6 +79,14 @@ scoped left join alongside dictionary labels, and add migration 0065 setting the
 explicit trusted-before-temporary search path on the WBS and two hierarchy-cycle
 helpers identified by the unchanged security assertion. Preserve helper bodies,
 prior migration bytes/checksums, allocation constraints, and hierarchy rules.
+Nested EXPLAIN plans also confirmed that selected planning-cache reads scan the
+whole portfolio through current-plan views. Migration 0066 keeps the original bulk
+query and all authorization/token logic, using correlated lookups
+only for explicitly selected planning entities. The private helper selects active,
+non-deleted owner tasks before resolving their logical dependency endpoints,
+matching the existing views without expanding unrelated rows. Preserve the existing 64-buffer
+growth limit, use symmetric warm-up, and verify scoped/full token equivalence,
+clean initialization and append-only upgrade safety.
 Capture these real behavior contracts in focused delta specs; the initial
 tooling-only `skip_specs` exemption is superseded by the approved scope expansion.
 

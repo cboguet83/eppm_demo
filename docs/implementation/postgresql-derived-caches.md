@@ -121,3 +121,18 @@ money inputs. SQLite runtime sources are archived. Full regression/coverage,
 50-user browser measurements and representative backup/restore/restart acceptance
 remain required. These cache tests do not establish browser performance or
 completion of the overall migration.
+
+## Bounded selected planning sources
+
+Migration 0066 repairs selected planning-key reads after relational current-plan
+views caused unrelated task scans. The private helper retains its signed-scope
+checks, token envelope, grants and original bulk query. For an explicit planning
+selection it first selects non-deleted tasks from the owners' active plans, then
+resolves only their dependency endpoints by stable identity in active plans.
+Visible source membership and fingerprints match bulk reads, including revised,
+deleted and hidden endpoints. No stored business data or published caches change.
+
+The real PostgreSQL regression retains a maximum of 64 additional shared-buffer
+accesses after adding 5,000 unrelated tasks and dependencies. Both measurements
+use the same warm-up after query-plan invalidation. Clean/upgrade tests also
+check prior ledger entries, records, helper privileges and trusted search path.
