@@ -247,3 +247,57 @@ approved pytest-xdist development dependency. Every controlled mode will now
 restart on identical revised sources; prior A/B results remain diagnostic.
 The original 50% preparation/25% full-wall improvement criteria remain, without
 an absolute seven-minute limit. CI stays serial pending task 4.1 acceptance.
+
+## Task 3.6 — organization filter completion and component readiness
+
+The restarted serial/fresh reference stopped after **694 passes and one
+organization-browser failure in 491.60s** (493.61s monitored). The failing
+Ctrl-click expected two matching projects but retained Service A alone. This
+was before parallel execution; no failed or partial run counts as acceptance.
+The user explicitly approved a focused test-only investigation and repair.
+
+The exact isolated test passed in 6.26s and then passed 20 ordinary repetitions.
+A 0.8-second fragment-tail delay did not reproduce it. With Chromium rendering
+throttled sixfold, the original scenario failed on iteration 19 at its first
+Space press after Reset: three projects remained instead of Service A's one.
+This exposed a concrete readiness gap in the same scenario; it does not prove
+that the initial Ctrl-click failure had an identical low-level cause.
+
+A smaller real-browser probe controls the existing service-button renderer's
+cleared-state delay. Immediately after Reset, Python's matching count is three
+while the old button remains pressed. Focusing that old node, allowing the
+queued redraw to complete, and pressing Space loses focus and fails selection.
+Waiting for its actual cleared state before focusing retains focus and passes
+the same keyboard operation. This changes only the private generated server,
+not application functions, callback rules or authorization.
+
+The committed regression runs the complete original scenario in immediate and
+delayed-service modes. The delayed mode wraps the original JavaScript renderer
+with a one-second cleared-state delay, including timer/renderer cleanup; its
+1.2-second pause after focusing deliberately represents a user pausing while a
+queued redraw finishes. With the original interaction sequence it failed in
+**13.79s** at the first post-Reset keyboard selection. The normal case has no
+fixed delay. The repair uses a hidden counter emitted after the original
+Dashboard fragment completes, plus the expected actual pressed service buttons
+before continuing. It reuses the existing bounded completion helper; business
+assertion deadlines remain unchanged. It does not retry an event or a test.
+
+Every original Playwright and direct assertion is retained, checked against the
+previous committed AST. Both click and Ctrl-click selection/replacement,
+keyboard toggling, cascading divisions/teams/managers, 25/100 kEUR budget values,
+matching counts, reset defaults and layout checks remain. The controlled
+regression is green with the repair. The whole module passes **three cases in
+template mode (24.95s)** and **fresh mode (24.94s)**. Adjacent Dashboard/shared
+filter browser modules plus ordinary security/revision tests pass **61 cases
+under two workers/loadgroup with application coverage (73.92s)**. Focused
+coverage is not the full 95% acceptance gate.
+
+The corrected complete scenario then passes **20 fresh-database repetitions**
+under the same sixfold Chromium throttling that exposed the original keyboard
+failure. No failed repetition was retried or omitted.
+
+Application and migration bytes remain unchanged. All nine pre-repair cohorts
+passed (65.68% median preparation reduction), but are diagnostic history because
+test sources changed. Task 4.1 requires a fresh complete comparison on the new
+sources. CI stays serial until all original correctness/performance gates pass;
+there is no absolute seven-minute limit.

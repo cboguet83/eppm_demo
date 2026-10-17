@@ -1,19 +1,89 @@
 """Native dashboard organization button selection and cascading behavior."""
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import date
+from pathlib import Path
 import re
+from typing import TYPE_CHECKING
 
 import psycopg
+import pytest
 
 from app.main import create_finance_service
 from app.runtime import RuntimeResources
 from tests.postgresql.browser import native_server
+from tests.postgresql.conftest import AuthorizedFixture
 from tests.postgresql.dashboard_browser import _SCREEN
 from tests.postgresql.test_dashboard_organization_filters import seed_organization
+from tests.postgresql.test_shared_project_filters_browser import _completed_filter_run
 from tests.test_dialog_browser import expect, sync_playwright
 
 
-def test_dashboard_organization_buttons_cascade_and_keep_status_default(authorized, tmp_path):
+if TYPE_CHECKING:
+    from playwright.sync_api import Page
+
+
+@contextmanager
+def _completed_action(
+    page: 'Page', services: tuple[str, ...] | None = None,
+) -> Iterator[None]:
+    """Wait for server completion and any expected service-button redraw."""
+    with _completed_filter_run(page, prefix='Dashboard test run: '):
+        yield
+    if services is not None:
+        pressed = page.locator(
+            '.st-key-dashboard_filter_service_buttons button[aria-pressed="true"]',
+        )
+        expect(pressed).to_have_text(list(services))
+
+
+def _organization_screen(*, delay_services: bool) -> str:
+    """Instrument completion and optionally delay clearing service buttons."""
+    screen = '''
+import streamlit as st
+from app.application.services.dashboard import DashboardService
+import app.presentation.pages.dashboard as dashboard_module
+if not hasattr(dashboard_module, '_test_original_dashboard'):
+    dashboard_module._test_original_dashboard = dashboard_module.render_dashboard.__wrapped__
+    @st.fragment(key='dashboard')
+    def completed_dashboard(service: DashboardService) -> None:
+        """Render the original dashboard and acknowledge fragment completion."""
+        dashboard_module._test_original_dashboard(service)
+        st.session_state['dashboard_test_runs'] = st.session_state.get('dashboard_test_runs', 0) + 1
+        st.html('<style>.st-key-dashboard_test_completion{display:none!important}</style>')
+        with st.container(key='dashboard_test_completion'):
+            st.caption('Dashboard test run: ' + str(st.session_state['dashboard_test_runs']))
+    dashboard_module.render_dashboard = completed_dashboard
+'''
+    if delay_services:
+        screen += '''
+import importlib
+panel_module = importlib.import_module('app.presentation.components.organization_filter_panel')
+original_js = panel_module._BUTTONS_JS.replace('export default function(', 'function renderButtons(')
+panel_module._BUTTONS_JS = original_js + """
+export default function(args) {
+    let cleanup;
+    const delay = args.data.title === 'Services' && args.data.selected.length === 0 ? 1000 : 0;
+    const timer = setTimeout(() => { cleanup = renderButtons(args); }, delay);
+    return () => { clearTimeout(timer); if (cleanup) cleanup(); };
+}
+"""
+'''
+    return screen + _SCREEN
+
+
+@pytest.mark.parametrize('delay_services', [False, True], ids=['immediate', 'delayed-services'])
+def test_dashboard_organization_buttons_cascade_and_keep_status_default(
+    authorized: AuthorizedFixture, tmp_path: Path, delay_services: bool,
+) -> None:
+    """Check organization filtering after acknowledged component updates.
+
+    Args:
+        authorized: Isolated database, accounts and restricted runtime access.
+        tmp_path: Private directory for browser sources, logs and screenshots.
+        delay_services: Delay cleared buttons to expose lost keyboard focus.
+    """
     seed_organization(authorized)
     with psycopg.connect(authorized.setup.operator_url) as connection:
         connection.execute("INSERT INTO eppm.wbs(id,code) VALUES (1,'ORG')")
@@ -22,7 +92,8 @@ def test_dashboard_organization_buttons_cascade_and_keep_status_default(authoriz
     finance.today = lambda: date(2026, 6, 1)
     finance.save([{'code': 'ORG', 'amounts': {'2026': '100000.00'}}],
                  base_id=None, name='Organization budget', status='Approved', year=2026)
-    with native_server(authorized, tmp_path, _SCREEN) as server, sync_playwright() as playwright:
+    screen = _organization_screen(delay_services=delay_services)
+    with native_server(authorized, tmp_path, screen) as server, sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
             page = server.new_page(browser, viewport={'width':1500, 'height':1100})
@@ -49,52 +120,73 @@ def test_dashboard_organization_buttons_cascade_and_keep_status_default(authoriz
             assert divisions.bounding_box()['height'] == 24
             assert teams.bounding_box()['y'] - (divisions.bounding_box()['y'] + 24) == 8
             page.screenshot(path=str(tmp_path / 'organization-panel-default.png'), full_page=True)
-            services.get_by_role('button', name='Service A', exact=True).click()
+            with _completed_action(page, services=('Service A',)):
+                services.get_by_role('button', name='Service A', exact=True).click()
             count(1)
             expect(services.get_by_role('button', name='Service A', exact=True)).to_have_attribute('title', 'Ctrl+click to select multiple options.')
-            services.get_by_role('button', name='Service B', exact=True).click()
+            with _completed_action(page, services=('Service B',)):
+                services.get_by_role('button', name='Service B', exact=True).click()
             expect(services.get_by_role('button', name='Service A', exact=True)).to_have_attribute('aria-pressed', 'false')
             expect(services.get_by_role('button', name='Service B', exact=True)).to_have_attribute('aria-pressed', 'true')
-            services.get_by_role('button', name='Service A', exact=True).click()
+            with _completed_action(page, services=('Service A',)):
+                services.get_by_role('button', name='Service A', exact=True).click()
             expect(services.get_by_role('button', name='Service B', exact=True)).to_have_attribute('aria-pressed', 'false')
             expect(budget_point).to_have_attribute('aria-label', re.compile(r': 25 kEUR$'))
             expect(page.locator('.st-key-dashboard_filter_org_manager_buttons')).to_contain_text('Alice Manager')
-            services.get_by_role('button', name='Service B', exact=True).click(modifiers=['Control'])
+            with _completed_action(page, services=('Service A', 'Service B')):
+                services.get_by_role('button', name='Service B', exact=True).click(modifiers=['Control'])
             count(2)
             expect(budget_point).to_have_attribute('aria-label', re.compile(r': 100 kEUR$'))
-            services.get_by_role('button', name='Service A', exact=True).click(modifiers=['Control'])
+            with _completed_action(page, services=('Service B',)):
+                services.get_by_role('button', name='Service A', exact=True).click(modifiers=['Control'])
             count(1)
-            divisions.locator('summary').click()
+            with _completed_action(page):
+                divisions.locator('summary').click()
             assert divisions.locator('[data-testid="stExpanderDetails"]').evaluate('(element) => getComputedStyle(element).paddingBottom') == '2px'
             division_choices = page.locator('.st-key-dashboard_filter_division_buttons')
             expect(division_choices).to_contain_text('Division B')
             expect(division_choices).not_to_contain_text('Division A')
-            division_choices.get_by_role('button', name='Division B', exact=True).click()
-            teams.locator('summary').click()
+            with _completed_action(page):
+                division_choices.get_by_role('button', name='Division B', exact=True).click()
+            with _completed_action(page):
+                teams.locator('summary').click()
             expect(page.locator('.st-key-dashboard_filter_org_team_buttons')).to_contain_text('Team B')
-            page.locator('.st-key-dashboard_filter_org_team_buttons').get_by_role('button', name='Team B', exact=True).click()
-            services.get_by_role('button', name='Service A', exact=True).click(modifiers=['Control'])
+            with _completed_action(page):
+                page.locator('.st-key-dashboard_filter_org_team_buttons').get_by_role('button', name='Team B', exact=True).click()
+            with _completed_action(page, services=('Service A', 'Service B')):
+                services.get_by_role('button', name='Service A', exact=True).click(modifiers=['Control'])
             expect(division_choices).to_contain_text('Division A')
-            services.get_by_role('button', name='Service B', exact=True).click(modifiers=['Control'])
+            with _completed_action(page, services=('Service A',)):
+                services.get_by_role('button', name='Service B', exact=True).click(modifiers=['Control'])
             count(1)
             expect(division_choices).to_contain_text('Division A')
             expect(division_choices).not_to_contain_text('Division B')
-            services.get_by_role('button', name='Service A', exact=True).click()
+            with _completed_action(page, services=()):
+                services.get_by_role('button', name='Service A', exact=True).click()
             expect(division_choices).to_contain_text('Division B')
-            services.get_by_role('button', name='Not assigned', exact=True).click()
+            with _completed_action(page, services=('Not assigned',)):
+                services.get_by_role('button', name='Not assigned', exact=True).click()
             count(1)
             expect(page.locator('.st-key-dashboard_filter_org_manager_buttons')).to_contain_text('Not assigned')
-            page.locator('.st-key-dashboard_clear button').click()
+            with _completed_action(page, services=()):
+                page.locator('.st-key-dashboard_clear button').click()
             count(3)
             expect(page.locator('.st-key-dashboard_filter_status')).to_contain_text('In Progress')
             services.get_by_role('button', name='Service A', exact=True).focus()
-            page.keyboard.press('Space')
+            if delay_services:
+                # Fault injection: a user pauses while the queued redraw finishes.
+                page.wait_for_timeout(1200)
+            with _completed_action(page, services=('Service A',)):
+                page.keyboard.press('Space')
             count(1)
             services.get_by_role('button', name='Service A', exact=True).focus()
-            page.keyboard.press('Space')
+            with _completed_action(page, services=()):
+                page.keyboard.press('Space')
             count(3)
-            managers.locator('summary').click()
-            page.locator('.st-key-dashboard_filter_org_manager_buttons').get_by_role('button', name='Alice Manager', exact=True).click()
+            with _completed_action(page):
+                managers.locator('summary').click()
+            with _completed_action(page):
+                page.locator('.st-key-dashboard_filter_org_manager_buttons').get_by_role('button', name='Alice Manager', exact=True).click()
             count(1)
             page.screenshot(path=str(tmp_path / 'organization-panel.png'), full_page=True)
         finally:
