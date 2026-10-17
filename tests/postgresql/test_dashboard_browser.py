@@ -8,6 +8,7 @@ import pytest
 
 from tests.test_dialog_browser import expect, sync_playwright
 from tests.postgresql.browser import NativeBrowserServer
+from tests.postgresql.browser_completion import ScriptCompletion
 from tests.postgresql.dashboard_browser import popup_server
 
 
@@ -27,6 +28,7 @@ def test_finance_curve_uses_selected_project_share(
         browser = playwright.chromium.launch(headless=True)
         try:
             page = popup_server.new_page(browser, viewport={'width':1500,'height':1200})
+            completion = ScriptCompletion(page)
             page.goto(popup_server.origin)
             page.locator('.st-key-dashboard_project_list summary').click(timeout=30000)
             table = page.locator('.st-key-dashboard_project_table .viewport')
@@ -34,14 +36,16 @@ def test_finance_curve_uses_selected_project_share(
             points = page.locator('.st-key-dashboard_finance_chart circle')
             for project_id, expected in [(1,'50 kEUR'),(2,'25 kEUR')]:
                 row = table.locator(f'tr[data-project-id="{project_id}"]')
-                row.click()
+                with completion.action():
+                    row.click()
                 expect(page.get_by_text('1 matching projects',exact=True)).to_be_visible()
                 expect(points).to_have_count(2)
                 expect(points.first).to_have_attribute('aria-label', re.compile(': '+re.escape(expected)))
                 points.first.hover()
                 expect(page.locator('.st-key-dashboard_finance_chart .tip')).to_contain_text(expected)
                 expect(row).to_have_attribute('aria-selected', 'true')
-                row.click()
+                with completion.action():
+                    row.click()
                 expect(page.get_by_text('1000 matching projects',exact=True)).to_be_visible()
                 expect(row).to_have_attribute('aria-selected', 'false')
             expect(page.get_by_text('Shell runs: 1',exact=True)).to_be_visible()

@@ -301,3 +301,66 @@ passed (65.68% median preparation reduction), but are diagnostic history because
 test sources changed. Task 4.1 requires a fresh complete comparison on the new
 sources. CI stays serial until all original correctness/performance gates pass;
 there is no absolute seven-minute limit.
+
+## Task 3.7 — completion-aware finance-selection actions
+
+The repeated optimized v4 run failed after 197 passes (48.23s pytest time) at
+the first clear-selection assertion, despite the selected-row check added in
+task 3.5. The first optimized run had passed all 3,295 tests; one successful run
+therefore did not satisfy the repeatability gate. No CI promotion occurred.
+
+The user approved this focused task and further test-only browser synchronization
+follow-ups, each retaining assertions, diagnosis evidence and a dedicated commit.
+Application, business-rule and security changes remain outside that approval.
+
+A diagnostic runner preserved the full collection and two-worker/loadgroup
+scheduling, stopping intentionally after the target case rather than running the
+remaining suite. It reproduced the original failure on its fifth invocation:
+one failure and 197 passes in 45.83s. A private callback observer logged only
+synthetic project IDs, selected IDs and token-match booleans. The first selection
+reached the callback with a matching token; the clear callback never arrived.
+This rules out a rejected clear token in that observed failure, but does not
+identify the exact frontend/transport step that lost the event.
+
+Further private pointer/protocol observations confirmed a readiness gap:
+the original sequence sent the next row click while Streamlit still reported
+the previous dashboard run active. Selected-row and finance-chart visibility
+were insufficient to establish script completion. Seven additional observed
+original-sequence runs passed, demonstrating the failure's intermittent nature.
+Private probes changed no application files and printed no payloads, tokens,
+cookies or connection strings.
+
+The test now attaches a completion observer before navigation. Each real row
+click waits for the previous successful run to become idle and then for a new
+successful completion plus actual idle status. Early-for-rerun notifications
+and temporary idle notifications alone cannot release the wait. Missing initial
+or new completion fails after a bounded ten seconds; browser-action failures
+propagate without waiting or retrying. All original business assertion deadlines
+remain unchanged. There is no test retry or repeated click.
+
+Four focused protocol checks pass. A temporary in-process mutation bypassing
+the waits makes three checks fail: an action runs before the queued successful
+completion, and missing initial/requested completions incorrectly pass. The
+unmodified observer passes those checks, including actual idle after completion,
+ignored early reruns/text frames, and propagation of the original action error.
+This is regression evidence for the observed synchronization gap, not a claim
+of a deterministic reproduction of the underlying intermittent event loss.
+
+Eight completion-aware full-scheduling diagnostic replays passed. Early replays
+used a preliminary observer; the last three used the final helper, which
+also requires the server's actual idle notification. Pointer traces show those
+clicks following successful completion/idle instead of overlapping the prior
+run. The original test still uses real Playwright row clicks, restricted native
+servers and both ordinary/delayed-table scenarios. An AST comparison confirms
+every existing direct and Playwright assertion is unchanged.
+
+The dashboard module and protocol regressions pass **seven cases in template
+mode (23.00s)** and **fresh mode (23.33s)**. Dashboard, organization and shared
+filter browser scenarios, ordinary authorization/revision tests and the protocol
+regressions pass **65 cases under two workers/loadgroup with application coverage
+collection (70.84s)**. The focused protocol/measurement checks pass nine cases.
+No application or migration files differ from merged setup PR #1.
+
+Full acceptance remains task 4.1: restart all cohorts and complete A/B/C/repeated-C
+on identical final sources. These focused and intentionally stopped diagnostic
+runs do not satisfy full completion or the 95% application coverage gate.
