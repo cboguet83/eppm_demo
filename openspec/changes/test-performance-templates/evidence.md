@@ -364,3 +364,56 @@ No application or migration files differ from merged setup PR #1.
 Full acceptance remains task 4.1: restart all cohorts and complete A/B/C/repeated-C
 on identical final sources. These focused and intentionally stopped diagnostic
 runs do not satisfy full completion or the 95% application coverage gate.
+
+## Task 3.8 — acknowledge project-form event publication
+
+The v5 fresh and template references passed all 3,299 cases and five subtests,
+but the first parallel run stopped after 1,786 passes at the WBS form's final
+saved-event assertion (741.20s pytest; 742.098730s monitored). The earlier
+validation event contained WBS 2 at 35%; the expected final event contained WBS 1
+at 100%. This incomplete run is not acceptance, and CI remains serial.
+
+The private scenario renders `project_form(...)` and then its `st.code(events)`
+log as separate Streamlit updates. A closed dialog is therefore not an
+acknowledgement that the event log has been published. Ranked possibilities
+were premature event-log observation, lost form edits, and a missing save event.
+The first prediction was that delaying only event-log publication would reproduce
+the exact stale-event mismatch while leaving the actual form action unchanged.
+
+The committed regression's private server delays one second immediately before
+publishing the final event log, after rendering the closed form. It preserves
+the original component, callbacks, values and validation behavior. With the
+original test sequence it reproduces the exact WBS 2/35% versus WBS 1/100%
+mismatch in **4.25s**. Waiting for the second published server event makes the
+same regression pass with the expected final WBS value. This establishes a
+test observation race rather than a WBS application defect.
+
+`_wait_for_event_count()` waits at most five seconds for the exact expected
+event count in the private page's JSON code block, then the existing assertions
+read that log. It does not retry an action, accept an unexpected event count
+or increase existing business-assertion deadlines. Both first
+validation and final-save reads use the corresponding count. The source audit
+found the direct `json.loads(page.locator('pre')...)` browser reads in this module
+only; choice ordering, exact decimal money and links had the same publication
+gap and now use that acknowledgement as well. Cancel/delete cases already wait
+for the expected count and are unchanged.
+
+Every original direct and Playwright assertion is retained exactly, checked
+against the committed AST. This includes draft/tabs, untouched versus edited
+selection order, precise decimal strings, dirty flags, links, validation,
+allocation defaults and remaining capacity, removed WBS rows, and shell-run
+checks. Modified test functions now have explicit types and useful docstrings.
+
+All **nine module cases pass (24.55s)**, including ordinary and delayed WBS
+publication. The module, adjacent native dialog cases and real PostgreSQL
+authorization/revision tests pass **65 cases with two workers/loadgroup and
+application coverage collection (36.82s)**. Focused coverage is not full
+application acceptance. Application and migration files remain unchanged.
+
+The complete WBS scenario then passes **ten ordinary and ten delayed-publication
+repetitions** with fresh browser sessions, without retries or omitted failures.
+
+The complete comparison restarts after this corrective test-source change;
+all earlier v5 timings remain diagnostic history. Task 4.1 still requires
+identical final-source cohorts, complete A/B/C and successful repeated C,
+the original performance targets, full coverage/JavaScript gates and cleanup.
