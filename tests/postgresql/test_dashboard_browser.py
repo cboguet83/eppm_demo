@@ -7,12 +7,22 @@ import time
 import pytest
 
 from tests.test_dialog_browser import expect, sync_playwright
+from tests.postgresql.browser import NativeBrowserServer
 from tests.postgresql.dashboard_browser import popup_server
 
 
-@pytest.mark.parametrize('popup_server', ['shared-budget'], indirect=True, ids=['distinct-budget-shares'])
-def test_finance_curve_uses_selected_project_share(popup_server):
-    """Check actual chart values when two projects share one approved WBS."""
+@pytest.mark.parametrize(
+    'popup_server', ['shared-budget', 'shared-budget-delayed-table'], indirect=True,
+    ids=['distinct-budget-shares', 'delayed-table-hydration'],
+)
+def test_finance_curve_uses_selected_project_share(
+    popup_server: NativeBrowserServer,
+) -> None:
+    """Check actual chart values when two projects share one approved WBS.
+
+    Args:
+        popup_server: Private dashboard with ordinary or delayed table rendering.
+    """
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
@@ -23,14 +33,17 @@ def test_finance_curve_uses_selected_project_share(popup_server):
             expect(table.locator('tr[data-project-id="1"]')).to_be_visible(timeout=30000)
             points = page.locator('.st-key-dashboard_finance_chart circle')
             for project_id, expected in [(1,'50 kEUR'),(2,'25 kEUR')]:
-                table.locator(f'tr[data-project-id="{project_id}"]').click()
+                row = table.locator(f'tr[data-project-id="{project_id}"]')
+                row.click()
                 expect(page.get_by_text('1 matching projects',exact=True)).to_be_visible()
                 expect(points).to_have_count(2)
                 expect(points.first).to_have_attribute('aria-label', re.compile(': '+re.escape(expected)))
                 points.first.hover()
                 expect(page.locator('.st-key-dashboard_finance_chart .tip')).to_contain_text(expected)
-                table.locator(f'tr[data-project-id="{project_id}"]').click()
+                expect(row).to_have_attribute('aria-selected', 'true')
+                row.click()
                 expect(page.get_by_text('1000 matching projects',exact=True)).to_be_visible()
+                expect(row).to_have_attribute('aria-selected', 'false')
             expect(page.get_by_text('Shell runs: 1',exact=True)).to_be_visible()
         finally:
             browser.close()

@@ -1,7 +1,8 @@
 """Dashboard browser scenarios seeded outside the restricted application process."""
 
-from tests.postgresql.plan_fixtures import seed_test_plans
+from collections.abc import Iterator
 from datetime import date
+from pathlib import Path
 
 import psycopg
 import pytest
@@ -9,7 +10,9 @@ import pytest
 from app.infrastructure.postgresql.seed_catalog import ensure_reference_catalog
 from app.main import create_finance_service
 from app.runtime import RuntimeResources
-from tests.postgresql.browser import native_server
+from tests.postgresql.browser import NativeBrowserServer, native_server
+from tests.postgresql.conftest import AuthorizedFixture
+from tests.postgresql.plan_fixtures import seed_test_plans
 
 
 _SCREEN = '''
@@ -38,9 +41,40 @@ else:
 '''
 
 
+def _screen(*, delay_table: bool) -> str:
+    """Delay selected-row rendering only in the regression's private server."""
+    if not delay_table:
+        return _SCREEN
+    return '''
+import importlib
+_table = importlib.import_module('app.presentation.components.dashboard_table')
+_render = _table._JS.replace('export default function(', 'function renderTable(')
+_table._JS = _render + """
+export default function(args) {
+    let cleanup;
+    const timer = setTimeout(() => { cleanup = renderTable(args); },
+        args.data.selected === null ? 0 : 2000);
+    return () => { clearTimeout(timer); if (cleanup) cleanup(); };
+}
+"""
+''' + _SCREEN
+
+
 @pytest.fixture
-def popup_server(authorized, tmp_path, request):
-    """Seed 1,000 projects, exact Finance shares and an active issue separately."""
+def popup_server(
+    authorized: AuthorizedFixture, tmp_path: Path, request: pytest.FixtureRequest,
+) -> Iterator[NativeBrowserServer]:
+    """Seed the private dashboard scenario and run its restricted server.
+
+    Args:
+        authorized: Independent database and accounts owned by this test.
+        tmp_path: Private directory for server sources and logs.
+        request: Scenario selecting ordinary or delayed table rendering.
+
+    Yields:
+        Authenticated loopback server with 1,000 projects and exact finance shares.
+    """
+    shared_budget = request.param in {'shared-budget', 'shared-budget-delayed-table'}
     with psycopg.connect(authorized.setup.operator_url) as connection:
         ensure_reference_catalog(connection)
         connection.execute("UPDATE eppm.project SET name='Project ' || lpad(id::text,4,'0')")
@@ -49,7 +83,7 @@ def popup_server(authorized, tmp_path, request):
         seed_test_plans(connection)
         connection.execute("INSERT INTO eppm.wbs(id,code,description) VALUES(1,'A','Example')")
         connection.execute('INSERT INTO eppm.project_wbs(project_id,wbs_id,percentage) VALUES(1,1,50)')
-        if request.param == 'shared-budget':
+        if shared_budget:
             connection.execute('INSERT INTO eppm.project_wbs(project_id,wbs_id,percentage) VALUES(2,1,25)')
         connection.execute("INSERT INTO eppm.resource_pool(id,name,capacity_fte) VALUES(1,'Pool A',1),(2,'Pool B',1)")
         connection.cursor().executemany(
@@ -61,9 +95,10 @@ def popup_server(authorized, tmp_path, request):
                            ('First line\nSecond line', blocker))
     finance = create_finance_service(RuntimeResources(authorized.database, authorized.key), access=authorized.binding(4).access)
     finance.today = lambda: date(2026, 6, 1)
-    amounts = ({'2026': '100010', '2027': '200000'} if request.param == 'shared-budget'
+    amounts = ({'2026': '100010', '2027': '200000'} if shared_budget
                else {'2026': '100.01', '2027': '200'})
     finance.save([{'code': 'A', 'amounts': amounts}],
                  base_id=None, name='Approved plan', status='Approved', year=2026)
-    with native_server(authorized, tmp_path, _SCREEN) as server:
+    screen = _screen(delay_table=request.param == 'shared-budget-delayed-table')
+    with native_server(authorized, tmp_path, screen) as server:
         yield server

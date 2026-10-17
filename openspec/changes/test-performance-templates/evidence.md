@@ -213,3 +213,37 @@ All previously collected performance numbers are diagnostic history, including
 the successful 3,291-case serial/fresh run. Task 4.1 requires a new interleaved
 cohort and full A/B/C/repeated-C series on these revised final test sources.
 CI remains serial until that series passes every correctness and speed gate.
+
+
+## Task 3.5 — dashboard table selection acknowledgement
+
+The first two-worker full comparison stopped after one failed dashboard case
+and 200 passes. Python matching counts and the finance chart can update before
+the table has rendered the new selection/token. Clicking that old row again
+sends a stale event, which the existing application correctly rejects. The
+adjacent dashboard scenario already waited for the row's selected state.
+
+The user explicitly approved this focused corrective task. The finance case now
+waits for `aria-selected=true` before clearing selection and requires `false`
+afterward. Chart amounts (50/25 kEUR), 1/1,000 matching counts, both project
+cycles and one shell run remain asserted. No application operations or failed
+tests are retried, and no assertion deadline was increased.
+
+The new fixture variant wraps the original table JavaScript only inside its
+private generated test server. It delays selected-state rendering by two
+seconds, preserves the original renderer/cleanup and cancels pending timers.
+With the original test, this real-browser regression failed the deselection
+assertion in **9.17s**. After the acknowledgement repair, the complete dashboard
+module passes all **three cases in template mode (22.93s)** and **fresh mode
+(23.11s)**. The module plus ordinary business-security and revision cases passes
+**55 cases under two workers/loadgroup with application coverage (25.61s)**.
+Focused coverage is not the full 95% acceptance gate. The measurement/scheduling
+harness also passed 12 cases, strict OpenSpec validation passed, and all ten
+JavaScript test files passed during resume checks.
+
+Application/migration/security sources and coverage scope remain unchanged.
+The only application-package metadata difference from main is the already
+approved pytest-xdist development dependency. Every controlled mode will now
+restart on identical revised sources; prior A/B results remain diagnostic.
+The original 50% preparation/25% full-wall improvement criteria remain, without
+an absolute seven-minute limit. CI stays serial pending task 4.1 acceptance.
