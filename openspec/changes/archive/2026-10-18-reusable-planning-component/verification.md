@@ -1,6 +1,6 @@
 # Verification: reusable-planning-component
 
-Status: **passed; ready for rearchive**. The OpenSpec verify-change workflow
+Status: **passed; rearchived on 2026-10-18**. The OpenSpec verify-change workflow
 checked completeness, all requirement/scenario mappings, design adherence and
 code-pattern consistency against the integrated implementation. No applicable
 check was skipped or left unverified.
@@ -164,11 +164,11 @@ Portable results are recorded here; local logs are
 
 The focused ledger below is from `git log main..HEAD --oneline` filtered by the
 change label, with `git log origin/main..HEAD --oneline` confirming the actual
-PR base. Current main is an ancestor of the verified source. Task 7.2 is the
-commit containing this final report; its hash is recorded only by the subsequent
-archive follow-up, after it exists.
+PR base. Current main is an ancestor of the verified source. Task 7.2 contains the final acceptance report; its already-existing hash was
+added by this archive follow-up.
 
 ```text
+ac8e6e2 test(reusable-planning-component): complete task 7.2 integrated acceptance
 098f9b8 perf(reusable-planning-component): complete task 7.3 scroll DOM correction
 05f87fe merge(reusable-planning-component): complete task 7.1 current main integration
 ed80720 chore(reusable-planning-component): archive verified change and sync specs
@@ -197,8 +197,10 @@ e68f994 feat(reusable-planning-component): complete task 2.1 host contracts
 48386c9 docs(reusable-planning-component): complete task 1.1 extraction plan
 ```
 
-PR: https://github.com/cboguet83/eppm_demo/pull/4. Final acceptance is complete;
-rearchive and the final PR update follow. Full CI on the final PR revision is an
+PR: https://github.com/cboguet83/eppm_demo/pull/4. Final acceptance is complete and the change is rearchived at
+`openspec/changes/archive/2026-10-18-reusable-planning-component/`.
+All 26 tasks are complete and both capability specs are synced; the final PR
+update follows. Full CI on the final PR revision is an
 additional gate before requesting merge approval. Registry publication and merge
 have not occurred. The unrelated primary checkout was not edited.
 
@@ -209,5 +211,5 @@ preserving task history.
 
 ## Final assessment
 
-All applicable implementation checks passed. Ready for rearchive; final PR CI
-must pass before merge approval is requested.
+All applicable implementation checks passed. The change is rearchived; final
+PR CI must pass before merge approval is requested.
