@@ -55,6 +55,8 @@ From an activated Python 3.14 virtual environment with `.[dev,browser-tests]`
 installed, Docker available, and Playwright Chromium installed:
 
 ```bash
+# Prepare canonical browser resources before root package installation/builds.
+python -m scripts.build_planning_assets
 # First use only: generation refuses to overwrite existing credentials.
 python -m scripts.configure_postgresql --output .local/workflow-tests.env
 docker compose --project-name eppm-workflow-tests \
@@ -70,6 +72,8 @@ EPPM_RUN_OIDC_E2E=1 \
 python -m dotenv -f .local/workflow-tests.env run -- \
   python -m pytest -q --require-full-suite --cov=app --cov-fail-under=95
 node --test tests/test_*.cjs
+node --test packages/planning-view/tests/*.test.js
+python -m scripts.build_planning_assets --check
 openspec validate <change-name> --strict
 ```
 

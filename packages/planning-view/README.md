@@ -348,5 +348,6 @@ Read failures retain valid data and expose an explicit Retry loading button.
 `packages/streamlit-planning-view` contains the typed independent Python wrapper
 and full-data/lazy-host examples. It requires Python 3.14 and Streamlit 1.63.x
 or a later 1.x release, uses explicit keys, and validates/deduplicates returned
-events without importing EPPM. Package assembly is handled by the next build
-task; native tests prepare a temporary frontend directly from this one source.
+events without importing EPPM. Prepare distributions with
+`python -m scripts.build_planning_assets` from the source repository; native
+tests also prepare a temporary frontend directly from this one source.

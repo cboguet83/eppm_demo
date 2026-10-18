@@ -19,6 +19,8 @@ jobs:
           cache: pip
       - name: Install application and browser test tools
         run: |
+          python -m scripts.build_planning_assets
+          python -m pip install 'setuptools>=80' wheel
           python -m pip install -e '.[dev,browser-tests]'
           python -m playwright install --with-deps chromium
       - name: Create isolated PostgreSQL credentials and database service
@@ -35,4 +37,7 @@ jobs:
           POSTGRES_TEST_CLIENT_CONTAINER: eppm-tests-postgres-1
         run: python -m dotenv -f .local/postgresql.env run -- python -m pytest -q -x -p no:cacheprovider --require-full-suite --cov=app --cov-report=term --cov-fail-under=95
       - name: JavaScript component checks
-        run: node --test tests/test_*.cjs
+        run: |
+          node --test tests/test_*.cjs
+          node --test packages/planning-view/tests/*.test.js
+          python -m scripts.build_planning_assets --check

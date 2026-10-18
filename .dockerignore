@@ -22,3 +22,5 @@ data/
 htmlcov/
 *.log
 scratch/
+app/presentation/assets/components/gantt/planning-view/
+packages/streamlit-planning-view/src/streamlit_planning_view/frontend/

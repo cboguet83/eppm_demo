@@ -6,8 +6,13 @@ __pycache__/
 # Environment & Secrets
 .env
 .env.local
+.env.*
+!.env.example
 .env.*.local
 .local/
+# Prepared from packages/planning-view by scripts.build_planning_assets.
+app/presentation/assets/components/gantt/planning-view/
+packages/streamlit-planning-view/src/streamlit_planning_view/frontend/
 
 
 # C extensions
