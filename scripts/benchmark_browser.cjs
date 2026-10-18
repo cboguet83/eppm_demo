@@ -1,4 +1,4 @@
-// Bounded Chromium readiness observation for the native Gantt diagnostic.
+// Bounded Chromium startup and shutdown for native planning diagnostics.
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -94,11 +94,25 @@ async function waitForBrowserPort(browser, profile, {timeoutMs = 20000, pollMs =
   }
 }
 
+/** Translate Playwright launch failures into the same allowlisted evidence.
+ * @param {unknown} error Browser-driver exception; never include its raw text.
+ * @returns {Error} Safe startup context without arguments, paths or child output.
+ */
+function browserStartupError(error) {
+  const message = error instanceof Error ? error.message : '';
+  const reasons = STARTUP_REASONS.filter(([, pattern]) => pattern.test(message))
+    .map(([name]) => name).sort().join(',') || 'none';
+  const code = message.match(/exitCode=(-?[0-9]{1,3})(?:,|\s)/)?.[1];
+  const signal = message.match(/signal=([A-Z0-9]+)/)?.[1];
+  const spawn = SPAWN_CODES.has(error?.code) ? error.code : 'unknown';
+  return new Error(`The benchmark browser could not start (${exitStatus(code === undefined ? null : Number(code), signal)}, spawn=${spawn}, diagnostics=${reasons}).`);
+}
+
 /**
- * Require a clean browser exit even when Chromium closes CDP without a response.
+ * Require a clean owned browser exit even when its close promise never resolves.
  *
  * @param {import('node:child_process').ChildProcess} browser Owned Chromium child.
- * @param {() => Promise<unknown>} requestClose Send exactly one Browser.close.
+ * @param {() => Promise<unknown>} requestClose Request one graceful browser close.
  * @param {{timeoutMs?: number}} options Existing bounded shutdown grace period.
  * @returns {Promise<void>} Resolves only after successful actual process exit.
  */
@@ -131,7 +145,7 @@ async function waitForBrowserShutdown(browser, requestClose, {timeoutMs = 1000} 
     timer = setTimeout(() => rejectExit(new Error(
       `The benchmark browser did not exit within ${timeoutMs} milliseconds (close_request_rejected=${requestRejected}).`,
     )), timeoutMs);
-    // A CDP acknowledgement is neither required nor sufficient for process exit.
+    // A close acknowledgement is neither required nor sufficient for process exit.
     // Observe rejection without exposing protocol details or leaving it unhandled.
     Promise.resolve().then(requestClose).catch(() => { requestRejected = true; });
     await exited;
@@ -142,4 +156,4 @@ async function waitForBrowserShutdown(browser, requestClose, {timeoutMs = 1000} 
   }
 }
 
-module.exports = {waitForBrowserPort, waitForBrowserShutdown};
+module.exports = {waitForBrowserPort, browserStartupError, waitForBrowserShutdown};

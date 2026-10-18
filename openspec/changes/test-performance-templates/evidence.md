@@ -743,3 +743,51 @@ The shared private helper now receives a ScriptCompletion observer attached befo
 Actual verification: canonical shared-filter module passes all four cases in serial/template (36.87s). Shared-filter plus existing completion negative/positive checks pass eight fresh/serial cases (36.24s). A real native page deliberately retaining an extra manager summary after completion still fails the new exact-one assertion with actual count TWO at the 30-second bound; the negative probe passes (37.57s), proving duplicates are not hidden. Canonical shared-filter + ordinary revision peers pass 20 template/two-worker cases (35.62s); after adapting its dashboard caller, both affected browser modules + peers pass all 23 (60.06s). Each ordinary/delayed-expander/delayed-page scenario is repeated three times on separate template databases: nine passes in 89.10s. The adapted dashboard module also passes all three fresh cases (25.38s). AST comparisons preserve every original assertion/expectation in both modules, including expectations inside lambdas. Strict change validation and focused whitespace checks pass. An initial combined temporary repeat command registered fixture plugins twice and executed no tests; it is excluded, and canonical parallel/repeated diagnostic runs were separated.
 
 This fixes the reproduced premature-observation pattern; the original failing run did not record its exact protocol/frame timestamps. Persistent post-completion duplication remains a failure, and missing/early/error acknowledgements remain covered by existing ScriptCompletion regressions. The independently lost hosted restoration/Chrome startup causes remain unproven as recorded in earlier tasks. The change is test-only under the user's standing focused follow-up authorization; business rules, application code, all 71 migrations, diagnostic shutdown code, CI triggers/gates and 95% coverage remain unchanged. All cohorts and four full runs must restart on this separately committed final source, including the repeated optimized run. The renewed harness also fingerprints tracked root application entrypoints, Streamlit config and Docker context rules; the existing immutable 20b0fff application image is reused only after verifying every Docker COPY input is byte-identical, since tests are not copied into that image.
+
+
+## Main integration after PR #4 (task 3.18)
+
+Main advanced to 47897b7 through externally merged reusable-planning-component
+PR #4 while the fca42c8 comparison was running. Preserve ADR 0065, both packages,
+host-owned workflows and all expanded CI gates. Merge without rewriting task
+history. Application and migration bytes match main; no application redesign
+is included. The fca42c8 comparison passed, but is historical for this integration.
+
+The mounted public-renderer harness replaces the old CDP launcher. Adapt the
+approved shutdown regressions using Playwright's public BrowserServer process
+API, a shared 20-second startup budget, loopback binding, bounded actual process
+exit and unconditional native-session/HTTP cleanup. Keep --move-task and all
+upstream assertions. A close acknowledgement alone never accepts a live browser.
+
+Installed-wheel checks must use a genuinely separate interpreter. Python -I
+in the checkout's own virtualenv still exposes editable finder paths; a fresh
+private virtualenv links only third-party dependencies, excludes editable hooks
+and proves checkout packages unavailable before adding the installed artifact.
+Every original source/import-path assertion remains.
+
+Renew acceptance with canonical package/build inputs fingerprinted, a rebuilt
+private application image, root and package JavaScript suites, generated-asset
+checks and unchanged full pytest/OIDC/PostgreSQL/95% coverage gates.
+
+Focused verification before the integration merge:
+
+- Asset assembly and `python -m scripts.build_planning_assets --check`: passed.
+- `node --test tests/test_*.cjs`: 221 passed; package JS: 117 passed.
+- Mounted native benchmark variants plus startup privacy: 4 passed in 20.68s.
+- Controlled cleanup-boundary probe: 2 passed in 24.41s. The old finally
+  structure leaves native stdin open when close raises and hits a 15-second
+  diagnostic timeout; nested finally closes it and retains original data/copy
+  checks. The ordinary 120-second integration deadline is unchanged.
+- Original wheel isolation assertion reproduced without coverage in 1.90s;
+  the separate interpreter preserves that assertion and fixes editable leakage.
+- Packaging, installed consumers, wrapper/example/component models and scheduling:
+  82 passed in 28.17s with focused coverage (288 relative source paths, none
+  external). This is not a claim of full-suite coverage.
+- Final two-worker/template native benchmark, organization, restoration, revisions
+  and startup checks: 48 passed in 110.79s, with no retries or skipped assertions.
+- Application and migrations have no diff against incoming main. All four merge
+  conflicts reconciled; old shutdown/readiness checks and new mounted editing
+  checks retained. User .env.example and Compose edits excluded.
+
+Original hosted restoration and Chrome startup causes remain unknown. These
+focused successes do not establish those causes or replace final acceptance.

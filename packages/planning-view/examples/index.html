@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Planning view web example</title>
+<style>body{font:14px system-ui;margin:20px;color:#0f172a}button,label{margin-right:8px}section{margin:24px 0}output{display:block;margin:12px 0}h2{font-size:18px}</style></head>
+<body>
+<h1>Planning view</h1><p>Edits update this page's fixture data. Use the task name “Reject” to see a host rejection.</p>
+<button id="unmount" type="button">Unmount primary</button><button id="remount" type="button">Mount primary</button>
+<button id="reset" type="button">Reset primary</button><label><input id="lazy" type="checkbox">Load tasks on demand</label>
+<output id="feedback" aria-live="polite">Ready</output><output id="accepted">Accepted edits: 0</output>
+<section><h2>Primary</h2><div id="primary"></div></section><section><h2>Independent read-only copy</h2><div id="secondary"></div></section>
+<script type="module">
+import {mountPlanningView} from '../src/index.js';
+import {validateEvent,validateMessage} from '../src/contracts/index.js';
+const tasks=[{id:'design',stableId:'design',projectId:'alpha',name:'Design',start:'2026-01-01',end:'2026-01-05',progress:20},
+  {id:'build',stableId:'build',projectId:'alpha',name:'Build',start:'2026-02-01',end:'2026-12-31',progress:0}];
+const initial=()=>({version:1,kind:'snapshot',scope:'primary',revision:'r1',capabilities:{edit:true},
+  projects:[{id:'alpha',name:'Alpha',start:'2026-01-01',end:'2026-12-31',taskCount:2}],tasks:structuredClone(tasks),
+  dependencies:[{id:'build-after-design',type:'FS',lagDays:0,predecessor:{kind:'task',id:'design'},successor:{kind:'task',id:'build'}}],
+  resources:[{id:'engineering',name:'Engineering',capacity:10,usage:{'2026-01-01':6,'2026-01-02':4},
+    selectedUsage:{'2026-01-02':3},assignedCapacity:{'2026-01-02':2}}]});
+const feedback=document.getElementById('feedback'),counter=document.getElementById('accepted');
+let data=initial(),primary=null,accepted=0;
+const seen=new Set();
+const reply=(event,allowed,error)=>primary?.update({version:1,kind:'response',scope:data.scope,revision:data.revision,
+  requestId:event.requestId,accepted:allowed,...(error?{error}:{})});
+const onEvent=input=>{
+  const event=validateEvent(input);
+  if(seen.has(event.requestId))return;seen.add(event.requestId);
+  if(event.type==='select'){feedback.textContent='Selected '+event.targetId+(event.context?.start?' · '+event.context.start+' → '+event.context.end:'');return;}
+  if(event.type==='command') {
+    if(event.command==='mark-period')data.resourceFilter={resourceId:event.targetId,name:'Engineering',start:event.context.start,end:event.context.end,clearAction:'clear-period'};
+    if(event.command==='clear-period')data.resourceFilter=null;
+    primary.update({...data});feedback.textContent=event.command==='mark-period'?'Resource period marked':'Resource period cleared';return;
+  }
+  const values=['task','dependency'].includes(event.type)?event.values:event;
+  const collection=event.type==='dependency'?'dependencies':'tasks',original=data[collection].find(record=>record.id===event.targetId);
+  if(event.scope!==data.scope || event.revision!==data.revision || !original || values.name==='Reject') {
+    reply(event,false,'The example rejected this change.');feedback.textContent='Change rejected';return;
+  }
+  const fields=collection==='tasks'?['name','start','end','progress','description','phase']:['type','lagDays','predecessor','successor'];
+  const replacement={...original};for(const field of fields)if(values[field]!==undefined)replacement[field]=values[field];
+  const oldRevision=data.revision;
+  data=validateMessage({...data,revision:'r'+(Number(oldRevision.slice(1))+1),[collection]:data[collection].map(record=>record.id===original.id?replacement:record)});
+  if(event.type==='task' && values.dependencies)data.dependencies=data.dependencies.filter(dep=>dep.successor.id!==event.targetId).concat(values.dependencies);
+  primary.update({version:1,kind:'patch',scope:data.scope,revision:data.revision,baseRevision:oldRevision,
+    [collection]:data[collection],...(event.type==='task'?{dependencies:data.dependencies}:{})});
+  reply(event,true);accepted++;counter.textContent='Accepted edits: '+accepted;feedback.textContent='Change accepted';
+};
+const load=({projectIds,scope,revision,requestId,signal})=>new Promise((resolve,reject)=>{
+  const abort=()=>{clearTimeout(timer);reject(new DOMException('Cancelled','AbortError'));};
+  const timer=setTimeout(()=>{
+    signal.removeEventListener('abort',abort);
+    const rows=tasks.filter(task=>projectIds.includes(task.projectId)).map(task=>({...task}));
+    data={...data,tasks:rows,loadedProjectIds:projectIds};
+    resolve({version:1,kind:'patch',scope,revision,requestId,replaceProjectIds:projectIds,tasks:rows});
+  },80);
+  signal.addEventListener('abort',abort,{once:true});if(signal.aborted)abort();
+});
+function mountPrimary() {
+  if(primary)return;
+  primary=mountPlanningView(document.getElementById('primary'),{snapshot:data,today:'2026-01-01',mode:'Day',grouped:false,editEnabled:true,onEvent,load,
+    contextActions:[{id:'mark-period',label:'Mark resource period',targetKinds:['resources']},
+      {id:'clear-period',label:'Clear marked period',targetKinds:['resources']}]});
+}
+mountPrimary();
+const secondary=mountPlanningView(document.getElementById('secondary'),{snapshot:{...initial(),scope:'secondary',capabilities:{edit:false}},today:'2026-01-01',mode:'Day',grouped:false});
+document.getElementById('unmount').onclick=()=>{primary?.destroy();primary=null;feedback.textContent='Primary unmounted';};
+document.getElementById('remount').onclick=()=>{mountPrimary();feedback.textContent='Primary mounted';};
+document.getElementById('reset').onclick=()=>{document.getElementById('lazy').checked=false;data=initial();primary?.update({...data,reset:true});feedback.textContent='Primary reset';};
+document.getElementById('lazy').onchange=event=>{
+  primary?.destroy();primary=null;data={...initial(),scope:event.target.checked?'primary-lazy':'primary'};
+  if(event.target.checked){data.tasks=[];data.loadedProjectIds=[];}mountPrimary();
+};
+window.addEventListener('pagehide',()=>{primary?.destroy();secondary.destroy();},{once:true});
+</script></body></html>

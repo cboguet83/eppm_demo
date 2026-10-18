@@ -1,0 +1,11 @@
+recursive-include packages/planning-view/src *.js *.css
+recursive-include packages/planning-view/examples *.html *.js
+include packages/planning-view/package.json
+include packages/planning-view/streamlit.html
+include packages/planning-view/README.md
+include packages/streamlit-planning-view/pyproject.toml
+recursive-include app/presentation/assets/components/gantt/planning-view *
+include app/presentation/assets/components/gantt/*.html
+include app/presentation/assets/components/gantt/*.js
+include app/presentation/assets/components/gantt/*.css
+global-exclude __pycache__ *.py[cod]

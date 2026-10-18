@@ -117,6 +117,7 @@ python -m venv .venv
 source .venv/bin/activate
 
 # Install dependencies
+python -m scripts.build_planning_assets
 pip install -e ".[dev]"
 
 # Generate ignored local credentials (refuses to overwrite an existing file)

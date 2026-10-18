@@ -34,7 +34,7 @@ def planning_app(context: 'BenchmarkContext', profile: bool = True, capture: boo
         if capture and component.call_args is not None:
             st.session_state['benchmark_payload'] = {
                 k: v for k, v in component.call_args.kwargs.items() if k not in ('on_change', 'key')}
-            # The standalone file component has no ASGI origin. Exercise its
+            # The standalone diagnostic has no ASGI application. Exercise its
             # existing callback path; HTTP/browser acceptance uses the real app.
             st.session_state['benchmark_payload']['task_endpoint'] = None
     if profile:

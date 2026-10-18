@@ -7,7 +7,18 @@ const {EventEmitter} = require('node:events');
 const {PassThrough} = require('node:stream');
 const {spawn} = require('node:child_process');
 const {setTimeout: pause} = require('node:timers/promises');
-const {waitForBrowserPort, waitForBrowserShutdown} = require('../scripts/benchmark_browser.cjs');
+const {waitForBrowserPort, browserStartupError, waitForBrowserShutdown} = require('../scripts/benchmark_browser.cjs');
+
+test('Playwright launch errors preserve only allowlisted startup evidence', () => {
+  const failure = Object.assign(new Error('No usable sandbox! private-startup-marker <process did exit: exitCode=23, signal=SIGTERM>'), {code:'EACCES'});
+  const safe = browserStartupError(failure);
+  assert.match(safe.message, /exit=23, signal=SIGTERM, spawn=EACCES, diagnostics=sandbox/);
+  assert.doesNotMatch(safe.message, /private-startup-marker/);
+  assert.equal(safe.cause, undefined);
+  assert.match(browserStartupError({code:'private-startup-marker'}).message, /spawn=unknown, diagnostics=none/);
+  assert.match(browserStartupError(null).message, /exit=none, signal=none/);
+});
+
 
 function privateProfile(t) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'eppm-browser-readiness-test-'));

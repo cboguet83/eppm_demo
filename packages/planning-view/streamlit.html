@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Planning view</title>
+<style>body{margin:0;}#planning-error{font:13px system-ui;color:#b91c1c;}</style></head>
+<body><div id="planning-root"></div><p id="planning-error" role="alert" hidden></p>
+<script type="module">
+import {connectStreamlit} from './src/adapters/streamlit.js';
+const error=document.getElementById('planning-error');
+connectStreamlit(document.getElementById('planning-root'),{onError:value=>{
+  if(value.code==='invalid_contract'){error.hidden=false;error.textContent=value.message;}
+}});
+</script></body></html>

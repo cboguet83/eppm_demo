@@ -53,3 +53,28 @@ The renewed comparison passes fresh/serial (3,370 tests + five subtests, 97.7047
 ## Repeated-parallel frame readiness follow-up
 
 At 20b0fff, complete fresh/serial, template/serial and first template/two-worker runs pass all 3,372 tests plus five subtests with 97.704784% coverage and 134 Node cases (2926.516402s / 2111.256669s / 1368.008414s). The repeated parallel run fails after 1,364 passes: a manager-frame CSS locator matches two summaries during view replacement. A controlled one-second page tail after the caption reproduces the identical strict-mode duplicate-manager failure in 9.09s. Caption advancement therefore precedes actual script completion and stale-node retirement. Task 3.17 retains all assertions and uses actual completion plus bounded exact-one readiness; persistent duplicates still fail. No application or business change is included. All four focused native cases, including the controlled delay, pass with the repair; renew full final-source comparisons after its separate commit. These prior complete passes remain historical, not final acceptance.
+
+
+## Main integration after PR #4 (task 3.18)
+
+Main advanced to 47897b7 through externally merged reusable-planning-component
+PR #4 while the fca42c8 comparison was running. Preserve ADR 0065, both packages,
+host-owned workflows and all expanded CI gates. Merge without rewriting task
+history. Application and migration bytes match main; no application redesign
+is included. The fca42c8 comparison passed, but is historical for this integration.
+
+The mounted public-renderer harness replaces the old CDP launcher. Adapt the
+approved shutdown regressions using Playwright's public BrowserServer process
+API, a shared 20-second startup budget, loopback binding, bounded actual process
+exit and unconditional native-session/HTTP cleanup. Keep --move-task and all
+upstream assertions. A close acknowledgement alone never accepts a live browser.
+
+Installed-wheel checks must use a genuinely separate interpreter. Python -I
+in the checkout's own virtualenv still exposes editable finder paths; a fresh
+private virtualenv links only third-party dependencies, excludes editable hooks
+and proves checkout packages unavailable before adding the installed artifact.
+Every original source/import-path assertion remains.
+
+Renew acceptance with canonical package/build inputs fingerprinted, a rebuilt
+private application image, root and package JavaScript suites, generated-asset
+checks and unchanged full pytest/OIDC/PostgreSQL/95% coverage gates.

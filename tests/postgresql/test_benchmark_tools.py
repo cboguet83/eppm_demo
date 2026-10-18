@@ -177,29 +177,30 @@ def test_gantt_browser_driver_consumes_native_session_payloads_and_cleans_up(
     if shutdown_behavior != 'ordinary':
         preload = tmp_path / 'lost-shutdown-acknowledgement.cjs'
         ignored_close = 'true' if shutdown_behavior == _IGNORED_SHUTDOWN else 'false'
-        preload.write_text(f'const ignoreClose = {ignored_close};\n'+"""
-const NativeSocket = globalThis.WebSocket;
-globalThis.WebSocket = class extends NativeSocket {
-  send(data) {
-    const message = JSON.parse(data);
-    if (message.method === 'Browser.close') {
-      this.closeId = message.id;
-      if (ignoreClose) return;
-    }
-    return super.send(data);
-  }
-  set onmessage(callback) {
-    super.onmessage = event => {
-      if (this.closeId !== undefined && JSON.parse(event.data).id === this.closeId) return;
-      callback(event);
-    };
-  }
-  get onmessage() { return super.onmessage; }
+        import playwright
+
+        assert playwright.__file__ is not None
+        driver = Path(playwright.__file__).parent / 'driver/package'
+        preload.write_text(
+            f'const ignoreClose = {ignored_close};\n'
+            + f'const {{chromium}} = require({json.dumps(str(driver))});\n'
+            + """
+const launch = chromium.launchServer.bind(chromium);
+chromium.launchServer = async options => {
+  const server = await launch(options);
+  const close = server.close.bind(server);
+  server.close = () => {
+    // Fault injection: drop only the close promise's acknowledgement.
+    // Actual clean exit is still required by the diagnostic; live children fail.
+    if (!ignoreClose) close().catch(() => {});
+    return new Promise(() => {});
+  };
+  return server;
 };
 """, encoding='utf-8')
         node += ['--require', str(preload)]
     command = [*node, 'scripts/benchmark_gantt.cjs', asyncio.run(executable()),
-               '--database', '--all-projects', '--expanded']
+               '--database', '--all-projects', '--expanded', '--move-task']
     if container := os.environ.get('POSTGRES_TEST_CLIENT_CONTAINER'):
         command.append('--client-container=' + container)
     result = subprocess.run(command, env=environment, cwd=Path(__file__).resolve().parents[2],
@@ -215,6 +216,7 @@ globalThis.WebSocket = class extends NativeSocket {
     assert report['source'] == 'isolated PostgreSQL restore'
     assert report['projects'] == 2 and report['pools'] == 1
     assert report['serverTimings'][0]['seconds'] > 0
+    assert any(item['action'] == 'update_task_full' for item in report['serverTimings'])
     assert copies(pg_database) == databases
     assert snapshot(pg_database) == before
 

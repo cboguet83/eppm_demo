@@ -148,4 +148,11 @@ def test_every_existing_context_menu_uses_the_shared_visual_standard() -> None:
     # Generic button colors were added later; this contract covers menus only.
     menu_css = CONTEXT_MENU_CSS[CONTEXT_MENU_CSS.index('.context-menu {'):]
     for path in Path("app/presentation/assets/components").glob("*/index.html"):
+        if path.parent.name == "gantt":
+            # The shared module's computed menu styles are checked in the mounted
+            # test_shared_menu_visual_standard_matches_host_context_menus.
+            bootstrap = path.parent / "eppm-bootstrap.js"
+            assert 'src="./eppm-bootstrap.js"' in path.read_text(encoding="utf-8")
+            assert "import {mountPlanningView}" in bootstrap.read_text(encoding="utf-8")
+            continue
         assert menu_css in path.read_text(encoding="utf-8"), path

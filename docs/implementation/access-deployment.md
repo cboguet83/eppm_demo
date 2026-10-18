@@ -342,6 +342,7 @@ Its additional `!override` Compose file removes development source bind mounts,
 so this workflow exercises the built image. Rebuild the image after source changes.
 
 ```text
+python -m scripts.build_planning_assets
 python -m pip install -e ".[dev,browser-tests]"
 ```
 
