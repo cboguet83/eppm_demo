@@ -26,6 +26,12 @@ project. Click it again to restore the previous scope. Changing another filter o
 using Clear all removes the row selection. Selection refreshes only Dashboard;
 scrolling still updates only the table.
 
+Each row activation has a distinct event identity. Selection uses the current
+revision and active-filter token independently of the selected-row paging token,
+so a second click remains valid while the browser is applying the first response.
+Every callback still checks current project visibility and filters before changing
+selection. Paging responses continue to use their own snapshot token.
+
 Finance overview plots the most recent Approved and Proposed Finance versions using each project's
 current WBS allocation percentages. Hover to see annual euro values. Both source
 versions are shown, and codes without amounts are identified. Canceled

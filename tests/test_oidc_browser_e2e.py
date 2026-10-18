@@ -183,17 +183,29 @@ def select_option(page, label: str, name: str | re.Pattern[str]) -> None:
         from contextlib import nullcontext
         from tests.browser_reruns import completed_rerun
 
+        if label == "Projects":
+            stage = "searching authorized project choices"
+            search = page.get_by_role("textbox", name="Search project names or references", exact=True)
+            if search.input_value() != "Visible browser project":
+                with completed_rerun(page):
+                    search.fill("Visible browser project")
+                    search.press("Enter")
+            stage = "selecting the authorized project"
+            choice = page.get_by_role("checkbox", name=name, exact=isinstance(name, str))
+            if not choice.is_checked():
+                with completed_rerun(page):
+                    choice.locator('xpath=ancestor::label').click()
+            return
         action = nullcontext() if label == "Account status" else completed_rerun(page)
         with action:
-            page.get_by_role("combobox", name=label, exact=True).click()
-            if label == "Projects":
-                page.get_by_role("combobox", name=label, exact=True).fill("Visible browser project")
+            field = page.get_by_role("combobox", name=label, exact=True)
+            option = page.get_by_role("option", name=name, exact=isinstance(name, str))
+            field.click()
             stage = "selecting option"
-            page.get_by_role("option", name=name, exact=isinstance(name, str)).click()
+            option.click()
             stage = "waiting for rendered selection"
-        if label == "Projects":
-            stage = "closing dropdown after selection is acknowledged"
-            page.get_by_role("combobox", name=label, exact=True).press("Tab")
+        stage = "waiting for the previous dropdown to unmount"
+        expect(page.locator('[role="listbox"]')).to_have_count(0)
     except Error:
         # This helper is used only on post-login fields in the fictional test database.
         raise AssertionError(f"Unable to select {label} while {stage}.\n" + page.locator("body").aria_snapshot()) from None
@@ -235,7 +247,7 @@ def exercise_scoped_user(browser, admin_page, server: BrowserDeployment) -> None
         open_access_management(admin_page, server)
         select_option(admin_page, "Application account", re.compile("Robin Example.*active"))
         select_option(admin_page, "Projects", re.compile("Visible browser project"))
-        expect(admin_page.get_by_test_id("stMultiSelect").get_by_text(re.compile("Visible browser project")).first).to_be_visible()
+        expect(admin_page.get_by_role("checkbox", name=re.compile("Visible browser project"))).to_be_checked()
         expect(admin_page.get_by_role("button", name="Grant access", exact=True)).to_be_visible()
         admin_page.get_by_role("button", name="Grant access", exact=True).click()
         wait_for_audit(server, "role.grant", 1)

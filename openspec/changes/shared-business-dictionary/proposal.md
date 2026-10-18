@@ -41,6 +41,14 @@ There are no unresolved business-scope decisions for this increment.
 
 ## Capabilities
 
+### Authorized acceptance repairs
+
+After two full acceptance runs failed in existing browser interactions, the user
+explicitly expanded scope to diagnose and repair access-administration project
+selection and dashboard project deselection. Preserve their business behavior,
+authorization and behavioral assertions; add focused regression evidence before
+repeating full acceptance. This extension does not register additional catalogs.
+
 ### New Capabilities
 
 - `shared-business-dictionaries`: centrally stored, dictionary-qualified business

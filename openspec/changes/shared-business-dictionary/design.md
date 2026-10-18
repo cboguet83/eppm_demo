@@ -1,5 +1,23 @@
 # Design
 
+## Authorized browser acceptance repairs
+
+The user authorized diagnosis and repair of intermittent access-administration
+project selection and dashboard project deselection after the initial full-suite
+attempts. Task 5.2 covers reproduction, interaction/rerun corrections and regression
+tests. Preserve authorization, fragment boundaries and all existing behavioral
+assertions. These repairs do not change the shared dictionary data model or scope.
+
+Dashboard click events carry unique nonces and a token for the current revision
+and active filters, independently of the selected-row paging snapshot. The server
+still reauthorizes every click against current filtered projects. Paging retains
+its own selection-dependent token and bounded cache.
+
+Named-project access scopes use the existing bounded administrator search and a
+scrollable native checkbox list. This removes the pinned framework multiselect's
+transient empty typeahead events from this workflow. Multiple selection, explicit
+Grant access submission, server-side validation and permission checks remain.
+
 ## Context
 
 See [proposal.md](proposal.md) for motivation and confirmed scope. The planning

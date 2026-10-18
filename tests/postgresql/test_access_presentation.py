@@ -121,9 +121,15 @@ def test_administrator_can_retain_a_named_project_selection_and_grant_its_scope(
     app = AppTest.from_function(access_screen, args=(path, settings, cookie)).run()
     app.selectbox(key="access_selected_user").set_value(target).run()
     assert not app.exception and not app.error
-    app.multiselect[0].set_value([1]).run()
+    app.checkbox(key="access_scope_project_1").check().run()
     assert not app.exception and not app.error
-    assert app.multiselect[0].value == [1]
+    assert app.checkbox(key="access_scope_project_1").value is True
+    app.checkbox(key="access_scope_project_2").check().run()
+    assert app.checkbox(key="access_scope_project_1").value is True
+    assert app.checkbox(key="access_scope_project_2").value is True
+    app.checkbox(key="access_scope_project_2").uncheck().run()
+    assert app.checkbox(key="access_scope_project_1").value is True
+    assert app.checkbox(key="access_scope_project_2").value is False
     app.button(key="access_grant").click().run()
     assert not app.exception and not app.error
     assignments = service.assignments(actor, target)

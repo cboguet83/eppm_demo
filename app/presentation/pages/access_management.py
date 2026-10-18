@@ -197,9 +197,12 @@ def _scope_editor(
     if kind == "projects":
         search = st.text_input(_label("search_projects", "Search project names or references"), key="access_project_search")
         choices = {int(item["id"]): item["name"] for item in service.scope_project_choices(actor, search)}
-        selected = st.multiselect(_label("projects", "Projects"), list(choices),
-                                  format_func=lambda value: f"{value} · {choices[value]}",
-                                  key="access_scope_projects")
+        # The authorized server search owns filtering; native checkbox choices
+        # avoid transient empty multiselect events clearing an in-flight query.
+        with st.container(height=220, key="access_scope_projects"):
+            st.caption(_label("projects", "Projects"))
+            selected = [identifier for identifier, name in choices.items()
+                        if st.checkbox(f"{identifier} · {name}", key=f"access_scope_project_{identifier}")]
         return {"kind": kind, "project_ids": selected}
     st.caption(_label("protected", "Scope-eligible properties are protected. All conditions must match; add separate assignments for alternatives."))
     selected = st.multiselect(_label("conditions", "Properties to match"), list(catalog),

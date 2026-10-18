@@ -38,7 +38,7 @@ export default function({data,parentElement,setStateValue,setTriggerValue}) {
             const offset=Math.floor(index/50)*50,row=model.pages.get(offset)?.[index-offset],tr=document.createElement('tr');
             if(row){
                 tr.dataset.projectId=row.id;tr.tabIndex=0;tr.setAttribute('aria-selected',String(row.id===data.selected));
-                const select=()=>setTriggerValue('project',{id:row.id,token:data.token});
+                const select=()=>setTriggerValue('project',{id:row.id,token:data.selection_token,nonce:crypto.randomUUID()});
                 tr.onclick=select;
                 tr.onkeydown=event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();select();}};
             }
@@ -59,9 +59,11 @@ export default function({data,parentElement,setStateValue,setTriggerValue}) {
 
 def dashboard_table(rows: list[dict], columns: list[str], total: int, offset: int,
                     token: str, loading: str, selected: int | None,
+                    selection_token: str,
                     on_project: Callable[[], None]) -> None:
     """Send only one fifty-row page; scrolling retains a bounded browser cache."""
     component = st.components.v2.component('eppm_dashboard_table', html='<div class="viewport" tabindex="0"></div>', css=_CSS, js=_JS)
     component(data={'rows': rows, 'columns': columns, 'total': total, 'offset': offset,
-                    'token': token, 'loading': loading, 'selected': selected}, key='dashboard_project_table',
+                    'token': token, 'loading': loading, 'selected': selected,
+                    'selection_token': selection_token}, key='dashboard_project_table',
               on_request_change=lambda: None, on_project_change=on_project, height='content')
