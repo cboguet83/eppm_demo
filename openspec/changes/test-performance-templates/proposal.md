@@ -16,15 +16,15 @@ The passing setup baseline took 40m36s: approximately 95% of measured test time 
 
 ### New Capabilities
 
-None. This is test infrastructure and developer tooling; `skip_specs: true` deliberately avoids inventing product requirements.
+`completed-page-navigation`: record the existing immediate-blanking/completed-destination behavior restored by approved corrective task 3.9. The original performance work remains test infrastructure and developer tooling.
 
 ### Modified Capabilities
 
-None. Existing application, business, authorization and architecture requirements remain unchanged. Test safety and acceptance contracts are specified in design.md and tasks.md.
+No existing capability delta is modified. Business, authorization and architecture requirements remain unchanged. Test safety and acceptance contracts are specified in design.md and tasks.md.
 
 ## Impact
 
-Expected implementation areas: `tests/postgresql/conftest.py` and small test-only support modules, isolation regressions, `tests/conftest.py`, `tests/test_full_suite.py`, audited test scheduling markers, `pyproject.toml` development dependencies, `.github/workflows/tests.yml`, and `docs/development-workflow.md`. Add pytest-xdist as a development dependency only after Python 3.14 compatibility checks. No runtime dependency, applied migration, production schema, Docker security policy or business behavior change is planned.
+Expected implementation areas: `tests/postgresql/conftest.py` and small test-only support modules, isolation regressions, `tests/conftest.py`, `tests/test_full_suite.py`, audited test scheduling markers, `pyproject.toml` development dependencies, `.github/workflows/tests.yml`, and `docs/development-workflow.md`. Add pytest-xdist as a development dependency only after Python 3.14 compatibility checks. No runtime dependency, applied migration, production schema, Docker security policy or business behavior change is planned. The user approved task 3.9 on 2026-10-18 to restore navigation readiness in `app/presentation/components/page_transition.py` and its shell completion marker, with controlled regressions. This narrow UI correction supersedes the original tooling-only exemption; its actual capability is specified rather than skipping specs.
 
 Branch: `codex/test-performance-templates`, created from setup PR #1 head `393f4f571c9140942dc89a1cec51e3a8abec1cec` with explicit user authorization to depart from the usual main-branch starting point. PR #1 is a prerequisite and remains unmerged; its latest full CI failed, so this plan does not claim a green remote baseline. Implementation must first establish a clean baseline after upstream corrections. Preserve the existing unrelated local Compose port edit.
 

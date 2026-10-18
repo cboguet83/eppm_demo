@@ -417,3 +417,84 @@ The complete comparison restarts after this corrective test-source change;
 all earlier v5 timings remain diagnostic history. Task 4.1 still requires
 identical final-source cohorts, complete A/B/C and successful repeated C,
 the original performance targets, full coverage/JavaScript gates and cleanup.
+
+## Task 3.9 — navigation diagnosis and approved application restoration
+
+The v6 fresh reference passes 3,300 cases and five subtests, 97.684036% coverage
+and 108 JavaScript cases in 2,437.556362s monitored wall time. Serial/template
+then fails after 3,235 passes and five subtests in 1,832.07s pytest /
+1,833.948504s monitored. Settings navigation times out in `completed_rerun()`;
+this incomplete comparison does not satisfy task 4.1. CI remains serial.
+
+Ranked probes distinguished a missing DOM running transition, replacement of
+the observed app node, and a click during initial hydration. The isolated
+original navigation reproduces the observer timeout on its fourth page. Actual
+Streamlit protocol messages show successful completion; the Settings submenu
+is rendered and the original app node remains connected, but the helper has
+not observed the required `notRunning -> running -> notRunning` sequence.
+
+A separate, tighter probe asserts main-content visibility after actual protocol
+completion rather than waiting thirty seconds for that DOM observer. It fails
+on its fifth ordinary navigation. More importantly, explicitly waiting for the
+initial successful script completion and actual idle state does not resolve
+the problem: the second navigation fails with completion count 1 -> 2, idle
+true, the destination's hierarchy tabs present, `body.eppm-page-loading` still
+set and the main content's computed visibility `hidden`.
+
+This is a real application loading-overlay defect, not merely a false test
+observer timeout. `page_transition.py` requires witnessing the transient DOM
+running state before removing the overlay; a fast completed navigation need not
+commit that intermediate presentation state. Replacing the test observer alone
+would conceal the stuck main page and is not accepted as a repair.
+
+The user explicitly approved the task 3.9 application extension on 2026-10-18.
+The correction adds an opaque page-render marker after the shell's destination
+renderer returns (also for a rejected route), letting the transition observe
+completed rendering without requiring a transient running DOM state. Idle,
+no-skeleton and two-animation-frame checks remain; a navigation generation
+prevents a stale reveal from releasing a later request. No business rules,
+authorization checks, migration bytes or CI/coverage gates change. The approved
+UI restoration now has an actual `completed-page-navigation` capability delta
+and supersedes the original tooling-only `skip_specs` exemption.
+
+The Settings test attaches the existing bounded protocol observer before initial
+navigation and waits for real successful completion around its click. Every
+original navigation, layout and hierarchy CRUD assertion remains. CSV and OIDC
+helper callers are retained; they are not silently replaced without a reproduced
+observer fault.
+
+A controlled real-browser regression suppresses only the component's observed
+transient running state while retaining actual Streamlit rendering/completion.
+On the original implementation it fails with the loading overlay still visible
+after successful destination completion (**1 failed, 1 passed in 10.56s**).
+The correction passes both ordinary/coalesced slow navigation cases, including
+frame-by-frame proof that unfinished content is hidden, plus both existing
+chart full-rerun/fragment response cases (**4 passed in 11.52s**). The wider
+focused set including Settings CRUD and protocol observer negative cases passes
+**9 cases in 16.36s** before the added frame sampler.
+
+The exact causal Settings probe that previously failed on its second
+completion-aware navigation now passes **30 consecutive fresh-page navigations**
+without retries. Native shell/fragment tests, real PostgreSQL retained-page
+authorization/fragment tests and all four CSV helper callers pass **35 cases in
+25.73s** with two workers/loadgroup/template mode. Four JavaScript regression
+cases pass for old-content rejection, coalesced completion with idle/skeleton
+checks, unchanged fragment completion and superseded reveal callbacks.
+
+Task 4.1 remains open. All cohorts and full comparisons restart on this corrected
+application/test revision; earlier timings are diagnostic only. CI remains
+serial/fresh until acceptance passes, and archive/PR/merge gates remain intact.
+
+Final layout-free marker verification passes **5 native navigation/Settings cases
+in 16.61s**. The marker uses style-only HTML outside Streamlit's visible main
+layout. The unchanged authenticated login/pending/bootstrap/access-administration
+browser workflow passes **1 case in 37.06s** against the rebuilt correction image
+from the established managed checkout. Initial disposable deployment attempts
+from the dirty primary workspace and `/tmp` stopped before browser execution;
+the temporary checkout's Docker bind mount was explicitly denied by Desktop.
+No failed attempt is counted as a pass, no test was retried within a suite, and
+the user's local Compose/environment edits remain untouched. The final image
+is rebuilt for the layout-free marker before the new comparison. All **112 Node
+cases pass**, with zero failures/skips. AST comparison confirms every original
+assertion in both modified browser modules remains. Strict OpenSpec validation
+passes; focused checks do not substitute for the pending full comparisons.

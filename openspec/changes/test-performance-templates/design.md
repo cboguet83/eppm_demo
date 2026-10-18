@@ -83,3 +83,11 @@ Implement and verify each numbered task in its own commit. Keep reference execut
 - [pytest-xdist execution model](https://pytest-xdist.readthedocs.io/en/stable/how-it-works.html) and [worker fixture lifecycle](https://pytest-xdist.readthedocs.io/en/stable/how-to.html): worker collection and per-worker session fixtures.
 - [pytest-xdist distribution](https://pytest-xdist.readthedocs.io/en/stable/distribution.html): bounded workers and loadgroup scheduling.
 - [pytest-cov distributed testing](https://pytest-cov.readthedocs.io/en/stable/xdist.html): combined workers and measured subprocesses.
+
+## Approved corrective task 3.9: completed navigation
+
+On 2026-10-18 the user explicitly approved extending task 3.9 into application code after real protocol observations proved Settings rendered successfully while the main workspace remained hidden. A fast rerun can omit the DOM's transient `running` state, so observing that state cannot be the only proof of navigation completion.
+
+The shell emits a fresh opaque page-render marker only after its destination renderer returns, including the inaccessible-destination response. The loading component accepts a changed marker as alternative completion evidence while retaining idle-state, no-skeleton and two-animation-frame checks. Each navigation snapshots the marker and advances a generation so a pending reveal cannot clear a later navigation. Existing observed-run completion remains available for nested fragment actions. There is no timer-only reveal, old-page visibility shortcut, protocol interception in application code, or change to business/security/migration behavior.
+
+The Settings browser test uses the existing bounded actual Streamlit completion observer attached before navigation. Other shared observer callers retain their original assertions and are verified separately. A real-browser controlled regression hides the transient DOM run state from the component, checks immediate blanking during the slow destination, and requires the completed destination and hidden overlay. Existing full-rerun and no-destination fragment tests remain. All timing cohorts and full A/B/C/repeated-C runs must restart on this corrected application/test revision; prior measurements are diagnostic.

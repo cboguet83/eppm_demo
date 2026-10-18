@@ -1,9 +1,11 @@
 """Browser regression for inline Settings navigation and hierarchy row actions."""
 
+from pathlib import Path
+
 import pytest
 
 from tests.test_dialog_browser import popup_server, sync_playwright, expect
-from tests.browser_reruns import completed_rerun
+from tests.postgresql.browser_completion import ScriptCompletion
 
 _APP = '''
 from dataclasses import replace
@@ -38,18 +40,21 @@ render_application(ApplicationWorkspace("settings-browser", {
 
 
 @pytest.mark.parametrize("popup_server", [_APP], indirect=True, ids=["settings"])
-def test_inline_navigation_and_hierarchy_table_crud(popup_server, tmp_path):
+def test_inline_navigation_and_hierarchy_table_crud(
+    popup_server: str, tmp_path: Path,
+) -> None:
     """Use real navigation, table events, and modal widgets in a browser."""
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
             page = browser.new_page(viewport={"width": 1450, "height": 1000})
+            completion = ScriptCompletion(page)
             errors = []
             page.on("pageerror", lambda error: errors.append(str(error)))
             page.goto(popup_server)
             nav = page.locator(".st-key-app_sidebar_nav")
             expect(nav.get_by_text("Organization Structure", exact=True)).to_have_count(0)
-            with completed_rerun(page):
+            with completion.action():
                 nav.get_by_text("Settings", exact=True).click()
             organization = nav.get_by_text("Organization Structure", exact=True)
             expect(organization).to_be_visible()

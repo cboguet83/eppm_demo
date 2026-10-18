@@ -3,6 +3,7 @@
 import pytest
 
 from tests.test_dialog_browser import popup_server, sync_playwright, expect
+from tests.postgresql.browser_completion import ScriptCompletion
 
 
 _APP = '''
@@ -25,20 +26,51 @@ render_application(ApplicationWorkspace('transition-test', {
 
 
 @pytest.mark.parametrize('popup_server', [_APP], indirect=True)
-def test_navigation_blanks_old_page_until_destination_ready(popup_server):
+@pytest.mark.parametrize('coalesced_state', [False, True])
+def test_navigation_blanks_old_page_until_destination_ready(
+    popup_server: str, coalesced_state: bool,
+) -> None:
+    """Keep every unfinished frame blank, including coalesced run states."""
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
             page = browser.new_page()
+            completion = ScriptCompletion(page)
             page.goto(popup_server)
             expect(page.get_by_text('Original page', exact=True)).to_be_visible()
             page.wait_for_selector('#eppm-page-transition', state='attached')
-            page.get_by_text('Planning & Milestones', exact=True).click()
-            expect(page.locator('#eppm-page-transition')).to_be_visible()
-            expect(page.locator('[data-testid="stMain"]')).to_be_hidden()
+            page.evaluate('''() => {
+                window.unfinishedVisibleFrames = [];
+                document.addEventListener('click', () => {
+                    const sample = () => {
+                        const main = document.querySelector('[data-testid="stMain"]');
+                        if (main.textContent.includes('Destination ready')) return;
+                        if (getComputedStyle(main).visibility !== 'hidden') {
+                            window.unfinishedVisibleFrames.push(main.textContent);
+                        }
+                        requestAnimationFrame(sample);
+                    };
+                    requestAnimationFrame(sample);
+                }, {once: true, capture: true});
+            }''')
+            # A real server completion must reveal the destination even when React
+            # never exposes the intermediate running state to this component.
+            with completion.action():
+                if coalesced_state:
+                    page.evaluate('''() => {
+                        const app = document.querySelector('[data-testid="stApp"]');
+                        const getAttribute = app.getAttribute.bind(app);
+                        app.getAttribute = name => name === 'data-test-script-state'
+                            ? 'notRunning' : getAttribute(name);
+                    }''')
+                page.get_by_text('Planning & Milestones', exact=True).click()
+                expect(page.locator('#eppm-page-transition')).to_be_visible()
+                expect(page.locator('[data-testid="stMain"]')).to_be_hidden()
+
             expect(page.get_by_text('Destination ready', exact=True)).to_be_visible()
             expect(page.locator('#eppm-page-transition')).to_be_hidden()
             expect(page.get_by_text('Original page', exact=True)).to_have_count(0)
+            assert page.evaluate('window.unfinishedVisibleFrames') == []
         finally:
             browser.close()
 
