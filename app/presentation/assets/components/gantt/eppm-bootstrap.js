@@ -31,6 +31,8 @@ connectStreamlit(root,{
         return confirmed?options.onEvent(confirmed):false;
       }});
     const frame=owner.querySelector('.planning-view:last-child');
+    const editLabel=frame.querySelector('[data-control=edit]').parentElement,editIcon=document.createElement('span');
+    editIcon.setAttribute('aria-hidden','true');editIcon.textContent='✏️ ';editLabel.insertBefore(editIcon,editLabel.lastChild);
     projectEditor=createProjectEditor({frame,transport,choices,lifetime});
     const service={choices,projectEditor};active=service;
     lifetime.own(()=>choices.destroy());lifetime.own(()=>view.destroy());

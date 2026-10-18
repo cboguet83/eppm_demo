@@ -87,3 +87,29 @@ test('comparison records, hierarchy and localized capabilities retain their own 
   assert.equal(result.reset,true);
   assert.throws(()=>validateMessage({...value,overlays:[{...value.overlays[0],kind:'draft'}]}),ContractError);
 });
+
+test('internal ownership transfer validates caller-frozen graphs and preserves immutable independent data',async()=>{
+  const {ownMessage}=await import('../src/contracts/owned.js');
+  const input={version:1,kind:'snapshot',scope:'s',revision:'r',projects:[{id:'p',name:'P'}],tasks:[],resources:[{id:'r',name:'R',capacity:1,usage:{'2026-01-01':1}}]};
+  const owned=ownMessage(input);assert.notEqual(owned,input);assert.equal(ownMessage(owned),owned);
+  input.resources[0].usage['2026-01-01']=99;assert.equal(owned.resources[0].usage['2026-01-01'],1);
+  assert.equal(Object.isFrozen(owned.resources[0].usage),true);
+  assert.throws(()=>ownMessage(Object.freeze({...input,resources:[{id:'r',name:'R',capacity:1,usage:{'2026-02-30':1}}]})),ContractError);
+  assert.throws(()=>ownMessage({...input,resources:[{id:'r',name:'R',capacity:1,usage:{'2026-01-01':NaN}}]}),ContractError);
+  const cycle={};cycle.self=cycle;assert.throws(()=>ownMessage({...input,extra:cycle}),ContractError);
+  const shared={safe:'value'};const aliases=ownMessage({...input,extra:[shared,shared]});assert.equal(aliases.extra[0],aliases.extra[1]);
+  const fresh=validateMessage(owned);assert.notEqual(fresh,owned);fresh.resources[0].usage['2026-01-01']=3;assert.equal(owned.resources[0].usage['2026-01-01'],1);
+});
+
+test('owned schema validation checks the copied values and cannot be bypassed by changing accessors',()=>{
+  const input=snapshot();let calls=0;
+  Object.defineProperty(input.tasks[0],'name',{enumerable:true,get(){return ++calls===1?42:'Valid later';}});
+  assert.throws(()=>validateMessage(input),ContractError);assert.equal(calls,1);
+  const event={version:1,scope:'s',revision:'r',requestId:'id',type:'progress',targetId:'t'};
+  Object.defineProperty(event,'progress',{enumerable:true,get:()=>NaN});assert.throws(()=>validateEvent(event),ContractError);
+  const source=JSON.parse('{"version":1,"kind":"snapshot","scope":"s","revision":"r","projects":[],"tasks":[],"__proto__":{"polluted":true}}');
+  const result=validateMessage(source);assert.equal(Object.hasOwn(result,'__proto__'),true);assert.equal(Object.getPrototypeOf(result),Object.prototype);assert.equal({}.polluted,undefined);
+});
+
+for(const day of ['0001-01-01','9999-12-31','2000-02-29','2400-02-29'])test('Gregorian date remains valid '+day,()=>assert.equal(validateDate(day),day));
+for(const day of ['1900-02-29','2100-02-29','2026-04-31','2026-00-01','2026-13-01','2026-01-00'])test('Gregorian date remains invalid '+day,()=>assert.throws(()=>validateDate(day),ContractError));

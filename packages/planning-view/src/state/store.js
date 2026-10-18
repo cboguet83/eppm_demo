@@ -1,5 +1,6 @@
 /** Instance-owned validated snapshots, indexes, and interaction state. */
 import {ContractError,validateMessage} from '../contracts/index.js';
+import {ownMessage} from '../contracts/owned.js';
 
 const COLLECTIONS=Object.freeze(['projects','tasks','dependencies','resources','overlays','hierarchy']);
 
@@ -135,7 +136,7 @@ function validateView(view) {
  * @returns {object} Read, indexed lookup, update, view, subscribe, and destroy seam.
  */
 export function createPlanningStore(input) {
-  const validated=validateMessage(input);
+  const validated=ownMessage(input);
   if(validated.kind!=='snapshot') throw new ContractError('initialSnapshot');
   let data=freeze(complete(validated)),indexes=buildIndexes(data),view=freeze(hintedView(initialView(),validated.viewHints)),disposed=false;
   membership(data);
@@ -145,7 +146,7 @@ export function createPlanningStore(input) {
   /** @param {object} message Authoritative snapshot, patch or correlated response. */
   const update=message=>{
     if(disposed) return false;
-    const next=validateMessage(message);
+    const next=ownMessage(message);
     if(next.kind!=='snapshot' && next.scope!==data.scope) return false;
     if(next.kind==='response' && next.requestId!==view.pendingRequestId) return false;
     if(next.kind!=='snapshot' && next.revision!==data.revision && next.baseRevision!==data.revision) return false;

@@ -31,8 +31,9 @@ function identity(value, path) {
 /** @param {unknown} value Candidate. @param {string} path Schema location. */
 export function validateDate(value, path = 'date') {
   requireValue(typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && !value.startsWith('0000'), path);
-  const time = Date.parse(value + 'T00:00:00Z');
-  requireValue(Number.isFinite(time) && new Date(time).toISOString().slice(0, 10) === value, path);
+  const year=Number(value.slice(0,4)),month=Number(value.slice(5,7)),day=Number(value.slice(8,10));
+  const leap=year%4===0 && (year%100!==0 || year%400===0);
+  requireValue(month>=1 && month<=12 && day>=1 && day<=[31,leap?29:28,31,30,31,30,31,31,30,31,30,31][month-1],path);
   return value;
 }
 
@@ -102,27 +103,29 @@ function dependencies(values, path) {
 }
 
 /** @param {unknown} value Daily series. @param {string} path Schema location. */
-function series(value, path) {
+function series(value, path, dates) {
   record(value, path);
-  for (const [day, amount] of Object.entries(value)) {
-    validateDate(day, path + '.date');
+  for (const day of Object.keys(value)) {
+    if(!dates.has(day)){validateDate(day, path + '.date');dates.add(day);}
+    const amount=value[day];
     requireValue(Number.isFinite(amount) && amount >= 0, path + '.value');
   }
 }
 
 /** @param {unknown} values Resource records. @param {string} path Schema location. */
 function resources(values, path) {
+  const dates=new Set();
   for (const resource of rows(values, path)) {
     requireValue(typeof resource.name === 'string', path + '.name');
     requireValue(Number.isFinite(resource.capacity) && resource.capacity >= 0, path + '.capacity');
     for (const field of ['usage', 'selectedUsage', 'assignedCapacity']) {
-      if (resource[field] !== undefined) series(resource[field], path + '.' + field);
+      if (resource[field] !== undefined) series(resource[field], path + '.' + field, dates);
     }
     if(resource.definedCapacity!==undefined)requireValue(Number.isFinite(resource.definedCapacity) && resource.definedCapacity>=0,path+'.definedCapacity');
     for(const flag of ['usedBySelection','hasAssignments'])if(resource[flag]!==undefined)requireValue(typeof resource[flag]==='boolean',path+'.'+flag);
     if(resource.comparisonUsage!==undefined) {
       record(resource.comparisonUsage,path+'.comparisonUsage');
-      for(const scope of ['total','selected'])if(resource.comparisonUsage[scope]!==undefined)series(resource.comparisonUsage[scope],path+'.comparisonUsage.'+scope);
+      for(const scope of ['total','selected'])if(resource.comparisonUsage[scope]!==undefined)series(resource.comparisonUsage[scope],path+'.comparisonUsage.'+scope, dates);
     }
   }
 }
@@ -162,18 +165,38 @@ function envelope(value) {
  * @param {unknown} input Candidate JSON data.
  */
 function jsonData(input) {
-  const pending = [[input, false]], active = new Set();
-  while (pending.length) {
-    const [value, leaving] = pending.pop();
-    if (leaving) { active.delete(value); continue; }
-    if (value === null || typeof value === 'string' || typeof value === 'boolean') continue;
-    if (typeof value === 'number') { requireValue(Number.isFinite(value), 'json'); continue; }
-    requireValue(typeof value === 'object', 'json');
-    if (!Array.isArray(value)) record(value, 'json');
-    requireValue(!active.has(value), 'json.cycle');
-    active.add(value); pending.push([value, true]);
-    for (const child of Object.values(value)) pending.push([child, false]);
+  const output=Array.isArray(input)?new Array(input.length):{};
+  const copies=new WeakMap([[input,output]]),active=new WeakSet(),complete=new WeakSet();
+  const pending=[[input,false]];
+  while(pending.length) {
+    const [value,leaving]=pending.pop();
+    if(leaving){active.delete(value);complete.add(value);continue;}
+    requireValue(!active.has(value),'json.cycle');
+    if(complete.has(value))continue;
+    if(!Array.isArray(value))record(value,'json');
+    active.add(value);pending.push([value,true]);
+    const target=copies.get(value);
+    for(const key of Object.keys(value)) {
+      const child=value[key];
+      const copy=jsonChild(child,copies,pending);
+      // Preserve an own JSON key without invoking Object.prototype.__proto__.
+      if(key==='__proto__')Object.defineProperty(target,key,{value:copy,enumerable:true,writable:true,configurable:true});
+      else target[key]=copy;
+    }
   }
+  return output;
+}
+
+/** Copy a JSON leaf or queue an object; graphs remain iterative and cycle-checked.
+ * @param {unknown} value Child value. @param {WeakMap} copies Owned copies.
+ * @param {Array} pending Work stack. @returns {unknown} Independent child.
+ */
+function jsonChild(value,copies,pending) {
+  if(value===null || typeof value==='string' || typeof value==='boolean')return value;
+  if(typeof value==='number'){requireValue(Number.isFinite(value),'json');return value;}
+  requireValue(typeof value==='object','json');
+  if(!copies.has(value))copies.set(value,Array.isArray(value)?new Array(value.length):{});
+  pending.push([value,false]);return copies.get(value);
 }
 
 /** @param {object} value Data-bearing message. */
@@ -234,11 +257,10 @@ function data(value) {
  * @throws {ContractError} Invalid input, with no caller state changes.
  */
 export function validateMessage(input) {
-  const value = record(input, 'message');
+  const value = jsonData(record(input, 'message'));
   envelope(value);
   requireValue(['snapshot', 'patch', 'response'].includes(value.kind), 'kind');
   data(value);
-  jsonData(value);
   if (value.kind === 'snapshot') {
     rows(value.projects, 'projects');
     tasks(value.tasks, 'tasks');
@@ -257,7 +279,7 @@ export function validateMessage(input) {
     value[field].forEach(id => identity(id, field));
     requireValue(new Set(value[field]).size === value[field].length, field + '.duplicateId');
   }
-  return structuredClone(value);
+  return value;
 }
 
 /** Validate a correlated display intention; business authorization stays in host.
@@ -265,9 +287,8 @@ export function validateMessage(input) {
  * @returns {object} Independently owned event.
  */
 export function validateEvent(input) {
-  const value = record(input, 'event');
+  const value = jsonData(record(input, 'event'));
   envelope(value);
-  jsonData(value);
   identity(value.requestId, 'requestId');
   requireValue(['dates', 'progress', 'task', 'dependency', 'select', 'command', 'load', 'error'].includes(value.type), 'event.type');
   if (['dates', 'progress', 'task', 'dependency', 'select'].includes(value.type)) identity(value.targetId, 'targetId');
@@ -278,5 +299,5 @@ export function validateEvent(input) {
     requireValue(Array.isArray(value.projectIds), 'projectIds');
     value.projectIds.forEach(id => identity(id, 'projectIds'));
   }
-  return structuredClone(value);
+  return value;
 }

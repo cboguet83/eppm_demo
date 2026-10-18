@@ -374,6 +374,11 @@ with the resource name, deviating capacity extrema and availability/excess;
 the default `'full'` also includes dates and demand. Capacity deviations color
 the capacity badge only. Frozen resource names show whole-calendar capacity
 extrema. All tooltip text is escaped through DOM text nodes.
+Resource captions accept `labels.total`, `labels.selected`,
+`labels.comparisonTotal` and `labels.comparisonSelected`. A project's optional
+`scenarioName` identifies its current count title. An overlay's optional
+`tooltip` supplies its project hover text; task/project `tooltip` fields supply
+plain text without exposing additional application data.
 
 ## Retained controls and host-specific editors
 

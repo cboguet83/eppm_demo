@@ -677,3 +677,34 @@ def test_resource_filters_scroll_virtualization_and_optional_layout(resource_pag
     page.evaluate("instances[0].update({...resourceSnapshot,scope:'no-resources',resources:[]})")
     expect(page.locator("#first [data-part=resource-heading]")).to_be_hidden()
     assert page.locator("#first [data-part=resource-body]").evaluate("n=>n.scrollTop") == 0
+
+
+def test_baseline_pairing_preserves_row_height_bar_proportions_and_former_task_color(planning_page: Page) -> None:
+    """Baseline overlays retain compact rows, smaller current bars and former tasks."""
+    page = planning_page
+    page.evaluate("""() => {
+      instances[0].destroy();window.baselineHost={version:1,kind:'snapshot',scope:'baseline',revision:'r1',
+        projects:[{id:'p',name:'Project'}],tasks:[{id:'live',projectId:'p',name:'Live',start:'2026-01-01',end:'2026-01-05'}],
+        viewHints:{expandedProjectIds:['p']}};
+      instances[0]=mount(document.getElementById('first'),{snapshot:baselineHost,mode:'Day',today:'2026-01-01'});
+    }""")
+    current = page.locator('#first .planning-bar[data-target-kind=tasks][data-lane=current]')
+    summary = page.locator('#first .planning-bar[data-target-kind=projects][data-lane=current]')
+    before = current.bounding_box()['height']
+    project_before = summary.bounding_box()['height']
+    row_height = page.locator('#first .planning-frozen-row[data-target-id=live]').bounding_box()['height']
+    page.evaluate("""instances[0].update({...baselineHost,overlays:[{id:'baseline',kind:'baseline',projectId:'p',tasks:[
+      baselineHost.tasks[0],{id:'former',projectId:'p',name:'Former task',start:'2026-01-06',end:'2026-01-07'}]}]})""")
+    baseline = page.locator('#first .planning-bar[data-target-id=live][data-lane=baseline]')
+    expect(baseline).to_be_visible()
+    assert current.bounding_box()['height'] == pytest.approx(before * .7, abs=.1)
+    assert summary.bounding_box()['height'] == pytest.approx(project_before * .7, abs=.1)
+    assert page.locator('#first .planning-frozen-row[data-target-id=live]').bounding_box()['height'] == row_height
+    assert baseline.bounding_box()['y'] > current.bounding_box()['y'] + current.bounding_box()['height']
+    former = page.locator('#first .planning-frozen-row[data-target-id=former]')
+    expect(former).to_have_attribute('data-lane', 'baseline')
+    expect(former.locator('.planning-column-name')).to_have_css('color', 'rgb(147, 51, 234)')
+    expect(page.locator('#first .planning-bar[data-target-id=former][data-lane=current]')).to_have_count(0)
+    page.evaluate('instances[0].update(baselineHost)')
+    expect(former).to_have_count(0)
+    assert current.bounding_box()['height'] == before

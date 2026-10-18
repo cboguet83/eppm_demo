@@ -21,6 +21,7 @@ flowchart TB
     ProjectForm["eppm-project-editor.js: revision-checked project dependency batch"]
     Core["planning-view/workspace: mount, controls, editors and lifetime"]
     State["planning-view/state: indexed store and bounded loader"]
+    Contracts["planning-view/contracts: checked JSON and immutable ownership"]
     Timeline["planning-view/timeline: rows, columns and dependencies"]
     Resources["planning-view/resources: hierarchy, summaries and grid"]
     Calendar["planning-view/calendar: shared date-only geometry"]
@@ -40,6 +41,9 @@ flowchart TB
     ProjectForm --> Choices
     ProjectForm --> Transport
     Core --> State
+    State --> Contracts
+    Bridge --> Contracts
+    Mapping --> Contracts
     Core --> Timeline
     Core --> Resources
     Core --> Calendar
@@ -94,6 +98,12 @@ EPPM supplies declarative project/task/resource menus. Record capabilities and
 edit mode are rechecked on invocation; the server reauthorizes every operation.
 Navigation, CSV, tags, pool assignments, project logs/details, baseline capture
 and alternative creation/activation retain their Python handlers and dialogs.
+The adapter supplies delivered scenario names, task progress, descriptions,
+tags and pool assignments for plain-text task/project hover cards. Count titles
+identify their current or comparison scenario. Former baseline tasks retain
+purple names, paired current bars use 70% of their ordinary height, and row
+height remains unchanged. The edit-mode pencil is decorative and keeps the
+checkbox's accessible name unchanged.
 Cancelled confirmations emit no request and leave the command menu usable.
 Resource commands retain pool/group identity, inclusive dates and allocation
 scope. Alternative demand rows remain comparison data and do not emit current
@@ -128,6 +138,15 @@ description/link visibility and expansion controls share this one renderer.
 EPPM selects concise capacity tooltips; demand remains available in accessible
 cell descriptions. Only deviating capacity badges change color. Availability
 and excess retain green/red status text with FTE units.
+Resource scope captions retain the translated capacity/total/filtered labels.
+Comparison captions and branch indicators avoid repeating pool names.
+
+Messages crossing the adapter, bridge and store share internally branded,
+deeply frozen validated copies. Arbitrary caller-frozen objects are validated
+and copied normally. This removes repeated ownership transfers without trusting
+mutable host data; public validation still returns independent copies. JSON
+copying is iterative, preserves aliases, rejects cycles/non-JSON values, and
+handles an own `__proto__` key without changing the result's prototype.
 
 ## Source and verification boundaries
 

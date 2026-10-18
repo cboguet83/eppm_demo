@@ -1,7 +1,8 @@
 /** Streamlit v1 transport; core modules never import or depend on this bridge. */
 import {mountPlanningView} from '../index.js';
-import {validateMessage,validateEvent,ContractError} from '../contracts/index.js';
+import {validateEvent,ContractError} from '../contracts/index.js';
 import {createLifetime} from '../workspace/lifetime.js';
+import {ownMessage} from '../contracts/owned.js';
 
 /** Connect a supplied root to one Streamlit parent with lossless queued delivery.
  * @param {HTMLElement} root Owned host element.
@@ -10,7 +11,7 @@ import {createLifetime} from '../workspace/lifetime.js';
  */
 export function connectStreamlit(root,{mount=mountPlanningView,onError=()=>{},prepareRender=args=>args,encodeEvent=event=>event}={}) {
   const win=root.ownerDocument.defaultView,lifetime=createLifetime(win),reads=new Map(),writes=new Map();
-  let origin=null,instance=null,snapshotKey=null,optionsKey=null,messagesKey=null,queue=[],inFlight=null,scope=null,revision=null;
+  let origin=null,instance=null,snapshotKey=null,snapshotText=null,optionsKey=null,messagesKey=null,queue=[],inFlight=null,scope=null,revision=null;
   const send=(type,fields={})=>{if(!lifetime.disposed)win.parent.postMessage({isStreamlitMessage:true,type,...fields},origin ?? '*');};
   const flush=()=>{
     if(inFlight || !queue.length || lifetime.disposed)return;
@@ -41,7 +42,7 @@ export function connectStreamlit(root,{mount=mountPlanningView,onError=()=>{},pr
     enqueue({version:1,type:'load',scope:request.scope,revision:request.revision,requestId:request.requestId,projectIds:request.projectIds});
   });
   const apply=input=>{
-    const message=validateMessage(input),pending=reads.get(message.requestId);
+    const message=ownMessage(input),pending=reads.get(message.requestId);
     if(message.kind==='response')writes.delete(message.requestId);
     if(pending) {
       reads.delete(message.requestId);
@@ -57,10 +58,12 @@ export function connectStreamlit(root,{mount=mountPlanningView,onError=()=>{},pr
       if(!args || !Array.isArray(args.messages ?? []) || !Array.isArray(args.ackRequestIds ?? []) || (args.ackRequestIds ?? []).some(id=>typeof id!=='string'))throw new ContractError('streamlit.args');
       if(args.lazy!==undefined && typeof args.lazy!=='boolean')throw new ContractError('streamlit.lazy');
       if(args.options!==undefined && (!args.options || typeof args.options!=='object' || Array.isArray(args.options)))throw new ContractError('streamlit.options');
-      const snapshot=validateMessage(args.snapshot);
+      const snapshot=ownMessage(args.snapshot);
       if(snapshot.kind!=='snapshot')throw new ContractError('streamlit.snapshot');
-      const updates=(args.messages ?? []).map(validateMessage);
-      const nextOptionsKey=JSON.stringify([args.options ?? {},!!args.lazy]),nextSnapshotKey=JSON.stringify(snapshot);
+      const updates=(args.messages ?? []).map(ownMessage);
+      const nextOptionsKey=JSON.stringify([args.options ?? {},!!args.lazy]);
+      const changedSnapshot=snapshotKey!==snapshot && snapshotKey!==null &&
+        (snapshotText ??=JSON.stringify(snapshotKey))!==JSON.stringify(snapshot);
       origin=event.origin;
       // A new scope invalidates unsent intentions; an already delivered head still
       // waits for its acknowledgement, preventing channel overwrite.
@@ -81,8 +84,8 @@ export function connectStreamlit(root,{mount=mountPlanningView,onError=()=>{},pr
         const replacement=mount(root,{...args.options,snapshot,onEvent:enqueue,onHeight:height=>send('streamlit:setFrameHeight',{height}),
           ...(args.lazy?{load}:{}),onLoadError:error=>onError(error)});
         previous?.destroy();instance=replacement;
-        optionsKey=nextOptionsKey;snapshotKey=nextSnapshotKey;messagesKey=null;
-      }else if(snapshotKey!==nextSnapshotKey){instance.update(snapshot);snapshotKey=nextSnapshotKey;messagesKey=null;}
+        optionsKey=nextOptionsKey;snapshotKey=snapshot;snapshotText=null;messagesKey=null;
+      }else if(changedSnapshot){instance.update(snapshot);snapshotKey=snapshot;snapshotText=null;messagesKey=null;}
       const nextMessagesKey=JSON.stringify(updates);
       if(messagesKey!==nextMessagesKey){for(const message of updates)apply(message);messagesKey=nextMessagesKey;}
       flush();

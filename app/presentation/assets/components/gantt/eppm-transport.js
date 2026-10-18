@@ -81,8 +81,8 @@ export function createEppmTransport({receive=()=>{}}={}) {
       const messages=[];
       const rebuilt=!!args.tasks && (!snapshot || before.scope_token!==host.scope_token);
       if(rebuilt) {
-        const next=snapshotFor(host);
-        if(snapshot?.scope===next.scope){delete next.viewHints.expandedProjectIds;delete next.viewHints.filters;}
+        let next=snapshotFor(host);
+        if(snapshot?.scope===next.scope)next={...next,viewHints:{editEnabled:next.viewHints.editEnabled}};
         snapshot=next;loaded=(host.loaded_project_ids ?? []).map(String);initializing=false;
       }
       revision=host.task_revision;

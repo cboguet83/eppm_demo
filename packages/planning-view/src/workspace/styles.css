@@ -55,6 +55,9 @@
 .planning-view .planning-comparison-title,.planning-view .planning-frozen-row[data-lane=alternative] .planning-column-name {color:#9333ea;}
 .planning-view .planning-comparison-title {display:block;font-size:10px;}
 .planning-view .planning-baseline {top:35px;height:4px;background:#94a3b8;border:0;}
+.planning-view .planning-baseline-paired .planning-current {height:14px;}
+.planning-view .planning-project-row.planning-baseline-paired .planning-current {height:7px;}
+.planning-view .planning-frozen-row[data-lane=baseline] .planning-column-name {color:#9333ea;}
 .planning-view .planning-comparing .planning-current {top:3px;height:18px;}
 .planning-view .planning-comparing .planning-current.planning-milestone {height:14px;top:5px;}
 .planning-view .planning-comparing .planning-alternative.planning-milestone {height:10px;top:25px;}
@@ -104,7 +107,7 @@
 .planning-view .planning-resource-toggle {padding:0 4px;flex-shrink:0;border:0;}
 .planning-view .planning-resource-cell {position:absolute;top:0;height:100%;display:flex;align-items:center;justify-content:center;border-right:1px solid var(--planning-border,#e2e8f0);cursor:pointer;}
 .planning-view .planning-resource-cell:focus-visible,.planning-view .planning-resource-left:focus-visible {outline:2px solid var(--planning-primary,#2563eb);outline-offset:-2px;}
-.planning-view .planning-resource-comparison {color:#7e22ce;background:#faf5ff;}
+.planning-view .planning-resource-comparison {color:#9333ea;background:#faf5ff;}
 .planning-view .planning-resource-overallocated {background:#fee2e2;color:#991b1b;font-weight:600;}
 .planning-view .planning-capacity-unassigned {background:#f1f5f9;color:#64748b;}
 .planning-view .planning-capacity-badge {font-size:10px;padding:1px 4px;margin-left:4px;border-radius:8px;}

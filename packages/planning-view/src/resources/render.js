@@ -106,9 +106,13 @@ export function createResourceRenderer({panel,heading,store,lifetime,options,can
             button.textContent=row.collapsed?'▸':'▾';button.setAttribute('aria-expanded',String(!row.collapsed));
             button.setAttribute('aria-label',(row.collapsed?(labels.expand || 'Expand'):(labels.collapse || 'Collapse'))+' '+name);left.append(button);
           }
-          const label=doc.createElement('span');
-          label.textContent=(row.scope==='assigned' || !row.pool || row.collapsed?name+' · ':'↳ ')+(row.comparison?(labels.alternative || 'Alternative')+' ':'')+
-            ({assigned:labels.assignedCapacity || 'Pool capacity',total:labels.total || 'Total assignments',selected:labels.selected || 'Selected projects'}[row.scope]);
+          const label=doc.createElement('span');label.dataset.part='resource-label';
+          if(row.scope==='assigned' || !row.pool || row.collapsed)label.append(doc.createTextNode(name+(!row.pool && !row.comparison?'':' · ')));
+          else {const branch=doc.createElement('span');branch.dataset.part='resource-branch';branch.textContent='↳ ';label.append(branch);}
+          const scopeLabel=doc.createElement('span');scopeLabel.dataset.part='resource-scope';
+          scopeLabel.textContent=row.comparison?(row.scope==='selected'?(labels.comparisonSelected || 'Alternative Selected Projects'):(labels.comparisonTotal || 'Alternative Total Assignments')):
+            !row.pool?'':({assigned:labels.assignedCapacity || 'Pool capacity',total:labels.total || 'Total assignments',selected:labels.selected || 'Selected projects'}[row.scope]);
+          label.append(scopeLabel);
           left.append(label);
           if(row.pool) {
             const range={start:calendar.start,end:calendar.bottomCells.at(-1).end};

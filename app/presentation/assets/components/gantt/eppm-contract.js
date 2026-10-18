@@ -1,6 +1,7 @@
 /** EPPM presentation DTOs mapped to the public planning contract. No persistence. */
 import {decodeIntervals} from './planning-view/src/resources/summary.js';
-import {validateMessage,ContractError} from './planning-view/src/contracts/index.js';
+import {ContractError} from './planning-view/src/contracts/index.js';
+import {ownMessage} from './planning-view/src/contracts/owned.js';
 
 const id=value=>String(value);
 const editable=(permissions,project)=>permissions.edit_all===true || (permissions.editable_projects ?? []).some(value=>id(value)===id(project));
@@ -20,6 +21,8 @@ export function labelsFor(catalog={}) {
       dependencies_header:'dependencies',btn_add_pred:'addDependency',whole_project_option:'wholeProject'},
     diagnostics:{title:'diagnostics',btn_close:'close'}};
   for(const [section,keys] of Object.entries(sections))for(const [key,target] of Object.entries(keys))if(typeof catalog[section]?.[key]==='string')result[target]=catalog[section][key];
+  if(result.showTotal)result.total=result.showTotal;
+  if(result.showSelected)result.selected=result.showSelected;
   const commands={project_dependencies:'manage_dependencies',manage_project_pools:'manage_project_pools',manage_task_pools:'assign_resource',
     manage_project_tags:'manage_tags',manage_task_tags:'manage_tags',edit_project_details:'edit_project',log_project_event:'log_event',
     complete_step:'mark_complete',delete_step:'delete_step',add_step:'add_step',add_step_after:'add_step_after',export_csv_template:'export_csv_template',import_csv_template:'import_csv_template',bulk_actions:'bulk_actions',project_filter_menu:'filter'};
@@ -54,7 +57,7 @@ export function dependencyFor(row,project,task=null,permissions=null,alternative
  * @param {object} row Task DTO. @param {object} permissions Actor presentation hints.
  * @param {string|null} project Comparison project. @param {object|null} plan Comparison metadata.
  */
-export function taskFor(row,permissions,project=null,plan=null) {
+export function taskFor(row,permissions,project=null,plan=null,activeName=null) {
   const projectId=id(project ?? row.project_id),identity=id(row.stable_id ?? row.id);
   return {id:identity,stableId:identity,projectId,name:row.task_name ?? row.name,start:row.start_date ?? row.start,end:row.end_date ?? row.end,
     progress:row.progress_pct ?? row.progress ?? 0,description:row.description ?? '',phase:row.phase ?? '',
@@ -62,7 +65,7 @@ export function taskFor(row,permissions,project=null,plan=null) {
     capabilities:{hasDiagnostics:(row.violations ?? []).length>0,logProject:editable(permissions,projectId),
       hasPredecessors:plan?(plan.dependencies ?? []).some(dep=>id(dep.task_id)===identity):(row.dependenciesList ?? []).length>0},
     context:{projectId,taskName:row.task_name ?? row.name,...(plan?{planId:plan.id,planRevision:plan.revision}:{})},
-    tooltip:[plan?.name,row.task_name ?? row.name,row.description,...(row.violations ?? []),
+    tooltip:[(plan?.name ?? activeName)?'Scenario: '+(plan?.name ?? activeName):null,row.task_name ?? row.name,String(row.progress_pct ?? row.progress ?? 0)+'%',row.description,...(row.violations ?? []),
       ...(row.tags ?? []).map(tag=>tag.tag_name ?? tag.free_tag ?? tag.tag ?? ''),
       ...(row.pools ?? []).map(pool=>(pool.pool_name ?? pool.name ?? '')+' · '+(pool.fte ?? pool.fte_assigned ?? 0)+' FTE')].filter(Boolean).join('\n')};
 }
@@ -107,6 +110,7 @@ export function projectFor(row,permissions,view={}) {
       showBaseline:view.show_baseline!==true,hideBaseline:view.show_baseline===true,hideAlternatives:comparison,
       hasDiagnostics:row.hasViolations===true || (row.projectDependencies ?? []).some(dep=>dep.is_violated===true)},
     ...(row.start && row.end?{start:row.start,end:row.end}:{}),context:{projectId:id(row.id)},
+    ...(view.active_plan_names?.[row.id]?{scenarioName:view.active_plan_names[row.id]}:{}),tooltip:[view.active_plan_names?.[row.id]?'Scenario: '+view.active_plan_names[row.id]:null,row.name].filter(Boolean).join('\n'),
     violations:(row.projectDependencies ?? []).filter(dep=>dep.is_violated).map(dep=>dep.violation_text).filter(Boolean)};
 }
 
@@ -116,7 +120,7 @@ export function projectFor(row,permissions,view={}) {
 export function overlaysFor(args) {
   const result=[],permissions=args.permissions ?? {};
   for(const [project,plan] of Object.entries(args.alternatives ?? {}))result.push({id:'alternative:'+id(plan.id),kind:'alternative',projectId:project,
-    name:plan.name,revision:plan.revision,newScenario:plan.new_scenario===true,editable:plan.editable===true,
+    name:plan.name,tooltip:'Scenario: '+plan.name,revision:plan.revision,newScenario:plan.new_scenario===true,editable:plan.editable===true,
     capabilities:{hasDiagnostics:(plan.dependencies ?? []).some(row=>row.is_violated===true)},
     context:{projectId:project,planId:plan.id,planRevision:plan.revision},tasks:plan.tasks.map(row=>taskFor(row,permissions,project,plan)),
     dependencies:(plan.dependencies ?? []).map(row=>dependencyFor(row,project,row.task_id==null?null:id(row.task_id),permissions,true))});
@@ -130,7 +134,7 @@ export function overlaysFor(args) {
  * @param {string} revision Public data revision. @param {string} baseRevision Previous revision.
  */
 export function patchFor(patch,host,revision,baseRevision=revision) {
-  const tasks=(patch.tasks ?? []).map(row=>taskFor(row,host.permissions)),dependencies=[];
+  const tasks=(patch.tasks ?? []).map(row=>taskFor(row,host.permissions,null,null,host.active_plan_names?.[row.project_id])),dependencies=[];
   const owners=new Map(tasks.map(task=>[task.id,task.projectId]));
   for(const row of patch.tasks ?? [])for(const dep of row.dependenciesList ?? [])dependencies.push(dependencyFor({...dep,
     predecessor_owner_id:dep.predecessor_owner_id ?? dep.pred_task_project_id ?? owners.get(id(dep.predecessor_task_id)) ?? dep.predecessor_project_id},row.project_id,row.id,host.permissions));
@@ -153,7 +157,7 @@ export function snapshotFor(args) {
   const filter=args.active_resource_filter;
   const hierarchy=hierarchyFor(args.resource_pool_hierarchy),pending=[...hierarchy];let groupId=filter?.group_id==null?null:id(filter.group_id);
   while(pending.length){const node=pending.pop();if(groupId!==null && id(node.context.groupId)===id(filter.group_id))groupId=node.id;for(const child of node.children ?? [])pending.push(child);}
-  return validateMessage({version:1,kind:'snapshot',scope:args.view_scope ?? args.scope_token,revision:args.task_revision,projects:patch.projects,tasks:patch.tasks,dependencies:patch.dependencies,
+  return ownMessage({version:1,kind:'snapshot',scope:args.view_scope ?? args.scope_token,revision:args.task_revision,projects:patch.projects,tasks:patch.tasks,dependencies:patch.dependencies,
     resources:(args.resource_pools ?? []).map(pool=>resourceFor(pool,args.alternative_pool_usage,args.permissions)),hierarchy,
     overlays:overlaysFor(args),loadedProjectIds:(args.loaded_project_ids ?? []).map(id),capabilities:{edit:true,select:true,clearResourceFilter:!!filter},labels:labelsFor(args.translations),
     choiceProjects:(args.all_projects ?? args.project_summaries).map(row=>({id:id(row.id),name:row.name})),

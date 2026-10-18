@@ -270,3 +270,33 @@ def test_task_resource_command_has_a_person_icon_and_retains_its_target(eppm_com
     command.click()
     page.wait_for_function("events.at(-1)?.action==='manage_task_pools'")
     assert page.evaluate("[events.at(-1).id,events.at(-1).project_id]") == [7, 1]
+
+
+def test_eppm_scenario_hover_count_metadata_and_mode_colors_remain_observable(eppm_component: api.Page) -> None:
+    """Scenario captions remain delivered metadata; exactly one mode stays red."""
+    page = eppm_component
+    page.evaluate("""send({...host,scope_token:'named-scenarios',active_plan_names:{1:'Active plan'},
+      alternatives:{1:{id:21,revision:1,name:'Option A',editable:true,status:'draft',tasks:[
+        {id:99,stable_id:7,task_name:'Alternative build',start_date:'2027-01-01',end_date:'2027-01-05',progress_pct:65,
+          description:'Scenario description',tags:[{free_tag:'Scenario tag'}],pools:[{pool_name:'Engineers',fte:1.25}]}],dependencies:[]}}})""")
+    alternative = page.locator('.planning-bar[data-target-kind=tasks][data-lane=alternative]')
+    expect(alternative).to_be_visible()
+    alternative.hover()
+    tooltip = page.get_by_role('tooltip')
+    for text in ['Scenario: Option A', 'Alternative build', '65%', 'Scenario description', 'Scenario tag', 'Engineers', '1.25 FTE']:
+        expect(tooltip).to_contain_text(text)
+    page.locator('.planning-bar[data-target-kind=tasks][data-lane=current]').hover()
+    expect(tooltip).to_contain_text('Scenario: Active plan')
+    expect(tooltip).not_to_contain_text('Scenario description')
+    expect(page.locator('[data-task-count=current]')).to_have_attribute('title', 'Tasks in Active plan')
+    expect(page.locator('[data-task-count=alternative]')).to_have_attribute('title', 'Tasks in Option A')
+    assert page.locator('[data-control=edit]').get_attribute('aria-label') is None
+    expect(page.get_by_role('checkbox', name='Enable edit mode', exact=True)).to_be_visible()
+    expect(page.locator('[data-control=edit]').locator('..')).to_contain_text('✏️ Enable edit mode')
+    for mode in ['Day', 'Week', 'Month', 'Quarter', 'Year']:
+        page.locator('[data-mode=' + mode + ']').click()
+        expect(page.locator('[data-mode][aria-pressed=true]')).to_have_count(1)
+        expect(page.locator('[data-mode=' + mode + ']')).to_have_css('background-color', 'rgb(196, 16, 57)')
+        for button in page.locator('[data-mode][aria-pressed=false]').all():
+            expect(button).to_have_css('background-color', 'rgb(226, 232, 240)')
+    expect(page.locator('.planning-toolbar')).to_have_css('padding', '5px 14px')

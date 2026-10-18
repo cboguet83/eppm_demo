@@ -16,6 +16,7 @@ function bar(owner,task,calendar,lane,targetKind,overlayId='',overlay=null) {
   Object.assign(el.dataset,{targetId:task.id ?? '',targetKind,lane,overlayId,start:task.start,end:task.end});
   if(overlay?.revision!==undefined)el.dataset.planRevision=overlay.revision;
   if(overlay?.newScenario)el.classList.add('planning-new-scenario');
+  if(targetKind==='projects' && typeof overlay?.tooltip==='string')el.dataset.tooltip=overlay.tooltip;
   el.dataset.scheduleLabel=(milestone?'Milestone: ':'')+(overlay?.name?overlay.name+' · ':'')+task.start+' → '+task.end;
   el.tabIndex=0;el.setAttribute('role','button');el.setAttribute('aria-label',(task.name ?? lane)+' · '+task.start+' → '+task.end);
   if(targetKind==='projects')el.dataset.expand=task.id;
@@ -110,10 +111,12 @@ export function createTimelineRenderer({panel,store,lifetime,options}) {
               left.append(cell);
             }
             if(row.kind==='project') {
-              const counts=node(doc,'span','planning-counts');counts.append(node(doc,'span','planning-count',String(row.taskCount)));
+              const counts=node(doc,'span','planning-counts'),currentCount=node(doc,'span','planning-count',String(row.taskCount));
+              currentCount.dataset.taskCount='current';currentCount.title='Tasks in '+(record.scenarioName ?? record.name);counts.append(currentCount);
               for(const {overlay} of row.comparisons) {
                 const count=node(doc,'button','planning-count planning-comparison-count',String(overlay.tasks.length));count.type='button';
                 Object.assign(count.dataset,{targetId:record.id,targetKind:'projects',overlayId:overlay.id,diagnostics:'true',lane:overlay.kind});counts.append(count);
+                count.dataset.taskCount=overlay.kind;count.dataset.nativeTitle='true';count.title='Tasks in '+(overlay.name ?? overlay.kind);
               }
               left.querySelector('.planning-column-name').append(counts);
             }
@@ -124,6 +127,7 @@ export function createTimelineRenderer({panel,store,lifetime,options}) {
             if(row.current)bar(right,row.current,calendar,'current','tasks');
             for(const {overlay,task} of row.comparisons)bar(right,row.kind==='project'?{...task,id:record.id,name:record.name}:task,calendar,overlay.kind,row.kind==='project'?'projects':'tasks',overlay.id,overlay);
             if(row.comparisons.some(item=>item.overlay.kind==='alternative'))right.classList.add('planning-comparing');
+            if(row.comparisons.some(item=>item.overlay.kind==='baseline'))right.classList.add('planning-baseline-paired');
             if(row.comparisons.some(item=>item.overlay.newScenario))left.classList.add('planning-new-scenario');
           }
           panel.leftCanvas.append(left);panel.canvas.append(right);

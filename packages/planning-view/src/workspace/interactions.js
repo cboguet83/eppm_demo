@@ -113,7 +113,7 @@ export function createInteractions({frame,toolbar,store,lifetime,options,calenda
   });
   lifetime.listen(frame,'pointerover',event=>{
     const node=event.target.closest('[data-target-id]');
-    if(!node || node.contains(event.relatedTarget) || drag || store.read().view.filters.hover===false)return;
+    if(!node || node.dataset.nativeTitle==='true' || node.contains(event.relatedTarget) || drag || store.read().view.filters.hover===false)return;
     hideHover();const target=targetOf(node),resolved=actions.resolve(target);if(!resolved)return;
     hovered=node;
     hoverTimer=lifetime.timeout(()=>{
@@ -189,7 +189,9 @@ export function createInteractions({frame,toolbar,store,lifetime,options,calenda
         const allowed=actions.canEdit(target,'dates'),progressAllowed=actions.canEdit(target,'progress');
         node.dataset.editable=String(allowed || progressAllowed);
         for(const handle of node.querySelectorAll('.planning-handle'))handle.dataset.editable=String(handle.dataset.edge==='progress'?progressAllowed:allowed);
-        if(view.filters.hover===false)node.title=node.getAttribute('aria-label') || resolved.record.name || '';else node.removeAttribute('title');
+        if(node.dataset.nativeTitle!=='true') {
+          if(view.filters.hover===false)node.title=node.getAttribute('aria-label') || resolved.record.name || '';else node.removeAttribute('title');
+        }
         const selection=view.selection?.values?.target;node.classList.toggle('planning-selected',JSON.stringify(selection)===JSON.stringify(target));
         if(!node.classList.contains('planning-bar') || target.kind!=='tasks')continue;
         const record=resolved.record,preview=view.preview?.target;

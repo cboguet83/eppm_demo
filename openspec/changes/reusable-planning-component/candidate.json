@@ -1,0 +1,830 @@
+{
+  "date": "2026-10-18",
+  "browser": "Chrome for Testing 151.0.7922.34",
+  "python": "3.14.7",
+  "node": "26.11.1",
+  "viewport": [
+    1500,
+    1100
+  ],
+  "iterations_per_mode": 5,
+  "capture": "tests/postgresql/capture_gantt_reference.py; sequential idle-host collection; 25 passed in 112.46 seconds",
+  "measurement_notes": "Synchronous render-message delivery; scroll work at public requestAnimationFrame boundary includes all workspace rendering. Reference timed its timeline callback. No private renderer globals.",
+  "budget_approved": false,
+  "summary_medians": {
+    "collapsed": {
+      "renderMs": 114.69999998807907,
+      "inspectedDependencies": 0,
+      "projects": 100,
+      "pools": 127,
+      "tasks": 1000,
+      "maxLinkNodes": 0,
+      "visibleTasks": 0,
+      "scrollFrameP95": 17.099999994039536,
+      "scrollWorkMaxMs": 9.100000023841858,
+      "scrollWorkP95Ms": 2.5999999940395355,
+      "resourceCells": 216,
+      "ganttRows": 27,
+      "resourceRows": 27,
+      "resourceTop": 5000,
+      "resourcePaneAlignmentPx": 0
+    },
+    "expanded": {
+      "renderMs": 115.59999999403954,
+      "inspectedDependencies": 0,
+      "projects": 100,
+      "pools": 127,
+      "tasks": 1000,
+      "maxLinkNodes": 44,
+      "visibleTasks": 24,
+      "scrollFrameP95": 17.200000017881393,
+      "scrollWorkMaxMs": 8.600000023841858,
+      "scrollWorkP95Ms": 2.2000000178813934,
+      "resourceCells": 216,
+      "ganttRows": 27,
+      "resourceRows": 27,
+      "resourceTop": 5000,
+      "resourcePaneAlignmentPx": 0
+    },
+    "external": {
+      "renderMs": 113.5,
+      "inspectedDependencies": 0,
+      "projects": 100,
+      "pools": 127,
+      "tasks": 1000,
+      "maxLinkNodes": 524,
+      "visibleTasks": 24,
+      "scrollFrameP95": 17.299999982118607,
+      "scrollWorkMaxMs": 8.299999982118607,
+      "scrollWorkP95Ms": 2.5999999940395355,
+      "resourceCells": 216,
+      "ganttRows": 27,
+      "resourceRows": 27,
+      "resourceTop": 5000,
+      "resourcePaneAlignmentPx": 0
+    },
+    "native": {
+      "renderMs": 44.30000001192093,
+      "inspectedDependencies": 0,
+      "projects": 2,
+      "pools": 1,
+      "tasks": 0,
+      "maxLinkNodes": 0,
+      "visibleTasks": 2,
+      "scrollFrameP95": 17,
+      "scrollWorkMaxMs": 1.5999999940395355,
+      "scrollWorkP95Ms": 1.5999999940395355,
+      "resourceCells": 15,
+      "ganttRows": 4,
+      "resourceRows": 3,
+      "resourceTop": 0,
+      "resourcePaneAlignmentPx": 0
+    },
+    "native-edit": {
+      "server_seconds": 0.4636740519781597,
+      "payload_bytes": 2873
+    }
+  },
+  "runs": [
+    {
+      "mode": "collapsed",
+      "iteration": 1,
+      "metrics": {
+        "expanded": false,
+        "externalLinks": false,
+        "renderMs": 111.69999998807907,
+        "defaultExternalLinks": false,
+        "inspectedDependencies": 0,
+        "projects": 100,
+        "pools": 127,
+        "tasks": 1000,
+        "source": "representative fixture",
+        "maxLinkNodes": 0,
+        "visibleTasks": 0,
+        "scrollFrameP95": 17.19999998807907,
+        "scrollWorkMaxMs": 9.100000023841858,
+        "scrollWorkP95Ms": 2.7000000178813934,
+        "resourceCells": 216,
+        "ganttRows": 27,
+        "resourceRows": 27,
+        "resourceTop": 5000,
+        "resourcePaneAlignmentPx": 0,
+        "fitCheck": {
+          "ganttWidth": 1050,
+          "resourceWidth": 1050,
+          "timelineWidth": 1050,
+          "ganttVerticalScrollbar": false,
+          "resourceVerticalScrollbar": false
+        }
+      }
+    },
+    {
+      "mode": "collapsed",
+      "iteration": 2,
+      "metrics": {
+        "expanded": false,
+        "externalLinks": false,
+        "renderMs": 114.69999998807907,
+        "defaultExternalLinks": false,
+        "inspectedDependencies": 0,
+        "projects": 100,
+        "pools": 127,
+        "tasks": 1000,
+        "source": "representative fixture",
+        "maxLinkNodes": 0,
+        "visibleTasks": 0,
+        "scrollFrameP95": 17.099999994039536,
+        "scrollWorkMaxMs": 8.599999994039536,
+        "scrollWorkP95Ms": 2.5,
+        "resourceCells": 216,
+        "ganttRows": 27,
+        "resourceRows": 27,
+        "resourceTop": 5000,
+        "resourcePaneAlignmentPx": 0,
+        "fitCheck": {
+          "ganttWidth": 1050,
+          "resourceWidth": 1050,
+          "timelineWidth": 1050,
+          "ganttVerticalScrollbar": false,
+          "resourceVerticalScrollbar": false
+        }
+      }
+    },
+    {
+      "mode": "collapsed",
+      "iteration": 3,
+      "metrics": {
+        "expanded": false,
+        "externalLinks": false,
+        "renderMs": 114,
+        "defaultExternalLinks": false,
+        "inspectedDependencies": 0,
+        "projects": 100,
+        "pools": 127,
+        "tasks": 1000,
+        "source": "representative fixture",
+        "maxLinkNodes": 0,
+        "visibleTasks": 0,
+        "scrollFrameP95": 17,
+        "scrollWorkMaxMs": 14.099999994039536,
+        "scrollWorkP95Ms": 2.5999999940395355,
+        "resourceCells": 216,
+        "ganttRows": 27,
+        "resourceRows": 27,
+        "resourceTop": 5000,
+        "resourcePaneAlignmentPx": 0,
+        "fitCheck": {
+          "ganttWidth": 1050,
+          "resourceWidth": 1050,
+          "timelineWidth": 1050,
+          "ganttVerticalScrollbar": false,
+          "resourceVerticalScrollbar": false
+        }
+      }
+    },
+    {
+      "mode": "collapsed",
+      "iteration": 4,
+      "metrics": {
+        "expanded": false,
+        "externalLinks": false,
+        "renderMs": 116.80000001192093,
+        "defaultExternalLinks": false,
+        "inspectedDependencies": 0,
+        "projects": 100,
+        "pools": 127,
+        "tasks": 1000,
+        "source": "representative fixture",
+        "maxLinkNodes": 0,
+        "visibleTasks": 0,
+        "scrollFrameP95": 17.099999994039536,
+        "scrollWorkMaxMs": 8.799999982118607,
+        "scrollWorkP95Ms": 2.5999999940395355,
+        "resourceCells": 216,
+        "ganttRows": 27,
+        "resourceRows": 27,
+        "resourceTop": 5000,
+        "resourcePaneAlignmentPx": 0,
+        "fitCheck": {
+          "ganttWidth": 1050,
+          "resourceWidth": 1050,
+          "timelineWidth": 1050,
+          "ganttVerticalScrollbar": false,
+          "resourceVerticalScrollbar": false
+        }
+      }
+    },
+    {
+      "mode": "collapsed",
+      "iteration": 5,
+      "metrics": {
+        "expanded": false,
+        "externalLinks": false,
+        "renderMs": 115.7000000178814,
+        "defaultExternalLinks": false,
+        "inspectedDependencies": 0,
+        "projects": 100,
+        "pools": 127,
+        "tasks": 1000,
+        "source": "representative fixture",
+        "maxLinkNodes": 0,
+        "visibleTasks": 0,
+        "scrollFrameP95": 17.19999998807907,
+        "scrollWorkMaxMs": 9.199999988079071,
+        "scrollWorkP95Ms": 2.600000023841858,
+        "resourceCells": 216,
+        "ganttRows": 27,
+        "resourceRows": 27,
+        "resourceTop": 5000,
+        "resourcePaneAlignmentPx": 0,
+        "fitCheck": {
+          "ganttWidth": 1050,
+          "resourceWidth": 1050,
+          "timelineWidth": 1050,
+          "ganttVerticalScrollbar": false,
+          "resourceVerticalScrollbar": false
+        }
+      }
+    },
+    {
+      "mode": "expanded",
+      "iteration": 1,
+      "metrics": {
+        "expanded": true,
+        "externalLinks": false,
+        "renderMs": 124.80000001192093,
+        "defaultExternalLinks": false,
+        "inspectedDependencies": 0,
+        "projects": 100,
+        "pools": 127,
+        "tasks": 1000,
+        "source": "representative fixture",
+        "maxLinkNodes": 44,
+        "visibleTasks": 24,
+        "scrollFrameP95": 17.200000017881393,
+        "scrollWorkMaxMs": 8.600000023841858,
+        "scrollWorkP95Ms": 2.699999988079071,
+        "resourceCells": 216,
+        "ganttRows": 27,
+        "resourceRows": 27,
+        "resourceTop": 5000,
+        "resourcePaneAlignmentPx": 0,
+        "fitCheck": {
+          "ganttWidth": 1050,
+          "resourceWidth": 1050,
+          "timelineWidth": 1050,
+          "ganttVerticalScrollbar": false,
+          "resourceVerticalScrollbar": false
+        }
+      }
+    },
+    {
+      "mode": "expanded",
+      "iteration": 2,
+      "metrics": {
+        "expanded": true,
+        "externalLinks": false,
+        "renderMs": 113.59999999403954,
+        "defaultExternalLinks": false,
+        "inspectedDependencies": 0,
+        "projects": 100,
+        "pools": 127,
+        "tasks": 1000,
+        "source": "representative fixture",
+        "maxLinkNodes": 44,
+        "visibleTasks": 24,
+        "scrollFrameP95": 17.5,
+        "scrollWorkMaxMs": 13.400000005960464,
+        "scrollWorkP95Ms": 2.5999999940395355,
+        "resourceCells": 216,
+        "ganttRows": 27,
+        "resourceRows": 27,
+        "resourceTop": 5000,
+        "resourcePaneAlignmentPx": 0,
+        "fitCheck": {
+          "ganttWidth": 1050,
+          "resourceWidth": 1050,
+          "timelineWidth": 1050,
+          "ganttVerticalScrollbar": false,
+          "resourceVerticalScrollbar": false
+        }
+      }
+    },
+    {
+      "mode": "expanded",
+      "iteration": 3,
+      "metrics": {
+        "expanded": true,
+        "externalLinks": false,
+        "renderMs": 116,
+        "defaultExternalLinks": false,
+        "inspectedDependencies": 0,
+        "projects": 100,
+        "pools": 127,
+        "tasks": 1000,
+        "source": "representative fixture",
+        "maxLinkNodes": 44,
+        "visibleTasks": 24,
+        "scrollFrameP95": 17.200000017881393,
+        "scrollWorkMaxMs": 8.800000011920929,
+        "scrollWorkP95Ms": 2.2000000178813934,
+        "resourceCells": 216,
+        "ganttRows": 27,
+        "resourceRows": 27,
+        "resourceTop": 5000,
+        "resourcePaneAlignmentPx": 0,
+        "fitCheck": {
+          "ganttWidth": 1050,
+          "resourceWidth": 1050,
+          "timelineWidth": 1050,
+          "ganttVerticalScrollbar": false,
+          "resourceVerticalScrollbar": false
+        }
+      }
+    },
+    {
+      "mode": "expanded",
+      "iteration": 4,
+      "metrics": {
+        "expanded": true,
+        "externalLinks": false,
+        "renderMs": 112.5,
+        "defaultExternalLinks": false,
+        "inspectedDependencies": 0,
+        "projects": 100,
+        "pools": 127,
+        "tasks": 1000,
+        "source": "representative fixture",
+        "maxLinkNodes": 44,
+        "visibleTasks": 24,
+        "scrollFrameP95": 17.200000017881393,
+        "scrollWorkMaxMs": 8.400000005960464,
+        "scrollWorkP95Ms": 1.9000000059604645,
+        "resourceCells": 216,
+        "ganttRows": 27,
+        "resourceRows": 27,
+        "resourceTop": 5000,
+        "resourcePaneAlignmentPx": 0,
+        "fitCheck": {
+          "ganttWidth": 1050,
+          "resourceWidth": 1050,
+          "timelineWidth": 1050,
+          "ganttVerticalScrollbar": false,
+          "resourceVerticalScrollbar": false
+        }
+      }
+    },
+    {
+      "mode": "expanded",
+      "iteration": 5,
+      "metrics": {
+        "expanded": true,
+        "externalLinks": false,
+        "renderMs": 115.59999999403954,
+        "defaultExternalLinks": false,
+        "inspectedDependencies": 0,
+        "projects": 100,
+        "pools": 127,
+        "tasks": 1000,
+        "source": "representative fixture",
+        "maxLinkNodes": 44,
+        "visibleTasks": 24,
+        "scrollFrameP95": 17.100000023841858,
+        "scrollWorkMaxMs": 8.199999988079071,
+        "scrollWorkP95Ms": 2.0999999940395355,
+        "resourceCells": 216,
+        "ganttRows": 27,
+        "resourceRows": 27,
+        "resourceTop": 5000,
+        "resourcePaneAlignmentPx": 0,
+        "fitCheck": {
+          "ganttWidth": 1050,
+          "resourceWidth": 1050,
+          "timelineWidth": 1050,
+          "ganttVerticalScrollbar": false,
+          "resourceVerticalScrollbar": false
+        }
+      }
+    },
+    {
+      "mode": "external",
+      "iteration": 1,
+      "metrics": {
+        "expanded": true,
+        "externalLinks": true,
+        "renderMs": 110.59999999403954,
+        "defaultExternalLinks": false,
+        "inspectedDependencies": 0,
+        "projects": 100,
+        "pools": 127,
+        "tasks": 1000,
+        "source": "representative fixture",
+        "maxLinkNodes": 524,
+        "visibleTasks": 24,
+        "scrollFrameP95": 17.299999982118607,
+        "scrollWorkMaxMs": 13.5,
+        "scrollWorkP95Ms": 2.5999999940395355,
+        "resourceCells": 216,
+        "ganttRows": 27,
+        "resourceRows": 27,
+        "resourceTop": 5000,
+        "resourcePaneAlignmentPx": 0,
+        "fitCheck": {
+          "ganttWidth": 1050,
+          "resourceWidth": 1050,
+          "timelineWidth": 1050,
+          "ganttVerticalScrollbar": false,
+          "resourceVerticalScrollbar": false
+        }
+      }
+    },
+    {
+      "mode": "external",
+      "iteration": 2,
+      "metrics": {
+        "expanded": true,
+        "externalLinks": true,
+        "renderMs": 122.59999999403954,
+        "defaultExternalLinks": false,
+        "inspectedDependencies": 0,
+        "projects": 100,
+        "pools": 127,
+        "tasks": 1000,
+        "source": "representative fixture",
+        "maxLinkNodes": 524,
+        "visibleTasks": 24,
+        "scrollFrameP95": 17.100000023841858,
+        "scrollWorkMaxMs": 7.5,
+        "scrollWorkP95Ms": 2.2000000178813934,
+        "resourceCells": 216,
+        "ganttRows": 27,
+        "resourceRows": 27,
+        "resourceTop": 5000,
+        "resourcePaneAlignmentPx": 0,
+        "fitCheck": {
+          "ganttWidth": 1050,
+          "resourceWidth": 1050,
+          "timelineWidth": 1050,
+          "ganttVerticalScrollbar": false,
+          "resourceVerticalScrollbar": false
+        }
+      }
+    },
+    {
+      "mode": "external",
+      "iteration": 3,
+      "metrics": {
+        "expanded": true,
+        "externalLinks": true,
+        "renderMs": 113.5,
+        "defaultExternalLinks": false,
+        "inspectedDependencies": 0,
+        "projects": 100,
+        "pools": 127,
+        "tasks": 1000,
+        "source": "representative fixture",
+        "maxLinkNodes": 524,
+        "visibleTasks": 24,
+        "scrollFrameP95": 17.599999994039536,
+        "scrollWorkMaxMs": 8.299999982118607,
+        "scrollWorkP95Ms": 2.9000000059604645,
+        "resourceCells": 216,
+        "ganttRows": 27,
+        "resourceRows": 27,
+        "resourceTop": 5000,
+        "resourcePaneAlignmentPx": 0,
+        "fitCheck": {
+          "ganttWidth": 1050,
+          "resourceWidth": 1050,
+          "timelineWidth": 1050,
+          "ganttVerticalScrollbar": false,
+          "resourceVerticalScrollbar": false
+        }
+      }
+    },
+    {
+      "mode": "external",
+      "iteration": 4,
+      "metrics": {
+        "expanded": true,
+        "externalLinks": true,
+        "renderMs": 114.7000000178814,
+        "defaultExternalLinks": false,
+        "inspectedDependencies": 0,
+        "projects": 100,
+        "pools": 127,
+        "tasks": 1000,
+        "source": "representative fixture",
+        "maxLinkNodes": 524,
+        "visibleTasks": 24,
+        "scrollFrameP95": 17.400000005960464,
+        "scrollWorkMaxMs": 8.299999982118607,
+        "scrollWorkP95Ms": 2.7000000178813934,
+        "resourceCells": 216,
+        "ganttRows": 27,
+        "resourceRows": 27,
+        "resourceTop": 5000,
+        "resourcePaneAlignmentPx": 0,
+        "fitCheck": {
+          "ganttWidth": 1050,
+          "resourceWidth": 1050,
+          "timelineWidth": 1050,
+          "ganttVerticalScrollbar": false,
+          "resourceVerticalScrollbar": false
+        }
+      }
+    },
+    {
+      "mode": "external",
+      "iteration": 5,
+      "metrics": {
+        "expanded": true,
+        "externalLinks": true,
+        "renderMs": 113.19999998807907,
+        "defaultExternalLinks": false,
+        "inspectedDependencies": 0,
+        "projects": 100,
+        "pools": 127,
+        "tasks": 1000,
+        "source": "representative fixture",
+        "maxLinkNodes": 524,
+        "visibleTasks": 24,
+        "scrollFrameP95": 17.299999982118607,
+        "scrollWorkMaxMs": 14,
+        "scrollWorkP95Ms": 2.5,
+        "resourceCells": 216,
+        "ganttRows": 27,
+        "resourceRows": 27,
+        "resourceTop": 5000,
+        "resourcePaneAlignmentPx": 0,
+        "fitCheck": {
+          "ganttWidth": 1050,
+          "resourceWidth": 1050,
+          "timelineWidth": 1050,
+          "ganttVerticalScrollbar": false,
+          "resourceVerticalScrollbar": false
+        }
+      }
+    },
+    {
+      "mode": "native",
+      "iteration": 1,
+      "metrics": {
+        "expanded": true,
+        "externalLinks": false,
+        "renderMs": 45.599999994039536,
+        "defaultExternalLinks": false,
+        "inspectedDependencies": 0,
+        "projects": 2,
+        "pools": 1,
+        "tasks": 0,
+        "source": "isolated PostgreSQL restore",
+        "maxLinkNodes": 0,
+        "visibleTasks": 2,
+        "scrollFrameP95": 17,
+        "scrollWorkMaxMs": 2.0999999940395355,
+        "scrollWorkP95Ms": 2.0999999940395355,
+        "resourceCells": 15,
+        "ganttRows": 4,
+        "resourceRows": 3,
+        "resourceTop": 0,
+        "resourcePaneAlignmentPx": 0,
+        "serverTimings": [
+          {
+            "action": "initial",
+            "seconds": 0.4077671080012806,
+            "bytes": 6207
+          },
+          {
+            "action": "load_project_tasks",
+            "seconds": 0.23096974100917578,
+            "bytes": 2175
+          }
+        ],
+        "fitCheck": {
+          "ganttWidth": 1050,
+          "resourceWidth": 1050,
+          "timelineWidth": 1050,
+          "ganttVerticalScrollbar": false,
+          "resourceVerticalScrollbar": false
+        }
+      }
+    },
+    {
+      "mode": "native",
+      "iteration": 2,
+      "metrics": {
+        "expanded": true,
+        "externalLinks": false,
+        "renderMs": 41.599999994039536,
+        "defaultExternalLinks": false,
+        "inspectedDependencies": 0,
+        "projects": 2,
+        "pools": 1,
+        "tasks": 0,
+        "source": "isolated PostgreSQL restore",
+        "maxLinkNodes": 0,
+        "visibleTasks": 2,
+        "scrollFrameP95": 16.900000005960464,
+        "scrollWorkMaxMs": 1.5,
+        "scrollWorkP95Ms": 1.5,
+        "resourceCells": 15,
+        "ganttRows": 4,
+        "resourceRows": 3,
+        "resourceTop": 0,
+        "resourcePaneAlignmentPx": 0,
+        "serverTimings": [
+          {
+            "action": "initial",
+            "seconds": 0.4149724480230361,
+            "bytes": 6207
+          },
+          {
+            "action": "load_project_tasks",
+            "seconds": 0.21608516600099392,
+            "bytes": 2175
+          }
+        ],
+        "fitCheck": {
+          "ganttWidth": 1050,
+          "resourceWidth": 1050,
+          "timelineWidth": 1050,
+          "ganttVerticalScrollbar": false,
+          "resourceVerticalScrollbar": false
+        }
+      }
+    },
+    {
+      "mode": "native",
+      "iteration": 3,
+      "metrics": {
+        "expanded": true,
+        "externalLinks": false,
+        "renderMs": 44.30000001192093,
+        "defaultExternalLinks": false,
+        "inspectedDependencies": 0,
+        "projects": 2,
+        "pools": 1,
+        "tasks": 0,
+        "source": "isolated PostgreSQL restore",
+        "maxLinkNodes": 0,
+        "visibleTasks": 2,
+        "scrollFrameP95": 17,
+        "scrollWorkMaxMs": 1.4000000059604645,
+        "scrollWorkP95Ms": 1.4000000059604645,
+        "resourceCells": 15,
+        "ganttRows": 4,
+        "resourceRows": 3,
+        "resourceTop": 0,
+        "resourcePaneAlignmentPx": 0,
+        "serverTimings": [
+          {
+            "action": "initial",
+            "seconds": 0.40941175699117593,
+            "bytes": 6207
+          },
+          {
+            "action": "load_project_tasks",
+            "seconds": 0.22863401001086459,
+            "bytes": 2175
+          }
+        ],
+        "fitCheck": {
+          "ganttWidth": 1050,
+          "resourceWidth": 1050,
+          "timelineWidth": 1050,
+          "ganttVerticalScrollbar": false,
+          "resourceVerticalScrollbar": false
+        }
+      }
+    },
+    {
+      "mode": "native",
+      "iteration": 4,
+      "metrics": {
+        "expanded": true,
+        "externalLinks": false,
+        "renderMs": 44.69999998807907,
+        "defaultExternalLinks": false,
+        "inspectedDependencies": 0,
+        "projects": 2,
+        "pools": 1,
+        "tasks": 0,
+        "source": "isolated PostgreSQL restore",
+        "maxLinkNodes": 0,
+        "visibleTasks": 2,
+        "scrollFrameP95": 17.100000023841858,
+        "scrollWorkMaxMs": 1.699999988079071,
+        "scrollWorkP95Ms": 1.699999988079071,
+        "resourceCells": 15,
+        "ganttRows": 4,
+        "resourceRows": 3,
+        "resourceTop": 0,
+        "resourcePaneAlignmentPx": 0,
+        "serverTimings": [
+          {
+            "action": "initial",
+            "seconds": 0.3858620169921778,
+            "bytes": 6207
+          },
+          {
+            "action": "load_project_tasks",
+            "seconds": 0.21393906298908405,
+            "bytes": 2175
+          }
+        ],
+        "fitCheck": {
+          "ganttWidth": 1050,
+          "resourceWidth": 1050,
+          "timelineWidth": 1050,
+          "ganttVerticalScrollbar": false,
+          "resourceVerticalScrollbar": false
+        }
+      }
+    },
+    {
+      "mode": "native",
+      "iteration": 5,
+      "metrics": {
+        "expanded": true,
+        "externalLinks": false,
+        "renderMs": 33.70000001788139,
+        "defaultExternalLinks": false,
+        "inspectedDependencies": 0,
+        "projects": 2,
+        "pools": 1,
+        "tasks": 0,
+        "source": "isolated PostgreSQL restore",
+        "maxLinkNodes": 0,
+        "visibleTasks": 2,
+        "scrollFrameP95": 17,
+        "scrollWorkMaxMs": 1.5999999940395355,
+        "scrollWorkP95Ms": 1.5999999940395355,
+        "resourceCells": 15,
+        "ganttRows": 4,
+        "resourceRows": 3,
+        "resourceTop": 0,
+        "resourcePaneAlignmentPx": 0,
+        "serverTimings": [
+          {
+            "action": "initial",
+            "seconds": 0.38872667599935085,
+            "bytes": 6207
+          },
+          {
+            "action": "load_project_tasks",
+            "seconds": 0.23466057400219142,
+            "bytes": 2175
+          }
+        ],
+        "fitCheck": {
+          "ganttWidth": 1050,
+          "resourceWidth": 1050,
+          "timelineWidth": 1050,
+          "ganttVerticalScrollbar": false,
+          "resourceVerticalScrollbar": false
+        }
+      }
+    },
+    {
+      "mode": "native-edit",
+      "iteration": 1,
+      "metrics": {
+        "server_seconds": 0.4636740519781597,
+        "payload_bytes": 2873
+      }
+    },
+    {
+      "mode": "native-edit",
+      "iteration": 2,
+      "metrics": {
+        "server_seconds": 0.4596814480028115,
+        "payload_bytes": 2873
+      }
+    },
+    {
+      "mode": "native-edit",
+      "iteration": 3,
+      "metrics": {
+        "server_seconds": 0.5430108979926445,
+        "payload_bytes": 2873
+      }
+    },
+    {
+      "mode": "native-edit",
+      "iteration": 4,
+      "metrics": {
+        "server_seconds": 0.47315608299686573,
+        "payload_bytes": 2873
+      }
+    },
+    {
+      "mode": "native-edit",
+      "iteration": 5,
+      "metrics": {
+        "server_seconds": 0.4371137349808123,
+        "payload_bytes": 2873
+      }
+    }
+  ]
+}
