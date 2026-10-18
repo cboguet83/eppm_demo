@@ -60,6 +60,24 @@ def planning_page(planning_module_origin: str) -> Iterator[Page]:
             browser.close()
 
 
+@pytest.fixture
+def editable_page(planning_page: Page) -> Page:
+    """Mount an opted-in host with a recorded event sink and opaque task IDs."""
+    planning_page.evaluate("""() => {
+      instances[0].destroy();window.events=[];
+      window.editableSnapshot={version:1,kind:'snapshot',scope:'editable',revision:'r1',
+        projects:[{id:'project',name:'Project'}],capabilities:{edit:true,manage:true},
+        tasks:[{id:'alpha',stableId:'stable-alpha',projectId:'project',name:'Alpha',start:'2026-01-01',end:'2026-01-05',progress:20,description:'Safe details'},
+          {id:'beta',stableId:'stable-beta',projectId:'project',name:'Beta',start:'2026-02-01',end:'2026-12-31',progress:0}],
+        dependencies:[{id:'link',type:'FS',lagDays:2,predecessor:{kind:'task',id:'alpha'},successor:{kind:'task',id:'beta'}}]};
+      instances[0]=mount(document.getElementById('first'),{snapshot:editableSnapshot,today:'2026-01-01',mode:'Day',grouped:false,editEnabled:true,
+        onEvent:event=>events.push(event),contextActions:[{id:'group',label:'Host actions',children:[
+          {id:'download',label:'Download',targetKinds:['tasks']},{id:'remove',label:'Delete',requiresEdit:true,capability:'manage'}]}]});
+    }""")
+    expect(planning_page.locator("#first .planning-bar[data-target-id=alpha]")).to_be_attached()
+    return planning_page
+
+
 def test_mounts_have_independent_modes_scoped_css_and_unique_ownership(planning_page: Page) -> None:
     """Changing one instance leaves the other and surrounding host styles intact."""
     page = planning_page
@@ -239,3 +257,200 @@ def test_dependency_bundles_inspect_individual_members_without_hidden_metadata(p
     expect(inspector).to_be_hidden()
     ids = page.locator("clipPath").evaluate_all("nodes=>nodes.map(n=>n.id)")
     assert len(ids) == len(set(ids)) == 2
+
+
+def test_task_editor_preserves_draft_and_handles_rejection_and_revocation(editable_page: Page) -> None:
+    """Draft values survive unrelated patches; a stale Save cannot bypass revoked hints."""
+    page = editable_page
+    page.locator("#first .planning-bar[data-target-id=alpha]").dblclick(position={"x": 30, "y": 10})
+    editor = page.locator("#first .planning-editor")
+    expect(editor).to_be_visible()
+    editor.locator("[data-field=name]").fill("Unsaved name")
+    page.evaluate("instances[0].update({version:1,kind:'patch',scope:'editable',revision:'r1',tasks:[{...editableSnapshot.tasks[1],name:'Updated Beta'}]})")
+    expect(editor.locator("[data-field=name]")).to_have_value("Unsaved name")
+    editor.get_by_role("button", name="Save", exact=True).click()
+    page.wait_for_function("events.filter(e=>e.type==='task').length===1")
+    assert page.evaluate("events.length") == 1
+    assert page.evaluate("events[0].values.name") == "Unsaved name"
+    page.evaluate("instances[0].update({version:1,kind:'response',scope:'editable',revision:'r1',requestId:events[0].requestId,accepted:false,error:'Changed by another editor'})")
+    expect(editor.get_by_role("alert")).to_have_text("Changed by another editor")
+    expect(editor.locator("[data-field=name]")).to_have_value("Unsaved name")
+    page.evaluate("instances[0].update({version:1,kind:'patch',scope:'editable',revision:'r1',capabilities:{edit:false}})")
+    expect(editor.get_by_role("button", name="Save", exact=True)).to_be_disabled()
+    page.evaluate("document.querySelector('#first .planning-editor').dispatchEvent(new Event('submit',{cancelable:true,bubbles:true}))")
+    assert page.evaluate("events.length") == 1
+    editor.get_by_role("button", name="Cancel", exact=True).click()
+    expect(editor).to_be_hidden()
+
+
+def test_pointer_dates_reconcile_rejection_acceptance_and_mid_drag_revocation(editable_page: Page) -> None:
+    """A drag emits one request, rolls back rejection, and cancels after revocation."""
+    page = editable_page
+    bar = page.locator("#first .planning-bar[data-target-id=alpha]")
+    bounds = bar.bounding_box()
+    page.mouse.move(bounds["x"] + 20, bounds["y"] + 10)
+    page.mouse.down()
+    page.mouse.move(bounds["x"] + 96, bounds["y"] + 10, steps=3)
+    page.mouse.up()
+    page.wait_for_function("events.length===1")
+    assert page.evaluate("events[0].type") == "dates"
+    assert page.evaluate("events[0].start") == "2026-01-03"
+    page.evaluate("instances[0].update({version:1,kind:'response',scope:'editable',revision:'r1',requestId:events[0].requestId,accepted:false,error:'No'})")
+    page.wait_for_function("document.querySelector('#first .planning-bar[data-target-id=alpha]').style.left==='114px'")
+    expect(page.locator("#first .planning-status")).to_have_text("No")
+    bounds = bar.bounding_box()
+    page.mouse.move(bounds["x"] + 20, bounds["y"] + 10)
+    page.mouse.down()
+    page.mouse.move(bounds["x"] + 58, bounds["y"] + 10)
+    page.mouse.up()
+    page.wait_for_function("events.filter(e=>e.type==='dates').length===2")
+    page.evaluate("""() => {
+      const event=events.findLast(e=>e.type==='dates');
+      instances[0].update({version:1,kind:'patch',scope:'editable',revision:'r1',tasks:[{...editableSnapshot.tasks[0],start:event.start,end:event.end}]});
+      instances[0].update({version:1,kind:'response',scope:'editable',revision:'r1',requestId:event.requestId,accepted:true});
+    }""")
+    expect(bar).to_have_attribute("data-start", "2026-01-02")
+    bounds = bar.bounding_box()
+    page.mouse.move(bounds["x"] + 20, bounds["y"] + 10)
+    page.mouse.down()
+    page.mouse.move(bounds["x"] + 58, bounds["y"] + 10)
+    page.evaluate("instances[0].update({version:1,kind:'patch',scope:'editable',revision:'r1',capabilities:{edit:false}})")
+    page.mouse.up()
+    page.wait_for_timeout(260)
+    assert page.evaluate("events.filter(e=>e.type==='dates').length") == 2
+    assert page.locator("#first .planning-dragging").count() == 0
+
+
+def test_menu_keyboard_tooltip_delay_and_dependency_editor(editable_page: Page) -> None:
+    """Keyboard menus invoke one host command and hover state is scoped/cancellable."""
+    page = editable_page
+    bar = page.locator("#first .planning-bar[data-target-id=alpha]")
+    bar.press("Shift+F10")
+    menu = page.locator("#first [role=menu]")
+    expect(menu).to_be_visible()
+    menu.get_by_role("menuitem", name="Host actions").focus()
+    page.keyboard.press("ArrowRight")
+    page.keyboard.press("Enter")
+    page.wait_for_function("events.length===1")
+    assert page.evaluate("events[0].command") == "download"
+    bar.hover(position={"x": 20, "y": 10})
+    tooltip = page.locator("#first [role=tooltip]")
+    page.wait_for_timeout(600)
+    expect(tooltip).to_be_hidden()
+    expect(tooltip).to_contain_text("Safe details", timeout=1200)
+    expect(tooltip).to_be_visible()
+    page.mouse.move(1300, 1500)
+    expect(tooltip).to_be_hidden()
+    page.locator("#first [data-control=hover]").uncheck()
+    expect(bar).to_have_attribute("title", "Alpha · 2026-01-01 → 2026-01-05")
+    page.locator("#first .planning-link").press("Enter")
+    inspector = page.locator("#first [data-part=dependency-inspector]")
+    inspector.get_by_role("button", name="Edit", exact=True).click()
+    editor = page.locator("#first .planning-editor")
+    expect(editor).to_be_visible()
+    editor.locator("[data-field=type]").select_option("SF")
+    editor.locator("[data-field=lagDays]").fill("-2")
+    editor.get_by_role("button", name="Save", exact=True).click()
+    page.wait_for_function("events.some(e=>e.type==='dependency')")
+    assert page.evaluate("events.find(e=>e.type==='dependency').values.type") == "SF"
+    assert page.evaluate("events.find(e=>e.type==='dependency').values.lagDays") == -2
+
+
+def test_comparison_editing_targets_alternative_and_invalidates_removed_draft(editable_page: Page) -> None:
+    """Baseline/current bars stay read-only while an alternative draft retains its identity."""
+    page = editable_page
+    page.evaluate("""() => {
+      window.alternative={...editableSnapshot.tasks[0],id:'alternative-alpha',name:'Alternative'};
+      instances[0].update({...editableSnapshot,overlays:[{id:'baseline',kind:'baseline',projectId:'project',tasks:[{...alternative,id:'baseline-alpha'}]},
+        {id:'alternative',kind:'alternative',projectId:'project',tasks:[alternative]}]});
+    }""")
+    current = page.locator("#first .planning-current[data-target-id=alpha]")
+    expect(current).to_have_attribute("data-editable", "false")
+    current.press("Enter")
+    expect(page.locator("#first .planning-editor")).to_be_hidden()
+    page.locator("#first .planning-alternative[data-target-id=alternative-alpha]").press("Enter")
+    editor = page.locator("#first .planning-editor")
+    expect(editor).to_be_visible()
+    editor.locator("[data-field=name]").fill("Alternative draft")
+    editor.get_by_role("button", name="Save", exact=True).click()
+    page.wait_for_function("events.some(e=>e.type==='task')")
+    assert page.evaluate("events.find(e=>e.type==='task').overlayId") == "alternative"
+    page.evaluate("""() => {
+      const event=events.find(e=>e.type==='task');
+      instances[0].update({version:1,kind:'response',scope:'editable',revision:'r1',requestId:event.requestId,accepted:false,error:'Conflict'});
+      instances[0].update({version:1,kind:'patch',scope:'editable',revision:'r1',overlays:[]});
+    }""")
+    expect(editor).to_be_hidden()
+    expect(page.locator("#first .planning-status")).to_contain_text("no longer available")
+
+
+def test_resize_progress_and_pending_tooltip_disposal(editable_page: Page) -> None:
+    """Resize and progress handles produce separate single intentions and dispose safely."""
+    page = editable_page
+    bar = page.locator("#first .planning-bar[data-target-id=alpha]")
+    handle = bar.locator(".planning-handle-progress").bounding_box()
+    page.mouse.move(handle["x"] + 2, handle["y"] + 8)
+    page.mouse.down()
+    page.mouse.move(handle["x"] + 40, handle["y"] + 8)
+    page.mouse.up()
+    page.wait_for_function("events.length===1")
+    assert page.evaluate("events[0].type") == "progress"
+    assert page.evaluate("events[0].progress") == 40
+    page.evaluate("instances[0].update({version:1,kind:'response',scope:'editable',revision:'r1',requestId:events[0].requestId,accepted:false})")
+    expect(page.locator("#first .planning-status")).to_be_visible()
+    handle = bar.locator(".planning-handle-start").bounding_box()
+    page.mouse.move(handle["x"] + 2, handle["y"] + 8)
+    page.mouse.down()
+    page.mouse.move(handle["x"] + 40, handle["y"] + 8)
+    page.mouse.up()
+    page.wait_for_function("events.length===2")
+    assert page.evaluate("events[1].type") == "dates"
+    assert page.evaluate("events[1].start") == "2026-01-02"
+    assert page.evaluate("events[1].end") == "2026-01-05"
+    page.evaluate("instances[0].update({version:1,kind:'response',scope:'editable',revision:'r1',requestId:events[1].requestId,accepted:false})")
+    bar.hover(position={"x": 20, "y": 10})
+    page.wait_for_timeout(100)
+    page.evaluate("instances[0].destroy();instances[0].destroy()")
+    page.wait_for_timeout(1100)
+    assert page.locator("#first [role=tooltip]").count() == 0
+    assert page.evaluate("events.length") == 2
+
+
+def test_task_dependency_fields_and_invalid_date_edits(editable_page: Page) -> None:
+    """Incoming link edits stay in one task intention; malformed dates never leave the view."""
+    page = editable_page
+    page.locator("#first .planning-bar[data-target-id=beta]").press("Enter")
+    editor = page.locator("#first .planning-editor")
+    editor.locator("[data-field=type]").select_option("FF")
+    editor.locator("[data-field=lagDays]").fill("3")
+    editor.locator("[data-field=predecessor]").select_option('{"kind":"project","id":"project"}')
+    editor.locator("[data-field=start]").fill("2027-01-01")
+    editor.get_by_role("button", name="Save", exact=True).click()
+    expect(editor.get_by_role("alert")).to_have_text("Check the dates and values before saving.")
+    assert page.evaluate("events.length") == 0
+    editor.locator("[data-field=start]").fill("2026-02-01")
+    editor.get_by_role("button", name="Save", exact=True).click()
+    page.wait_for_function("events.length===1")
+    assert page.evaluate("events[0].type") == "task"
+    assert page.evaluate("events[0].values.dependencies[0].type") == "FF"
+    assert page.evaluate("events[0].values.dependencies[0].lagDays") == 3
+    assert page.evaluate("events[0].values.dependencies[0].predecessor.kind") == "project"
+
+
+def test_single_selection_and_destroy_during_active_drag(editable_page: Page) -> None:
+    """A single selection emits once and active pointer capture cannot survive unmount."""
+    page = editable_page
+    bar = page.locator("#first .planning-bar[data-target-id=alpha]")
+    bar.click(position={"x": 20, "y": 10})
+    page.wait_for_function("events.length===1")
+    assert page.evaluate("events[0].type") == "select"
+    expect(bar).to_have_class("planning-bar planning-current planning-selected")
+    bounds = bar.bounding_box()
+    page.mouse.move(bounds["x"] + 20, bounds["y"] + 10)
+    page.mouse.down()
+    page.mouse.move(bounds["x"] + 58, bounds["y"] + 10)
+    page.evaluate("instances[0].destroy();instances[0].destroy()")
+    page.mouse.up()
+    page.wait_for_timeout(260)
+    assert page.evaluate("events.length") == 1
+    assert page.locator("#first .planning-view").count() == 0

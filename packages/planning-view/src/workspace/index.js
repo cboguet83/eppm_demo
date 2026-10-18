@@ -6,6 +6,8 @@ import {createLoadingController} from '../state/loader.js';
 import {createLifetime} from './lifetime.js';
 import {createTimelineRenderer} from '../timeline/render.js';
 import {createDependencyRenderer} from '../timeline/dependency-render.js';
+import {createInteractions} from './interactions.js';
+import {validateActions,canEdit} from './actions.js';
 
 /** @param {Document} doc Document. @param {string} tag HTML tag. @param {string} name Part. @param {string} className Scoped style. */
 function element(doc,tag,name,className) {
@@ -115,11 +117,15 @@ export function mountPlanningView(root,options) {
   for(const name of ['onHeight','onEvent','load','onLoadError']) {
     if(options[name]!==undefined && typeof options[name]!=='function')throw new ContractError('options.'+name);
   }
+  for(const name of ['showResources','grouped','editEnabled'])if(options[name]!==undefined && typeof options[name]!=='boolean')throw new ContractError('options.'+name);
+  if(options.tooltipDelay!==undefined && (!Number.isFinite(options.tooltipDelay) || options.tooltipDelay<0 || options.tooltipDelay>60000))throw new ContractError('options.tooltipDelay');
+  options={...options,contextActions:validateActions(options.contextActions)};
   const doc=root.ownerDocument,win=doc.defaultView;
   const now=new Date();
   const today=options.today ?? [now.getFullYear(),String(now.getMonth()+1).padStart(2,'0'),String(now.getDate()).padStart(2,'0')].join('-');
   const store=createPlanningStore(options.snapshot);
   if(options.mode)store.setView({mode:options.mode});
+  if(options.editEnabled)store.setView({filters:{editEnabled:true}});
   // Fail invalid geometry before allocating DOM/listeners or notifying a host.
   calendarFor(store.read().data,store.read().view.mode,today,0);
   const lifetime=createLifetime(win),instanceId=win.crypto.randomUUID();
@@ -141,7 +147,10 @@ export function mountPlanningView(root,options) {
   let leftWidth=425,cancelRender=null,loader=null,geometry=null,geometryKey=null,lastHeight=null;
   lifetime.own(()=>{geometry=null;geometryKey=null;});
   const timelineRenderer=createTimelineRenderer({panel:timeline,store,lifetime,options});
-  const dependencies=createDependencyRenderer({panel:timeline,frame,lifetime,instanceId});
+  const interactions=createInteractions({frame,toolbar,store,lifetime,options,calendar:()=>geometry});
+  const dependencies=createDependencyRenderer({panel:timeline,frame,lifetime,instanceId,
+    onEdit:entry=>interactions.openDependency(entry),
+    canEditEntry:entry=>{const {data,view}=store.read();return canEdit(data,view,{kind:'dependencies',id:entry.dependency.id,...(entry.overlay?{overlayId:entry.overlay.id}:{})},'dependency');}});
   const draw=()=>{
     cancelRender=null;
     const {data,view}=store.read();
@@ -160,6 +169,7 @@ export function mountPlanningView(root,options) {
     }
     const rendered=timelineRenderer.render(data,view,calendar,loader);
     dependencies.render(data,view,calendar,rendered.projection,rendered.window);
+    interactions.render();
     resource.leftHeader.textContent=data.labels.resource || 'Resource pool';
     resourceHeading.textContent=data.labels.resourceUsage || 'Resource usage';
     const hidden=options.showResources===false || data.resources.length===0;

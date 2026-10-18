@@ -203,3 +203,66 @@ member's type, lag and diagnostic information. Click/context menu or Enter/Space
 opens details; Escape or Close dismisses it. SVG clipping identifiers are unique
 per instance. Paths crossing the virtual window remain eligible through a
 row-interval index; distant unrelated links do not enter the render query.
+
+## Editing, events and context actions
+
+Pass `onEvent: event => handleIntention(event)` to receive selections, commands
+and writes. Editing is opt-in through the toolbar. `editEnabled: true` opts in
+on mount; a scope change/reset restores the default. The snapshot must also
+grant `capabilities.edit: true`. Optional `editDates`, `editProgress`,
+`editTasks`, and `editDependencies` flags can disable individual operations.
+An entity/overlay with `editable: false` disables its edits. Baselines remain
+read-only. When an alternative is displayed, current records are read-only and
+permitted writes target its separate `overlayId`. These are UI hints; always
+authorize against current server grants and revisions.
+
+Enter/double-click opens a task editor; the context menu and dependency details
+also open editors. The task editor includes name, dates, progress, description,
+phase and incoming predecessor/type/lag records. Its predecessor choices are
+delivered records. Dependency editors support both endpoints and all link
+types. Draft fields survive same-scope patches. Removed targets invalidate
+drafts explicitly. Escape closes the editor, Tab stays within it, and
+Ctrl/Command+Enter submits. Date/progress handles use pointer capture; Escape,
+revocation, scope/revision change, pointer cancellation and disposal stop a drag.
+
+Date/progress events carry the requested fields at the top level; task and
+dependency events carry a `values` object (so dependency `values.type: 'FS'`
+cannot overwrite event `type: 'dependency'`). Every event retains opaque IDs,
+scope, revision and a unique request ID. A pending write blocks duplicate
+submits. Apply authoritative patches and then a correlated response:
+
+```js
+display.update({version:1, kind:'patch', scope, revision, tasks: savedTasks});
+display.update({version:1, kind:'response', scope, revision,
+  requestId: event.requestId, accepted:true});
+// Or retain authoritative data and reject the preview/draft safely:
+display.update({version:1, kind:'response', scope, revision,
+  requestId: event.requestId, accepted:false, error:'The schedule changed.'});
+```
+
+Neither dragging nor submitting modifies business data locally. Rejection
+restores authoritative bars, retains an editor's unsaved fields, and displays
+safe host text. A rejected/thrown event sink releases pending state with a
+generic message. Async failures after disposal are ignored. Single selections
+are delayed briefly to distinguish double-click editing; they do not block
+writes or require acknowledgements.
+
+`contextActions` accepts copied JSON descriptors such as:
+
+```js
+[{id:'project-actions', label:'Project actions', targetKinds:['projects'],
+  children:[{id:'export-csv', label:'Export CSV', capability:'export'}]}]
+```
+
+Use optional `targetKinds`, `lanes` (current/baseline/alternative), `capability`,
+and `requiresEdit` restrictions. Up to eight submenu levels are accepted, with
+unique nonempty IDs and no cycles/executable content. Arrow keys, Home/End,
+Enter/Space, Escape and Shift+F10 provide keyboard operation. Every invocation
+rechecks current capabilities; application dialogs, import/export, approval,
+navigation and persistence belong in the host handler for `type:'command'`.
+The core supplies no application commands implicitly.
+
+Hover details use plain text and appear after 1,000 ms by default. Hosts may
+set a finite `tooltipDelay` from 0 through 60,000 ms. Leaving, editing, updating
+or disposing cancels the reveal. The Hover details checkbox restores native
+titles when rich hover is disabled. Drag feedback appears immediately.

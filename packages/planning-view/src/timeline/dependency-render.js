@@ -5,7 +5,7 @@ import {ROW_HEIGHT} from './rows.js';
 const NS='http://www.w3.org/2000/svg';
 
 /** @param {object} panel Private timeline slots. @param {HTMLElement} frame Owned root. @param {object} lifetime Instance lifetime. @param {string} instanceId Unique scope. */
-export function createDependencyRenderer({panel,frame,lifetime,instanceId}) {
+export function createDependencyRenderer({panel,frame,lifetime,instanceId,onEdit,canEditEntry}) {
   const doc=frame.ownerDocument,svg=doc.createElementNS(NS,'svg'),defs=doc.createElementNS(NS,'defs');
   const clip=doc.createElementNS(NS,'clipPath'),rect=doc.createElementNS(NS,'rect'),group=doc.createElementNS(NS,'g');
   const clipId='planning-clip-'+instanceId;
@@ -35,6 +35,10 @@ export function createDependencyRenderer({panel,frame,lifetime,instanceId}) {
     add(labels.status || 'Status',details.evaluable?(details.violated?(labels.violated || 'Violated'):(labels.satisfied || 'Satisfied')):(labels.unavailable || 'Unavailable'));
     for(const diagnostic of details.diagnostics)add(labels.diagnostic || 'Diagnostic',typeof diagnostic==='string'?diagnostic:diagnostic.message ?? '');
     inspector.append(list);select.focus();
+    if(onEdit) {
+      const edit=doc.createElement('button');edit.type='button';edit.textContent=labels.edit || 'Edit';edit.dataset.editDependency='true';
+      edit.disabled=!canEditEntry(bundle.members[memberIndex]);inspector.append(edit);
+    }
   };
   const open=event=>{
     const target=event.target.closest('[data-bundle-key]');
@@ -43,7 +47,12 @@ export function createDependencyRenderer({panel,frame,lifetime,instanceId}) {
   };
   lifetime.listen(svg,'click',open);lifetime.listen(svg,'contextmenu',open);
   lifetime.listen(svg,'keydown',event=>{if(['Enter',' '].includes(event.key))open(event);});
-  lifetime.listen(inspector,'click',event=>{if(event.target.closest('[data-close-inspector]'))close();});
+  lifetime.listen(inspector,'click',event=>{
+    if(event.target.closest('[data-close-inspector]'))close();
+    if(event.target.closest('[data-edit-dependency]') && selected) {
+      const entry=bundles.get(selected.key)?.members[selected.memberIndex];if(entry && onEdit(entry))close();
+    }
+  });
   lifetime.listen(inspector,'change',event=>{if(selected && event.target.tagName==='SELECT')show(bundles.get(selected.key),Number(event.target.value));});
   lifetime.listen(frame,'keydown',event=>{if(event.key==='Escape')close();});
   lifetime.own(()=>{svg.remove();inspector.remove();bundles.clear();nodes.clear();index=null;previousData=null;previousProjection=null;labels={};selected=null;});

@@ -49,6 +49,14 @@ mounted 1,000-task fixture asserts at most 39 timeline rows and unchanged bar
 nodes on horizontal scroll. Injected-read disposal is checked in the browser.
 Existing EPPM entry checks remain until the compatibility integration is migrated.
 
+Tasks 3.3/3.4 add imported dependency/action checks and mounted regressions for
+individual bundle inspection, hidden endpoint redaction, safe correlated
+rejection, accepted dates, resize/progress, alternative-only writes, draft
+preservation/removal, mid-drag revocation, single/double-click delivery,
+keyboard submenus/editors, delayed/cancelled hover and disposal during a drag.
+These become the independent behavior surface for the permissions, menu,
+tooltip and dependency assertions when task 5.2 removes source slicing.
+
 ## Commands and current results
 
 - `node --test tests/test_gantt_scrolling.cjs tests/test_gantt_permissions.cjs tests/test_planning_lazy.cjs tests/test_ui_menus.cjs`: four files passed.

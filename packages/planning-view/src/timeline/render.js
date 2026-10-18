@@ -81,6 +81,8 @@ export function createTimelineRenderer({panel,store,lifetime,options}) {
           else {
             const record=row.record,range=row.summary ?? record;
             Object.assign(left.dataset,{targetId:record.id,targetKind:row.kind==='project'?'projects':'tasks',lane:row.current || row.kind==='project'?'current':row.comparisons[0].overlay.kind});
+            left.tabIndex=0;
+            if(row.kind==='task' && !row.current)left.dataset.overlayId=row.comparisons[0].overlay.id;
             if(row.kind==='project') {
               const button=node(doc,'button','planning-expand',row.expanded?'▾':'▸');button.dataset.expand=row.projectId;
               button.setAttribute('aria-label',(row.expanded?(data.labels.collapse || 'Collapse'):(data.labels.expand || 'Expand'))+' '+record.name);
