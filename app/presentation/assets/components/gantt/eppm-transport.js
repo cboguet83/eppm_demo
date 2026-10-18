@@ -2,6 +2,14 @@
 import {ContractError,validateMessage} from './planning-view/src/contracts/index.js';
 import {snapshotFor,patchFor,eventFor,overlaysFor,resourceFor,projectFor} from './eppm-contract.js';
 
+/** Compare opaque string identities without numeric coercion.
+ * @param {string} left First identity. @param {string} right Second identity.
+ * @returns {number} Lexical ordering for response membership comparison.
+ */
+function compareProjectIds(left,right) {
+  return left.localeCompare(right);
+}
+
 /** Create a cancellable provider retaining existing HTTP/source-token semantics.
  * @param {Function} host Current EPPM render context. @param {Function} refresh Request one authorized refresh.
  * @param {Function} fetcher Injected same-origin fetch boundary.
@@ -26,7 +34,7 @@ export function createTaskProvider({host,refresh,fetcher=globalThis.fetch}) {
     if(input.scope_token!==scope || input.nonce!==request.requestId)throw new ContractError('eppm.readCorrelation');
     const patch=patchFor(input,current,request.revision);
     patch.requestId=request.requestId;
-    if(JSON.stringify([...patch.replaceProjectIds].sort())!==JSON.stringify([...request.projectIds].sort()))throw new ContractError('eppm.readProjects');
+    if(JSON.stringify([...patch.replaceProjectIds].sort(compareProjectIds))!==JSON.stringify([...request.projectIds].sort(compareProjectIds)))throw new ContractError('eppm.readProjects');
     return validateMessage(patch);
   };
 }

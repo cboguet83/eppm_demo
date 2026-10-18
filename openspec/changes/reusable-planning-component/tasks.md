@@ -62,6 +62,10 @@ Each numbered checkbox is one focused commit containing its implementation, rele
 
 - [x] 9.1 Make the remaining dashboard full-shell filter consumer wait for real native script completion and published service-button selection before issuing the next toggle. Add delayed service redraw coverage for the hosted toggle sequence, retain every geometry/filter/color assertion and existing deadlines, verify focused native/completion checks and complete strict acceptance, and record final evidence before delivery follow-ups.
 
+## 10. Hosted reliability annotation
+
+- [x] 10.1 Make string-ID ordering explicit in the EPPM task-response correlation check, preserving order-independent exact identity comparison and malformed/mismatched-response rejection. Add transport regressions for reordered numeric-looking string IDs, duplicate/mismatched deliveries and unchanged request arrays; run focused checks, complete strict acceptance, JavaScript/assets/spec validation and OpenSpec verification before rearchive. Record both the successful application CI and the separate SonarCloud sort annotations without weakening quality thresholds.
+
 ## Workflow follow-up
 
 - After all tracked tasks and required checks pass, sync both capability deltas and archive the change on this branch. Inspect and commit the archive and verification evidence in a separate lifecycle commit.

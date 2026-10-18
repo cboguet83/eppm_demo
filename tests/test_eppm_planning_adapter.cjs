@@ -63,6 +63,26 @@ test('HTTP hydration sends bounded same-origin source tokens and requires exact 
   const wrong=createTaskProvider({host:()=>host,refresh:()=>{},fetcher:async()=>({ok:true,json:async()=>({scope_token:'other',nonce:'read'})})});
   await assert.rejects(wrong(request),/readCorrelation/);
 });
+test('HTTP hydration compares exact project identities independently of delivery order',async()=>{
+  const {createTaskProvider}=await transport,host=fixture();
+  const projectIds=Object.freeze(['2','10','1']),request={scope:'selection',revision:'r1',requestId:'read',projectIds,signal:new AbortController().signal};
+  let delivered=[10,1,2];
+  const provider=createTaskProvider({host:()=>host,refresh:()=>assert.fail('Unexpected refresh'),fetcher:async()=>({ok:true,
+    json:async()=>({scope_token:'server-scope',nonce:'read',replace_projects:delivered,tasks:[]})})});
+
+  const result=await provider(request);
+  assert.deepEqual(result.replaceProjectIds,['10','1','2']);
+  assert.deepEqual(projectIds,['2','10','1']);
+  assert.deepEqual(delivered,[10,1,2]);
+  for(const invalid of [[10,1,3],[10,1],[10,1,2,3],[10,1,1]]) {
+    delivered=invalid;
+    await assert.rejects(provider(request),/eppm.readProjects/);
+  }
+  delivered=[10,1,2,2];
+  await assert.rejects(provider(request),/eppm.readProjects/);
+  assert.deepEqual(projectIds,['2','10','1']);
+});
+
 test('403/409 refresh once per source revision, and cancelled/stale reads never apply',async()=>{
   const {createTaskProvider}=await transport;let host=fixture(),refreshes=0,status=403;
   const provider=createTaskProvider({host:()=>host,refresh:()=>refreshes++,fetcher:async()=>({status,ok:false})});

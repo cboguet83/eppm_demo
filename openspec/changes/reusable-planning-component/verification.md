@@ -1,19 +1,22 @@
 # Verification: reusable-planning-component
 
-Status: **passed; rearchived after consumer completion correction on 2026-10-18**. The OpenSpec verify-change workflow
+Status: **passed after task 10.1 reliability annotation; ready to rearchive**. The OpenSpec verify-change workflow
 checked completeness, all requirement/scenario mappings, design adherence and
-code-pattern consistency against the integrated implementation. No applicable
-check was skipped or left unverified.
+code-pattern consistency against the integrated implementation. No
+required prearchive check was skipped or left unverified. Final hosted checks
+on the new revision remain an additional delivery gate.
 
 ## Scorecard
 
 | Dimension | Final finding |
 | --- | --- |
-| Completeness | 28/28 tasks complete; all 16 added requirements implemented. No removed/renamed requirements. |
-| Correctness | All 35 scenarios mapped below. Complete PostgreSQL/authenticated-browser acceptance passed with zero skips and 97.71% application coverage. |
+| Completeness | 29/29 tasks complete. All 16 added requirements implemented. No removed/renamed requirements. |
+| Correctness | All 35 scenarios mapped below. Renewed complete PostgreSQL/authenticated-browser acceptance passed with zero skips and 97.71% application coverage. |
 | Coherence | Explicit host dependencies, independent lifecycle/state, canonical assets and thin EPPM integration follow the design. Approved initial-render limits and every unchanged timing/hard gate pass. |
 
-No implementation/spec divergence or outstanding critical issue was found.
+No implementation/spec divergence or outstanding prearchive critical issue was
+found. Task 10.1's explicit ID ordering and regression preserve the response
+correlation requirement and host-owned authorization boundary.
 Prior failed/interrupted attempts are recorded below rather than counted as
 acceptance. Registry publication and a separate repository remain non-goals.
 
@@ -67,16 +70,18 @@ characterization meanings and hard bounds remain in `baseline.md`.
 
 ## Final validation evidence
 
-Application/browser runtime remains `098f9b8`, including current main `664f72a`,
-with the matching Docker image. The task 8.1 build correction and task 9.1 test-consumer sequencing were frozen
-during renewed full acceptance. Subsequent edits are documentation/evidence only.
+The canonical browser core remains `098f9b8`, including current main `664f72a`.
+The EPPM host includes task 10.1's explicit response-ID comparator and matching
+rebuilt Docker image. That code, task 8.1's build correction and task 9.1's
+test-consumer sequencing were frozen during renewed full acceptance. Subsequent
+edits are documentation/evidence only.
 Python 3.14.7, Node 26.11.1 and installed Playwright 1.62 Chromium were used.
 
 | Check | Actual result |
 | --- | --- |
-| Complete strict integrated suite | **3,484 passed + 5 subtests, zero skips in 1,556.86 s (25:56)**. Exactly two loadgroup workers, template-backed isolated PostgreSQL, authenticated browser deployments, no worker restarts and complete worker/collection proof. |
+| Complete strict integrated suite | **3,484 passed + 5 subtests, zero skips in 1,240.83 s (20:40)**. Exactly two loadgroup workers, template-backed isolated PostgreSQL, authenticated browser deployments, no worker restarts and complete worker/collection proof. |
 | Application coverage | **17,097 statements, 392 missed, 97.71%**; unchanged `app` source/exclusion scope and >=95% gate. Native host subprocess coverage included; containerized OIDC remains a separate behavior gate. |
-| JavaScript | **324 passed, zero failures/skips**, including all original entry points, extracted modules and current-main startup/completion checks. |
+| JavaScript | **328 passed, zero failures/skips**, including all original entry points, extracted modules, explicit ID-ordering regression and current-main startup/completion checks. |
 | Independent wrapper/example coverage | **46 passed, 275/275 statements, 100%** against unchanged >=95% gate. |
 | Affected mounted/browser regressions | **38 passed in 57.12 s**, including retained static control nodes, actual label updates, resources, menu appearance after real transitions, keyboard/viewport and EPPM behavior. All also execute in the complete suite. |
 | Installed consumers/distributions | 15 focused distribution/consumer checks passed in 20.03 s, including isolated get-requires/editable hooks for root and wrapper without source-path insertion; direct/source-rebuilt wheels, browser archive and two-instance web/Streamlit examples also passed in the complete suite. No editable EPPM imports or startup frontend build. |
@@ -165,10 +170,12 @@ Portable results are recorded here; local logs are
 
 The focused ledger below is from `git log main..HEAD --oneline` filtered by the
 change label, with `git log origin/main..HEAD --oneline` confirming the actual
-PR base. Current main is an ancestor of the verified source. Task 9.1 contains the final consumer correction and renewed acceptance; its
-already-existing hash was added by this archive follow-up.
+PR base. Current main is an ancestor of the verified source. Task 10.1 contains
+the explicit ID-ordering follow-up and renewed acceptance; its hash is recorded
+only after that commit exists.
 
 ```text
+34920be chore(reusable-planning-component): archive verified consumer completion
 daf9e9b test(reusable-planning-component): complete task 9.1 native consumer completion
 fc2db4a chore(reusable-planning-component): archive verified packaging correction
 4abe570 fix(reusable-planning-component): complete task 8.1 isolated packaging hooks
@@ -202,9 +209,9 @@ e68f994 feat(reusable-planning-component): complete task 2.1 host contracts
 48386c9 docs(reusable-planning-component): complete task 1.1 extraction plan
 ```
 
-PR: https://github.com/cboguet83/eppm_demo/pull/4. All 28 tasks are complete;
-final acceptance is complete and the change is rearchived at
-`openspec/changes/archive/2026-10-18-reusable-planning-component/`. Both capability
+PR: https://github.com/cboguet83/eppm_demo/pull/4. All 29 tasks are complete;
+the change is ready to rearchive from `openspec/changes/reusable-planning-component/`
+after task 10.1. Both capability
 specs remain synced. Full CI on the final PR revision is an additional gate
 before requesting merge approval. Registry publication and merge have not
 occurred. The unrelated primary checkout was not edited.
@@ -216,7 +223,9 @@ preserving task history.
 
 ## Final assessment
 
-All applicable implementation and packaging checks passed. The change is rearchived; final PR CI must pass before merge approval is requested.
+All required prearchive implementation and packaging checks passed. The change
+is ready to rearchive after task 10.1; final application CI and SonarCloud checks
+on the published revision must pass before merge approval is requested.
 
 ## Hosted packaging correction
 
@@ -265,3 +274,39 @@ made. Full renewed acceptance passed 3,484 tests + 5 subtests with zero skips an
 97.71% application coverage in 1,556.86 seconds. All original full-shell
 assertions remain, with stronger published-selection checks; no dashboard
 production code, tolerance or timeout was changed.
+
+## Hosted string-identity reliability annotation
+
+Application CI run 39153115287 on 34920be passed on attempt 2: 3,484 tests +
+5 subtests, zero skips, 97.71% coverage in 1,605.24 seconds; all 324 JavaScript
+checks and prepared-asset validation passed. Attempt 1 stopped at the unchanged
+pool-hierarchy concurrency test after bounded transaction retries were exhausted
+(1 failed / 1,781 passed). The unchanged rerun passed; no pool implementation,
+concurrency assertion, retry budget or test gate was changed. The underlying
+database conflict was not exposed by that test's safe error translation.
+
+A separate SonarCloud check on 34920be failed new-code reliability (D, required
+A), with two annotations at eppm-transport.js:29 for comparator-free sorts.
+Task 10.1 makes string-ID ordering explicit in both response-membership sorts;
+IDs remain strings and request/delivery arrays remain unmodified. Regression
+coverage accepts reordered numeric-looking identities and rejects substituted,
+missing, extra and duplicate delivery IDs. All 328 local Node 26 JavaScript checks
+(211 repository-entry checks and 117 package checks), 46
+wrapper/example checks (275/275 statements, 100%), asset validation, the selected
+change and all nine main specs pass. The application image was rebuilt; complete
+renewed strict acceptance passed 3,484 tests + 5 subtests with zero skips,
+97.71% application coverage and unchanged source/exclusions in 1,240.83 seconds.
+The OpenSpec verification confirms all 16 requirements and 35 scenario mappings,
+the completed task and design coherence. Only the EPPM HTTP membership comparator
+changed; the canonical renderer, calendar, loading bounds and measured rendering/
+scroll paths are unchanged, so the five-run performance evidence remains
+applicable. No additional performance exception was accepted.
+
+Logs: /tmp/planning-101-final-pytest.log, /tmp/planning-101-node.log and
+/tmp/planning-101-wrapper.log. The initial sandboxed JavaScript diagnostic could
+not spawn its local subprocesses; the unchanged checks passed with the required
+execution permission. No failure was hidden or counted as acceptance.
+
+Sonar MCP tools were unavailable in this session. The reported gate/annotations
+above come from the SonarCloud GitHub check output (check 117750812444), not an
+invented server query. No quality threshold or server setting was changed.
