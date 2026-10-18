@@ -1501,6 +1501,7 @@ def _render_planning_chart(
                     requested.append(pid)
             patch = {
                 "replace_projects": requested,
+                "request_revision": event.get("revision"),
                 "tasks": build_task_payload(
                     workspace, requested, snapshot["bounds"], snapshot["details"]
                 ),

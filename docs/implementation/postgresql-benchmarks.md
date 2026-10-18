@@ -35,8 +35,8 @@ The profilers run the real Streamlit screens with `AppTest`. The standalone Gant
 driver serves the assembled component on an isolated loopback origin and uses
 the Playwright driver already supplied by the Python browser-tests dependency.
 It operates public DOM controls and exchanges JSON-lines events with the planning
-session. Its loopback HTTP task requests are translated to the existing authorized
-callback because the diagnostic has no ASGI application. The session supplies
+session. It uses the existing authorized task callback fallback because the
+diagnostic has no ASGI application. The session supplies
 the receipt acknowledgement normally added by the real widget adapter. Timings exclude snapshot creation and
 identity setup; profiler output and requested chart payloads are emitted to stdout.
 

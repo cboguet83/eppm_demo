@@ -27,7 +27,8 @@ adjacent task links. Required versioned-contract identities and project summarie
 describe that same data. External links start disabled. Expansion, link toggles,
 dependency inspection, scroll and Year fit checks use public controls and DOM.
 The native configuration uses the real application on a disposable PostgreSQL
-restore, translating loopback HTTP reads to its existing authorized task callback.
+restore and the existing authorized callback fallback when no HTTP task endpoint
+is supplied. It does not intercept or replace browser transport methods.
 `--move-task` waits for predecessor choices and submits a real task editor;
 receipt acknowledgements let the actual bridge queue progress.
 

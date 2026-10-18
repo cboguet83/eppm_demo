@@ -85,6 +85,11 @@ without another expanding current-task cache. It releases raw task replacements
 after mapping them. Stale/aborted responses
 are ignored. A 403 or 409 requests one authorized refresh for that source
 revision. Other failures retain data and expose the shared explicit retry control.
+When no direct task endpoint is supplied, EPPM uses the generic bridge's queued
+load events and its existing Python `load_project_tasks` callback. The callback
+echoes the request revision into the presentation patch; its nonce correlates the
+read, and stale source/revision patches cannot overwrite a newer view. The server
+still authorizes the requested projects and enforces its existing 25/100 bounds.
 
 Predecessor choice reads are separate from schedule hydration. The generic
 editor receives a cancellable reader; EPPM routes current choices through the

@@ -227,3 +227,18 @@ source/copy cleanup. The explicit five-repeat collector passed 25 checks in
 Timing medians and the still-unapproved render-budget regression are recorded in
 `performance-comparison.md` / `candidate.json`. Consumer migration completion does
 not waive that separate gate or replace strict full-suite acceptance.
+
+Task 5.7 restores the design's callback fallback for hosts without a direct HTTP
+task endpoint. It uses the existing generic bridge queue and Python action, with
+nonce correlation and an echoed request revision in presentation patches. Raw
+patch scope mismatch is rejected; a stale requested revision cannot update a
+newer store. The HTTP path and server authorization/25–100 bounds are unchanged.
+The native diagnostic now exercises that actual fallback without an HTTP proxy.
+Validation: 32 focused adapter/bridge/state checks, 11 mounted EPPM checks
+(14.51 s), and seven native benchmark/bounded-loading/single-rerun regressions
+(18.33 s) passed. Module coverage adds malformed record/hierarchy capability
+regressions; the 117-test pure run passes with 100% statement coverage in contracts,
+owned messages, calendar, state/loading, resource models and dependency models.
+Mounted DOM coverage is separate; the Node aggregate includes unexecuted browser
+renderers and is not represented as full browser coverage. Final full-suite and
+installed-artifact evidence remain part of task 6.1.

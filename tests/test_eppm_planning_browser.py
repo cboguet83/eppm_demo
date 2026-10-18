@@ -300,3 +300,24 @@ def test_eppm_scenario_hover_count_metadata_and_mode_colors_remain_observable(ep
         for button in page.locator('[data-mode][aria-pressed=false]').all():
             expect(button).to_have_css('background-color', 'rgb(226, 232, 240)')
     expect(page.locator('.planning-toolbar')).to_have_css('padding', '5px 14px')
+
+
+def test_eppm_callback_hydration_uses_queued_correlated_patches_without_http(eppm_component: api.Page) -> None:
+    """An ordinary Streamlit host can hydrate with its existing callback protocol."""
+    page = eppm_component
+    requests: list[str] = []
+    page.on('request', lambda request: requests.append(request.url) if '/api/planning/tasks' in request.url else None)
+    page.evaluate("""send({...host,scope_token:'callback-source',task_endpoint:null,tasks:[],loaded_project_ids:[]})""")
+    page.wait_for_function("events.some(event=>event.action==='load_project_tasks')")
+    assert page.evaluate("events.at(-1).project_ids") == [1]
+    assert page.evaluate("events.at(-1).revision") == 'r1'
+    page.evaluate("""send({ack_nonce:events.at(-1).nonce,patch:{scope_token:'callback-source',nonce:events.at(-1).nonce,
+      request_revision:'r1',replace_projects:[1],tasks:host.tasks,loaded_project_ids:[1]}})""")
+    expect(page.locator('.planning-bar[data-target-kind=tasks][data-target-id="7"]')).to_be_visible()
+    assert requests == []
+    assert page.evaluate("events.filter(event=>event.action==='load_project_tasks').length") == 1
+    page.evaluate("""send({patch:{scope_token:'old-source',nonce:'late',request_revision:'r1',replace_projects:[1],
+      tasks:[{...host.tasks[0],name:'Stale task'}],loaded_project_ids:[1]}})""")
+    expect(page.locator('[data-eppm-error]')).to_have_text('The planning display received invalid data.')
+    expect(page.locator('.planning-frozen-row[data-target-kind=tasks]')).to_contain_text('Build')
+    expect(page.locator('.planning-frozen-row[data-target-kind=tasks]')).not_to_contain_text('Stale task')

@@ -140,3 +140,21 @@ test('alternative predecessor choices use stable delivered identities without cu
   assert.deepEqual(await reader.read(request),[{id:'7',name:'Alternative'}]);
   assert.deepEqual(await reader.read({...request,projectId:'2'}),[{id:'8',name:'External'}]);reader.destroy();
 });
+
+test('EPPM callback loading uses the queued bridge and returns correlated canonical patches',async()=>{
+  const {createEppmTransport}=await transport,adapter=createEppmTransport(),emitted=[];
+  const initial=adapter.prepareRender({...fixture(),task_endpoint:null,tasks:[],loaded_project_ids:[]},{emit:event=>emitted.push(event)});
+  assert.equal(initial.lazy,true);
+  const request={version:1,type:'load',scope:'selection',revision:'r1',requestId:'callback-read',projectIds:['1']};
+  assert.deepEqual(adapter.encodeEvent(request),{nonce:'callback-read',scope_token:'server-scope',loaded_project_ids:[],action:'load_project_tasks',project_ids:[1],revision:'r1'});
+  const response=adapter.prepareRender({ack_nonce:'callback-read',patch:{scope_token:'server-scope',nonce:'callback-read',replace_projects:[1],tasks:fixture().tasks,loaded_project_ids:[1]}},{emit:()=>{}});
+  assert.equal(response.messages[0].requestId,'callback-read');assert.deepEqual(response.messages[0].replaceProjectIds,['1']);assert.equal(response.messages[0].tasks[0].id,'7');
+  assert.deepEqual(response.ackRequestIds,['callback-read']);assert.deepEqual(adapter.loaded(),['1']);
+  assert.equal(adapter.prepareRender({task_endpoint:'/api/planning/tasks'},{emit:()=>{}}).lazy,false);
+  assert.throws(()=>adapter.prepareRender({patch:{scope_token:'old',nonce:'callback-read'}},{emit:()=>{}}),/patchScope/);
+  const {patchFor}=await contracts;
+  const stale=patchFor({replace_projects:[1],tasks:fixture().tasks,request_revision:'r1',nonce:'old'},fixture(),'r2');
+  assert.equal(stale.revision,'r1');assert.equal(stale.baseRevision,'r1');
+  const {createPlanningStore}=await import('../packages/planning-view/src/state/store.js');
+  const store=createPlanningStore({...initial.snapshot,revision:'r2'});assert.equal(store.update(stale),false);assert.equal(store.read().data.tasks.length,0);
+});

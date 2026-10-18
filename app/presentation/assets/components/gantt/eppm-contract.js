@@ -141,7 +141,8 @@ export function patchFor(patch,host,revision,baseRevision=revision) {
   const summaries=new Map((host.project_summaries ?? []).filter(row=>(patch.replace_projects ?? []).some(project=>id(project)===id(row.id))).map(row=>[id(row.id),row]));
   for(const row of patch.project_summaries ?? [])summaries.set(id(row.id),row);
   for(const row of summaries.values())for(const dep of row.projectDependencies ?? [])dependencies.push(dependencyFor(dep,row.id,null,host.permissions));
-  return {version:1,kind:'patch',scope:host.view_scope ?? host.scope_token,revision,baseRevision,replaceProjectIds:(patch.replace_projects ?? []).map(id),tasks,dependencies,
+  return {version:1,kind:'patch',scope:host.view_scope ?? host.scope_token,revision:patch.request_revision ?? revision,baseRevision:patch.request_revision ?? baseRevision,replaceProjectIds:(patch.replace_projects ?? []).map(id),tasks,dependencies,
+    ...(typeof patch.nonce==='string'?{requestId:patch.nonce}:{}),
     ...(patch.project_summaries?{projects:patch.project_summaries.map(row=>projectFor(row,host.permissions,host))}:{}),
     ...(patch.resource_pools?{resources:patch.resource_pools.map(pool=>resourceFor(pool,host.alternative_pool_usage,host.permissions))}:{}),
     ...(patch.evict_project_ids?{evictProjectIds:patch.evict_project_ids.map(id)}:{}),
@@ -182,6 +183,7 @@ export function eventFor(event,host,loaded=[]) {
   const context=event.context ?? {},project=context.projectId ?? (event.targetKind==='projects'?event.targetId:null);
   const plan=event.overlayId?.startsWith('alternative:') || event.type==='command'?(host.alternatives ?? {})[project]:null;
   const base={nonce:event.requestId,scope_token:host.scope_token,loaded_project_ids:loaded.map(Number)};
+  if(event.type==='load')return {...base,action:'load_project_tasks',project_ids:event.projectIds.map(Number),revision:event.revision};
   if(event.type==='dates')return {...base,action:plan?'update_alternative_dates':'update_dates',id:Number(event.targetId),start_date:event.start,end_date:event.end,
     ...(plan?{project_id:Number(project),plan_id:plan.id,revision:context.planRevision}: {})};
   const fields=event.values;

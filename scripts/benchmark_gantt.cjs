@@ -34,14 +34,6 @@ async function main() {
       await page.exposeFunction('benchmarkHostEvent',async request=>{
         const response=await exchange(request);await page.evaluate(args=>planningTest.send(args),response.args);
       });
-      await page.route('**/api/planning/tasks',async route=>{
-        const request=route.request().postDataJSON();
-        const response=await exchange({...request,action:'load_project_tasks'});
-        const {patch,...context}=response.args;
-        if(!patch)throw new Error('The authorized task callback returned no patch');
-        await page.evaluate(args=>planningTest.send(args),context);
-        await route.fulfill({json:{...patch,scope_token:request.scope_token,nonce:request.nonce}});
-      });
       await page.evaluate(()=>addEventListener('message',event=>{if(event.data?.type==='streamlit:setComponentValue')void window.benchmarkHostEvent(event.data.value);}));
     }
     const renderMs=await page.evaluate(args=>{const start=performance.now();planningTest.send(args);return performance.now()-start;},payload);

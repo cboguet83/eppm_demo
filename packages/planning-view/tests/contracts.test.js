@@ -113,3 +113,14 @@ test('owned schema validation checks the copied values and cannot be bypassed by
 
 for(const day of ['0001-01-01','9999-12-31','2000-02-29','2400-02-29'])test('Gregorian date remains valid '+day,()=>assert.equal(validateDate(day),day));
 for(const day of ['1900-02-29','2100-02-29','2026-04-31','2026-00-01','2026-13-01','2026-01-00'])test('Gregorian date remains invalid '+day,()=>assert.throws(()=>validateDate(day),ContractError));
+
+test('record and hierarchy capabilities stay flat booleans at the public boundary',()=>{
+  const value={...snapshot(),projects:[{id:'project-alpha',name:'Alpha',capabilities:{edit:true}}],
+    hierarchy:[{id:'root',capabilities:{poolDetails:false},children:[{id:'leaf',resourceId:'pool',capabilities:{select:true}}]}]};
+  assert.deepEqual(validateMessage(value).projects[0].capabilities,{edit:true});
+  assert.deepEqual(validateMessage(value).hierarchy[0].capabilities,{poolDetails:false});
+  for(const capabilities of [null,[],{edit:1},{edit:'true'}]){
+    assert.throws(()=>validateMessage({...value,projects:[{...value.projects[0],capabilities}]}),ContractError);
+    assert.throws(()=>validateMessage({...value,hierarchy:[{id:'root',capabilities}]}),ContractError);
+  }
+});

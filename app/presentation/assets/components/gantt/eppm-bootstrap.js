@@ -20,7 +20,7 @@ connectStreamlit(root,{
   onError:error=>{notice.textContent=error.message;notice.hidden=false;},
   mount(owner,options) {
     const lifetime=createLifetime(window),choices=createChoiceReader(transport);
-    const provider=createTaskProvider({host:transport.host,refresh:()=>transport.event('initialize_planning')});
+    const provider=transport.host().task_endpoint?createTaskProvider({host:transport.host,refresh:()=>transport.event('initialize_planning')}):options.load;
     let projectEditor=null;
     const view=mountPlanningView(owner,{...options,contextActions:planningCommands(),dependencyEditor:'successor',projectDependenciesCommand:'project_dependencies',
       load:async request=>{const patch=await provider(request);transport.loadedPatch(patch);return patch;},

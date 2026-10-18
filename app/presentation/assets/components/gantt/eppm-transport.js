@@ -61,6 +61,7 @@ export function createEppmTransport({receive=()=>{}}={}) {
     },
     prepareRender(args,callbacks) {
       if(!args || typeof args!=='object' || Array.isArray(args))throw new ContractError('eppm.args');
+      if(args.patch?.scope_token!==undefined && args.patch.scope_token!==(args.scope_token ?? host.scope_token))throw new ContractError('eppm.patchScope');
       emit=callbacks.emit;
       const before=host,oldRevision=revision;
       host={...host,...args,task_source_tokens:{...(args.task_source_tokens ?? host.task_source_tokens),...args.task_source_token_patch}};
@@ -108,7 +109,7 @@ export function createEppmTransport({receive=()=>{}}={}) {
       if(args.dependency_response)receive('choices',args.dependency_response);
       if(args.project_dependency_response)receive('projectDependencies',args.project_dependency_response);
       for(const field of ['tasks','patch','dependency_response','project_dependency_response','adapter_error','ack_nonce'])delete host[field];
-      return {snapshot,messages,ackRequestIds:acknowledgement?[acknowledgement]:[],options:{grouped:true,editCommand:'toggle_edit',timelineHeight:{min:178,max:439},resourceTooltipDetails:'capacity'}};
+      return {snapshot,messages,ackRequestIds:acknowledgement?[acknowledgement]:[],lazy:!host.task_endpoint,options:{grouped:true,editCommand:'toggle_edit',timelineHeight:{min:178,max:439},resourceTooltipDetails:'capacity'}};
     }
   };
 }
