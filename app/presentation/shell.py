@@ -4,7 +4,10 @@ import streamlit as st
 
 from app.presentation.components.application_workspace import ApplicationWorkspace
 from app.presentation.components.dialog import install_dialog_presentation
-from app.presentation.components.page_transition import install_page_transition
+from app.presentation.components.page_transition import (
+    install_page_transition,
+    mark_page_rendered,
+)
 from app.presentation.i18n import SUPPORTED_LOCALES, get_current_locale, set_current_locale, t
 from app.presentation.navigation import (
     PAGE_PORTFOLIO,
@@ -268,9 +271,11 @@ def _render_application_page(workspace: ApplicationWorkspace) -> None:
     render_page = workspace.pages.get(page)
     if render_page is None:
         st.info(t("auth.no_access", default="Your account has no assigned application access. Contact an access administrator."))
+        mark_page_rendered()
         return
     with st.container(key=f"application_page_{page}"):
         render_page()
+        mark_page_rendered()
 
 
 def render_language_selector() -> None:

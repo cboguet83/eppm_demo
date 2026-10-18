@@ -3,7 +3,8 @@
 from concurrent.futures import ThreadPoolExecutor
 from secrets import token_urlsafe
 from threading import Barrier, Event
-from time import perf_counter
+from time import perf_counter, sleep
+from unittest.mock import Mock
 from urllib.parse import urlsplit, urlunsplit
 from uuid import uuid4
 
@@ -19,6 +20,7 @@ from app.infrastructure.postgresql.migration import (
 )
 from app.infrastructure.postgresql.pool import Database
 from app.shared.config.database import DatabaseConfig, validate_database_url
+from tests.postgresql.template_database import PostgreSQLFixture
 
 
 @pytest.mark.parametrize("overrides", [
@@ -380,11 +382,79 @@ def test_statement_timeout_aborts_without_replaying_the_operation(pg_database):
         resource.close()
 
 
-def test_shutdown_closes_database_sessions(pg_database):
-    resource = Database(DatabaseConfig(pg_database.runtime_url, pool_min=2, pool_max=2))
-    resource.open()
-    with psycopg.connect(pg_database.operator_url, autocommit=True) as operator:
-        count_sql = "SELECT COUNT(*) FROM pg_stat_activity WHERE datname=current_database() AND application_name='eppm-runtime'"
-        assert operator.execute(count_sql).fetchone()[0] == 2
+def _assert_backends_closed(
+    operator: psycopg.Connection, backend_pids: list[int],
+) -> None:
+    """Require the tested pool's exact backend sessions to disappear."""
+    deadline = perf_counter() + 2.0
+    while True:
+        remaining = operator.execute(
+            "SELECT count(*) FROM pg_stat_activity "
+            "WHERE datname=current_database() AND pid=ANY(%s)",
+            (backend_pids,),
+        ).fetchone()[0]
+        if remaining == 0:
+            return
+        assert perf_counter() < deadline, (
+            f"{remaining} owned pool backends remain."
+        )
+        sleep(0.01)
+
+
+def test_shutdown_observation_accepts_delayed_backend_exit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An already closed client may briefly remain in the server view."""
+    operator = Mock(spec=psycopg.Connection)
+    operator.execute.return_value.fetchone.side_effect = [(2,), (1,), (0,)]
+    clock = iter((0.0, 0.5, 1.0))
+    monkeypatch.setattr(
+        "tests.postgresql.test_foundation.perf_counter", lambda: next(clock),
+    )
+    monkeypatch.setattr("tests.postgresql.test_foundation.sleep", lambda _: None)
+
+    _assert_backends_closed(operator, [101, 102])
+
+    assert operator.execute.call_count == 3
+    assert all(call.args[1] == ([101, 102],)
+               for call in operator.execute.call_args_list)
+
+
+def test_shutdown_observation_rejects_persistent_backend_sessions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The observation deadline must fail for a genuine session leak."""
+    operator = Mock(spec=psycopg.Connection)
+    operator.execute.return_value.fetchone.return_value = (1,)
+    clock = iter((0.0, 2.0))
+    monkeypatch.setattr(
+        "tests.postgresql.test_foundation.perf_counter", lambda: next(clock),
+    )
+
+    with pytest.raises(AssertionError, match="1 owned pool backends remain"):
+        _assert_backends_closed(operator, [101, 102])
+
+
+def test_shutdown_closes_database_sessions(
+    pg_database: PostgreSQLFixture,
+) -> None:
+    """Close the pool immediately and observe its backend shutdown."""
+    resource = Database(DatabaseConfig(
+        pg_database.runtime_url, pool_min=2, pool_max=2,
+    ))
+    try:
+        resource.open()
+        with psycopg.connect(
+            pg_database.operator_url, autocommit=True,
+        ) as operator:
+            backend_pids = [row[0] for row in operator.execute(
+                "SELECT pid FROM pg_stat_activity "
+                "WHERE datname=current_database() "
+                "AND application_name='eppm-runtime'",
+            ).fetchall()]
+            assert len(backend_pids) == 2
+            resource.close()
+            assert resource._pool.closed
+            _assert_backends_closed(operator, backend_pids)
+    finally:
         resource.close()
-        assert operator.execute(count_sql).fetchone()[0] == 0

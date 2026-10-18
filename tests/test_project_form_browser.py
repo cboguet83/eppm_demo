@@ -1,10 +1,33 @@
 """Real browser checks for atomic project forms and explicit server actions."""
 
 import json
+from typing import TYPE_CHECKING
 
 import pytest
 
 from tests.test_dialog_browser import popup_server as popup_server, expect, sync_playwright
+
+if TYPE_CHECKING:
+    from playwright.sync_api import Page
+
+
+def _wait_for_event_count(page: 'Page', count: int) -> None:
+    """Await the server's event log rather than another component's visibility.
+
+    Args:
+        page: Private form scenario publishing its events in one code block.
+        count: Exact number of server actions expected before reading the log.
+
+    Raises:
+        TimeoutError: The expected event count is not published in five seconds.
+    """
+    page.wait_for_function(
+        """count => {
+            const text = document.querySelector('pre')?.textContent;
+            return text && JSON.parse(text).length === count;
+        }""",
+        arg=count, timeout=5000,
+    )
 
 
 _APP = '''
@@ -47,6 +70,14 @@ def modal():
 modal()
 '''
 
+_DELAYED_EVENTS_APP = _APP.replace(
+    '    st.code(',
+    '    if st.session_state.get("form") is None and '
+    'len(st.session_state.get("events", [])) > 1:\n'
+    '        time.sleep(1)\n'
+    '    st.code(',
+)
+
 _SAMPLE = """
 window.openedForms=[];
 const show=HTMLDialogElement.prototype.showModal;
@@ -61,7 +92,15 @@ HTMLDialogElement.prototype.showModal=function() {
 @pytest.mark.parametrize("popup_server", [_APP.replace('choices=["one"]', 'choices=["two","one"]')],
                          indirect=True, ids=["stored-selection-order"])
 @pytest.mark.parametrize("change_selection", [False, True])
-def test_untouched_selection_order_survives_save_and_validation_retry(popup_server, change_selection):
+def test_untouched_selection_order_survives_save_and_validation_retry(
+    popup_server: str, change_selection: bool,
+) -> None:
+    """Preserve selection order through acknowledged validation and save events.
+
+    Args:
+        popup_server: Private form server with a stored selection order.
+        change_selection: Whether the user deliberately changes that selection.
+    """
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
@@ -76,12 +115,14 @@ def test_untouched_selection_order_survives_save_and_validation_retry(popup_serv
             modal.get_by_label("name", exact=True).fill("")
             modal.get_by_role("button", name="Save", exact=True).click()
             expect(modal.get_by_role("alert")).to_have_text("Name is required")
+            _wait_for_event_count(page, 1)
             first = json.loads(page.locator("pre").inner_text())[0]
             assert first["values"]["choices"] == expected
             assert ("choices" in first["dirty"]) is change_selection
             modal.get_by_label("name", exact=True).fill("Saved title")
             modal.get_by_role("button", name="Save", exact=True).click()
             expect(modal).not_to_be_visible()
+            _wait_for_event_count(page, 2)
             assert json.loads(page.locator("pre").inner_text())[-1]["values"]["choices"] == expected
         finally:
             browser.close()
@@ -97,7 +138,14 @@ _MONEY_APP = _APP.replace(
 
 
 @pytest.mark.parametrize("popup_server", [_MONEY_APP], indirect=True, ids=["exact-project-money"])
-def test_project_money_remains_decimal_text_in_browser_events_and_validation_retries(popup_server):
+def test_project_money_remains_decimal_text_in_browser_events_and_validation_retries(
+    popup_server: str,
+) -> None:
+    """Check exact decimal text in the server's validation and save events.
+
+    Args:
+        popup_server: Private form server exposing exact decimal values.
+    """
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
@@ -118,12 +166,14 @@ def test_project_money_remains_decimal_text_in_browser_events_and_validation_ret
             expect(modal.get_by_role("alert")).to_have_text("Name is required")
             for key, value in values.items():
                 expect(modal.get_by_label(key)).to_have_value(value)
+            _wait_for_event_count(page, 1)
             event = json.loads(page.locator("pre").inner_text())[0]
             assert {key: event["values"][key] for key in values} == values
             assert event["values"]["amount"] == 100  # Generic numeric properties keep their existing type.
             modal.get_by_label("name", exact=True).fill("Precise save")
             modal.get_by_role("button", name="Save", exact=True).click()
             expect(modal).not_to_be_visible()
+            _wait_for_event_count(page, 2)
             saved = json.loads(page.locator("pre").inner_text())[-1]
             assert {key: saved["values"][key] for key in values} == values
             expect(page.get_by_text("Shell runs: 1", exact=True)).to_be_visible()
@@ -132,7 +182,14 @@ def test_project_money_remains_decimal_text_in_browser_events_and_validation_ret
 
 
 @pytest.mark.parametrize("popup_server", [_APP], indirect=True, ids=["project-form"])
-def test_project_fields_tabs_and_links_are_local_and_save_retries_without_page_refresh(popup_server):
+def test_project_fields_tabs_and_links_are_local_and_save_retries_without_page_refresh(
+    popup_server: str,
+) -> None:
+    """Retain local draft fields and links across an acknowledged validation retry.
+
+    Args:
+        popup_server: Private form server recording explicit user actions.
+    """
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
@@ -172,6 +229,7 @@ def test_project_fields_tabs_and_links_are_local_and_save_retries_without_page_r
             expect(modal.get_by_label("amount")).to_have_value("123.45")
             expect(modal.get_by_role("tab", name="Useful links")).to_have_attribute("aria-selected", "true")
             assert len(page.evaluate("window.openedForms")) == 1
+            _wait_for_event_count(page, 1)
             events = json.loads(page.locator("pre").inner_text())
             assert len(events) == 1
             assert events[0]["values"] == dict(name="", amount=123.45, due="2028-05-19", tags=["One", "Two"], choices=["one", "two"])
@@ -180,6 +238,7 @@ def test_project_fields_tabs_and_links_are_local_and_save_retries_without_page_r
             modal.get_by_role("button", name="Save", exact=True).click()
             expect(modal).not_to_be_visible()
             expect(page.get_by_text("Shell runs: 1", exact=True)).to_be_visible()
+            _wait_for_event_count(page, 2)
             assert len(json.loads(page.locator("pre").inner_text())) == 2
         finally:
             browser.close()
@@ -214,8 +273,18 @@ def test_project_cancel_reopen_and_delete_confirmation_are_local(popup_server, d
             browser.close()
 
 
-@pytest.mark.parametrize("popup_server", [_APP], indirect=True, ids=["project-form"])
-def test_wbs_rows_default_to_100_show_remaining_and_survive_tabs_and_validation(popup_server):
+@pytest.mark.parametrize(
+    "popup_server", [_APP, _DELAYED_EVENTS_APP], indirect=True,
+    ids=["project-form", "delayed-event-publication"],
+)
+def test_wbs_rows_default_to_100_show_remaining_and_survive_tabs_and_validation(
+    popup_server: str,
+) -> None:
+    """Retain WBS edits and read only the acknowledged final save event.
+
+    Args:
+        popup_server: Ordinary or deliberately delayed event-publication server.
+    """
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
@@ -239,6 +308,7 @@ def test_wbs_rows_default_to_100_show_remaining_and_survive_tabs_and_validation(
             modal.get_by_label("name", exact=True).fill("")
             modal.get_by_role("button", name="Save", exact=True).click()
             expect(modal.get_by_role("alert")).to_have_text("Name is required")
+            _wait_for_event_count(page, 1)
             assert json.loads(page.locator("pre").inner_text())[0]["wbs"] == [{"wbs_id": 2, "percentage": 35}]
             expect(modal.get_by_label("Allocation (%)", exact=True)).to_have_value("35")
             modal.get_by_role("button", name="Add WBS").click()
@@ -247,6 +317,7 @@ def test_wbs_rows_default_to_100_show_remaining_and_survive_tabs_and_validation(
             modal.get_by_label("name", exact=True).fill("Saved")
             modal.get_by_role("button", name="Save", exact=True).click()
             expect(modal).not_to_be_visible()
+            _wait_for_event_count(page, 2)
             events = json.loads(page.locator("pre").inner_text())
             assert events[-1]["wbs"] == [{"wbs_id": 1, "percentage": 100}]
             expect(page.get_by_text("Shell runs: 1", exact=True)).to_be_visible()

@@ -1,12 +1,17 @@
 """Blank the main workspace immediately while a navigation rerun loads."""
 
+from uuid import uuid4
+
 import streamlit as st
 
 
 _JS = """
 export default function({parentElement}) {
     const doc = parentElement.ownerDocument;
-    let loading = false, ran = false, frame = 0;
+    let loading = false, ran = false, frame = 0, generation = 0;
+    const rendered = () => doc.querySelector('[data-eppm-page-rendered]')
+        ?.getAttribute('data-eppm-page-rendered');
+    let previousRender;
     const overlay = doc.createElement('div');
     overlay.id = 'eppm-page-transition';
     overlay.setAttribute('role', 'progressbar');
@@ -17,11 +22,16 @@ export default function({parentElement}) {
         const app = doc.querySelector('[data-testid="stApp"]');
         if (!loading) return;
         if (app?.getAttribute('data-test-script-state') === 'running') ran = true;
-        if (!ran || app?.getAttribute('data-test-script-state') !== 'notRunning') return;
+        const destinationRendered = rendered() && rendered() !== previousRender;
+        if ((!ran && !destinationRendered)
+            || app?.getAttribute('data-test-script-state') !== 'notRunning') return;
         if (doc.querySelector('[data-testid="stMain"] [data-testid="stSkeleton"]')) return;
+        const requested = generation;
         cancelAnimationFrame(frame);
         frame = requestAnimationFrame(() => requestAnimationFrame(() => {
-            if (app.getAttribute('data-test-script-state') !== 'notRunning') return;
+            if (requested !== generation
+                || app.getAttribute('data-test-script-state') !== 'notRunning'
+                || doc.querySelector('[data-testid="stMain"] [data-testid="stSkeleton"]')) return;
             loading = false;
             doc.body.classList.remove('eppm-page-loading');
         }));
@@ -32,6 +42,8 @@ export default function({parentElement}) {
         const bounds = main.getBoundingClientRect();
         overlay.style.left = `${bounds.left}px`;
         overlay.style.top = `${bounds.top}px`;
+        generation += 1;
+        previousRender = rendered();
         loading = true; ran = false;
         doc.body.classList.add('eppm-page-loading');
     };
@@ -49,7 +61,7 @@ export default function({parentElement}) {
     doc.addEventListener('keydown', keyboard, true);
     const observer = new MutationObserver(finish);
     observer.observe(doc.body, {subtree:true, childList:true, attributes:true,
-        attributeFilter:['data-test-script-state']});
+        attributeFilter:['data-test-script-state', 'data-eppm-page-rendered']});
     return () => {
         observer.disconnect(); cancelAnimationFrame(frame);
         doc.removeEventListener('click', begin, true);
@@ -76,3 +88,13 @@ def install_page_transition() -> None:
         'eppm_page_transition', html='<span></span>', js=_JS,
     )
     component(key='eppm_page_transition', height=0)
+
+
+def mark_page_rendered() -> None:
+    """Acknowledge page rendering even when the browser coalesces run states.
+
+    Emit only after the page renderer returns. The transition still waits for an
+    idle app with no skeletons before revealing the completed destination.
+    """
+    # Streamlit places style-only HTML outside the main layout.
+    st.html(f'<style data-eppm-page-rendered="{uuid4().hex}"></style>')

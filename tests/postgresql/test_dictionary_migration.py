@@ -67,6 +67,7 @@ def test_dictionary_upgrade_preserves_overlapping_ids_and_rolls_back_failures(
         return
     assert migrate(empty_database.operator_url) == (
         '0069_shared_business_dictionaries.sql', '0070_dictionary_locale_integrity.sql',
+        '0071_project_update_headroom.sql',
     )
     assert migrate(empty_database.operator_url) == ()
     with psycopg.connect(empty_database.operator_url) as connection:
