@@ -1,7 +1,11 @@
 """Real transactions, restored pools and mapping popup allocation limits."""
 
 from concurrent.futures import ThreadPoolExecutor
+from itertools import islice
+import json
+from pathlib import Path
 from threading import Barrier, local
+from typing import TYPE_CHECKING
 import pytest
 import psycopg
 
@@ -11,7 +15,108 @@ from app.infrastructure.postgresql.resource_pools import PostgresResourcePoolSto
 from app.main import create_organization_service, create_resource_pool_service
 from tests.postgresql.test_resource_pool_ui import database, access, dialog
 from tests.postgresql.browser import native_server
+from tests.postgresql.browser_completion import ScriptCompletion
 from tests.postgresql.test_pool_hierarchy_browser import SCREEN
+
+if TYPE_CHECKING:
+    from playwright.sync_api import Page
+
+
+_RESTORATION_SCREEN = r"""
+import importlib
+import json
+from pathlib import Path
+from app.domain.resources.models import ResourcePool
+from app.domain.resources.hierarchy import PoolHierarchy
+from app.infrastructure.postgresql.resource_pools import PostgresResourcePoolStore
+
+_pool_module = importlib.import_module('app.presentation.pages.resource_pools')
+_trace_path = Path(__file__).with_name('restoration-counts.jsonl')
+
+def _record_counts(kind: str, include_deleted: bool, count: int, deleted: int) -> None:
+    with _trace_path.open('a', encoding='utf-8') as stream:
+        stream.write(json.dumps({'kind': kind, 'include_deleted': include_deleted,
+                                 'count': count, 'deleted': deleted}) + '\n')
+
+if not hasattr(PostgresResourcePoolStore, '_restoration_original_read'):
+    PostgresResourcePoolStore._restoration_original_read = PostgresResourcePoolStore.get_all_pools
+    def _observed_read(self: PostgresResourcePoolStore, *, include_deleted: bool = False) -> list[ResourcePool]:
+        rows = PostgresResourcePoolStore._restoration_original_read(self, include_deleted=include_deleted)
+        _record_counts('read', include_deleted, len(rows), sum(row.deleted_flag for row in rows))
+        return rows
+    PostgresResourcePoolStore.get_all_pools = _observed_read
+
+if not hasattr(_pool_module, '_restoration_original_tree'):
+    _pool_module._restoration_original_tree = _pool_module.resource_pool_tree
+    def _observed_tree(hierarchy: PoolHierarchy, *args: object, **kwargs: object) -> object:
+        _record_counts('tree', bool(st.session_state.get('pool_show_deleted')),
+                       len(hierarchy.pools), sum(row.deleted_flag for row in hierarchy.pools.values()))
+        return _pool_module._restoration_original_tree(hierarchy, *args, **kwargs)
+    _pool_module.resource_pool_tree = _observed_tree
+""" + SCREEN
+
+
+def _diagnostic_fields(
+    value: object, shape: dict[str, type[object]],
+) -> dict[str, object]:
+    """Retain only explicitly allowed fields with exact primitive types."""
+    if not isinstance(value, dict):
+        return {}
+    labels = {'kind': {'read', 'tree'}, 'scriptState': {'running', 'notRunning'}}
+    return {
+        key: value[key] for key, expected in shape.items()
+        if type(value.get(key)) is expected
+        and (expected is not str or value[key] in labels[key])
+    }
+
+
+def _restoration_snapshot(
+    page: 'Page', completion: ScriptCompletion, directory: Path,
+) -> str:
+    """Capture only counts, flags and completion metadata, never raw messages.
+
+    Args:
+        page: The failing test's private browser page.
+        completion: Passive observer attached before navigation.
+        directory: This test's private server directory.
+
+    Returns:
+        JSON containing only diagnostic state, excluding cookies and URLs.
+    """
+    from playwright.sync_api import Error as PlaywrightError
+
+    state: dict[str, object] = {
+        'successful_runs': completion._completed,
+        'script_running': completion._running,
+    }
+    try:
+        trace = directory / 'restoration-counts.jsonl'
+        with trace.open(encoding='utf-8') as stream:
+            state['server_counts'] = [
+                _diagnostic_fields(json.loads(line), {
+                    'kind': str, 'include_deleted': bool,
+                    'count': int, 'deleted': int,
+                })
+                for line in islice(stream, 64)
+            ]
+    except (OSError, ValueError) as error:
+        state['server_counts_unavailable'] = type(error).__name__
+    try:
+        dom = page.evaluate("""() => ({
+            checkboxChecked: document.querySelector('input[type=checkbox]')?.checked ?? null,
+            scriptState: document.querySelector('[data-testid=stApp]')
+                ?.getAttribute('data-test-script-state') ?? null
+        })""")
+        state['dom'] = _diagnostic_fields(dom, {
+            'checkboxChecked': bool, 'scriptState': str,
+        }) | {
+            # Playwright locators traverse the component's shadow root.
+            'treeRows': page.get_by_role('treeitem').count(),
+            'deletedRows': page.locator('[role=treeitem] .pool-deleted').count(),
+        }
+    except PlaywrightError as error:
+        state['dom_unavailable'] = type(error).__name__
+    return json.dumps(state, sort_keys=True)
 
 
 def setup_resources(database, access):
@@ -118,10 +223,11 @@ def test_blocked_restoration_popup_explains_conflicting_pools(database, access, 
     service.create_mapping(PoolMapping(first, 'employee', employee, 100))
     service.delete_pool(first)
     service.create_mapping(PoolMapping(second, 'employee', employee, 100))
-    with native_server(authorized, tmp_path, SCREEN) as server, playwright_api.sync_playwright() as playwright:
+    with native_server(authorized, tmp_path, _RESTORATION_SCREEN) as server, playwright_api.sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
             page = server.new_page(browser, viewport={'width': 1700, 'height': 1200})
+            completion = ScriptCompletion(page)
             page.goto(server.origin)
             page.get_by_text('Show deleted pools', exact=True).click()
             row = page.get_by_role('treeitem', name='Alpha (Deleted)', exact=True)
@@ -136,5 +242,8 @@ def test_blocked_restoration_popup_explains_conflicting_pools(database, access, 
             playwright_api.expect(row).to_be_visible()
             with psycopg.connect(authorized.setup.operator_url) as connection:
                 assert connection.execute('SELECT deleted_flag FROM eppm.resource_pool WHERE id=%s', (first,)).fetchone() == (True,)
+        except (AssertionError, playwright_api.TimeoutError) as error:
+            details = _restoration_snapshot(page, completion, tmp_path)
+            raise AssertionError(f'Restoration browser diagnostics: {details}') from error
         finally:
             browser.close()

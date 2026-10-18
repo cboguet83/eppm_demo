@@ -659,3 +659,17 @@ workflow check succeeds with the authorized execution permission.
 ## Hosted PR #2 follow-up (2026-10-18)
 
 Archived head b05b861: run 39112886950, SonarCloud success; pytest failed 1/1,353 after 616.55s on test_blocked_restoration_popup_explains_conflicting_pools, waiting 30s for Alpha (Deleted). Snapshot: checkbox checked, export include_deleted=true, only Beta rendered. JavaScript step skipped after fail-fast. No hosted coverage/full-suite acceptance is claimed. Original covered test passed 30/30 under two-host-CPU affinity; separate pristine focused 4.61s, post-checkbox initial delay 9.38s, tail delay 7.28s, 2s component-module load delay 6.80s, and 16x CPU throttle 11.29s all passed. These do not reproduce the hosted symptom. Temporary probes remain outside the repository in /tmp; no application/test repair has been assumed.
+
+### Task 3.11 — passive hosted-failure diagnostics
+
+The original hosted symptom remains unconfirmed locally; this task is observation only. The affected test attaches the already tested ScriptCompletion observer before navigation but never calls its action/wait methods, so click timing and all original assertion expressions remain unchanged (AST comparison passed). The isolated served test screen records only pool-read/tree counts, deleted counts and include-deleted flags, with no row names, IDs, connection strings or session values. Failure output adds at most 64 sanitized records, successful completion count/running flag and bounded DOM counts/state. Playwright locators cross the tree's shadow root. Unexpected fields/string values and raw browser/parser error payloads are omitted. No application source, scheduling/gate/coverage/workflow or business behavior changes.
+
+A genuine-path forced-assertion probe (temporary /tmp plugin) fails after the real Alpha (Deleted) row is rendered: final diagnostic output shows checkbox=true, 2 tree rows, 1 deleted row, successful protocol completion and a server tree input of 2/1. This verifies capture only; it does NOT reproduce or explain the hosted defect. Privacy regression first fails because unexpected values were retained; after allowlisting both regressions pass (2 in 0.41s). Missing-file/browser-error observations report exception type only. All original mapping assertions remain intact.
+
+Focused executions, using generated ignored credentials for the dedicated PostgreSQL service:
+- fresh/serial mapping module: 6 passed in 8.41s;
+- template/two-worker mapping, pool-hierarchy, observer and privacy cases: 22 passed in 54.27s;
+- final ordinary template/serial restoration plus privacy cases: 3 passed in 4.74s;
+- forced capture: expected nonzero with original forced assertion chained to sanitized diagnostic JSON (not acceptance).
+
+Earlier 30/30 covered two-CPU pristine probes and controlled-delay/throttle passes are diagnostic evidence only. Next publish this focused diagnostic task to draft PR #2, let its unfiltered full CI execute, and inspect any failure counts/protocol state before adding a confirmed repair. Renewed comparable full acceptance/verification remains task 4.4 and cannot be claimed from these focused checks.
