@@ -20,6 +20,7 @@ HEAVY_MODULES = frozenset({
     "test_parallel_resources.py", "test_full_suite.py",
     "test_full_suite_parallel.py", "test_test_scheduling.py",
     "test_parallel_coverage.py",
+    "test_template_measurements.py",
 })
 
 

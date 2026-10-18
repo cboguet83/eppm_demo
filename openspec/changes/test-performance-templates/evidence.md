@@ -603,3 +603,29 @@ is created on loopback port 25432 with distinct newly generated ignored test
 credentials for the restarted comparison. No application database is modified.
 Task 4.1 remains open and CI stays fresh/serial pending complete final-source
 cohorts, full A/B/C/repeated-C, unchanged full gates and performance acceptance.
+
+## Task 4.1 — complete corrected-source acceptance
+
+V8 completes all nine 54-case preparation cohorts and all four full runs on
+`09b57a6` plus the three fixed measurement inputs, source fingerprint
+`c7696b72aed956ca5bad730ad4d64bb9b4103e2ecd28656b93388b10e686f961`.
+A/B/C1/C2 monitored wall times are 2,537.813874 / 2,123.056248 / 1,277.208545 /
+1,243.467171 seconds. The slower C improves full wall time **49.672884%**;
+C median preparation improves **67.723838%**. Both targets pass.
+
+The independent raw audit verifies all 3,304 canonical setup/call/teardown
+outcomes exactly once, five passing subtests, no skipped/failed reports,
+matching full worker collections and nonzero work on each original worker.
+All four coverage reports have exactly the same 283 files, excluded/missing
+lines and 16,539/16,931 statements (**97.684720%**). All 112 Node cases pass
+in each run. Each full cleanup check has zero test databases/other clients.
+Unrounded inputs/results/resources, connection-budget observations and method
+limits are preserved in `measurements.json` and `measurement.md`; earlier
+failed comparisons remain explicit diagnostic history, never acceptance.
+
+The opt-in metrics helper is tested by the complete suites: it records real
+preparation timing/outcomes without fixture values, rejects stale/missing
+output directories, and retains failed preparation results/nonzero exits.
+Its subprocess tests join the audited heavy scheduling group. The C3 test
+infrastructure map documents the existing components. CI is still unchanged
+in this task; template default and two-worker promotion are task 4.2.

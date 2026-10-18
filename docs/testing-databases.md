@@ -5,6 +5,43 @@ Test infrastructure uses explicit `POSTGRES_TEST_ADMIN_URL` and
 operator and restricted runtime logins. Keep credentials in ignored local files.
 Never point these settings at an application deployment.
 
+## C3 — test infrastructure components
+
+This component view covers the existing pytest execution environment. Each test
+process is either the serial runner or an xdist worker; the controller also
+receives worker collection and outcome reports. PostgreSQL is the isolated test
+server, including its invocation-owned databases, rather than a new service.
+
+```mermaid
+flowchart LR
+    engine["pytest / xdist execution"]
+    gate["Collection, scheduling and outcome hooks<br/>tests/conftest.py"]
+    fixtures["PostgreSQL and authorization fixtures<br/>tests/postgresql/conftest.py"]
+    factory["DatabaseTemplateFactory<br/>tests/postgresql/template_database.py"]
+    migrations["Real migration discovery and runner<br/>app/infrastructure/postgresql/migration.py"]
+    native["Native browser process helper<br/>tests/postgresql/browser.py"]
+    benchmark["Benchmark observation fixture and lock<br/>test_benchmark_tools.py / benchmark_lock.py"]
+    child["Native Streamlit application process"]
+    metrics["Opt-in preparation/outcome hooks<br/>tests/performance/template_metrics.py"]
+    coverage["pytest-cov and coverage subprocess patch"]
+    pg[("Isolated PostgreSQL 18<br/>owned templates and disposable databases")]
+    engine -->|collection and reports| gate
+    engine -->|fixture lifecycle| fixtures
+    engine -->|optional measurement hooks| metrics
+    engine -->|worker coverage aggregation| coverage
+    fixtures -->|constructs and closes| factory
+    native -->|reads injected AuthorizedFixture| fixtures
+    engine -->|benchmark fixture lifecycle| benchmark
+    benchmark -->|bounded maintenance-database advisory lock| pg
+    fixtures -->|restricted pools| pg
+    factory -->|calls| migrations
+    migrations -->|migrates owned databases| pg
+    factory -->|creates, clones and drops exact owned names| pg
+    native -->|starts and terminates| child
+    child -->|restricted connections| pg
+    child -->|graceful subprocess coverage| coverage
+```
+
 ## Template lifecycle
 
 `tests/postgresql/template_database.py` provides `DatabaseTemplateFactory`.
