@@ -30,3 +30,18 @@ existing verified backup procedure before upgrade. Migration failure rolls back
 the complete transaction; after success, repair forward or explicitly restore
 the verified pre-upgrade backup before restarting an old binary. Restoration can
 discard later writes and is not an automatic down migration.
+
+## Shared reads and writes
+
+`PostgresDictionaryStore` runs on the caller's existing authorized connection.
+`PostgresDictionaryGateway` uses the normal whole-operation transaction retry
+boundary and translates storage failures to safe application exceptions.
+`CollaborationService` keeps its `role` / `event_type` method contracts and
+delegates its catalog operations to this same store. Contacts, logs and dashboard
+blockers join the dictionary code as well as the numeric ID. No translated label
+is used to identify blocking-point behavior.
+
+An entry edit writes its canonical name and submitted locale rows atomically.
+Optional labels are deleted when explicitly blank and omitted locales remain
+untouched. Explicit translation reads distinguish absent rows from fallback
+display labels. Concurrent edits replay the full authorized transaction.
