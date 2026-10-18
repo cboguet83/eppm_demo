@@ -1,4 +1,5 @@
 recursive-include packages/planning-view/src *.js *.css
+recursive-include packages/planning-view/examples *.html *.js
 include packages/planning-view/package.json
 include packages/planning-view/streamlit.html
 include packages/planning-view/README.md

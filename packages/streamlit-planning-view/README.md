@@ -99,3 +99,29 @@ Unit tests cover the Python parser/wrapper independently. The native Streamlit
 harness copies only this package and the browser sources into a temporary host
 and checks three keys, lazy reads, accepted/rejected edits, deduplication,
 retained zoom and sizing, with no `app.*` imports.
+
+## Run the installed example
+
+After installing either the direct wheel or a wheel rebuilt from this package's
+source distribution, launch its packaged example from any directory:
+
+```bash
+python -m pip install /path/to/streamlit_planning_view-0.1.0-py3-none-any.whl
+python -m streamlit_planning_view --server.address=127.0.0.1 --server.port=8501
+```
+
+The launcher replaces itself with the current Python/Streamlit process, so
+normal server termination cleans up the running example. It requires no
+repository files, editable installs, EPPM services or frontend build. The example
+uses two keys with overlapping fixture identities. Edits update the primary
+session only; the secondary copy remains read-only. The task name `Reject`
+shows safe host rejection. Resource selections/marked periods and an optional
+Python-backed lazy read demonstrate the other host paths. Changing the lazy
+checkbox changes scope deliberately; ordinary same-scope reruns retain state.
+
+The browser package documents date/capacity meanings, public events, reset and
+disposal, supported runtime APIs and version compatibility. Installed-consumer
+tests run both wheel variants in clean Python environments with EPPM imports
+unavailable and with no editable import hooks. They exercise actual Streamlit
+rendering, accepted/rejected edits, retained peer zoom, resource events and lazy
+reads. The web artifact's own example also verifies clean unmount/remount.

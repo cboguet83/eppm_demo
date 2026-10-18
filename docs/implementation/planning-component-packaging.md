@@ -84,3 +84,12 @@ tools (included in `.[dev]`), falling back to `python3` on PATH when needed.
 `EPPM_BUILD_PYTHON` selects another prepared Python 3.14 interpreter.
 Runtime/browser checks retain the pytest interpreter and its Streamlit install.
 Installed-consumer interaction tests supplement these packaging checks.
+
+The browser archive includes `examples/index.html`. The standalone wheel/source
+also ships `example.py` and an executable module: `python -m streamlit_planning_view`.
+See both package READMEs for launch commands and integration/compatibility notes.
+`tests/test_planning_installed_consumers.py` runs the actual shipped examples
+from extracted/installed artifacts. It checks two-instance isolation, accepted
+and rejected edits, resource events, lazy reads and web unmount/remount. Its
+Streamlit environments exclude EPPM packages and editable hooks while sharing
+only already installed third-party dependencies.

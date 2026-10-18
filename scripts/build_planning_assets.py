@@ -40,7 +40,7 @@ def source_files(root: Path) -> dict[str, bytes]:
     source = root / "packages/planning-view"
     required = ["src/index.js", "src/adapters/streamlit.js",
                 "src/workspace/styles.css", "package.json", "streamlit.html",
-                "README.md"]
+                "README.md", "examples/index.html"]
     if any(not (source / name).is_file() for name in required):
         raise AssetError("Canonical planning browser sources are missing.")
     with _safe_path(source, "package.json").open(encoding="utf-8") as stream:
@@ -57,8 +57,9 @@ def source_files(root: Path) -> dict[str, bytes]:
         raise AssetError("Browser and Python planning versions disagree.")
     names = sorted(
         path.relative_to(source).as_posix()
-        for path in (source / "src").rglob("*")
-        if path.is_file() and path.suffix in (".js", ".css")
+        for directory in [source / "src", source / "examples"]
+        for path in directory.rglob("*")
+        if path.is_file() and path.suffix in (".js", ".css", ".html")
     )
     files: dict[str, bytes] = {}
     for name in [*names, "package.json", "README.md", "streamlit.html"]:

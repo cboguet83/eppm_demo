@@ -351,3 +351,31 @@ or a later 1.x release, uses explicit keys, and validates/deduplicates returned
 events without importing EPPM. Prepare distributions with
 `python -m scripts.build_planning_assets` from the source repository; native
 tests also prepare a temporary frontend directly from this one source.
+
+## Run the installed web example
+
+Unpack the browser artifact into an empty consumer directory, then serve it:
+
+```bash
+tar -xzf planning-view-0.1.0.tar.gz -C /path/to/consumer
+python -m http.server 8000 --bind 127.0.0.1 --directory /path/to/consumer
+```
+
+Open `http://127.0.0.1:8000/planning-view-0.1.0/examples/index.html`. The example
+imports only its adjacent installed modules/styles. It demonstrates two
+instances with overlapping IDs, host-accepted/rejected edits, marked resource
+periods, lazy reads, snapshot/reset updates and explicit unmount/remount. The
+secondary instance stays read-only. Set a task name to `Reject` to exercise a
+safe host rejection. This is fixture data in the current page, with no backend.
+Its host handler illustrates contract validation and correlated replies;
+production hosts supply their own authorization and persistence.
+
+Validated tooling is Node 26, Python 3.14 and Playwright 1.62 Chromium on Linux.
+The browser runtime needs native ES modules, `structuredClone`, secure-context
+`crypto.randomUUID`, AbortController, Pointer Events and ResizeObserver. HTTP
+loopback supports local examples; deployed hosts use their normal secure origin.
+No Node runtime/compiler is required by a consumer. Other browser engines have
+not been part of the acceptance checks. Contract 1 is the supported protocol;
+package version 0.1.0 does not replace `version:1` in data/events. Unsupported
+contract versions fail explicitly. Keep labels/capabilities in data for upgrades
+that retain applicable interaction state, and destroy instances on host unmount.
