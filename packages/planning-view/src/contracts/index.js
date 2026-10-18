@@ -110,6 +110,12 @@ function resources(values, path) {
     for (const field of ['usage', 'selectedUsage', 'assignedCapacity']) {
       if (resource[field] !== undefined) series(resource[field], path + '.' + field);
     }
+    if(resource.definedCapacity!==undefined)requireValue(Number.isFinite(resource.definedCapacity) && resource.definedCapacity>=0,path+'.definedCapacity');
+    for(const flag of ['usedBySelection','hasAssignments'])if(resource[flag]!==undefined)requireValue(typeof resource[flag]==='boolean',path+'.'+flag);
+    if(resource.comparisonUsage!==undefined) {
+      record(resource.comparisonUsage,path+'.comparisonUsage');
+      for(const scope of ['total','selected'])if(resource.comparisonUsage[scope]!==undefined)series(resource.comparisonUsage[scope],path+'.comparisonUsage.'+scope);
+    }
   }
 }
 
@@ -125,6 +131,7 @@ function hierarchy(value, path) {
     requireValue(!objects.has(node) && !keys.has(node.id), path + '.duplicateOrCycle');
     objects.add(node); keys.add(node.id);
     if (node.resourceId !== undefined) identity(node.resourceId, path + '.resourceId');
+    if(node.name!==undefined)requireValue(typeof node.name==='string',path+'.name');
     if (node.children === undefined) continue;
     requireValue(Array.isArray(node.children), path + '.children');
     for (const child of node.children) pending.push(child);
@@ -159,6 +166,13 @@ function jsonData(input) {
 
 /** @param {object} value Data-bearing message. */
 function data(value) {
+  if(value.resourceFilter!==undefined && value.resourceFilter!==null) {
+    const filter=record(value.resourceFilter,'resourceFilter');
+    requireValue(filter.resourceId!==undefined || filter.groupId!==undefined,'resourceFilter.target');
+    for(const field of ['resourceId','groupId','clearAction'])if(filter[field]!==undefined)identity(filter[field],'resourceFilter.'+field);
+    if(filter.name!==undefined)requireValue(typeof filter.name==='string','resourceFilter.name');
+    if(filter.start || filter.end)range(filter,'resourceFilter');
+  }
   if (value.projects !== undefined) {
     for (const project of rows(value.projects, 'projects')) {
       requireValue(typeof project.name === 'string', 'projects.name');

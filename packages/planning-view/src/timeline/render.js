@@ -60,7 +60,7 @@ export function createTimelineRenderer({panel,store,lifetime,options}) {
   return {
     render(data,view,calendar,loader) {
       header(data.labels);
-      const expanded=JSON.stringify(view.expandedProjects),filters=JSON.stringify(view.filters);
+      const expanded=JSON.stringify(view.expandedProjects),filters=JSON.stringify(['projectIds','query','sort','taskSort'].map(key=>view.filters[key] ?? null));
       const changed=!previous || previous.data!==data || previous.expanded!==expanded || previous.filters!==filters;
       if(changed)projection=projectRows(data,view,{grouped:options.grouped!==false});
       previous={data,expanded,filters};

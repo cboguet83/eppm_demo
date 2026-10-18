@@ -266,3 +266,64 @@ Hover details use plain text and appear after 1,000 ms by default. Hosts may
 set a finite `tooltipDelay` from 0 through 60,000 ms. Leaving, editing, updating
 or disposing cancels the reveal. The Hover details checkbox restores native
 titles when rich hover is disabled. Drag feedback appears immediately.
+
+## Optional resource grid
+
+```js
+const resources = [{
+  id:'engineering', name:'Engineering', capacity:10, definedCapacity:10,
+  hasAssignments:true, usedBySelection:true,
+  usage:{'2026-01-01':6, '2026-01-02':4},
+  selectedUsage:{'2026-01-02':3}, assignedCapacity:{'2026-01-02':2},
+  comparisonUsage:{total:{'2026-01-02':5}, selected:{'2026-01-02':4}},
+}];
+const hierarchy = [{id:'organization', name:'Organization', children:[
+  {id:'engineering-node', resourceId:'engineering'},
+]}];
+// Include resources/hierarchy in the snapshot and configure the mount:
+const resourceOptions = {hideUnused:true, onlyOverallocated:false,
+  showTotal:true, showSelected:true, collapsed:false};
+```
+
+`capacity` is normal effective capacity; sparse `assignedCapacity` overrides it
+per calendar day, including zeroes. Optional `definedCapacity` is the reference
+for under/overassignment badges, defaulting to capacity. `hasAssignments:false`
+uses unassigned display styling. These display hints do not change daily
+capacity calculations. `usedBySelection:false` permits Hide unused filtering;
+it defaults to visible for independent hosts without selection metadata.
+Nonzero comparison selected demand also keeps a pool visible.
+
+Hierarchy nodes are opaque group IDs, optional names, `children`, and resource
+leaves using `resourceId`. Projection is iterative. Missing resource references
+are omitted without fetching metadata. Absent hierarchy produces flat pool
+nodes. Expanded pools show capacity, total and selected demand; collapsed pools
+show total demand. Comparison rows appear when formatted period demand differs,
+so sub-display-precision changes do not create duplicate rows. Group warnings
+use any child's daily excess rather than offsetting it against another child's
+unused capacity. The header warns on visible total/selected overallocation.
+
+Mount options include `resourceUnit` (default FTE), `resourceOptions`, and a
+finite `resourceMaxHeight` from 50 through 2,000 px (default 324). The two-tier
+header stays fixed. Rows are 23.8 px with six-row overscan; columns render the
+visible shared calendar plus two extra columns per side. Capacity/demand cells
+expose separately computed minimum capacity, peak demand and maximum excess.
+The shared today line and column-hover guide use the same geometry in both
+panes. Frozen rows, scale, scrolling and resized columns stay aligned.
+
+Resource controls change display scope; the host owns application filters.
+Supply `resourceFilter:{resourceId, name, start, end, clearAction}` or a `groupId`
+to show active filter indication. Dates are optional for a whole-pool/group
+filter. `clearAction` names a supplied context action and adds its clear button;
+a command still passes current action-capability checks. Patch with
+`resourceFilter:null` to remove the indication.
+
+A single click/Space emits `select` with target kind `resources` or `hierarchy`
+and `context:{start,end,scope,periodLabel,resourceNode}` where available. IDs and
+periods remain opaque/inclusive. Scope is assigned/total/selected or an
+alternative-prefixed demand scope. Alternative demand rows do not emit current
+allocation selections. Double-click/Enter on capacity/group/collapsed rows
+toggles expansion and cancels pending single selection. Arrow keys/Home/End
+navigate cells, scrolling the virtual window as needed. Context actions receive
+the same period/scope. Same-scope updates preserve independent resource vertical
+scroll; scope/reset clears it. Hiding/removing resources reserves no grid space,
+and frame-height callbacks include the enabled controls and complete viewport.

@@ -57,6 +57,14 @@ keyboard submenus/editors, delayed/cancelled hover and disposal during a drag.
 These become the independent behavior surface for the permissions, menu,
 tooltip and dependency assertions when task 5.2 removes source slicing.
 
+Task 3.5 adds imported resource-grid hierarchy/window/filter checks and mounted
+1,001-pool checks for capacity/demand/excess, comparison scopes, period/header
+alignment, allocation/context/clear-filter events, single/double-click and
+keyboard behavior, dynamic sizing and optional layout. The fixture asserts at
+most 40 mounted resource rows and fewer than 40×30 cells while scrolling both
+axes. Group selection uses actual hierarchy IDs and preserves independent
+resource vertical scroll/reset through the store.
+
 ## Commands and current results
 
 - `node --test tests/test_gantt_scrolling.cjs tests/test_gantt_permissions.cjs tests/test_planning_lazy.cjs tests/test_ui_menus.cjs`: four files passed.

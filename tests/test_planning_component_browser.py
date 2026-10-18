@@ -47,7 +47,7 @@ def planning_page(planning_module_origin: str) -> Iterator[Page]:
                 window.snapshot={version:1,kind:'snapshot',scope:'scope',revision:'r1',
                   projects:[{id:'same-project',name:'Project'},...Array.from({length:100},(_,i)=>({id:'project-'+i,name:'Project '+i}))],
                   tasks:[{id:'same-task',projectId:'same-project',name:'<script>unsafe</script>',start:'2026-01-01',end:'2026-12-31'}],
-                  resources:[{id:'same-pool',name:'Pool',capacity:5}]};
+                  resources:[{id:'same-pool',name:'Pool',capacity:5},...Array.from({length:100},(_,i)=>({id:'pool-'+i,name:'Pool '+i,capacity:5}))]};
                 window.heights=[[],[]];
                 window.instances=['first','second'].map((id,index)=>mount(document.getElementById(id),{
                     snapshot,today:'2026-01-01',mode:'Day',onHeight:h=>heights[index].push(h)}));
@@ -75,6 +75,26 @@ def editable_page(planning_page: Page) -> Page:
           {id:'download',label:'Download',targetKinds:['tasks']},{id:'remove',label:'Delete',requiresEdit:true,capability:'manage'}]}]});
     }""")
     expect(planning_page.locator("#first .planning-bar[data-target-id=alpha]")).to_be_attached()
+    return planning_page
+
+
+@pytest.fixture
+def resource_page(planning_page: Page) -> Page:
+    """Mount hierarchical capacity/demand data with an ordinary web host event sink."""
+    planning_page.evaluate("""() => {
+      instances[0].destroy();window.events=[];
+      const resources=[{id:'focus',name:'Capacity team',capacity:10,definedCapacity:10,hasAssignments:true,
+        usage:{'2026-01-01':6,'2026-01-02':4},assignedCapacity:{'2026-01-02':2},selectedUsage:{'2026-01-02':3},
+        comparisonUsage:{selected:{'2026-01-02':4}}},
+        ...Array.from({length:1000},(_,i)=>({id:'pool-'+i,name:'Pool '+i,capacity:5}))];
+      window.resourceSnapshot={...snapshot,scope:'resources',resources,
+        hierarchy:[{id:'group',name:'Organization',children:resources.map(pool=>({id:'node-'+pool.id,resourceId:pool.id}))}],
+        resourceFilter:{resourceId:'focus',name:'Capacity team',start:'2026-01-01',end:'2026-01-02',clearAction:'clear-filter'}};
+      instances[0]=mount(document.getElementById('first'),{snapshot:resourceSnapshot,today:'2026-01-01',mode:'Month',onHeight:h=>heights[0].push(h),
+        onEvent:e=>events.push(e),contextActions:[{id:'filter-period',label:'Filter consuming projects',targetKinds:['resources','hierarchy']},
+          {id:'clear-filter',label:'Clear resource filter',targetKinds:['resources','hierarchy']}]});
+    }""")
+    expect(planning_page.locator("#first .planning-resource-cell").first).to_be_attached()
     return planning_page
 
 
@@ -454,3 +474,76 @@ def test_single_selection_and_destroy_during_active_drag(editable_page: Page) ->
     page.wait_for_timeout(260)
     assert page.evaluate("events.length") == 1
     assert page.locator("#first .planning-view").count() == 0
+
+
+def test_resource_period_extrema_comparison_warning_and_header_alignment(resource_page: Page) -> None:
+    """Actual mounted cells expose distinct demand, minimum capacity and daily excess."""
+    page = resource_page
+    selector = '#first .planning-resource-cell[data-target-id=focus][data-start="2026-01-01"]'
+    total = page.locator(selector + '[data-scope=total]')
+    expect(total).to_have_text("6.0")
+    expect(total).to_have_attribute("data-capacity", "2")
+    expect(total).to_have_attribute("data-excess", "2")
+    expect(total).to_have_attribute("data-overallocated", "true")
+    expect(page.locator(selector + '[data-scope=assigned]')).to_have_text("2.0")
+    expect(page.locator(selector + '[data-scope=selected]')).to_have_attribute("data-excess", "1")
+    expect(page.locator(selector + '[data-scope=alternative_selected]')).to_have_text("4.0")
+    expect(page.locator('#first [data-part=resource-header-inner] [data-start="2026-01-01"]')).to_have_class("planning-header-cell planning-current planning-resource-overallocated")
+    header_x = page.locator('#first [data-part=timeline-header-inner] [data-start="2026-01-01"]').bounding_box()["x"]
+    assert abs(total.bounding_box()["x"] - header_x) <= 1
+    assert page.locator("#first .planning-resource-right").count() <= 40
+    assert page.locator("#first .planning-resource-cell").count() < 40 * 30
+    expect(page.locator("#first [data-part=resource-filter]")).to_contain_text("Capacity team")
+    assert page.evaluate("heights[0].at(-1)===Math.ceil(document.querySelector('#first .planning-view').getBoundingClientRect().height)")
+
+
+def test_resource_period_actions_single_double_click_and_keyboard(resource_page: Page) -> None:
+    """Allocation selection and host commands retain periods; double-click expands/collapses."""
+    page = resource_page
+    cell = page.locator('#first .planning-resource-cell[data-target-id=focus][data-start="2026-01-01"][data-scope=total]')
+    cell.click()
+    page.wait_for_function("events.length===1")
+    assert page.evaluate("events[0].type") == "select"
+    assert page.evaluate("events[0].context.start") == "2026-01-01"
+    assert page.evaluate("events[0].context.scope") == "total"
+    cell.press("Shift+F10")
+    page.get_by_role("menuitem", name="Filter consuming projects", exact=True).click()
+    page.wait_for_function("events.length===2")
+    assert page.evaluate("events[1].command") == "filter-period"
+    assert page.evaluate("events[1].context.end") == "2026-01-31"
+    page.locator("#first [data-part=resource-filter]").get_by_role("button", name="Clear resource filter").click()
+    page.wait_for_function("events.length===3")
+    assert page.evaluate("events[2].command") == "clear-filter"
+    page.locator('#first .planning-resource-left[data-target-id=focus][data-scope=assigned]').dblclick(position={"x": 180, "y": 10})
+    page.wait_for_timeout(350)
+    assert page.evaluate("events.length") == 3
+    expect(page.locator('#first .planning-resource-left[data-target-id=focus][data-scope=assigned]')).to_have_count(0)
+    page.locator('#first .planning-resource-left[data-target-id=focus][data-scope=total]').get_by_role("button", name="Expand Capacity team").press("Enter")
+    expect(page.locator('#first .planning-resource-left[data-target-id=focus][data-scope=assigned]')).to_have_count(1)
+    cell.focus()
+    page.keyboard.press("ArrowRight")
+    assert page.evaluate("document.activeElement.dataset.start") == "2026-02-01"
+    page.keyboard.press("ArrowDown")
+    assert page.evaluate("document.activeElement.dataset.scope") == "selected"
+
+
+def test_resource_filters_scroll_virtualization_and_optional_layout(resource_page: Page) -> None:
+    """Both dimensions remain bounded and grid controls resize the complete frame."""
+    page = resource_page
+    page.locator("#first [data-mode=Day]").click()
+    page.locator("#first [data-part=resource-body]").evaluate("n=>{n.scrollTop=10000;n.scrollLeft=4000}")
+    page.wait_for_function("document.querySelector('#first [data-part=timeline-body]').scrollLeft===4000")
+    page.wait_for_function("Number(document.querySelector('#first .planning-resource-right').dataset.rowIndex)>400")
+    assert page.locator("#first .planning-resource-right").count() <= 40
+    assert page.locator("#first .planning-resource-cell").count() < 40 * 30
+    assert page.locator("#first [data-part=resource-left]").evaluate("n=>n.scrollTop") == 10000
+    page.locator("#first [data-resource-control=onlyOverallocated]").check()
+    expect(page.locator("#first .planning-resource-count")).to_have_text("1 Pools")
+    page.locator("#first [data-resource-control=showSelected]").uncheck()
+    expect(page.locator('#first .planning-resource-cell[data-scope=selected]')).to_have_count(0)
+    page.locator("#first [data-resource-control=collapse]").click()
+    expect(page.locator("#first [data-part=resource-panel]")).to_be_hidden()
+    expect(page.locator("#first [data-part=resource-heading]")).to_be_visible()
+    page.evaluate("instances[0].update({...resourceSnapshot,scope:'no-resources',resources:[]})")
+    expect(page.locator("#first [data-part=resource-heading]")).to_be_hidden()
+    assert page.locator("#first [data-part=resource-body]").evaluate("n=>n.scrollTop") == 0

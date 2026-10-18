@@ -8,6 +8,8 @@ import {createTimelineRenderer} from '../timeline/render.js';
 import {createDependencyRenderer} from '../timeline/dependency-render.js';
 import {createInteractions} from './interactions.js';
 import {validateActions,canEdit} from './actions.js';
+import {createResourceRenderer} from '../resources/render.js';
+import {createColumnGuides} from './columns.js';
 
 /** @param {Document} doc Document. @param {string} tag HTML tag. @param {string} name Part. @param {string} className Scoped style. */
 function element(doc,tag,name,className) {
@@ -70,7 +72,8 @@ function bindScrolling(panels,store,lifetime,schedule) {
   },{passive:true});
   lifetime.listen(resource.body,'scroll',()=>{
     resource.left.scrollTop=resource.body.scrollTop;horizontal(resource.body);
-    if(store.read().view.scrollLeft!==resource.body.scrollLeft)store.setView({scrollLeft:resource.body.scrollLeft});
+    const {view}=store.read();
+    if(view.scrollLeft!==resource.body.scrollLeft || view.resourceScrollTop!==resource.body.scrollTop)store.setView({scrollLeft:resource.body.scrollLeft,resourceScrollTop:resource.body.scrollTop});
     schedule();
   },{passive:true});
   for(const item of [timeline,resource]) {
@@ -119,13 +122,16 @@ export function mountPlanningView(root,options) {
   }
   for(const name of ['showResources','grouped','editEnabled'])if(options[name]!==undefined && typeof options[name]!=='boolean')throw new ContractError('options.'+name);
   if(options.tooltipDelay!==undefined && (!Number.isFinite(options.tooltipDelay) || options.tooltipDelay<0 || options.tooltipDelay>60000))throw new ContractError('options.tooltipDelay');
+  if(options.resourceUnit!==undefined && typeof options.resourceUnit!=='string')throw new ContractError('options.resourceUnit');
+  if(options.resourceMaxHeight!==undefined && (!Number.isFinite(options.resourceMaxHeight) || options.resourceMaxHeight<50 || options.resourceMaxHeight>2000))throw new ContractError('options.resourceMaxHeight');
+  if(options.resourceOptions!==undefined && (!options.resourceOptions || typeof options.resourceOptions!=='object' || Array.isArray(options.resourceOptions) || Object.entries(options.resourceOptions).some(([key,value])=>!['hideUnused','onlyOverallocated','showTotal','showSelected','collapsed'].includes(key) || typeof value!=='boolean')))throw new ContractError('options.resourceOptions');
   options={...options,contextActions:validateActions(options.contextActions)};
   const doc=root.ownerDocument,win=doc.defaultView;
   const now=new Date();
   const today=options.today ?? [now.getFullYear(),String(now.getMonth()+1).padStart(2,'0'),String(now.getDate()).padStart(2,'0')].join('-');
   const store=createPlanningStore(options.snapshot);
   if(options.mode)store.setView({mode:options.mode});
-  if(options.editEnabled)store.setView({filters:{editEnabled:true}});
+  if(options.editEnabled || options.resourceOptions)store.setView({filters:{editEnabled:!!options.editEnabled,resources:options.resourceOptions ?? {}}});
   // Fail invalid geometry before allocating DOM/listeners or notifying a host.
   calendarFor(store.read().data,store.read().view.mode,today,0);
   const lifetime=createLifetime(win),instanceId=win.crypto.randomUUID();
@@ -148,6 +154,8 @@ export function mountPlanningView(root,options) {
   lifetime.own(()=>{geometry=null;geometryKey=null;});
   const timelineRenderer=createTimelineRenderer({panel:timeline,store,lifetime,options});
   const interactions=createInteractions({frame,toolbar,store,lifetime,options,calendar:()=>geometry});
+  const resources=createResourceRenderer({panel:resource,heading:resourceHeading,store,lifetime,options,cancelSelection:interactions.cancelSelection});
+  const columns=createColumnGuides([timeline,resource],lifetime,()=>geometry);
   const dependencies=createDependencyRenderer({panel:timeline,frame,lifetime,instanceId,
     onEdit:entry=>interactions.openDependency(entry),
     canEditEntry:entry=>{const {data,view}=store.read();return canEdit(data,view,{kind:'dependencies',id:entry.dependency.id,...(entry.overlay?{overlayId:entry.overlay.id}:{})},'dependency');}});
@@ -169,11 +177,9 @@ export function mountPlanningView(root,options) {
     }
     const rendered=timelineRenderer.render(data,view,calendar,loader);
     dependencies.render(data,view,calendar,rendered.projection,rendered.window);
+    resources.render(data,view,calendar);
+    columns.render(calendar,today);
     interactions.render();
-    resource.leftHeader.textContent=data.labels.resource || 'Resource pool';
-    resourceHeading.textContent=data.labels.resourceUsage || 'Resource usage';
-    const hidden=options.showResources===false || data.resources.length===0;
-    resource.root.hidden=hidden;resourceHeading.hidden=hidden;
     timeline.body.scrollTop=view.scrollTop;timeline.body.scrollLeft=view.scrollLeft;
     const height=Math.ceil(frame.getBoundingClientRect().height);
     if(height!==lastHeight && typeof options.onHeight==='function'){lastHeight=height;options.onHeight(height);}

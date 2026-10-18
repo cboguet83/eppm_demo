@@ -10,6 +10,11 @@ function targetOf(node) {
   return {kind:node.dataset.targetKind,id:node.dataset.targetId,...(node.dataset.overlayId?{overlayId:node.dataset.overlayId}:{})};
 }
 
+/** @param {HTMLElement} node Rendered resource row/cell. @returns {object} Delivered period context. */
+function contextOf(node) {
+  const result={};for(const field of ['start','end','scope','periodLabel','resourceNode'])if(node?.dataset[field]!==undefined)result[field]=node.dataset[field];return result;
+}
+
 /** Compose instance-owned interactions without retaining stale entity objects.
  * @param {HTMLElement} frame Owned root. @param {HTMLElement} toolbar Toolbar.
  * @param {object} store Store. @param {object} lifetime Lifetime.
@@ -18,6 +23,8 @@ function targetOf(node) {
 export function createInteractions({frame,toolbar,store,lifetime,options,calendar}) {
   const doc=frame.ownerDocument,win=doc.defaultView,actions=createActionController({store,onEvent:options.onEvent});
   const commands=validateActions(options.contextActions),menu=createContextMenu(frame,lifetime);
+  const commandIndex=new Map(),pendingCommands=[...commands];
+  while(pendingCommands.length){const command=pendingCommands.pop();commandIndex.set(command.id,command);for(const child of command.children ?? [])pendingCommands.push(child);}
   const editor=createEditor({frame,store,actions,lifetime});
   const tooltip=doc.createElement('div');tooltip.className='planning-tooltip';tooltip.setAttribute('role','tooltip');tooltip.hidden=true;frame.append(tooltip);
   const status=doc.createElement('p');status.className='planning-error planning-status';status.setAttribute('role','alert');status.hidden=true;toolbar.after(status);
@@ -38,7 +45,7 @@ export function createInteractions({frame,toolbar,store,lifetime,options,calenda
     current.node.classList.remove('planning-dragging');tooltip.hidden=true;
   };
   /** @param {object} target Current target. @param {MouseEvent} event Invocation. */
-  const openMenu=(target,event)=>{
+  const openMenu=(target,event,context={})=>{
     const {data,view}=store.read(),entries=[];hideHover();cancelSelection();
     if(['tasks','dependencies'].includes(target.kind))entries.push({label:data.labels.edit || 'Edit',disabled:!actions.canEdit(target,target.kind==='dependencies'?'dependency':'task'),run:()=>actions.open(target)});
     // Each entry is checked again on invocation; a formerly enabled menu is safe.
@@ -47,7 +54,7 @@ export function createInteractions({frame,toolbar,store,lifetime,options,calenda
       const {source,destination}=pending.pop();
       for(const command of source) {
         if(!actionAllowed(command,data,view,target))continue;
-        const entry={label:command.label,run:()=>actions.command(command,target)};destination.push(entry);
+        const entry={label:command.label,run:()=>actions.command(command,target,context)};destination.push(entry);
         if(command.children){entry.children=[];pending.push({source:command.children,destination:entry.children});}
       }
     }
@@ -57,14 +64,16 @@ export function createInteractions({frame,toolbar,store,lifetime,options,calenda
   lifetime.listen(hover,'change',()=>{hideHover();const {view}=store.read();store.setView({filters:{...view.filters,hover:hover.checked}});});
   lifetime.listen(frame,'contextmenu',event=>{
     const node=event.target.closest('[data-target-id]'),target=targetOf(node);
-    if(target){event.preventDefault();openMenu(target,event);}
+    if(target){event.preventDefault();openMenu(target,event,contextOf(node));}
   });
   lifetime.listen(frame,'click',event=>{
     if(event.target.closest('.planning-editor,.planning-menu,.planning-inspector'))return;
+    const extension=event.target.closest('[data-host-action]');
+    if(extension){const command=commandIndex.get(extension.dataset.hostAction);if(command)actions.command(command,targetOf(extension),contextOf(extension));return;}
     if(suppressClick){suppressClick=false;return;}
-    const target=targetOf(event.target.closest('[data-target-id]'));
-    if(target && !event.target.closest('[data-expand]')) {
-      cancelSelection();selectionTimer=lifetime.timeout(()=>{selectionTimer=null;actions.select(target);},220);
+    const node=event.target.closest('[data-target-id]'),target=targetOf(node);
+    if(target && !event.target.closest('[data-expand],[data-toggle-resource]') && !node.dataset.scope?.startsWith('alternative_')) {
+      cancelSelection();selectionTimer=lifetime.timeout(()=>{selectionTimer=null;actions.select(target,contextOf(node));},300);
     }
   });
   lifetime.listen(frame,'dblclick',event=>{
@@ -76,10 +85,10 @@ export function createInteractions({frame,toolbar,store,lifetime,options,calenda
     if(event.target.closest('.planning-editor,.planning-menu,.planning-inspector'))return;
     const node=event.target.closest('[data-target-id]'),target=targetOf(node);if(!target)return;
     if(event.key==='ContextMenu' || (event.key==='F10' && event.shiftKey)) {
-      event.preventDefault();const bounds=node.getBoundingClientRect();openMenu(target,{clientX:bounds.left,clientY:bounds.bottom});return;
+      event.preventDefault();const bounds=node.getBoundingClientRect();openMenu(target,{clientX:bounds.left,clientY:bounds.bottom},contextOf(node));return;
     }
     if(event.key==='Enter' && target.kind==='tasks'){event.preventDefault();actions.open(target);}
-    if(event.key===' '){event.preventDefault();actions.select(target);}
+    if(event.key===' ' && !node.dataset.scope?.startsWith('alternative_')){event.preventDefault();actions.select(target,contextOf(node));}
   });
   lifetime.listen(frame,'pointerover',event=>{
     const node=event.target.closest('[data-target-id]');
@@ -89,7 +98,7 @@ export function createInteractions({frame,toolbar,store,lifetime,options,calenda
     hoverTimer=lifetime.timeout(()=>{
       hoverTimer=null;if(!node.isConnected || hovered!==node)return;
       const {record}=actions.resolve(target) ?? {};if(!record)return;
-      tooltip.textContent=record.tooltip ?? [record.name,record.start && record.start+' → '+record.end,record.description].filter(Boolean).join('\n');
+      tooltip.textContent=node.dataset.tooltip ?? record.tooltip ?? [record.name,record.start && record.start+' → '+record.end,record.description].filter(Boolean).join('\n');
       tooltip.hidden=false;place(event);
     },options.tooltipDelay ?? 1000);
   });
@@ -136,8 +145,9 @@ export function createInteractions({frame,toolbar,store,lifetime,options,calenda
     const target=view.draft?.values?.target;
     if(target && !actions.resolve(target)){store.setView({draft:null,error:'The edited item is no longer available.'});}
   }));
-  lifetime.own(()=>{stopDrag();hideHover();cancelSelection();actions.destroy();tooltip.remove();status.remove();});
+  lifetime.own(()=>{stopDrag();hideHover();cancelSelection();actions.destroy();tooltip.remove();status.remove();commandIndex.clear();});
   return {
+    cancelSelection,
     openDependency(entry){hideHover();return actions.open({kind:'dependencies',id:entry.dependency.id,...(entry.overlay?{overlayId:entry.overlay.id}:{})});},
     render() {
       const {data,view}=store.read();editLabel.hidden=!data.capabilities.edit;edit.checked=!!view.filters.editEnabled;

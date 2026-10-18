@@ -1,14 +1,21 @@
 /** Fresh capability checks and correlated user intentions, independent of the DOM. */
 import {ContractError,validateEvent,validateMessage} from '../contracts/index.js';
 
+const TARGET_KINDS=Object.freeze(['tasks','projects','dependencies','resources','hierarchy']);
+
 /** Resolve an opaque target only from the delivered data.
  * @param {object} data Snapshot. @param {object} target Kind/id and optional overlayId.
  */
 export function resolveTarget(data,target) {
-  if(!target || !['tasks','projects','dependencies','resources'].includes(target.kind))return null;
+  if(!target || !TARGET_KINDS.includes(target.kind))return null;
   const overlay=target.overlayId?data.overlays.find(row=>row.id===target.overlayId):null;
   if(target.overlayId && !overlay)return null;
-  const rows=overlay?(target.kind==='projects'?[data.projects.find(row=>row.id===overlay.projectId)]:(overlay[target.kind] ?? [])):data[target.kind];
+  if(overlay && target.kind==='hierarchy')return null;
+  let rows=overlay?(target.kind==='projects'?[data.projects.find(row=>row.id===overlay.projectId)]:(overlay[target.kind] ?? [])):data[target.kind];
+  if(target.kind==='hierarchy') {
+    rows=[];const pending=[...data.hierarchy];
+    while(pending.length){const node=pending.pop();rows.push(node);for(const child of node.children ?? [])pending.push(child);}
+  }
   const record=rows.find(row=>row?.id===target.id);
   return record?{record,overlay,lane:overlay?.kind ?? 'current',projectId:record.projectId ?? (target.kind==='projects'?record.id:undefined)}:null;
 }
@@ -77,7 +84,7 @@ function validateValues(type,values,record) {
 export function createActionController({store,onEvent=()=>{},requestId=()=>crypto.randomUUID()}) {
   let disposed=false,overlayIndexes=new WeakMap();
   const resolve=target=>{
-    if(disposed || !target || !['tasks','projects','dependencies','resources'].includes(target.kind))return null;
+    if(disposed || !target || !TARGET_KINDS.includes(target.kind))return null;
     const overlay=target.overlayId?store.lookup('overlays',target.overlayId):null;
     if(target.overlayId && !overlay)return null;
     let record;

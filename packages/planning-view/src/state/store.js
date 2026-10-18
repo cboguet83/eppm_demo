@@ -1,7 +1,7 @@
 /** Instance-owned validated snapshots, indexes, and interaction state. */
 import {ContractError,validateMessage} from '../contracts/index.js';
 
-const COLLECTIONS=Object.freeze(['projects','tasks','dependencies','resources','overlays']);
+const COLLECTIONS=Object.freeze(['projects','tasks','dependencies','resources','overlays','hierarchy']);
 
 /** Freeze a validated JSON graph iteratively; unchanged frozen records are reused.
  * @param {object} root Owned JSON data. @returns {object} Frozen data.
@@ -33,7 +33,7 @@ function complete(snapshot) {
 
 /** @returns {object} Default interaction state for a new view scope. */
 function initialView() {
-  return {scrollTop:0,scrollLeft:0,mode:'Quarter',expandedProjects:[],collapsedResources:[],
+  return {scrollTop:0,scrollLeft:0,resourceScrollTop:0,mode:'Quarter',expandedProjects:[],collapsedResources:[],
     selection:null,draft:null,preview:null,pendingRequestId:null,error:null,filters:{}};
 }
 
@@ -67,7 +67,7 @@ function patchData(previous,patch) {
     dependencies:merge(previous.dependencies,patch.dependencies,removeDependencies),
     resources:merge(previous.resources,patch.resources,ids(patch,'removeResourceIds'))};
   result.overlays=previous.overlays.filter(row=>!removed.has(row.projectId));
-  for(const field of ['hierarchy','overlays','capabilities','labels']) {
+  for(const field of ['hierarchy','overlays','capabilities','labels','resourceFilter']) {
     if(patch[field]!==undefined) result[field]=patch[field];
   }
   result.loadedProjectIds=patch.loadedProjectIds ?? previous.loadedProjectIds.filter(id=>!removed.has(id) && !evicted.has(id));
@@ -76,7 +76,10 @@ function patchData(previous,patch) {
 
 /** @param {object} data Snapshot. @returns {object} Private collection indexes. */
 function buildIndexes(data) {
-  return Object.fromEntries(COLLECTIONS.map(field=>[field,new Map(data[field].map(row=>[row.id,row]))]));
+  const result=Object.fromEntries(COLLECTIONS.filter(field=>field!=='hierarchy').map(field=>[field,new Map(data[field].map(row=>[row.id,row]))]));
+  result.hierarchy=new Map();const pending=[...data.hierarchy];
+  while(pending.length){const node=pending.pop();result.hierarchy.set(node.id,node);for(const child of node.children ?? [])pending.push(child);}
+  return result;
 }
 
 /** Check relationships after joining individually validated old/new records.
@@ -95,7 +98,7 @@ function membership(data) {
 
 /** @param {object} view Interaction state. */
 function validateView(view) {
-  for(const field of ['scrollTop','scrollLeft']) {
+  for(const field of ['scrollTop','scrollLeft','resourceScrollTop']) {
     if(!Number.isFinite(view[field]) || view[field]<0) throw new ContractError('view.'+field);
   }
   if(!['Day','Week','Month','Quarter','Year'].includes(view.mode)) throw new ContractError('view.mode');
