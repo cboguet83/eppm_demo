@@ -20,6 +20,10 @@ versus reference 26 rows, 208 cells and 0 px. Both retain the same hard bounds.
 Native host-edit preparation improved from 0.646 to 0.511 seconds; emitted
 payload size is 2,873 bytes versus 2,850. The separate native driver regression
 also submits an actual mounted task edit and checks source/restore cleanup.
+The native candidate `tasks: 0` counts the initial lazy payload; `visibleTasks: 2`
+confirms hydrated task rows before scrolling. The reference `tasks: 2` counted
+hydrated private state. This count-field boundary differs; fixture contents and
+the timed initial render-message boundary remain unchanged.
 
 Render timing brackets synchronous delivery through the actual EPPM bootstrap,
 including normalization, checked data ownership and initial drawing, just as
