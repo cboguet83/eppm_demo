@@ -55,3 +55,13 @@ Ordinary project flush retains both lists. Full reference reset clears only thei
 entry rows, preserves the definition rows and unrelated catalogs, and restores
 the established event-type seed. Sequence repair advances the common entry
 high-water mark before reset and never rewinds it.
+
+## Settings translation editor
+
+Open Settings → Project Configuration → Project roles or Event types. Both tabs
+use the shared editor while retaining independent selections and lazy loading.
+The Name field is also the English label. Optional French, German, Luxembourgish
+and Portuguese fields show explicit stored labels; an empty field means that
+reads use the canonical name. Saving an empty optional label removes the override.
+Additional stored locales are preserved. Save writes the entire submitted edit
+atomically, and deleting a referenced choice remains prohibited by PostgreSQL.

@@ -943,5 +943,14 @@
     "save": "Guardar exceção",
     "delete": "Eliminar exceção",
     "help": "As reduções são em ETI, não em percentagem. Reduções sobrepostas somam-se; a capacidade não fica abaixo de zero. Ambas as datas estão incluídas."
+  },
+  "business_dictionary": {
+    "english": "O nome também é a designação em inglês.",
+    "fr": "Francês",
+    "de": "Alemão",
+    "lb": "Luxemburguês",
+    "pt": "Português",
+    "absent": "Sem tradução",
+    "fallback": "Deixe em branco para usar o nome canónico. Limpar uma designação remove essa tradução."
   }
 }

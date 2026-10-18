@@ -28,7 +28,7 @@ identified by task 1.1 in `git log origin/main..HEAD --oneline`.
 
 ## 4. Settings translation maintenance
 
-- [ ] 4.1 Compose the dictionary service in `app/main.py` and `SettingsWorkspace` and reuse a common editor through the existing lazy role/event-type tabs. Add canonical-name/English editing and optional fr/de/lb/pt translations, explicit absent-label state, blank removal, stable selection, safe errors and deletion confirmation. Add translated interface strings to the five packaged catalogs and user-facing Settings documentation. Add Streamlit and authenticated browser tests for create/rename/translation/removal, fallback versus explicit text, permission denial, used-entry deletion and lazy-tab behavior. Verify these UI tests, composition/layer checks and packaged-resource tests pass.
+- [x] 4.1 Compose the dictionary service in `app/main.py` and `SettingsWorkspace` and reuse a common editor through the existing lazy role/event-type tabs. Add canonical-name/English editing and optional fr/de/lb/pt translations, explicit absent-label state, blank removal, stable selection, safe errors and deletion confirmation. Add translated interface strings to the five packaged catalogs and user-facing Settings documentation. Add Streamlit and authenticated browser tests for create/rename/translation/removal, fallback versus explicit text, permission denial, used-entry deletion and lazy-tab behavior. Verify these UI tests, composition/layer checks and packaged-resource tests pass.
 
 ## 5. Cross-component integration
 

@@ -19,6 +19,7 @@ from app.application.services.tags import TagService
 from app.application.services.planning import PlanningService
 from app.application.services.project_overallocation import ProjectOverallocationService
 from app.application.services.collaboration import CollaborationService
+from app.application.services.dictionaries import DictionaryService
 from app.application.services.budgets import BudgetService
 from app.application.services.finance import FinanceService
 from app.application.services.dashboard import DashboardService
@@ -179,6 +180,13 @@ def create_budget_service(resources: RuntimeResources, *, access: BusinessAccess
     return BudgetService(PostgresBudgetReader(resources.database, resources.key, access=access))
 
 
+def create_dictionary_service(resources: RuntimeResources, *, access: BusinessAccess) -> DictionaryService:
+    """Compose shared dictionaries with the caller's current actor and pool."""
+    from app.infrastructure.postgresql.dictionaries import PostgresDictionaryGateway
+
+    return DictionaryService(PostgresDictionaryGateway(resources.database, resources.key, access=access))
+
+
 def main() -> None:
     """Run a startup command or compose the Streamlit application."""
     import streamlit as st
@@ -285,6 +293,7 @@ def create_settings_workspace(resources: RuntimeResources, *, access: BusinessAc
         create_project_type_service(resources, access=access),
         create_collaboration_service(resources, access=access),
         WbsService(PostgresProjectGateway(resources.database, resources.key, access=access)),
+        create_dictionary_service(resources, access=access),
     )
 
 

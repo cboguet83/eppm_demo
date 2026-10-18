@@ -517,6 +517,7 @@ and `node --test tests/test_portfolio_table.cjs`.
    - Real-time constraint violation diagnostics detecting scheduling breaks.
    - Bulk CSV milestone loader with validation and downloadable template.
 3. **⚙️ 3. Settings**:
+   - Project Configuration → Project roles / Event types share a translation editor. Name is the English label; blank French, German, Luxembourgish or Portuguese labels use the canonical name. Clearing a label removes that translation. Referenced entries cannot be deleted.
    - Click Settings to reveal four indented pages, with Organization Structure selected by default:
      - **🏢 Organization Structure**: Manage Function Types, Hierarchy Types, Functions, Teams, Employees, Pool Types, and Resource Pools in tabs at the top of the page.
      - **🧩 Parameter Definition**: Dynamic schema builder to manage schema groups, create/edit typed parameters (TEXT, DATE, NUMBER, ENUM, TAGS, HYPERLINK), configure discrete options, and inspect the real-time schema hierarchy tree.
