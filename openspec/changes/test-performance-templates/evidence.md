@@ -498,3 +498,108 @@ is rebuilt for the layout-free marker before the new comparison. All **112 Node
 cases pass**, with zero failures/skips. AST comparison confirms every original
 assertion in both modified browser modules remains. Strict OpenSpec validation
 passes; focused checks do not substitute for the pending full comparisons.
+
+## Task 4.1 — v7 reference blocked by independent-save contention
+
+Task 3.9 is committed as `f8d7c0eac1b3f1739cba96aee1ca5d29ccdd08c3`.
+The final image was rebuilt and the managed verification checkout advanced
+without changing the three fixed measurement inputs. V7 source fingerprint is
+`bba2b312f058d51a9be1316f1a67f59039089cd6d0a970893b80920f02007dc3`.
+All nine preparation cohorts pass their 54 canonical cases. Median migrated
+preparation is A 19.166846s / B 5.421497s / C 6.442131s: **66.389194% lower**
+for C. This is preparation evidence only.
+
+The fresh/serial full reference then fails at the large ten-editor title-save
+case after **1,833 passes**, with five safe `ProjectStorageError` results caused
+by exhausted `TransactionRetryError`. Pytest wall time is **1,949.09s** and
+monitored wall time **1,950.755298s**. It fails before full B/C, Node execution
+or performance acceptance. The failure is in the unchanged persistence code;
+`git diff origin/main...HEAD -- app/application app/infrastructure` is empty.
+No measured source was edited while the matrix ran.
+
+A fresh isolated reproduction passes without coverage (36.10s), but reproduces
+the failure with coverage (35.58s), excluding prior-test state as a necessary
+cause. Exception-only instrumentation records SQLSTATE 40001 dependency-pivot
+failures while reading owner-specific WBS/property rows. It logs SQL templates
+and diagnostic types, never bound values or connection coordinates. A ten-project
+control passes with zero exceptions and ten project updates; it performs no
+property writes, so unexpected dynamic-property rewrites are not the cause.
+
+Paired disposable-database probes keep all original ten-success, title, WBS and
+property assertions and the unchanged three-attempt replay limit:
+
+| Project-table treatment | Result | Time | Save attempts |
+| --- | --- | ---: | --- |
+| Default fillfactor 100, VACUUM FULL | Failed | 35.17s | Several reach three; some exhaust |
+| Fillfactor 50, VACUUM FULL | Passed | 34.29s | All ten succeed on first attempt |
+| Fillfactor 70, VACUUM FULL | Passed | 30.32s | All ten succeed on first attempt |
+| Fillfactor 70, CLUSTER by existing primary key | Passed | 34.65s | All ten succeed on first attempt |
+
+These results establish a physical-layout dependence. Avoiding non-HOT index
+updates is the mechanism supported by the probes and PostgreSQL's
+[HOT documentation](https://www.postgresql.org/docs/18/storage-hot.html) and
+[SSI implementation notes](https://raw.githubusercontent.com/postgres/postgres/REL_18_STABLE/src/backend/storage/lmgr/README-SSI);
+no direct HOT-counter measurement has yet been captured. The candidate is not
+claimed as a completed migration or a universal no-retry guarantee.
+
+Only disposable test databases received these diagnostic treatments. No new
+application migration, retry policy or business/security change has been made.
+A proposed forward migration would reserve 30% project-table page space and
+repack existing rows, preserving serializable isolation and the three-attempt
+bound. Its costs are more table space, temporary rebuild space and an exclusive
+read/write-blocking lock during the repack, per PostgreSQL's
+[CLUSTER documentation](https://www.postgresql.org/docs/18/sql-cluster.html).
+A separate user approval request for focused task 3.10 is pending because the
+application-storage scope exceeds the task 3.9 navigation approval.
+
+Task 4.1 remains unchecked, CI stays fresh/serial, and archive/PR creation waits
+for actual successful full comparisons. No failed full run or diagnostic
+partial run is counted as acceptance, and no assertion or gate is weakened.
+
+Post-diagnostic audit: no current-invocation `eppm_test_serial_*` database remains. One differently named `eppm_test_<uuid>` database with idle runtime clients was observed on the shared test server; ownership is not established and it is left untouched. Future controlled comparisons must wait for an uncontended server and the driver's zero-other-resource check. Do not infer or perform prefix-based cleanup.
+
+## Task 3.10 — approved forward-only project update headroom
+
+On 2026-10-18 the user explicitly approved the fillfactor-70 forward migration,
+existing-row repack, regression tests and dedicated commit, including the
+exclusive-lock and disk-space tradeoffs. Migration 0069 changes only project
+table storage: ALTER TABLE fillfactor, CLUSTER through its existing primary key,
+then ANALYZE. All **68 historical migration files remain byte-for-byte equal
+to HEAD**. The transaction engine, three-attempt limit/backoff, authorization,
+business services and original concurrent-save test module have no diff.
+
+The new clean-install regression failed before the migration with **zero HOT
+updates instead of ten** (0.96s), independently of checking a configuration value.
+It now requires ten on-page updates from the real transaction-local PostgreSQL
+statistics view, avoiding asynchronous cumulative-counter polling.
+
+Three migration cases pass (2.53s before formatting-only cleanup): clean page
+headroom, populated upgrade/reentry and a controlled failure after repacking.
+The populated cases compare all project rows, WBS shares, project cache revisions,
+owner/ACL/RLS flags, row policies, constraints and index definitions. They retain
+the complete historical ledger including timestamps; the deliberate failure
+restores the old storage file/options and ledger before a successful reapply.
+No row/security object is rewritten to make the tests pass.
+
+The final formatted tests and all existing concurrent editor, foundation
+transaction/retry, allocation integrity, WBS hardening and business-authorization
+cases pass **124 tests in 108.54s** under coverage with fresh/serial preparation.
+The identical set passes **124 tests in 52.66s** with coverage, template mode and
+two workers/loadgroup, with worker restarts disabled. The original ten-editor
+workload passes in both, including its 10,001-project/browser-form case. Focused
+coverage collection is not full application acceptance; the full 95% gate and
+all Node cases remain required in the new controlled comparisons.
+
+The capability delta retains every existing independent-save requirement and
+scenario, adding populated-upgrade preservation coverage. Documentation records
+page-space/HOT rationale, maintenance-window locking, temporary rebuild space
+and increased table storage; this is not a universal no-retry guarantee.
+Strict OpenSpec validation passes.
+
+Another invocation was observed creating differently owned databases on the old
+shared test service. Its resources were left untouched. A new isolated
+`eppm-performance-tests-postgres-1` service, PostgreSQL 18.6 / max_connections 100,
+is created on loopback port 25432 with distinct newly generated ignored test
+credentials for the restarted comparison. No application database is modified.
+Task 4.1 remains open and CI stays fresh/serial pending complete final-source
+cohorts, full A/B/C/repeated-C, unchanged full gates and performance acceptance.
