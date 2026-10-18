@@ -10,6 +10,7 @@ import psycopg
 import pytest
 
 from tests.postgresql.browser import native_server
+from tests.postgresql.browser_completion import ScriptCompletion
 from tests.postgresql.conftest import AuthorizedFixture
 from tests.postgresql.dashboard_browser import _SCREEN
 from tests.test_dialog_browser import expect, sync_playwright
@@ -40,33 +41,38 @@ _VIEW_RUN_PREFIX = 'View test run: '
 
 @contextmanager
 def _completed_filter_run(
-    page: 'Page', prefix: str = _FRAME_RUN_PREFIX,
+    page: 'Page', completion: ScriptCompletion,
+    prefix: str = _FRAME_RUN_PREFIX,
 ) -> Iterator[None]:
     """Observe persistent server completion around one native filter action.
 
     Args:
         page: Test screen with persistent completion counters.
+        completion: Actual protocol observer attached before navigation.
         prefix: Marker for the filter fragment or page-level navigation.
 
     Yields:
         Control to perform one expander, filter or navigation action.
 
     Raises:
-        TimeoutError: The requested fragment/page does not finish in 30 seconds.
+        AssertionError: A script or unique completion marker never becomes ready.
+        TimeoutError: The completion caption does not advance in 30 seconds.
     """
     marker = page.get_by_test_id('stCaptionContainer').filter(
         has_text=re.compile('^' + re.escape(prefix)),
     )
-    previous = int(marker.text_content().strip().removeprefix(prefix))
-    yield
-    page.wait_for_function("""({previous, prefix}) =>
-        [...document.querySelectorAll('[data-testid="stCaptionContainer"]')]
-            .some(node => {
-                const text = node.textContent.trim();
-                return text.startsWith(prefix)
-                    && Number(text.slice(prefix.length)) > previous;
-            })
-    """, arg={'previous': previous, 'prefix': prefix}, timeout=30000)
+    with completion.action():
+        expect(marker).to_have_count(1, timeout=30000)
+        previous = int(marker.text_content().strip().removeprefix(prefix))
+        yield
+        page.wait_for_function("""({previous, prefix}) =>
+            [...document.querySelectorAll('[data-testid="stCaptionContainer"]')]
+                .some(node => {
+                    const text = node.textContent.trim();
+                    return text.startsWith(prefix)
+                        && Number(text.slice(prefix.length)) > previous;
+                })
+        """, arg={'previous': previous, 'prefix': prefix}, timeout=30000)
 
 
 def _acknowledged_screen(*, filter_marker: bool = True) -> str:
@@ -107,14 +113,21 @@ if not hasattr(panel_module, '_eppm_test_original_panel'):
 
 
 @pytest.mark.parametrize(
-    'delayed_frame', [False, True], ids=['immediate', 'delayed'],
+    'render_delay', ['none', 'frame', 'page-completion'],
+    ids=['immediate', 'delayed', 'delayed-page-completion'],
 )
 def test_organization_frames_preserve_state_and_highlight_collapsed_filters(
-    authorized: AuthorizedFixture, tmp_path: Path, delayed_frame: bool,
+    authorized: AuthorizedFixture, tmp_path: Path, render_delay: str,
 ) -> None:
-    """Retain completed organization choices across view replacement."""
+    """Retain completed organization choices across view replacement.
+
+    Args:
+        authorized: Isolated real database and verified business identities.
+        tmp_path: Private browser-server sources and diagnostic directory.
+        render_delay: Controlled frame or page-tail delay, or ordinary rendering.
+    """
     screen = _acknowledged_screen()
-    if delayed_frame:
+    if render_delay == 'frame':
         screen = """
 import time
 import streamlit as st
@@ -133,6 +146,12 @@ if not hasattr(st, '_eppm_test_original_expander'):
         return frame
     st.expander = delayed_expander
 """ + screen
+    if render_delay == 'page-completion':
+        screen += """
+import time
+if view != 'Other' and st.session_state['shell_runs'] > 1:
+    time.sleep(1)
+"""
     with (
         native_server(authorized, tmp_path, screen) as server,
         sync_playwright() as playwright,
@@ -140,35 +159,40 @@ if not hasattr(st, '_eppm_test_original_expander'):
         browser = playwright.chromium.launch(headless=True)
         try:
             page = server.new_page(browser, viewport={'width': 1600, 'height': 1200})
+            completion = ScriptCompletion(page)
             page.goto(server.origin)
             for facet in ('division', 'org_team', 'org_manager'):
                 frame = page.locator('.st-key-organization_frame_' + facet)
+                expect(frame.locator('summary')).to_have_count(1, timeout=30000)
                 expect(frame.locator('summary')).to_be_visible(timeout=30000)
-                with _completed_filter_run(page):
+                with _completed_filter_run(page, completion):
                     frame.locator('summary').click()
-                with _completed_filter_run(page):
+                with _completed_filter_run(page, completion):
                     frame.get_by_role('button').first.click()
-                with _completed_filter_run(page):
+                with _completed_filter_run(page, completion):
                     frame.locator('summary').click()
+                expect(frame.locator('summary')).to_have_count(1, timeout=30000)
                 expect(frame.locator('summary')).to_have_css(
                     'background-color', 'rgb(196, 16, 57)',
                 )
             team = page.locator('.st-key-organization_frame_org_team')
-            with _completed_filter_run(page):
+            with _completed_filter_run(page, completion):
                 team.locator('summary').click()
             for view in ('Other', 'Projects', 'Planning', 'Dashboard'):
-                with _completed_filter_run(page, _VIEW_RUN_PREFIX):
+                with _completed_filter_run(page, completion, _VIEW_RUN_PREFIX):
                     page.get_by_test_id('stRadio').get_by_text(
                         view, exact=True,
                     ).click()
                 if view == 'Other':
                     expect(team).to_have_count(0)
                     continue
+                expect(team.locator('details')).to_have_count(1, timeout=30000)
                 expect(team.locator('details')).to_have_attribute('open', '')
                 for facet in ('division', 'org_manager'):
                     summary = page.locator(
                         '.st-key-organization_frame_' + facet + ' summary'
                     )
+                    expect(summary).to_have_count(1, timeout=30000)
                     expect(summary).to_have_css(
                         'background-color', 'rgb(196, 16, 57)',
                     )
@@ -183,7 +207,12 @@ if not hasattr(st, '_eppm_test_original_expander'):
 def test_shared_status_filter_survives_navigation_and_widget_cleanup(
     authorized: AuthorizedFixture, tmp_path: Path,
 ) -> None:
-    """Preserve status selection and layout after completed navigation."""
+    """Preserve status selection and layout after completed navigation.
+
+    Args:
+        authorized: Isolated real database and verified business identities.
+        tmp_path: Private browser-server sources and diagnostic directory.
+    """
     with psycopg.connect(authorized.setup.operator_url) as connection:
         connection.execute("UPDATE eppm.project SET name='Project '||id, status=CASE id WHEN 1 THEN 'Completed' ELSE 'In Progress' END")
         connection.execute("INSERT INTO eppm.project_task(project_id,project_plan_id,task_name,start_date,end_date) SELECT id,(SELECT id FROM eppm.project_plan WHERE project_id=p.id AND is_current),'Task '||id,'2026-01-01','2026-02-01' FROM eppm.project p")
@@ -193,6 +222,7 @@ def test_shared_status_filter_survives_navigation_and_widget_cleanup(
         browser = playwright.chromium.launch(headless=True)
         try:
             page = server.new_page(browser, viewport={'width': 1600, 'height': 1200})
+            completion = ScriptCompletion(page)
             page.goto(server.origin)
             status = page.locator('.st-key-dashboard_filter_status').last
             expect(status).to_contain_text('In Progress', timeout=30000)
@@ -203,7 +233,7 @@ def test_shared_status_filter_survives_navigation_and_widget_cleanup(
             expect(status).not_to_contain_text('In Progress')
             page.keyboard.press('Escape')
             for view in ('Other', 'Projects', 'Planning', 'Dashboard'):
-                with _completed_filter_run(page, _VIEW_RUN_PREFIX):
+                with _completed_filter_run(page, completion, _VIEW_RUN_PREFIX):
                     page.get_by_test_id('stRadio').get_by_text(view, exact=True).click()
                 if view == 'Other':
                     expect(status).to_have_count(0)
@@ -243,7 +273,7 @@ def test_shared_status_filter_survives_navigation_and_widget_cleanup(
                 expect(page.get_by_test_id('stException')).to_have_count(0)
             page.locator('.st-key-dashboard_clear button').click()
             expect(status).to_contain_text('In Progress')
-            with _completed_filter_run(page, _VIEW_RUN_PREFIX):
+            with _completed_filter_run(page, completion, _VIEW_RUN_PREFIX):
                 page.get_by_test_id('stRadio').get_by_text(
                     'Projects', exact=True,
                 ).click()
