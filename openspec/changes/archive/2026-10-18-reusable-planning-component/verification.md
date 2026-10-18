@@ -1,6 +1,6 @@
 # Verification: reusable-planning-component
 
-Status: **passed; ready for rearchive after packaging correction**. The OpenSpec verify-change workflow
+Status: **passed; rearchived after packaging correction on 2026-10-18**. The OpenSpec verify-change workflow
 checked completeness, all requirement/scenario mappings, design adherence and
 code-pattern consistency against the integrated implementation. No applicable
 check was skipped or left unverified.
@@ -166,9 +166,10 @@ Portable results are recorded here; local logs are
 The focused ledger below is from `git log main..HEAD --oneline` filtered by the
 change label, with `git log origin/main..HEAD --oneline` confirming the actual
 PR base. Current main is an ancestor of the verified source. Task 8.1 contains the final packaging correction and renewed acceptance; its
-own hash is added only by the subsequent archive follow-up.
+already-existing hash was added by this archive follow-up.
 
 ```text
+4abe570 fix(reusable-planning-component): complete task 8.1 isolated packaging hooks
 3eab64d chore(reusable-planning-component): rearchive integrated verified change
 ac8e6e2 test(reusable-planning-component): complete task 7.2 integrated acceptance
 098f9b8 perf(reusable-planning-component): complete task 7.3 scroll DOM correction
@@ -200,7 +201,8 @@ e68f994 feat(reusable-planning-component): complete task 2.1 host contracts
 ```
 
 PR: https://github.com/cboguet83/eppm_demo/pull/4. All 27 tasks are complete;
-final packaging acceptance is complete and rearchive follows. Both capability
+final packaging acceptance is complete and the change is rearchived at
+`openspec/changes/archive/2026-10-18-reusable-planning-component/`. Both capability
 specs remain synced. Full CI on the final PR revision is an additional gate
 before requesting merge approval. Registry publication and merge have not
 occurred. The unrelated primary checkout was not edited.
@@ -212,8 +214,8 @@ preserving task history.
 
 ## Final assessment
 
-All applicable implementation and packaging checks passed. Ready for rearchive;
-final PR CI must pass before merge approval is requested.
+All applicable implementation and packaging checks passed. The change is
+rearchived; final PR CI must pass before merge approval is requested.
 
 ## Hosted packaging correction
 
