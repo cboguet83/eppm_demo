@@ -1,6 +1,6 @@
 # Verification: reusable-planning-component
 
-Status: **passed; ready for rearchive after consumer completion correction**. The OpenSpec verify-change workflow
+Status: **passed; rearchived after consumer completion correction on 2026-10-18**. The OpenSpec verify-change workflow
 checked completeness, all requirement/scenario mappings, design adherence and
 code-pattern consistency against the integrated implementation. No applicable
 check was skipped or left unverified.
@@ -166,9 +166,10 @@ Portable results are recorded here; local logs are
 The focused ledger below is from `git log main..HEAD --oneline` filtered by the
 change label, with `git log origin/main..HEAD --oneline` confirming the actual
 PR base. Current main is an ancestor of the verified source. Task 9.1 contains the final consumer correction and renewed acceptance; its
-own hash is recorded only by the subsequent archive follow-up.
+already-existing hash was added by this archive follow-up.
 
 ```text
+daf9e9b test(reusable-planning-component): complete task 9.1 native consumer completion
 fc2db4a chore(reusable-planning-component): archive verified packaging correction
 4abe570 fix(reusable-planning-component): complete task 8.1 isolated packaging hooks
 3eab64d chore(reusable-planning-component): rearchive integrated verified change
@@ -215,7 +216,7 @@ preserving task history.
 
 ## Final assessment
 
-All applicable implementation and packaging checks passed. Ready for rearchive; final PR CI must pass before merge approval is requested.
+All applicable implementation and packaging checks passed. The change is rearchived; final PR CI must pass before merge approval is requested.
 
 ## Hosted packaging correction
 
