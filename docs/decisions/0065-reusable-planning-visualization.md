@@ -1,4 +1,4 @@
-# ADR 0064: Reusable planning visualization with host-owned workflows
+# ADR 0065: Reusable planning visualization with host-owned workflows
 
 The planning chart and resource grid share a native JavaScript module with a
 validated version-1 contract and a `mountPlanningView(root, options)` lifecycle.

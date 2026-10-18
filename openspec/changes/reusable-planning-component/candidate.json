@@ -834,6 +834,7 @@
     "native_initial_render_median_ms": 60,
     "other_gates": "Unchanged: other applicable timings retain 10% AND 5 ms regression rule; all hard bounds retained."
   },
-  "source_commit": "05f87fe plus task 7.3 browser correction",
-  "asset_manifest_sha256": "963444bed1fd4f6af4604cfd2ee1bb0aa0b87b543642abb7a777cff1e4daf002"
+  "source_commit": "098f9b8",
+  "asset_manifest_sha256": "963444bed1fd4f6af4604cfd2ee1bb0aa0b87b543642abb7a777cff1e4daf002",
+  "accepted": true
 }
