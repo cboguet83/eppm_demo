@@ -4,6 +4,7 @@ const fs=require('node:fs');
 const path=require('node:path');
 const http=require('node:http');
 const {execFileSync}=require('node:child_process');
+const {browserStartupError}=require('./benchmark_browser.cjs');
 const root=path.resolve(__dirname,'..');
 const localPython=path.join(root,'.venv',process.platform==='win32'?'Scripts/python.exe':'bin/python');
 const python=process.env.EPPM_BENCHMARK_PYTHON || (fs.existsSync(localPython)?localPython:'python');
@@ -25,7 +26,9 @@ async function openPlanningBrowser(executable=process.env.EPPM_BENCHMARK_BROWSER
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
   let browser;
   try {
-    browser=await chromium.launch({headless:true,chromiumSandbox:true,...(executable?{executablePath:executable}:{})});
+    try {
+      browser=await chromium.launch({headless:true,chromiumSandbox:true,timeout:20000,...(executable?{executablePath:executable}:{})});
+    }catch(error){throw browserStartupError(error);}
     const page=await browser.newPage({viewport:{width:1500,height:1100}});
     const errors=[];page.on('pageerror',error=>errors.push(error.message));
     await page.goto('http://127.0.0.1:'+server.address().port);

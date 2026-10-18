@@ -40,6 +40,11 @@ Use [OWASP ASVS 5.0.0](https://owasp.org/www-project-application-security-verifi
 
 ### Users and external identities
 
+For a named-project assignment, use **Search project names or references** to
+narrow the authorized choices, check the desired projects in the scrollable
+**Projects** list, and choose **Grant access**. Checking or clearing a project
+does not create an assignment; the explicit grant retains server-side validation.
+
 Maintain an internal user identifier and an external identity mapping uniquely constrained by OIDC issuer and subject: `iss` + `sub`.
 
 Email and display name are profile attributes, never authorization keys. Do not merge identities by matching email, and do not automatically link identities across providers. Follow the [OpenID Connect guidance on claim stability](https://openid.net/specs/openid-connect-core-1_0.html#ClaimStability).

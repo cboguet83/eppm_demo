@@ -10,9 +10,13 @@ import streamlit as st
 from app.presentation.i18n import get_current_locale, t
 from app.domain.projects.collaboration import CatalogKind, EVENT_SCOPES, EVENT_STATUSES
 from app.application.services.collaboration import CollaborationService
+from app.application.services.dictionaries import DictionaryService
 from app.application.ports.collaboration import ProjectEvent
 from app.presentation.components.modal_form import ModalField, ModalForm, modal_form
-from app.application.exceptions import CollaborationConflictError, CollaborationStorageError
+from app.application.exceptions import (
+    CollaborationConflictError, CollaborationStorageError,
+    DictionaryConflictError, DictionaryStorageError,
+)
 
 
 def _label(key: str, default: str) -> str:
@@ -24,13 +28,13 @@ def _change(action: Callable[[], object], error_key: str) -> None:
     try:
         action()
         st.session_state.pop(error_key, None)
-    except (ValueError, CollaborationStorageError) as error:
+    except (ValueError, CollaborationStorageError, DictionaryStorageError) as error:
         st.session_state[error_key] = (
             _label(
                 "integrity_error",
                 "Cannot save: this entry is duplicated, missing, or still in use.",
             )
-            if isinstance(error, CollaborationConflictError)
+            if isinstance(error, (CollaborationConflictError, DictionaryConflictError))
             else str(error)
         )
 
@@ -47,7 +51,7 @@ def collaboration_errors[**P](function: Callable[P, None]) -> Callable[P, None]:
     def render(*args: P.args, **kwargs: P.kwargs) -> None:
         try:
             function(*args, **kwargs)
-        except (ValueError, CollaborationStorageError) as error:
+        except (ValueError, CollaborationStorageError, DictionaryStorageError) as error:
             st.error(str(error))
 
     return render
@@ -55,7 +59,10 @@ def collaboration_errors[**P](function: Callable[P, None]) -> Callable[P, None]:
 
 @st.fragment
 @collaboration_errors
-def render_project_catalog(service: CollaborationService, kind: CatalogKind) -> None:
+def render_project_catalog(
+    service: CollaborationService, kind: CatalogKind,
+    dictionaries: DictionaryService | None = None,
+) -> None:
     """Maintain the role/type catalog without loading unrelated settings tabs."""
     st.subheader(
         _label("roles", "Project roles") if kind == "role" else _label("types", "Event types")
@@ -76,12 +83,19 @@ def render_project_catalog(service: CollaborationService, kind: CatalogKind) -> 
         format_func=lambda value: choices.get(value, _label("new_entry", "New entry")),
         key=prefix + "_selection",
     )
+    code = 'project_role' if kind == 'role' else 'project_event_type'
+    labels = dictionaries.translations(code, item_id) if dictionaries and item_id is not None else {}
     with st.form(f"{prefix}_{item_id}"):
         name_key = f"{prefix}_{item_id}_name"
         st.text_input(_label("name", "Name"), value=choices.get(item_id, ""), key=name_key)
+        translation_keys = _translation_fields(prefix, item_id, labels) if dictionaries else {}
 
         def save_entry() -> None:
-            saved_id = service.save_catalog(kind, st.session_state[name_key], item_id)
+            if dictionaries:
+                submitted = {locale: st.session_state[key] for locale, key in translation_keys.items()}
+                saved_id = dictionaries.save_entry(code, st.session_state[name_key], item_id, submitted)
+            else:
+                saved_id = service.save_catalog(kind, st.session_state[name_key], item_id)
             st.session_state[prefix + "_selection"] = saved_id
 
         st.form_submit_button(
@@ -96,7 +110,10 @@ def render_project_catalog(service: CollaborationService, kind: CatalogKind) -> 
         )
 
         def delete_entry() -> None:
-            service.delete_catalog(kind, item_id)
+            if dictionaries:
+                dictionaries.delete_entry(code, item_id)
+            else:
+                service.delete_catalog(kind, item_id)
             st.session_state[prefix + "_selection"] = None
 
         st.button(
@@ -107,6 +124,19 @@ def render_project_catalog(service: CollaborationService, kind: CatalogKind) -> 
             args=(delete_entry, prefix + "_error"),
         )
     _show_error(prefix + "_error")
+
+
+def _translation_fields(prefix: str, item_id: int | None, labels: dict[str, str]) -> dict[str, str]:
+    """Edit explicit labels; blank fields visibly retain canonical-name fallback."""
+    st.caption(t('business_dictionary.english'))
+    keys: dict[str, str] = {}
+    for locale in ('fr', 'de', 'lb', 'pt'):
+        key = f'{prefix}_{item_id}_label_{locale}'
+        st.text_input(t('business_dictionary.' + locale), value=labels.get(locale, ''),
+                      key=key, placeholder=t('business_dictionary.absent'),
+                      help=t('business_dictionary.fallback'))
+        keys[locale] = key
+    return keys
 
 
 @st.fragment

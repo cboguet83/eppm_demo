@@ -73,6 +73,14 @@ class CollaborationStorageError(RuntimeError):
     """Collaboration storage could not complete the requested operation."""
 
 
+class DictionaryConflictError(ValueError):
+    """A dictionary edit conflicts with a name, reference or concurrent change."""
+
+
+class DictionaryStorageError(RuntimeError):
+    """Shared dictionary storage could not complete the requested operation."""
+
+
 class DatabaseMaintenanceError(RuntimeError):
     """Database startup or maintenance failed with a safe user-facing message."""
 

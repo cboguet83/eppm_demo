@@ -58,3 +58,10 @@ evidence only. For this extraction the user explicitly approved initial-render
 median limits of 150 ms synthetic / 60 ms native on 2026-10-18. Retain the
 design's 10% **and** 5 ms median-regression gate for other applicable timings,
 and keep all row, alignment, loading and geometry hard bounds unchanged.
+
+The mounted driver retains current main's bounded startup diagnostics through
+Playwright: launch is limited to 20 seconds, early exit rejects promptly, and
+only allowlisted exit/signal/spawn metadata and reason categories are reported.
+Raw child output, paths and launch arguments are withheld; sandbox settings are
+unchanged. Native installed-consumer modules share the audited heavy-worker
+group under the two-worker full-suite configuration.

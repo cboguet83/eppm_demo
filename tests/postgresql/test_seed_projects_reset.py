@@ -97,7 +97,7 @@ def test_full_reset_preserves_accounts_approved_finance_hierarchy_choices_and_ol
         assert connection.execute('SELECT count(*) FROM eppm.resource_pool').fetchone() == (0,)
         assert connection.execute('SELECT name,is_general FROM eppm.project_type').fetchall() == [('General', True)]
         assert connection.execute("SELECT DISTINCT label FROM eppm.hierarchy_type_translation WHERE locale='fr'").fetchall() == [('Configured',)]
-        assert connection.execute("SELECT name FROM eppm.project_event_type WHERE system_code='blocking_point'").fetchone() == ('Blocking Point',)
+        assert connection.execute("SELECT name FROM eppm.business_dictionary_entry WHERE dictionary_code='project_event_type' AND system_code='blocking_point'").fetchone() == ('Blocking Point',)
         assert connection.execute("SELECT catalog FROM eppm.operator_seed_state").fetchall() == [('reference',)]
     assert finance.view(snapshot).selected.rows[0].amounts == {2026: Decimal('1.01')}
     assert operator.run(lambda connection: create_seed_project(connection, name='New identity'), write=True) > 8

@@ -1,5 +1,7 @@
 """Provision each test database separately; never reset application storage."""
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 import os
 import shutil
@@ -8,11 +10,9 @@ from uuid import uuid4
 
 import psycopg
 from psycopg import sql
-from psycopg.conninfo import conninfo_to_dict, make_conninfo
 from psycopg.types.json import Jsonb
 import pytest
 
-from app.infrastructure.postgresql.migration import migrate
 from app.infrastructure.postgresql.backup import PostgresTools
 from app.infrastructure.postgresql.pool import Database
 from app.infrastructure.postgresql.authorization import ActorBinding, configure_signing_key
@@ -20,53 +20,58 @@ from app.application.services.access import AuthorizationPolicy, SessionLimits
 from app.application.services.business_access import BusinessAccess
 from app.domain.access.models import Actor
 from app.shared.config.database import DatabaseConfig
+from tests.postgresql.template_database import (
+    DatabaseTemplateFactory,
+    PostgreSQLFixture,
+    database_url,
+)
 
 
-@dataclass(frozen=True)
-class PostgreSQLFixture:
-    """Secret-bearing setup and runtime connection strings, excluded from repr."""
+@pytest.fixture(scope="session")
+def database_factory() -> Iterator[DatabaseTemplateFactory]:
+    """Own one lazy template factory for this pytest process.
 
-    name: str
-    operator_url: str = field(repr=False)
-    runtime_url: str = field(repr=False)
-
-
-def database_url(original: str, name: str) -> str:
-    """Replace only the database name in an explicitly supplied test URL."""
-    from urllib.parse import urlsplit, urlunsplit
-
-    parsed = urlsplit(original)
-    return urlunsplit(parsed._replace(path=f"/{name}"))
-
-
-@pytest.fixture
-def empty_database() -> PostgreSQLFixture:
-    """Create a random test database with separate owner and runtime connections."""
+    Yields:
+        A worker-local factory bound only to explicit test credentials.
+    """
     operator = os.environ.get("POSTGRES_TEST_ADMIN_URL")
     runtime = os.environ.get("POSTGRES_TEST_RUNTIME_URL")
     if not operator or not runtime:
-        pytest.skip("Set explicit POSTGRES_TEST_ADMIN_URL and POSTGRES_TEST_RUNTIME_URL for real PostgreSQL tests.")
-    operator_options, runtime_options = conninfo_to_dict(operator), conninfo_to_dict(runtime)
-    if operator_options.get("user") == runtime_options.get("user"):
-        pytest.fail("Test setup and runtime users must be different.")
-    name = "eppm_test_" + uuid4().hex
-    maintenance = make_conninfo(operator, dbname="postgres")
-    with psycopg.connect(maintenance, autocommit=True) as connection:
-        connection.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(name)))
+        pytest.skip(
+            "Set explicit POSTGRES_TEST_ADMIN_URL and "
+            "POSTGRES_TEST_RUNTIME_URL for real PostgreSQL tests."
+        )
+    factory = DatabaseTemplateFactory(
+        operator, runtime,
+        worker=os.environ.get("PYTEST_XDIST_WORKER", "serial"),
+    )
     try:
-        yield PostgreSQLFixture(name, database_url(operator, name), database_url(runtime, name))
+        yield factory
     finally:
-        # The only cleanup target is the random name created above, never an
-        # environment-selected application database or an existing volume.
-        with psycopg.connect(maintenance, autocommit=True) as connection:
-            connection.execute(sql.SQL("DROP DATABASE {} WITH (FORCE)").format(sql.Identifier(name)))
+        factory.close()
 
 
 @pytest.fixture
-def pg_database(empty_database: PostgreSQLFixture) -> PostgreSQLFixture:
-    """Migrate using operator credentials; callers use the distinct runtime URL."""
-    migrate(empty_database.operator_url)
-    return empty_database
+def empty_database(
+    database_factory: DatabaseTemplateFactory,
+) -> Iterator[PostgreSQLFixture]:
+    """Yield a genuinely unmigrated database independent of ordinary tests."""
+    with database_factory.empty() as database:
+        yield database
+
+
+@pytest.fixture
+def pg_database(
+    database_factory: DatabaseTemplateFactory, request: pytest.FixtureRequest,
+) -> Iterator[PostgreSQLFixture]:
+    """Yield a fresh migrated database or a disposable migration-only clone."""
+    mode = request.config.getoption("postgres_test_db_mode")
+    preparation = (
+        database_factory.clone() if mode == "template"
+        else database_factory.fresh()
+    )
+    with preparation as database:
+        yield database
 
 
 @pytest.fixture
@@ -143,8 +148,24 @@ class AuthorizedFixture:
 
 
 @pytest.fixture
-def authorized(pg_database: PostgreSQLFixture) -> AuthorizedFixture:
+def authorized(pg_database: PostgreSQLFixture) -> Iterator[AuthorizedFixture]:
     """Seed actual accounts/sessions/grants as setup; exercise the restricted role."""
+    with authorized_database(pg_database) as fixture:
+        yield fixture
+
+
+@contextmanager
+def authorized_database(
+    pg_database: PostgreSQLFixture,
+) -> Iterator[AuthorizedFixture]:
+    """Seed and close an independent authorized test database.
+
+    Args:
+        pg_database: One test-owned migrated database, never shared state.
+
+    Yields:
+        The normal restricted pool and independently generated signing key.
+    """
     key = token_bytes(32)
     configure_signing_key(pg_database.operator_url, key.hex())
     with psycopg.connect(pg_database.operator_url) as operator:

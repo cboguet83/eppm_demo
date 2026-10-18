@@ -8,6 +8,7 @@ import sys
 import psycopg
 from psycopg import sql
 import pytest
+from collections.abc import Iterator
 from streamlit.testing.v1 import AppTest
 
 from app.application.exceptions import DatabaseMaintenanceError
@@ -16,6 +17,17 @@ from scripts.benchmark_planning import create_app, run_app
 from scripts.benchmark_runtime import isolated_benchmark
 from scripts.benchmark_task_pool_dialog import modal_app
 from tests.postgresql.business import business
+from tests.postgresql.benchmark_lock import benchmark_cluster_lock
+from tests.postgresql.template_database import PostgreSQLFixture
+
+
+@pytest.fixture(autouse=True)
+def benchmark_observation_lock(
+    pg_database: PostgreSQLFixture,
+) -> Iterator[None]:
+    """Keep cluster-wide copy observations exclusive across test invocations."""
+    with benchmark_cluster_lock(pg_database):
+        yield
 
 
 def snapshot(setup):

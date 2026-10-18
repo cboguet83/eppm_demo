@@ -47,6 +47,11 @@ Each numbered checkbox is one focused commit containing its implementation, rele
 
 - [x] 6.1 Run the complete strict pytest suite with real isolated PostgreSQL and authenticated browser groups, at least 95% unchanged-scope application coverage, separate wrapper coverage of at least 95%, all existing JavaScript checks, new package/module/browser/installed-artifact checks, strict OpenSpec validation, and the verify-change workflow. Compare five repeated benchmark runs with the task 1.2 reference using the design's explicitly approved 150 ms synthetic / 60 ms native initial-render limits, unchanged 10%/5 ms budget for other applicable timings, and unchanged hard bounds. Review the final diff, security/layer boundaries, contract-to-scenario coverage, artifact reproducibility, and docs; record actual commands/results, coverage, skips, benchmark comparisons, and `git log main..HEAD --oneline` task-to-commit evidence in `verification.md`. Leave this task incomplete if a required check cannot execute or fails.
 
+## 7. Current-main delivery integration
+
+- [x] 7.1 Integrate approved current main with a merge commit preserving task history, combine xdist and standalone-build development dependencies, retain the mounted benchmark and carry forward bounded/sanitized browser-startup diagnostics through Playwright, and classify new native consumer modules in the existing serialized heavy-worker group. Reopen this change for delivery corrections, preserve all completed tasks and existing main changes, and verify focused startup, benchmark, scheduling, dictionary integration and JavaScript regressions before committing this integration task.
+- [ ] 7.2 Reverify the integrated revision with five sequential benchmark captures, the complete strict two-worker/template PostgreSQL/authenticated-browser suite and unchanged >=95% application coverage, standalone wrapper coverage, all JavaScript checks, prepared artifacts, strict specs and OpenSpec verification. Update evidence and the PR description to the final scope; leave incomplete on a required failure, then rearchive and publish the integrated revision for full PR CI.
+
 ## Workflow follow-up
 
 - After all tracked tasks and required checks pass, sync both capability deltas and archive the change on this branch. Inspect and commit the archive and verification evidence in a separate lifecycle commit.

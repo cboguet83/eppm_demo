@@ -1,14 +1,14 @@
 # Verification: reusable-planning-component
 
-Status: **passed; archived on 2026-10-18**. The OpenSpec verify-change workflow
+Status: **reopened for current-main integration; prior acceptance preserved**. The OpenSpec verify-change workflow
 checked the proposal, design, both deltas, all tracked tasks and implementation
-evidence. All applicable checks passed; none were skipped or left unverified.
+evidence. All applicable checks passed on the prior revision; current-main tasks 7.1/7.2 require renewed acceptance.
 
 ## Scorecard
 
 | Dimension | Current finding |
 | --- | --- |
-| Completeness | 23/23 tasks complete. All 16 added requirements have implementation and test mappings below. |
+| Completeness | 24/25 tasks complete; renewed integrated acceptance remains open. All 16 added requirements have implementation and test mappings below. |
 | Correctness | All 35 scenarios map to module, mounted, installed or native regressions. The complete strict suite passed with real PostgreSQL and authenticated browsers, no skips, and 97.69% application coverage. |
 | Coherence | Native modules, explicit host dependencies, instance ownership, portable packaging and thin EPPM integration follow the design. The user explicitly approved 150 ms synthetic / 60 ms native initial rendering on 2026-10-18; all other gates remain unchanged. |
 
@@ -17,8 +17,8 @@ publication and moving source to another repository are explicit non-goals.
 
 ## Findings
 
-No critical issues, warnings or suggestions remain. No applicable check was
-skipped. All 16 requirements and 35 scenarios have implementation/test mappings.
+Prior acceptance had no critical issues, warnings, suggestions or skipped
+checks. Current tasks 7.1/7.2 remain incomplete until integrated validation. All 16 requirements and 35 scenarios have implementation/test mappings.
 
 No separate code-pattern or requirement-implementation divergence was found in
 the reviewed boundaries. Callback loading omitted during integration was found
@@ -192,3 +192,26 @@ e68f994 feat(reusable-planning-component): complete task 2.1 host contracts
 
 All checks passed before archive. Specs are synced and the change is archived.
 Full PR CI is an additional gate before requesting merge approval.
+
+## Current-main delivery integration
+
+PR #4 exposed conflicts with approved main `664f72a`, which merged the shared
+business dictionary and two-worker/template performance changes during this
+implementation. The original serial acceptance remains evidence for `ad15b55`;
+it is not claimed for the integrated revision. Tasks 7.1/7.2 reopen the change
+for dependency/benchmark resolution and complete integration acceptance before
+rearchive. Main also contains the dashboard event-acknowledgement timing fix.
+
+Task 7.1 integrates main `664f72a` with a merge commit. Dependency resolution
+retains xdist plus setuptools/wheel and all prepared-asset metadata. The mounted
+benchmark replaces the obsolete private-global/CDP path while reusing main's
+allowlisted startup categories and exit metadata through a 20-second Playwright
+launch bound. An actual early-exit executable regression failed on raw output
+before the fix and passes afterward; sandbox protections remain unchanged.
+Three new native consumer modules join the existing serialized heavy-worker
+group; canonical collection identities and all assertions are retained.
+Validation: 324 JavaScript checks passed; 39 focused gate/completion/diagnostic
+checks passed before the scheduling audit identified missing classifications,
+then all eight startup/scheduling checks passed in 5.72 seconds. Seven native
+benchmark/dictionary/dashboard checks passed in 60.23 seconds with template-backed
+isolated PostgreSQL. Task 7.2 still requires complete integrated acceptance.

@@ -17,6 +17,10 @@ Project saves SHALL avoid global WBS capacity reads and share rewrites when the 
 - **WHEN** an authorized editor submits unchanged shares or an empty replacement
 - **THEN** existing unchanged shares are retained or explicitly cleared as requested, without global capacity reads
 
+#### Scenario: Upgrade a populated project portfolio
+- **WHEN** an existing populated installation is upgraded and authorized editors save independent project titles
+- **THEN** existing project records, WBS allocations, constraints and permissions are retained, and independent saves retain the same serializable isolation and bounded retry policy
+
 ### Requirement: Allocation integrity survives no-op optimization
 Changed nonempty WBS allocations and reactivation of cancelled projects SHALL retain fresh global capacity validation and native constraints. Empty or unchanged shares SHALL not bypass project authorization.
 

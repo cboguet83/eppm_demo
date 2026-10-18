@@ -518,6 +518,7 @@ and `node --test tests/test_portfolio_table.cjs`.
    - Real-time constraint violation diagnostics detecting scheduling breaks.
    - Bulk CSV milestone loader with validation and downloadable template.
 3. **⚙️ 3. Settings**:
+   - Project Configuration → Project roles / Event types share a translation editor. Name is the English label; blank French, German, Luxembourgish or Portuguese labels use the canonical name. Clearing a label removes that translation. Referenced entries cannot be deleted.
    - Click Settings to reveal four indented pages, with Organization Structure selected by default:
      - **🏢 Organization Structure**: Manage Function Types, Hierarchy Types, Functions, Teams, Employees, Pool Types, and Resource Pools in tabs at the top of the page.
      - **🧩 Parameter Definition**: Dynamic schema builder to manage schema groups, create/edit typed parameters (TEXT, DATE, NUMBER, ENUM, TAGS, HYPERLINK), configure discrete options, and inspect the real-time schema hierarchy tree.
@@ -528,9 +529,10 @@ and `node --test tests/test_portfolio_table.cjs`.
 
 ### Project contacts and log persistence
 
-The native PostgreSQL schema includes `project_role`, `project_contact`,
-`project_event_type`, and `project_log_event`. Catalog labels support locale
-fallback through their `_translation` tables. Normal application startup preserves
+The native PostgreSQL schema stores role and event-type entries in
+`business_dictionary_entry`, with localized labels in
+`business_dictionary_translation`. Contacts and logs retain typed references
+through `project_contact` and `project_log_event`. Normal application startup preserves
 existing data and never reseeds it.
 
 Contacts reference a role and **function**, not an employee. Occupants' full names

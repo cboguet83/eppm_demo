@@ -943,5 +943,14 @@
     "save": "Enregistrer l’exception",
     "delete": "Supprimer l’exception",
     "help": "Les réductions sont en ETP, pas en pourcentage. Elles se cumulent en cas de chevauchement ; la capacité ne descend pas sous zéro. Les deux dates sont incluses."
+  },
+  "business_dictionary": {
+    "english": "Le nom est aussi le libellé anglais.",
+    "fr": "Français",
+    "de": "Allemand",
+    "lb": "Luxembourgeois",
+    "pt": "Portugais",
+    "absent": "Aucune traduction",
+    "fallback": "Laissez vide pour utiliser le nom canonique. Effacer un libellé supprime cette traduction."
   }
 }

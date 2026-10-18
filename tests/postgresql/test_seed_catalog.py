@@ -46,7 +46,19 @@ def test_default_seeder_creates_wbs_without_projects(pg_database):
         assert install_default_data(connection, force=False, include_projects=False, year=2026)
         assert {row[0] for row in connection.execute('SELECT code FROM eppm.wbs')} == {'#xx.xx.xx', *(f'p.{number}.10' for number in range(1, 11))}
         assert dict(connection.execute('SELECT code,description FROM eppm.wbs')) == {**{f'p.{n}.10': f'descripttion projet {n}' for n in range(1, 11)}, '#xx.xx.xx': 'otp fictif pour plannification'}
-        assert {'maintenance', 'bim', 'amo', 'etudes', 'secutite'} <= {r[0] for r in connection.execute('SELECT name FROM eppm.project_role')}
+        assert {'maintenance', 'bim', 'amo', 'etudes', 'secutite'} <= {r[0] for r in connection.execute("SELECT name FROM eppm.business_dictionary_entry WHERE dictionary_code='project_role'")}
+
+
+def test_shared_reference_reinitialization_preserves_explicit_localized_labels(pg_database):
+    """Reference markers retain names and translations maintained after setup."""
+    with psycopg.connect(pg_database.operator_url) as connection:
+        ensure_reference_catalog(connection)
+        identity = connection.execute("SELECT id FROM eppm.business_dictionary_entry WHERE dictionary_code='project_event_type' AND system_code='blocking_point'").fetchone()[0]
+        connection.execute("UPDATE eppm.business_dictionary_entry SET name='Configured blocker' WHERE dictionary_code='project_event_type' AND id=%s", (identity,))
+        connection.execute("INSERT INTO eppm.business_dictionary_translation VALUES ('project_event_type',%s,'fr','Blocage configuré')", (identity,))
+        ensure_reference_catalog(connection)
+        assert connection.execute("SELECT name FROM eppm.business_dictionary_entry WHERE dictionary_code='project_event_type' AND id=%s", (identity,)).fetchone() == ('Configured blocker',)
+        assert connection.execute("SELECT label FROM eppm.business_dictionary_translation WHERE dictionary_code='project_event_type' AND entry_id=%s AND locale='fr'", (identity,)).fetchone() == ('Blocage configuré',)
 
 
 def test_native_demo_catalog_has_current_definitions_relationships_and_editable_hierarchy_types(pg_database):
@@ -61,7 +73,7 @@ def test_native_demo_catalog_has_current_definitions_relationships_and_editable_
         assert tuple(row[0] for row in connection.execute('SELECT code FROM eppm.hierarchy_type ORDER BY id')) == HIERARCHY_TYPES
         assert connection.execute('SELECT count(*) FROM eppm.hierarchy_type_translation').fetchone() == (35,)
         assert connection.execute('SELECT count(*) FROM eppm.team WHERE hierarchy_type_id IS NOT NULL').fetchone() == (0,)
-        assert connection.execute("SELECT name FROM eppm.project_event_type WHERE system_code='blocking_point'").fetchone() == ('Blocking Point',)
+        assert connection.execute("SELECT name FROM eppm.business_dictionary_entry WHERE dictionary_code='project_event_type' AND system_code='blocking_point'").fetchone() == ('Blocking Point',)
         assert connection.execute('SELECT count(*) FROM eppm.project').fetchone() == (0,)
         assert connection.execute('SELECT count(*) FROM eppm.app_user').fetchone() == (0,)
         assert not can_install_demo(connection)
@@ -73,11 +85,11 @@ def test_reference_seed_markers_preserve_edited_and_removed_choices(pg_database)
     with psycopg.connect(pg_database.operator_url) as connection:
         connection.execute("DELETE FROM eppm.hierarchy_type WHERE code='brigade'")
         connection.execute("UPDATE eppm.hierarchy_type_translation SET label='Configured team' WHERE locale='en'")
-        connection.execute('DELETE FROM eppm.project_event_type')
+        connection.execute("DELETE FROM eppm.business_dictionary_entry WHERE dictionary_code='project_event_type'")
     operator.run(ensure_reference_catalog, write=True)
     with psycopg.connect(pg_database.operator_url) as connection:
         assert connection.execute('SELECT count(*) FROM eppm.hierarchy_type').fetchone() == (6,)
-        assert connection.execute('SELECT count(*) FROM eppm.project_event_type').fetchone() == (0,)
+        assert connection.execute("SELECT count(*) FROM eppm.business_dictionary_entry WHERE dictionary_code='project_event_type'").fetchone() == (0,)
         assert connection.execute("SELECT DISTINCT label FROM eppm.hierarchy_type_translation WHERE locale='en'").fetchall() == [('Configured team',)]
         connection.execute("INSERT INTO eppm.operator_seed_state(catalog) VALUES ('demo')")
         assert not can_install_demo(connection)
@@ -86,12 +98,12 @@ def test_reference_seed_markers_preserve_edited_and_removed_choices(pg_database)
 def test_existing_reference_choices_are_not_replaced_on_first_operator_initialization(pg_database):
     with psycopg.connect(pg_database.operator_url) as connection:
         connection.execute("INSERT INTO eppm.hierarchy_type(code) VALUES ('custom')")
-        connection.execute("INSERT INTO eppm.project_event_type(name) VALUES ('Custom event')")
+        connection.execute("INSERT INTO eppm.business_dictionary_entry(dictionary_code,name) VALUES ('project_event_type','Custom event')")
         connection.execute("INSERT INTO eppm.project_type(name,is_general) VALUES ('General',true)")
     OperatorDatabase(pg_database.operator_url).run(ensure_reference_catalog, write=True)
     with psycopg.connect(pg_database.operator_url) as connection:
         assert connection.execute('SELECT code FROM eppm.hierarchy_type').fetchall() == [('custom',)]
-        assert connection.execute('SELECT name FROM eppm.project_event_type').fetchall() == [('Custom event',)]
+        assert connection.execute("SELECT name FROM eppm.business_dictionary_entry WHERE dictionary_code='project_event_type'").fetchall() == [('Custom event',)]
         assert can_install_demo(connection)
         connection.execute("INSERT INTO eppm.project_type(name) VALUES ('User template')")
         assert not can_install_demo(connection)

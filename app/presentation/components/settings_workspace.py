@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 
 from app.application.services.collaboration import CollaborationService
+from app.application.services.dictionaries import DictionaryService
 from app.application.services.organization import OrganizationService
 from app.application.services.pool_capacity import PoolCapacityService
 from app.application.services.project_types import ProjectTypeService
@@ -24,3 +25,4 @@ class SettingsWorkspace:
     types: ProjectTypeService
     collaboration: CollaborationService
     wbs: WbsService
+    dictionaries: DictionaryService
