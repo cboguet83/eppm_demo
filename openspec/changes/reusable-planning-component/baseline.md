@@ -224,9 +224,11 @@ six checks (52.41 s); the additional alternative-resource/shared-scenario/native
 benchmark group passed three checks (38.61 s), including a real editor update and
 source/copy cleanup. The explicit five-repeat collector passed 25 checks in
 112.46 s; every configuration retained its row/alignment/fit hard assertions.
-Timing medians and the still-unapproved render-budget regression are recorded in
-`performance-comparison.md` / `candidate.json`. Consumer migration completion does
-not waive that separate gate or replace strict full-suite acceptance.
+Those captures preceded the final callback/menu corrections. The user approved
+150 ms synthetic / 60 ms native initial-render limits on 2026-10-18, retaining
+every other gate. Refreshed final medians and the approval are recorded in
+`performance-comparison.md` / `candidate.json`; consumer migration does not
+replace strict full-suite acceptance.
 
 Task 5.7 restores the design's callback fallback for hosts without a direct HTTP
 task endpoint. It uses the existing generic bridge queue and Python action, with

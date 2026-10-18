@@ -2,7 +2,7 @@
 
 Five sequential runs per configuration on the reference Python/Node/Chromium
 runtime and 1500 × 1100 viewport are recorded in `candidate.json`. The explicit
-collector completed all 25 tests in 112.46 seconds, with no concurrent full suite
+collector completed all 25 tests in 115.30 seconds on source `d3cfd24`, with no concurrent full suite
 or database-copy checks. Synthetic fixture: 100 projects, 1,000 tasks, 127 pools,
 730 dated entries per pool and dense dependencies. Native fixture and source-data
 isolation checks are unchanged. Every capture passed positive row/cell counts,
@@ -10,14 +10,14 @@ isolation checks are unchanged. Every capture passed positive row/cell counts,
 
 | Configuration | Reference render median | Candidate render median | Reference scroll-work p95 median | Candidate scroll-work p95 median |
 | --- | ---: | ---: | ---: | ---: |
-| Collapsed | 35.1 ms | 114.7 ms | 4.8 ms | 2.6 ms |
-| Expanded | 36.8 ms | 115.6 ms | 4.4 ms | 2.2 ms |
-| External links | 38.6 ms | 113.5 ms | 5.0 ms | 2.6 ms |
-| Native PostgreSQL | 25.5 ms | 44.3 ms | Not recorded | 1.6 ms |
+| Collapsed | 35.1 ms | 120.9 ms | 4.8 ms | 2.3 ms |
+| Expanded | 36.8 ms | 115.7 ms | 4.4 ms | 2.1 ms |
+| External links | 38.6 ms | 116.5 ms | 5.0 ms | 2.5 ms |
+| Native PostgreSQL | 25.5 ms | 42.7 ms | Not recorded | 1.1 ms |
 
 Synthetic resource medians: 27 live rows, 216 cells and 0 px pane misalignment,
 versus reference 26 rows, 208 cells and 0 px. Both retain the same hard bounds.
-Native host-edit preparation improved from 0.646 to 0.464 seconds; emitted
+Native host-edit preparation improved from 0.646 to 0.511 seconds; emitted
 payload size is 2,873 bytes versus 2,850. The separate native driver regression
 also submits an actual mounted task edit and checks source/restore cleanup.
 
@@ -37,13 +37,16 @@ reduce that substantially. Caller-frozen objects still require full validation;
 public validation still returns independent copies. Tests cover invalid dates,
 mutated input, cycles, aliases, changing accessors and safe own JSON keys.
 
-**Acceptance remains blocked by the initial-render budget.** Every candidate
-render median exceeds both the design's 10% and 5 ms limits. The existing budget
-has not been changed or waived. The user has been asked whether to retain it or
-approve explicit 150 ms synthetic / 60 ms native initial-render limits, keeping
-all other gates unchanged. Until a decision or a conforming implementation,
-task 5.5 and final acceptance remain incomplete; these measurements do not
-authorize archive or PR delivery.
+**The final captures pass the explicitly approved budget.** On 2026-10-18 the
+user accepted revised initial-render median limits of **150 ms synthetic /
+60 ms native**, retaining every other gate. The three synthetic medians above
+are below 150 ms and native rendering is below 60 ms. Other applicable timings
+retain the original rule: a regression must exceed both 10% and 5 ms to block
+acceptance. Scroll-work medians improve, frame p95 remains within that rule,
+and all row/alignment/loading/geometry bounds pass. This decision changes only
+initial-render limits; contract validation and input ownership remain intact.
+Task 5.5 is satisfied; full strict-suite acceptance is still required before
+archive or PR delivery.
 
 An earlier diagnostic collector was interrupted after 17 successful tests when
 the full suite began. Its measurements are excluded here: overlapping copy

@@ -54,5 +54,7 @@ configurations. Use a new ignored `--basetemp` directory. Run this collector
 sequentially with other database benchmark tests: their global disposable-copy
 cleanup assertions must not overlap, and timing captures need an idle host.
 An interrupted run or a run concurrent with the full suite is diagnostic
-evidence only. Retain the design's 10% **and** 5 ms median-regression gate;
-these tooling changes do not approve a slower budget.
+evidence only. For this extraction the user explicitly approved initial-render
+median limits of 150 ms synthetic / 60 ms native on 2026-10-18. Retain the
+design's 10% **and** 5 ms median-regression gate for other applicable timings,
+and keep all row, alignment, loading and geometry hard bounds unchanged.
