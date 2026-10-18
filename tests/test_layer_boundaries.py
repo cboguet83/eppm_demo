@@ -83,6 +83,7 @@ def test_core_imports_work_without_installed_third_party_packages() -> None:
             "import app.application.services.collaboration; import app.domain.projects.collaboration; "
             "import app.application.services.budgets; import app.domain.projects.budgets; "
             "import app.application.services.maintenance; "
+            "import app.application.services.dictionaries; import app.domain.dictionaries; "
             "assert not {'streamlit', 'pandas', 'sqlite3', 'src'} & sys.modules.keys()",
         ],
         cwd=ROOT,

@@ -18,7 +18,7 @@ identified by task 1.1 in `git log origin/main..HEAD --oneline`.
 
 ## 2. Typed dictionary operations
 
-- [ ] 2.1 Add domain dictionary records/validators, typed application ports and an injected application service for the two registered dictionary codes. Define canonical-name/English-label and optional-translation edit commands, missing-entry errors and safe failure contracts. Add useful API docstrings and pytest unit/service tests for valid inputs, unknown codes, malformed locale/ID/name/translation input, omitted versus blank locales, preserved identity and authorization requests. Verify these tests and inward-dependency/core-import checks pass; target complete coverage of new validation logic.
+- [x] 2.1 Add domain dictionary records/validators, typed application ports and an injected application service for the two registered dictionary codes. Define canonical-name/English-label and optional-translation edit commands, missing-entry errors and safe failure contracts. Add useful API docstrings and pytest unit/service tests for valid inputs, unknown codes, malformed locale/ID/name/translation input, omitted versus blank locales, preserved identity and authorization requests. Verify these tests and inward-dependency/core-import checks pass; target complete coverage of new validation logic.
 
 ## 3. PostgreSQL storage and consumer migration
 
