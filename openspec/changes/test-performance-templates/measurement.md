@@ -1,3 +1,5 @@
+> Historical comparison before main PR #3 integration. Task 4.4 must remeasure the integrated sources. Migration 0069 below names the unpublished preview now renumbered, without SQL changes, to 0071.
+
 # Controlled test performance measurements
 
 Status: task 4.1 acceptance PASSED. All nine cohorts and four full runs pass; CI promotion is the next separate task.

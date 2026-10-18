@@ -27,9 +27,9 @@ from tests.postgresql.conftest import database_url
 DISPLAY_SOURCE_TABLES = frozenset({
     'hierarchy_type', 'hierarchy_type_translation', 'wbs', 'project_wbs',
     'employee', 'employee_calendar_exception', 'function', 'function_type',
-    'project', 'project_contact', 'project_dependency', 'project_event_type', 'project_event_type_translation',
+    'project', 'project_contact', 'project_dependency', 'business_dictionary_entry', 'business_dictionary_translation',
     'project_link', 'project_log_event', 'project_property_value', 'project_property_value_item',
-    'project_role', 'project_role_translation', 'project_tag', 'project_task', 'project_type',
+    'project_tag', 'project_task', 'project_type',
     'project_type_property', 'project_type_property_default', 'project_type_property_default_item',
     'project_type_property_rule', 'resource_pool', 'resource_pool_assignment',
     'resource_pool_mapping', 'pool_staffing_projection',

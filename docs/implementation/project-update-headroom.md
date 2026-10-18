@@ -1,6 +1,6 @@
 # Project update headroom
 
-Migration 0069 reserves 30% of `eppm.project` data pages (`fillfactor=70`) for
+Migration 0071 reserves 30% of `eppm.project` data pages (`fillfactor=70`) for
 updates. It repacks existing rows using `project_pkey` and refreshes table
 statistics, so upgrades of dense populated databases receive the same headroom
 as new databases. Existing records, constraints, indexes, grants, RLS policies,
@@ -29,7 +29,7 @@ flowchart TD
     operator["Explicit operator migration command"]
     migrate["migration.migrate(url: str, directory: Path) -> tuple[str, ...]"]
     discover["migration.discover_migrations(directory: Path) -> tuple[Migration, ...]"]
-    sql["0069_project_update_headroom.sql"]
+    sql["0071_project_update_headroom.sql"]
     table["eppm.project: fillfactor=70"]
     index["Existing project_pkey"]
     ledger["Existing eppm.schema_migration ledger"]
@@ -50,3 +50,13 @@ Regression tests verify ten on-page title updates using transaction-local HOT
 statistics, populated upgrade/reentry preservation and rollback of a deliberate
 failure after repacking. Existing concurrent editor, authorization, allocation
 and three-attempt transaction tests remain the behavioral checks.
+
+## Integration with the released dictionary migrations
+
+Main's applied migrations 0069 and 0070 remain byte-for-byte unchanged. The
+unreleased storage repair moved from its preview number 0069 to 0071, keeping
+its SQL bytes identical. Upgrade regression coverage now starts at main's
+70-migration schema and verifies populated upgrade, rollback and reentry.
+The original preview's migration ledger is incompatible with main's different
+0069 checksum; do not edit an existing ledger to hide that mismatch. No
+persistent application database is reset or migrated by this reconciliation.

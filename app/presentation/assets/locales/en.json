@@ -919,5 +919,14 @@
     "save": "Save exception",
     "delete": "Delete exception",
     "help": "Reductions are in FTE, not percentages. Overlapping reductions add together; effective capacity cannot fall below zero. Both dates are included."
+  },
+  "business_dictionary": {
+    "english": "The name is also the English label.",
+    "fr": "French",
+    "de": "German",
+    "lb": "Luxembourgish",
+    "pt": "Portuguese",
+    "absent": "No translation",
+    "fallback": "Leave blank to use the canonical name. Clearing an existing label removes that translation."
   }
 }

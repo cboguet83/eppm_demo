@@ -16,6 +16,8 @@ from app.domain.access.models import Permission
 from app.domain.projects.collaboration import CatalogKind, EventValues, validate_catalog
 from app.domain.projects.links import LinkValues
 from app.infrastructure.postgresql.business import run_business
+from app.infrastructure.postgresql.dictionaries import PostgresDictionaryStore
+from app.domain.dictionaries import DictionaryCode, dictionary_edit
 from app.infrastructure.postgresql.errors import DatabaseUnavailableError, TransactionRetryError
 from app.infrastructure.postgresql.pool import Database
 from app.shared.logging import get_logger
@@ -23,8 +25,8 @@ from app.shared.logging import get_logger
 logger = get_logger(__name__)
 
 
-def _catalog_table(kind: CatalogKind) -> str:
-    """Map a validated catalog code to an internal SQL identifier."""
+def _catalog_code(kind: CatalogKind) -> DictionaryCode:
+    """Map the established collaboration kinds to shared dictionary codes."""
     return {'role': 'project_role', 'event_type': 'project_event_type'}[validate_catalog(kind)]
 
 
@@ -61,26 +63,15 @@ class PostgresCollaborationStore:
 
     def list_catalog(self, kind: CatalogKind, locale: str) -> list[CatalogEntry]:
         """Return translated labels with canonical fallback and stable ordering."""
-        table = _catalog_table(kind)
-        return self._rows(CatalogEntry,
-            f'SELECT c.id,c.name,COALESCE(t.label,c.name) AS label FROM eppm.{table} c '
-            f'LEFT JOIN eppm.{table}_translation t ON t.catalog_id=c.id AND t.locale=%s '
-            'ORDER BY lower(COALESCE(t.label,c.name) COLLATE "C") COLLATE "C",c.id', (locale,))
+        return PostgresDictionaryStore(self.connection).list_entries(_catalog_code(kind), locale)
 
     def save_catalog(self, kind: CatalogKind, name: str, item_id: int | None) -> int:
-        """Save the canonical name and English translation atomically."""
-        table = _catalog_table(kind)
-        if item_id is None:
-            item_id = self.connection.execute(f'INSERT INTO eppm.{table}(name) VALUES (%s) RETURNING id', (name,)).fetchone()[0]
-        elif not self.connection.execute(f'UPDATE eppm.{table} SET name=%s WHERE id=%s', (name, item_id)).rowcount:
-            raise ValueError('The catalog entry no longer exists.')
-        self.connection.execute(f'INSERT INTO eppm.{table}_translation(catalog_id,locale,label) VALUES (%s,\'en\',%s) '
-                                'ON CONFLICT(catalog_id,locale) DO UPDATE SET label=excluded.label', (item_id, name))
-        return item_id
+        """Save canonical name and English translation through shared storage."""
+        return PostgresDictionaryStore(self.connection).save_entry(_catalog_code(kind), dictionary_edit(name), item_id)
 
     def delete_catalog(self, kind: CatalogKind, item_id: int) -> None:
-        """Delete unused reference data, with foreign keys protecting existing usage."""
-        self.connection.execute(f'DELETE FROM eppm.{_catalog_table(kind)} WHERE id=%s', (item_id,))
+        """Delete one unused catalog entry with native reference protection."""
+        PostgresDictionaryStore(self.connection).delete_entry(_catalog_code(kind), item_id)
 
     def function_choices(self) -> list[FunctionChoice]:
         """Use the minimal name directory without fetching employee contact fields."""
@@ -113,8 +104,8 @@ class PostgresCollaborationStore:
         """Resolve only an authorized project's assigned functions and phones."""
         return self._rows(ProjectContact,
             'SELECT c.id,c.role_id,c.function_id,c.function_name,c.person,c.mobile,c.landline,COALESCE(t.label,r.name) AS role '
-            'FROM eppm.project_contacts(%s) c JOIN eppm.project_role r ON r.id=c.role_id '
-            'LEFT JOIN eppm.project_role_translation t ON t.catalog_id=r.id AND t.locale=%s '
+            "FROM eppm.project_contacts(%s) c JOIN eppm.business_dictionary_entry r ON r.id=c.role_id AND r.dictionary_code='project_role' "
+            'LEFT JOIN eppm.business_dictionary_translation t ON t.dictionary_code=r.dictionary_code AND t.entry_id=r.id AND t.locale=%s '
             'ORDER BY COALESCE(t.label,r.name) COLLATE "C",c.id', (project_id, locale))
 
     def save_contact(self, project_id: int, role_id: int, function_id: int, contact_id: int | None) -> int:
@@ -146,8 +137,8 @@ class PostgresCollaborationStore:
             to_char(e.created_at AT TIME ZONE 'UTC','YYYY-MM-DD HH24:MI:SS') AS created_at,
             to_char(e.updated_at AT TIME ZONE 'UTC','YYYY-MM-DD HH24:MI:SS') AS updated_at,
             COALESCE(t.label,c.name) AS event_type FROM eppm.project_log_event e
-            JOIN eppm.project_event_type c ON c.id=e.event_type_id
-            LEFT JOIN eppm.project_event_type_translation t ON t.catalog_id=c.id AND t.locale=%s
+            JOIN eppm.business_dictionary_entry c ON c.id=e.event_type_id AND c.dictionary_code='project_event_type'
+            LEFT JOIN eppm.business_dictionary_translation t ON t.dictionary_code=c.dictionary_code AND t.entry_id=c.id AND t.locale=%s
             WHERE e.project_id=%s ORDER BY e.id DESC LIMIT %s OFFSET %s''', (locale, project_id, limit, offset))
 
     def save_event(self, project_id: int, values: EventValues, event_id: int | None) -> int:

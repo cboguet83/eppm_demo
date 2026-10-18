@@ -1,4 +1,4 @@
-> Reopened after final-revision hosted CI failed. The report below records the previous 18-task local verification. It does not establish readiness for the resumed change; tasks 3.11 and 4.4 are pending and the failure cause is unconfirmed.
+> Historical verification of the original 18 tasks. The plan is reopened: main PR #3 integration (task 3.14) and renewed acceptance (task 4.4) are pending. This report does not establish current archive readiness.
 
 # Verification: test-performance-templates
 

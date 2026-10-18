@@ -89,7 +89,7 @@ def test_populated_upgrade_preserves_truth_authority_and_prior_history(
 ) -> None:
     """Repack old dense rows atomically and retain the ledger on reentry."""
     migrations = discover_migrations()
-    repair = next(item for item in migrations if item.version == 69)
+    repair = next(item for item in migrations if item.version == 71)
     for migration in migrations[:repair.version - 1]:
         with (tmp_path / migration.name).open('w', encoding='utf-8') as stream:
             stream.write(migration.sql)

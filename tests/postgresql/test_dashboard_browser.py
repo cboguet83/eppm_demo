@@ -34,7 +34,7 @@ def test_finance_curve_uses_selected_project_share(
             table = page.locator('.st-key-dashboard_project_table .viewport')
             expect(table.locator('tr[data-project-id="1"]')).to_be_visible(timeout=30000)
             points = page.locator('.st-key-dashboard_finance_chart circle')
-            for project_id, expected in [(1,'50 kEUR'),(2,'25 kEUR')]:
+            for project_id, expected in [(1,'50 kEUR'),(2,'25 kEUR')] * 5:
                 row = table.locator(f'tr[data-project-id="{project_id}"]')
                 with completion.action():
                     row.click()
