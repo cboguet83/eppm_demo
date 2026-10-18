@@ -37,10 +37,12 @@ def install_wbs_catalog(connection: psycopg.Connection) -> None:
 def install_project_roles(connection: psycopg.Connection) -> None:
     """Install the requested project-contact roles without replacing edited rows."""
     for name in PROJECT_ROLES:
-        identity = connection.execute('INSERT INTO eppm.project_role(name) VALUES (%s) '
-            'ON CONFLICT(lower(name)) DO UPDATE SET name=eppm.project_role.name RETURNING id', (name,)).fetchone()[0]
-        connection.execute("INSERT INTO eppm.project_role_translation(catalog_id,locale,label) VALUES (%s,'en',%s) "
-                           'ON CONFLICT(catalog_id,locale) DO NOTHING', (identity, name))
+        identity = connection.execute(
+            "INSERT INTO eppm.business_dictionary_entry(dictionary_code,name) VALUES ('project_role',%s) "
+            'ON CONFLICT(dictionary_code,lower(name)) DO UPDATE SET name=eppm.business_dictionary_entry.name RETURNING id',
+            (name,)).fetchone()[0]
+        connection.execute("INSERT INTO eppm.business_dictionary_translation(dictionary_code,entry_id,locale,label) "
+                           "VALUES ('project_role',%s,'en',%s) ON CONFLICT(dictionary_code,entry_id,locale) DO NOTHING", (identity,name))
 
 
 def ensure_reference_catalog(connection: psycopg.Connection) -> None:
@@ -53,7 +55,7 @@ def ensure_reference_catalog(connection: psycopg.Connection) -> None:
             with connection.cursor() as cursor:
                 cursor.executemany('INSERT INTO eppm.hierarchy_type_translation(hierarchy_type_id,locale,label) VALUES (%s,%s,%s)',
                                    [(identity, locale, code) for locale in ('en', 'fr', 'de', 'lb', 'pt')])
-    if not connection.execute('SELECT 1 FROM eppm.project_event_type LIMIT 1').fetchone():
+    if not connection.execute("SELECT 1 FROM eppm.business_dictionary_entry WHERE dictionary_code='project_event_type' LIMIT 1").fetchone():
         seed_event_types(connection)
     if not connection.execute('SELECT 1 FROM eppm.project_type WHERE is_general').fetchone():
         connection.execute("INSERT INTO eppm.project_type(name,is_general) VALUES ('General',true)")
@@ -64,9 +66,9 @@ def seed_event_types(connection: psycopg.Connection) -> None:
     """Install the established event choices on initial setup or a full reset."""
     for name in EVENT_TYPES:
         code = 'blocking_point' if name == 'Blocking Point' else None
-        identity = connection.execute('INSERT INTO eppm.project_event_type(name,system_code) VALUES (%s,%s) RETURNING id',
+        identity = connection.execute("INSERT INTO eppm.business_dictionary_entry(dictionary_code,name,system_code) VALUES ('project_event_type',%s,%s) RETURNING id",
                                       (name, code)).fetchone()[0]
-        connection.execute("INSERT INTO eppm.project_event_type_translation(catalog_id,locale,label) VALUES (%s,'en',%s)",
+        connection.execute("INSERT INTO eppm.business_dictionary_translation(dictionary_code,entry_id,locale,label) VALUES ('project_event_type',%s,'en',%s)",
                            (identity, name))
 
 

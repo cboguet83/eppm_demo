@@ -45,3 +45,13 @@ An entry edit writes its canonical name and submitted locale rows atomically.
 Optional labels are deleted when explicitly blank and omitted locales remain
 untouched. Explicit translation reads distinguish absent rows from fallback
 display labels. Concurrent edits replay the full authorized transaction.
+
+## Operator lifecycle
+
+Reference and demo installers use dictionary-qualified entries and labels. The
+existing reference/demo markers retain their prior meaning, so ordinary startup
+does not restore removed event choices or overwrite configured translations.
+Ordinary project flush retains both lists. Full reference reset clears only their
+entry rows, preserves the definition rows and unrelated catalogs, and restores
+the established event-type seed. Sequence repair advances the common entry
+high-water mark before reset and never rewinds it.
