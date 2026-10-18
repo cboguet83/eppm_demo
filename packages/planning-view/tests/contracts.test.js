@@ -14,7 +14,7 @@ test('opaque identities, inclusive dates, and omitted resources survive independ
   assert.equal(validateDate('2028-02-29'),'2028-02-29');
 });
 
-for (const day of ['2027-02-29','2028-02-30','2028-13-01','1/2/2028',null,1]) {
+for (const day of ['0000-01-01','2027-02-29','2028-02-30','2028-13-01','1/2/2028',null,1]) {
   test(`reject invalid calendar value ${day}`, () => assert.throws(()=>validateDate(day),ContractError));
 }
 

@@ -30,7 +30,7 @@ function identity(value, path) {
 
 /** @param {unknown} value Candidate. @param {string} path Schema location. */
 export function validateDate(value, path = 'date') {
-  requireValue(typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value), path);
+  requireValue(typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && !value.startsWith('0000'), path);
   const time = Date.parse(value + 'T00:00:00Z');
   requireValue(Number.isFinite(time) && new Date(time).toISOString().slice(0, 10) === value, path);
   return value;
