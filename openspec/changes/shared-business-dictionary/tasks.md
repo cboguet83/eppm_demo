@@ -32,7 +32,7 @@ identified by task 1.1 in `git log origin/main..HEAD --oneline`.
 
 ## 5. Cross-component integration
 
-- [ ] 5.1 Add integration regressions that warm collaboration/dashboard displays, commit or roll back translated edits, and verify revisions, latest labels, blocker identity and project isolation. Cover simultaneous dictionary edits, immutable identity/classification fields, direct runtime SQL bypass attempts and unaffected excluded catalogs. Add the focused shared-dictionary ADR extending ADR 0010 and document the implemented C4 components, authorization and coordinated rollout; retain ADR 0012/0063 decisions. Verify these integration tests and existing revision/dashboard/scoped-contact regressions pass; inspect active callers for retired catalog-table SQL and record justified migration-history references.
+- [x] 5.1 Add integration regressions that warm collaboration/dashboard displays, commit or roll back translated edits, and verify revisions, latest labels, blocker identity and project isolation. Cover simultaneous dictionary edits, immutable identity/classification fields, direct runtime SQL bypass attempts and unaffected excluded catalogs. Add the focused shared-dictionary ADR extending ADR 0010 and document the implemented C4 components, authorization and coordinated rollout; retain ADR 0012/0063 decisions. Verify these integration tests and existing revision/dashboard/scoped-contact regressions pass; inspect active callers for retired catalog-table SQL and record justified migration-history references.
 
 ## 6. Acceptance
 

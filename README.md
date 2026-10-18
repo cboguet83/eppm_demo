@@ -528,9 +528,10 @@ and `node --test tests/test_portfolio_table.cjs`.
 
 ### Project contacts and log persistence
 
-The native PostgreSQL schema includes `project_role`, `project_contact`,
-`project_event_type`, and `project_log_event`. Catalog labels support locale
-fallback through their `_translation` tables. Normal application startup preserves
+The native PostgreSQL schema stores role and event-type entries in
+`business_dictionary_entry`, with localized labels in
+`business_dictionary_translation`. Contacts and logs retain typed references
+through `project_contact` and `project_log_event`. Normal application startup preserves
 existing data and never reseeds it.
 
 Contacts reference a role and **function**, not an employee. Occupants' full names

@@ -56,7 +56,7 @@ def popup_server(authorized, tmp_path, request):
             "INSERT INTO eppm.resource_pool_assignment(pool_id,project_id,fte_assigned,start_date,end_date,project_plan_id) VALUES(%s,%s,%s,'2026-01-01','2026-03-31',(SELECT id FROM eppm.project_plan WHERE project_id=%s AND is_current))",
             [(1, 1, 1, 1), (1, 2, 2, 2), (2, 1, 1, 1), (2, 2, 1, 2)],
         )
-        blocker = connection.execute("SELECT id FROM eppm.project_event_type WHERE system_code='blocking_point'").fetchone()[0]
+        blocker = connection.execute("SELECT id FROM eppm.business_dictionary_entry WHERE dictionary_code='project_event_type' AND system_code='blocking_point'").fetchone()[0]
         connection.execute("INSERT INTO eppm.project_log_event(project_id,title,description,comment,event_type_id,status) VALUES(1,'Delivery blocked',%s,'Read only',%s,'active')",
                            ('First line\nSecond line', blocker))
     finance = create_finance_service(RuntimeResources(authorized.database, authorized.key), access=authorized.binding(4).access)

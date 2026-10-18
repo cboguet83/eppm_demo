@@ -17,13 +17,13 @@ def test_repeated_migrations_preserve_events_and_current_session_states(business
     """Native migration reentry never repeats the retired SQLite session upgrade."""
     with psycopg.connect(authorized.setup.operator_url) as connection:
         blocker = connection.execute(
-            "SELECT id FROM eppm.project_event_type WHERE system_code='blocking_point'"
+            "SELECT id FROM eppm.business_dictionary_entry WHERE dictionary_code='project_event_type' AND system_code='blocking_point'"
         ).fetchone()[0]
         event = connection.execute(
             "INSERT INTO eppm.project_log_event(project_id,title,event_type_id) "
             "VALUES(1,'Preserved issue',%s) RETURNING id", (blocker,)
         ).fetchone()[0]
-        connection.execute("UPDATE eppm.project_event_type SET name='Renamed blocker' WHERE id=%s", (blocker,))
+        connection.execute("UPDATE eppm.business_dictionary_entry SET name='Renamed blocker' WHERE dictionary_code='project_event_type' AND id=%s", (blocker,))
         connection.execute("UPDATE eppm.app_session SET revoked=true WHERE session_hash='session-2'")
         before = connection.execute(
             "SELECT session_hash,revoked FROM eppm.app_session ORDER BY session_hash"
@@ -34,7 +34,7 @@ def test_repeated_migrations_preserve_events_and_current_session_states(business
             "SELECT id,title,event_type_id FROM eppm.project_log_event"
         ).fetchall() == [(event, 'Preserved issue', blocker)]
         assert connection.execute(
-            "SELECT name,system_code FROM eppm.project_event_type WHERE id=%s", (blocker,)
+            "SELECT name,system_code FROM eppm.business_dictionary_entry WHERE dictionary_code='project_event_type' AND id=%s", (blocker,)
         ).fetchone() == ('Renamed blocker', 'blocking_point')
         assert connection.execute(
             "SELECT session_hash,revoked FROM eppm.app_session ORDER BY session_hash"
@@ -47,9 +47,9 @@ def test_dashboard_filters_scope_shared_capacity_approved_budget_and_issues(busi
         conn.execute("INSERT INTO eppm.wbs(id,code,description) VALUES(1,'A','Budget A')")
         conn.execute('INSERT INTO eppm.project_wbs VALUES(1,1,50),(2,1,50)')
         conn.execute("UPDATE eppm.resource_pool SET capacity_fte=2 WHERE id=1")
-        blocker=conn.execute("SELECT id FROM eppm.project_event_type WHERE system_code='blocking_point'").fetchone()[0]
+        blocker=conn.execute("SELECT id FROM eppm.business_dictionary_entry WHERE dictionary_code='project_event_type' AND system_code='blocking_point'").fetchone()[0]
         conn.execute("INSERT INTO eppm.project_log_event(project_id,title,event_type_id,status) VALUES(1,'Visible blocker',%s,'active'),(2,'Secret blocker',%s,'active')",(blocker,blocker))
-        conn.execute("UPDATE eppm.project_event_type SET name='Renamed' WHERE id=%s",(blocker,))
+        conn.execute("UPDATE eppm.business_dictionary_entry SET name='Renamed' WHERE dictionary_code='project_event_type' AND id=%s",(blocker,))
     finance=create_finance_service(path,access=manager);finance.today=lambda:date(2026,1,1)
     first=finance.save([{'code':'A','amounts':{'2026':'100'}}],base_id=None,name='Approved',status='Approved',year=2026)
     newer=finance.save([{'code':'A','amounts':{'2026':'200'}}],base_id=first,name='Newer',status='Approved',year=2026)
