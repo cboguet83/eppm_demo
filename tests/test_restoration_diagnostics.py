@@ -6,7 +6,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from tests.postgresql.test_mapping_allocation import _restoration_snapshot
+from tests.postgresql.test_mapping_allocation import (
+    _report_restoration_failure, _restoration_snapshot,
+)
 
 
 def test_restoration_snapshot_omits_unexpected_server_and_browser_values(
@@ -61,3 +63,26 @@ def test_restoration_snapshot_reports_missing_observations_without_error_payload
         'server_counts_unavailable': 'FileNotFoundError',
         'dom_unavailable': 'Error',
     }
+
+
+@pytest.mark.parametrize('failure_kind', ['assertion', 'browser'])
+def test_diagnostic_report_preserves_original_failure(
+    tmp_path: Path, failure_kind: str,
+) -> None:
+    """An observation must not swallow or replace the originating failure."""
+    playwright = pytest.importorskip('playwright.sync_api')
+    error = (AssertionError('original failure') if failure_kind == 'assertion'
+             else playwright.TimeoutError('original timeout'))
+    page = MagicMock()
+    page.evaluate.return_value = {}
+    page.get_by_role.return_value.count.return_value = 0
+    page.locator.return_value.count.return_value = 0
+    completion = MagicMock(_completed=0, _running=False)
+
+    with pytest.raises(type(error)) as caught:
+        with _report_restoration_failure(page, completion, tmp_path):
+            raise error
+
+    assert caught.value is error
+    assert error.__notes__[0].startswith('Restoration browser diagnostics: ')
+    assert 'server_counts_unavailable' in error.__notes__[0]

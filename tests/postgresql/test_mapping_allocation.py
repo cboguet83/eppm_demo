@@ -1,6 +1,8 @@
 """Real transactions, restored pools and mapping popup allocation limits."""
 
 from concurrent.futures import ThreadPoolExecutor
+from collections.abc import Iterator
+from contextlib import contextmanager
 from itertools import islice
 import json
 from pathlib import Path
@@ -119,6 +121,30 @@ def _restoration_snapshot(
     return json.dumps(state, sort_keys=True)
 
 
+@contextmanager
+def _report_restoration_failure(
+    page: 'Page', completion: ScriptCompletion, directory: Path,
+) -> Iterator[None]:
+    """Attach safe observations while propagating the original browser failure.
+
+    Args:
+        page: The test's private page.
+        completion: Passive protocol observer.
+        directory: This test's private server directory.
+
+    Yields:
+        Control to the original browser actions and assertions.
+    """
+    from playwright.sync_api import Error as PlaywrightError
+
+    try:
+        yield
+    except (AssertionError, PlaywrightError) as error:
+        details = _restoration_snapshot(page, completion, directory)
+        error.add_note(f'Restoration browser diagnostics: {details}')
+        raise
+
+
 def setup_resources(database, access):
     service = create_resource_pool_service(database, access=access)
     org = create_organization_service(database, access=access)
@@ -228,22 +254,20 @@ def test_blocked_restoration_popup_explains_conflicting_pools(database, access, 
         try:
             page = server.new_page(browser, viewport={'width': 1700, 'height': 1200})
             completion = ScriptCompletion(page)
-            page.goto(server.origin)
-            page.get_by_text('Show deleted pools', exact=True).click()
-            row = page.get_by_role('treeitem', name='Alpha (Deleted)', exact=True)
-            playwright_api.expect(row).to_be_visible(timeout=30000)
-            row.click(button='right')
-            page.get_by_role('menuitem', name='Undelete pool', exact=True).click()
-            popup = page.get_by_role('dialog')
-            playwright_api.expect(popup).to_contain_text('200% allocated')
-            playwright_api.expect(popup).to_contain_text('Alpha: 100%; Beta: 100%')
-            page.screenshot(path=str(tmp_path / 'restoration-blocked.png'), full_page=True)
-            popup.locator('.st-key-close_pool_restoration_warning button').click()
-            playwright_api.expect(row).to_be_visible()
-            with psycopg.connect(authorized.setup.operator_url) as connection:
-                assert connection.execute('SELECT deleted_flag FROM eppm.resource_pool WHERE id=%s', (first,)).fetchone() == (True,)
-        except (AssertionError, playwright_api.TimeoutError) as error:
-            details = _restoration_snapshot(page, completion, tmp_path)
-            raise AssertionError(f'Restoration browser diagnostics: {details}') from error
+            with _report_restoration_failure(page, completion, tmp_path):
+                page.goto(server.origin)
+                page.get_by_text('Show deleted pools', exact=True).click()
+                row = page.get_by_role('treeitem', name='Alpha (Deleted)', exact=True)
+                playwright_api.expect(row).to_be_visible(timeout=30000)
+                row.click(button='right')
+                page.get_by_role('menuitem', name='Undelete pool', exact=True).click()
+                popup = page.get_by_role('dialog')
+                playwright_api.expect(popup).to_contain_text('200% allocated')
+                playwright_api.expect(popup).to_contain_text('Alpha: 100%; Beta: 100%')
+                page.screenshot(path=str(tmp_path / 'restoration-blocked.png'), full_page=True)
+                popup.locator('.st-key-close_pool_restoration_warning button').click()
+                playwright_api.expect(row).to_be_visible()
+                with psycopg.connect(authorized.setup.operator_url) as connection:
+                    assert connection.execute('SELECT deleted_flag FROM eppm.resource_pool WHERE id=%s', (first,)).fetchone() == (True,)
         finally:
             browser.close()

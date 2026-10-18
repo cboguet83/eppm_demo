@@ -673,3 +673,11 @@ Focused executions, using generated ignored credentials for the dedicated Postgr
 - forced capture: expected nonzero with original forced assertion chained to sanitized diagnostic JSON (not acceptance).
 
 Earlier 30/30 covered two-CPU pristine probes and controlled-delay/throttle passes are diagnostic evidence only. Next publish this focused diagnostic task to draft PR #2, let its unfiltered full CI execute, and inspect any failure counts/protocol state before adding a confirmed repair. Renewed comparable full acceptance/verification remains task 4.4 and cannot be claimed from these focused checks.
+
+### Task 3.12 — preserve original diagnostic failures
+
+SonarCloud check 117637947107 at 34b0fb1 reports a new reliability issue: an assertion lexically inside a try/except catching AssertionError. Four older pytest_plugins placement annotations remain separate maintainability findings; the added reliability issue fails the new-code rating. No configured Sonar MCP capability is exposed in this session, so the exact check summary and annotation were retrieved through GitHub read-only APIs.
+
+Move failure reporting into a context manager that appends sanitized exception notes and re-raises the original object/traceback. It never suppresses an assertion or substitutes a new assertion. The browser actions, all original assertion ASTs (compared to origin/main), flow timing, timeouts and retry policy remain unchanged. Two explicit assertion/browser-timeout identity regressions plus privacy tests pass: 4 in 0.35s. Real bounded parallel mapping/privacy run: 10 passed in 8.00s. A real-browser forced capture keeps the originating `AssertionError: forced diagnostic capture probe` and appends the expected 2-row/1-deleted diagnostic note; it remains an expected nonzero diagnostic test, not a reproduction of the hosted defect.
+
+The remote Sonar correction is not yet verified until this separate commit is published and analyzed. Do not interrupt the in-flight 34b0fb1 full diagnostic run merely to restart it: it may still capture the original hosted-only failure. The original failure cause and task 4.4 remain unresolved.
