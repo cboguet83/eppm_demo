@@ -1,13 +1,21 @@
 """Reject incomplete standalone distributions before packaging."""
 
+from collections.abc import Callable
 from pathlib import Path
+from runpy import run_path
+from typing import cast
 
 from setuptools import setup
 from setuptools.command.build_py import build_py
 from setuptools.command.editable_wheel import editable_wheel
 from setuptools.command.sdist import sdist
 
-from build_frontend import validate_frontend
+# Load the trusted build validator without relying on source-root imports.
+ROOT = Path(__file__).resolve().parent
+VALIDATE_FRONTEND = cast(
+    Callable[[Path], None],
+    run_path(str(ROOT / "build_frontend.py"))["validate_frontend"],
+)
 
 
 class CheckedBuild(build_py):
@@ -15,7 +23,7 @@ class CheckedBuild(build_py):
 
     def run(self) -> None:
         """Validate the complete local source and build its wheel tree."""
-        validate_frontend(Path(__file__).resolve().parent)
+        VALIDATE_FRONTEND(ROOT)
         super().run()
 
 
@@ -24,7 +32,7 @@ class CheckedSource(sdist):
 
     def run(self) -> None:
         """Validate prepared assets before source-distribution assembly."""
-        validate_frontend(Path(__file__).resolve().parent)
+        VALIDATE_FRONTEND(ROOT)
         super().run()
 
 
@@ -33,7 +41,7 @@ class CheckedEditable(editable_wheel):
 
     def run(self) -> None:
         """Validate prepared assets before editable wheel assembly."""
-        validate_frontend(Path(__file__).resolve().parent)
+        VALIDATE_FRONTEND(ROOT)
         super().run()
 
 

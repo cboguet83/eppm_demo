@@ -119,7 +119,7 @@ def _backend(
     environment["SOURCE_DATE_EPOCH"] = "315532800"
     result = subprocess.run([
         python, "-I", "-c",
-        "import sys;sys.path.insert(0,'.');"
+        "import sys;"
         "assert sys.version_info[:2]==(3,14);"
         "from setuptools import build_meta;"
         "getattr(build_meta,sys.argv[2])(sys.argv[1])",
@@ -130,6 +130,28 @@ def _backend(
     else:
         assert result.returncode != 0
     return result
+
+
+@pytest.mark.parametrize("project", [ROOT, WRAPPER], ids=["application", "standalone"])
+def test_isolated_pep517_editable_hooks_find_their_validators(
+    project: Path, tmp_path: Path,
+) -> None:
+    """Metadata and editable builds must work without source-root import paths."""
+    prepare_assets(ROOT)
+    default = (sys.executable if importlib.util.find_spec("setuptools")
+               else shutil.which("python3") or sys.executable)
+    python = os.environ.get("EPPM_BUILD_PYTHON", default)
+    environment = os.environ.copy()
+    environment.pop("PYTHONPATH", None)
+    result = subprocess.run(
+        [python, "-I", "-c", "from setuptools import build_meta;"
+         "build_meta.get_requires_for_build_editable()"],
+        cwd=project, env=environment, capture_output=True, text=True,
+        timeout=90, check=False,
+    )
+    assert result.returncode == 0, (result.stdout + result.stderr)[-4000:]
+    _backend(project, tmp_path / "editable", "build_editable")
+    assert len(list((tmp_path / "editable").glob("*.whl"))) == 1
 
 
 @pytest.fixture(scope="module")

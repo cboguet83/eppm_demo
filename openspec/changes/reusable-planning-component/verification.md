@@ -1,6 +1,6 @@
 # Verification: reusable-planning-component
 
-Status: **passed; rearchived on 2026-10-18**. The OpenSpec verify-change workflow
+Status: **passed; ready for rearchive after packaging correction**. The OpenSpec verify-change workflow
 checked completeness, all requirement/scenario mappings, design adherence and
 code-pattern consistency against the integrated implementation. No applicable
 check was skipped or left unverified.
@@ -9,7 +9,7 @@ check was skipped or left unverified.
 
 | Dimension | Final finding |
 | --- | --- |
-| Completeness | 26/26 tasks complete; all 16 added requirements implemented. No removed/renamed requirements. |
+| Completeness | 27/27 tasks complete; all 16 added requirements implemented. No removed/renamed requirements. |
 | Correctness | All 35 scenarios mapped below. Complete PostgreSQL/authenticated-browser acceptance passed with zero skips and 97.71% application coverage. |
 | Coherence | Explicit host dependencies, independent lifecycle/state, canonical assets and thin EPPM integration follow the design. Approved initial-render limits and every unchanged timing/hard gate pass. |
 
@@ -67,18 +67,19 @@ characterization meanings and hard bounds remain in `baseline.md`.
 
 ## Final validation evidence
 
-Runtime code was frozen at `098f9b8`, including current main `664f72a`, with a
-matching Docker image. Subsequent changes are documentation/evidence only.
+Application/browser runtime remains `098f9b8`, including current main `664f72a`,
+with the matching Docker image. The build-only task 8.1 correction was frozen
+during renewed full acceptance. Subsequent edits are documentation/evidence only.
 Python 3.14.7, Node 26.11.1 and installed Playwright 1.62 Chromium were used.
 
 | Check | Actual result |
 | --- | --- |
-| Complete strict integrated suite | **3,481 passed + 5 subtests, zero skips in 1,234.25 s (20:34)**. Exactly two loadgroup workers, template-backed isolated PostgreSQL, authenticated browser deployments, no worker restarts and complete worker/collection proof. |
+| Complete strict integrated suite | **3,483 passed + 5 subtests, zero skips in 1,248.42 s (20:48)**. Exactly two loadgroup workers, template-backed isolated PostgreSQL, authenticated browser deployments, no worker restarts and complete worker/collection proof. |
 | Application coverage | **17,097 statements, 392 missed, 97.71%**; unchanged `app` source/exclusion scope and >=95% gate. Native host subprocess coverage included; containerized OIDC remains a separate behavior gate. |
 | JavaScript | **324 passed, zero failures/skips**, including all original entry points, extracted modules and current-main startup/completion checks. |
 | Independent wrapper/example coverage | **46 passed, 275/275 statements, 100%** against unchanged >=95% gate. |
 | Affected mounted/browser regressions | **38 passed in 57.12 s**, including retained static control nodes, actual label updates, resources, menu appearance after real transitions, keyboard/viewport and EPPM behavior. All also execute in the complete suite. |
-| Installed consumers/distributions | Direct wheel, source-rebuilt wheel, browser archive and two-instance web/Streamlit examples outside the checkout all passed in the complete suite. No editable EPPM imports or startup frontend build. |
+| Installed consumers/distributions | 15 focused distribution/consumer checks passed in 20.03 s, including isolated get-requires/editable hooks for root and wrapper without source-path insertion; direct/source-rebuilt wheels, browser archive and two-instance web/Streamlit examples also passed in the complete suite. No editable EPPM imports or startup frontend build. |
 | Pure models | 117 focused checks passed; contracts/owned messages/calendar/state/loading/resource/dependency models have 100% statement coverage. This is not claimed as complete DOM-renderer coverage. |
 | Five-repeat benchmark | **25 passed in 107.13 s**. Initial-render medians 121.1/118.8/124.0 ms synthetic and 39.8 ms native, below explicitly approved 150/60 ms. Maximum scroll work 8.9/8.6/9.4 ms and p95 1.5/1.7/1.6 ms pass the unchanged 10%-AND-5-ms rule. Rows <=40, cells positive, alignment 0 px and geometry/loading bounds pass. |
 | Assets/specs/diff | Prepared-asset manifest check, selected-change strict validation, **all nine main specs strict validation**, and `git diff --check` passed. |
@@ -123,8 +124,8 @@ Run the explicit five-repeat collector separately from full-suite/database-copy
 checks, with a new ignored basetemp, as documented in the benchmark procedure.
 
 Portable results are recorded here; local logs are
-`/tmp/planning-integrated-pytest-2.log`, `/tmp/planning-73-node.log`,
-`/tmp/planning-integrated-wrapper.log`, `/tmp/planning-73-browser.log`, and
+`/tmp/planning-packaging-final-pytest.log`, `/tmp/planning-81-node.log`,
+`/tmp/planning-81-wrapper.log`, `/tmp/planning-73-browser.log`, and
 `/tmp/planning-candidate-scroll-fixed.log`.
 
 ## Earlier attempts and corrections
@@ -164,10 +165,11 @@ Portable results are recorded here; local logs are
 
 The focused ledger below is from `git log main..HEAD --oneline` filtered by the
 change label, with `git log origin/main..HEAD --oneline` confirming the actual
-PR base. Current main is an ancestor of the verified source. Task 7.2 contains the final acceptance report; its already-existing hash was
-added by this archive follow-up.
+PR base. Current main is an ancestor of the verified source. Task 8.1 contains the final packaging correction and renewed acceptance; its
+own hash is added only by the subsequent archive follow-up.
 
 ```text
+3eab64d chore(reusable-planning-component): rearchive integrated verified change
 ac8e6e2 test(reusable-planning-component): complete task 7.2 integrated acceptance
 098f9b8 perf(reusable-planning-component): complete task 7.3 scroll DOM correction
 05f87fe merge(reusable-planning-component): complete task 7.1 current main integration
@@ -197,12 +199,11 @@ e68f994 feat(reusable-planning-component): complete task 2.1 host contracts
 48386c9 docs(reusable-planning-component): complete task 1.1 extraction plan
 ```
 
-PR: https://github.com/cboguet83/eppm_demo/pull/4. Final acceptance is complete and the change is rearchived at
-`openspec/changes/archive/2026-10-18-reusable-planning-component/`.
-All 26 tasks are complete and both capability specs are synced; the final PR
-update follows. Full CI on the final PR revision is an
-additional gate before requesting merge approval. Registry publication and merge
-have not occurred. The unrelated primary checkout was not edited.
+PR: https://github.com/cboguet83/eppm_demo/pull/4. All 27 tasks are complete;
+final packaging acceptance is complete and rearchive follows. Both capability
+specs remain synced. Full CI on the final PR revision is an additional gate
+before requesting merge approval. Registry publication and merge have not
+occurred. The unrelated primary checkout was not edited.
 
 Repository settings were inspected read-only: main was unprotected, and merge,
 squash and rebase methods enabled. No administrative settings were changed. This
@@ -211,5 +212,30 @@ preserving task history.
 
 ## Final assessment
 
-All applicable implementation checks passed. The change is rearchived; final
-PR CI must pass before merge approval is requested.
+All applicable implementation and packaging checks passed. Ready for rearchive;
+final PR CI must pass before merge approval is requested.
+
+## Hosted packaging correction
+
+Final-head CI run 39147420394 stopped in installation before tests:
+setuptools' isolated get-requires-for-editable hook could not import `scripts`
+from root setup.py. The standalone setup similarly imports `build_frontend`
+through the source-root path. Local distribution helper `_backend` inserted
+that path, masking the real hook environment. Task 8.1 removes the shortcut,
+loads both trusted build validators by file path and verifies real metadata/
+editable hooks plus complete acceptance before rearchive. Prior runtime/full
+acceptance is retained as historical evidence; renewed acceptance below covers
+the correction.
+
+The two new isolated metadata regressions both failed before the fix (missing
+`scripts` / `build_frontend`). Root and standalone setup now load their trusted
+validators by file path with typed callable boundaries; no source import path
+is added. All 15 distribution/installed-consumer checks pass in 20.03 seconds,
+including get-requires/build-editable hooks without the old path insertion.
+Prepared-asset validation is unchanged. Actual pip editable-install smoke tests
+also passed for root and wrapper in disposable targets with --no-deps,
+--no-index and existing local build tools (--no-build-isolation); no dependency
+was downloaded or changed. The isolated Python -I hook tests separately prove
+source-root imports are unnecessary. Complete renewed strict acceptance passed
+3,483 tests + 5 subtests, zero skips, 97.71% app coverage in 1,248.42 seconds;
+324 JavaScript checks and all 46 wrapper/example checks (100% coverage) pass.

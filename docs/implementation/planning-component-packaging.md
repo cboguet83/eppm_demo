@@ -36,6 +36,9 @@ source. Root source distributions retain that source and metadata so checks
 work without the original checkout. Prepare before root installation. Docker
 prepares in its build stage using Python, then copies the tree into its non-root
 runtime. CI prepares before installation and checks drift after tests.
+Both setup files load their trusted validator by file path relative to the
+source distribution. They do not depend on source-root imports, so isolated
+PEP 517 metadata and editable-wheel hooks use the same integrity checks.
 
 ## Build Python artifacts
 
@@ -79,7 +82,9 @@ publication and a separate repository remain outside this change.
 installs them plus the root wheel in temporary targets. It disables source-tree
 import resolution and checks every resource against the source manifest. Tests
 also check byte-identical repeated archives, failed build guards and browser
-rendering from an extracted archive. They use the active Python 3.14 build
+rendering from an extracted archive. Backend processes run with Python `-I`
+without inserting the source root into `sys.path`; root and standalone
+get-requires-for-editable and editable-wheel hooks are exercised explicitly. They use the active Python 3.14 build
 tools (included in `.[dev]`), falling back to `python3` on PATH when needed.
 `EPPM_BUILD_PYTHON` selects another prepared Python 3.14 interpreter.
 Runtime/browser checks retain the pytest interpreter and its Streamlit install.

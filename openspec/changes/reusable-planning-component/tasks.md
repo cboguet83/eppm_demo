@@ -54,6 +54,10 @@ Each numbered checkbox is one focused commit containing its implementation, rele
 
 - [x] 7.3 Remove unchanged resource-control/layout and toolbar text mutations from scroll frames while retaining label/filter/resize updates and keyboard behavior. The integrated five-repeat collapsed maximum scroll-work median of 12.5 ms exceeded the unchanged 6.9 ms reference by more than 10% and 5 ms; profile DOM rebuilding, add mounted identity/update regression coverage, and repeat every timing metric including maximum scroll work before completing this correction.
 
+## 8. Hosted packaging correction
+
+- [x] 8.1 Make root and independent-wrapper build guards work in isolated PEP 517 hooks without importing source-root modules through sys.path. Remove the test helper's source-path insertion; verify get-requires/editable-wheel hooks plus direct/source-rebuilt artifacts and installed consumers, then rerun complete strict two-worker acceptance, wrapper/JavaScript/asset/spec checks and OpenSpec verification. Preserve asset-integrity failures and all prior gates, record the hosted failure and final evidence, then rearchive and update the existing PR for final CI.
+
 ## Workflow follow-up
 
 - After all tracked tasks and required checks pass, sync both capability deltas and archive the change on this branch. Inspect and commit the archive and verification evidence in a separate lifecycle commit.
