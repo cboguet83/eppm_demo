@@ -8,20 +8,25 @@ import json
 from pathlib import Path
 from threading import Barrier, local
 from typing import TYPE_CHECKING
+
 import pytest
 import psycopg
+from streamlit.proto.BackMsg_pb2 import BackMsg
 
 from app.domain.organization.models import Employee, OrgFunction, Team
 from app.domain.resources.models import PoolMapping, ResourcePool
 from app.infrastructure.postgresql.resource_pools import PostgresResourcePoolStore
+from app.application.services.business_access import BusinessAccess
 from app.main import create_organization_service, create_resource_pool_service
+from app.runtime import RuntimeResources
 from tests.postgresql.test_resource_pool_ui import database, access, dialog
 from tests.postgresql.browser import native_server
 from tests.postgresql.browser_completion import ScriptCompletion
 from tests.postgresql.test_pool_hierarchy_browser import SCREEN
 
 if TYPE_CHECKING:
-    from playwright.sync_api import Page
+    from playwright.sync_api import Page, WebSocket
+    from tests.postgresql.conftest import AuthorizedFixture
 
 
 _RESTORATION_SCREEN = r"""
@@ -56,6 +61,39 @@ if not hasattr(_pool_module, '_restoration_original_tree'):
         return _pool_module._restoration_original_tree(hierarchy, *args, **kwargs)
     _pool_module.resource_pool_tree = _observed_tree
 """ + SCREEN
+
+
+def _observe_restoration_toggle(
+    page: 'Page', completion: ScriptCompletion,
+) -> list[tuple[int, bool]]:
+    """Record only completion state when the first deleted-visibility request leaves.
+
+    Args:
+        page: Private browser page, before navigation.
+        completion: Its passive server completion observer.
+
+    Returns:
+        A list populated by the first true checkbox request; no raw frames persist.
+    """
+    observations: list[tuple[int, bool]] = []
+
+    def receive(payload: str | bytes) -> None:
+        if observations or not isinstance(payload, bytes):
+            return
+        message = BackMsg.FromString(payload)
+        if not message.HasField('rerun_script'):
+            return
+        widgets = message.rerun_script.widget_states.widgets
+        if any(widget.id.endswith('-pool_show_deleted')
+               and widget.HasField('bool_value') and widget.bool_value
+               for widget in widgets):
+            observations.append((completion._completed, completion._running))
+
+    def observe(socket: 'WebSocket') -> None:
+        socket.on('framesent', receive)
+
+    page.on('websocket', observe)
+    return observations
 
 
 def _diagnostic_fields(
@@ -243,20 +281,43 @@ def test_concurrent_allocations_cannot_both_consume_same_remaining_capacity(data
     assert service.mapping_catalog().allocations().total(('employee', employee)) == 60
 
 
-def test_blocked_restoration_popup_explains_conflicting_pools(database, access, authorized, tmp_path):
+@pytest.mark.parametrize(
+    'delayed_initial_completion', [False, True],
+    ids=['ordinary', 'delayed-initial-completion'],
+)
+def test_blocked_restoration_popup_explains_conflicting_pools(
+    database: RuntimeResources, access: BusinessAccess,
+    authorized: 'AuthorizedFixture', tmp_path: Path,
+    delayed_initial_completion: bool,
+) -> None:
+    """Preserve restoration rejection after bounded initial/toggle completion."""
     playwright_api = pytest.importorskip('playwright.sync_api')
     service, first, second, _, employee = setup_resources(database, access)
     service.create_mapping(PoolMapping(first, 'employee', employee, 100))
     service.delete_pool(first)
     service.create_mapping(PoolMapping(second, 'employee', employee, 100))
-    with native_server(authorized, tmp_path, _RESTORATION_SCREEN) as server, playwright_api.sync_playwright() as playwright:
+    screen = _RESTORATION_SCREEN
+    if delayed_initial_completion:
+        # Controlled precondition gap, not a reproduction of the hosted failure.
+        screen += """
+import time
+if not st.session_state.get('_initial_restoration_completed'):
+    time.sleep(2)
+    st.session_state['_initial_restoration_completed'] = True
+"""
+    with native_server(authorized, tmp_path, screen) as server, playwright_api.sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
             page = server.new_page(browser, viewport={'width': 1700, 'height': 1200})
             completion = ScriptCompletion(page)
+            toggles = _observe_restoration_toggle(page, completion)
             with _report_restoration_failure(page, completion, tmp_path):
                 page.goto(server.origin)
-                page.get_by_text('Show deleted pools', exact=True).click()
+                with completion.action():
+                    playwright_api.expect(page.get_by_role(
+                        'treeitem', name='Beta', exact=True,
+                    )).to_be_visible(timeout=30000)
+                    page.get_by_text('Show deleted pools', exact=True).click()
                 row = page.get_by_role('treeitem', name='Alpha (Deleted)', exact=True)
                 playwright_api.expect(row).to_be_visible(timeout=30000)
                 row.click(button='right')
@@ -269,5 +330,8 @@ def test_blocked_restoration_popup_explains_conflicting_pools(database, access, 
                 playwright_api.expect(row).to_be_visible()
                 with psycopg.connect(authorized.setup.operator_url) as connection:
                     assert connection.execute('SELECT deleted_flag FROM eppm.resource_pool WHERE id=%s', (first,)).fetchone() == (True,)
+                assert len(toggles) == 1
+                assert toggles[0][0] > 0, 'Toggle preceded initial successful completion'
+                assert toggles[0][1] is False, 'Toggle interrupted an active script'
         finally:
             browser.close()

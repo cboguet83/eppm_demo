@@ -5,9 +5,10 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
+from streamlit.proto.BackMsg_pb2 import BackMsg
 
 from tests.postgresql.test_mapping_allocation import (
-    _report_restoration_failure, _restoration_snapshot,
+    _observe_restoration_toggle, _report_restoration_failure, _restoration_snapshot,
 )
 
 
@@ -86,3 +87,31 @@ def test_diagnostic_report_preserves_original_failure(
     assert caught.value is error
     assert error.__notes__[0].startswith('Restoration browser diagnostics: ')
     assert 'server_counts_unavailable' in error.__notes__[0]
+
+
+def test_toggle_observer_retains_only_first_matching_completion_state() -> None:
+    """Ignore unrelated traffic and never retain raw widget data or later states."""
+    page = MagicMock()
+    completion = MagicMock(_completed=1, _running=False)
+    observations = _observe_restoration_toggle(page, completion)
+    socket = MagicMock()
+    page.on.call_args.args[1](socket)
+    receive = socket.on.call_args.args[1]
+    assert socket.on.call_args.args[0] == 'framesent'
+    receive('unrelated text')
+    receive(BackMsg(app_heartbeat=True).SerializeToString())
+    message = BackMsg()
+    widgets = message.rerun_script.widget_states.widgets
+    widgets.add(id='private-other-widget', string_value='private-payload')
+    widgets.add(id='generated-pool_show_deleted', bool_value=False)
+    receive(message.SerializeToString())
+    assert observations == []
+
+    widgets[-1].bool_value = True
+    receive(message.SerializeToString())
+    completion._completed = 2
+    completion._running = True
+    receive(message.SerializeToString())
+
+    assert observations == [(1, False)]
+    assert 'private' not in repr(observations)
