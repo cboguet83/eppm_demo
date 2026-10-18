@@ -327,3 +327,26 @@ navigate cells, scrolling the virtual window as needed. Context actions receive
 the same period/scope. Same-scope updates preserve independent resource vertical
 scroll; scope/reset clears it. Hiding/removing resources reserves no grid space,
 and frame-height callbacks include the enabled controls and complete viewport.
+
+## Streamlit transport
+
+`./streamlit` exports `connectStreamlit(root)`, a separate bridge importing the
+same core. It mounts from contract-v1 `snapshot` data and applies `messages`
+patches/responses. `options` is JSON mount configuration, `lazy` selects queued
+load events, and `ackRequestIds` acknowledges transport receipt. Identical
+snapshots/updates are not reapplied on every rerun. Changing mount options
+remounts; use data for retained-state label/capability updates.
+
+The bridge pins its actual parent window/origin, owns a single delivery queue,
+prioritizes unsent actions before reads, and waits for receipt acknowledgement
+before advancing the single component-value channel. Correlated load patches
+resolve only their provider request. Aborted reads, stale revisions and disposed
+instances cannot deliver late results. Page disposal releases the bridge/core.
+Finite `loading:{batchSize,maxProjects}` mount options default to 25/100.
+Read failures retain valid data and expose an explicit Retry loading button.
+
+`packages/streamlit-planning-view` contains the typed independent Python wrapper
+and full-data/lazy-host examples. It requires Python 3.14 and Streamlit 1.63.x
+or a later 1.x release, uses explicit keys, and validates/deduplicates returned
+events without importing EPPM. Package assembly is handled by the next build
+task; native tests prepare a temporary frontend directly from this one source.

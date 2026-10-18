@@ -183,7 +183,8 @@ def test_invalid_mount_and_failed_callback_leave_no_partial_display(planning_pag
     """Validate mount boundaries before DOM changes and unwind failed setup."""
     assert planning_page.evaluate("""() => {
       const host=document.createElement('div');document.body.append(host);
-      for(const options of [null,{}, {snapshot,onHeight:1},{snapshot,today:'bad'}]) {
+      for(const options of [null,{}, {snapshot,onHeight:1},{snapshot,today:'bad'},
+        {snapshot,loading:null},{snapshot,loading:{batchSize:0}},{snapshot,resourceOptions:[]}]) {
         try{mount(host,options);return false;}catch(e){if(e.name!=='ContractError')return false;}
       }
       try{mount(host,{snapshot,onHeight:()=>{throw new Error('host');}});return false;}catch(e){}
@@ -243,6 +244,28 @@ def test_visible_lazy_reads_are_injected_and_destroy_aborts_pending_work(plannin
     page.wait_for_timeout(100)
     assert page.evaluate("readAborted")
     assert page.evaluate("loadErrors.length") == 0
+
+
+def test_visible_read_failure_requires_explicit_retry(planning_page: Page) -> None:
+    """The mounted loader keeps valid rows and exposes a safe nonrepeating retry."""
+    page = planning_page
+    page.evaluate("""() => {
+      instances[0].destroy();window.reads=[];
+      instances[0]=mount(document.getElementById('first'),{snapshot:{...snapshot,tasks:[],loadedProjectIds:[]},today:'2026-01-01',
+        load:request=>new Promise((resolve,reject)=>reads.push({request,resolve,reject}))});
+    }""")
+    page.wait_for_function("reads.length===1")
+    page.evaluate("reads[0].reject(new Error('private backend detail'))")
+    retry = page.locator("#first [data-part=retry-load]")
+    expect(retry).to_be_visible()
+    expect(page.locator("#first .planning-status")).not_to_contain_text("private backend detail")
+    page.wait_for_timeout(150)
+    assert page.evaluate("reads.length") == 1
+    retry.click()
+    page.wait_for_function("reads.length===2")
+    page.evaluate("""reads[1].resolve({version:1,kind:'patch',scope:reads[1].request.scope,revision:reads[1].request.revision,
+      replaceProjectIds:reads[1].request.projectIds,tasks:[]})""")
+    expect(retry).to_be_hidden()
 
 
 def test_dependency_bundles_inspect_individual_members_without_hidden_metadata(planning_page: Page) -> None:

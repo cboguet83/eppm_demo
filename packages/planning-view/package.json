@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.js",
+    "./streamlit": "./src/adapters/streamlit.js",
     "./contracts": "./src/contracts/index.js",
     "./calendar": "./src/calendar/index.js",
     "./resources": "./src/resources/summary.js",

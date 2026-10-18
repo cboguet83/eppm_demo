@@ -125,6 +125,9 @@ export function mountPlanningView(root,options) {
   if(options.resourceUnit!==undefined && typeof options.resourceUnit!=='string')throw new ContractError('options.resourceUnit');
   if(options.resourceMaxHeight!==undefined && (!Number.isFinite(options.resourceMaxHeight) || options.resourceMaxHeight<50 || options.resourceMaxHeight>2000))throw new ContractError('options.resourceMaxHeight');
   if(options.resourceOptions!==undefined && (!options.resourceOptions || typeof options.resourceOptions!=='object' || Array.isArray(options.resourceOptions) || Object.entries(options.resourceOptions).some(([key,value])=>!['hideUnused','onlyOverallocated','showTotal','showSelected','collapsed'].includes(key) || typeof value!=='boolean')))throw new ContractError('options.resourceOptions');
+  if(options.loading!==undefined && (!options.loading || typeof options.loading!=='object' || Array.isArray(options.loading)))throw new ContractError('options.loading');
+  const loading={batchSize:options.loading?.batchSize ?? 25,maxProjects:options.loading?.maxProjects ?? 100};
+  if(!Number.isSafeInteger(loading.batchSize) || loading.batchSize<1 || !Number.isSafeInteger(loading.maxProjects) || loading.maxProjects<loading.batchSize)throw new ContractError('options.loading');
   options={...options,contextActions:validateActions(options.contextActions)};
   const doc=root.ownerDocument,win=doc.defaultView;
   const now=new Date();
@@ -139,9 +142,11 @@ export function mountPlanningView(root,options) {
   frame.dataset.instanceId=instanceId;frame.setAttribute('role','group');frame.setAttribute('aria-label','Planning');
   const sheet=doc.createElement('link');sheet.rel='stylesheet';sheet.href=new URL('./styles.css',import.meta.url).href;
   const toolbar=element(doc,'div','toolbar','planning-toolbar');
+  const retry=doc.createElement('button');retry.type='button';retry.dataset.part='retry-load';retry.hidden=true;
   for(const mode of ['Day','Week','Month','Quarter','Year']) {
     const button=doc.createElement('button');button.type='button';button.dataset.mode=mode;button.textContent=mode;toolbar.append(button);
   }
+  toolbar.append(retry);
   const timeline=panel(doc,'timeline'),resource=panel(doc,'resource');
   const splitter=element(doc,'div','splitter','planning-splitter');
   splitter.tabIndex=0;splitter.setAttribute('role','separator');splitter.setAttribute('aria-orientation','vertical');
@@ -170,6 +175,7 @@ export function mountPlanningView(root,options) {
       renderHeader(timeline.headerInner,geometry);renderHeader(resource.headerInner,geometry);
     }
     const calendar=geometry;
+    retry.hidden=!loader?.status().failed;retry.textContent=data.labels.retry || 'Retry loading';
     for(const item of [timeline,resource])item.canvas.style.width=calendar.width+'px';
     for(const button of toolbar.querySelectorAll('[data-mode]')) {
       button.textContent=data.labels[button.dataset.mode.toLowerCase()] || button.dataset.mode;
@@ -190,12 +196,15 @@ export function mountPlanningView(root,options) {
     const button=event.target.closest('button[data-mode]');
     if(button && toolbar.contains(button))store.setView({mode:button.dataset.mode});
   });
+  lifetime.listen(retry,'click',()=>{loader?.retry();store.setView({error:null});schedule();});
   bindScrolling({timeline,resource},store,lifetime,schedule);
   bindSplitter(frame,splitter,lifetime,value=>{leftWidth=value;schedule();},()=>timeline.left.getBoundingClientRect().width);
   const observer=new win.ResizeObserver(schedule);observer.observe(timeline.body);observer.observe(frame);
   lifetime.own(()=>observer.disconnect());lifetime.listen(win,'resize',schedule);lifetime.listen(sheet,'load',schedule);
   if(options.load) {
-    loader=createLoadingController({store,load:options.load,onError:options.onLoadError});
+    loader=createLoadingController({store,load:options.load,onError:error=>{
+      store.setView({error:error.message});options.onLoadError?.(error);schedule();
+    },...loading});
     lifetime.own(()=>loader.destroy());
   }
   try {draw();} catch(error) {lifetime.destroy();throw error;}
