@@ -121,7 +121,7 @@ async function main() {
       for (let p=1;p<=127;p++) {
         const usage={}, capacity={};
         for(let d=0;d<730;d++) {usage[day(d)]=(p%5)+1;capacity[day(d)]=d===365?0:4;}
-        pools.push({id:p,name:'Pool '+p,capacity:4,theoretical_capacity:4,displayed_assigned_capacity:4,
+        pools.push({id:p,name:'Pool '+p,used_by_selected_projects:true,capacity:4,theoretical_capacity:4,displayed_assigned_capacity:4,
           has_assigned_resources:true,daily_assigned_capacity:capacity,daily_usage:usage,selected_projects_daily_usage:usage});
       }
       for(let g=0;g<13;g++) {

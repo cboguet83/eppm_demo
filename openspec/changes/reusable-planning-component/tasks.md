@@ -5,7 +5,7 @@ Each numbered checkbox is one focused commit containing its implementation, rele
 ## 1. Planning and behavior reference
 
 - [x] 1.1 Capture the explored scope, proposal, two capability deltas, design, and task sequence on the isolated branch from current main; verify all required artifacts exist, `openspec validate reusable-planning-component --strict` passes, the artifact descriptions/scenarios agree, and the diff contains planning files only; then commit the completed planning task.
-- [ ] 1.2 Establish the behavioral reference for the current Gantt using existing scrolling, lazy-loading, permissions, menus, tooltip, resource-header, planning-event, and native scenario/filter tests; add missing observable characterization and document the old-test-to-behavior mapping. Record five reference runs of representative collapsed/expanded/external-link and isolated PostgreSQL benchmark configurations, environment/fixture identifiers, render/scroll metrics, DOM counts, payload size, and host edit timing; verify reference checks pass or resolve a concrete pre-existing blocker before extraction.
+- [x] 1.2 Establish the behavioral reference for the current Gantt using existing scrolling, lazy-loading, permissions, menus, tooltip, resource-header, planning-event, and native scenario/filter tests; add missing observable characterization and document the old-test-to-behavior mapping. Record five reference runs of representative collapsed/expanded/external-link and isolated PostgreSQL benchmark configurations, environment/fixture identifiers, render/scroll metrics, DOM counts, payload size, and host edit timing; verify reference checks pass or resolve a concrete pre-existing blocker before extraction.
 
 ## 2. Contract and data models
 
