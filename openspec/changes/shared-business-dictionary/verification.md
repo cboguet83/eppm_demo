@@ -2,21 +2,23 @@
 
 ## Current verdict
 
-Implementation tasks 1.1 through 5.3 are complete, including the user-authorized
-browser repairs. Task 6.1 remains open pending a complete strict acceptance run
-after those repairs. Do not archive or create a PR until that run, its coverage
-threshold and the final verification verdict pass.
+All ten tracked tasks are complete. The complete strict acceptance suite passed
+on application revision `1fb7f13`: 3,283 tests and five subtests, no skips, with
+97.70% statement coverage. OpenSpec strict validation and all JavaScript component
+checks also passed. No critical findings, warnings or unverified checks remain
+in this OpenSpec implementation assessment. The change is ready for sync/archive
+and PR delivery under the standing workflow.
 
 | Dimension | Evidence |
 | --- | --- |
-| Completeness | 9/10 tasks complete; all 14 added requirements mapped below |
-| Correctness | All 29 scenarios have implementation and test evidence; full-suite acceptance pending |
+| Completeness | 10/10 tasks complete; all 14 added requirements mapped below |
+| Correctness | All 29 scenarios have implementation and test evidence; complete strict acceptance passed |
 | Coherence | Shared tables, composite consumer references, injected transactions, existing Settings navigation and scope exclusions match the design |
 
-No implementation requirement was dropped or deferred. The currently incomplete
-acceptance task is the outstanding critical gate, rather than a claim of full
-acceptance. This report is an OpenSpec verify-change assessment; it is not a
-SonarQube static-analysis report.
+No implementation requirement was dropped or deferred. This report is an
+OpenSpec verify-change assessment; it is not a SonarQube static-analysis report.
+Full GitHub CI on the final PR revision and explicit user approval remain merge
+requirements. The disposable test databases were the only migration targets.
 
 ## Requirement and scenario evidence
 
@@ -71,7 +73,7 @@ databases were not migrated or reset.
 | Dashboard reproduction | The exact failing case passed in 4.46 seconds; the full two-test dashboard browser module passed in 14.20 seconds. |
 
 Those two full attempts preceded the authorized repairs. Neither satisfies
-acceptance, and global coverage has not yet been accepted. The user explicitly
+acceptance; the successful final run below supersedes them. The user explicitly
 authorized expanding scope to repair the failures; task 5.2 records that work.
 
 ## Authorized browser repairs: task 5.2
@@ -142,7 +144,42 @@ tests/postgresql/test_dictionaries.py tests/postgresql/test_dictionary_integrati
 passed all 18 tests in 10.99 seconds using the isolated dotenv configuration.
 The first post-repair acceptance attempt was deliberately interrupted after 232
 passed in 208.83 seconds to make this correction. It is not acceptance evidence;
-the complete strict suite must restart on the corrected committed revision.
+the complete strict suite restarted on the corrected committed revision.
+
+## Final acceptance: task 6.1
+
+The unchanged application and test sources at `1fb7f13` passed:
+
+```text
+python -m dotenv -f .local/dictionary-tests.env run -- python -m pytest -q --tb=short --require-full-suite --cov=app --cov-fail-under=95 --cov-report=term-missing --cov-report=json:.local/dictionary-coverage.json
+3283 passed, 5 subtests passed in 3083.29s (0:51:23)
+Required test coverage of 95% reached. Total coverage: 97.70%
+```
+
+Both Python executables were the existing Python 3.14.7 virtual environment.
+There were no skips. Strict mode required real isolated PostgreSQL and real
+authenticated browser participation. Host-process coverage includes native browser
+server execution; containerized OIDC behavior is verified separately and is not
+claimed as host-process coverage.
+
+| Coverage | Covered / statements | Percentage |
+| --- | --- | --- |
+| Application | 16,682 / 17,074 | 97.70% |
+| New dictionary domain | 40 / 40 | 100% |
+| New dictionary application service | 21 / 21 | 100% |
+| New shared PostgreSQL adapter | 56 / 56 | 100% |
+
+The final JavaScript invocation passed all 11 component files with no skips.
+OpenSpec strict validation passed. The final diff/whitespace audit passed; only
+additive migrations 0069 and 0070 differ from the fetched baseline, with 0069
+unchanged by the later integrity correction. No secrets, dependency patches,
+coverage exclusions or unrelated user changes are included. The expanded browser
+scope and its evidence are recorded above and in proposal/design/task artifacts.
+
+A read-only GitHub check confirmed merge commits are available and reported main
+as unprotected; squash and rebase methods are also enabled. This workflow still
+requires a merge commit after full PR CI and explicit approval. Repository settings
+were not changed.
 
 ## Task-to-commit evidence
 
@@ -159,5 +196,5 @@ fetched main at `0b6ebb0`.
 | 4.1 Translation editor | `0b2595c` |
 | 5.1 Integrated contracts | `04342b2` |
 | 5.2 Authorized browser repairs | `591acd2` |
-| 5.3 Planned SQL locale integrity | Dedicated task commit; recorded by the next acceptance update |
-| 6.1 Full acceptance | Pending required full-suite result |
+| 5.3 Planned SQL locale integrity | `1fb7f13` |
+| 6.1 Full acceptance | This dedicated acceptance commit; recorded by the lifecycle update |

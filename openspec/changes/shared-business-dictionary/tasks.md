@@ -40,7 +40,7 @@ identified by task 1.1 in `git log origin/main..HEAD --oneline`.
 
 ## 6. Acceptance
 
-- [ ] 6.1 Run `openspec validate shared-business-dictionary --strict`, the OpenSpec verify-change workflow, the complete authenticated PostgreSQL/browser pytest suite with `--require-full-suite --cov=app --cov-fail-under=95`, and all JavaScript component checks per `docs/development-workflow.md`. Inspect the final diff, confirm no secrets/unrelated changes or rewritten migrations, and record commands/results/coverage/skips, clean-and-upgrade evidence, scenario-to-test mapping and task-to-commit evidence in `verification.md`. Verify every required gate passes before marking this task complete; unavailable or failed checks keep it unchecked.
+- [x] 6.1 Run `openspec validate shared-business-dictionary --strict`, the OpenSpec verify-change workflow, the complete authenticated PostgreSQL/browser pytest suite with `--require-full-suite --cov=app --cov-fail-under=95`, and all JavaScript component checks per `docs/development-workflow.md`. Inspect the final diff, confirm no secrets/unrelated changes or rewritten migrations, and record commands/results/coverage/skips, clean-and-upgrade evidence, scenario-to-test mapping and task-to-commit evidence in `verification.md`. Verify every required gate passes before marking this task complete; unavailable or failed checks keep it unchecked.
 
 ## Workflow follow-up
 
