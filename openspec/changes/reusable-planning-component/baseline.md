@@ -102,6 +102,20 @@ name the main splitter explicitly. Failed attempts are not acceptance evidence.
 Remaining legacy source/global consumers and repeated benchmark comparisons are
 tracked in tasks 5.2 and 6.1.
 
+Task 5.3 records the renderer correction discovered during that consumer mapping.
+Mounted small vertical scrolls through 400 px now retain the existing task DOM;
+large jumps keep the existing at-most-39-row fixture bound. Imported clipping
+checks retain the original `[2400,207,2100,1076.4]` rectangle for a 900 px
+viewport at scroll 3000 and rows 5–30; scrolling to 3100 reuses that rectangle,
+and jumping to 8000 moves it to x=7400. Mounted checks exercise real SVG bounds,
+clickable two-member incoming markers, inspection, and marker removal outside
+the row window. Known expanded/unloaded task endpoints wait for hydration.
+The independent Node suite passed **100 checks**, and mounted component checks
+passed **21 tests in 33.98 s**. This corrects earlier extracted renderer behavior.
+Native project-dependency/alternative-context follow-ups passed **2 tests in
+29.35 s** with the actual EPPM bootstrap and restricted PostgreSQL services.
+Legacy entry migration and final performance acceptance remain pending.
+
 - `node --test tests/test_gantt_scrolling.cjs tests/test_gantt_permissions.cjs tests/test_planning_lazy.cjs tests/test_ui_menus.cjs`: four files passed.
 - Targeted Python edit-mode, event, view, and resource-header checks: 28 passed.
 - Tooltip and Gantt keyboard browser checks: two passed, seven unrelated cases deselected.

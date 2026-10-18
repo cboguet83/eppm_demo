@@ -72,6 +72,8 @@
 .planning-view .planning-link-violated {stroke:#ef4444;stroke-dasharray:4 2;}
 .planning-view .planning-link[data-lane=alternative] {stroke:#9333ea;}
 .planning-view .planning-link[data-lane=alternative].planning-link-violated {stroke:#ef4444;}
+.planning-view .planning-entry-marker {fill:#94a3b8;pointer-events:all;}
+.planning-view .planning-link-violated .planning-entry-marker {fill:#ef4444;}
 .planning-view .planning-inspector {position:fixed;z-index:1000;top:12vh;left:50%;transform:translateX(-50%);width:min(420px,90vw);max-height:75vh;overflow:auto;padding:16px;border:1px solid var(--planning-border,#e2e8f0);border-radius:8px;background:var(--planning-background,#fff);box-shadow:0 10px 40px #0f172a44;}
 .planning-view .planning-inspector select {display:block;width:100%;margin-top:8px;}
 .planning-view .planning-inspector dt {font-weight:600;}

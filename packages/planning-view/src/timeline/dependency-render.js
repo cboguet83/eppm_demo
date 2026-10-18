@@ -1,6 +1,5 @@
 /** Bounded SVG reconciliation and keyboard-accessible delivered-link inspection. */
-import {createDependencyIndex,layoutDependencies,inspectDependency} from './dependencies.js';
-import {ROW_HEIGHT} from './rows.js';
+import {createDependencyIndex,layoutDependencies,inspectDependency,dependencyViewport} from './dependencies.js';
 
 const NS='http://www.w3.org/2000/svg';
 
@@ -13,7 +12,7 @@ export function createDependencyRenderer({panel,frame,lifetime,instanceId,onEdit
   svg.classList.add('planning-dependencies');svg.dataset.part='dependencies';
   const inspector=doc.createElement('div');inspector.className='planning-inspector';inspector.dataset.part='dependency-inspector';
   inspector.setAttribute('role','dialog');inspector.setAttribute('aria-label','Dependency details');inspector.hidden=true;frame.append(inspector);
-  let index=null,previousData=null,previousProjection=null,bundles=new Map(),nodes=new Map(),selected=null,labels={},signature='';
+  let index=null,previousData=null,previousProjection=null,bundles=new Map(),nodes=new Map(),selected=null,labels={},signature='',viewport=null;
   const close=()=>{inspector.hidden=true;selected=null;};
   const show=(bundle,memberIndex=0)=>{
     selected={key:bundle.key,memberIndex};inspector.replaceChildren();inspector.hidden=false;
@@ -55,7 +54,7 @@ export function createDependencyRenderer({panel,frame,lifetime,instanceId,onEdit
   });
   lifetime.listen(inspector,'change',event=>{if(selected && event.target.tagName==='SELECT')show(bundles.get(selected.key),Number(event.target.value));});
   lifetime.listen(frame,'keydown',event=>{if(event.key==='Escape')close();});
-  lifetime.own(()=>{svg.remove();inspector.remove();bundles.clear();nodes.clear();index=null;previousData=null;previousProjection=null;labels={};selected=null;});
+  lifetime.own(()=>{svg.remove();inspector.remove();bundles.clear();nodes.clear();index=null;previousData=null;previousProjection=null;labels={};selected=null;viewport=null;});
   return {
     render(data,view,calendar,projection,window) {
       labels=data.labels;inspector.setAttribute('aria-label',labels.dependencyDetails || 'Dependency details');
@@ -64,22 +63,29 @@ export function createDependencyRenderer({panel,frame,lifetime,instanceId,onEdit
         index=createDependencyIndex(data,projection);previousData=data;previousProjection=projection;
         if(selected)close();
       }
-      const nextSignature=JSON.stringify([window.start,window.end,calendar.width,calendar.start,calendar.end,view.mode,view.filters]);
+      const nextSignature=JSON.stringify([window.start,window.end,calendar.width,calendar.start,calendar.end,view.mode,view.filters,view.scrollLeft,panel.body.clientWidth]);
       if(!changed && signature===nextSignature && panel.canvas.contains(svg))return;
       signature=nextSignature;
       const laidOut=layoutDependencies(index.query(window.start,window.end),calendar,window,view.filters);
       bundles=new Map(laidOut.map(bundle=>[bundle.key,bundle]));
       for(const [key,node] of nodes)if(!bundles.has(key)){node.remove();nodes.delete(key);}
-      const top=window.start*ROW_HEIGHT,height=Math.max(ROW_HEIGHT,(window.end-window.start+1)*ROW_HEIGHT);
-      svg.style.top=top+'px';svg.setAttribute('width',calendar.width);svg.setAttribute('height',height);
-      svg.setAttribute('viewBox',`0 ${top} ${calendar.width} ${height}`);
-      rect.setAttribute('x',0);rect.setAttribute('y',top);rect.setAttribute('width',calendar.width);rect.setAttribute('height',height);
+      const nextViewport=dependencyViewport({calendarWidth:calendar.width,...window,scrollLeft:view.scrollLeft,viewportWidth:panel.body.clientWidth,previous:viewport});
+      if(nextViewport!==viewport) {
+        viewport=nextViewport;const {left,top,width,height}=viewport;
+        svg.style.top=top+'px';svg.style.left=left+'px';svg.setAttribute('width',width);svg.setAttribute('height',height);
+        svg.setAttribute('viewBox',`${left} ${top} ${width} ${height}`);
+        rect.setAttribute('x',left);rect.setAttribute('y',top);rect.setAttribute('width',width);rect.setAttribute('height',height);
+      }
       for(const bundle of laidOut) {
         let owner=nodes.get(bundle.key);
         if(!owner) {
           const path=doc.createElementNS(NS,'path'),arrow=doc.createElementNS(NS,'path');owner=doc.createElementNS(NS,'g');
           path.setAttribute('d',bundle.path);arrow.setAttribute('d',`M ${bundle.x+bundle.direction*5} ${bundle.y-3} L ${bundle.x} ${bundle.y} L ${bundle.x+bundle.direction*5} ${bundle.y+3}`);
           owner.append(path,arrow);group.append(owner);nodes.set(bundle.key,owner);
+          if(bundle.missingPredecessor) {
+            const marker=doc.createElementNS(NS,'circle');marker.classList.add('planning-entry-marker');
+            marker.setAttribute('cx',bundle.entryX);marker.setAttribute('cy',bundle.entryY);marker.setAttribute('r',3.5);owner.append(marker);
+          }
         }
         owner.dataset.bundleKey=bundle.key;owner.dataset.memberCount=bundle.members.length;owner.dataset.lane=bundle.lane;
         owner.setAttribute('tabindex','0');owner.setAttribute('role','button');

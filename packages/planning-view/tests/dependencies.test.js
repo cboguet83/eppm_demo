@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {createDependencyIndex,layoutDependencies,inspectDependency} from '../src/timeline/dependencies.js';
+import {createDependencyIndex,layoutDependencies,inspectDependency,dependencyViewport} from '../src/timeline/dependencies.js';
 import {projectRows,ROW_HEIGHT} from '../src/timeline/rows.js';
 import {createCalendar} from '../src/calendar/index.js';
 import {createPlanningStore} from '../src/state/store.js';
@@ -58,6 +58,29 @@ test('explicitly supplied external endpoint details remain inspectable without h
   const h=fixture(input,['p']);
   const details=inspectDependency(h.index.query(0,10)[0]).predecessor;
   assert.deepEqual(details,{kind:'task',id:'outside',name:'Delivered external task',start:'2026-01-01',end:'2026-01-03'});
+});
+
+test('dependency SVG bounds retain 600px overscan and reuse small horizontal scrolls',()=>{
+  const input={calendarWidth:20000,start:5,end:30,scrollLeft:3000,viewportWidth:900};
+  const first=dependencyViewport(input),rectangle=value=>[value.left,value.top,value.width,value.height].map(number=>Number(number.toFixed(1)));
+  assert.deepEqual(rectangle(first),[2400,207,2100,1076.4]);
+  assert.equal(dependencyViewport({...input,scrollLeft:3100,previous:first}),first);
+  const jumped=dependencyViewport({...input,scrollLeft:8000,previous:first});assert.deepEqual(rectangle(jumped),[7400,207,2100,1076.4]);
+  assert.notEqual(dependencyViewport({...input,start:6,previous:first}),first);
+  const short=dependencyViewport({...input,calendarWidth:500,scrollLeft:9000});assert.equal(short.left,0);assert.equal(short.width,500);
+  assert.equal(dependencyViewport({...input,start:0,end:-1}).height,ROW_HEIGHT);
+  for(const values of [{calendarWidth:Infinity},{start:-1},{end:4.5},{end:3},{scrollLeft:-1},{viewportWidth:-1},{overscan:NaN}])assert.throws(()=>dependencyViewport({...input,...values}),ContractError);
+});
+
+test('expanded undelivered task endpoints wait for hydration instead of leaving orphan stubs',()=>{
+  const input=initial();input.dependencies=[
+    dependency('missing-pred','FS',{predecessor:{kind:'task',id:'pending',projectId:'p'}}),
+    dependency('missing-succ','FS',{successor:{kind:'task',id:'pending',projectId:'q'}}),
+    dependency('outside','FS',{predecessor:{kind:'task',id:'external',projectId:'outside'}})];
+  const h=fixture(input),entries=h.index.query(0,10);assert.deepEqual(entries.map(entry=>entry.dependency.id),['outside']);
+  const bundles=layoutDependencies(entries,calendar,h.window);assert.equal(bundles[0].missingPredecessor,true);
+  assert.deepEqual(inspectDependency(entries[0]).predecessor,{kind:'task',id:'external'});
+  assert.equal(h.index.query(0,1).length,0);
 });
 
 test('interval candidates include crossing paths while excluding distant unrelated edges',()=>{

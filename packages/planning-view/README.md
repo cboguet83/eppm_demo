@@ -352,6 +352,14 @@ instances cannot deliver late results. Page disposal releases the bridge/core.
 Finite `loading:{batchSize,maxProjects}` mount options default to 25/100.
 Read failures retain valid data and expose an explicit Retry loading button.
 
+Timeline rows remain mounted while the visible range stays inside their retained
+overscan window; large jumps or changed data repaint the bounded window. SVG
+dependencies use a horizontal viewport with 600 px overscan and reuse its clip
+while subsequent horizontal movement remains inside it. Incoming external entry
+markers retain all bundled records for inspection. Known expanded schedules
+with undelivered task endpoints wait for hydration instead of painting orphan
+stubs; explicitly unavailable endpoint metadata remains redacted.
+
 Host adapters can supply `prepareRender(args, {emit})` and `encodeEvent(event)`
 to `connectStreamlit(root, options)`. The first normalizes a host's wire format
 into `{snapshot,messages,ackRequestIds,options}`; returning null for a non-null

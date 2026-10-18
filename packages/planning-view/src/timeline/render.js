@@ -34,7 +34,7 @@ function bar(owner,task,calendar,lane,targetKind,overlayId='',overlay=null) {
 export function createTimelineRenderer({panel,store,lifetime,options}) {
   const doc=panel.root.ownerDocument;
   bindColumnWidths(panel,lifetime);
-  let projection=null,previous=null,window=null,signature='',headerLabels=null;
+  let projection=null,previous=null,window=null,windowHeight=null,signature='',headerLabels=null;
   lifetime.own(()=>{projection=null;previous=null;window=null;headerLabels=null;});
   const toggle=id=>{
     const expanded=new Set(store.read().view.expandedProjects);
@@ -80,7 +80,8 @@ export function createTimelineRenderer({panel,store,lifetime,options}) {
         const scrollTop=projection.projectIndexes.get(view.focusProjectId)*ROW_HEIGHT;
         store.setView({focusProjectId:null,scrollTop});view={...view,scrollTop};
       }
-      const next=rowWindow(projection.rows.length,view.scrollTop,panel.body.clientHeight);
+      let next=rowWindow(projection.rows.length,view.scrollTop,panel.body.clientHeight);
+      if(!changed && window && windowHeight===panel.body.clientHeight && next.visibleStart>=window.start && next.visibleEnd<=window.end)next={...next,start:window.start,end:window.end};
       panel.canvas.style.backgroundSize=calendar.bottomCells[0].width+'px 100%';
       const height=Math.max(ROW_HEIGHT,projection.rows.length*ROW_HEIGHT);
       for(const canvas of [panel.canvas,panel.leftCanvas])canvas.style.height=height+'px';
@@ -133,7 +134,7 @@ export function createTimelineRenderer({panel,store,lifetime,options}) {
         }
         signature=currentSignature;
       }
-      window=next;
+      window=next;windowHeight=panel.body.clientHeight;
       if(loader) {
         const ids=(start,end)=>[...new Set(projection.rows.slice(start,end+1).map(row=>row.projectId))];
         loader.request(ids(next.visibleStart,next.visibleEnd),ids(next.start,next.end));

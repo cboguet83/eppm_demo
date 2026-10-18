@@ -243,11 +243,49 @@ def test_timeline_virtualization_pairing_inclusive_bars_and_safe_text(planning_p
     page.locator("#first [data-part=timeline-body]").evaluate("n=>n.scrollLeft=38")
     page.wait_for_timeout(50)
     assert page.evaluate("originalBar.isConnected")
+    page.locator("#first [data-part=timeline-body]").evaluate("n=>{for(let top=0;top<=400;top+=10){n.scrollTop=top;n.dispatchEvent(new Event('scroll'));}}")
+    page.wait_for_timeout(50)
+    assert page.evaluate("originalBar.isConnected")
     page.locator("#first [data-part=timeline-body]").evaluate("n=>n.scrollTop=20000")
     page.wait_for_function("Number(document.querySelector('#first .planning-timeline-row').dataset.rowIndex)>400")
     assert page.locator("#first .planning-timeline-row").count() <= 39
     page.locator("#first [data-part=timeline-body]").evaluate("n=>n.scrollTop=100000")
     expect(page.locator("#first .planning-bar[data-target-id=task-999]")).to_be_attached()
+
+
+def test_dependency_viewport_reuses_horizontal_clip_and_incoming_entry_markers(planning_page: Page) -> None:
+    """SVG work is clipped, incoming members stay inspectable, and off-window stubs vanish."""
+    page = planning_page
+    page.evaluate("""() => {
+      instances[0].update({...snapshot,scope:'entry-markers',projects:[{id:'p',name:'P'}],
+        tasks:Array.from({length:1000},(_,i)=>({id:'task-'+i,projectId:'p',name:'Task '+i,start:'2026-01-01',end:'2026-12-31'})),
+        dependencies:[0,1].map(i=>({id:'incoming-'+i,type:'FS',lagDays:i,predecessor:{kind:'task',id:'outside',projectId:'outside'},successor:{kind:'task',id:'task-1'}}))});
+    }""")
+    page.locator("#first [data-mode=Day]").click()
+    page.get_by_role("button", name="Expand P", exact=True).click()
+    marker = page.locator("#first .planning-entry-marker")
+    expect(marker).to_have_count(1)
+    expect(page.locator("#first .planning-link")).to_have_attribute("data-member-count", "2")
+    marker.dispatch_event("click")
+    inspector = page.locator("#first [data-part=dependency-inspector]")
+    expect(inspector).to_be_visible()
+    expect(inspector.get_by_role("combobox").locator("option")).to_have_count(2)
+    inspector.get_by_role("button", name="Close", exact=True).click()
+    body = page.locator("#first [data-part=timeline-body]")
+    body.evaluate("n=>n.scrollLeft=3000")
+    svg = page.locator("#first [data-part=dependencies]")
+    page.wait_for_function("Number(document.querySelector('#first [data-part=dependencies]').getAttribute('viewBox').split(' ')[0])===2400")
+    before = svg.get_attribute("viewBox")
+    assert float(svg.get_attribute("width")) <= body.evaluate("n=>n.clientWidth") + 1200
+    body.evaluate("n=>n.scrollLeft=3100")
+    page.wait_for_timeout(50)
+    expect(svg).to_have_attribute("viewBox", before)
+    body.evaluate("n=>n.scrollLeft=8000")
+    page.wait_for_function("Number(document.querySelector('#first [data-part=dependencies]').getAttribute('viewBox').split(' ')[0])===7400")
+    body.evaluate("n=>n.scrollTop=20000")
+    expect(marker).to_have_count(0)
+    expect(page.locator("#first .planning-link")).to_have_count(0)
+    assert page.locator("#first .planning-timeline-row").count() <= 39
 
 
 def test_visible_lazy_reads_are_injected_and_destroy_aborts_pending_work(planning_page: Page) -> None:
