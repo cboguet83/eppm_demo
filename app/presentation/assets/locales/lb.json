@@ -920,5 +920,14 @@
     "save": "Ausnam späicheren",
     "delete": "Ausnam läschen",
     "help": "Reduktioune sinn a FTE, net a Prozent. Iwwerlappend Reduktioune ginn zesummegerechent; d’Kapazitéit geet net ënner null. Béid Datume sinn abegraff."
+  },
+  "business_dictionary": {
+    "english": "Den Numm ass och déi englesch Bezeechnung.",
+    "fr": "Franséisch",
+    "de": "Däitsch",
+    "lb": "Lëtzebuergesch",
+    "pt": "Portugisesch",
+    "absent": "Keng Iwwersetzung",
+    "fallback": "Eidel loosse fir de kanoneschen Numm ze benotzen. Läschen hëlt dës Iwwersetzung ewech."
   }
 }

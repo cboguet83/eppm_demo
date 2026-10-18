@@ -32,7 +32,7 @@ logger = get_logger(__name__)
 _LATEST = '''SELECT s.id FROM eppm.finance_snapshot s WHERE s.sealed AND s.status=%s
     AND NOT EXISTS(SELECT 1 FROM eppm.finance_cancellation c WHERE c.snapshot_id=s.id) ORDER BY s.number DESC LIMIT 1'''
 _BLOCKERS = '''FROM eppm.project_log_event e JOIN eppm.project p ON p.id=e.project_id
-    JOIN eppm.project_event_type t ON t.id=e.event_type_id WHERE t.system_code='blocking_point'
+    JOIN eppm.business_dictionary_entry t ON t.id=e.event_type_id AND t.dictionary_code='project_event_type' WHERE t.system_code='blocking_point'
     AND e.status='active' AND e.project_id=ANY(%s::bigint[])'''
 
 
@@ -188,7 +188,7 @@ class PostgresDashboardReader:
                     e.scope,e.comment,e.event_type_id,e.status,
                     to_char(e.created_at AT TIME ZONE 'UTC','YYYY-MM-DD HH24:MI:SS') AS created_at,
                     to_char(e.updated_at AT TIME ZONE 'UTC','YYYY-MM-DD HH24:MI:SS') AS updated_at,
-                    p.name AS project_name,coalesce((SELECT label FROM eppm.project_event_type_translation
-                        WHERE catalog_id=t.id AND locale=%s),t.name) AS event_type """ + _BLOCKERS +
+                    p.name AS project_name,coalesce((SELECT label FROM eppm.business_dictionary_translation
+                        WHERE dictionary_code=t.dictionary_code AND entry_id=t.id AND locale=%s),t.name) AS event_type """ + _BLOCKERS +
                     ' ORDER BY e.id DESC', (locale, ids)).fetchall()
         return self._run(operation, project_ids)

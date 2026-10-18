@@ -47,10 +47,10 @@ def render_settings_view(workspace: SettingsWorkspace) -> None:
         )
         if roles_tab.open:
             with roles_tab:
-                render_project_catalog(workspace.collaboration, "role")
+                render_project_catalog(workspace.collaboration, "role", workspace.dictionaries)
         if events_tab.open:
             with events_tab:
-                render_project_catalog(workspace.collaboration, "event_type")
+                render_project_catalog(workspace.collaboration, "event_type", workspace.dictionaries)
         if wbs_tab.open:
             from app.presentation.pages.wbs import render_wbs_catalog
             with wbs_tab:

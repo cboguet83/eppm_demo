@@ -102,6 +102,7 @@ def _project_page(service: DashboardService, filters: dict[str, list[str]], matc
     revision = service.revision()
     projects = _matching_projects(service, _catalog(service, revision), filters, match_all)
     token = sha256(repr((revision, [row['id'] for row in projects])).encode()).hexdigest()
+    selection_token = sha256(repr((revision, filters, match_all)).encode()).hexdigest()
     request = st.session_state.get('dashboard_project_table', {}).get('request', {})
     offset = request.get('offset', 0) if isinstance(request, dict) and request.get('token') == token else 0
     offset = min(max(0, offset), max(0, len(projects)-1)) if type(offset) is int else 0
@@ -113,7 +114,7 @@ def _project_page(service: DashboardService, filters: dict[str, list[str]], matc
         dashboard_table(rows, [_label(key) for key in ('project', 'mail_code', 'phase', 'priority')],
                         len(projects), offset, token, _label('loading'),
                         st.session_state.get('dashboard_selected_project'),
-                        partial(_select_project, service, token))
+                        selection_token, partial(_select_project, service, selection_token))
 
 
 def _matching_projects(service: DashboardService, catalog: DashboardCatalog,
@@ -132,7 +133,7 @@ def _select_project(service: DashboardService, token: str) -> None:
     try:
         catalog = _catalog(service, service.revision())
         filters, match_all = st.session_state.get('dashboard_active_filters', ({}, False))
-        allowed = {row['id'] for row in _matching_projects(service, catalog, filters, match_all)}
+        allowed = {row['id'] for row in service.filtered(catalog, filters, match_all)}
         if event['id'] not in allowed:
             return
         selected = st.session_state.get('dashboard_selected_project')

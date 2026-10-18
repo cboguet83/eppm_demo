@@ -104,13 +104,13 @@ def test_reports_use_requested_latest_finance_status_exact_shares_and_localized_
     with psycopg.connect(staffing.setup.operator_url) as connection:
         connection.execute("INSERT INTO eppm.wbs(id,code) VALUES (1,'A')")
         connection.execute('INSERT INTO eppm.project_wbs(project_id,wbs_id,percentage) VALUES (1,1,50),(3,1,50)')
-        blocker = connection.execute("INSERT INTO eppm.project_event_type(name,system_code) "
-                                     "VALUES ('Blocking point','blocking_point') RETURNING id").fetchone()[0]
+        blocker = connection.execute("INSERT INTO eppm.business_dictionary_entry(dictionary_code,name,system_code) "
+                                     "VALUES ('project_event_type','Blocking point','blocking_point') RETURNING id").fetchone()[0]
         connection.execute("INSERT INTO eppm.project_log_event(project_id,title,event_type_id,status,deadline) "
                            "VALUES (1,'Visible blocker',%s,'active','2026-01-20'),(3,'Hidden blocker',%s,'active',NULL),"
                            "(1,'Closed blocker',%s,'closed',NULL)", (blocker, blocker, blocker))
-        connection.execute('INSERT INTO eppm.project_event_type_translation(catalog_id,locale,label) VALUES (%s,%s,%s) '
-                           'ON CONFLICT(catalog_id,locale) DO UPDATE SET label=excluded.label', (blocker, 'fr', 'Blocage'))
+        connection.execute('INSERT INTO eppm.business_dictionary_translation(dictionary_code,entry_id,locale,label) VALUES (%s,%s,%s,%s) '
+                           'ON CONFLICT(dictionary_code,entry_id,locale) DO UPDATE SET label=excluded.label', ('project_event_type',blocker, 'fr', 'Blocage'))
     access = staffing.binding(4).access
     finance = FinanceService(PostgresFinanceGateway(staffing.database, staffing.key, access=access))
     finance.today = lambda: DAY

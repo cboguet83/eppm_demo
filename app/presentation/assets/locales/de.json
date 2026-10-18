@@ -920,5 +920,14 @@
     "save": "Ausnahme speichern",
     "delete": "Ausnahme löschen",
     "help": "Reduzierungen gelten in VZÄ, nicht in Prozent. Überlappende Reduzierungen werden addiert; die Kapazität fällt nicht unter null. Beide Daten sind eingeschlossen."
+  },
+  "business_dictionary": {
+    "english": "Der Name ist auch die englische Bezeichnung.",
+    "fr": "Französisch",
+    "de": "Deutsch",
+    "lb": "Luxemburgisch",
+    "pt": "Portugiesisch",
+    "absent": "Keine Übersetzung",
+    "fallback": "Leer lassen, um den kanonischen Namen zu verwenden. Das Leeren entfernt die Übersetzung."
   }
 }

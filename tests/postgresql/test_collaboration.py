@@ -40,7 +40,7 @@ def test_catalog_names_labels_fallback_and_unique_names_are_preserved(collaborat
     identity = collaboration.save_catalog(kind, ' Sponsor ')
     table = 'project_role' if kind == 'role' else 'project_event_type'
     with psycopg.connect(authorized.setup.operator_url) as connection:
-        connection.execute(f'INSERT INTO eppm.{table}_translation(catalog_id,locale,label) VALUES (%s,\'fr\',\'Parrain\')', (identity,))
+        connection.execute("INSERT INTO eppm.business_dictionary_translation VALUES (%s,%s,'fr','Parrain')", (table,identity))
     assert next(row for row in collaboration.list_catalog(kind, 'fr') if row['id'] == identity)['label'] == 'Parrain'
     assert next(row for row in collaboration.list_catalog(kind, 'de') if row['id'] == identity)['label'] == 'Sponsor'
     assert collaboration.save_catalog(kind, 'Executive sponsor', identity) == identity
@@ -63,7 +63,7 @@ def test_catalog_rename_and_english_translation_roll_back_together(collaboration
     with psycopg.connect(authorized.setup.operator_url) as connection:
         connection.execute("""CREATE FUNCTION eppm.reject_translation() RETURNS trigger LANGUAGE plpgsql AS $$
             BEGIN RAISE EXCEPTION 'private failure detail' USING ERRCODE='23514'; END $$""")
-        connection.execute('CREATE TRIGGER reject_translation BEFORE UPDATE ON eppm.project_role_translation FOR EACH ROW EXECUTE FUNCTION eppm.reject_translation()')
+        connection.execute('CREATE TRIGGER reject_translation BEFORE UPDATE ON eppm.business_dictionary_translation FOR EACH ROW EXECUTE FUNCTION eppm.reject_translation()')
     with pytest.raises(CollaborationConflictError) as error:
         collaboration.save_catalog('role', 'Changed', role)
     assert 'private failure' not in str(error.value)
@@ -91,7 +91,7 @@ def test_contacts_preserve_repeated_roles_and_follow_current_function_occupants(
     with psycopg.connect(authorized.setup.operator_url) as connection:
         connection.execute("UPDATE eppm.employee_function SET function_id=3 WHERE employee_id="
                            "(SELECT employee_id FROM eppm.employee WHERE email='alice@example.test')")
-        connection.execute("INSERT INTO eppm.project_role_translation VALUES (%s,'fr','Parrain')", (role,))
+        connection.execute("INSERT INTO eppm.business_dictionary_translation VALUES ('project_role',%s,'fr','Parrain')", (role,))
     assert collaboration.list_contacts(1, 'fr')[0]['person'] == 'Alice Smith'
     assert collaboration.list_contacts(1, 'fr')[0]['role'] == 'Parrain'
     collaboration.delete_contact(2, first)
@@ -266,7 +266,7 @@ def test_storage_outage_is_translated_without_private_connection_details(collabo
 def test_blocking_event_type_rename_preserves_the_existing_system_identity(collaboration, authorized):
     identity = collaboration.save_catalog('event_type', 'Blocking Point')
     collaboration.save_catalog('event_type', 'Renamed blocking event', identity)
-    assert authorized.query('SELECT system_code FROM eppm.project_event_type WHERE id=%s', (identity,), user_id=4) == [('blocking_point',)]
+    assert authorized.query('SELECT system_code FROM eppm.business_dictionary_entry WHERE dictionary_code=\'project_event_type\' AND id=%s', (identity,), user_id=4) == [('blocking_point',)]
 
 
 def test_contact_function_has_no_public_execute_and_filters_before_private_aggregation(collaboration, authorized):

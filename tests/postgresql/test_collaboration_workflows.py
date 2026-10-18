@@ -157,7 +157,7 @@ def test_catalog_validation_translations_and_project_deletion_cascade(collaborat
     with pytest.raises(ValueError):
         repo.list_catalog("untrusted_table")
     with psycopg.connect(authorized.setup.operator_url) as conn:
-        conn.execute("INSERT INTO eppm.project_role_translation VALUES (%s, 'fr', 'Parrain')", (role,))
+        conn.execute("INSERT INTO eppm.business_dictionary_translation VALUES ('project_role',%s, 'fr', 'Parrain')", (role,))
     repo.save_contact(1, role, 1)
     assert repo.list_contacts(1, "fr")[0]["role"] == "Parrain"
     assert repo.list_contacts(1, "de")[0]["role"] == "Sponsor"
@@ -289,7 +289,7 @@ def test_layered_catalog_rename_rolls_back_when_translation_write_fails(collabor
                 RAISE EXCEPTION 'translation write failed' USING ERRCODE='23514'; END $$"""
         )
         connection.execute("""CREATE TRIGGER reject_role_translation BEFORE UPDATE
-            ON eppm.project_role_translation FOR EACH ROW
+            ON eppm.business_dictionary_translation FOR EACH ROW
             EXECUTE FUNCTION eppm.reject_test_role_translation()""")
     with pytest.raises(CollaborationConflictError) as failure:
         service.save_catalog("role", "Changed", role)
@@ -425,7 +425,7 @@ def test_collaboration_ui_handles_failed_write_without_success_state(collaborati
             LANGUAGE plpgsql AS $$ BEGIN
                 PERFORM * FROM eppm.missing_internal_table; RETURN NEW; END $$""")
         connection.execute("""CREATE TRIGGER broken_catalog_write BEFORE INSERT
-            ON eppm.project_role FOR EACH ROW EXECUTE FUNCTION eppm.break_test_catalog()""")
+            ON eppm.business_dictionary_entry FOR EACH ROW EXECUTE FUNCTION eppm.break_test_catalog()""")
     app.text_input[0].set_value("Sponsor")
     next(button for button in app.button if button.label == "Save").click().run()
     assert not app.exception

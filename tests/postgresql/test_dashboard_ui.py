@@ -49,6 +49,21 @@ def table_data(app):
                            if item.proto.id.endswith('-dashboard_project_table')))
 
 
+def test_selection_token_survives_row_toggles_but_changes_with_filters(business):
+    """Keep in-flight clicks usable while invalidating stale filtered views."""
+    path, _, _, _, manager = business
+    app = AppTest.from_function(screen, args=(path, manager.actor)).run()
+    initial = table_data(app)
+    app.session_state['dashboard_selected_project'] = 1
+    app.run()
+    selected = table_data(app)
+    assert selected['total'] == 1
+    assert selected['token'] != initial['token']
+    assert selected['selection_token'] == initial['selection_token']
+    app.checkbox(key='dashboard_filter_status_option_In Progress').uncheck().run()
+    assert table_data(app)['selection_token'] != initial['selection_token']
+
+
 def test_resource_charts_follow_status_and_top_pool_selections(business, authorized):
     path, _, _, _, manager = business
     with psycopg.connect(authorized.setup.operator_url) as connection:
@@ -160,6 +175,16 @@ def test_project_selection_rechecks_scope_and_rejects_stale_events(business, eve
     app = AppTest.from_function(selection_screen, args=(path,editor.actor,event,selected)).run()
     assert not app.exception
     assert json.loads(app.json[0].value) == {'selected':expected,'reruns':reruns}
+
+
+def test_selection_can_replace_another_row_before_the_table_acknowledges_it(business):
+    """Authorize a queued click against filters, independently of its prior row."""
+    path, _, _, _, manager = business
+    app = AppTest.from_function(selection_screen, args=(
+        path, manager.actor, {'id': 2, 'token': 'current'}, 1,
+    )).run()
+    assert not app.exception
+    assert json.loads(app.json[0].value) == {'selected': 2, 'reruns': ['dashboard']}
 
 
 def budget_screen(path, actor, project_id):

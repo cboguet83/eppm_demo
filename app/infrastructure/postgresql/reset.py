@@ -29,8 +29,10 @@ def flush_projects(connection: psycopg.Connection, *, flush_all: bool = False) -
 
 def _flush_references(connection: psycopg.Connection) -> None:
     """Reset the existing demo references while retaining configurable hierarchy types."""
+    advance_seed_sequences(connection, (('business_dictionary_entry', 'id'),))
+    connection.execute("DELETE FROM eppm.business_dictionary_entry WHERE dictionary_code IN ('project_role','project_event_type')")
     for table in (
-        'wbs', 'project_role', 'project_event_type',
+        'wbs',
         'project_type_property_default', 'project_type_property_rule', 'project_type_property',
     ):
         connection.execute(sql.SQL('DELETE FROM eppm.{}').format(sql.Identifier(table)))

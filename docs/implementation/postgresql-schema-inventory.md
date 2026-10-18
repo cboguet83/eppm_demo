@@ -1,5 +1,22 @@
 # Schema inventory at the PostgreSQL migration baseline
 
+## Shared business dictionary upgrade
+
+Migration 0069 replaces the role/event-type catalogs and their translation tables
+with `business_dictionary`, `business_dictionary_entry` and
+`business_dictionary_translation`. Entry identity is `(dictionary_code,id)` so
+legacy IDs remain valid even when the two catalogs share numeric IDs. Contacts
+and logs retain their numeric references and add generated fixed dictionary
+discriminators with restrictive composite foreign keys. System classifications
+remain separate from editable names and translations. Other catalogs are unchanged.
+
+The upgrade copies all locale rows without normalization, advances the common
+identity sequence, and installs shared permissions and catalog revision triggers.
+See [shared dictionary operations](shared-business-dictionaries.md).
+
+Migration 0070 rejects new blank translation locale keys without changing legacy
+rows. Its check is validated when historical keys already satisfy the rule.
+
 Source: the final SQLite schema produced by accepted commit `f564a5b`, captured
 from the isolated 10,001-project fixture. The complete generated `sqlite_schema`
 inventory is retained locally at `.local/migration-baseline/sqlite-schema.json`.
