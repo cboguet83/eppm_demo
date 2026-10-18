@@ -124,3 +124,16 @@ test('invalid geometry and dates fail safely at pure model interfaces',()=>{
   assert.throws(()=>timelineBounds([],'bad',options.today),ContractError);
   assert.throws(()=>shiftTask({start:options.start,end:options.end},0.5),ContractError);
 });
+
+test('legacy resource precision boundaries and daily exception cache identities remain exact',()=>{
+  assert.deepEqual([0,1.26,99.94,100,100.49,100.5,100.98,999.99].map(formatResourceValue),['0.0','1.3','99.9','100','100','101','101','1000']);
+  const summarize=createResourceSummaries().summarize,capacity={'2026-01-02':0,'2026-01-03':8},usage={'2026-01-01':3,'2026-01-02':.1,'2026-01-03':4};
+  const input={usage,assignedCapacity:capacity,capacity:4,start:'2026-01-01',end:'2026-03-31'},result=summarize(input);
+  assert.equal(result.minCapacity,0);assert.equal(result.maxCapacity,8);assert.equal(result.maxExcess,.1);assert.equal(result.isOverallocated,true);assert.equal(summarize(input),result);
+  assert.equal(summarize({...input,start:'2026-01-03'}).isOverallocated,false);
+  assert.equal(summarize({...input,capacity:5,assignedCapacity:{},usage:{}}).minCapacity,5);
+  assert.equal(summarize({...input,end:'2026-01-01',assignedCapacity:{'2026-01-01':8}}).minCapacity,8);
+  assert.equal(summarize({...input,capacity:10,end:'2026-01-02',usage:{'2026-01-01':8,'2026-01-02':2},assignedCapacity:{'2026-01-02':3}}).minAvailable,1);
+  assert.equal(summarize({...input,capacity:5,end:'2026-01-03',usage:{},assignedCapacity:{'2026-01-02':0}}).minAvailable,0);
+  assert.equal(summarize({...input,capacity:10,end:'2026-01-01',usage:{'2026-01-01':8},assignedCapacity:{'2026-01-01':12}}).minAvailable,4);
+});

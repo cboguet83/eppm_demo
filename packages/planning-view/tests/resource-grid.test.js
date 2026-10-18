@@ -85,3 +85,24 @@ test('resource display metadata rejects malformed capacity, comparison series an
   const h=fixture({...snapshot(),resourceFilter:{groupId:'group'}});
   h.store.update({version:1,kind:'patch',scope:'s',revision:'r',resourceFilter:null});assert.equal(h.store.read().data.resourceFilter,null);
 });
+
+test('legacy visibility composes selected-project usage, ancestors, changed selections and daily warnings',()=>{
+  const pools=[resource('1',{usedBySelection:true,capacity:4,usage:{'2026-01-02':3},selectedUsage:{},assignedCapacity:{}}),
+    resource('2',{usedBySelection:false,capacity:4,usage:{'2026-01-02':1},selectedUsage:{},assignedCapacity:{'2026-01-02':0}}),
+    resource('3',{usedBySelection:true,capacity:4,usage:{'2026-01-02':5},selectedUsage:{},assignedCapacity:{}})];
+  const input={...snapshot(),resources:pools,hierarchy:[{id:'root',children:[{id:'nested',children:[{id:'leaf1',resourceId:'1'}]},{id:'empty',children:[{id:'leaf2',resourceId:'2'}]},{id:'leaf3',resourceId:'3'}]}]};
+  assert.deepEqual([...fixture(input,{hideUnused:false,onlyOverallocated:true}).model.pools.keys()],['2','3']);
+  assert.deepEqual([...fixture(input,{onlyOverallocated:true}).model.pools.keys()],['3']);
+  const first=fixture({...input,resources:pools.slice(0,2)});
+  assert.deepEqual(first.model.rows.map(row=>row.node.id),['root','nested','leaf1','leaf1','leaf1']);
+  assert.equal(fixture({...input,resources:pools.slice(0,2)},{},['nested']).model.rows.length,2);
+  const changed={...input,resources:[{...pools[0],usedBySelection:false},{...pools[1],usedBySelection:true}]};
+  assert.deepEqual(fixture(changed).model.rows.map(row=>row.node.id),['root','empty','leaf2','leaf2','leaf2']);
+  assert.equal(fixture({...changed,resources:changed.resources.map(pool=>({...pool,usedBySelection:false}))}).model.rows.length,0);
+  const compare={...snapshot(),resources:[resource('pool',{capacity:4,usage:{'2026-01-01':2,'2026-01-02':1},comparisonUsage:{total:{'2026-01-01':1,'2026-01-02':2}}})]};
+  assert.equal(fixture(compare).model.rows.filter(row=>row.comparison).length,0);
+  const h=fixture(compare),day=createCalendar({start:'2026-01-01',end:'2026-01-02',mode:'Day',today:'2026-01-01'});
+  assert.equal(resourceRows(h.data,h.view,day,h.summaries).rows.filter(row=>row.comparison).length,1);
+  const feb=createCalendar({start:'2026-02-01',end:'2026-02-02',mode:'Day',today:'2026-02-01'});
+  const scoped=fixture(input,{onlyOverallocated:true});assert.equal(resourceRows(scoped.data,scoped.view,feb,scoped.summaries).rows.length,0);
+});

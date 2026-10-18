@@ -165,3 +165,65 @@ in 48.71 seconds; all five native PostgreSQL project-dependency/scenario browser
 checks passed in 63.84 seconds. The native checks retain stale-save, dependency,
 scenario activation, milestone and shared-dialog assertions. Browser selectors
 are scoped per instance and await rendered expansion before invoking markers.
+
+## Remaining legacy consumer migration (task 5.2)
+
+The four original CJS entry points remain runnable. They import their extracted
+owner tests instead of parsing HTML function bodies; Node's normal test runner
+executes the same assertions in those modules. The three unrelated CSV download,
+tab-position and action-table cases remain in `test_ui_menus.cjs` unchanged.
+Mounted checks complement pure models; implementation globals are not retained.
+
+| Original assertion group | Current assertion owner / mounted coverage |
+| --- | --- |
+| Complete script parses | Browser module graph loads without page errors in `test_planning_component_browser.py` / `test_eppm_planning_browser.py`; all Node modules import in entry checks |
+| Project single-click; task double-click; resource single/double-click cancellation | Timeline expansion/pairing and resource action tests in `test_planning_component_browser.py`; native alternative-resource workflow |
+| Hierarchy all-level expansion / collapse keeps roots | `resource-grid.test.js` hierarchy projection and mounted collapse/expand controls; native alternative-resource workflow |
+| Calendar Month/Quarter/Year exact 15/5/4 cells and 675/140/160 widths, leap/year adjacency | `models.test.js` period geometry cases |
+| Row 41.4 px / toolbar padding / 234–495 panel and full frame height | Mounted timeline/resource geometry, `test_eppm_planning_browser.py`, native baseline/alternative resource checks |
+| Fixed headers, horizontal synchronization and independent vertical offsets | `test_resource_grid_headers.py` mounted ancestor/position checks; scroll/splitter and resource alignment tests |
+| Eight precision boundaries and 23.8 px resource rows | `models.test.js` exact legacy precision cases; native alternative-resource height assertions |
+| Comparison peaks compare displayed periods rather than different daily dates | `resource-grid.test.js` equal swapped daily peaks vs differing Day periods |
+| One red scale / gray alternatives | EPPM mode styles and mounted per-instance mode state checks |
+| Hide unused / ancestor retention / collapsed groups / changed selection / no matches | `resource-grid.test.js` exact legacy visibility fixtures and native resource controls |
+| External links initially disabled | EPPM snapshot hints and every benchmark configuration's checked public toolbar state |
+| Daily-zero capacity filter composed with selected-project visibility and period | `resource-grid.test.js` exact legacy [2,3]/[3]/empty period assertions |
+| Dependency FS/SS/FF/SF, bundles, member identity, lag, violation, whole-project header | `dependencies.test.js` geometry/index/inspection cases and mounted bundle/dependency editor tests |
+| 600 px horizontal overscan and exact clip rectangles | `dependencies.test.js` [2400,207,2100,1076.4] / reuse / [7400,...]; mounted SVG viewBox/width assertions |
+| Incoming entry markers, all members and no orphan stubs | Mounted dependency viewport test; expanded undelivered endpoint module test |
+| Retained small-scroll DOM, bounded large jumps, data refresh, frame coalescing | Mounted row-identity/large-scroll/disposal tests, `timeline.test.js`, `lifetime.test.js` |
+| Local/visible/offscreen/whole-project predecessor choices | Generic task editor choices; EPPM project panel and predecessor-reader module/mounted cases |
+| Capacity min/max, daily paired excess, cache identity and sparse override availability | `models.test.js` original zero/0.1/8/full-override/matching-day cases plus scope summary tests |
+| Choice queue, stale/project/source correlation and retained selected predecessor on failure | `streamlit.test.js` queue ownership, `test_eppm_planning_adapter.cjs` coalesced reader, mounted failed-choice and project-panel tests |
+| Baseline first capture / replacement confirmation / opt-in approval | EPPM command capability and confirmation tests; native immutable baseline workflow |
+| Task/project permissions, log without edit mode, navigation/export retained, stale listeners | `actions.test.js`, EPPM capability matrix, mounted revocation during editor/pointer edit |
+| Dependency owners / shared-pool administration / alternative-only writes | EPPM adapter dependency/resource capability cases and native scenario dependency/edit checks |
+| HTTP 25/100, requested fingerprints, unchanged source patches, single flight / stale abort / 403–409 refresh / explicit retry | `state.test.js`, `test_eppm_planning_adapter.cjs`, mounted lazy read/retry and native HTTP tests |
+| Same-selection viewport vs new-scope reset; unrelated record identity; hydration / eviction / exact intervals | `state.test.js`, `models.test.js`, mounted update/creation tests and native scoped update workflows |
+| CSV/pool/group identity, quarter dates, total/selected allocation scopes and filter scopes | EPPM event mapping, mounted period drill-through and native alternative-resource filtering / shared CSV panels |
+| Viewport-clamped pointer/keyboard nested menus and cancelled confirmations | Mounted nested menu bounds, Tab/Right/Left, single delivery and EPPM cancelled confirmation tests |
+| Badge-only orange/purple deviation, whole-calendar capacity summary, escaped concise green/red FTE hover | `models.test.js` capacityDetails and mounted EPPM capacity tooltip / color assertions |
+| Task assignment person icon / owning identity | Mounted EPPM Assign Resource test and native shared task-pool dialog |
+| Tooltip 600 ms hidden / one-second show / 200 ms cancellation / native-title restoration | `test_gantt_tooltip_browser.py` now mounts the actual component |
+| Resource toggle and comparison disabled details / enabled nested filters with keyboard | Gantt case in `test_table_accessibility_browser.py` now mounts the actual adapter |
+| Native baseline, alternative-only pools, tags, CSV, shared dependency panels, recovery, portfolio navigation/filter spacing | Corresponding PostgreSQL consumers use public target/lane/part attributes, accessible buttons and host render messages |
+| 10,001-project load harness usable task arrival | `tests/performance/browser_load.py` selects rendered nonempty headers and waits for actual task DOM, without private models |
+
+The benchmark uses the same mounted message/control boundary with an isolated
+loopback asset server and installed Playwright driver. It retains positive and
+<=40 resource rows, positive cells, <=1 px pane alignment, bundle-member and
+Year fit checks. Its native driver performs a real accepted task edit and asserts
+source data and disposable database cleanup. The extended procedure documents
+measurement boundaries and why captures must not overlap database-copy tests.
+
+Task 5.2 validation: all original JavaScript entry checks plus extracted module
+checks passed (302 checks with normal Node file isolation). All mounted component,
+EPPM, tooltip/header and table accessibility checks passed (44 tests, 58.71 s).
+The migrated native baseline/filter-spacing/portfolio navigation group passed
+six checks (52.41 s); the additional alternative-resource/shared-scenario/native
+benchmark group passed three checks (38.61 s), including a real editor update and
+source/copy cleanup. The explicit five-repeat collector passed 25 checks in
+112.46 s; every configuration retained its row/alignment/fit hard assertions.
+Timing medians and the still-unapproved render-budget regression are recorded in
+`performance-comparison.md` / `candidate.json`. Consumer migration completion does
+not waive that separate gate or replace strict full-suite acceptance.

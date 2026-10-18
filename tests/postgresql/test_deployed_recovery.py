@@ -57,13 +57,12 @@ def _planning_page(page: 'Page', server: BrowserDeployment, data: dict[str, obje
     iframe = page.locator('iframe[title*="interactive_gantt"]')
     expect(iframe).to_be_visible()
     frame = iframe.element_handle().content_frame()
-    frame.wait_for_function("pid => typeof projectSummariesData !== 'undefined' && "
-                            "projectSummariesData.length === 1 && Number(projectSummariesData[0].id) === pid",
-                            arg=data['project'])
-    frame.locator('#btn-expand-all').click()
-    frame.wait_for_function("task => typeof tasksData !== 'undefined' && tasksData.some(row => Number(row.id) === task)",
-                            arg=data['task'])
-    assert frame.evaluate("tasksData.some(row => row.name === 'Recovery retained task')")
+    expect(frame.locator('[data-part=project-count]')).to_have_text('1 Project')
+    expect(frame.locator('.planning-frozen-row[data-target-kind=projects][data-target-id="' + str(data['project']) + '"]')).to_be_visible()
+    frame.locator('[data-control=expandAll]').click()
+    task = frame.locator('.planning-frozen-row[data-target-kind=tasks][data-target-id="' + str(data['task']) + '"]')
+    expect(task).to_be_visible()
+    expect(task).to_contain_text('Recovery retained task')
     assert not page.get_by_test_id('stException').count()
 
 

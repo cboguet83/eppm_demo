@@ -28,10 +28,16 @@ Chromium/Edge executable. `--all-projects` selects all projects; the Python plan
 commands accept `--projects 0` for the same purpose. An explicit `--task-id` selects
 the dialog's task; otherwise it prefers a task with resource assignments.
 
+See the [component benchmark procedure](planning-component-benchmark.md) for
+synthetic configurations, metrics and measurement boundaries.
+
 The profilers run the real Streamlit screens with `AppTest`. The standalone Gantt
-driver loads the actual component from a local file and exchanges JSON-lines
-events with the planning session. It uses the component's supported callback task
-loading path because it has no ASGI origin. Timings exclude snapshot creation and
+driver serves the assembled component on an isolated loopback origin and uses
+the Playwright driver already supplied by the Python browser-tests dependency.
+It operates public DOM controls and exchanges JSON-lines events with the planning
+session. Its loopback HTTP task requests are translated to the existing authorized
+callback because the diagnostic has no ASGI application. The session supplies
+the receipt acknowledgement normally added by the real widget adapter. Timings exclude snapshot creation and
 identity setup; profiler output and requested chart payloads are emitted to stdout.
 
 These are component diagnostics. Their synthetic identity exists only in the

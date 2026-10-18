@@ -152,7 +152,7 @@ async def _prepare(session: Session, server: BrowserDeployment) -> None:
         if failed in done:
             raise RuntimeError("The application reported a planning storage failure.")
         session.frame = await (await iframe.element_handle()).content_frame()
-        await session.frame.wait_for_function("typeof masterRenderItems !== 'undefined' && masterRenderItems.length >= 10001",
+        await session.frame.wait_for_function("parseInt(document.querySelector('[data-part=project-count]')?.textContent, 10) >= 10001",
                                               timeout=120000)
         return
     await page.goto(server.origin + "/?nav=portfolio")
@@ -183,18 +183,21 @@ async def _portfolio(session: Session) -> float:
 async def _tasks(session: Session) -> float:
     frame = session.frame
     assert frame is not None
-    await frame.locator("#btn-collapse-all").click()
-    target = await frame.evaluate("""index => {
-        const headers=masterRenderItems.filter(row => row.type==='project_header' && row.taskCount>0);
-        const project=headers[(index*131)%headers.length];
-        return {project:String(project.project_id), row:masterRenderItems.indexOf(project)};
-    }""", session.sequence + session.index * 47)
-    await frame.locator("#timeline-body-scroller").evaluate("(node, row) => {node.scrollTop=row*46;}", target["row"])
-    toggle = frame.locator(f"#frozen-row-proj-{target['project']} .collapse-toggle-icon")
+    await frame.locator('[data-control=collapseAll]').click()
+    # Select a deterministic nonempty header from a real virtualized window.
+    index = ((session.sequence + session.index * 47) * 131) % 10001
+    await frame.locator('[data-part=timeline-body]').evaluate(
+        "(node, index) => {node.scrollTop=index*parseFloat(getComputedStyle(node.closest('.planning-view')).getPropertyValue('--planning-row-height'));}", index)
+    await frame.wait_for_function("index=>[...document.querySelectorAll('.planning-frozen-row')].some(row=>Number(row.dataset.rowIndex)>=Math.max(0,index-15))", arg=index)
+    target = await frame.evaluate("""() => {
+        const row=[...document.querySelectorAll('.planning-frozen-row[data-target-kind=projects]')]
+          .find(node=>Number(node.querySelector('.planning-count')?.textContent)>0);
+        if(!row)throw new Error('No nonempty project in the requested task-loading window');
+        return {project:row.dataset.targetId,row:Number(row.dataset.rowIndex)};
+    }""")
+    toggle = frame.locator('.planning-frozen-row[data-target-kind=projects][data-target-id="' + target['project'] + '"] [data-expand]')
     await toggle.wait_for(state="visible")
-    await _arm(frame, "loadedProjectIds.has(values.project) && tasksData.some(task => "
-               "String(task.project_id)===values.project && document.getElementById('frozen-row-'+task.id))",
-               target, click=True)
+    await _arm(frame, "[...document.querySelectorAll('.planning-frozen-row[data-target-kind=tasks]')].some(row=>row.dataset.projectId===values.project)", target, click=True)
     await toggle.click()
     return await _elapsed(frame)
 
