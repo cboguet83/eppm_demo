@@ -6,8 +6,8 @@ All ten tracked tasks are complete. The complete strict acceptance suite passed
 on application revision `1fb7f13`: 3,283 tests and five subtests, no skips, with
 97.70% statement coverage. OpenSpec strict validation and all JavaScript component
 checks also passed. No critical findings, warnings or unverified checks remain
-in this OpenSpec implementation assessment. The change is ready for sync/archive
-and PR delivery under the standing workflow.
+in this OpenSpec implementation assessment. The change is synced and archived,
+ready for PR delivery under the standing workflow.
 
 | Dimension | Evidence |
 | --- | --- |
@@ -197,4 +197,17 @@ fetched main at `0b6ebb0`.
 | 5.1 Integrated contracts | `04342b2` |
 | 5.2 Authorized browser repairs | `591acd2` |
 | 5.3 Planned SQL locale integrity | `1fb7f13` |
-| 6.1 Full acceptance | This dedicated acceptance commit; recorded by the lifecycle update |
+| 6.1 Full acceptance | `20a1587` |
+
+## Sync and archive evidence
+
+The new main specification at `openspec/specs/shared-business-dictionaries/spec.md`
+contains all 14 added requirements and 29 scenarios. Its purpose and requirement
+bodies match the delta verbatim; only the main-spec title and Requirements header
+change. All six main specifications pass `openspec validate --specs --strict`.
+
+All four planning artifacts and all ten tracked tasks were complete before the
+change moved to `openspec/changes/archive/2026-10-18-shared-business-dictionary`.
+The archive preserves `.openspec.yaml` byte-for-byte. No active copy remains.
+This lifecycle update changes planning/specification documentation only; the
+application and tests remain at the locally verified revision `1fb7f13`.
