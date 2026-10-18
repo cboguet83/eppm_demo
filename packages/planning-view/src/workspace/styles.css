@@ -20,3 +20,32 @@
 .planning-view.planning-resizing {user-select:none;}
 .planning-view .planning-resource-heading {font-weight:600;background:var(--planning-header,#f8fafc);padding:8px;border-top:1px solid var(--planning-border,#e2e8f0);}
 .planning-view .planning-resource-spacer {grid-column:2;grid-row:1 / 3;background:var(--planning-border,#e2e8f0);}
+.planning-view .planning-row {position:absolute;left:0;width:100%;height:var(--planning-row-height);border-bottom:1px solid var(--planning-border,#e2e8f0);}
+.planning-view .planning-frozen-row {display:flex;align-items:center;min-width:425px;white-space:nowrap;}
+.planning-view .planning-column {flex-shrink:0;padding:0 6px;overflow:hidden;text-overflow:ellipsis;}
+.planning-view .planning-column-id {width:55px;}
+.planning-view .planning-column-name {width:190px;flex:1;min-width:80px;}
+.planning-view .planning-column-start,.planning-view .planning-column-end {width:90px;font-size:11px;}
+.planning-view .planning-left-header {padding:0;}
+.planning-view .planning-left-header button {height:100%;border:0;border-radius:0;text-align:left;}
+.planning-view .planning-expand {width:24px;padding:0 4px;flex-shrink:0;}
+.planning-view .planning-project-row {background:var(--planning-header,#f8fafc);font-weight:600;}
+.planning-view .planning-count {font-size:10px;padding:2px 5px;background:var(--planning-border,#e2e8f0);border-radius:10px;}
+.planning-view .planning-bar {position:absolute;top:11px;height:20px;background:var(--planning-primary,#3b82f6);border:1px solid #1d4ed8;border-radius:3px;cursor:pointer;touch-action:none;}
+.planning-view .planning-project-row .planning-bar {height:10px;top:16px;background:#64748b;border-color:#475569;}
+.planning-view .planning-progress {height:100%;background:#1d4ed8;pointer-events:none;}
+.planning-view .planning-complete {filter:saturate(.45);}
+.planning-view .planning-violated {outline:1px solid #ef4444;}
+.planning-view .planning-milestone {width:14px;height:14px;transform:translateX(-7px) rotate(45deg);top:13px;border-radius:1px;}
+.planning-view .planning-alternative {top:24px;height:12px;background:#a855f7;border-color:#7e22ce;}
+.planning-view .planning-baseline {top:35px;height:4px;background:#94a3b8;border:0;}
+.planning-view .planning-comparing .planning-current {top:3px;height:18px;}
+.planning-view .planning-comparing .planning-current.planning-milestone {height:14px;top:5px;}
+.planning-view .planning-comparing .planning-alternative.planning-milestone {height:10px;top:25px;}
+.planning-view .planning-handle {position:absolute;top:0;height:100%;width:6px;}
+.planning-view .planning-handle-start {left:0;cursor:w-resize;}
+.planning-view .planning-handle-end {right:0;cursor:e-resize;}
+.planning-view .planning-handle-progress {left:50%;width:6px;cursor:ew-resize;}
+.planning-view [data-part=timeline-canvas] {background-image:linear-gradient(to right,transparent calc(100% - 1px),var(--planning-border,#e2e8f0) 1px);background-repeat:repeat-x;}
+.planning-view .planning-project-row .planning-alternative {top:25px;height:8px;background:#a855f7;border-color:#7e22ce;}
+.planning-view .planning-project-row .planning-baseline {top:36px;height:3px;background:#94a3b8;}

@@ -4,6 +4,7 @@ import {createCalendar,timelineBounds} from '../calendar/index.js';
 import {createPlanningStore} from '../state/store.js';
 import {createLoadingController} from '../state/loader.js';
 import {createLifetime} from './lifetime.js';
+import {createTimelineRenderer} from '../timeline/render.js';
 
 /** @param {Document} doc Document. @param {string} tag HTML tag. @param {string} name Part. @param {string} className Scoped style. */
 function element(doc,tag,name,className) {
@@ -136,26 +137,32 @@ export function mountPlanningView(root,options) {
   const resourceHeading=element(doc,'div','resource-heading','planning-resource-heading');
   frame.append(sheet,toolbar,timeline.root,resourceHeading,resource.root);root.append(frame);
   lifetime.own(()=>frame.remove());lifetime.own(()=>store.destroy());
-  let leftWidth=425,cancelRender=null;
+  let leftWidth=425,cancelRender=null,loader=null,geometry=null,geometryKey=null,lastHeight=null;
+  const timelineRenderer=createTimelineRenderer({panel:timeline,store,lifetime,options});
   const draw=()=>{
     cancelRender=null;
     const {data,view}=store.read();
     const left=Math.max(120,Math.min(leftWidth,frame.clientWidth-200));
     frame.style.setProperty('--planning-left-width',left+'px');
-    const calendar=calendarFor(data,view.mode,today,timeline.body.clientWidth);
-    renderHeader(timeline.headerInner,calendar);renderHeader(resource.headerInner,calendar);
+    const key=[data.tasks,data.projects,data.overlays,view.mode,timeline.body.clientWidth];
+    if(!geometryKey || key.some((value,index)=>value!==geometryKey[index])) {
+      geometry=calendarFor(data,view.mode,today,timeline.body.clientWidth);geometryKey=key;
+      renderHeader(timeline.headerInner,geometry);renderHeader(resource.headerInner,geometry);
+    }
+    const calendar=geometry;
     for(const item of [timeline,resource])item.canvas.style.width=calendar.width+'px';
     for(const button of toolbar.querySelectorAll('[data-mode]')) {
       button.textContent=data.labels[button.dataset.mode.toLowerCase()] || button.dataset.mode;
       button.setAttribute('aria-pressed',String(view.mode===button.dataset.mode));
     }
-    timeline.leftHeader.textContent=data.labels.projectTask || 'Project / task';
+    timelineRenderer.render(data,view,calendar,loader);
     resource.leftHeader.textContent=data.labels.resource || 'Resource pool';
     resourceHeading.textContent=data.labels.resourceUsage || 'Resource usage';
     const hidden=options.showResources===false || data.resources.length===0;
     resource.root.hidden=hidden;resourceHeading.hidden=hidden;
     timeline.body.scrollTop=view.scrollTop;timeline.body.scrollLeft=view.scrollLeft;
-    if(typeof options.onHeight==='function')options.onHeight(Math.ceil(frame.getBoundingClientRect().height));
+    const height=Math.ceil(frame.getBoundingClientRect().height);
+    if(height!==lastHeight && typeof options.onHeight==='function'){lastHeight=height;options.onHeight(height);}
   };
   const schedule=()=>{if(!lifetime.disposed && !cancelRender)cancelRender=lifetime.frame(draw);};
   lifetime.own(store.subscribe(()=>schedule()));
@@ -168,7 +175,7 @@ export function mountPlanningView(root,options) {
   const observer=new win.ResizeObserver(schedule);observer.observe(timeline.body);observer.observe(frame);
   lifetime.own(()=>observer.disconnect());lifetime.listen(win,'resize',schedule);lifetime.listen(sheet,'load',schedule);
   if(options.load) {
-    const loader=createLoadingController({store,load:options.load,onError:options.onLoadError});
+    loader=createLoadingController({store,load:options.load,onError:options.onLoadError});
     lifetime.own(()=>loader.destroy());
   }
   try {draw();} catch(error) {lifetime.destroy();throw error;}

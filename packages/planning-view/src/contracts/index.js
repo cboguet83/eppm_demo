@@ -58,11 +58,14 @@ function rows(values, path) {
 
 /** @param {unknown} values Task records. @param {string} path Schema location. */
 function tasks(values, path) {
+  const stableIds=new Set();
   for (const task of rows(values, path)) {
     identity(task.projectId, path + '.projectId');
     requireValue(typeof task.name === 'string', path + '.name');
     range(task, path);
     if (task.stableId !== undefined) identity(task.stableId, path + '.stableId');
+    const pairing=JSON.stringify([task.projectId,task.stableId ?? task.id]);
+    requireValue(!stableIds.has(pairing),path+'.duplicateStableId');stableIds.add(pairing);
     if (task.progress !== undefined) {
       requireValue(Number.isFinite(task.progress) && task.progress >= 0 && task.progress <= 100, path + '.progress');
     }
@@ -151,6 +154,8 @@ function data(value) {
   if (value.projects !== undefined) {
     for (const project of rows(value.projects, 'projects')) {
       requireValue(typeof project.name === 'string', 'projects.name');
+      if(project.start!=null || project.end!=null)range(project,'projects');
+      if(project.taskCount!==undefined)requireValue(Number.isSafeInteger(project.taskCount) && project.taskCount>=0,'projects.taskCount');
     }
   }
   if (value.tasks !== undefined) tasks(value.tasks, 'tasks');

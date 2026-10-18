@@ -146,3 +146,29 @@ instance. Hosts should destroy before removing their host element. Distinct
 instances can use the same data IDs. No renderer maps or document globals are
 part of the public API. Exceptions thrown by host callbacks propagate; an
 initial callback failure releases the partly mounted display before throwing.
+
+## Timeline and comparison rows
+
+Project headers group tasks by `projectId`; expanding a header reveals its own
+date-sorted tasks. Header sort buttons cycle ascending, descending, original
+project order. Task order uses date then natural opaque-ID order; IDs themselves
+are preserved. `grouped: false` shows task rows directly. Delivered project
+`start`/`end` summaries are authoritative; absent summaries use delivered task
+extrema. Optional `taskCount` is a nonnegative safe integer and keeps placeholder
+rows sized while a host loader supplies an expanded project.
+
+Pair comparison tasks using `stableId` within each project. A missing stable ID
+uses that record's opaque `id`. Give current and overlay records distinct `id`
+values when they represent separately editable entities, but the same stable ID
+when they should share a row. Stable identities must be unique within each
+project and each supplied task collection. Names never determine pairing.
+Unpaired comparison records create overlay-only rows. Current, alternative and
+baseline bars retain separate target identities/lanes; baseline lines remain
+display-only. Comparison dependencies use the overlay task IDs, documented with
+the dependency module. Inclusive date widths and equal-date milestone diamonds
+use the shared calendar. Delivered progress/violation flags style the bar.
+
+Virtual canvases retain total scroll height while mounting only viewport rows
+plus 15 rows of overscan per side. Horizontal scrolling reuses existing bar DOM
+and calendar headers. Visible project IDs precede overscan in injected lazy
+reads; disposal aborts those reads. No row-level inline handlers are generated.

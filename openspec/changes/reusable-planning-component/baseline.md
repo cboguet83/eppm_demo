@@ -41,6 +41,14 @@ their owners are extracted. Preserve the behavior/assertion in this table; do
 not retain private globals merely to satisfy a test. Keep existing native
 security and transactional checks.
 
+Task 3.2's imported `packages/planning-view/tests/timeline.test.js` and mounted
+`tests/test_planning_component_browser.py` now characterize project boundaries,
+summary/placeholder geometry, sort and expansion, inclusive leap-day bars,
+milestones, progress, stable comparison pairing and overlay-only rows. The
+mounted 1,000-task fixture asserts at most 39 timeline rows and unchanged bar
+nodes on horizontal scroll. Injected-read disposal is checked in the browser.
+Existing EPPM entry checks remain until the compatibility integration is migrated.
+
 ## Commands and current results
 
 - `node --test tests/test_gantt_scrolling.cjs tests/test_gantt_permissions.cjs tests/test_planning_lazy.cjs tests/test_ui_menus.cjs`: four files passed.

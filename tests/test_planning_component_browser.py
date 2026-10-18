@@ -45,7 +45,7 @@ def planning_page(planning_module_origin: str) -> Iterator[Page]:
                 const {mountPlanningView}=await import('/src/index.js');
                 window.mount=mountPlanningView;
                 window.snapshot={version:1,kind:'snapshot',scope:'scope',revision:'r1',
-                  projects:[{id:'same-project',name:'Project'}],
+                  projects:[{id:'same-project',name:'Project'},...Array.from({length:100},(_,i)=>({id:'project-'+i,name:'Project '+i}))],
                   tasks:[{id:'same-task',projectId:'same-project',name:'<script>unsafe</script>',start:'2026-01-01',end:'2026-12-31'}],
                   resources:[{id:'same-pool',name:'Pool',capacity:5}]};
                 window.heights=[[],[]];
@@ -111,10 +111,10 @@ def test_updates_are_atomic_reset_scope_and_hide_absent_resources(planning_page:
     page.locator("#first [data-part=timeline-body]").evaluate("n=>n.scrollLeft=500")
     page.wait_for_function("document.querySelector('#first [data-part=resource-header]').scrollLeft===500")
     page.evaluate("instances[0].update({...snapshot,revision:'r2',labels:{projectTask:'Projet'}})")
-    expect(page.locator("#first [data-part=timeline-left-header]")).to_have_text("Projet")
+    expect(page.locator("#first [data-sort=name]")).to_have_text("Projet")
     assert page.locator("#first [data-part=timeline-body]").evaluate("n=>n.scrollLeft") == 500
     assert page.evaluate("""() => {try{instances[0].update({...snapshot,version:2});return false;}catch(e){return e.name==='ContractError';}}""")
-    expect(page.locator("#first [data-part=timeline-left-header]")).to_have_text("Projet")
+    expect(page.locator("#first [data-sort=name]")).to_have_text("Projet")
     page.evaluate("instances[0].update({...snapshot,scope:'new',resources:[]})")
     expect(page.locator("#first [data-part=resource-panel]")).to_be_hidden()
     assert page.locator("#first [data-part=timeline-body]").evaluate("n=>n.scrollLeft") == 0
@@ -150,3 +150,57 @@ def test_invalid_mount_and_failed_callback_leave_no_partial_display(planning_pag
       try{mount(host,{snapshot,onHeight:()=>{throw new Error('host');}});return false;}catch(e){}
       return host.children.length===0;
     }""")
+
+
+def test_timeline_virtualization_pairing_inclusive_bars_and_safe_text(planning_page: Page) -> None:
+    """Render bounded rows, distinct lanes and date geometry from the public contract."""
+    page = planning_page
+    page.evaluate("""() => {
+      const tasks=Array.from({length:1000},(_,i)=>({id:'task-'+i,stableId:'stable-'+i,projectId:'same-project',
+        name:i===0?'<img src=x onerror=alert(1)>':'Task '+i,start:'2028-02-28',end:i===1?'2028-02-28':'2028-03-01',progress:50}));
+      tasks[999].end='2028-12-31';
+      instances[0].update({...snapshot,scope:'large',projects:snapshot.projects.slice(0,1),tasks,
+        overlays:[{id:'old',kind:'baseline',projectId:'same-project',tasks:[{...tasks[0],id:'renamed',name:'Previous'},
+          {...tasks[0],id:'removed',stableId:'removed',name:'Removed'}]},
+          {id:'other',kind:'alternative',projectId:'same-project',tasks:[{...tasks[0],id:'alternative-id',name:'New name'}]}]});
+    }""")
+    page.locator("#first [data-mode=Day]").click()
+    page.get_by_role("button", name="Expand Project", exact=True).first.click()
+    task = page.locator("#first .planning-bar[data-target-id=task-0]")
+    expect(task).to_be_attached()
+    assert task.evaluate("n=>parseFloat(n.style.width)") == 114
+    assert task.locator(".planning-progress").evaluate("n=>n.style.width") == "50%"
+    assert page.locator("#first .planning-milestone[data-target-id=task-1]").count() == 1
+    row = task.locator("..")
+    assert row.locator(".planning-bar").count() == 3
+    assert row.locator(".planning-alternative").get_attribute("data-target-id") == "alternative-id"
+    expect(page.locator("#first .planning-frozen-row").filter(has_text="Removed")).to_be_attached()
+    assert page.locator("#first .planning-frozen-row img").count() == 0
+    expect(page.locator("#first .planning-frozen-row").filter(has_text="<img")).to_contain_text("<img src=x onerror=alert(1)>")
+    assert page.locator("#first .planning-timeline-row").count() <= 39
+    original = task.evaluate("n=>{window.originalBar=n;return true}")
+    assert original
+    page.locator("#first [data-part=timeline-body]").evaluate("n=>n.scrollLeft=38")
+    page.wait_for_timeout(50)
+    assert page.evaluate("originalBar.isConnected")
+    page.locator("#first [data-part=timeline-body]").evaluate("n=>n.scrollTop=20000")
+    page.wait_for_function("Number(document.querySelector('#first .planning-timeline-row').dataset.rowIndex)>400")
+    assert page.locator("#first .planning-timeline-row").count() <= 39
+    page.locator("#first [data-part=timeline-body]").evaluate("n=>n.scrollTop=100000")
+    expect(page.locator("#first .planning-bar[data-target-id=task-999]")).to_be_attached()
+
+
+def test_visible_lazy_reads_are_injected_and_destroy_aborts_pending_work(planning_page: Page) -> None:
+    """The mounted window uses the host provider and owns cancellation of its request."""
+    page = planning_page
+    page.evaluate("""() => {
+      instances[0].destroy();window.reads=[];window.loadErrors=[];
+      instances[0]=mount(document.getElementById('first'),{snapshot:{...snapshot,tasks:[],loadedProjectIds:[]},today:'2026-01-01',
+        load:request=>new Promise((resolve,reject)=>reads.push({request,resolve,reject})),onLoadError:e=>loadErrors.push(e)});
+    }""")
+    page.wait_for_function("reads.length===1")
+    assert page.evaluate("reads[0].request.projectIds.length") <= 25
+    page.evaluate("instances[0].destroy();window.readAborted=reads[0].request.signal.aborted;reads[0].reject(new Error('late'))")
+    page.wait_for_timeout(100)
+    assert page.evaluate("readAborted")
+    assert page.evaluate("loadErrors.length") == 0
