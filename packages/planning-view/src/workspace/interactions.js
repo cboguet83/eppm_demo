@@ -64,8 +64,9 @@ export function createInteractions({frame,toolbar,store,lifetime,options,calenda
       const {source,destination}=pending.pop();
       for(const command of source) {
         if(!actionAllowed(command,data,view,target))continue;
-        const entry={label:data.labels['command_'+command.id] || command.label,run:()=>{
-          const latest=store.read();if(!actionAllowed(command,latest.data,latest.view,target))return;
+        const entry={id:command.id,icon:command.icon,label:data.labels['command_'+command.id] || command.label,
+          disabled:(command.disabledScopes ?? []).includes(context.scope),run:()=>{
+          const latest=store.read();if(!actionAllowed(command,latest.data,latest.view,target,context))return;
           if(command.editor==='createTask')actions.openCreate(target);
           else if(command.editor==='diagnostics')diagnostics.open(target);
           else if(command.editor==='predecessors')diagnostics.open(target,'predecessors');
@@ -74,7 +75,7 @@ export function createInteractions({frame,toolbar,store,lifetime,options,calenda
         if(command.children){entry.children=[];pending.push({source:command.children,destination:entry.children});}
       }
     }
-    menu.open(entries,event.clientX,event.clientY);
+    menu.open(entries,event.clientX,event.clientY,event.target?.closest('[data-target-id]') ?? doc.activeElement);
   };
   lifetime.listen(edit,'change',()=>{
     const {data,view}=store.read();store.setView({filters:{...view.filters,editEnabled:edit.checked}});

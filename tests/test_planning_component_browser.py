@@ -263,6 +263,7 @@ def test_dependency_viewport_reuses_horizontal_clip_and_incoming_entry_markers(p
     }""")
     page.locator("#first [data-mode=Day]").click()
     page.get_by_role("button", name="Expand P", exact=True).click()
+    expect(page.get_by_role("button", name="Collapse P", exact=True)).to_be_visible()
     marker = page.locator("#first .planning-entry-marker")
     expect(marker).to_have_count(1)
     expect(page.locator("#first .planning-link")).to_have_attribute("data-member-count", "2")
@@ -455,6 +456,54 @@ def test_menu_keyboard_tooltip_delay_and_dependency_editor(editable_page: Page) 
     page.wait_for_function("events.some(e=>e.type==='dependency')")
     assert page.evaluate("events.find(e=>e.type==='dependency').values.type") == "SF"
     assert page.evaluate("events.find(e=>e.type==='dependency').values.lagDays") == -2
+
+
+def test_nested_menu_panels_fit_the_viewport_and_support_tab_and_back_navigation(editable_page: Page) -> None:
+    """Nested panels remain outside root scrolling, inside the viewport, and keyboard reachable."""
+    page = editable_page
+    page.locator("#first .planning-bar[data-target-id=alpha]").dispatch_event("contextmenu", {"clientX": 1398, "clientY": 1598})
+    root = page.locator("#first [data-menu-depth='0']")
+    box = root.bounding_box()
+    assert box["x"] + box["width"] <= 1390
+    assert box["y"] + box["height"] <= 1590
+    parent = root.get_by_role("menuitem", name="Host actions")
+    parent.focus()
+    child = page.locator("#first [data-menu-depth='1']")
+    expect(child).to_be_visible()
+    assert child.evaluate("node=>node.parentElement.matches('.planning-view')")
+    box = child.bounding_box()
+    assert box["x"] >= 10 and box["x"] + box["width"] <= 1390
+    assert box["y"] >= 10 and box["y"] + box["height"] <= 1590
+    page.keyboard.press("Tab")
+    expect(child.get_by_role("menuitem", name="Download", exact=True)).to_be_focused()
+    page.keyboard.press("ArrowLeft")
+    expect(child).to_have_count(0)
+    expect(parent).to_be_focused()
+    page.keyboard.press("ArrowRight")
+    page.keyboard.press("Space")
+    page.wait_for_function("events.length===1")
+    assert page.evaluate("events[0].command") == "download"
+
+
+def test_creation_patch_expands_only_its_project_and_preserves_the_viewport(planning_page: Page) -> None:
+    """A host creation patch must not jump away from a retained scroll position."""
+    page = planning_page
+    page.evaluate("""() => {
+      instances[0].destroy();
+      const projects=Array.from({length:100},(_,i)=>({id:'p'+i,name:'Project '+i,taskCount:1,start:'2026-01-01',end:'2026-12-31'}));
+      const tasks=projects.map(project=>({id:'t'+project.id,projectId:project.id,name:'Task',start:project.start,end:project.end}));
+      instances[0]=mount(document.getElementById('first'),{snapshot:{version:1,kind:'snapshot',scope:'creation',revision:'r1',projects,tasks},mode:'Day',today:'2026-01-01'});
+    }""")
+    body = page.locator("#first [data-part=timeline-body]")
+    body.evaluate("node=>{node.scrollTop=1800;node.scrollLeft=920}")
+    page.wait_for_function("document.querySelector('#first [data-part=timeline-header]').scrollLeft===920")
+    page.evaluate("""instances[0].update({version:1,kind:'patch',scope:'creation',revision:'r1',replaceProjectIds:['p2'],
+      tasks:[{id:'created',projectId:'p2',name:'Created',start:'2026-01-01',end:'2026-12-31'}],viewHints:{focusProjectId:'p2'}})""")
+    page.wait_for_timeout(50)
+    assert body.evaluate("node=>[node.scrollTop,node.scrollLeft]") == [1800, 920]
+    body.evaluate("node=>node.scrollTop=0")
+    expect(page.locator("#first").get_by_role("button", name="Collapse Project 2", exact=True)).to_be_visible()
+    expect(page.locator("#first").get_by_role("button", name="Expand Project 3", exact=True)).to_be_visible()
 
 
 def test_comparison_editing_targets_alternative_and_invalidates_removed_draft(editable_page: Page) -> None:

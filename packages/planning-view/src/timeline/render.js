@@ -76,10 +76,6 @@ export function createTimelineRenderer({panel,store,lifetime,options}) {
         const height=Math.min(options.timelineHeight.max,Math.max(options.timelineHeight.min,projection.rows.length*ROW_HEIGHT));
         panel.root.style.gridTemplateRows='56px '+height+'px';
       }
-      if(view.focusProjectId && projection.projectIndexes.has(view.focusProjectId)) {
-        const scrollTop=projection.projectIndexes.get(view.focusProjectId)*ROW_HEIGHT;
-        store.setView({focusProjectId:null,scrollTop});view={...view,scrollTop};
-      }
       let next=rowWindow(projection.rows.length,view.scrollTop,panel.body.clientHeight);
       if(!changed && window && windowHeight===panel.body.clientHeight && next.visibleStart>=window.start && next.visibleEnd<=window.end)next={...next,start:window.start,end:window.end};
       panel.canvas.style.backgroundSize=calendar.bottomCells[0].width+'px 100%';

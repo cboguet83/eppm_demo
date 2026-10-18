@@ -1,5 +1,5 @@
 /** Virtual resource rows/cells with independent vertical and shared date geometry. */
-import {createResourceSummaries,formatResourceValue} from './summary.js';
+import {createResourceSummaries,formatResourceValue,capacityDetails} from './summary.js';
 import {resourceRows,resourceWindow,resourceCell,periodSummary,RESOURCE_ROW_HEIGHT} from './rows.js';
 
 const FILTERS=['hideUnused','onlyOverallocated','showTotal','showSelected'];
@@ -110,10 +110,14 @@ export function createResourceRenderer({panel,heading,store,lifetime,options,can
           label.textContent=(row.scope==='assigned' || !row.pool || row.collapsed?name+' · ':'↳ ')+(row.comparison?(labels.alternative || 'Alternative')+' ':'')+
             ({assigned:labels.assignedCapacity || 'Pool capacity',total:labels.total || 'Total assignments',selected:labels.selected || 'Selected projects'}[row.scope]);
           left.append(label);
+          if(row.pool) {
+            const range={start:calendar.start,end:calendar.bottomCells.at(-1).end};
+            left.dataset.tooltip=capacityDetails(row.pool,periodSummary(row.pool,range,summaries),{labels,unit:options.resourceUnit || 'FTE'});
+          }
           if(row.scope==='assigned' && row.pool.hasAssignments!==false) {
             const whole={start:calendar.start,end:calendar.bottomCells.at(-1).end},capacity=periodSummary(row.pool,whole,summaries),defined=row.pool.definedCapacity ?? row.pool.capacity;
-            for(const [condition,text] of [[capacity.minCapacity<defined-.0001,labels.underassignment || 'Underassignment'],[capacity.maxCapacity>defined+.0001,labels.overassignment || 'Overassignment']]) {
-              if(condition){const badge=doc.createElement('span');badge.className='planning-capacity-badge';badge.textContent=text;left.append(badge);}
+            for(const [condition,text,kind] of [[capacity.minCapacity<defined-.0001,labels.underassignment || 'Underassignment','under'],[capacity.maxCapacity>defined+.0001,labels.overassignment || 'Overassignment','over']]) {
+              if(condition){const badge=doc.createElement('span');badge.className='planning-capacity-badge';badge.dataset.capacityStatus=kind;badge.textContent=text;left.append(badge);}
             }
           }
           if(activeMatch)left.classList.add('planning-resource-filtered');
@@ -126,13 +130,15 @@ export function createResourceRenderer({panel,heading,store,lifetime,options,can
             cell.textContent=result.value===null?'':result.value===0 && row.scope!=='assigned'?'—':formatResourceValue(result.value);
             cell.dataset.capacity=String(result.minCapacity ?? '');cell.dataset.demand=String(result.maxDemand ?? '');cell.dataset.excess=String(result.maxExcess ?? '');
             cell.dataset.overallocated=String(result.isOverallocated);
-            const tooltip=[name,period.start+' → '+period.end];
+            const details=row.pool?capacityDetails(row.pool,result,{labels,unit:options.resourceUnit || 'FTE'}).split('\n'):[name];
+            const description=[name,period.start+' → '+period.end,...details.slice(1)];
             if(result.value!==null) {
-              tooltip.push((labels.demand || 'Demand')+': '+formatResourceValue(result.maxDemand),
+              description.push((labels.demand || 'Demand')+': '+formatResourceValue(result.maxDemand),
                 (labels.capacity || 'Capacity')+': '+formatResourceValue(result.minCapacity),
-                (result.isOverallocated?(labels.excess || 'Overallocated'):(labels.available || 'Available'))+': '+formatResourceValue(result.isOverallocated?result.maxExcess:result.minAvailable));
+                (result.isOverallocated?(labels.excess || 'Overallocated'):(labels.available || 'Available'))+': '+formatResourceValue(result.isOverallocated?result.maxExcess:result.minAvailable)+' '+(options.resourceUnit || 'FTE'));
             }
-            cell.dataset.tooltip=tooltip.join('\n');cell.setAttribute('aria-label',tooltip.join(' · '));
+            const tooltip=options.resourceTooltipDetails==='capacity'?[...details,...(result.value!==null?[description.at(-1)]:[])]:description;
+            cell.dataset.tooltip=tooltip.join('\n');cell.setAttribute('aria-label',description.join(' · '));
             if(row.scope==='assigned') {
               const defined=row.pool.definedCapacity ?? row.pool.capacity;
               if(row.pool.hasAssignments===false)cell.classList.add('planning-capacity-unassigned');

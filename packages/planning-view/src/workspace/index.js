@@ -124,6 +124,7 @@ export function mountPlanningView(root,options) {
   for(const name of ['showResources','grouped','editEnabled'])if(options[name]!==undefined && typeof options[name]!=='boolean')throw new ContractError('options.'+name);
   if(options.tooltipDelay!==undefined && (!Number.isFinite(options.tooltipDelay) || options.tooltipDelay<0 || options.tooltipDelay>60000))throw new ContractError('options.tooltipDelay');
   if(options.resourceUnit!==undefined && typeof options.resourceUnit!=='string')throw new ContractError('options.resourceUnit');
+  if(options.resourceTooltipDetails!==undefined && !['full','capacity'].includes(options.resourceTooltipDetails))throw new ContractError('options.resourceTooltipDetails');
   if(options.editCommand!==undefined && (typeof options.editCommand!=='string' || !options.editCommand.trim()))throw new ContractError('options.editCommand');
   if(options.projectDependenciesCommand!==undefined && (typeof options.projectDependenciesCommand!=='string' || !options.projectDependenciesCommand.trim()))throw new ContractError('options.projectDependenciesCommand');
   if(options.dependencyEditor!==undefined && options.dependencyEditor!=='successor')throw new ContractError('options.dependencyEditor');

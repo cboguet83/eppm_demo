@@ -183,3 +183,90 @@ def test_eppm_malformed_rebuild_keeps_valid_rows_and_a_safe_error(eppm_component
     expect(page.locator("[data-eppm-error]")).to_have_text("The planning display received invalid data.")
     expect(page.locator(".planning-bar[data-target-kind=tasks]")).to_have_attribute("data-start", "2027-01-01")
     expect(page.locator("[data-eppm-error]")).not_to_contain_text("SECRET")
+
+
+def test_failed_predecessor_read_retains_choice_and_fields_until_explicit_retry(eppm_component: api.Page) -> None:
+    """Failed choices retain selected identity, lag and other unsaved task fields."""
+    page = eppm_component
+    enable_edit(page)
+    page.evaluate("""send({...host,edit_enabled:true,scope_token:'choices-source',tasks:[{...host.tasks[0],dependenciesList:[
+      {id:9,predecessor_task_id:8,predecessor_owner_id:2,predecessor_task_name:'External step',link_type:'SS',lag_days:2}]}]})""")
+    page.locator(".planning-bar[data-target-kind=tasks]").dblclick()
+    page.wait_for_function("events.at(-1)?.action==='load_dependency_tasks'")
+    editor = page.locator(".planning-editor")
+    row = editor.locator(".planning-dependency-field")
+    endpoint = row.get_by_role("combobox", name="Predecessor", exact=True)
+    assert endpoint.input_value() and page.evaluate("JSON.parse(document.querySelector('.planning-editor [data-field=predecessor]').value).id") == "8"
+    editor.get_by_label("Step name", exact=True).fill("Retained draft")
+    row.locator("[data-field=lagDays]").fill("-2")
+    page.evaluate("send({ack_nonce:events.at(-1).nonce,dependency_response:{project_id:'2',nonce:events.at(-1).nonce,error:'SECRET backend failure'}})")
+    expect(row.get_by_role("alert")).to_contain_text("retry")
+    expect(row.get_by_role("alert")).not_to_contain_text("SECRET")
+    expect(endpoint).to_be_disabled()
+    expect(endpoint.locator("option:checked")).to_have_text("External step")
+    expect(editor.get_by_label("Step name", exact=True)).to_have_value("Retained draft")
+    expect(row.locator("[data-field=lagDays]")).to_have_value("-2")
+    editor.get_by_role("button", name="Save", exact=True).click()
+    assert page.evaluate("events.some(event=>event.action==='update_task_full')") is False
+    row.get_by_role("combobox", name="Predecessor project", exact=True).select_option("2")
+    page.wait_for_function("events.filter(event=>event.action==='load_dependency_tasks').length===2")
+    page.evaluate("send({ack_nonce:events.at(-1).nonce,dependency_response:{project_id:'2',nonce:events.at(-1).nonce,tasks:[{id:8,task_name:'External step'},{id:9,task_name:'Other'}]}})")
+    expect(endpoint).to_be_enabled()
+    expect(row.get_by_role("alert")).to_be_hidden()
+    expect(endpoint.locator("option:checked")).to_have_text("External step")
+    expect(editor.get_by_label("Step name", exact=True)).to_have_value("Retained draft")
+
+
+def test_resource_badges_hover_extrema_and_comparison_commands_keep_their_meaning(eppm_component: api.Page) -> None:
+    """Capacity deviations color badges; concise tooltips and comparison actions retain scope."""
+    page = eppm_component
+    page.evaluate("""send({...host,scope_token:'capacity-source',permissions:{...host.permissions,manage_shared:true},resource_pools:[
+      {id:2,name:'Pool <A>',capacity:2,theoretical_capacity:2,has_assigned_resources:true,
+       daily_assigned_capacity_intervals:[['2027-01-01','2027-01-01',1],['2027-01-02','2027-01-02',4]],
+       daily_usage_intervals:[['2027-01-02','2027-01-02',5.2]],selected_projects_daily_usage_intervals:[['2027-01-02','2027-01-02',1.5]]}]})""")
+    page.locator("[data-mode=Day]").click()
+    expect(page.locator("[data-capacity-status=under]")).to_have_css("background-color", "rgb(255, 237, 213)")
+    expect(page.locator("[data-capacity-status=over]")).to_have_css("background-color", "rgb(243, 232, 255)")
+    capacity = page.locator(".planning-resource-cell[data-scope=assigned][data-start='2027-01-01']")
+    expect(capacity).to_have_css("background-color", "rgba(0, 0, 0, 0)")
+    expect(capacity).to_have_css("box-shadow", "none")
+    page.locator(".planning-resource-left[data-scope=assigned]").hover()
+    tooltip = page.get_by_role("tooltip")
+    expect(tooltip).to_contain_text("Defined capacity: 2.0 FTE", timeout=1500)
+    expect(tooltip).to_contain_text("Min assigned capacity: 1.0 FTE")
+    expect(tooltip).to_contain_text("Max assigned capacity: 4.0 FTE")
+    page.mouse.move(1490, 1190)
+    selected = page.locator(".planning-resource-cell[data-scope=selected][data-start='2027-01-02']")
+    selected.hover()
+    expect(tooltip).to_contain_text("Available: 2.5 FTE", timeout=1500)
+    expect(tooltip.locator(".planning-tooltip-status")).to_have_css("color", "rgb(74, 222, 128)")
+    expect(tooltip).not_to_contain_text("Demand:")
+    expect(tooltip).not_to_contain_text("2027-")
+    assert tooltip.locator("a").count() == 0
+    page.mouse.move(1490, 1190)
+    page.locator(".planning-resource-cell[data-scope=total][data-start='2027-01-02']").hover()
+    expect(tooltip).to_contain_text("Overallocated: 1.2 FTE", timeout=1500)
+    expect(tooltip.locator(".planning-tooltip-status")).to_have_css("color", "rgb(248, 113, 113)")
+    page.evaluate("send({alternative_pool_usage:{2:{selected:{'2027-01-02':2.5}}}})")
+    comparison = page.locator(".planning-resource-cell[data-scope=alternative_selected][data-start='2027-01-02']")
+    comparison.click(button="right")
+    expect(page.locator("[data-command=go_to_pool_details]")).to_be_disabled()
+    expect(page.locator("[data-command=show_pool_allocations]")).to_be_disabled()
+    parent = page.locator("[data-command=filter_pool]")
+    expect(parent).to_be_enabled()
+    parent.focus()
+    page.keyboard.press("Tab")
+    expect(page.locator("[data-command=filter_pool_this]")).to_be_focused()
+
+
+def test_task_resource_command_has_a_person_icon_and_retains_its_target(eppm_component: api.Page) -> None:
+    """The application action retains its user-facing icon and task/project identity."""
+    page = eppm_component
+    enable_edit(page)
+    page.locator(".planning-bar[data-target-kind=tasks]").click(button="right")
+    command = page.locator("[data-command=manage_task_pools]")
+    expect(command).to_have_accessible_name("Assign Resource")
+    expect(command.locator("[aria-hidden=true]")).to_have_text("👤")
+    command.click()
+    page.wait_for_function("events.at(-1)?.action==='manage_task_pools'")
+    assert page.evaluate("[events.at(-1).id,events.at(-1).project_id]") == [7, 1]

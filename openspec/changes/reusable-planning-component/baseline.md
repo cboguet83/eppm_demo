@@ -154,3 +154,14 @@ native-date-edit modes. Preserve the resulting numeric reports in
 transport after extraction. Host timings exclude browser paint. No credentials
 or business payloads belong in reports. Final change acceptance still requires
 the complete strict suite; this reference is not full acceptance evidence.
+
+Task 5.4 restores nested viewport-bounded menus, capacity badge/tooltip styling,
+comparison resource restrictions, task assignment identity/icon, coalesced
+independently cancellable predecessor reads, failed-choice selection retention,
+and expansion without viewport movement after creation. Public configuration and
+EPPM ownership documentation describe these behaviors. Validation: 111 Node
+module/adapter checks passed; 32 mounted component/adapter browser checks passed
+in 48.71 seconds; all five native PostgreSQL project-dependency/scenario browser
+checks passed in 63.84 seconds. The native checks retain stale-save, dependency,
+scenario activation, milestone and shared-dialog assertions. Browser selectors
+are scoped per instance and await rendered expansion before invoking markers.

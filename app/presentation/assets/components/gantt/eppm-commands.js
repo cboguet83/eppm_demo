@@ -21,10 +21,11 @@ export function planningCommands() {
     {id:'bulk_actions',label:'Bulk actions',targetKinds:['projects'],children:[project('export_csv_template','Export CSV'),project('import_csv_template','Import CSV','editProject')]},
     project('manage_project_tags','Manage project tags','editProject'),project('manage_project_pools','Manage project resource pools','editProject'),
     {...project('log_project_event','Log project event','logProject'),targetKinds:['projects','tasks']},project('edit_project_details','View project details'),
-    task('complete_step','Mark complete'),task('delete_step','Delete step'),task('manage_task_tags','Manage step tags'),task('manage_task_pools','Manage step resource pools'),
+    task('complete_step','Mark complete'),task('delete_step','Delete step'),task('manage_task_tags','Manage step tags'),{...task('manage_task_pools','Assign Resource'),icon:'👤'},
     {...task('add_step_after','Add step'),editor:'createTask'},{...task('task_diagnostics','Constraint diagnostics',false),capability:'hasDiagnostics',editor:'diagnostics'},
     {...task('view_predecessors','View predecessors',false),capability:'hasPredecessors',editor:'predecessors'},
-    resource('show_pool_allocations','Show resource allocations'),{...resource('go_to_pool_details','Resource pool details'),capability:'poolDetails'},
+    {...resource('show_pool_allocations','Show resource allocations'),disabledScopes:['alternative','alternative_total','alternative_selected']},
+    {...resource('go_to_pool_details','Resource pool details'),capability:'poolDetails',disabledScopes:['alternative','alternative_total','alternative_selected']},
     resource('filter_pool','Filter consuming projects',[
       resource('filter_pool_this','This period'),resource('filter_pool_predecessors','With predecessors'),resource('filter_pool_dependencies','With all dependencies')]),
     {...resource('clear_resource_pool_filter','Clear resource filter'),capability:'clearResourceFilter'}

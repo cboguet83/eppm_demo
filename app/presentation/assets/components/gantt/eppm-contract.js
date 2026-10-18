@@ -14,12 +14,13 @@ export function labelsFor(catalog={}) {
   const sections={view_modes:{day:'day',week:'week',month:'month',quarter:'quarter',year:'year'},
     columns:{id:'columnId',project:'columnName',start:'columnStart',stop:'columnEnd'},
     toggles:{internal_links:'internalLinks',external_links:'externalLinks',show_description:'descriptions',show_hover:'hover',expand_all:'expandAll',collapse_all:'collapseAll'},
-    resource_grid:{only_overallocated:'onlyOverallocated',title:'resourceUsage',show_total:'showTotal',show_selected:'showSelected',no_pools:'noResources',assigned_capacity:'assignedCapacity',clear_filter:'clearFilter',available_value:'available',overallocated_value:'excess'},
+    resource_grid:{only_overallocated:'onlyOverallocated',title:'resourceUsage',show_total:'showTotal',show_selected:'showSelected',no_pools:'noResources',assigned_capacity:'assignedCapacity',clear_filter:'clearFilter',available_value:'available',overallocated_value:'excess',
+      defined_capacity:'definedCapacity',min_assigned_capacity:'minAssignedCapacity',max_assigned_capacity:'maxAssignedCapacity'},
     modal:{field_name:'name',field_phase:'phase',field_start:'start',field_end:'end',field_desc:'description',field_progress:'progress',btn_save:'save',btn_cancel:'cancel',
       dependencies_header:'dependencies',btn_add_pred:'addDependency',whole_project_option:'wholeProject'},
     diagnostics:{title:'diagnostics',btn_close:'close'}};
   for(const [section,keys] of Object.entries(sections))for(const [key,target] of Object.entries(keys))if(typeof catalog[section]?.[key]==='string')result[target]=catalog[section][key];
-  const commands={project_dependencies:'manage_dependencies',manage_project_pools:'manage_project_pools',manage_task_pools:'manage_task_pools',
+  const commands={project_dependencies:'manage_dependencies',manage_project_pools:'manage_project_pools',manage_task_pools:'assign_resource',
     manage_project_tags:'manage_tags',manage_task_tags:'manage_tags',edit_project_details:'edit_project',log_project_event:'log_event',
     complete_step:'mark_complete',delete_step:'delete_step',add_step:'add_step',add_step_after:'add_step_after',export_csv_template:'export_csv_template',import_csv_template:'import_csv_template',bulk_actions:'bulk_actions',project_filter_menu:'filter'};
   for(const [command,key] of Object.entries(commands))if(catalog.context_menu?.[key])result['command_'+command]=catalog.context_menu[key];

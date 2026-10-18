@@ -368,13 +368,20 @@ validated queued event to that host's wire format. These codecs do not bypass
 core message/event validation. Receipt acknowledgements still use the original
 public request ID even if the wire field has another name.
 
+Resource cells expose full accessible descriptions. The optional
+`resourceTooltipDetails:'capacity'` setting replaces their visual hover text
+with the resource name, deviating capacity extrema and availability/excess;
+the default `'full'` also includes dates and demand. Capacity deviations color
+the capacity badge only. Frozen resource names show whole-calendar capacity
+extrema. All tooltip text is escaped through DOM text nodes.
+
 ## Retained controls and host-specific editors
 
 Optional checked `viewHints` on snapshots/patches contain `editEnabled`, unique
 `expandedProjectIds`, `focusProjectId`, `resetResourceFilters`, or boolean
 `filters` for `internalLinks`, `externalLinks`, `descriptions` and `hover`. They
-change only the requested retained fields. Focus expands the project and moves
-to its header. A view-only hint does not replace data records. Ordinary data
+change only the requested retained fields. Focus expands the project while
+preserving the viewport. A view-only hint does not replace data records. Ordinary data
 patches do not overwrite an unrelated local filter or draft.
 
 The toolbar owns link/description visibility, scale and expansion. Frozen
@@ -385,7 +392,11 @@ the default body remains 280 px. Resource height is independently bounded.
 
 Menu entries can use `requiresMode:true` for edit-mode actions governed by a
 separate capability (for example an approval permission); `requiresEdit:true`
-also checks editable entity/lane hints. `editor:'createTask'` opens the shared
+also checks editable entity/lane hints. Optional `icon` is rendered as plain
+decorative text; `disabledScopes` lists resource contexts in which the command
+stays visible but cannot execute. Nested menus support pointer hover,
+Tab/Arrow Right into children, Arrow Left back, and Escape to close, and remain
+inside the viewport. `editor:'createTask'` opens the shared
 creation form; `editor:'diagnostics'` opens delivered diagnostics and
 `editor:'predecessors'` lists incoming links. Task creation
 emits `type:'task', operation:'create', targetKind:'projects', targetId:projectId`

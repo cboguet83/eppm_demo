@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import {ContractError} from '../src/contracts/index.js';
 import {addDays,dayIndex,dateFromIndex,timelineBounds,createCalendar,shiftTask} from '../src/calendar/index.js';
-import {decodeIntervals,createResourceSummaries,formatResourceValue} from '../src/resources/summary.js';
+import {decodeIntervals,createResourceSummaries,formatResourceValue,capacityDetails} from '../src/resources/summary.js';
 
 const options={start:'2023-01-01',end:'2024-04-01',mode:'Month',today:'2024-02-29'};
 for (const [mode,count,width] of [['Month',15,675],['Quarter',5,140],['Year',4,160]]) {
@@ -101,6 +101,16 @@ test('resource scopes use identical rules and values keep established display pr
   assert.throws(()=>formatResourceValue(-1),ContractError);
   assert.throws(()=>summaries.summarize({...common,capacity:-1}),ContractError);
   assert.throws(()=>summaries.summarize({...common,end:'2025-01-01'}),ContractError);
+});
+
+test('capacity hover summaries include only differing assigned extrema and remain plain text',()=>{
+  const pool={name:'Pool <A>',capacity:2,definedCapacity:2,hasAssignments:true};
+  assert.equal(capacityDetails(pool,{minCapacity:2,maxCapacity:2}),'Pool <A>');
+  assert.equal(capacityDetails(pool,{minCapacity:1,maxCapacity:4}),'Pool <A>\nDefined capacity: 2.0 FTE\nMin assigned capacity: 1.0 FTE\nMax assigned capacity: 4.0 FTE');
+  assert.equal(capacityDetails(pool,{minCapacity:1,maxCapacity:2}),'Pool <A>\nDefined capacity: 2.0 FTE\nMin assigned capacity: 1.0 FTE');
+  assert.equal(capacityDetails(pool,{minCapacity:2,maxCapacity:4}),'Pool <A>\nDefined capacity: 2.0 FTE\nMax assigned capacity: 4.0 FTE');
+  assert.equal(capacityDetails({...pool,hasAssignments:false},{minCapacity:0,maxCapacity:4}),'Pool <A>');
+  assert.match(capacityDetails({...pool,definedCapacity:undefined},{minCapacity:1,maxCapacity:2},{unit:'people',labels:{definedCapacity:'Defined',minAssignedCapacity:'Minimum'}}),/Defined: 2.0 people\nMinimum: 1.0 people/);
 });
 
 test('invalid geometry and dates fail safely at pure model interfaces',()=>{

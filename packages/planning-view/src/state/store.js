@@ -47,7 +47,6 @@ function hintedView(view,hints={}) {
   if(hints.expandedProjectIds)next.expandedProjects=[...hints.expandedProjectIds];
   if(hints.focusProjectId) {
     next.expandedProjects=[...new Set([...next.expandedProjects,hints.focusProjectId])];
-    next.focusProjectId=hints.focusProjectId;
   }
   return next;
 }

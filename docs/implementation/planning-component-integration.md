@@ -98,12 +98,20 @@ Cancelled confirmations emit no request and leave the command menu usable.
 Resource commands retain pool/group identity, inclusive dates and allocation
 scope. Alternative demand rows remain comparison data and do not emit current
 allocation selections.
+Their details/allocation commands remain visibly disabled; allocation filters
+remain available through nested pointer and keyboard menus. Task assignment
+uses the person icon. Menus are clamped to the viewport and child panels can
+open on either side.
 
 The shared task editor owns task fields and incoming dependency controls. It
 supports editing and creating tasks, preserves drafts across unrelated reruns,
 and checks capabilities again on Save. Alternative frozen task rows address the
 alternative; current and baseline bars remain read-only during comparison.
 Dependency inspection opens the successor task editor or EPPM's project panel.
+Project-scoped predecessor reads coalesce by scope, revision and project while
+each caller retains independent cancellation. Failed reads preserve the selected
+predecessor and draft, show a safe retry message, and prevent incomplete saves.
+Creation patches expand their project without moving the retained viewport.
 
 The project dependency panel is application-owned because its server contract is
 an atomic revision-checked batch with explicit upserts/deletions. It contains no
@@ -117,6 +125,9 @@ retaining the previous size limits. Rows remain 41.4 px and resource rows 23.8 p
 Main and individual frozen columns resize within the instance. Baseline and
 alternative lanes, new-scenario colors, milestones, diagnostic counts, progress,
 description/link visibility and expansion controls share this one renderer.
+EPPM selects concise capacity tooltips; demand remains available in accessible
+cell descriptions. Only deviating capacity badges change color. Availability
+and excess retain green/red status text with FTE units.
 
 ## Source and verification boundaries
 

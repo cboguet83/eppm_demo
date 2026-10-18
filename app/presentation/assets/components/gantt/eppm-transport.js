@@ -108,7 +108,7 @@ export function createEppmTransport({receive=()=>{}}={}) {
       if(args.dependency_response)receive('choices',args.dependency_response);
       if(args.project_dependency_response)receive('projectDependencies',args.project_dependency_response);
       for(const field of ['tasks','patch','dependency_response','project_dependency_response','adapter_error','ack_nonce'])delete host[field];
-      return {snapshot,messages,ackRequestIds:acknowledgement?[acknowledgement]:[],options:{grouped:true,editCommand:'toggle_edit',timelineHeight:{min:178,max:439}}};
+      return {snapshot,messages,ackRequestIds:acknowledgement?[acknowledgement]:[],options:{grouped:true,editCommand:'toggle_edit',timelineHeight:{min:178,max:439},resourceTooltipDetails:'capacity'}};
     }
   };
 }

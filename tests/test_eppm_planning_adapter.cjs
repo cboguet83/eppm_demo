@@ -109,3 +109,34 @@ test('bounded replacements retain unchanged project links and group filters addr
   const snapshot=snapshotFor(host);assert.equal(snapshot.resourceFilter.groupId,'group:3');assert.equal(snapshot.capabilities.clearResourceFilter,true);
   assert.equal(snapshot.resourceFilter.start,'2028-02-28');
 });
+
+test('predecessor reads coalesce by project/source while cancellation and stale responses remain isolated',async()=>{
+  const {createChoiceReader}=await import('../app/presentation/assets/components/gantt/eppm-choices.js');
+  let host=fixture();const requests=[];
+  const reader=createChoiceReader({host:()=>host,event:(command,context,project)=>{const nonce='choice-'+(requests.length+1);requests.push({command,context,project,nonce});return nonce;}});
+  const firstController=new AbortController(),secondController=new AbortController();
+  const request=signal=>({projectId:'2',overlayId:null,signal});
+  const first=reader.read(request(firstController.signal)),second=reader.read(request(secondController.signal));
+  assert.equal(requests.length,1);firstController.abort();await assert.rejects(first,{name:'AbortError'});
+  reader.receive({nonce:'unknown',project_id:'2',tasks:[]});
+  reader.receive({nonce:requests[0].nonce,project_id:'2',tasks:[{id:8,task_name:'Predecessor'}]});
+  assert.deepEqual(await second,[{id:'8',name:'Predecessor'}]);
+  const stale=reader.read(request(new AbortController().signal));host={...host,task_revision:'r2'};
+  reader.receive({nonce:requests.at(-1).nonce,project_id:'2',tasks:[]});await assert.rejects(stale,{name:'AbortError'});
+  const rejected=reader.read(request(new AbortController().signal));reader.receive({nonce:requests.at(-1).nonce,project_id:'3',tasks:[]});await assert.rejects(rejected,/could not be loaded/);
+  const failed=reader.read(request(new AbortController().signal));reader.receive({nonce:requests.at(-1).nonce,project_id:'2',error:'SECRET FAILURE'});
+  await assert.rejects(failed,error=>error.message==='Predecessor tasks could not be loaded.');
+  const controller=new AbortController(),cancelled=reader.read(request(controller.signal));controller.abort();await assert.rejects(cancelled,{name:'AbortError'});
+  reader.receive({nonce:requests.at(-1).nonce,project_id:'2',tasks:[{id:8,task_name:'Late'}]});
+  const pending=reader.read(request(new AbortController().signal));reader.destroy();reader.destroy();await assert.rejects(pending,{name:'AbortError'});
+  await assert.rejects(reader.read(request(new AbortController().signal)),{name:'AbortError'});
+});
+
+test('alternative predecessor choices use stable delivered identities without current schedule reads',async()=>{
+  const {createChoiceReader}=await import('../app/presentation/assets/components/gantt/eppm-choices.js');
+  const host={...fixture(),alternatives:{1:{tasks:[{id:99,stable_id:7,task_name:'Alternative'}]}},alternative_task_choices:[{id:8,project_id:2,task_name:'External'}]};
+  const reader=createChoiceReader({host:()=>host,event:()=>assert.fail('Unexpected current schedule read')});
+  const request={projectId:'1',overlayId:'alternative:21',signal:new AbortController().signal};
+  assert.deepEqual(await reader.read(request),[{id:'7',name:'Alternative'}]);
+  assert.deepEqual(await reader.read({...request,projectId:'2'}),[{id:'8',name:'External'}]);reader.destroy();
+});

@@ -30,7 +30,7 @@ export function createEditor({frame,store,actions,lifetime,options={}}) {
     if(dependencyIndex!==null)select.dataset.dependencyIndex=dependencyIndex;
     const choices=[...data.projects.map(record=>({kind:'project',id:record.id,name:record.name})),
       ...(overlay?.tasks ?? data.tasks).map(record=>({kind:'task',id:record.id,name:record.name}))];
-    if(!choices.some(choice=>choice.kind===value.kind && choice.id===value.id))choices.unshift({...value,name:data.labels.unavailable || 'Unavailable'});
+    if(!choices.some(choice=>choice.kind===value.kind && choice.id===value.id))choices.unshift({...value,name:value.kind!=='unavailable' && value.name?value.name:data.labels.unavailable || 'Unavailable'});
     for(const choice of choices) {
       const option=doc.createElement('option');option.value=JSON.stringify({kind:choice.kind,...(choice.id?{id:choice.id}:{})});
       option.textContent=choice.name;option.selected=choice.kind===value.kind && choice.id===value.id;select.append(option);

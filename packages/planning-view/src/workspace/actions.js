@@ -48,7 +48,8 @@ export function validateActions(actions=[]) {
     if(typeof action.id!=='string' || !action.id.trim() || ids.has(action.id) || typeof action.label!=='string')throw new ContractError('contextActions.identity');
     ids.add(action.id);
     if(action.capability!==undefined && typeof action.capability!=='string')throw new ContractError('contextActions.capability');
-    for(const field of ['targetKinds','lanes'])if(action[field]!==undefined && (!Array.isArray(action[field]) || action[field].some(value=>typeof value!=='string')))throw new ContractError('contextActions.'+field);
+    for(const field of ['targetKinds','lanes','disabledScopes'])if(action[field]!==undefined && (!Array.isArray(action[field]) || action[field].some(value=>typeof value!=='string')))throw new ContractError('contextActions.'+field);
+    if(action.icon!==undefined && typeof action.icon!=='string')throw new ContractError('contextActions.icon');
     if(action.requiresEdit!==undefined && typeof action.requiresEdit!=='boolean')throw new ContractError('contextActions.requiresEdit');
     if(action.requiresMode!==undefined && typeof action.requiresMode!=='boolean')throw new ContractError('contextActions.requiresMode');
     if(action.editor!==undefined && !['createTask','diagnostics','predecessors'].includes(action.editor))throw new ContractError('contextActions.editor');
@@ -61,11 +62,12 @@ export function validateActions(actions=[]) {
 }
 
 /** @param {object} action Declarative action. @param {object} data Snapshot. @param {object} view View. @param {object} target Current target. */
-export function actionAllowed(action,data,view,target) {
+export function actionAllowed(action,data,view,target,context={}) {
   const resolved=resolveTarget(data,target);
   if(!resolved)return false;
   return (!action.targetKinds || action.targetKinds.includes(target.kind)) && (!action.lanes || action.lanes.includes(resolved.lane)) &&
     (!action.requiresMode || view.filters.editEnabled===true) &&
+    !(action.disabledScopes ?? []).includes(context.scope) &&
     (!action.capability || ((target.kind==='projects'?resolved.overlay?.capabilities?.[action.capability]:undefined) ?? resolved.record.capabilities?.[action.capability] ?? data.capabilities[action.capability])===true) && (!action.requiresEdit || canEdit(data,view,target,'command'));
 }
 
@@ -165,7 +167,7 @@ export function createActionController({store,onEvent=()=>{},requestId=()=>crypt
     command(action,target,context={}) {
       if(disposed)return null;
       const {data,view}=store.read();
-      if(!actionAllowed(action,data,view,target))return null;
+      if(!actionAllowed(action,data,view,target,context))return null;
       const event=validateEvent({version:1,scope:data.scope,revision:data.revision,requestId:requestId(),type:'command',command:action.id,
         targetId:target.id,targetKind:target.kind,overlayId:target.overlayId ?? null,context:{...resolve(target).record.context,...context}});
       return deliver(event);

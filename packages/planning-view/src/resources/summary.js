@@ -5,6 +5,22 @@ import {dayIndex,dateFromIndex} from '../calendar/index.js';
 const EMPTY = Object.freeze({});
 const EPSILON = 0.0001;
 
+/** Format the delivered pool title and differing assigned-capacity extrema.
+ * @param {object} resource Immutable resource. @param {object} summary Period extrema.
+ * @param {object} options Optional labels and resource unit.
+ * @returns {string} Plain text; callers never insert it as HTML.
+ */
+export function capacityDetails(resource,summary,{labels={},unit='FTE'}={}) {
+  const defined=resource.definedCapacity ?? resource.capacity;
+  const under=resource.hasAssignments!==false && summary.minCapacity<defined-EPSILON;
+  const over=resource.hasAssignments!==false && summary.maxCapacity>defined+EPSILON;
+  if(!under && !over)return resource.name;
+  const lines=[resource.name,(labels.definedCapacity || 'Defined capacity')+': '+defined.toFixed(1)+' '+unit];
+  if(under)lines.push((labels.minAssignedCapacity || 'Min assigned capacity')+': '+summary.minCapacity.toFixed(1)+' '+unit);
+  if(over)lines.push((labels.maxAssignedCapacity || 'Max assigned capacity')+': '+summary.maxCapacity.toFixed(1)+' '+unit);
+  return lines.join('\n');
+}
+
 /** Decode inclusive intervals, retaining zeroes and missing dates.
  * @param {Array<[string,string,number]>} intervals Ordered nonoverlapping intervals.
  * @param {number} maxDays Maximum expanded entries, default twenty-five years.

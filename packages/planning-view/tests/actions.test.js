@@ -48,6 +48,16 @@ test('creation starts after the invoked task or the displayed project schedule a
   h.actions.openCreate({kind:'projects',id:'project'});assert.equal(h.store.read().view.draft.values.fields.phase,'Host default');
 });
 
+test('scope-disabled host commands retain fresh invocation guards and safe icon descriptors',()=>{
+  const h=harness(),command={id:'allocations',label:'Allocations',icon:'👤',disabledScopes:['alternative_selected']};
+  assert.equal(actionAllowed(command,h.store.read().data,h.store.read().view,current,{scope:'alternative_selected'}),false);
+  assert.equal(h.actions.command(command,current,{scope:'alternative_selected'}),null);assert.equal(h.events.length,0);
+  assert.equal(h.actions.command(command,current,{scope:'selected'}).command,'allocations');
+  assert.equal(validateActions([command])[0].icon,'👤');
+  assert.throws(()=>validateActions([{...command,icon:1}]),ContractError);
+  assert.throws(()=>validateActions([{...command,disabledScopes:[1]}]),ContractError);
+});
+
 test('edits are correlated once, reject safely and settle only on authoritative updates',()=>{
   const h=harness();assert.equal(h.actions.open(current),true);
   const event=h.actions.request('dates',current,{start:'2026-01-02',end:'2026-01-04'});

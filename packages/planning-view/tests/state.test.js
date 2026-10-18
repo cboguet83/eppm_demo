@@ -17,7 +17,7 @@ test('validated host view hints change only requested view fields and reject ato
   const {data,view}=store.read();assert.equal(view.scrollTop,120);assert.equal(view.draft.values.name,'Draft');
   assert.equal(data.projects[0].id,'p0');
   assert.equal(view.filters.query,'Retain');assert.equal(view.filters.editEnabled,false);assert.equal(view.filters.externalLinks,false);
-  assert.deepEqual(view.expandedProjects,['p0','p1']);assert.equal(view.focusProjectId,'p1');assert.deepEqual(view.filters.resources,{hideUnused:true,onlyOverallocated:false});
+  assert.deepEqual(view.expandedProjects,['p0','p1']);assert.equal(view.scrollTop,120);assert.deepEqual(view.filters.resources,{hideUnused:true,onlyOverallocated:false});
   for(const hints of [null,{editEnabled:1},{expandedProjectIds:['p0','p0']},{expandedProjectIds:[1]},{focusProjectId:1},{filters:{query:'unsafe'}},{filters:null}]) {
     assert.throws(()=>store.update(patch({viewHints:hints})),ContractError);assert.equal(store.read().data,data);assert.equal(store.read().view,view);
   }
