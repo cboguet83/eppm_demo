@@ -242,3 +242,5 @@ owned messages, calendar, state/loading, resource models and dependency models.
 Mounted DOM coverage is separate; the Node aggregate includes unexecuted browser
 renderers and is not represented as full browser coverage. Final full-suite and
 installed-artifact evidence remain part of task 6.1.
+
+The cross-component `test_every_existing_context_menu_uses_the_shared_visual_standard` retains inline CSS checks for inline components and verifies the Gantt module bootstrap. `test_shared_menu_visual_standard_matches_host_context_menus` compares the extracted panel and ordinary/focused items against the actual shared host CSS through computed browser styles; nested keyboard/viewport regressions remain mounted checks.

@@ -81,9 +81,9 @@
 .planning-view .planning-inspector select {display:block;width:100%;margin-top:8px;}
 .planning-view .planning-inspector dt {font-weight:600;}
 .planning-view .planning-inspector dd {margin:4px 0 12px;white-space:pre-wrap;}
-.planning-view .planning-menu {position:fixed;z-index:1100;min-width:180px;max-width:calc(100vw - 20px);max-height:calc(100vh - 20px);overflow:auto;padding:4px;border:1px solid var(--planning-border,#e2e8f0);border-radius:6px;background:var(--planning-background,#fff);box-shadow:0 8px 24px #0f172a33;}
-.planning-view .planning-menu button {display:block;width:100%;text-align:left;border:0;background:transparent;}
-.planning-view .planning-menu button:focus {background:#dbeafe;outline:none;}
+.planning-view .planning-menu {position:fixed;background:var(--planning-background,#fff);color:var(--planning-text,#1e293b);border:1px solid #cbd5e1;border-radius:8px;box-shadow:0 10px 25px rgba(0,0,0,.15);z-index:10000;min-width:220px;padding:6px 0;box-sizing:border-box;max-width:calc(100vw - 20px);max-height:calc(100vh - 20px);overflow-y:auto;}
+.planning-view .planning-menu button {display:flex;align-items:center;gap:10px;padding:8px 16px;font:inherit;font-size:13px;font-weight:500;text-align:left;color:inherit;background:transparent;border:0;border-radius:0;box-sizing:border-box;width:100%;margin:0;cursor:pointer;transition:background .12s ease;}
+.planning-view .planning-menu button:hover,.planning-view .planning-menu button:focus-visible {background:var(--planning-header,#f1f5f9);color:var(--planning-primary,#2563eb);outline-offset:-2px;}
 .planning-view button:disabled {opacity:.45;cursor:default;}
 .planning-view .planning-tooltip {position:fixed;z-index:1200;max-width:380px;padding:10px;background:#0f172a;color:#fff;border-radius:6px;white-space:pre-wrap;pointer-events:none;}
 .planning-view .planning-tooltip-status[data-overallocated=true] {color:#f87171;font-weight:600;}

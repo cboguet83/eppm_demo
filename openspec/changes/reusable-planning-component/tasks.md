@@ -41,6 +41,8 @@ Each numbered checkbox is one focused commit containing its implementation, rele
 
 - [x] 5.7 Restore the documented EPPM callback loading fallback when no direct HTTP task endpoint is supplied, using the existing queued bridge and correlated Python task patches. Verify mapped load intentions, safe stale/cancelled responses, retained 25/100 bounds and native diagnostic loading/editing; keep HTTP/source-token behavior unchanged and commit this compatibility correction separately.
 
+- [x] 5.8 Migrate the final inline-menu-style consumer to the module bootstrap and a mounted computed-style comparison with the shared host menu standard. Restore scoped panel/item/focus appearance where extraction diverged; verify the existing host source assertion, mounted visual parity and nested keyboard/viewport behavior before committing this correction separately.
+
 ## 6. Full integration acceptance
 
 - [ ] 6.1 Run the complete strict pytest suite with real isolated PostgreSQL and authenticated browser groups, at least 95% unchanged-scope application coverage, separate wrapper coverage of at least 95%, all existing JavaScript checks, new package/module/browser/installed-artifact checks, strict OpenSpec validation, and the verify-change workflow. Compare five repeated benchmark runs with the task 1.2 reference using the design's 10%/5 ms regression budget and unchanged hard bounds. Review the final diff, security/layer boundaries, contract-to-scenario coverage, artifact reproducibility, and docs; record actual commands/results, coverage, skips, benchmark comparisons, and `git log main..HEAD --oneline` task-to-commit evidence in `verification.md`. Leave this task incomplete if a required check cannot execute or fails.

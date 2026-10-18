@@ -458,6 +458,39 @@ def test_menu_keyboard_tooltip_delay_and_dependency_editor(editable_page: Page) 
     assert page.evaluate("events.find(e=>e.type==='dependency').values.lagDays") == -2
 
 
+def test_shared_menu_visual_standard_matches_host_context_menus(editable_page: Page) -> None:
+    """Extracted menus retain the host menu's panel, item and focus appearance."""
+    from app.presentation.components.context_menu import CONTEXT_MENU_CSS
+
+    page = editable_page
+    menu_css = CONTEXT_MENU_CSS[CONTEXT_MENU_CSS.index(".context-menu {"):]
+    page.add_style_tag(content=menu_css)
+    page.evaluate("""() => {
+      const reference=document.createElement('div');reference.id='reference-menu';
+      reference.className='context-menu';reference.style.font='12px system-ui,sans-serif';
+      reference.innerHTML='<button class="context-menu-item">Reference</button>';
+      document.body.append(reference);
+    }""")
+    page.locator("#first .planning-bar[data-target-id=alpha]").press("Shift+F10")
+    panel = page.locator("#first [data-menu-depth='0']")
+    item = panel.get_by_role("menuitem").first
+    properties = [
+        "position", "backgroundColor", "color", "border", "borderRadius",
+        "boxShadow", "zIndex", "minWidth", "padding", "boxSizing", "maxWidth",
+        "maxHeight", "overflowY", "display", "alignItems", "gap", "fontSize",
+        "fontWeight", "textAlign", "margin", "cursor", "transition",
+    ]
+    measure = "(node, properties) => Object.fromEntries(properties.map(key=>[key,getComputedStyle(node)[key]]))"
+    assert panel.evaluate(measure, properties) == page.locator("#reference-menu").evaluate(measure, properties)
+    # Moving focus off the first item compares ordinary as well as focus styles.
+    page.locator("#outside").focus()
+    assert item.evaluate(measure, properties) == page.locator("#reference-menu button").evaluate(measure, properties)
+    item.focus()
+    actual = item.evaluate(measure, properties)
+    page.locator("#reference-menu button").focus()
+    assert actual == page.locator("#reference-menu button").evaluate(measure, properties)
+
+
 def test_nested_menu_panels_fit_the_viewport_and_support_tab_and_back_navigation(editable_page: Page) -> None:
     """Nested panels remain outside root scrolling, inside the viewport, and keyboard reachable."""
     page = editable_page
