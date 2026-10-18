@@ -8,7 +8,7 @@ evidence. All applicable checks passed on the prior revision; current-main tasks
 
 | Dimension | Current finding |
 | --- | --- |
-| Completeness | 24/25 tasks complete; renewed integrated acceptance remains open. All 16 added requirements have implementation and test mappings below. |
+| Completeness | 25/26 tasks complete; renewed integrated acceptance remains open. All 16 added requirements have implementation and test mappings below. |
 | Correctness | All 35 scenarios map to module, mounted, installed or native regressions. The complete strict suite passed with real PostgreSQL and authenticated browsers, no skips, and 97.69% application coverage. |
 | Coherence | Native modules, explicit host dependencies, instance ownership, portable packaging and thin EPPM integration follow the design. The user explicitly approved 150 ms synthetic / 60 ms native initial rendering on 2026-10-18; all other gates remain unchanged. |
 
@@ -215,3 +215,20 @@ checks passed before the scheduling audit identified missing classifications,
 then all eight startup/scheduling checks passed in 5.72 seconds. Seven native
 benchmark/dictionary/dashboard checks passed in 60.23 seconds with template-backed
 isolated PostgreSQL. Task 7.2 still requires complete integrated acceptance.
+
+The first integrated 25-capture run passed every hard assertion and initial-render
+limit in 103.68 seconds, but collapsed maximum scroll-work median was 12.5 ms
+versus reference 6.9 ms. This fails the unchanged timing gate; all runs are
+retained in `scroll-regression.json` and are not counted as acceptance. A DOM
+allocation profile put the slow frame in resource redraw (360 new elements).
+Task 7.3 removes repeated static control/layout writes before scroll measurement
+without changing summaries, geometry, input ownership or timing gates.
+
+Task 7.3 passed 38 affected mounted/browser checks in 57.12 seconds and all 324
+JavaScript checks. A corrected mounted regression fails against the unchanged
+renderer on static text-node replacement and passes with the fix. Five fresh
+repeats/configuration (25 captures, 107.13 seconds) pass every metric including
+maximum work: synthetic render 121.1/118.8/124.0 ms; native 39.8 ms; synthetic
+scroll maximum 8.9/8.6/9.4 ms and p95 1.5/1.7/1.6 ms. Resource hard bounds are
+unchanged and pass. Rejected integrated captures remain in `scroll-regression.json`.
+Full integrated acceptance still remains task 7.2.

@@ -8,21 +8,21 @@
     1100
   ],
   "iterations_per_mode": 5,
-  "capture": "tests/postgresql/capture_gantt_reference.py; sequential idle-host collection on d3cfd24; 25 passed in 115.30 seconds",
+  "capture": "tests/postgresql/capture_gantt_reference.py; sequential idle-host collection after scroll DOM correction; 25 passed in 107.13 seconds",
   "measurement_notes": "Synchronous render-message delivery; scroll work at public requestAnimationFrame boundary includes all workspace rendering. Reference timed its timeline callback. No private renderer globals.",
   "budget_approved": true,
   "summary_medians": {
     "collapsed": {
-      "renderMs": 120.90000000596046,
+      "renderMs": 121.09999999403954,
       "inspectedDependencies": 0,
       "projects": 100,
       "pools": 127,
       "tasks": 1000,
       "maxLinkNodes": 0,
       "visibleTasks": 0,
-      "scrollFrameP95": 17.099999994039536,
-      "scrollWorkMaxMs": 8.700000017881393,
-      "scrollWorkP95Ms": 2.2999999821186066,
+      "scrollFrameP95": 16.900000005960464,
+      "scrollWorkMaxMs": 8.900000005960464,
+      "scrollWorkP95Ms": 1.5,
       "resourceCells": 216,
       "ganttRows": 27,
       "resourceRows": 27,
@@ -30,16 +30,16 @@
       "resourcePaneAlignmentPx": 0
     },
     "expanded": {
-      "renderMs": 115.69999998807907,
+      "renderMs": 118.80000001192093,
       "inspectedDependencies": 0,
       "projects": 100,
       "pools": 127,
       "tasks": 1000,
       "maxLinkNodes": 44,
       "visibleTasks": 24,
-      "scrollFrameP95": 17.299999982118607,
-      "scrollWorkMaxMs": 8.800000011920929,
-      "scrollWorkP95Ms": 2.0999999940395355,
+      "scrollFrameP95": 17,
+      "scrollWorkMaxMs": 8.599999994039536,
+      "scrollWorkP95Ms": 1.699999988079071,
       "resourceCells": 216,
       "ganttRows": 27,
       "resourceRows": 27,
@@ -47,16 +47,16 @@
       "resourcePaneAlignmentPx": 0
     },
     "external": {
-      "renderMs": 116.5,
+      "renderMs": 124,
       "inspectedDependencies": 0,
       "projects": 100,
       "pools": 127,
       "tasks": 1000,
       "maxLinkNodes": 524,
       "visibleTasks": 24,
-      "scrollFrameP95": 17.400000005960464,
-      "scrollWorkMaxMs": 8.599999994039536,
-      "scrollWorkP95Ms": 2.5,
+      "scrollFrameP95": 17.19999998807907,
+      "scrollWorkMaxMs": 9.400000005960464,
+      "scrollWorkP95Ms": 1.5999999940395355,
       "resourceCells": 216,
       "ganttRows": 27,
       "resourceRows": 27,
@@ -64,16 +64,16 @@
       "resourcePaneAlignmentPx": 0
     },
     "native": {
-      "renderMs": 42.69999998807907,
+      "renderMs": 39.79999998211861,
       "inspectedDependencies": 0,
       "projects": 2,
       "pools": 1,
       "tasks": 0,
       "maxLinkNodes": 0,
       "visibleTasks": 2,
-      "scrollFrameP95": 17,
-      "scrollWorkMaxMs": 1.100000023841858,
-      "scrollWorkP95Ms": 1.100000023841858,
+      "scrollFrameP95": 16.900000005960464,
+      "scrollWorkMaxMs": 0.699999988079071,
+      "scrollWorkP95Ms": 0.699999988079071,
       "resourceCells": 15,
       "ganttRows": 4,
       "resourceRows": 3,
@@ -81,7 +81,7 @@
       "resourcePaneAlignmentPx": 0
     },
     "native-edit": {
-      "server_seconds": 0.5107822660065722,
+      "server_seconds": 0.5219519159873016,
       "payload_bytes": 2873
     }
   },
@@ -92,7 +92,7 @@
       "metrics": {
         "expanded": false,
         "externalLinks": false,
-        "renderMs": 120.30000001192093,
+        "renderMs": 115.09999999403954,
         "defaultExternalLinks": false,
         "inspectedDependencies": 0,
         "projects": 100,
@@ -101,9 +101,9 @@
         "source": "representative fixture",
         "maxLinkNodes": 0,
         "visibleTasks": 0,
-        "scrollFrameP95": 17.100000023841858,
-        "scrollWorkMaxMs": 8.200000017881393,
-        "scrollWorkP95Ms": 2.399999976158142,
+        "scrollFrameP95": 16.900000005960464,
+        "scrollWorkMaxMs": 8.099999994039536,
+        "scrollWorkP95Ms": 1.199999988079071,
         "resourceCells": 216,
         "ganttRows": 27,
         "resourceRows": 27,
@@ -124,7 +124,7 @@
       "metrics": {
         "expanded": false,
         "externalLinks": false,
-        "renderMs": 138.09999999403954,
+        "renderMs": 133.09999999403954,
         "defaultExternalLinks": false,
         "inspectedDependencies": 0,
         "projects": 100,
@@ -134,7 +134,391 @@
         "maxLinkNodes": 0,
         "visibleTasks": 0,
         "scrollFrameP95": 16.900000005960464,
-        "scrollWorkMaxMs": 9.399999976158142,
+        "scrollWorkMaxMs": 8.900000005960464,
+        "scrollWorkP95Ms": 1.5,
+        "resourceCells": 216,
+        "ganttRows": 27,
+        "resourceRows": 27,
+        "resourceTop": 5000,
+        "resourcePaneAlignmentPx": 0,
+        "fitCheck": {
+          "ganttWidth": 1050,
+          "resourceWidth": 1050,
+          "timelineWidth": 1050,
+          "ganttVerticalScrollbar": false,
+          "resourceVerticalScrollbar": false
+        }
+      }
+    },
+    {
+      "mode": "collapsed",
+      "iteration": 3,
+      "metrics": {
+        "expanded": false,
+        "externalLinks": false,
+        "renderMs": 121.09999999403954,
+        "defaultExternalLinks": false,
+        "inspectedDependencies": 0,
+        "projects": 100,
+        "pools": 127,
+        "tasks": 1000,
+        "source": "representative fixture",
+        "maxLinkNodes": 0,
+        "visibleTasks": 0,
+        "scrollFrameP95": 17,
+        "scrollWorkMaxMs": 13,
+        "scrollWorkP95Ms": 1.4000000059604645,
+        "resourceCells": 216,
+        "ganttRows": 27,
+        "resourceRows": 27,
+        "resourceTop": 5000,
+        "resourcePaneAlignmentPx": 0,
+        "fitCheck": {
+          "ganttWidth": 1050,
+          "resourceWidth": 1050,
+          "timelineWidth": 1050,
+          "ganttVerticalScrollbar": false,
+          "resourceVerticalScrollbar": false
+        }
+      }
+    },
+    {
+      "mode": "collapsed",
+      "iteration": 4,
+      "metrics": {
+        "expanded": false,
+        "externalLinks": false,
+        "renderMs": 125.19999998807907,
+        "defaultExternalLinks": false,
+        "inspectedDependencies": 0,
+        "projects": 100,
+        "pools": 127,
+        "tasks": 1000,
+        "source": "representative fixture",
+        "maxLinkNodes": 0,
+        "visibleTasks": 0,
+        "scrollFrameP95": 16.80000001192093,
+        "scrollWorkMaxMs": 12.900000005960464,
+        "scrollWorkP95Ms": 1.5,
+        "resourceCells": 216,
+        "ganttRows": 27,
+        "resourceRows": 27,
+        "resourceTop": 5000,
+        "resourcePaneAlignmentPx": 0,
+        "fitCheck": {
+          "ganttWidth": 1050,
+          "resourceWidth": 1050,
+          "timelineWidth": 1050,
+          "ganttVerticalScrollbar": false,
+          "resourceVerticalScrollbar": false
+        }
+      }
+    },
+    {
+      "mode": "collapsed",
+      "iteration": 5,
+      "metrics": {
+        "expanded": false,
+        "externalLinks": false,
+        "renderMs": 117,
+        "defaultExternalLinks": false,
+        "inspectedDependencies": 0,
+        "projects": 100,
+        "pools": 127,
+        "tasks": 1000,
+        "source": "representative fixture",
+        "maxLinkNodes": 0,
+        "visibleTasks": 0,
+        "scrollFrameP95": 16.900000005960464,
+        "scrollWorkMaxMs": 8.799999982118607,
+        "scrollWorkP95Ms": 1.5,
+        "resourceCells": 216,
+        "ganttRows": 27,
+        "resourceRows": 27,
+        "resourceTop": 5000,
+        "resourcePaneAlignmentPx": 0,
+        "fitCheck": {
+          "ganttWidth": 1050,
+          "resourceWidth": 1050,
+          "timelineWidth": 1050,
+          "ganttVerticalScrollbar": false,
+          "resourceVerticalScrollbar": false
+        }
+      }
+    },
+    {
+      "mode": "expanded",
+      "iteration": 1,
+      "metrics": {
+        "expanded": true,
+        "externalLinks": false,
+        "renderMs": 116,
+        "defaultExternalLinks": false,
+        "inspectedDependencies": 0,
+        "projects": 100,
+        "pools": 127,
+        "tasks": 1000,
+        "source": "representative fixture",
+        "maxLinkNodes": 44,
+        "visibleTasks": 24,
+        "scrollFrameP95": 17,
+        "scrollWorkMaxMs": 8.599999994039536,
+        "scrollWorkP95Ms": 1.5,
+        "resourceCells": 216,
+        "ganttRows": 27,
+        "resourceRows": 27,
+        "resourceTop": 5000,
+        "resourcePaneAlignmentPx": 0,
+        "fitCheck": {
+          "ganttWidth": 1050,
+          "resourceWidth": 1050,
+          "timelineWidth": 1050,
+          "ganttVerticalScrollbar": false,
+          "resourceVerticalScrollbar": false
+        }
+      }
+    },
+    {
+      "mode": "expanded",
+      "iteration": 2,
+      "metrics": {
+        "expanded": true,
+        "externalLinks": false,
+        "renderMs": 112.59999999403954,
+        "defaultExternalLinks": false,
+        "inspectedDependencies": 0,
+        "projects": 100,
+        "pools": 127,
+        "tasks": 1000,
+        "source": "representative fixture",
+        "maxLinkNodes": 44,
+        "visibleTasks": 24,
+        "scrollFrameP95": 17,
+        "scrollWorkMaxMs": 13.099999994039536,
+        "scrollWorkP95Ms": 1.4000000059604645,
+        "resourceCells": 216,
+        "ganttRows": 27,
+        "resourceRows": 27,
+        "resourceTop": 5000,
+        "resourcePaneAlignmentPx": 0,
+        "fitCheck": {
+          "ganttWidth": 1050,
+          "resourceWidth": 1050,
+          "timelineWidth": 1050,
+          "ganttVerticalScrollbar": false,
+          "resourceVerticalScrollbar": false
+        }
+      }
+    },
+    {
+      "mode": "expanded",
+      "iteration": 3,
+      "metrics": {
+        "expanded": true,
+        "externalLinks": false,
+        "renderMs": 118.80000001192093,
+        "defaultExternalLinks": false,
+        "inspectedDependencies": 0,
+        "projects": 100,
+        "pools": 127,
+        "tasks": 1000,
+        "source": "representative fixture",
+        "maxLinkNodes": 44,
+        "visibleTasks": 24,
+        "scrollFrameP95": 17.099999994039536,
+        "scrollWorkMaxMs": 14.099999994039536,
+        "scrollWorkP95Ms": 1.9000000059604645,
+        "resourceCells": 216,
+        "ganttRows": 27,
+        "resourceRows": 27,
+        "resourceTop": 5000,
+        "resourcePaneAlignmentPx": 0,
+        "fitCheck": {
+          "ganttWidth": 1050,
+          "resourceWidth": 1050,
+          "timelineWidth": 1050,
+          "ganttVerticalScrollbar": false,
+          "resourceVerticalScrollbar": false
+        }
+      }
+    },
+    {
+      "mode": "expanded",
+      "iteration": 4,
+      "metrics": {
+        "expanded": true,
+        "externalLinks": false,
+        "renderMs": 140,
+        "defaultExternalLinks": false,
+        "inspectedDependencies": 0,
+        "projects": 100,
+        "pools": 127,
+        "tasks": 1000,
+        "source": "representative fixture",
+        "maxLinkNodes": 44,
+        "visibleTasks": 24,
+        "scrollFrameP95": 17,
+        "scrollWorkMaxMs": 8,
+        "scrollWorkP95Ms": 1.699999988079071,
+        "resourceCells": 216,
+        "ganttRows": 27,
+        "resourceRows": 27,
+        "resourceTop": 5000,
+        "resourcePaneAlignmentPx": 0,
+        "fitCheck": {
+          "ganttWidth": 1050,
+          "resourceWidth": 1050,
+          "timelineWidth": 1050,
+          "ganttVerticalScrollbar": false,
+          "resourceVerticalScrollbar": false
+        }
+      }
+    },
+    {
+      "mode": "expanded",
+      "iteration": 5,
+      "metrics": {
+        "expanded": true,
+        "externalLinks": false,
+        "renderMs": 126.90000000596046,
+        "defaultExternalLinks": false,
+        "inspectedDependencies": 0,
+        "projects": 100,
+        "pools": 127,
+        "tasks": 1000,
+        "source": "representative fixture",
+        "maxLinkNodes": 44,
+        "visibleTasks": 24,
+        "scrollFrameP95": 17.099999994039536,
+        "scrollWorkMaxMs": 8.399999976158142,
+        "scrollWorkP95Ms": 1.800000011920929,
+        "resourceCells": 216,
+        "ganttRows": 27,
+        "resourceRows": 27,
+        "resourceTop": 5000,
+        "resourcePaneAlignmentPx": 0,
+        "fitCheck": {
+          "ganttWidth": 1050,
+          "resourceWidth": 1050,
+          "timelineWidth": 1050,
+          "ganttVerticalScrollbar": false,
+          "resourceVerticalScrollbar": false
+        }
+      }
+    },
+    {
+      "mode": "external",
+      "iteration": 1,
+      "metrics": {
+        "expanded": true,
+        "externalLinks": true,
+        "renderMs": 135.19999998807907,
+        "defaultExternalLinks": false,
+        "inspectedDependencies": 0,
+        "projects": 100,
+        "pools": 127,
+        "tasks": 1000,
+        "source": "representative fixture",
+        "maxLinkNodes": 524,
+        "visibleTasks": 24,
+        "scrollFrameP95": 17.299999982118607,
+        "scrollWorkMaxMs": 19.5,
+        "scrollWorkP95Ms": 1.5999999940395355,
+        "resourceCells": 216,
+        "ganttRows": 27,
+        "resourceRows": 27,
+        "resourceTop": 5000,
+        "resourcePaneAlignmentPx": 0,
+        "fitCheck": {
+          "ganttWidth": 1050,
+          "resourceWidth": 1050,
+          "timelineWidth": 1050,
+          "ganttVerticalScrollbar": false,
+          "resourceVerticalScrollbar": false
+        }
+      }
+    },
+    {
+      "mode": "external",
+      "iteration": 2,
+      "metrics": {
+        "expanded": true,
+        "externalLinks": true,
+        "renderMs": 120.39999997615814,
+        "defaultExternalLinks": false,
+        "inspectedDependencies": 0,
+        "projects": 100,
+        "pools": 127,
+        "tasks": 1000,
+        "source": "representative fixture",
+        "maxLinkNodes": 524,
+        "visibleTasks": 24,
+        "scrollFrameP95": 17.19999998807907,
+        "scrollWorkMaxMs": 7.9000000059604645,
+        "scrollWorkP95Ms": 1.4000000059604645,
+        "resourceCells": 216,
+        "ganttRows": 27,
+        "resourceRows": 27,
+        "resourceTop": 5000,
+        "resourcePaneAlignmentPx": 0,
+        "fitCheck": {
+          "ganttWidth": 1050,
+          "resourceWidth": 1050,
+          "timelineWidth": 1050,
+          "ganttVerticalScrollbar": false,
+          "resourceVerticalScrollbar": false
+        }
+      }
+    },
+    {
+      "mode": "external",
+      "iteration": 3,
+      "metrics": {
+        "expanded": true,
+        "externalLinks": true,
+        "renderMs": 111.90000000596046,
+        "defaultExternalLinks": false,
+        "inspectedDependencies": 0,
+        "projects": 100,
+        "pools": 127,
+        "tasks": 1000,
+        "source": "representative fixture",
+        "maxLinkNodes": 524,
+        "visibleTasks": 24,
+        "scrollFrameP95": 17.100000023841858,
+        "scrollWorkMaxMs": 9.400000005960464,
+        "scrollWorkP95Ms": 1.300000011920929,
+        "resourceCells": 216,
+        "ganttRows": 27,
+        "resourceRows": 27,
+        "resourceTop": 5000,
+        "resourcePaneAlignmentPx": 0,
+        "fitCheck": {
+          "ganttWidth": 1050,
+          "resourceWidth": 1050,
+          "timelineWidth": 1050,
+          "ganttVerticalScrollbar": false,
+          "resourceVerticalScrollbar": false
+        }
+      }
+    },
+    {
+      "mode": "external",
+      "iteration": 4,
+      "metrics": {
+        "expanded": true,
+        "externalLinks": true,
+        "renderMs": 124,
+        "defaultExternalLinks": false,
+        "inspectedDependencies": 0,
+        "projects": 100,
+        "pools": 127,
+        "tasks": 1000,
+        "source": "representative fixture",
+        "maxLinkNodes": 524,
+        "visibleTasks": 24,
+        "scrollFrameP95": 17.299999982118607,
+        "scrollWorkMaxMs": 7.9000000059604645,
         "scrollWorkP95Ms": 1.7000000178813934,
         "resourceCells": 216,
         "ganttRows": 27,
@@ -151,246 +535,22 @@
       }
     },
     {
-      "mode": "collapsed",
-      "iteration": 3,
-      "metrics": {
-        "expanded": false,
-        "externalLinks": false,
-        "renderMs": 111.69999998807907,
-        "defaultExternalLinks": false,
-        "inspectedDependencies": 0,
-        "projects": 100,
-        "pools": 127,
-        "tasks": 1000,
-        "source": "representative fixture",
-        "maxLinkNodes": 0,
-        "visibleTasks": 0,
-        "scrollFrameP95": 17.19999998807907,
-        "scrollWorkMaxMs": 8.599999994039536,
-        "scrollWorkP95Ms": 2.2999999821186066,
-        "resourceCells": 216,
-        "ganttRows": 27,
-        "resourceRows": 27,
-        "resourceTop": 5000,
-        "resourcePaneAlignmentPx": 0,
-        "fitCheck": {
-          "ganttWidth": 1050,
-          "resourceWidth": 1050,
-          "timelineWidth": 1050,
-          "ganttVerticalScrollbar": false,
-          "resourceVerticalScrollbar": false
-        }
-      }
-    },
-    {
-      "mode": "collapsed",
-      "iteration": 4,
-      "metrics": {
-        "expanded": false,
-        "externalLinks": false,
-        "renderMs": 120.90000000596046,
-        "defaultExternalLinks": false,
-        "inspectedDependencies": 0,
-        "projects": 100,
-        "pools": 127,
-        "tasks": 1000,
-        "source": "representative fixture",
-        "maxLinkNodes": 0,
-        "visibleTasks": 0,
-        "scrollFrameP95": 17.099999994039536,
-        "scrollWorkMaxMs": 8.700000017881393,
-        "scrollWorkP95Ms": 2.5,
-        "resourceCells": 216,
-        "ganttRows": 27,
-        "resourceRows": 27,
-        "resourceTop": 5000,
-        "resourcePaneAlignmentPx": 0,
-        "fitCheck": {
-          "ganttWidth": 1050,
-          "resourceWidth": 1050,
-          "timelineWidth": 1050,
-          "ganttVerticalScrollbar": false,
-          "resourceVerticalScrollbar": false
-        }
-      }
-    },
-    {
-      "mode": "collapsed",
-      "iteration": 5,
-      "metrics": {
-        "expanded": false,
-        "externalLinks": false,
-        "renderMs": 121.7000000178814,
-        "defaultExternalLinks": false,
-        "inspectedDependencies": 0,
-        "projects": 100,
-        "pools": 127,
-        "tasks": 1000,
-        "source": "representative fixture",
-        "maxLinkNodes": 0,
-        "visibleTasks": 0,
-        "scrollFrameP95": 16.900000005960464,
-        "scrollWorkMaxMs": 16.900000005960464,
-        "scrollWorkP95Ms": 2.0999999940395355,
-        "resourceCells": 216,
-        "ganttRows": 27,
-        "resourceRows": 27,
-        "resourceTop": 5000,
-        "resourcePaneAlignmentPx": 0,
-        "fitCheck": {
-          "ganttWidth": 1050,
-          "resourceWidth": 1050,
-          "timelineWidth": 1050,
-          "ganttVerticalScrollbar": false,
-          "resourceVerticalScrollbar": false
-        }
-      }
-    },
-    {
-      "mode": "expanded",
-      "iteration": 1,
-      "metrics": {
-        "expanded": true,
-        "externalLinks": false,
-        "renderMs": 114.09999999403954,
-        "defaultExternalLinks": false,
-        "inspectedDependencies": 0,
-        "projects": 100,
-        "pools": 127,
-        "tasks": 1000,
-        "source": "representative fixture",
-        "maxLinkNodes": 44,
-        "visibleTasks": 24,
-        "scrollFrameP95": 17.200000017881393,
-        "scrollWorkMaxMs": 7.9000000059604645,
-        "scrollWorkP95Ms": 2.0999999940395355,
-        "resourceCells": 216,
-        "ganttRows": 27,
-        "resourceRows": 27,
-        "resourceTop": 5000,
-        "resourcePaneAlignmentPx": 0,
-        "fitCheck": {
-          "ganttWidth": 1050,
-          "resourceWidth": 1050,
-          "timelineWidth": 1050,
-          "ganttVerticalScrollbar": false,
-          "resourceVerticalScrollbar": false
-        }
-      }
-    },
-    {
-      "mode": "expanded",
-      "iteration": 2,
-      "metrics": {
-        "expanded": true,
-        "externalLinks": false,
-        "renderMs": 114.09999999403954,
-        "defaultExternalLinks": false,
-        "inspectedDependencies": 0,
-        "projects": 100,
-        "pools": 127,
-        "tasks": 1000,
-        "source": "representative fixture",
-        "maxLinkNodes": 44,
-        "visibleTasks": 24,
-        "scrollFrameP95": 17.299999982118607,
-        "scrollWorkMaxMs": 8.800000011920929,
-        "scrollWorkP95Ms": 2.0999999940395355,
-        "resourceCells": 216,
-        "ganttRows": 27,
-        "resourceRows": 27,
-        "resourceTop": 5000,
-        "resourcePaneAlignmentPx": 0,
-        "fitCheck": {
-          "ganttWidth": 1050,
-          "resourceWidth": 1050,
-          "timelineWidth": 1050,
-          "ganttVerticalScrollbar": false,
-          "resourceVerticalScrollbar": false
-        }
-      }
-    },
-    {
-      "mode": "expanded",
-      "iteration": 3,
-      "metrics": {
-        "expanded": true,
-        "externalLinks": false,
-        "renderMs": 117.69999998807907,
-        "defaultExternalLinks": false,
-        "inspectedDependencies": 0,
-        "projects": 100,
-        "pools": 127,
-        "tasks": 1000,
-        "source": "representative fixture",
-        "maxLinkNodes": 44,
-        "visibleTasks": 24,
-        "scrollFrameP95": 17.30000001192093,
-        "scrollWorkMaxMs": 8.199999988079071,
-        "scrollWorkP95Ms": 2.2000000178813934,
-        "resourceCells": 216,
-        "ganttRows": 27,
-        "resourceRows": 27,
-        "resourceTop": 5000,
-        "resourcePaneAlignmentPx": 0,
-        "fitCheck": {
-          "ganttWidth": 1050,
-          "resourceWidth": 1050,
-          "timelineWidth": 1050,
-          "ganttVerticalScrollbar": false,
-          "resourceVerticalScrollbar": false
-        }
-      }
-    },
-    {
-      "mode": "expanded",
-      "iteration": 4,
-      "metrics": {
-        "expanded": true,
-        "externalLinks": false,
-        "renderMs": 115.69999998807907,
-        "defaultExternalLinks": false,
-        "inspectedDependencies": 0,
-        "projects": 100,
-        "pools": 127,
-        "tasks": 1000,
-        "source": "representative fixture",
-        "maxLinkNodes": 44,
-        "visibleTasks": 24,
-        "scrollFrameP95": 17.5,
-        "scrollWorkMaxMs": 9.399999976158142,
-        "scrollWorkP95Ms": 3,
-        "resourceCells": 216,
-        "ganttRows": 27,
-        "resourceRows": 27,
-        "resourceTop": 5000,
-        "resourcePaneAlignmentPx": 0,
-        "fitCheck": {
-          "ganttWidth": 1050,
-          "resourceWidth": 1050,
-          "timelineWidth": 1050,
-          "ganttVerticalScrollbar": false,
-          "resourceVerticalScrollbar": false
-        }
-      }
-    },
-    {
-      "mode": "expanded",
+      "mode": "external",
       "iteration": 5,
       "metrics": {
         "expanded": true,
-        "externalLinks": false,
-        "renderMs": 132.39999997615814,
+        "externalLinks": true,
+        "renderMs": 139.69999998807907,
         "defaultExternalLinks": false,
         "inspectedDependencies": 0,
         "projects": 100,
         "pools": 127,
         "tasks": 1000,
         "source": "representative fixture",
-        "maxLinkNodes": 44,
+        "maxLinkNodes": 524,
         "visibleTasks": 24,
         "scrollFrameP95": 17.19999998807907,
-        "scrollWorkMaxMs": 17.099999994039536,
+        "scrollWorkMaxMs": 15.599999994039536,
         "scrollWorkP95Ms": 2,
         "resourceCells": 216,
         "ganttRows": 27,
@@ -407,172 +567,12 @@
       }
     },
     {
-      "mode": "external",
-      "iteration": 1,
-      "metrics": {
-        "expanded": true,
-        "externalLinks": true,
-        "renderMs": 116.5,
-        "defaultExternalLinks": false,
-        "inspectedDependencies": 0,
-        "projects": 100,
-        "pools": 127,
-        "tasks": 1000,
-        "source": "representative fixture",
-        "maxLinkNodes": 524,
-        "visibleTasks": 24,
-        "scrollFrameP95": 17.400000005960464,
-        "scrollWorkMaxMs": 8.099999994039536,
-        "scrollWorkP95Ms": 2.5,
-        "resourceCells": 216,
-        "ganttRows": 27,
-        "resourceRows": 27,
-        "resourceTop": 5000,
-        "resourcePaneAlignmentPx": 0,
-        "fitCheck": {
-          "ganttWidth": 1050,
-          "resourceWidth": 1050,
-          "timelineWidth": 1050,
-          "ganttVerticalScrollbar": false,
-          "resourceVerticalScrollbar": false
-        }
-      }
-    },
-    {
-      "mode": "external",
-      "iteration": 2,
-      "metrics": {
-        "expanded": true,
-        "externalLinks": true,
-        "renderMs": 118.69999998807907,
-        "defaultExternalLinks": false,
-        "inspectedDependencies": 0,
-        "projects": 100,
-        "pools": 127,
-        "tasks": 1000,
-        "source": "representative fixture",
-        "maxLinkNodes": 524,
-        "visibleTasks": 24,
-        "scrollFrameP95": 17.599999994039536,
-        "scrollWorkMaxMs": 8.599999994039536,
-        "scrollWorkP95Ms": 2.800000011920929,
-        "resourceCells": 216,
-        "ganttRows": 27,
-        "resourceRows": 27,
-        "resourceTop": 5000,
-        "resourcePaneAlignmentPx": 0,
-        "fitCheck": {
-          "ganttWidth": 1050,
-          "resourceWidth": 1050,
-          "timelineWidth": 1050,
-          "ganttVerticalScrollbar": false,
-          "resourceVerticalScrollbar": false
-        }
-      }
-    },
-    {
-      "mode": "external",
-      "iteration": 3,
-      "metrics": {
-        "expanded": true,
-        "externalLinks": true,
-        "renderMs": 112.90000000596046,
-        "defaultExternalLinks": false,
-        "inspectedDependencies": 0,
-        "projects": 100,
-        "pools": 127,
-        "tasks": 1000,
-        "source": "representative fixture",
-        "maxLinkNodes": 524,
-        "visibleTasks": 24,
-        "scrollFrameP95": 17.400000005960464,
-        "scrollWorkMaxMs": 13.5,
-        "scrollWorkP95Ms": 2.800000011920929,
-        "resourceCells": 216,
-        "ganttRows": 27,
-        "resourceRows": 27,
-        "resourceTop": 5000,
-        "resourcePaneAlignmentPx": 0,
-        "fitCheck": {
-          "ganttWidth": 1050,
-          "resourceWidth": 1050,
-          "timelineWidth": 1050,
-          "ganttVerticalScrollbar": false,
-          "resourceVerticalScrollbar": false
-        }
-      }
-    },
-    {
-      "mode": "external",
-      "iteration": 4,
-      "metrics": {
-        "expanded": true,
-        "externalLinks": true,
-        "renderMs": 106.5,
-        "defaultExternalLinks": false,
-        "inspectedDependencies": 0,
-        "projects": 100,
-        "pools": 127,
-        "tasks": 1000,
-        "source": "representative fixture",
-        "maxLinkNodes": 524,
-        "visibleTasks": 24,
-        "scrollFrameP95": 17.5,
-        "scrollWorkMaxMs": 7.700000017881393,
-        "scrollWorkP95Ms": 2.5,
-        "resourceCells": 216,
-        "ganttRows": 27,
-        "resourceRows": 27,
-        "resourceTop": 5000,
-        "resourcePaneAlignmentPx": 0,
-        "fitCheck": {
-          "ganttWidth": 1050,
-          "resourceWidth": 1050,
-          "timelineWidth": 1050,
-          "ganttVerticalScrollbar": false,
-          "resourceVerticalScrollbar": false
-        }
-      }
-    },
-    {
-      "mode": "external",
-      "iteration": 5,
-      "metrics": {
-        "expanded": true,
-        "externalLinks": true,
-        "renderMs": 121.7000000178814,
-        "defaultExternalLinks": false,
-        "inspectedDependencies": 0,
-        "projects": 100,
-        "pools": 127,
-        "tasks": 1000,
-        "source": "representative fixture",
-        "maxLinkNodes": 524,
-        "visibleTasks": 24,
-        "scrollFrameP95": 17.19999998807907,
-        "scrollWorkMaxMs": 14.700000017881393,
-        "scrollWorkP95Ms": 2.0999999940395355,
-        "resourceCells": 216,
-        "ganttRows": 27,
-        "resourceRows": 27,
-        "resourceTop": 5000,
-        "resourcePaneAlignmentPx": 0,
-        "fitCheck": {
-          "ganttWidth": 1050,
-          "resourceWidth": 1050,
-          "timelineWidth": 1050,
-          "ganttVerticalScrollbar": false,
-          "resourceVerticalScrollbar": false
-        }
-      }
-    },
-    {
       "mode": "native",
       "iteration": 1,
       "metrics": {
         "expanded": true,
         "externalLinks": false,
-        "renderMs": 50.099999994039536,
+        "renderMs": 35.69999998807907,
         "defaultExternalLinks": false,
         "inspectedDependencies": 0,
         "projects": 2,
@@ -581,9 +581,9 @@
         "source": "isolated PostgreSQL restore",
         "maxLinkNodes": 0,
         "visibleTasks": 2,
-        "scrollFrameP95": 17,
-        "scrollWorkMaxMs": 1.300000011920929,
-        "scrollWorkP95Ms": 1.300000011920929,
+        "scrollFrameP95": 16.80000001192093,
+        "scrollWorkMaxMs": 0.800000011920929,
+        "scrollWorkP95Ms": 0.800000011920929,
         "resourceCells": 15,
         "ganttRows": 4,
         "resourceRows": 3,
@@ -592,12 +592,12 @@
         "serverTimings": [
           {
             "action": "initial",
-            "seconds": 0.41613659099675715,
+            "seconds": 0.42170400999020785,
             "bytes": 6207
           },
           {
             "action": "load_project_tasks",
-            "seconds": 0.24831447598990053,
+            "seconds": 0.249024777993327,
             "bytes": 2261
           }
         ],
@@ -616,7 +616,7 @@
       "metrics": {
         "expanded": true,
         "externalLinks": false,
-        "renderMs": 31.19999998807907,
+        "renderMs": 39.79999998211861,
         "defaultExternalLinks": false,
         "inspectedDependencies": 0,
         "projects": 2,
@@ -625,9 +625,9 @@
         "source": "isolated PostgreSQL restore",
         "maxLinkNodes": 0,
         "visibleTasks": 2,
-        "scrollFrameP95": 17,
-        "scrollWorkMaxMs": 3.0999999940395355,
-        "scrollWorkP95Ms": 3.0999999940395355,
+        "scrollFrameP95": 16.80000001192093,
+        "scrollWorkMaxMs": 0.5,
+        "scrollWorkP95Ms": 0.5,
         "resourceCells": 15,
         "ganttRows": 4,
         "resourceRows": 3,
@@ -636,12 +636,12 @@
         "serverTimings": [
           {
             "action": "initial",
-            "seconds": 0.41151134998654015,
+            "seconds": 0.43962235198705457,
             "bytes": 6207
           },
           {
             "action": "load_project_tasks",
-            "seconds": 0.25650812999811023,
+            "seconds": 0.2634838160010986,
             "bytes": 2261
           }
         ],
@@ -660,95 +660,7 @@
       "metrics": {
         "expanded": true,
         "externalLinks": false,
-        "renderMs": 42.69999998807907,
-        "defaultExternalLinks": false,
-        "inspectedDependencies": 0,
-        "projects": 2,
-        "pools": 1,
-        "tasks": 0,
-        "source": "isolated PostgreSQL restore",
-        "maxLinkNodes": 0,
-        "visibleTasks": 2,
-        "scrollFrameP95": 17,
-        "scrollWorkMaxMs": 1,
-        "scrollWorkP95Ms": 1,
-        "resourceCells": 15,
-        "ganttRows": 4,
-        "resourceRows": 3,
-        "resourceTop": 0,
-        "resourcePaneAlignmentPx": 0,
-        "serverTimings": [
-          {
-            "action": "initial",
-            "seconds": 0.4511700510047376,
-            "bytes": 6207
-          },
-          {
-            "action": "load_project_tasks",
-            "seconds": 0.23496738501125947,
-            "bytes": 2261
-          }
-        ],
-        "fitCheck": {
-          "ganttWidth": 1050,
-          "resourceWidth": 1050,
-          "timelineWidth": 1050,
-          "ganttVerticalScrollbar": false,
-          "resourceVerticalScrollbar": false
-        }
-      }
-    },
-    {
-      "mode": "native",
-      "iteration": 4,
-      "metrics": {
-        "expanded": true,
-        "externalLinks": false,
-        "renderMs": 43.30000001192093,
-        "defaultExternalLinks": false,
-        "inspectedDependencies": 0,
-        "projects": 2,
-        "pools": 1,
-        "tasks": 0,
-        "source": "isolated PostgreSQL restore",
-        "maxLinkNodes": 0,
-        "visibleTasks": 2,
-        "scrollFrameP95": 17.100000023841858,
-        "scrollWorkMaxMs": 0.7000000178813934,
-        "scrollWorkP95Ms": 0.7000000178813934,
-        "resourceCells": 15,
-        "ganttRows": 4,
-        "resourceRows": 3,
-        "resourceTop": 0,
-        "resourcePaneAlignmentPx": 0,
-        "serverTimings": [
-          {
-            "action": "initial",
-            "seconds": 0.427913752006134,
-            "bytes": 6207
-          },
-          {
-            "action": "load_project_tasks",
-            "seconds": 0.24772636900888756,
-            "bytes": 2261
-          }
-        ],
-        "fitCheck": {
-          "ganttWidth": 1050,
-          "resourceWidth": 1050,
-          "timelineWidth": 1050,
-          "ganttVerticalScrollbar": false,
-          "resourceVerticalScrollbar": false
-        }
-      }
-    },
-    {
-      "mode": "native",
-      "iteration": 5,
-      "metrics": {
-        "expanded": true,
-        "externalLinks": false,
-        "renderMs": 31.900000005960464,
+        "renderMs": 45.10000002384186,
         "defaultExternalLinks": false,
         "inspectedDependencies": 0,
         "projects": 2,
@@ -758,8 +670,8 @@
         "maxLinkNodes": 0,
         "visibleTasks": 2,
         "scrollFrameP95": 16.900000005960464,
-        "scrollWorkMaxMs": 1.100000023841858,
-        "scrollWorkP95Ms": 1.100000023841858,
+        "scrollWorkMaxMs": 0.699999988079071,
+        "scrollWorkP95Ms": 0.699999988079071,
         "resourceCells": 15,
         "ganttRows": 4,
         "resourceRows": 3,
@@ -768,12 +680,100 @@
         "serverTimings": [
           {
             "action": "initial",
-            "seconds": 0.4277727029984817,
+            "seconds": 0.4244729829952121,
             "bytes": 6207
           },
           {
             "action": "load_project_tasks",
-            "seconds": 0.25925409997580573,
+            "seconds": 0.28202024500933476,
+            "bytes": 2261
+          }
+        ],
+        "fitCheck": {
+          "ganttWidth": 1050,
+          "resourceWidth": 1050,
+          "timelineWidth": 1050,
+          "ganttVerticalScrollbar": false,
+          "resourceVerticalScrollbar": false
+        }
+      }
+    },
+    {
+      "mode": "native",
+      "iteration": 4,
+      "metrics": {
+        "expanded": true,
+        "externalLinks": false,
+        "renderMs": 53,
+        "defaultExternalLinks": false,
+        "inspectedDependencies": 0,
+        "projects": 2,
+        "pools": 1,
+        "tasks": 0,
+        "source": "isolated PostgreSQL restore",
+        "maxLinkNodes": 0,
+        "visibleTasks": 2,
+        "scrollFrameP95": 17.099999994039536,
+        "scrollWorkMaxMs": 0.4000000059604645,
+        "scrollWorkP95Ms": 0.4000000059604645,
+        "resourceCells": 15,
+        "ganttRows": 4,
+        "resourceRows": 3,
+        "resourceTop": 0,
+        "resourcePaneAlignmentPx": 0,
+        "serverTimings": [
+          {
+            "action": "initial",
+            "seconds": 0.41741378902224824,
+            "bytes": 6207
+          },
+          {
+            "action": "load_project_tasks",
+            "seconds": 0.25664889501058497,
+            "bytes": 2261
+          }
+        ],
+        "fitCheck": {
+          "ganttWidth": 1050,
+          "resourceWidth": 1050,
+          "timelineWidth": 1050,
+          "ganttVerticalScrollbar": false,
+          "resourceVerticalScrollbar": false
+        }
+      }
+    },
+    {
+      "mode": "native",
+      "iteration": 5,
+      "metrics": {
+        "expanded": true,
+        "externalLinks": false,
+        "renderMs": 36.70000001788139,
+        "defaultExternalLinks": false,
+        "inspectedDependencies": 0,
+        "projects": 2,
+        "pools": 1,
+        "tasks": 0,
+        "source": "isolated PostgreSQL restore",
+        "maxLinkNodes": 0,
+        "visibleTasks": 2,
+        "scrollFrameP95": 16.900000005960464,
+        "scrollWorkMaxMs": 1.5999999940395355,
+        "scrollWorkP95Ms": 1.5999999940395355,
+        "resourceCells": 15,
+        "ganttRows": 4,
+        "resourceRows": 3,
+        "resourceTop": 0,
+        "resourcePaneAlignmentPx": 0,
+        "serverTimings": [
+          {
+            "action": "initial",
+            "seconds": 0.4315919560031034,
+            "bytes": 6207
+          },
+          {
+            "action": "load_project_tasks",
+            "seconds": 0.2615006210107822,
             "bytes": 2261
           }
         ],
@@ -790,7 +790,7 @@
       "mode": "native-edit",
       "iteration": 1,
       "metrics": {
-        "server_seconds": 0.5250660989840981,
+        "server_seconds": 0.57118365901988,
         "payload_bytes": 2873
       }
     },
@@ -798,7 +798,7 @@
       "mode": "native-edit",
       "iteration": 2,
       "metrics": {
-        "server_seconds": 0.49593122498481534,
+        "server_seconds": 0.47153439398971386,
         "payload_bytes": 2873
       }
     },
@@ -806,7 +806,7 @@
       "mode": "native-edit",
       "iteration": 3,
       "metrics": {
-        "server_seconds": 0.5107822660065722,
+        "server_seconds": 0.5219519159873016,
         "payload_bytes": 2873
       }
     },
@@ -814,7 +814,7 @@
       "mode": "native-edit",
       "iteration": 4,
       "metrics": {
-        "server_seconds": 0.5085861140105408,
+        "server_seconds": 0.5313594100007322,
         "payload_bytes": 2873
       }
     },
@@ -822,7 +822,7 @@
       "mode": "native-edit",
       "iteration": 5,
       "metrics": {
-        "server_seconds": 0.5303951549867634,
+        "server_seconds": 0.5082748680142686,
         "payload_bytes": 2873
       }
     }
@@ -833,5 +833,7 @@
     "synthetic_initial_render_median_ms": 150,
     "native_initial_render_median_ms": 60,
     "other_gates": "Unchanged: other applicable timings retain 10% AND 5 ms regression rule; all hard bounds retained."
-  }
+  },
+  "source_commit": "05f87fe plus task 7.3 browser correction",
+  "asset_manifest_sha256": "963444bed1fd4f6af4604cfd2ee1bb0aa0b87b543642abb7a777cff1e4daf002"
 }

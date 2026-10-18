@@ -484,10 +484,13 @@ def test_shared_menu_visual_standard_matches_host_context_menus(editable_page: P
     assert panel.evaluate(measure, properties) == page.locator("#reference-menu").evaluate(measure, properties)
     # Moving focus off the first item compares ordinary as well as focus styles.
     page.locator("#outside").focus()
+    item.evaluate("node=>Promise.all(node.getAnimations().map(animation=>animation.finished))")
     assert item.evaluate(measure, properties) == page.locator("#reference-menu button").evaluate(measure, properties)
     item.focus()
+    item.evaluate("node=>Promise.all(node.getAnimations().map(animation=>animation.finished))")
     actual = item.evaluate(measure, properties)
     page.locator("#reference-menu button").focus()
+    page.locator("#reference-menu button").evaluate("node=>Promise.all(node.getAnimations().map(animation=>animation.finished))")
     assert actual == page.locator("#reference-menu button").evaluate(measure, properties)
 
 
@@ -516,6 +519,29 @@ def test_nested_menu_panels_fit_the_viewport_and_support_tab_and_back_navigation
     page.keyboard.press("Space")
     page.wait_for_function("events.length===1")
     assert page.evaluate("events[0].command") == "download"
+
+
+def test_scroll_retains_unchanged_control_text_and_updates_host_labels(resource_page: Page) -> None:
+    """Scrolling preserves static control nodes; actual label updates still render."""
+    page = resource_page
+    page.locator("#first [data-mode=Day]").click()
+    expect(page.locator("#first [data-mode=Day]")).to_have_attribute("aria-pressed", "true")
+    page.evaluate("() => new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))")
+    page.evaluate("""() => {
+      window.controlTextNodes=[document.querySelector('#first .planning-resource-count').firstChild,
+        document.querySelector('#first [data-part=resource-left-header]').firstChild,
+        document.querySelector('#first [data-mode=Day]').firstChild];
+      document.querySelector('#first [data-part=timeline-body]').scrollLeft=20;
+    }""")
+    page.wait_for_function("document.querySelector('#first [data-part=resource-body]').scrollLeft===20")
+    page.evaluate("() => new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))")
+    assert page.evaluate("""() => controlTextNodes.every((node,index)=>node===
+      document.querySelector(['#first .planning-resource-count','#first [data-part=resource-left-header]',
+        '#first [data-mode=Day]'][index]).firstChild)""")
+    page.evaluate("instances[0].update({version:1,kind:'patch',scope:'resources',revision:'r1',labels:{pools:'Teams',resource:'Capacity',day:'Daily'}})")
+    expect(page.locator("#first .planning-resource-count")).to_contain_text("Teams")
+    expect(page.locator("#first [data-part=resource-left-header]")).to_contain_text("Capacity")
+    expect(page.locator("#first [data-mode=Day]")).to_have_text("Daily")
 
 
 def test_creation_patch_expands_only_its_project_and_preserves_the_viewport(planning_page: Page) -> None:

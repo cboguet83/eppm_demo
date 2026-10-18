@@ -2,7 +2,7 @@
 
 Five sequential runs per configuration on the reference Python/Node/Chromium
 runtime and 1500 × 1100 viewport are recorded in `candidate.json`. The explicit
-collector completed all 25 tests in 115.30 seconds on source `d3cfd24`, with no concurrent full suite
+collector completed all 25 tests in 107.13 seconds after task 7.3 on integrated main, with no concurrent full suite
 or database-copy checks. Synthetic fixture: 100 projects, 1,000 tasks, 127 pools,
 730 dated entries per pool and dense dependencies. Native fixture and source-data
 isolation checks are unchanged. Every capture passed positive row/cell counts,
@@ -10,14 +10,14 @@ isolation checks are unchanged. Every capture passed positive row/cell counts,
 
 | Configuration | Reference render median | Candidate render median | Reference scroll-work p95 median | Candidate scroll-work p95 median |
 | --- | ---: | ---: | ---: | ---: |
-| Collapsed | 35.1 ms | 120.9 ms | 4.8 ms | 2.3 ms |
-| Expanded | 36.8 ms | 115.7 ms | 4.4 ms | 2.1 ms |
-| External links | 38.6 ms | 116.5 ms | 5.0 ms | 2.5 ms |
-| Native PostgreSQL | 25.5 ms | 42.7 ms | Not recorded | 1.1 ms |
+| Collapsed | 35.1 ms | 121.1 ms | 4.8 ms | 1.5 ms |
+| Expanded | 36.8 ms | 118.8 ms | 4.4 ms | 1.7 ms |
+| External links | 38.6 ms | 124.0 ms | 5.0 ms | 1.6 ms |
+| Native PostgreSQL | 25.5 ms | 39.8 ms | Not recorded | 0.7 ms |
 
 Synthetic resource medians: 27 live rows, 216 cells and 0 px pane misalignment,
 versus reference 26 rows, 208 cells and 0 px. Both retain the same hard bounds.
-Native host-edit preparation improved from 0.646 to 0.511 seconds; emitted
+Native host-edit preparation improved from 0.646 to 0.522 seconds; emitted
 payload size is 2,873 bytes versus 2,850. The separate native driver regression
 also submits an actual mounted task edit and checks source/restore cleanup.
 The native candidate `tasks: 0` counts the initial lazy payload; `visibleTasks: 2`
@@ -56,3 +56,21 @@ An earlier diagnostic collector was interrupted after 17 successful tests when
 the full suite began. Its measurements are excluded here: overlapping copy
 cleanup assertions caused one diagnostic cleanup failure, and a busy host is
 unsuitable for timing comparison. The final sequential collector supersedes it.
+
+## Current-main scroll correction
+
+The first integrated collection passed initial-render and hard assertions but
+failed collapsed maximum scroll work: 12.5 ms versus reference 6.9 ms, exceeding
+both unchanged limits. Every capture is retained in `scroll-regression.json`.
+A DOM profile located the slow frame in resource redraw (360 new elements).
+Task 7.3 avoids unchanged resource-control/layout and toolbar text writes on
+scroll frames, with mounted static-node identity and real label-update tests.
+The menu visual comparison waits for actual CSS transitions to finish; its
+configured-style assertions remain intact.
+
+Final maximum-scroll-work medians are 8.9 / 8.6 / 9.4 ms versus reference
+6.9 / 7.4 / 8.2 ms for collapsed / expanded / external configurations. None
+exceeds the reference by 5 ms. Native maximum/p95 work is 0.7 ms (no original
+work metric); native frame p95 improves from 33.3 to 16.9 ms. Every applicable
+render, maximum/p95 scroll-work and frame metric was compared; no gate was
+waived. The final capture includes the prepared-asset manifest hash.

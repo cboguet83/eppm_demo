@@ -19,10 +19,11 @@ export function createViewControls({toolbar,store,lifetime}) {
     while(pending.length){const node=pending.pop();if(node.children?.length)collapsed.push(node.id);for(const child of node.children ?? [])pending.push(child);}
     store.setView({expandedProjects:[],collapsedResources:collapsed,scrollTop:0});
   });
+  const setText=(node,value)=>{if(node.textContent!==value)node.textContent=value;};
   return ()=>{
     const {data,view}=store.read();
-    for(const [key,{input,text,fallback}] of controls){input.checked=view.filters[key]!==false;text.textContent=data.labels[key] || fallback;}
-    expand.textContent=data.labels.expandAll || 'Expand all';collapse.textContent=data.labels.collapseAll || 'Collapse all';
-    expand.hidden=collapse.hidden=data.projects.length===0;count.textContent=data.projects.length+' '+(data.projects.length===1?(data.labels.project || 'Project'):(data.labels.projects || 'Projects'));
+    for(const [key,{input,text,fallback}] of controls){input.checked=view.filters[key]!==false;setText(text,data.labels[key] || fallback);}
+    setText(expand,data.labels.expandAll || 'Expand all');setText(collapse,data.labels.collapseAll || 'Collapse all');
+    expand.hidden=collapse.hidden=data.projects.length===0;setText(count,data.projects.length+' '+(data.projects.length===1?(data.labels.project || 'Project'):(data.labels.projects || 'Projects')));
   };
 }

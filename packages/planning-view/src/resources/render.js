@@ -60,26 +60,28 @@ export function createResourceRenderer({panel,heading,store,lifetime,options,can
         if(model){panel.canvas.replaceChildren();panel.leftCanvas.replaceChildren();summaries.clear();model=null;previousData=null;previousKey='';signature='';}
         return;
       }
-      title.textContent=labels.resourceUsage || 'Resource usage';toggle.textContent=filters.collapsed?'▸':'▾';toggle.setAttribute('aria-expanded',String(!filters.collapsed));
-      toggle.setAttribute('aria-label',(filters.collapsed?(labels.expand || 'Expand'):(labels.collapse || 'Collapse'))+' '+title.textContent);
-      const defaults={hideUnused:'Hide unused pools',onlyOverallocated:'Only overallocated',showTotal:'Total assignments',showSelected:'Selected assignments'};
-      for(const [name,{label,input}] of checks){input.checked=!!filters[name];label.lastChild.textContent=labels[name] || defaults[name];}
       const key=JSON.stringify([view.collapsedResources,filters,calendar.start,calendar.end,calendar.width,view.mode]);
       const changed=data!==previousData || key!==previousKey;
-      if(changed){model=resourceRows(data,view,calendar,summaries);previousData=data;previousKey=key;}
-      count.textContent=String(model.pools.size)+' '+(model.pools.size===1?(labels.pool || 'Pool'):(labels.pools || 'Pools'));
       const active=data.resourceFilter;
-      filter.hidden=!active;filter.textContent=active?[active.name || active.resourceId || active.groupId,active.start,active.end].filter(Boolean).join(' · '):'';
-      if(active?.clearAction) {
-        const clear=doc.createElement('button');clear.type='button';clear.textContent='×';clear.setAttribute('aria-label',labels.clearFilter || 'Clear resource filter');
-        Object.assign(clear.dataset,{hostAction:active.clearAction,targetKind:active.resourceId?'resources':'hierarchy',targetId:active.resourceId ?? active.groupId});filter.append(clear);
+      if(changed) {
+        model=resourceRows(data,view,calendar,summaries);previousData=data;previousKey=key;
+        title.textContent=labels.resourceUsage || 'Resource usage';toggle.textContent=filters.collapsed?'▸':'▾';toggle.setAttribute('aria-expanded',String(!filters.collapsed));
+        toggle.setAttribute('aria-label',(filters.collapsed?(labels.expand || 'Expand'):(labels.collapse || 'Collapse'))+' '+title.textContent);
+        const defaults={hideUnused:'Hide unused pools',onlyOverallocated:'Only overallocated',showTotal:'Total assignments',showSelected:'Selected assignments'};
+        for(const [name,{label,input}] of checks){input.checked=!!filters[name];label.lastChild.textContent=labels[name] || defaults[name];}
+        count.textContent=String(model.pools.size)+' '+(model.pools.size===1?(labels.pool || 'Pool'):(labels.pools || 'Pools'));
+        filter.hidden=!active;filter.textContent=active?[active.name || active.resourceId || active.groupId,active.start,active.end].filter(Boolean).join(' · '):'';
+        if(active?.clearAction) {
+          const clear=doc.createElement('button');clear.type='button';clear.textContent='×';clear.setAttribute('aria-label',labels.clearFilter || 'Clear resource filter');
+          Object.assign(clear.dataset,{hostAction:active.clearAction,targetKind:active.resourceId?'resources':'hierarchy',targetId:active.resourceId ?? active.groupId});filter.append(clear);
+        }
+        panel.leftHeader.textContent=(labels.resource || 'Resource pool')+' · '+(options.resourceUnit || 'FTE');
+        const height=Math.max(34,model.rows.length*RESOURCE_ROW_HEIGHT)+16;
+        panel.root.style.gridTemplateRows='56px '+Math.min(options.resourceMaxHeight ?? 324,height)+'px';
+        for(const canvas of [panel.canvas,panel.leftCanvas])canvas.style.height=height+'px';
+        panel.leftCanvas.style.minWidth='425px';
       }
-      panel.leftHeader.textContent=(labels.resource || 'Resource pool')+' · '+(options.resourceUnit || 'FTE');
       if(filters.collapsed)return;
-      const height=Math.max(34,model.rows.length*RESOURCE_ROW_HEIGHT)+16;
-      panel.root.style.gridTemplateRows='56px '+Math.min(options.resourceMaxHeight ?? 324,height)+'px';
-      for(const canvas of [panel.canvas,panel.leftCanvas])canvas.style.height=height+'px';
-      panel.leftCanvas.style.minWidth='425px';
       panel.body.scrollTop=view.resourceScrollTop;panel.left.scrollTop=view.resourceScrollTop;panel.body.scrollLeft=view.scrollLeft;
       const window=resourceWindow(model.rows.length,view.resourceScrollTop,panel.body.clientHeight,calendar.bottomCells,view.scrollLeft,panel.body.clientWidth);
       const nextSignature=JSON.stringify(window);

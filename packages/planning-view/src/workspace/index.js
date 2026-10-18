@@ -184,11 +184,14 @@ export function mountPlanningView(root,options) {
     }
     const calendar=geometry;
     renderControls();
-    retry.hidden=!loader?.status().failed;retry.textContent=data.labels.retry || 'Retry loading';
+    retry.hidden=!loader?.status().failed;
+    const retryLabel=data.labels.retry || 'Retry loading';if(retry.textContent!==retryLabel)retry.textContent=retryLabel;
     for(const item of [timeline,resource])item.canvas.style.width=calendar.width+'px';
     for(const button of toolbar.querySelectorAll('[data-mode]')) {
-      button.textContent=data.labels[button.dataset.mode.toLowerCase()] || button.dataset.mode;
-      button.setAttribute('aria-pressed',String(view.mode===button.dataset.mode));
+      const label=data.labels[button.dataset.mode.toLowerCase()] || button.dataset.mode;
+      if(button.textContent!==label)button.textContent=label;
+      const pressed=String(view.mode===button.dataset.mode);
+      if(button.getAttribute('aria-pressed')!==pressed)button.setAttribute('aria-pressed',pressed);
     }
     const rendered=timelineRenderer.render(data,view,calendar,loader);
     dependencies.render(data,view,calendar,rendered.projection,rendered.window);
