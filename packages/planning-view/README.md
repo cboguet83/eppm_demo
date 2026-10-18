@@ -70,3 +70,47 @@ normal capacity artificially. Pass each demand scope independently with the
 same effective capacity. FTE labels retain one decimal below 100 and whole
 numbers from 100. Python-derived integration tests compare the browser results
 against the existing domain's effective capacity and overallocation functions.
+
+## Instance data and loading
+
+`createPlanningStore(snapshot)` owns a frozen copy and private collection
+indexes. `read()` returns frozen data/view values; `lookup(collection, id)`
+returns one immutable record. `update(message)` validates changed input and
+reconciled relationships before atomically publishing. Unchanged records and
+daily series retain identity, so task patches do not reclone the resource grid.
+`setView(patch)` handles scroll position, mode, expansion, filters, selection,
+editor draft and pending preview/request. `subscribe(listener)` returns an
+unsubscribe function. `destroy()` is idempotent and releases indexes/listeners.
+
+Same-scope snapshots and patches retain applicable interaction state. A new
+scope or explicit reset clears it. A deleted draft target is invalidated with a
+safe explanation. Draft/selection targets use `{kind: 'tasks', id: 'task-id'}`
+(or projects/dependencies/resources/overlays). Rejected correlated responses
+clear preview/pending state and retain the editor; accepted responses close it.
+Responses with an obsolete request ID, patches for another scope, and revision
+changes without the current `baseRevision` are ignored. For an authoritative
+revision change, send a snapshot or a patch with `baseRevision` matching the
+current revision. Updated capabilities take effect in the published snapshot.
+
+Patches upsert records and support `removeTaskIds`, `removeDependencyIds`,
+`removeResourceIds`, and `evictProjectIds` in addition to the contract fields.
+Project replacement removes its old tasks and owned dependency records before
+adding the delivered bundle; project removal also drops its overlays. Eviction
+keeps project headers/task counts but removes hydrated task/dependency records.
+
+`createLoadingController({store, load, onError, batchSize, maxProjects})` owns
+one cancellable request at a time. Call `request(visibleIds, overscanIds)` with
+the latest window; priority is visible first. Requests are coalesced through a
+60-ms scheduler, with injectable schedule/cancel functions for host integration.
+Only known projects are requested; desired and retained working sets are bounded.
+Defaults are 25 projects per batch and 100 retained projects. Limits must be
+finite positive integers and batch size cannot exceed retention.
+
+The async provider receives `{projectIds,scope,revision,requestId,signal}` and
+returns a versioned patch for exactly the requested project IDs. Fully loaded
+snapshots default to all supplied projects loaded; lazy hosts explicitly supply
+`loadedProjectIds: []`. Scope/revision changes abort and invalidate old reads;
+the renderer requests its new window afterwards. Failures retain valid rows,
+emit a safe error, and wait for explicit `retry()`. `status()` exposes pending,
+failed, queued and disposed values. `destroy()` cancels timers/reads, detaches
+its observer, and prevents late results/errors from reaching the store/host.

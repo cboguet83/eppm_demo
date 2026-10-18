@@ -6,7 +6,9 @@
   "exports": {
     "./contracts": "./src/contracts/index.js",
     "./calendar": "./src/calendar/index.js",
-    "./resources": "./src/resources/summary.js"
+    "./resources": "./src/resources/summary.js",
+    "./state": "./src/state/store.js",
+    "./loader": "./src/state/loader.js"
   },
   "scripts": {"test": "node --test tests/*.test.js"}
 }
