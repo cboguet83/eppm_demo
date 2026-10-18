@@ -5,6 +5,7 @@ import {createPlanningStore} from '../state/store.js';
 import {createLoadingController} from '../state/loader.js';
 import {createLifetime} from './lifetime.js';
 import {createTimelineRenderer} from '../timeline/render.js';
+import {createDependencyRenderer} from '../timeline/dependency-render.js';
 
 /** @param {Document} doc Document. @param {string} tag HTML tag. @param {string} name Part. @param {string} className Scoped style. */
 function element(doc,tag,name,className) {
@@ -138,7 +139,9 @@ export function mountPlanningView(root,options) {
   frame.append(sheet,toolbar,timeline.root,resourceHeading,resource.root);root.append(frame);
   lifetime.own(()=>frame.remove());lifetime.own(()=>store.destroy());
   let leftWidth=425,cancelRender=null,loader=null,geometry=null,geometryKey=null,lastHeight=null;
+  lifetime.own(()=>{geometry=null;geometryKey=null;});
   const timelineRenderer=createTimelineRenderer({panel:timeline,store,lifetime,options});
+  const dependencies=createDependencyRenderer({panel:timeline,frame,lifetime,instanceId});
   const draw=()=>{
     cancelRender=null;
     const {data,view}=store.read();
@@ -155,7 +158,8 @@ export function mountPlanningView(root,options) {
       button.textContent=data.labels[button.dataset.mode.toLowerCase()] || button.dataset.mode;
       button.setAttribute('aria-pressed',String(view.mode===button.dataset.mode));
     }
-    timelineRenderer.render(data,view,calendar,loader);
+    const rendered=timelineRenderer.render(data,view,calendar,loader);
+    dependencies.render(data,view,calendar,rendered.projection,rendered.window);
     resource.leftHeader.textContent=data.labels.resource || 'Resource pool';
     resourceHeading.textContent=data.labels.resourceUsage || 'Resource usage';
     const hidden=options.showResources===false || data.resources.length===0;

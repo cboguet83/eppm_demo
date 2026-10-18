@@ -172,3 +172,34 @@ Virtual canvases retain total scroll height while mounting only viewport rows
 plus 15 rows of overscan per side. Horizontal scrolling reuses existing bar DOM
 and calendar headers. Visible project IDs precede overscan in injected lazy
 reads; disposal aborts those reads. No row-level inline handlers are generated.
+
+## Dependencies and diagnostics
+
+```js
+const dependency = {
+  id: 'build-after-design', type: 'FS', lagDays: 2,
+  predecessor: {kind: 'task', id: 'design', projectId: 'alpha'},
+  successor: {kind: 'task', id: 'build'},
+  violated: true, evaluable: true, external: false,
+  diagnostics: ['Build starts before the delivered constraint allows.'],
+};
+```
+
+FS/SS/FF/SF determine predecessor/successor start or finish anchors. Lag and
+diagnostic status are delivered metadata; links do not move dates or calculate
+authoritative constraints. Optional `diagnostics` entries are text or objects
+with a text `message`. Project endpoints use `{kind:'project', id:'alpha'}`.
+Overlay dependency endpoints use their overlay's task IDs; delivered current
+tasks remain available for external references. Stable pairing determines rows
+without rewriting endpoint identities. A collapsed task uses its known project
+summary anchor. For undelivered tasks, optional `projectId` enables that fallback
+only when the project is collapsed. Otherwise available ends show a short stub.
+
+An unavailable endpoint uses `{kind:'unavailable'}`. Inspection exposes no name,
+ID or dates for it. A project fallback does not manufacture hidden task names
+or dates. No dependency interaction fetches endpoint metadata. Delivered
+records sharing a path are bundled, and an accessible selector retains every
+member's type, lag and diagnostic information. Click/context menu or Enter/Space
+opens details; Escape or Close dismisses it. SVG clipping identifiers are unique
+per instance. Paths crossing the virtual window remain eligible through a
+row-interval index; distant unrelated links do not enter the render query.

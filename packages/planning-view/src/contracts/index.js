@@ -80,8 +80,16 @@ function dependencies(values, path) {
       const endpoint = record(dependency[side], path + '.' + side);
       requireValue(['project', 'task', 'unavailable'].includes(endpoint.kind), path + '.kind');
       if (endpoint.kind !== 'unavailable') identity(endpoint.id, path + '.endpointId');
+      if(endpoint.projectId!==undefined)identity(endpoint.projectId,path+'.projectId');
     }
     if (dependency.lagDays !== undefined) requireValue(Number.isInteger(dependency.lagDays), path + '.lagDays');
+    for(const flag of ['violated','evaluable','external']) {
+      if(dependency[flag]!==undefined)requireValue(typeof dependency[flag]==='boolean',path+'.'+flag);
+    }
+    if(dependency.diagnostics!==undefined) {
+      requireValue(Array.isArray(dependency.diagnostics),path+'.diagnostics');
+      requireValue(dependency.diagnostics.every(item=>typeof item==='string' || (item!==null && typeof item==='object' && typeof item.message==='string')),path+'.diagnostics');
+    }
   }
 }
 

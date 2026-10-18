@@ -49,3 +49,12 @@
 .planning-view [data-part=timeline-canvas] {background-image:linear-gradient(to right,transparent calc(100% - 1px),var(--planning-border,#e2e8f0) 1px);background-repeat:repeat-x;}
 .planning-view .planning-project-row .planning-alternative {top:25px;height:8px;background:#a855f7;border-color:#7e22ce;}
 .planning-view .planning-project-row .planning-baseline {top:36px;height:3px;background:#94a3b8;}
+.planning-view .planning-dependencies {position:absolute;left:0;pointer-events:none;overflow:hidden;}
+.planning-view .planning-link {stroke:#94a3b8;stroke-width:1.8;fill:none;pointer-events:stroke;cursor:pointer;}
+.planning-view .planning-link:hover,.planning-view .planning-link:focus {stroke:#2563eb;stroke-width:3;outline:none;}
+.planning-view .planning-link-violated {stroke:#ef4444;stroke-dasharray:4 2;}
+.planning-view .planning-link[data-lane=alternative] {stroke:#a855f7;}
+.planning-view .planning-inspector {position:fixed;z-index:1000;top:12vh;left:50%;transform:translateX(-50%);width:min(420px,90vw);max-height:75vh;overflow:auto;padding:16px;border:1px solid var(--planning-border,#e2e8f0);border-radius:8px;background:var(--planning-background,#fff);box-shadow:0 10px 40px #0f172a44;}
+.planning-view .planning-inspector select {display:block;width:100%;margin-top:8px;}
+.planning-view .planning-inspector dt {font-weight:600;}
+.planning-view .planning-inspector dd {margin:4px 0 12px;white-space:pre-wrap;}

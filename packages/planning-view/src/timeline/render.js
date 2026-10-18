@@ -30,6 +30,7 @@ function bar(owner,task,calendar,lane,targetKind,overlayId='') {
 export function createTimelineRenderer({panel,store,lifetime,options}) {
   const doc=panel.root.ownerDocument;
   let projection=null,previous=null,window=null,signature='',headerLabels=null;
+  lifetime.own(()=>{projection=null;previous=null;window=null;headerLabels=null;});
   const toggle=id=>{
     const expanded=new Set(store.read().view.expandedProjects);
     if(expanded.has(id))expanded.delete(id);else expanded.add(id);

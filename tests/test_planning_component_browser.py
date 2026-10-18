@@ -70,7 +70,8 @@ def test_mounts_have_independent_modes_scoped_css_and_unique_ownership(planning_
     assert page.locator("#outside").evaluate("n=>getComputedStyle(n).userSelect") == "text"
     ids = page.locator(".planning-view").evaluate_all("nodes=>nodes.map(n=>n.dataset.instanceId)")
     assert len(set(ids)) == 2
-    assert page.locator(".planning-view [id]").count() == 0
+    owned_ids = page.locator(".planning-view [id]").evaluate_all("nodes=>nodes.map(n=>n.id)")
+    assert len(owned_ids) == len(set(owned_ids))
     expect(page.locator("#first > span")).to_have_text("Retained")
 
 
@@ -204,3 +205,37 @@ def test_visible_lazy_reads_are_injected_and_destroy_aborts_pending_work(plannin
     page.wait_for_timeout(100)
     assert page.evaluate("readAborted")
     assert page.evaluate("loadErrors.length") == 0
+
+
+def test_dependency_bundles_inspect_individual_members_without_hidden_metadata(planning_page: Page) -> None:
+    """Collapsed paths retain members, keyboard inspection and instance-safe SVG IDs."""
+    page = planning_page
+    page.evaluate("""() => {
+      const data={...snapshot,scope:'links',projects:[{id:'p',name:'First'},{id:'q',name:'Second'}],
+        tasks:[{id:'a',projectId:'p',name:'A',start:'2026-01-01',end:'2026-01-03'},
+          {id:'b',projectId:'q',name:'B',start:'2026-01-05',end:'2026-01-08'}],
+        dependencies:Array.from({length:100},(_,i)=>({id:'link-'+i,type:'FS',lagDays:i,
+          diagnostics:['Issue '+i],predecessor:{kind:'task',id:'a'},successor:{kind:'task',id:'b'}}))};
+      instances[0].update(data);instances[1].update(data);
+    }""")
+    expect(page.locator("#first .planning-link")).to_have_count(1)
+    assert page.locator("#first .planning-link").get_attribute("data-member-count") == "100"
+    page.locator("#first .planning-link").press("Enter")
+    inspector = page.locator("#first [data-part=dependency-inspector]")
+    expect(inspector).to_be_visible()
+    expect(page.locator("#second [data-part=dependency-inspector]")).to_be_hidden()
+    inspector.get_by_role("combobox").select_option("99")
+    expect(inspector).to_contain_text("Issue 99")
+    expect(inspector).to_contain_text("99")
+    inspector.get_by_role("button", name="Close", exact=True).click()
+    page.evaluate("""instances[0].update({version:1,kind:'patch',scope:'links',revision:'r1',dependencies:[
+      {id:'hidden',type:'SS',predecessor:{kind:'unavailable',name:'SECRET-METADATA'},successor:{kind:'task',id:'b'}}]})""")
+    hidden = page.locator("#first .planning-link").filter(has=page.locator("path"))
+    expect(hidden).to_have_count(2)
+    page.locator("#first .planning-link").filter(has=page.locator("path")).nth(1).press("Enter")
+    expect(inspector).to_contain_text("Unavailable")
+    expect(inspector).not_to_contain_text("SECRET-METADATA")
+    inspector.get_by_role("combobox").press("Escape")
+    expect(inspector).to_be_hidden()
+    ids = page.locator("clipPath").evaluate_all("nodes=>nodes.map(n=>n.id)")
+    assert len(ids) == len(set(ids)) == 2
