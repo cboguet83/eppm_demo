@@ -2,7 +2,8 @@
 
 The independent contracts module uses native ES modules and no runtime imports.
 Run `node --test packages/planning-view/tests/*.test.js` from the repository root.
-Mounting and rendering are introduced by subsequent extraction tasks.
+The root export is `mountPlanningView`; internal modules remain implementation
+seams for focused tests. Rendering features are added by the extraction tasks.
 
 `validateMessage(input)` returns an independently owned validated JSON copy or
 throws `ContractError` with only a schema location. Call it before changing view
@@ -114,3 +115,34 @@ the renderer requests its new window afterwards. Failures retain valid rows,
 emit a safe error, and wait for explicit `retry()`. `status()` exposes pending,
 failed, queued and disposed values. `destroy()` cancels timers/reads, detaches
 its observer, and prevents late results/errors from reaching the store/host.
+
+## Workspace lifecycle
+
+```js
+import {mountPlanningView} from './src/index.js';
+const display = mountPlanningView(document.querySelector('#planning'), {
+  snapshot, today: '2026-01-01', mode: 'Quarter', showResources: true,
+  onHeight: pixels => resizeEmbeddingFrame(pixels),
+});
+display.update({...snapshot, revision: 'next'});
+display.destroy();
+```
+
+Serve the source tree over HTTP so native modules and the adjacent scoped CSS
+load from the same package. The host must provide a nonzero available width.
+The display retains other host children and removes only its own subtree.
+The two panels share their horizontal scroll, scale, header geometry and frozen
+column width, while vertical scroll stays independent. The splitter supports
+pointer capture and Left/Right keys. Resource data is optional and its absence
+reserves no grid space. Names/labels are written as text, never executable HTML.
+Theme variables such as `--planning-primary`, `--planning-background`, and
+`--planning-text` can be set on the host. All CSS selectors are scoped.
+
+`update` returns whether an applicable message was accepted, throws a safe
+`ContractError` for malformed input, and returns false after disposal.
+`destroy` is idempotent: listeners, pointer capture, observers, frames, timers,
+reads, state indexes and owned DOM are released. It never resets another
+instance. Hosts should destroy before removing their host element. Distinct
+instances can use the same data IDs. No renderer maps or document globals are
+part of the public API. Exceptions thrown by host callbacks propagate; an
+initial callback failure releases the partly mounted display before throwing.
