@@ -7,6 +7,7 @@ const path = require('node:path');
 const {spawn, execFileSync} = require('node:child_process');
 const {pathToFileURL} = require('node:url');
 const readline = require('node:readline');
+const {waitForBrowserPort} = require('./benchmark_browser.cjs');
 
 async function main() {
   const useDatabase = process.argv.includes('--database');
@@ -47,18 +48,13 @@ async function main() {
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'eppm-gantt-browser-'));
   const browser = spawn(executable, ['--headless=new', '--disable-extensions', '--no-first-run',
     '--no-default-browser-check', '--remote-debugging-port=0', '--window-size=1500,1100',
-    '--user-data-dir=' + profile, 'about:blank'], {windowsHide: true, stdio: 'ignore'});
-  let socket, closeBrowser, browserError;
-  browser.once('error', () => { browserError = new Error('The benchmark browser could not start.'); });
+    '--user-data-dir=' + profile, 'about:blank'], {windowsHide: true, stdio: ['ignore', 'ignore', 'pipe']});
+  let socket, closeBrowser;
+  // The readiness observer adds sanitized startup details. Retain contextual
+  // logging for process errors during the rest of the diagnostic as well.
+  browser.on('error', () => { console.error('The benchmark browser process reported an error.'); });
   try {
-    const activePort = path.join(profile, 'DevToolsActivePort');
-    const deadline = Date.now() + 20000;
-    while (!fs.existsSync(activePort)) {
-      if (browserError) throw browserError;
-      if (Date.now() > deadline) throw new Error('Headless browser did not start');
-      await new Promise(resolve => setTimeout(resolve, 100));
-    }
-    const port = fs.readFileSync(activePort, 'utf8').split('\n')[0];
+    const port = await waitForBrowserPort(browser, profile);
     const targets = await (await fetch('http://127.0.0.1:' + port + '/json')).json();
     socket = new WebSocket(targets.find(t => t.type === 'page').webSocketDebuggerUrl);
     await new Promise(resolve => socket.addEventListener('open', resolve, {once: true}));

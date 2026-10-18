@@ -235,3 +235,45 @@ The controlled local full runs passed 3,304 cases plus five subtests and 112
 JavaScript cases at 97.68% coverage. The slower of two complete parallel runs
 took 21m17s versus 42m18s fresh/serial, a 49.7% reduction; median preparation
 improved 67.7%. These pytest timings exclude provisioning/build/install time.
+
+## Native Gantt browser startup
+
+The Gantt diagnostic keeps Chromium's sandbox flags and its 20-second readiness
+limit. `scripts/benchmark_browser.cjs` observes the one spawned browser; it does
+not retry or replace it. Spawn errors and early exits fail immediately with
+allowlisted OS metadata. Startup stderr contributes only fixed classifications
+(sandbox, resource limit, disk space, profile lock, crashpad or DevTools announced).
+A bounded 4 KiB rolling buffer handles split messages; raw child output is never
+included in the failure. After startup, stderr is drained without retention.
+A live browser that never produces a complete `DevToolsActivePort` handshake
+still fails at the existing deadline. Partial writes do not release readiness.
+The driver retains responsibility for browser/session cleanup and source-copy
+isolation. A classified signal is diagnostic evidence, not proof of a universal
+underlying Chrome cause.
+
+C4 code view of this diagnostic boundary (Node built-ins are actual dependencies):
+
+```mermaid
+flowchart TD
+    main["benchmark_gantt.cjs: main() → Promise&lt;void&gt;"]
+    wait["benchmark_browser.cjs: waitForBrowserPort(browser: ChildProcess, profile: string, options: object) → Promise&lt;number&gt;<br/>observeError(error: ErrnoException) → void<br/>observeExit(code: number|null, name: string|null) → void<br/>observeStderr(chunk: Buffer) → void<br/>diagnostics() → string"]
+    read["readDevToolsPort(profile: string) → number|null"]
+    status["exitStatus(code: number|null, signal: string|null) → string"]
+    config["DEVTOOLS_FILE: string<br/>SPAWN_CODES: Set&lt;string&gt;<br/>SIGNALS: Set&lt;string&gt;<br/>STARTUP_REASONS: Array<br/>defaults: timeout 20000ms, poll 100ms"]
+    child["Node ChildProcess: error / exit / stderr"]
+    file["Node fs: invocation-owned readiness file"]
+    main -->|observe spawned browser| wait
+    wait --> read
+    wait --> status
+    wait --> config
+    status --> config
+    read --> config
+    wait -->|attach and remove observers| child
+    read --> file
+```
+
+`node --test tests/test_benchmark_browser.cjs` covers complete/partial handshakes,
+spawn failures, early exits/signals, live deadlines, stale files and a real child
+exit, including raw-output privacy. The existing PostgreSQL benchmark test keeps
+its original rendering, source-preservation and cleanup assertions. Full PR CI
+continues to execute every test with strict completion and 95% coverage.
