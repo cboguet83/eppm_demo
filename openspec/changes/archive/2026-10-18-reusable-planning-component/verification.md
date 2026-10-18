@@ -1,6 +1,6 @@
 # Verification: reusable-planning-component
 
-Status: **passed after task 10.1 reliability annotation; ready to rearchive**. The OpenSpec verify-change workflow
+Status: **passed; rearchived after task 10.1 reliability annotation on 2026-10-18**. The OpenSpec verify-change workflow
 checked completeness, all requirement/scenario mappings, design adherence and
 code-pattern consistency against the integrated implementation. No
 required prearchive check was skipped or left unverified. Final hosted checks
@@ -171,10 +171,11 @@ Portable results are recorded here; local logs are
 The focused ledger below is from `git log main..HEAD --oneline` filtered by the
 change label, with `git log origin/main..HEAD --oneline` confirming the actual
 PR base. Current main is an ancestor of the verified source. Task 10.1 contains
-the explicit ID-ordering follow-up and renewed acceptance; its hash is recorded
-only after that commit exists.
+the explicit ID-ordering follow-up and renewed acceptance; its already-existing
+hash was added by this archive follow-up.
 
 ```text
+f6ff7d8 fix(reusable-planning-component): complete task 10.1 explicit ID ordering
 34920be chore(reusable-planning-component): archive verified consumer completion
 daf9e9b test(reusable-planning-component): complete task 9.1 native consumer completion
 fc2db4a chore(reusable-planning-component): archive verified packaging correction
@@ -210,8 +211,8 @@ e68f994 feat(reusable-planning-component): complete task 2.1 host contracts
 ```
 
 PR: https://github.com/cboguet83/eppm_demo/pull/4. All 29 tasks are complete;
-the change is ready to rearchive from `openspec/changes/reusable-planning-component/`
-after task 10.1. Both capability
+the change is rearchived at
+`openspec/changes/archive/2026-10-18-reusable-planning-component/` after task 10.1. Both capability
 specs remain synced. Full CI on the final PR revision is an additional gate
 before requesting merge approval. Registry publication and merge have not
 occurred. The unrelated primary checkout was not edited.
@@ -224,7 +225,7 @@ preserving task history.
 ## Final assessment
 
 All required prearchive implementation and packaging checks passed. The change
-is ready to rearchive after task 10.1; final application CI and SonarCloud checks
+is rearchived after task 10.1; final application CI and SonarCloud checks
 on the published revision must pass before merge approval is requested.
 
 ## Hosted packaging correction
