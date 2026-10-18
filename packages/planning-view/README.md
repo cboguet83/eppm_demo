@@ -41,3 +41,32 @@ Hosts accept or reject requests through correlated responses and authoritative
 updates. UI capabilities are presentation hints. Additional metadata must be
 JSON data; cycles, executable values, nonfinite numbers, and class instances
 are rejected. User text must be rendered as text by later rendering modules.
+
+## Calendar and resource models
+
+`calendar` exports date-only day indexing, day shifts, padded `timelineBounds`,
+`createCalendar`, and `shiftTask`. Supply `today` explicitly. Period cells have
+inclusive `start`/`end` dates, label, width and x position; calendar input `end`
+is exclusive. Day/Week/Month/Quarter/Year retain existing widths and padding,
+including the Year mode's two complete half-year cells per displayed year.
+Viewport stretching is shared by both headers. Date positions interpolate
+within the same period cells as the grid, including unequal month lengths;
+inverse positions and drag deltas use calendar days, independent of timezone.
+Resource and timeline renderers must share this one model. `maxPeriods` defaults
+to 10,000 and bounds expansion; invalid geometry fails with `ContractError`.
+
+`resources` exports `decodeIntervals`, `createResourceSummaries` and
+`formatResourceValue`. Decoding ordered, inclusive, nonoverlapping intervals
+preserves zero and missing-day distinctions. The default expansion limit is
+25 years of entries; hosts can supply an explicit finite limit. A summary
+instance owns its caches and indexes; supply validated immutable daily maps,
+replace a changed map rather than mutating it, and call `clear` when disposing
+the view. No cache is shared across instances. Period results are frozen.
+
+Summaries distinguish minimum/maximum effective capacity, peak demand, maximum
+positive daily excess, and minimum nonnegative availability. A missing override
+uses normal capacity; zero remains zero and fully overridden periods never add
+normal capacity artificially. Pass each demand scope independently with the
+same effective capacity. FTE labels retain one decimal below 100 and whole
+numbers from 100. Python-derived integration tests compare the browser results
+against the existing domain's effective capacity and overallocation functions.

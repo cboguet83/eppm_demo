@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "exports": {"./contracts": "./src/contracts/index.js"},
+  "exports": {
+    "./contracts": "./src/contracts/index.js",
+    "./calendar": "./src/calendar/index.js",
+    "./resources": "./src/resources/summary.js"
+  },
   "scripts": {"test": "node --test tests/*.test.js"}
 }
