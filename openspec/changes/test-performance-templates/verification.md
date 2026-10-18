@@ -1,82 +1,101 @@
-> Historical verification of the original 18 tasks. The plan is reopened: main PR #3 integration (task 3.14) and renewed acceptance (task 4.4) are pending. This report does not establish current archive readiness.
+# Final verification: test-performance-templates
 
-# Verification: test-performance-templates
-
-Date: 2026-10-18. Branch: `codex/test-performance-templates`.
+Date: 2026-10-19. Dedicated branch: codex/test-performance-templates. Renewed task 4.4 acceptance uses clean committed source 9ee483625a316e481ccc506b435205690f302bd9. Later verification/archive changes are documentation/lifecycle only.
 
 ## Scorecard
 
 | Dimension | Result |
 | --- | --- |
-| Completeness | All 18 numbered tasks complete with this verification task; 3/3 added or modified requirements implemented. |
-| Correctness | All 7 delta scenarios mapped to implementation and regression evidence below; complete four-mode acceptance passes. |
-| Coherence | Worker-owned migration-only templates, bounded scheduling, strict completion and aggregate coverage follow the design; approved UI/storage extensions are documented. |
+| Completeness | 27/27 numbered tasks complete with this verification commit; each has a dedicated commit. All three capability requirements and seven scenarios are covered. |
+| Correctness | Nine preparation cohorts and four full strict runs pass on identical app/test/script/config bytes and the same immutable application image. Coverage remains above 95% in every mode. |
+| Coherence | Worker-owned migration templates, isolated clones, bounded loadgroup workers, strict completion and aggregate subprocess coverage follow the design. Approved navigation/storage changes are already on main through PR #2; this follow-up adds test readiness, bounded diagnostic browser shutdown, completed organization views and final evidence. |
 
-No critical issues, warnings or suggestions from this verification. All applicable local verification checks passed. Ready for archive. Full final-revision PR CI and explicit merge approval remain delivery gates, not completed local checks. No local Sonar analysis is claimed; remote quality checks will be inspected on the concrete PR.
+No critical implementation/spec mismatch was found. Accepted limitation: the original hosted missing-row and Chrome startup causes remain unknown. The user explicitly approved bounded readiness hardening without a proven original root cause. This limitation is not hidden by passing repeats or described as a causal fix. Final archived-head hosted CI/Sonar and explicit approval of the follow-up PR remain delivery gates.
+
+## Actual complete acceptance
+
+| Mode | Canonical cases | Subtests | Statement coverage | Monitored wall seconds |
+| --- | ---: | ---: | ---: | ---: |
+| full-A | 3489 | 5 | 97.707200% | 2706.244404 |
+| full-B | 3489 | 5 | 97.707200% | 2060.796884 |
+| full-C-1 | 3489 | 5 | 97.707200% | 1135.924798 |
+| full-C-2 | 3489 | 5 | 97.707200% | 1151.056192 |
+
+Median preparation reduction is 66.86% (required ≥50%). Using the slower successful parallel run, full wall reduction is 57.47% (required ≥25%). No absolute seven-minute limit applies.
+Every canonical case has exactly one successful setup, call and teardown; subtests pass. Both workers execute real cases. No required skips, deselection, missing reports, retries or worker restarts are accepted. All four runs pass all 338 Node cases (221 root and 117 package) with no fail/cancel/skip/TODO and generated-asset checks. Coverage source/statement/exclusion maps match; missing-line variation, if any, is retained in measurements.json. Every mode ends with zero owned databases and zero other clients on the dedicated service, within the conservative 40-client budget. See measurement.md and measurements.json for exact timings, versions, image/source hashes, resources, limitations and raw-log location.
+
+Full command: python -m pytest -q -x -p no:cacheprovider -p tests.performance.template_metrics --max-worker-restart=0 MODE --require-full-suite --cov=app --cov-config=pyproject.toml --cov-report=json:RUN/coverage.json --cov-fail-under=95, with fresh per-run COVERAGE_FILE and metrics directory, real isolated PostgreSQL and EPPM_RUN_OIDC_E2E=1. MODE is serial/fresh, serial/template or two-worker/template/loadgroup. The harness runs each mode sequentially with frozen versions/source/image and checks all phase outcomes. JavaScript: node --test tests/test_*.cjs and node --test packages/planning-view/tests/*.test.js; generated assets: python -m scripts.build_planning_assets --check. The opt-in sampler records overhead separately from build/provisioning; hosted timings are not substituted for local comparisons.
 
 ## Requirement and scenario mapping
 
-- **Navigation blanks unfinished destinations / Slow destination:** `app/presentation/components/page_transition.py` begins blanking synchronously; `tests/test_page_transition_browser.py::test_navigation_blanks_old_page_until_destination_ready` samples unfinished frames and verifies ordinary/coalesced modes.
-- **Completed destinations become visible / Coalesced running state:** `mark_page_rendered()` and `app/presentation/shell.py::_render_application_page` acknowledge completed rendering, retaining idle/skeleton/two-frame readiness. The same browser regression and `tests/test_page_transition.cjs` cover completed rendering without observed running and old-content rejection. Task 3.9 evidence records the failing old implementation.
-- **New navigation supersedes a pending reveal:** navigation generation invalidates stale animation callbacks; Node regressions retain hidden state until the later destination completes.
-- **Existing fragment navigation responses:** `test_chart_navigation_shows_loading_and_clears_it_after_completion` covers both full rerun and inaccessible fragment destinations, retaining observed-run fallback.
-- **Unchanged WBS shares do not add global save contention / Ten independent title saves:** original `tests/postgresql/test_project_save_concurrency.py` remains byte-for-byte unchanged from main and passes all full modes. Migration 0069 reserves physical update headroom without altering business logic or retry policy.
-- **Clear or retain authorized shares:** existing independent-save, WBS, security and allocation-integrity regressions remain unchanged; all pass in complete runs. No global capacity validation or authorization is bypassed.
-- **Upgrade a populated project portfolio:** `tests/postgresql/test_project_update_headroom.py` covers clean HOT updates and populated upgrade/reentry/atomic rollback. Records, WBS, cache revisions, constraints, RLS/policies, privileges and prior ledger timestamps/checksums are preserved. The transaction-local HOT assertion fails without the storage repair. Upgrade and rollback fixtures remain genuinely unmigrated before setup.
+- Navigation blanks unfinished destinations / Slow destination: page_transition.py begins blanking synchronously; test_page_transition_browser.py checks slow destination blanking in ordinary/coalesced-running modes.
+- Completed destinations become visible / Coalesced running state: mark_page_rendered and shell destination acknowledgement retain idle/skeleton/two-frame readiness; controlled real-browser and Node tests verify reveal without transient running and reject old content.
+- New navigation supersedes a pending reveal: navigation generations invalidate earlier animation callbacks; Node regressions retain blanking for the later destination.
+- Existing fragment navigation responses: ordinary full-rerun and inaccessible-destination fragment cases retain all navigation assertions.
+- Unchanged WBS shares do not add global save contention / Ten independent title saves: the original small and 10,001-project concurrent-save workloads retain all assertions and pass in all four complete runs. Forward migration 0071 reserves physical headroom without changing isolation/retry/business rules.
+- Clear or retain authorized shares: existing WBS, security, authorization and allocation-integrity tests pass in every complete mode; no global capacity or access checks are bypassed.
+- Upgrade a populated project portfolio: headroom clean-install/HOT, populated 70-to-71 upgrade/reentry and atomic rollback tests preserve records, WBS, caches, constraints, RLS/policies, privileges and prior ledger checksums/timestamps. Important migration tests still use genuinely empty databases.
 
-## Complete acceptance and final-source reconciliation
+Inherited reusable-planning-component ADR 0065/package/host boundaries from main PR #4 and shared-business-dictionary requirements/decisions from PR #3 remain unchanged; the full suite includes their schema, locale, RLS, repository, browser and upgrade tests. No new architecture/business decision is introduced by this follow-up.
 
-See [measurement.md](measurement.md), [measurements.json](measurements.json) and [evidence.md](evidence.md) for exact commands, fixed inputs, versions, raw sanitized summaries, diagnostic failures and causal limits.
+## Readiness evidence and causal uncertainty
 
-All nine interleaved cohorts pass identical 54-case manifests. Median migrated preparation improves from 21.619483s to 6.977939s: **67.72% lower**, passing the 50% target.
+Task 3.15 retains every original restoration assertion and uses the existing unchanged 10-second completion bound before initial-tree interaction and around the visibility-toggle rerun. Its two-second delayed-initial-completion case observes the actual outbound checkbox request. Before the guard it fails in 5.22s at completion count zero, while the original popup/deleted-record assertions still pass. After the guard: fresh focused 15/13.78s, parallel/template with real peers 31/14.10s, diagnostic/completion unit checks 9/0.29s, final serial/template 16/15.08s. A separate privacy regression retains only the first matching request state, never raw widget data. Existing missing/error/early-rerun acknowledgement tests preserve bounded failure.
+This proves a readiness precondition gap, not the original hosted missing-Alpha symptom. Thirty pristine and 100 instrumented repetitions plus later green hosted runs did not establish the original cause. Failure notes remain credential-free and preserve originating exceptions. The startup helper separately proves early-child-exit detection with the same timeout/sandbox policy; it does not identify the original hosted Chrome failure cause.
 
-| Full mode | Monitored wall | Outcomes | Coverage |
-| --- | ---: | --- | ---: |
-| Fresh / serial | 2537.813874s (42m18s) | 3304 + 5 subtests | 97.684720% |
-| Template / serial | 2123.056248s (35m23s) | 3304 + 5 subtests | 97.684720% |
-| Template / two workers, first | 1277.208545s (21m17s) | 3304 + 5 subtests | 97.684720% |
-| Template / two workers, repeat | 1243.467171s (20m43s) | 3304 + 5 subtests | 97.684720% |
+## Diagnostic shutdown regression
 
-Use the slower optimized run: **49.67% lower** full wall time, passing the 25% target. No absolute seven-minute target applies. All four runs execute 112 Node cases successfully, no skips/retries/restarts, exactly one setup/call/teardown per canonical case, 2261 migrated preparations, and zero remaining test databases/other clients. Coverage matches per file: 16539/16931 statements, 283 files, 499 excluded lines. Both workers execute real work; sampled client peaks 23/24 remain within the 40-client budget.
+Task 3.16 reproduces the post-report 120-second timeout by suppressing only Browser.close acknowledgement while the real browser exits. The repaired helper requires actual clean process exit within the existing 1,000ms grace period and removes its listeners/timer; an acknowledgement alone cannot accept a live browser. The real ignored-close case still fails and removes only its own database copy, retaining original source snapshots. Focused fresh 16/37.06s, parallel/template with ordinary peers 32/30.89s and all 134 Node checks pass. The original natural missing acknowledgement was not captured, so the controlled defect is distinguished from unproven original event ordering.
 
-Measured source is revision `09b57a6` plus three explicitly fixed task-4.1 measurement inputs subsequently committed in `7cd8aef`; this is not described as a pristine revision. Task 4.2 changes only selection defaults, workflow flags and documentation. Its template/two-worker flags exactly match measured C; no application/test assertions or coverage scope changed after acceptance. Parsed workflow invariants pass, 57 selection/gate/controller/real-fixture checks pass (17.31s), the implicit template default passes two real fixture cases (1.37s), and post-promotion collection matches all 3304 ordered IDs. Collection-only evidence is not treated as a full execution.
+## Organization view completion regression
 
-Local walls exclude provisioning/browser installation/image build and include resource sampling overhead. Docker samples can conservatively include another invocation; peaks are observations, not hard maxima. Hosted CI timing must be reported separately. Earlier failed/partial comparisons are diagnostic only and never count toward acceptance.
+Task 3.17 reproduces the exact duplicate-manager-summary CSS failure by delaying the test-owned page tail after its caption (RED 9.09s). The helper now requires actual successful script completion and advancing unique captions; explicit exact-one frame/detail/summary readiness precedes unchanged strict assertions. A persistent extra manager still fails after 30 seconds (negative probe passes 37.57s). Shared-filter serial/template four cases pass 36.87s; fresh plus completion regressions eight/36.24s; both affected browser modules with peers 23 parallel/template cases/60.06s; nine repeated ordinary/frame/page-tail cases pass in 89.10s; adapted dashboard fresh three/25.38s. All original assertions in both modules are retained. No application change or last-element fallback is used.
 
-## Final inspection and checks
+## Main PR #4 integration
 
-- `openspec validate test-performance-templates --strict`: passed.
-- `git diff --check origin/main...HEAD`: passed.
-- Reviewed proposal, design, both delta specs, task list, measurement/evidence and final application/workflow diff.
-- All 68 historical migration files are unchanged from main; only migration 0069 is added. Transaction engine and original concurrency test are unchanged. No retry-limit, isolation, authorization or business-rule changes.
-- Migration 0069 requires an operator maintenance window, exclusive table lock, temporary rebuild disk and increased steady project-table space. Applied ledger 69 requires fix-forward release recovery; older 68-migration binaries are not a supported downgrade.
-- Template cleanup is exact ownership-based; migration-only sources are sealed, identities/security are initialized per clone, and isolation/fault/worker-crash regressions pass. Strict completion and combined worker/native-child coverage remain mandatory. Containerized OIDC remains a separate complete behavior gate.
-- Full workflow retains unfiltered PR triggers, Python 3.14, fail-fast, real PostgreSQL/OIDC, all JavaScript checks and 95% aggregate coverage. Exactly two workers/loadgroup, no restart masking; serial/fresh diagnostics remain available.
-- Unrelated user `.env.example` and `docker-compose.postgresql.yml` changes are excluded from commits.
+Task 3.18 integrates 47897b7 with a dedicated merge commit. Keep all upstream package assets, --move-task, DTO editing and expanded CI assertions. Public BrowserServer process ownership preserves bounded actual shutdown and loopback binding; nested finally closes native stdin even when browser cleanup fails. A controlled old-finally mutation reproduces the native-session leak; the fixed version fails promptly and preserves source snapshots/copy cleanup. Fresh isolated artifact interpreters repair reproduced local editable-finder leakage without removing original assertions. Focused verification: 221 root + 117 package JS, asset assembly/checks, 82 packaging/model/scheduling checks in 28.17s and 48 affected parallel native/browser cases in 110.79s. Full acceptance uses rebuilt image and canonical package/build input fingerprints. The prior fca42c8 series passed 3,373 + five subtests and 97.70% coverage with 58.17% wall / 67.50% preparation reduction; it is historical because main advanced during it.
 
-## One focused commit per task
+## Preservation and final review
 
-- `8ed38ab docs(test-performance-templates): complete task 1.1 performance plan`
-- `078647e test(test-performance-templates): record complete serial fresh-database reference (task 1.2)`
-- `959714c test(test-performance-templates): own migrated templates and disposable clone lifecycles (task 2.1)`
-- `46bcae6 test(test-performance-templates): select fresh or cloned PostgreSQL fixture preparation (task 2.2)`
-- `db1ff84 test(test-performance-templates): prove clone security cache and process cleanup isolation (task 2.3)`
-- `9c05ad2 test(test-performance-templates): aggregate strict collection and outcomes across bounded workers (task 3.1)`
-- `d0139a7 test(test-performance-templates): bound scheduling and serialize shared benchmark observations (task 3.2)`
-- `980180f test(test-performance-templates): prove combined worker and native subprocess application coverage (task 3.3)`
-- `c052f7c test(test-performance-templates): observe backend shutdown within a bounded deadline (task 3.4)`
-- `779f0b2 test(test-performance-templates): wait for dashboard table selection acknowledgement (task 3.5)`
-- `55a517f test(test-performance-templates): acknowledge organization filter completion and rendered selections (task 3.6)`
-- `bc1f4ba test(test-performance-templates): await native completion before finance selections (task 3.7)`
-- `ba24367 test(test-performance-templates): await published project form events before assertions (task 3.8)`
-- `f8d7c0e test(test-performance-templates): restore completed navigation visibility (task 3.9)`
-- `09b57a6 test(test-performance-templates): reserve project title update headroom (task 3.10)`
-- `7cd8aef test(test-performance-templates): verify complete performance acceptance (task 4.1)`
-- `2ce4bd3 test(test-performance-templates): enable verified template and two-worker CI (task 4.2)`
-- Task 4.3: this verification commit (its own hash is intentionally not embedded).
+All migration/companion bytes and application/CI files match main 47897b7 in this follow-up. Three diagnostic scripts adapt the owned-browser lifecycle to the mounted public planning renderer; installed-wheel test interpreters exclude editable hooks while preserving every import-path assertion. The original 70 released migrations were preserved during main integration, and unpublished headroom SQL moved to 0071 without a byte change. No applied migration is rewritten. The new diff changes only browser tests, diagnostic shutdown tooling, privacy/regression tests, OpenSpec evidence and archive lifecycle. User .env.example and docker-compose.postgresql.yml edits are excluded/preserved. No credentials, logs with raw protocol data, generated database files or dependencies are committed.
+Strict change validation, strict validation of all main specs, task/source/diff review and task-specific regression checks passed before archive. Full PR workflow retains unfiltered pull_request triggers, Python 3.14, fail-fast, real PostgreSQL/OIDC, exactly two loadgroup workers, no restarts, all JavaScript checks and the same 95% aggregate gate. No local Sonar analysis is claimed; inspect the actual remote SonarCloud check on the follow-up PR.
 
-Historical reconciliation merge commits preserve prerequisite setup history. Archive/spec synchronization is a separate lifecycle commit, outside numbered tasks. Setup PR #1 was approved and merged separately; this PR requires its own approval.
+## Commit discipline
 
-## Remaining delivery
+| Task | Dedicated commit |
+| --- | --- |
+| 1.1 | 8ed38ab |
+| 1.2 | 078647e |
+| 2.1 | 959714c |
+| 2.2 | 46bcae6 |
+| 2.3 | db1ff84 |
+| 3.1 | 9c05ad2 |
+| 3.2 | d0139a7 |
+| 3.3 | 980180f |
+| 3.4 | c052f7c |
+| 3.5 | 779f0b2 |
+| 3.6 | 55a517f |
+| 3.7 | bc1f4ba |
+| 3.8 | ba24367 |
+| 3.9 | f8d7c0e |
+| 3.10 | 09b57a6 |
+| 3.11 | 34b0fb1 |
+| 3.12 | 207f65b |
+| 3.13 | 98f1f6d |
+| 3.14 | 1ec6560 |
+| 3.15 | 557983f |
+| 3.16 | 20b0fff |
+| 3.17 | fca42c8 |
+| 3.18 | 9ee4836 |
+| 4.1 | 7cd8aef |
+| 4.2 | 2ce4bd3 |
+| 4.3 | 00b9ce4 |
+| 4.4 | This verification commit |
 
-Sync the two approved capability deltas, archive all completed artifacts, create and attach the PR to main, and require full automatic CI on its final archived revision. Do not merge before the user approves that concrete PR; use a merge commit preserving all task commits.
+Archive/spec synchronization is a separate lifecycle commit. Earlier archive b05b861 and reopening 5e73174 remain historical; task commits and main reconciliation merges are not rewritten.
+
+## Delivery state
+
+PR #1 was merged with explicit approval. GitHub reports cboguet83 merged PR #2 on 2026-10-18 at 11:04:58 UTC with merge commit 664f72a, containing 1ec6560. Its full CI/Sonar passed 3,368 tests + five subtests, 97.70% coverage and 124 Node cases (pytest 18m58s / whole job 20m53s). This merge was discovered after task 3.15; earlier statements that PR #2 remained draft reflected stale information and are superseded here. The new readiness commit was not in that merge.
+
+Re-archive this completed change and create a follow-up PR targeting main. Require full automatic CI and SonarCloud on the final archived head; failed/missing gates block merge. Wait for explicit approval of that concrete follow-up PR, then use a merge commit preserving each task commit. No merge is authorized by this report.

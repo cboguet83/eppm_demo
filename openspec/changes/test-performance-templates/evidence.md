@@ -791,3 +791,34 @@ Focused verification before the integration merge:
 
 Original hosted restoration and Chrome startup causes remain unknown. These
 focused successes do not establish those causes or replace final acceptance.
+
+
+## Task 4.4 — renewed integrated acceptance at 9ee4836
+
+All nine ABC/BCA/CAB cohorts and all four complete runs passed on identical
+tracked source/package/build inputs and immutable rebuilt application image.
+Fresh/serial: 2706.244404s; template/serial: 2060.796884s; template/two-worker:
+1135.924798s and 1151.056192s. The slower parallel result lowers full wall
+time by 57.466658%; migrated preparation median falls 66.857157%. Both
+unchanged relative targets pass; no absolute seven-minute limit applies.
+
+Every full run passes 3,489 canonical cases plus five subtests, 16,705/17,097
+statements (97.707200%), 221 root and 117 package JavaScript cases and the
+generated-asset check. Audit confirms exactly one successful setup/call/teardown
+per case, identical coverage file/statement/exclusion/missing-line maps, both
+workers doing real work, no required skips/retries/restarts/missing reports and
+zero test databases/other clients at every boundary. Each full run prepares
+2,290 migrated fixtures. Peak client samples remain within the 40-client budget.
+Detailed measurements, versions, sampling limitations and source/image hashes
+are in measurement.md and measurements.json. The raw ignored V13 directory is
+.local/template-performance-20261018-230313 in the managed verification checkout.
+
+Strict validation passes for this change and all nine main specs. The exact
+three delta requirement blocks/seven scenarios already match their main specs.
+Application, all migration bytes and full CI configuration match main 47897b7.
+AST review preserves all original assertions/Playwright expectations in the
+five affected restoration/organization/distribution modules. Changes after
+9ee4836 are evidence and archive lifecycle only. No local Sonar scan is claimed:
+final archived-head automatic hosted CI and SonarCloud remain delivery gates.
+The original hosted restoration/startup causes remain unproven as explicitly
+approved; green local comparisons do not establish those causes.

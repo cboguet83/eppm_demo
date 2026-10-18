@@ -1,7 +1,7 @@
 {
   "metadata": {
-    "revision": "09b57a6fffa0ce21d4fc70352b9fbe0fac47d53c",
-    "source_sha256": "c7696b72aed956ca5bad730ad4d64bb9b4103e2ecd28656b93388b10e686f961",
+    "revision": "9ee483625a316e481ccc506b435205690f302bd9",
+    "source_sha256": "b36216aaaf6a75bddbfb7c46585d3d6b10ac4e11673d24580df386840de902fe",
     "worktree": "<managed-verification-checkout>",
     "python": "3.14.7 (main, Aug 14 2026, 15:35:28) [Clang 22.1.3 ]",
     "platform": "Linux-7.2.9-2-cachyos-x86_64-with-glibc2.44",
@@ -19,10 +19,16 @@
       "plotly": "7.1.0",
       "Authlib": "1.8.0",
       "httpx2": "2.12.0",
-      "python-dotenv": "1.2.4"
+      "python-dotenv": "1.2.4",
+      "setuptools": "84.0.0",
+      "wheel": "0.48.0"
     },
     "node": "v26.11.1",
-    "image_id": "sha256:db973dd5dd084075be1681d39d4246c093d8cfdd92a6438b606f0b1e41e37518",
+    "image_id": "sha256:b2599c5585e0bc4c270d1ee99bf5402f97f9f3a802100c1e6d6778c431e48021",
+    "image_tag": "eppm-demo:test-performance-9ee4836",
+    "image_source_revision": "9ee483625a316e481ccc506b435205690f302bd9",
+    "image_inputs_identical_to_tested_revision": true,
+    "browser_image_selection": "immutable image ID via existing EPPM_E2E_APP_IMAGE",
     "docker": {
       "cpus": 8,
       "memory": 8026890240
@@ -32,9 +38,27 @@
       "tests/postgresql/test_revisions.py",
       "tests/postgresql/test_business_security.py"
     ],
-    "note": "Task 4.1 measurement helpers are fixed working-tree inputs; all modes use identical bytes."
+    "note": "Clean committed integrated sources; all modes use identical app/test/script/config bytes.",
+    "source_scope": [
+      "app",
+      "tests",
+      "scripts",
+      "pyproject.toml",
+      "requirements.txt",
+      "Dockerfile",
+      "docker-compose*.yml",
+      ".github/workflows/tests.yml",
+      "streamlit_app.py",
+      "asgi_app.py",
+      ".streamlit",
+      ".dockerignore",
+      "packages",
+      "MANIFEST.in",
+      "setup.py",
+      "LICENSE"
+    ]
   },
-  "raw_run_directory": ".local/template-performance-20261018-083734",
+  "raw_run_directory": ".local/template-performance-20261018-230313",
   "runs": [
     {
       "label": "cohort-1-A",
@@ -44,31 +68,31 @@
       "manifest_sha256": "8abd36dfc2c32cf68c2c17644ec7c243db5b8f0ee0464de22528443f81767fa7",
       "subtests": 0,
       "preparation_count": 54,
-      "preparation_total_seconds": 21.880805974127725,
-      "preparation_median_seconds": 0.40231525848503225,
+      "preparation_total_seconds": 20.82469082987518,
+      "preparation_median_seconds": 0.3815950919961324,
       "coverage": {
-        "covered_lines": 1145,
-        "num_statements": 16931,
-        "percent_covered": 6.762742897643376,
+        "covered_lines": 1147,
+        "num_statements": 17097,
+        "percent_covered": 6.708779318009007,
         "percent_covered_display": "7",
-        "missing_lines": 15786,
-        "excluded_lines": 499,
-        "percent_statements_covered": 6.762742897643376,
+        "missing_lines": 15950,
+        "excluded_lines": 511,
+        "percent_statements_covered": 6.708779318009007,
         "percent_statements_covered_display": "7"
       },
       "resources": {
-        "wall_seconds": 35.69626452800003,
-        "samples": 31,
+        "wall_seconds": 33.25654150999617,
+        "samples": 28,
         "peaks": {
           "client_connections": 3,
-          "test_database_bytes": 23031166,
-          "host_process_rss_kib": 144464,
-          "docker_test_memory_bytes": 80195092
+          "test_database_bytes": 28421502,
+          "host_process_rss_kib": 145176,
+          "docker_test_memory_bytes": 200802304
         },
-        "max_child_rss_kib": 145952,
-        "child_user_seconds": 4.92072,
-        "child_system_seconds": 0.8733059999999999,
-        "docker_samples": 4,
+        "max_child_rss_kib": 146744,
+        "child_user_seconds": 4.635087,
+        "child_system_seconds": 0.7928339999999999,
+        "docker_samples": 3,
         "docker_sample_failures": 0,
         "database_sample_failures": 0,
         "docker_scope": [
@@ -91,30 +115,30 @@
       "manifest_sha256": "8abd36dfc2c32cf68c2c17644ec7c243db5b8f0ee0464de22528443f81767fa7",
       "subtests": 0,
       "preparation_count": 54,
-      "preparation_total_seconds": 5.788726883009076,
-      "preparation_median_seconds": 0.10145895299501717,
+      "preparation_total_seconds": 5.667723443068098,
+      "preparation_median_seconds": 0.098008683489752,
       "coverage": {
-        "covered_lines": 1145,
-        "num_statements": 16931,
-        "percent_covered": 6.762742897643376,
+        "covered_lines": 1147,
+        "num_statements": 17097,
+        "percent_covered": 6.708779318009007,
         "percent_covered_display": "7",
-        "missing_lines": 15786,
-        "excluded_lines": 499,
-        "percent_statements_covered": 6.762742897643376,
+        "missing_lines": 15950,
+        "excluded_lines": 511,
+        "percent_statements_covered": 6.708779318009007,
         "percent_statements_covered_display": "7"
       },
       "resources": {
-        "wall_seconds": 18.311583574017277,
+        "wall_seconds": 18.301373244001297,
         "samples": 16,
         "peaks": {
-          "client_connections": 2,
-          "test_database_bytes": 28249470,
-          "host_process_rss_kib": 145444,
-          "docker_test_memory_bytes": 94392811
+          "client_connections": 3,
+          "test_database_bytes": 28380542,
+          "host_process_rss_kib": 142836,
+          "docker_test_memory_bytes": 209190912
         },
-        "max_child_rss_kib": 146040,
-        "child_user_seconds": 3.850777,
-        "child_system_seconds": 0.484703,
+        "max_child_rss_kib": 146720,
+        "child_user_seconds": 3.77675,
+        "child_system_seconds": 0.473193,
         "docker_samples": 2,
         "docker_sample_failures": 0,
         "database_sample_failures": 0,
@@ -138,30 +162,30 @@
       "manifest_sha256": "8abd36dfc2c32cf68c2c17644ec7c243db5b8f0ee0464de22528443f81767fa7",
       "subtests": 0,
       "preparation_count": 54,
-      "preparation_total_seconds": 6.9779394400829915,
-      "preparation_median_seconds": 0.10970298500615172,
+      "preparation_total_seconds": 7.4305700679833535,
+      "preparation_median_seconds": 0.11465771051007323,
       "coverage": {
-        "covered_lines": 1145,
-        "num_statements": 16931,
-        "percent_covered": 6.762742897643376,
+        "covered_lines": 1147,
+        "num_statements": 17097,
+        "percent_covered": 6.708779318009007,
         "percent_covered_display": "7",
-        "missing_lines": 15786,
-        "excluded_lines": 499,
-        "percent_statements_covered": 6.762742897643376,
+        "missing_lines": 15950,
+        "excluded_lines": 511,
+        "percent_statements_covered": 6.708779318009007,
         "percent_statements_covered_display": "7"
       },
       "resources": {
-        "wall_seconds": 13.30344565300038,
+        "wall_seconds": 13.976133996009594,
         "samples": 11,
         "peaks": {
           "client_connections": 4,
-          "test_database_bytes": 63009211,
-          "host_process_rss_kib": 215728,
-          "docker_test_memory_bytes": 120271667
+          "test_database_bytes": 56695548,
+          "host_process_rss_kib": 216368,
+          "docker_test_memory_bytes": 206464614
         },
-        "max_child_rss_kib": 138860,
-        "child_user_seconds": 4.7026509999999995,
-        "child_system_seconds": 0.5424709999999999,
+        "max_child_rss_kib": 139728,
+        "child_user_seconds": 4.66744,
+        "child_system_seconds": 0.562914,
         "docker_samples": 2,
         "docker_sample_failures": 0,
         "database_sample_failures": 0,
@@ -185,30 +209,30 @@
       "manifest_sha256": "8abd36dfc2c32cf68c2c17644ec7c243db5b8f0ee0464de22528443f81767fa7",
       "subtests": 0,
       "preparation_count": 54,
-      "preparation_total_seconds": 5.745348688971717,
-      "preparation_median_seconds": 0.09623104950878769,
+      "preparation_total_seconds": 5.816869660076918,
+      "preparation_median_seconds": 0.10131334199104458,
       "coverage": {
-        "covered_lines": 1145,
-        "num_statements": 16931,
-        "percent_covered": 6.762742897643376,
+        "covered_lines": 1147,
+        "num_statements": 17097,
+        "percent_covered": 6.708779318009007,
         "percent_covered_display": "7",
-        "missing_lines": 15786,
-        "excluded_lines": 499,
-        "percent_statements_covered": 6.762742897643376,
+        "missing_lines": 15950,
+        "excluded_lines": 511,
+        "percent_statements_covered": 6.708779318009007,
         "percent_statements_covered_display": "7"
       },
       "resources": {
-        "wall_seconds": 18.36322995601222,
+        "wall_seconds": 18.312611192988697,
         "samples": 16,
         "peaks": {
           "client_connections": 3,
-          "test_database_bytes": 28088526,
-          "host_process_rss_kib": 146480,
-          "docker_test_memory_bytes": 126667980
+          "test_database_bytes": 41643917,
+          "host_process_rss_kib": 147112,
+          "docker_test_memory_bytes": 203423744
         },
-        "max_child_rss_kib": 145924,
-        "child_user_seconds": 3.8834049999999998,
-        "child_system_seconds": 0.481101,
+        "max_child_rss_kib": 146824,
+        "child_user_seconds": 3.795832,
+        "child_system_seconds": 0.47874999999999995,
         "docker_samples": 2,
         "docker_sample_failures": 0,
         "database_sample_failures": 0,
@@ -232,30 +256,30 @@
       "manifest_sha256": "8abd36dfc2c32cf68c2c17644ec7c243db5b8f0ee0464de22528443f81767fa7",
       "subtests": 0,
       "preparation_count": 54,
-      "preparation_total_seconds": 6.758936041966081,
-      "preparation_median_seconds": 0.106102682009805,
+      "preparation_total_seconds": 6.584061728121014,
+      "preparation_median_seconds": 0.10411810701771174,
       "coverage": {
-        "covered_lines": 1145,
-        "num_statements": 16931,
-        "percent_covered": 6.762742897643376,
+        "covered_lines": 1147,
+        "num_statements": 17097,
+        "percent_covered": 6.708779318009007,
         "percent_covered_display": "7",
-        "missing_lines": 15786,
-        "excluded_lines": 499,
-        "percent_statements_covered": 6.762742897643376,
+        "missing_lines": 15950,
+        "excluded_lines": 511,
+        "percent_statements_covered": 6.708779318009007,
         "percent_statements_covered_display": "7"
       },
       "resources": {
-        "wall_seconds": 14.301208479999332,
-        "samples": 12,
+        "wall_seconds": 13.25144659599755,
+        "samples": 11,
         "peaks": {
-          "client_connections": 5,
-          "test_database_bytes": 70193595,
-          "host_process_rss_kib": 290104,
-          "docker_test_memory_bytes": 149212364
+          "client_connections": 4,
+          "test_database_bytes": 63500731,
+          "host_process_rss_kib": 241792,
+          "docker_test_memory_bytes": 211812352
         },
-        "max_child_rss_kib": 138876,
-        "child_user_seconds": 4.998798,
-        "child_system_seconds": 0.556713,
+        "max_child_rss_kib": 139872,
+        "child_user_seconds": 4.564856,
+        "child_system_seconds": 0.506508,
         "docker_samples": 2,
         "docker_sample_failures": 0,
         "database_sample_failures": 0,
@@ -279,31 +303,31 @@
       "manifest_sha256": "8abd36dfc2c32cf68c2c17644ec7c243db5b8f0ee0464de22528443f81767fa7",
       "subtests": 0,
       "preparation_count": 54,
-      "preparation_total_seconds": 21.619482991023688,
-      "preparation_median_seconds": 0.3998103375051869,
+      "preparation_total_seconds": 20.02998127992032,
+      "preparation_median_seconds": 0.36967257600917947,
       "coverage": {
-        "covered_lines": 1145,
-        "num_statements": 16931,
-        "percent_covered": 6.762742897643376,
+        "covered_lines": 1147,
+        "num_statements": 17097,
+        "percent_covered": 6.708779318009007,
         "percent_covered_display": "7",
-        "missing_lines": 15786,
-        "excluded_lines": 499,
-        "percent_statements_covered": 6.762742897643376,
+        "missing_lines": 15950,
+        "excluded_lines": 511,
+        "percent_statements_covered": 6.708779318009007,
         "percent_statements_covered_display": "7"
       },
       "resources": {
-        "wall_seconds": 35.631081264989916,
-        "samples": 31,
+        "wall_seconds": 32.36546182399616,
+        "samples": 28,
         "peaks": {
           "client_connections": 3,
-          "test_database_bytes": 27954558,
-          "host_process_rss_kib": 145340,
-          "docker_test_memory_bytes": 136000307
+          "test_database_bytes": 25734526,
+          "host_process_rss_kib": 147084,
+          "docker_test_memory_bytes": 210239488
         },
-        "max_child_rss_kib": 145868,
-        "child_user_seconds": 4.877266,
-        "child_system_seconds": 0.8047639999999999,
-        "docker_samples": 4,
+        "max_child_rss_kib": 146648,
+        "child_user_seconds": 4.603357,
+        "child_system_seconds": 0.7711399999999999,
+        "docker_samples": 3,
         "docker_sample_failures": 0,
         "database_sample_failures": 0,
         "docker_scope": [
@@ -326,33 +350,33 @@
       "manifest_sha256": "8abd36dfc2c32cf68c2c17644ec7c243db5b8f0ee0464de22528443f81767fa7",
       "subtests": 0,
       "preparation_count": 54,
-      "preparation_total_seconds": 7.095204872020986,
-      "preparation_median_seconds": 0.10900575248524547,
+      "preparation_total_seconds": 6.878919779061107,
+      "preparation_median_seconds": 0.10574612049094867,
       "coverage": {
-        "covered_lines": 1145,
-        "num_statements": 16931,
-        "percent_covered": 6.762742897643376,
+        "covered_lines": 1147,
+        "num_statements": 17097,
+        "percent_covered": 6.708779318009007,
         "percent_covered_display": "7",
-        "missing_lines": 15786,
-        "excluded_lines": 499,
-        "percent_statements_covered": 6.762742897643376,
+        "missing_lines": 15950,
+        "excluded_lines": 511,
+        "percent_statements_covered": 6.708779318009007,
         "percent_statements_covered_display": "7"
       },
       "resources": {
-        "wall_seconds": 14.290458964009304,
+        "wall_seconds": 14.834193409013096,
         "samples": 12,
         "peaks": {
-          "client_connections": 4,
-          "test_database_bytes": 62976443,
-          "host_process_rss_kib": 215756,
-          "docker_test_memory_bytes": 154140672
+          "client_connections": 5,
+          "test_database_bytes": 69366203,
+          "host_process_rss_kib": 293252,
+          "docker_test_memory_bytes": 206674329
         },
-        "max_child_rss_kib": 138944,
-        "child_user_seconds": 4.656227,
-        "child_system_seconds": 0.583123,
+        "max_child_rss_kib": 140028,
+        "child_user_seconds": 5.658544,
+        "child_system_seconds": 0.538041,
         "docker_samples": 2,
         "docker_sample_failures": 0,
-        "database_sample_failures": 1,
+        "database_sample_failures": 0,
         "docker_scope": [
           "eppm-performance-tests-postgres-1",
           "eppm-e2e-*",
@@ -373,30 +397,30 @@
       "manifest_sha256": "8abd36dfc2c32cf68c2c17644ec7c243db5b8f0ee0464de22528443f81767fa7",
       "subtests": 0,
       "preparation_count": 54,
-      "preparation_total_seconds": 21.341893281060038,
-      "preparation_median_seconds": 0.39574257101048715,
+      "preparation_total_seconds": 20.755370167957153,
+      "preparation_median_seconds": 0.38190181100799236,
       "coverage": {
-        "covered_lines": 1145,
-        "num_statements": 16931,
-        "percent_covered": 6.762742897643376,
+        "covered_lines": 1147,
+        "num_statements": 17097,
+        "percent_covered": 6.708779318009007,
         "percent_covered_display": "7",
-        "missing_lines": 15786,
-        "excluded_lines": 499,
-        "percent_statements_covered": 6.762742897643376,
+        "missing_lines": 15950,
+        "excluded_lines": 511,
+        "percent_statements_covered": 6.708779318009007,
         "percent_statements_covered_display": "7"
       },
       "resources": {
-        "wall_seconds": 33.58175383199705,
-        "samples": 30,
+        "wall_seconds": 32.53107909898972,
+        "samples": 29,
         "peaks": {
           "client_connections": 3,
-          "test_database_bytes": 27463038,
-          "host_process_rss_kib": 146812,
-          "docker_test_memory_bytes": 136944025
+          "test_database_bytes": 28421502,
+          "host_process_rss_kib": 146096,
+          "docker_test_memory_bytes": 207618048
         },
-        "max_child_rss_kib": 146236,
-        "child_user_seconds": 4.7340409999999995,
-        "child_system_seconds": 0.840814,
+        "max_child_rss_kib": 146668,
+        "child_user_seconds": 4.545429,
+        "child_system_seconds": 0.7828729999999999,
         "docker_samples": 3,
         "docker_sample_failures": 0,
         "database_sample_failures": 0,
@@ -420,30 +444,30 @@
       "manifest_sha256": "8abd36dfc2c32cf68c2c17644ec7c243db5b8f0ee0464de22528443f81767fa7",
       "subtests": 0,
       "preparation_count": 54,
-      "preparation_total_seconds": 6.626180466846563,
-      "preparation_median_seconds": 0.10583439649781212,
+      "preparation_total_seconds": 6.330559564958094,
+      "preparation_median_seconds": 0.1052014059969224,
       "coverage": {
-        "covered_lines": 1145,
-        "num_statements": 16931,
-        "percent_covered": 6.762742897643376,
+        "covered_lines": 1147,
+        "num_statements": 17097,
+        "percent_covered": 6.708779318009007,
         "percent_covered_display": "7",
-        "missing_lines": 15786,
-        "excluded_lines": 499,
-        "percent_statements_covered": 6.762742897643376,
+        "missing_lines": 15950,
+        "excluded_lines": 511,
+        "percent_statements_covered": 6.708779318009007,
         "percent_statements_covered_display": "7"
       },
       "resources": {
-        "wall_seconds": 21.392786273994716,
-        "samples": 19,
+        "wall_seconds": 19.672589591995347,
+        "samples": 17,
         "peaks": {
           "client_connections": 3,
-          "test_database_bytes": 41747517,
-          "host_process_rss_kib": 146520,
-          "docker_test_memory_bytes": 130862284
+          "test_database_bytes": 28506318,
+          "host_process_rss_kib": 146224,
+          "docker_test_memory_bytes": 201431449
         },
-        "max_child_rss_kib": 145952,
-        "child_user_seconds": 4.043626,
-        "child_system_seconds": 0.5770179999999999,
+        "max_child_rss_kib": 146640,
+        "child_user_seconds": 3.779706,
+        "child_system_seconds": 0.471211,
         "docker_samples": 2,
         "docker_sample_failures": 0,
         "database_sample_failures": 0,
@@ -463,36 +487,36 @@
       "label": "full-A",
       "mode": "A",
       "full": true,
-      "count": 3304,
-      "manifest_sha256": "49076554992fc6fedd32475eeda4bfe646d0839ceb8b6aa04b3186945fabbfd6",
+      "count": 3489,
+      "manifest_sha256": "4e34ca510cff06953491a37d8223873ead70d872714794b01b314efe18cdc5fe",
       "subtests": 5,
-      "preparation_count": 2261,
-      "preparation_total_seconds": 841.4153668132203,
-      "preparation_median_seconds": 0.3626573619840201,
+      "preparation_count": 2290,
+      "preparation_total_seconds": 860.8886545645073,
+      "preparation_median_seconds": 0.37200541351921856,
       "coverage": {
-        "covered_lines": 16539,
-        "num_statements": 16931,
-        "percent_covered": 97.6847203354793,
+        "covered_lines": 16705,
+        "num_statements": 17097,
+        "percent_covered": 97.70720009358367,
         "percent_covered_display": "98",
         "missing_lines": 392,
-        "excluded_lines": 499,
-        "percent_statements_covered": 97.6847203354793,
+        "excluded_lines": 511,
+        "percent_statements_covered": 97.70720009358367,
         "percent_statements_covered_display": "98"
       },
       "resources": {
-        "wall_seconds": 2537.813873701991,
-        "samples": 2234,
+        "wall_seconds": 2706.2444035140215,
+        "samples": 2359,
         "peaks": {
           "client_connections": 12,
-          "test_database_bytes": 159102655,
-          "host_process_rss_kib": 2051884,
-          "docker_test_memory_bytes": 1752380211
+          "test_database_bytes": 159209151,
+          "host_process_rss_kib": 1852208,
+          "docker_test_memory_bytes": 2030074593
         },
-        "max_child_rss_kib": 497528,
-        "child_user_seconds": 524.112497,
-        "child_system_seconds": 97.909211,
-        "docker_samples": 224,
-        "docker_sample_failures": 1,
+        "max_child_rss_kib": 500036,
+        "child_user_seconds": 598.8963,
+        "child_system_seconds": 114.312061,
+        "docker_samples": 236,
+        "docker_sample_failures": 3,
         "database_sample_failures": 0,
         "docker_scope": [
           "eppm-performance-tests-postgres-1",
@@ -505,43 +529,45 @@
         "test_databases": 0,
         "other_client_connections": 0
       },
-      "node_seconds": 0.5018957130087074
+      "node_seconds": 0.3149285899999086,
+      "package_node_seconds": 0.16105731201241724,
+      "asset_check_passed": true
     },
     {
       "label": "full-B",
       "mode": "B",
       "full": true,
-      "count": 3304,
-      "manifest_sha256": "49076554992fc6fedd32475eeda4bfe646d0839ceb8b6aa04b3186945fabbfd6",
+      "count": 3489,
+      "manifest_sha256": "4e34ca510cff06953491a37d8223873ead70d872714794b01b314efe18cdc5fe",
       "subtests": 5,
-      "preparation_count": 2261,
-      "preparation_total_seconds": 247.12950285969418,
-      "preparation_median_seconds": 0.10054604499600828,
+      "preparation_count": 2290,
+      "preparation_total_seconds": 215.1690665112692,
+      "preparation_median_seconds": 0.0967561605211813,
       "coverage": {
-        "covered_lines": 16539,
-        "num_statements": 16931,
-        "percent_covered": 97.6847203354793,
+        "covered_lines": 16705,
+        "num_statements": 17097,
+        "percent_covered": 97.70720009358367,
         "percent_covered_display": "98",
         "missing_lines": 392,
-        "excluded_lines": 499,
-        "percent_statements_covered": 97.6847203354793,
+        "excluded_lines": 511,
+        "percent_statements_covered": 97.70720009358367,
         "percent_statements_covered_display": "98"
       },
       "resources": {
-        "wall_seconds": 2123.056247563014,
-        "samples": 1848,
+        "wall_seconds": 2060.7968841130205,
+        "samples": 1793,
         "peaks": {
           "client_connections": 12,
-          "test_database_bytes": 172911998,
-          "host_process_rss_kib": 1968136,
-          "docker_test_memory_bytes": 1887646515
+          "test_database_bytes": 173013198,
+          "host_process_rss_kib": 1848028,
+          "docker_test_memory_bytes": 1997998653
         },
-        "max_child_rss_kib": 478828,
-        "child_user_seconds": 493.277094,
-        "child_system_seconds": 87.400415,
-        "docker_samples": 185,
-        "docker_sample_failures": 6,
-        "database_sample_failures": 0,
+        "max_child_rss_kib": 497264,
+        "child_user_seconds": 567.908153,
+        "child_system_seconds": 103.406233,
+        "docker_samples": 180,
+        "docker_sample_failures": 3,
+        "database_sample_failures": 2,
         "docker_scope": [
           "eppm-performance-tests-postgres-1",
           "eppm-e2e-*",
@@ -553,43 +579,45 @@
         "test_databases": 0,
         "other_client_connections": 0
       },
-      "node_seconds": 0.2083637219911907
+      "node_seconds": 0.35414271501940675,
+      "package_node_seconds": 0.18173366101109423,
+      "asset_check_passed": true
     },
     {
       "label": "full-C-1",
       "mode": "C",
       "full": true,
-      "count": 3304,
-      "manifest_sha256": "49076554992fc6fedd32475eeda4bfe646d0839ceb8b6aa04b3186945fabbfd6",
+      "count": 3489,
+      "manifest_sha256": "4e34ca510cff06953491a37d8223873ead70d872714794b01b314efe18cdc5fe",
       "subtests": 5,
-      "preparation_count": 2261,
-      "preparation_total_seconds": 330.7523464982514,
-      "preparation_median_seconds": 0.14399554999545217,
+      "preparation_count": 2290,
+      "preparation_total_seconds": 231.5156925165502,
+      "preparation_median_seconds": 0.10053058399353176,
       "coverage": {
-        "covered_lines": 16539,
-        "num_statements": 16931,
-        "percent_covered": 97.6847203354793,
+        "covered_lines": 16705,
+        "num_statements": 17097,
+        "percent_covered": 97.70720009358367,
         "percent_covered_display": "98",
         "missing_lines": 392,
-        "excluded_lines": 499,
-        "percent_statements_covered": 97.6847203354793,
+        "excluded_lines": 511,
+        "percent_statements_covered": 97.70720009358367,
         "percent_statements_covered_display": "98"
       },
       "resources": {
-        "wall_seconds": 1277.2085445720004,
-        "samples": 1109,
+        "wall_seconds": 1135.9247979169886,
+        "samples": 985,
         "peaks": {
-          "client_connections": 23,
-          "test_database_bytes": 200637676,
-          "host_process_rss_kib": 2307672,
-          "docker_test_memory_bytes": 1936824729
+          "client_connections": 12,
+          "test_database_bytes": 186817245,
+          "host_process_rss_kib": 2309244,
+          "docker_test_memory_bytes": 1940285030
         },
-        "max_child_rss_kib": 446116,
-        "child_user_seconds": 506.322063,
-        "child_system_seconds": 81.84601,
-        "docker_samples": 111,
-        "docker_sample_failures": 5,
-        "database_sample_failures": 2,
+        "max_child_rss_kib": 491728,
+        "child_user_seconds": 583.610406,
+        "child_system_seconds": 97.09759,
+        "docker_samples": 99,
+        "docker_sample_failures": 3,
+        "database_sample_failures": 4,
         "docker_scope": [
           "eppm-performance-tests-postgres-1",
           "eppm-e2e-*",
@@ -601,43 +629,45 @@
         "test_databases": 0,
         "other_client_connections": 0
       },
-      "node_seconds": 0.3179278489842545
+      "node_seconds": 0.32796671998221427,
+      "package_node_seconds": 0.16503980502602644,
+      "asset_check_passed": true
     },
     {
       "label": "full-C-2",
       "mode": "C",
       "full": true,
-      "count": 3304,
-      "manifest_sha256": "49076554992fc6fedd32475eeda4bfe646d0839ceb8b6aa04b3186945fabbfd6",
+      "count": 3489,
+      "manifest_sha256": "4e34ca510cff06953491a37d8223873ead70d872714794b01b314efe18cdc5fe",
       "subtests": 5,
-      "preparation_count": 2261,
-      "preparation_total_seconds": 330.39046008730656,
-      "preparation_median_seconds": 0.14867557198158465,
+      "preparation_count": 2290,
+      "preparation_total_seconds": 229.90765104960883,
+      "preparation_median_seconds": 0.09963799850083888,
       "coverage": {
-        "covered_lines": 16539,
-        "num_statements": 16931,
-        "percent_covered": 97.6847203354793,
+        "covered_lines": 16705,
+        "num_statements": 17097,
+        "percent_covered": 97.70720009358367,
         "percent_covered_display": "98",
         "missing_lines": 392,
-        "excluded_lines": 499,
-        "percent_statements_covered": 97.6847203354793,
+        "excluded_lines": 511,
+        "percent_statements_covered": 97.70720009358367,
         "percent_statements_covered_display": "98"
       },
       "resources": {
-        "wall_seconds": 1243.4671706669906,
-        "samples": 1091,
+        "wall_seconds": 1151.0561917150044,
+        "samples": 998,
         "peaks": {
-          "client_connections": 24,
-          "test_database_bytes": 200864156,
-          "host_process_rss_kib": 2335520,
-          "docker_test_memory_bytes": 2232103731
+          "client_connections": 12,
+          "test_database_bytes": 187027341,
+          "host_process_rss_kib": 2259364,
+          "docker_test_memory_bytes": 1952238796
         },
-        "max_child_rss_kib": 444596,
-        "child_user_seconds": 500.193119,
-        "child_system_seconds": 81.39374,
-        "docker_samples": 110,
-        "docker_sample_failures": 6,
-        "database_sample_failures": 2,
+        "max_child_rss_kib": 493368,
+        "child_user_seconds": 584.563787,
+        "child_system_seconds": 97.600826,
+        "docker_samples": 100,
+        "docker_sample_failures": 5,
+        "database_sample_failures": 3,
         "docker_scope": [
           "eppm-performance-tests-postgres-1",
           "eppm-e2e-*",
@@ -649,93 +679,135 @@
         "test_databases": 0,
         "other_client_connections": 0
       },
-      "node_seconds": 0.29094974699546583
+      "node_seconds": 0.3387590089987498,
+      "package_node_seconds": 0.18883361198822968,
+      "asset_check_passed": true
     }
   ],
   "audit": [
     {
       "label": "full-A",
       "scheduled_calls": {
-        "serial": 3304
+        "serial": 3489
       },
       "node": {
-        "tests": 112,
-        "pass": 112,
-        "fail": 0,
-        "cancelled": 0,
-        "skipped": 0,
-        "todo": 0
+        "node.log": {
+          "tests": 221,
+          "pass": 221,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "package-node.log": {
+          "tests": 117,
+          "pass": 117,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
       },
-      "preparation_count": 2261,
-      "coverage_files": 283,
-      "statements": 16931,
-      "excluded_lines": 499
+      "preparation_count": 2290,
+      "coverage_files": 288,
+      "statements": 17097,
+      "excluded_lines": 511
     },
     {
       "label": "full-B",
       "scheduled_calls": {
-        "serial": 3304
+        "serial": 3489
       },
       "node": {
-        "tests": 112,
-        "pass": 112,
-        "fail": 0,
-        "cancelled": 0,
-        "skipped": 0,
-        "todo": 0
+        "node.log": {
+          "tests": 221,
+          "pass": 221,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "package-node.log": {
+          "tests": 117,
+          "pass": 117,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
       },
-      "preparation_count": 2261,
-      "coverage_files": 283,
-      "statements": 16931,
-      "excluded_lines": 499
+      "preparation_count": 2290,
+      "coverage_files": 288,
+      "statements": 17097,
+      "excluded_lines": 511
     },
     {
       "label": "full-C-1",
       "scheduled_calls": {
-        "gw0": 958,
-        "gw1": 2346
+        "gw0": 880,
+        "gw1": 2609
       },
       "node": {
-        "tests": 112,
-        "pass": 112,
-        "fail": 0,
-        "cancelled": 0,
-        "skipped": 0,
-        "todo": 0
+        "node.log": {
+          "tests": 221,
+          "pass": 221,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "package-node.log": {
+          "tests": 117,
+          "pass": 117,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
       },
-      "preparation_count": 2261,
-      "coverage_files": 283,
-      "statements": 16931,
-      "excluded_lines": 499
+      "preparation_count": 2290,
+      "coverage_files": 288,
+      "statements": 17097,
+      "excluded_lines": 511
     },
     {
       "label": "full-C-2",
       "scheduled_calls": {
-        "gw1": 2320,
-        "gw0": 984
+        "gw0": 915,
+        "gw1": 2574
       },
       "node": {
-        "tests": 112,
-        "pass": 112,
-        "fail": 0,
-        "cancelled": 0,
-        "skipped": 0,
-        "todo": 0
+        "node.log": {
+          "tests": 221,
+          "pass": 221,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        },
+        "package-node.log": {
+          "tests": 117,
+          "pass": 117,
+          "fail": 0,
+          "cancelled": 0,
+          "skipped": 0,
+          "todo": 0
+        }
       },
-      "preparation_count": 2261,
-      "coverage_files": 283,
-      "statements": 16931,
-      "excluded_lines": 499
+      "preparation_count": 2290,
+      "coverage_files": 288,
+      "statements": 17097,
+      "excluded_lines": 511
     }
   ],
   "coverage_variations": {},
   "preparation_medians_seconds": {
-    "A": 21.619482991023688,
-    "B": 5.788726883009076,
-    "C": 6.9779394400829915
+    "A": 20.755370167957153,
+    "B": 5.816869660076918,
+    "C": 6.878919779061107
   },
-  "preparation_reduction": 0.6772383760064845,
-  "full_wall_reduction_using_slower_optimized_run": 0.4967288350784783,
-  "canonical_manifest_sha256": "49076554992fc6fedd32475eeda4bfe646d0839ceb8b6aa04b3186945fabbfd6",
+  "preparation_reduction": 0.668571568543691,
+  "full_wall_reduction_using_slower_optimized_run": 0.5746665784434053,
+  "canonical_manifest_sha256": "4e34ca510cff06953491a37d8223873ead70d872714794b01b314efe18cdc5fe",
   "acceptance_passed": true
 }
