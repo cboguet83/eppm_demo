@@ -36,6 +36,8 @@ identified by task 1.1 in `git log origin/main..HEAD --oneline`.
 
 - [x] 5.2 Diagnose and repair the intermittent access-administration project-selection and dashboard project-deselection browser failures, as explicitly authorized by the user after two failed full acceptance runs. Establish focused reproduction evidence, fix confirmed interaction/rerun causes without weakening behavioral assertions, add regression coverage at the affected seam, and verify the focused browser groups and relevant unit/component checks. Record the cause and results in verification evidence and commit this scope extension separately before final acceptance.
 
+- [x] 5.3 Complete the planned database nonblank-locale integrity rule with an additive migration after 0069. Preserve every legacy locale row, enforce the rule for new SQL writes, validate existing rows when compatible, and add clean/legacy-upgrade and runtime constraint regressions. Keep migrations 0001-0069 unchanged and record the correction and focused verification in a dedicated commit.
+
 ## 6. Acceptance
 
 - [ ] 6.1 Run `openspec validate shared-business-dictionary --strict`, the OpenSpec verify-change workflow, the complete authenticated PostgreSQL/browser pytest suite with `--require-full-suite --cov=app --cov-fail-under=95`, and all JavaScript component checks per `docs/development-workflow.md`. Inspect the final diff, confirm no secrets/unrelated changes or rewritten migrations, and record commands/results/coverage/skips, clean-and-upgrade evidence, scenario-to-test mapping and task-to-commit evidence in `verification.md`. Verify every required gate passes before marking this task complete; unavailable or failed checks keep it unchecked.

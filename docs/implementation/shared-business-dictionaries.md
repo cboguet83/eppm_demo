@@ -24,6 +24,12 @@ the common sequence is advanced beyond migrated IDs. Only names and labels are
 editable through runtime grants. The Blocking Point insertion classifier is
 restricted to event types and survives name changes.
 
+Migration 0070 enforces nonblank locale keys for new translation writes. It keeps
+all historical rows unchanged, including any legacy blank key. The constraint is
+validated when existing keys satisfy it; otherwise it remains unvalidated for
+historical rows while still rejecting new blank keys. No applied migration is
+rewritten, and the application continues validating new bounded language tags.
+
 Run the operator migrations with application writers stopped, and deploy the
 matching application release. Earlier migration files remain unchanged. Use the
 existing verified backup procedure before upgrade. Migration failure rolls back

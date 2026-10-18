@@ -14,6 +14,9 @@ The upgrade copies all locale rows without normalization, advances the common
 identity sequence, and installs shared permissions and catalog revision triggers.
 See [shared dictionary operations](shared-business-dictionaries.md).
 
+Migration 0070 rejects new blank translation locale keys without changing legacy
+rows. Its check is validated when historical keys already satisfy the rule.
+
 Source: the final SQLite schema produced by accepted commit `f564a5b`, captured
 from the isolated 10,001-project fixture. The complete generated `sqlite_schema`
 inventory is retained locally at `.local/migration-baseline/sqlite-schema.json`.

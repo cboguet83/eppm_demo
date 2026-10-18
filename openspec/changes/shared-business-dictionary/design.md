@@ -107,6 +107,10 @@ The proposed relational structure is:
 | `business_dictionary_entry` | `dictionary_code text`, `id bigint`, `code text`, `name text`, nullable `system_code text` | Restrictive FK to dictionary code; primary key `(dictionary_code,id)`; unique `(dictionary_code,code)`; unique `(dictionary_code,system_code)`; unique `(dictionary_code,lower(name))` |
 | `business_dictionary_translation` | `dictionary_code text`, `entry_id bigint`, `locale text`, `label text` | Primary key `(dictionary_code,entry_id,locale)`; composite entry FK with `ON DELETE CASCADE`; nonblank locale/label |
 
+Migration 0070 completes the locale integrity check without rewriting 0069. Its
+initially unvalidated check preserves any historical blank keys while enforcing
+the rule for new writes. It validates existing rows immediately when compatible.
+
 Entry IDs retain their original numeric values in each dictionary. A single
 identity sequence supplies new IDs and advances beyond the maximum migrated ID
 across both catalogs; IDs are not globally unique and must never be used alone.

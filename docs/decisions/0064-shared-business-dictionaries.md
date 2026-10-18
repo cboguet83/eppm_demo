@@ -26,6 +26,9 @@ this increment. Packaged interface translations retain
 catalog storage requires a separate decision. Migration 0069 and its matching
 application release deploy together; existing migration history is not rewritten.
 
+Additive migration 0070 completes the nonblank-locale write constraint while
+preserving every historical locale row; existing compatible rows are validated.
+
 ## C4 level 3: implemented catalog components
 
 ```mermaid

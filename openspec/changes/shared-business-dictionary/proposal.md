@@ -65,7 +65,8 @@ their specified behavior does not change.
 - Domain/application: reusable typed dictionary records and validation, injected
   dictionary transaction ports/service, and compatibility through
   `CollaborationService` catalog methods.
-- PostgreSQL: one new ordered migration after the current baseline (0068), typed
+- PostgreSQL: ordered consolidation migration 0069 and additive locale-integrity
+  migration 0070 after the current baseline (0068), typed
   contact/event foreign keys, scoped system classification, shared permissions,
   revisions, and dictionary/translation queries.
 - Consumers: collaboration and dashboard adapters; reference/demo seeding,

@@ -2,14 +2,14 @@
 
 ## Current verdict
 
-Implementation tasks 1.1 through 5.2 are complete, including the user-authorized
+Implementation tasks 1.1 through 5.3 are complete, including the user-authorized
 browser repairs. Task 6.1 remains open pending a complete strict acceptance run
 after those repairs. Do not archive or create a PR until that run, its coverage
 threshold and the final verification verdict pass.
 
 | Dimension | Evidence |
 | --- | --- |
-| Completeness | 8/9 tasks complete; all 14 added requirements mapped below |
+| Completeness | 9/10 tasks complete; all 14 added requirements mapped below |
 | Correctness | All 29 scenarios have implementation and test evidence; full-suite acceptance pending |
 | Coherence | Shared tables, composite consumer references, injected transactions, existing Settings navigation and scope exclusions match the design |
 
@@ -125,6 +125,25 @@ schema upgrade tests. Migration files 0001-0068 and checksummed hooks are unchan
 No external dependency, role/permission relaxation, coverage exclusion or ignored
 credential file is included in the Git diff.
 
+## Final integrity correction: task 5.3
+
+The final design review identified that the planned nonblank locale rule was
+enforced by application validation but not by SQL. Additive migration 0070
+completes that rule without rewriting any existing migration. Its initially
+unvalidated check preserves historical blank locale keys while rejecting new
+blank or whitespace-only keys. It validates the existing population immediately
+when compatible. The upgrade regression now covers both historical blank-key and
+ordinary populations, preservation of every row, constraint validation state,
+rerun safety and failure rollback. Direct authorized runtime SQL attempts verify
+the constraint cannot be bypassed by skipping Python validation.
+
+`pytest -q -x --tb=short tests/postgresql/test_dictionary_migration.py
+tests/postgresql/test_dictionaries.py tests/postgresql/test_dictionary_integration.py`
+passed all 18 tests in 10.99 seconds using the isolated dotenv configuration.
+The first post-repair acceptance attempt was deliberately interrupted after 232
+passed in 208.83 seconds to make this correction. It is not acceptance evidence;
+the complete strict suite must restart on the corrected committed revision.
+
 ## Task-to-commit evidence
 
 Source: `git log origin/main..HEAD --oneline` on the dedicated branch, based on
@@ -139,5 +158,6 @@ fetched main at `0b6ebb0`.
 | 3.3 Lifecycle | `be835f5` |
 | 4.1 Translation editor | `0b2595c` |
 | 5.1 Integrated contracts | `04342b2` |
-| 5.2 Authorized browser repairs | Dedicated task commit; recorded by the next acceptance update |
+| 5.2 Authorized browser repairs | `591acd2` |
+| 5.3 Planned SQL locale integrity | Dedicated task commit; recorded by the next acceptance update |
 | 6.1 Full acceptance | Pending required full-suite result |

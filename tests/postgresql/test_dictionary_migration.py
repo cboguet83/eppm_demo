@@ -7,25 +7,47 @@ import pytest
 
 from app.infrastructure.postgresql.migration import discover_migrations, migrate
 from app.infrastructure.postgresql.errors import MigrationError
+from tests.postgresql.conftest import AuthorizedFixture
+
+
+@pytest.mark.parametrize('locale', ['', '   '])
+def test_runtime_translation_rejects_blank_locale(authorized: AuthorizedFixture, locale: str) -> None:
+    """Enforce the planned locale rule even when authorized SQL bypasses Python."""
+    identity = authorized.query(
+        "INSERT INTO eppm.business_dictionary_entry(dictionary_code,name) VALUES ('project_role','Sponsor') RETURNING id",
+        user_id=4, write=True,
+    )[0][0]
+    with pytest.raises(psycopg.errors.CheckViolation):
+        authorized.query(
+            "INSERT INTO eppm.business_dictionary_translation VALUES ('project_role',%s,%s,'Rejected')",
+            (identity, locale), user_id=4, write=True,
+        )
+    assert authorized.query(
+        'SELECT locale FROM eppm.business_dictionary_translation WHERE entry_id=%s',
+        (identity,), user_id=4,
+    ) == []
 
 
 def preceding_schema(setup, directory):
     """Install unchanged migration sources up to the dictionary upgrade."""
-    for migration in discover_migrations()[:-1]:
+    for migration in (item for item in discover_migrations() if item.version < 69):
         with (directory / migration.name).open('w', encoding='utf-8') as output:
             output.write(migration.sql)
     migrate(setup.operator_url, directory=directory)
 
 
 @pytest.mark.parametrize('fail_upgrade', [False, True])
+@pytest.mark.parametrize('legacy_blank_locale', [False, True])
 def test_dictionary_upgrade_preserves_overlapping_ids_and_rolls_back_failures(
-    empty_database, tmp_path, fail_upgrade,
+    empty_database, tmp_path, fail_upgrade, legacy_blank_locale,
 ):
     preceding_schema(empty_database, tmp_path)
     with psycopg.connect(empty_database.operator_url) as connection:
         connection.execute("INSERT INTO eppm.project_role(id,name) VALUES (7,'Sponsor')")
         connection.execute("INSERT INTO eppm.project_event_type(id,name,system_code) VALUES (7,'Update',NULL),(42,'Renamed blocker','blocking_point')")
         connection.execute("INSERT INTO eppm.project_role_translation VALUES (7,'fr','Parrain'),(7,'legacy-LOCALE','Legacy')")
+        if legacy_blank_locale:
+            connection.execute("INSERT INTO eppm.project_role_translation VALUES (7,'','Legacy blank locale')")
         connection.execute("INSERT INTO eppm.project_event_type_translation VALUES (42,'pt','Impedimento')")
         connection.execute("INSERT INTO eppm.project_type(id,name,is_general) VALUES (1,'General',true)")
         connection.execute("INSERT INTO eppm.project(id,name) VALUES (10,'Project')")
@@ -43,7 +65,9 @@ def test_dictionary_upgrade_preserves_overlapping_ids_and_rolls_back_failures(
             assert connection.execute('SELECT id,name FROM eppm.project_role').fetchall() == [(7,'Sponsor')]
             assert connection.execute('SELECT version,name,checksum FROM eppm.schema_migration ORDER BY version').fetchall() == ledger
         return
-    assert migrate(empty_database.operator_url) == ('0069_shared_business_dictionaries.sql',)
+    assert migrate(empty_database.operator_url) == (
+        '0069_shared_business_dictionaries.sql', '0070_dictionary_locale_integrity.sql',
+    )
     assert migrate(empty_database.operator_url) == ()
     with psycopg.connect(empty_database.operator_url) as connection:
         assert connection.execute('SELECT dictionary_code,id,code,name,system_code FROM eppm.business_dictionary_entry ORDER BY dictionary_code,id').fetchall() == [
@@ -51,16 +75,22 @@ def test_dictionary_upgrade_preserves_overlapping_ids_and_rolls_back_failures(
             ('project_event_type',42,'entry_42','Renamed blocker','blocking_point'),
             ('project_role',7,'entry_7','Sponsor',None),
         ]
-        assert connection.execute('SELECT dictionary_code,entry_id,locale,label FROM eppm.business_dictionary_translation ORDER BY dictionary_code,locale').fetchall() == [
+        expected_labels = [
             ('project_event_type',42,'pt','Impedimento'),
             ('project_role',7,'fr','Parrain'),
             ('project_role',7,'legacy-LOCALE','Legacy'),
         ]
+        if legacy_blank_locale:
+            expected_labels.append(('project_role',7,'','Legacy blank locale'))
+        assert connection.execute('SELECT dictionary_code,entry_id,locale,label FROM eppm.business_dictionary_translation ORDER BY dictionary_code,locale').fetchall() == sorted(expected_labels)
+        assert connection.execute("SELECT convalidated FROM pg_constraint WHERE conname='dictionary_locale_nonblank'").fetchone() == (not legacy_blank_locale,)
         assert connection.execute('SELECT role_id FROM eppm.project_contact').fetchall() == [(7,)]
         assert connection.execute('SELECT event_type_id FROM eppm.project_log_event').fetchall() == [(42,)]
         assert connection.execute('SELECT version,name,checksum FROM eppm.schema_migration WHERE version<69 ORDER BY version').fetchall() == ledger
         new_id = connection.execute("INSERT INTO eppm.business_dictionary_entry(dictionary_code,name) VALUES ('project_role','New') RETURNING id").fetchone()[0]
         assert new_id > 42
+        with pytest.raises(psycopg.errors.CheckViolation), connection.transaction():
+            connection.execute("INSERT INTO eppm.business_dictionary_translation VALUES ('project_role',%s,'','Rejected')", (new_id,))
         with pytest.raises(psycopg.errors.RestrictViolation), connection.transaction():
             connection.execute("DELETE FROM eppm.business_dictionary_entry WHERE dictionary_code='project_role' AND id=7")
 
