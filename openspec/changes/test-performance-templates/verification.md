@@ -1,3 +1,5 @@
+> Reopened after final-revision hosted CI failed. The report below records the previous 18-task local verification. It does not establish readiness for the resumed change; tasks 3.11 and 4.4 are pending and the failure cause is unconfirmed.
+
 # Verification: test-performance-templates
 
 Date: 2026-10-18. Branch: `codex/test-performance-templates`.

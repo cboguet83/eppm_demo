@@ -655,3 +655,7 @@ CI uses exactly the previously measured C configuration. No application, test
 assertion, coverage scope, source, dependency or schema change occurs here.
 The sandbox initially denied Node's nested Git process; the native parsed
 workflow check succeeds with the authorized execution permission.
+
+## Hosted PR #2 follow-up (2026-10-18)
+
+Archived head b05b861: run 39112886950, SonarCloud success; pytest failed 1/1,353 after 616.55s on test_blocked_restoration_popup_explains_conflicting_pools, waiting 30s for Alpha (Deleted). Snapshot: checkbox checked, export include_deleted=true, only Beta rendered. JavaScript step skipped after fail-fast. No hosted coverage/full-suite acceptance is claimed. Original covered test passed 30/30 under two-host-CPU affinity; separate pristine focused 4.61s, post-checkbox initial delay 9.38s, tail delay 7.28s, 2s component-module load delay 6.80s, and 16x CPU throttle 11.29s all passed. These do not reproduce the hosted symptom. Temporary probes remain outside the repository in /tmp; no application/test repair has been assumed.
