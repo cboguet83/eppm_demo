@@ -6,6 +6,8 @@ import re
 import pytest
 
 api = pytest.importorskip('playwright.sync_api')
+from tests.test_eppm_planning_browser import eppm_component, eppm_component_origin  # noqa: F401
+
 COMPONENTS = Path(__file__).resolve().parents[1] / 'app/presentation/assets/components'
 
 
@@ -65,52 +67,38 @@ def test_table_filters_have_accessible_names_and_scoped_headers(component):
             browser.close()
 
 
-def test_gantt_submenus_and_resource_toggle_work_with_keyboard():
-    with api.sync_playwright() as playwright:
-        browser = playwright.chromium.launch(headless=True)
-        try:
-            page = browser.new_page(viewport={'width': 1400, 'height': 1000})
-            errors = []
-            page.on('pageerror', lambda error: errors.append(str(error)))
-            page.set_content((COMPONENTS / 'gantt/index.html').read_text(encoding='utf-8'))
-            page.evaluate('''() => {
-                window.actions = [];
-                Streamlit.setComponentValue = value => window.actions.push(value);
-                selectedContextMenuProjectId = 42;
-                allProjectsData = [{id: 42, name: 'Keyboard project'}];
-                document.getElementById('project-context-menu').style.display = 'block';
-            }''')
-            assert page.locator('button button').count() == 0
-            trigger = page.locator('#ctx-filter-menu').locator('..')
-            api.expect(trigger).to_have_role('button')
-            trigger.focus()
-            page.keyboard.press('Enter')
-            api.expect(page.locator('#ctx-filter-this')).to_be_visible()
-            page.keyboard.press('Tab')
-            api.expect(page.locator('#ctx-filter-this')).to_be_focused()
-            page.keyboard.press('Space')
-            events = page.evaluate('window.actions')
-            assert [(event['action'], event['project_id'], event['filter_scope'])
-                    for event in events] == [('filter_project', 42, 'this')]
-            toggle = page.get_by_role('button', name='Toggle resource pools grid')
-            toggle.focus()
-            page.keyboard.press('Enter')
-            api.expect(page.locator('#resource-grid-main')).to_have_class(re.compile('collapsed'))
-            page.keyboard.press('Space')
-            api.expect(page.locator('#resource-grid-main')).not_to_have_class(re.compile('collapsed'))
-            page.evaluate('''() => {
-                canManageSharedData = true;
-                openResourceCellContextMenu(new MouseEvent('contextmenu', {clientX: 100, clientY: 100}),
-                    7, 'Pool', '', '', '', null, 'alternative');
-            }''')
-            api.expect(page.locator('#ctx-res-details-btn')).to_be_disabled()
-            pool_filter = page.locator('#ctx-res-filter-btn > button')
-            api.expect(pool_filter).to_be_enabled()
-            pool_filter.focus()
-            page.keyboard.press('Tab')
-            api.expect(page.locator('[data-resource-filter="consuming"]')).to_be_focused()
-            assert page.locator('.context-menu-item').evaluate_all(
-                "nodes => nodes.every(node => node.tagName === 'BUTTON')")
-            assert not errors, errors
-        finally:
-            browser.close()
+def test_gantt_submenus_and_resource_toggle_work_with_keyboard(eppm_component):
+    """Real mounted menus preserve keyboard scope selection and grid toggling."""
+    page = eppm_component
+    assert page.locator('button button').count() == 0
+    row = page.locator('.planning-frozen-row[data-target-kind=projects]')
+    row.press('Shift+F10')
+    trigger = page.locator('[data-command=project_filter_menu]')
+    api.expect(trigger).to_have_role('menuitem')
+    trigger.focus()
+    page.keyboard.press('Enter')
+    first = page.locator('[data-command=filter_project]')
+    api.expect(first).to_be_visible()
+    page.keyboard.press('Tab')
+    api.expect(first).to_be_focused()
+    page.keyboard.press('Space')
+    page.wait_for_function("events.some(event=>event.action==='filter_project')")
+    events = page.evaluate("events.filter(event=>event.action==='filter_project')")
+    assert [(event['action'], event['project_id'], event['filter_scope'])
+            for event in events] == [('filter_project', 1, 'this')]
+    toggle = page.locator('[data-resource-control=collapse]')
+    toggle.focus()
+    page.keyboard.press('Enter')
+    api.expect(page.locator('[data-part=resource-panel]')).to_be_hidden()
+    page.keyboard.press('Space')
+    api.expect(page.locator('[data-part=resource-panel]')).to_be_visible()
+    page.evaluate("""send({permissions:{edit_all:true,manage_shared:true},alternative_pool_usage:{2:{total:{'2027-01-01':2},selected:{'2027-01-01':1}}}})""")
+    cell = page.locator('.planning-resource-cell[data-scope=alternative_total]').first
+    cell.click(button='right')
+    api.expect(page.locator('[data-command=go_to_pool_details]')).to_be_disabled()
+    pool_filter = page.locator('[data-command=filter_pool]')
+    api.expect(pool_filter).to_be_enabled()
+    pool_filter.focus()
+    page.keyboard.press('Tab')
+    api.expect(page.locator('[data-command=filter_pool_this]')).to_be_focused()
+    assert page.locator('[role=menuitem]').evaluate_all("nodes=>nodes.every(node=>node.tagName==='BUTTON')")

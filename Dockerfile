@@ -14,6 +14,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir --user -r requirements.txt
 
+# Prepare the canonical browser assets once, without a Node runtime/compiler.
+COPY scripts/__init__.py scripts/build_planning_assets.py ./scripts/
+COPY LICENSE ./LICENSE
+COPY packages/planning-view/ ./packages/planning-view/
+COPY packages/streamlit-planning-view/pyproject.toml ./packages/streamlit-planning-view/pyproject.toml
+RUN python -m scripts.build_planning_assets --target eppm
+
 # Stage 2: Runtime Image
 FROM python:3.14-slim-trixie AS runtime
 
@@ -54,6 +61,7 @@ COPY --from=builder --chown=appuser:appuser /root/.local /home/appuser/.local
 # Copy application source code and scripts
 COPY --chown=appuser:appuser streamlit_app.py asgi_app.py .
 COPY --chown=appuser:appuser app/ ./app/
+COPY --from=builder --chown=appuser:appuser /build/app/presentation/assets/components/gantt/planning-view/ ./app/presentation/assets/components/gantt/planning-view/
 COPY --chown=appuser:appuser scripts/ ./scripts/
 COPY --chown=appuser:appuser .streamlit/ ./.streamlit/
 

@@ -1,5 +1,10 @@
 # PostgreSQL task scheduling and dependencies
 
+The Planning chart now uses the shared browser package through the
+[EPPM planning integration](planning-component-integration.md). That guide records
+the current browser/presentation C3 map; the service/store map below remains the
+authoritative persistence ownership map.
+
 ## Project dependency management
 
 Right-click a project label or summary bar and choose **Manage dependencies**.

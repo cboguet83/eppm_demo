@@ -120,9 +120,9 @@ def test_project_details_shortcut_opens_planning_filtered_to_the_selected_projec
             planning.click()
             expect(page.get_by_role('radio', name='Planning & Milestones', exact=True)).to_be_checked(timeout=30000)
             chart = page.frame_locator('iframe[title*="interactive_gantt"]')
-            expect(chart.locator('#badge-projects-count-text')).to_have_text('1 Project')
-            expect(chart.locator('.project-group-row[id^="frozen-row-proj-"]')).to_have_count(1)
-            expect(chart.locator('#frozen-row-proj-' + project_id)).to_be_visible()
+            expect(chart.locator('[data-part=project-count]')).to_have_text('1 Project')
+            expect(chart.locator('.planning-frozen-row[data-target-kind=projects]')).to_have_count(1)
+            expect(chart.locator('.planning-frozen-row[data-target-kind=projects][data-target-id="' + project_id + '"]')).to_be_visible()
             assert len(page.context.pages) == 1
         finally:
             browser.close()

@@ -144,7 +144,7 @@ def test_gantt_browser_driver_consumes_native_session_payloads_and_cleans_up(bus
                                 'DATABASE_URL': pg_database.runtime_url,
                                 'EPPM_BENCHMARK_PYTHON': sys.executable}
     command = ['node', 'scripts/benchmark_gantt.cjs', asyncio.run(executable()),
-               '--database', '--all-projects', '--expanded']
+               '--database', '--all-projects', '--expanded', '--move-task']
     if container := os.environ.get('POSTGRES_TEST_CLIENT_CONTAINER'):
         command.append('--client-container=' + container)
     result = subprocess.run(command, env=environment, cwd=Path(__file__).resolve().parents[2],
@@ -154,6 +154,7 @@ def test_gantt_browser_driver_consumes_native_session_payloads_and_cleans_up(bus
     assert report['source'] == 'isolated PostgreSQL restore'
     assert report['projects'] == 2 and report['pools'] == 1
     assert report['serverTimings'][0]['seconds'] > 0
+    assert any(item['action'] == 'update_task_full' for item in report['serverTimings'])
     assert copies(pg_database) == databases
     assert snapshot(pg_database) == before
 

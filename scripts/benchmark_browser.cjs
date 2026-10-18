@@ -94,4 +94,18 @@ async function waitForBrowserPort(browser, profile, {timeoutMs = 20000, pollMs =
   }
 }
 
-module.exports = {waitForBrowserPort};
+/** Translate Playwright launch failures into the same allowlisted evidence.
+ * @param {unknown} error Browser-driver exception; never include its raw text.
+ * @returns {Error} Safe startup context without arguments, paths or child output.
+ */
+function browserStartupError(error) {
+  const message = error instanceof Error ? error.message : '';
+  const reasons = STARTUP_REASONS.filter(([, pattern]) => pattern.test(message))
+    .map(([name]) => name).sort().join(',') || 'none';
+  const code = message.match(/exitCode=(-?[0-9]{1,3})(?:,|\s)/)?.[1];
+  const signal = message.match(/signal=([A-Z0-9]+)/)?.[1];
+  const spawn = SPAWN_CODES.has(error?.code) ? error.code : 'unknown';
+  return new Error(`The benchmark browser could not start (${exitStatus(code === undefined ? null : Number(code), signal)}, spawn=${spawn}, diagnostics=${reasons}).`);
+}
+
+module.exports = {waitForBrowserPort, browserStartupError};

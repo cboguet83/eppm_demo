@@ -17,14 +17,23 @@ def main() -> None:
     with configured_benchmark(args) as context:
         app = create_app(context, projects=args.projects, profile=False, capture=True)
 
-        def render() -> None:
+        def render(acknowledgement: str | None = None) -> None:
+            """Emit a render with the receipt normally added by the widget adapter.
+
+            Args:
+                acknowledgement: Nonce of the event handled in this rerun.
+            """
             run_app(app)
-            print(json.dumps({'args': app.session_state['benchmark_payload'], 'server_seconds': app.session_state['benchmark_seconds']}), flush=True)
+            payload = dict(app.session_state['benchmark_payload'])
+            if acknowledgement is not None:
+                payload['ack_nonce'] = acknowledgement
+            print(json.dumps({'args': payload, 'server_seconds': app.session_state['benchmark_seconds']}), flush=True)
 
         render()
         for line in sys.stdin:
-            app.session_state['benchmark_event'] = json.loads(line)
-            render()
+            event = json.loads(line)
+            app.session_state['benchmark_event'] = event
+            render(event.get('nonce'))
 
 
 if __name__ == '__main__':

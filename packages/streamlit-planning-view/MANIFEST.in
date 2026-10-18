@@ -1,0 +1,3 @@
+include build_frontend.py
+recursive-include src/streamlit_planning_view/frontend *
+global-exclude __pycache__ *.py[cod]
