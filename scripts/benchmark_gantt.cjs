@@ -7,7 +7,7 @@ const path = require('node:path');
 const {spawn, execFileSync} = require('node:child_process');
 const {pathToFileURL} = require('node:url');
 const readline = require('node:readline');
-const {waitForBrowserPort} = require('./benchmark_browser.cjs');
+const {waitForBrowserPort, waitForBrowserShutdown} = require('./benchmark_browser.cjs');
 
 async function main() {
   const useDatabase = process.argv.includes('--database');
@@ -209,8 +209,9 @@ async function main() {
         resourceVerticalScrollbar:document.getElementById('resource-grid-main').scrollHeight>document.getElementById('resource-grid-main').clientHeight+1};
     })()`);
     console.log(JSON.stringify(result, null, 2));
-    await call('Browser.close');
+    const requestClose = closeBrowser;
     closeBrowser = null;
+    await waitForBrowserShutdown(browser, requestClose);
   } finally {
     if (closeBrowser && socket?.readyState === WebSocket.OPEN) {
       await Promise.race([closeBrowser().catch(() => {}), new Promise(resolve => setTimeout(resolve, 1000))]);

@@ -7,7 +7,7 @@ const {EventEmitter} = require('node:events');
 const {PassThrough} = require('node:stream');
 const {spawn} = require('node:child_process');
 const {setTimeout: pause} = require('node:timers/promises');
-const {waitForBrowserPort} = require('../scripts/benchmark_browser.cjs');
+const {waitForBrowserPort, waitForBrowserShutdown} = require('../scripts/benchmark_browser.cjs');
 
 function privateProfile(t) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'eppm-browser-readiness-test-'));
@@ -152,4 +152,117 @@ test('an actual child exit is reported without waiting for a readiness timeout',
       return true;
     },
   );
+});
+
+test('successful exit completes shutdown without a CDP acknowledgement', async t => {
+  const browser = browserProcess(t);
+  let calls = 0;
+  await waitForBrowserShutdown(browser, () => {
+    calls++;
+    queueMicrotask(() => { browser.exitCode = 0; browser.emit('exit', 0, null); });
+    return new Promise(() => {});
+  });
+  assert.equal(calls, 1);
+  assert.equal(browser.listenerCount('exit'), 0);
+  assert.equal(browser.listenerCount('error'), 0);
+});
+
+test('a close acknowledgement cannot accept a browser that remains alive', async t => {
+  const browser = browserProcess(t);
+  await assert.rejects(waitForBrowserShutdown(browser, () => Promise.resolve(), {timeoutMs: 5}),
+    /did not exit within 5 milliseconds/);
+  assert.equal(browser.listenerCount('exit'), 0);
+  assert.equal(browser.listenerCount('error'), 0);
+});
+
+test('a rejected close request still permits observed successful exit', async t => {
+  const browser = browserProcess(t);
+  await waitForBrowserShutdown(browser, () => {
+    setImmediate(() => { browser.exitCode = 0; browser.emit('exit', 0, null); });
+    return Promise.reject(new Error('private-protocol-message'));
+  });
+  assert.equal(browser.listenerCount('exit'), 0);
+});
+
+test('a rejected close request fails for a live child without exposing protocol data', async t => {
+  const browser = browserProcess(t);
+  await assert.rejects(waitForBrowserShutdown(browser,
+    () => Promise.reject(new Error('private-protocol-message')), {timeoutMs: 5}), error => {
+    assert.match(error.message, /close_request_rejected=true/);
+    assert.doesNotMatch(error.message, /private-protocol-message/);
+    return true;
+  });
+  assert.equal(browser.listenerCount('error'), 0);
+});
+
+test('nonzero and signalled browser exits remain shutdown failures', async t => {
+  for (const [code, signal, expected] of [[23, null, /exit=23/], [null, 'SIGTERM', /signal=SIGTERM/]]) {
+    const browser = browserProcess(t);
+    await assert.rejects(waitForBrowserShutdown(browser, () => {
+      queueMicrotask(() => browser.emit('exit', code, signal));
+      return Promise.resolve();
+    }), expected);
+    assert.equal(browser.listenerCount('exit'), 0);
+  }
+});
+
+test('already exited children are classified without another close request', async t => {
+  const browser = browserProcess(t);
+  let calls = 0;
+  const close = () => { calls++; return Promise.resolve(); };
+  browser.exitCode = 0;
+  await waitForBrowserShutdown(browser, close);
+  browser.exitCode = 23;
+  await assert.rejects(waitForBrowserShutdown(browser, close), /exit=23/);
+  assert.equal(calls, 0);
+  assert.equal(browser.listenerCount('exit'), 0);
+});
+
+test('shutdown process errors expose only allowlisted codes', async t => {
+  const browser = browserProcess(t);
+  await assert.rejects(waitForBrowserShutdown(browser, () => {
+    queueMicrotask(() => browser.emit('error', Object.assign(
+      new Error('private-process-message'), {code: 'private-code'},
+    )));
+    return Promise.resolve();
+  }), error => {
+    assert.match(error.message, /code=unknown/);
+    assert.doesNotMatch(error.message, /private/);
+    return true;
+  });
+  assert.equal(browser.listenerCount('exit'), 0);
+  assert.equal(browser.listenerCount('error'), 0);
+});
+
+test('invalid shutdown bounds install no observers and send no request', async t => {
+  const browser = browserProcess(t);
+  let calls = 0;
+  for (const timeoutMs of [0, -1, NaN, Infinity, 1.5]) {
+    await assert.rejects(waitForBrowserShutdown(browser,
+      () => { calls++; return Promise.resolve(); }, {timeoutMs}), RangeError);
+  }
+  assert.equal(calls, 0);
+  assert.equal(browser.listenerCount('exit'), 0);
+  assert.equal(browser.listenerCount('error'), 0);
+});
+
+test('a real child exit releases an unanswered shutdown command', async t => {
+  const browser = spawn(process.execPath, ['-e', 'setTimeout(() => process.exit(0), 10)'],
+    {stdio: 'ignore'});
+  t.after(() => browser.kill());
+  await waitForBrowserShutdown(browser, () => new Promise(() => {}));
+  assert.equal(browser.exitCode, 0);
+  assert.equal(browser.listenerCount('exit'), 0);
+});
+
+
+test('a real persistent child still fails shutdown and is explicitly cleaned up', async t => {
+  const browser = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'],
+    {stdio: 'ignore'});
+  t.after(() => browser.kill());
+  await assert.rejects(waitForBrowserShutdown(browser, () => Promise.resolve(),
+    {timeoutMs: 20}), /did not exit within 20 milliseconds/);
+  assert.equal(browser.exitCode, null);
+  assert.equal(browser.listenerCount('exit'), 0);
+  assert.equal(browser.listenerCount('error'), 0);
 });

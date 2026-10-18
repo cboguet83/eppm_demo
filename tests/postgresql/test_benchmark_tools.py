@@ -3,7 +3,9 @@
 import json
 from io import StringIO
 import os
+from pathlib import Path
 import sys
+from typing import TYPE_CHECKING
 
 import psycopg
 from psycopg import sql
@@ -19,6 +21,20 @@ from scripts.benchmark_task_pool_dialog import modal_app
 from tests.postgresql.business import business
 from tests.postgresql.benchmark_lock import benchmark_cluster_lock
 from tests.postgresql.template_database import PostgreSQLFixture
+
+
+_IGNORED_SHUTDOWN = 'ignored-close'
+
+
+if TYPE_CHECKING:
+    from app.application.services.access import AccessService
+    from app.application.services.business_access import BusinessAccess
+    from app.domain.access.models import Actor
+    from app.runtime import RuntimeResources
+
+    type BenchmarkBusiness = tuple[
+        RuntimeResources, AccessService, Actor, BusinessAccess, BusinessAccess,
+    ]
 
 
 @pytest.fixture(autouse=True)
@@ -120,9 +136,23 @@ def test_failed_archive_client_preserves_source_and_leaves_no_copy(business, pg_
     assert snapshot(pg_database) == before
 
 
-def test_gantt_browser_driver_consumes_native_session_payloads_and_cleans_up(business, pg_database):
+@pytest.mark.parametrize(
+    'shutdown_behavior', ['ordinary', 'lost-acknowledgement', _IGNORED_SHUTDOWN],
+    ids=['ordinary', 'lost-shutdown-acknowledgement', 'ignored-shutdown-request'],
+)
+def test_gantt_browser_driver_consumes_native_session_payloads_and_cleans_up(
+    business: 'BenchmarkBusiness', pg_database: PostgreSQLFixture,
+    tmp_path: Path, shutdown_behavior: str,
+) -> None:
+    """Preserve native source/copy integrity with or without a shutdown response.
+
+    Args:
+        business: Seeded real business identities and restricted process resources.
+        pg_database: This test's isolated native database fixture.
+        tmp_path: Private directory for controlled protocol instrumentation.
+        shutdown_behavior: Ordinary, missing response, or deliberately ignored close.
+    """
     import asyncio
-    from pathlib import Path
     import subprocess
     from playwright.async_api import async_playwright
 
@@ -143,12 +173,43 @@ def test_gantt_browser_driver_consumes_native_session_payloads_and_cleans_up(bus
     environment = os.environ | {'DATABASE_OPERATOR_URL': pg_database.operator_url,
                                 'DATABASE_URL': pg_database.runtime_url,
                                 'EPPM_BENCHMARK_PYTHON': sys.executable}
-    command = ['node', 'scripts/benchmark_gantt.cjs', asyncio.run(executable()),
+    node = ['node']
+    if shutdown_behavior != 'ordinary':
+        preload = tmp_path / 'lost-shutdown-acknowledgement.cjs'
+        ignored_close = 'true' if shutdown_behavior == _IGNORED_SHUTDOWN else 'false'
+        preload.write_text(f'const ignoreClose = {ignored_close};\n'+"""
+const NativeSocket = globalThis.WebSocket;
+globalThis.WebSocket = class extends NativeSocket {
+  send(data) {
+    const message = JSON.parse(data);
+    if (message.method === 'Browser.close') {
+      this.closeId = message.id;
+      if (ignoreClose) return;
+    }
+    return super.send(data);
+  }
+  set onmessage(callback) {
+    super.onmessage = event => {
+      if (this.closeId !== undefined && JSON.parse(event.data).id === this.closeId) return;
+      callback(event);
+    };
+  }
+  get onmessage() { return super.onmessage; }
+};
+""", encoding='utf-8')
+        node += ['--require', str(preload)]
+    command = [*node, 'scripts/benchmark_gantt.cjs', asyncio.run(executable()),
                '--database', '--all-projects', '--expanded']
     if container := os.environ.get('POSTGRES_TEST_CLIENT_CONTAINER'):
         command.append('--client-container=' + container)
     result = subprocess.run(command, env=environment, cwd=Path(__file__).resolve().parents[2],
                             capture_output=True, text=True, timeout=120, check=False)
+    if shutdown_behavior == _IGNORED_SHUTDOWN:
+        assert result.returncode == 1
+        assert 'did not exit within 1000 milliseconds' in result.stderr
+        assert copies(pg_database) == databases
+        assert snapshot(pg_database) == before
+        return
     assert result.returncode == 0, result.stderr[-3000:]
     report = json.loads(result.stdout)
     assert report['source'] == 'isolated PostgreSQL restore'
