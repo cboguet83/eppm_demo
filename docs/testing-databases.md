@@ -45,8 +45,8 @@ flowchart LR
 ## Template lifecycle
 
 `tests/postgresql/template_database.py` provides `DatabaseTemplateFactory`.
-The pytest fixtures use this owner for both preparation modes. The rollout
-default remains `fresh`; template preparation is explicitly selectable:
+The pytest fixtures use this owner for both preparation modes. After complete fresh/template/parallel acceptance, migrated templates are the
+default. Both preparation modes remain explicitly selectable:
 
 ```bash
 python -m pytest --postgres-test-db-mode=fresh
@@ -211,3 +211,27 @@ These focused branch probes do not assert whole-application acceptance. Full
 runs must still meet 95% across `app` with no required skips. Real containerized
 OIDC/recovery remains a separate behavior gate; container application execution
 is not attributed to the host's native-subprocess coverage.
+
+## Accepted full-run configuration
+
+Full PR CI uses exactly two workers with loadgroup scheduling and no worker
+restarts, preserving every test and the strict completion/95% coverage gates:
+
+```bash
+python -m pytest -q -x -p no:cacheprovider --require-full-suite \
+  --cov=app --cov-fail-under=95 -n 2 --dist=loadgroup \
+  --postgres-test-db-mode=template --max-worker-restart=0
+node --test tests/test_*.cjs
+```
+
+Use the isolated credentials, real OIDC option and browser/client prerequisites
+in [the development workflow](development-workflow.md). For a serial diagnostic
+reference, select `-n 0 --postgres-test-db-mode=fresh`; this retains all historical
+migrations. During editing, run affected test paths locally for quick feedback;
+partial runs do not satisfy the full PR or OpenSpec acceptance gates. The
+measurement plugin is opt-in and is not enabled by normal PR CI.
+
+The controlled local full runs passed 3,304 cases plus five subtests and 112
+JavaScript cases at 97.68% coverage. The slower of two complete parallel runs
+took 21m17s versus 42m18s fresh/serial, a 49.7% reduction; median preparation
+improved 67.7%. These pytest timings exclude provisioning/build/install time.

@@ -629,3 +629,29 @@ output directories, and retains failed preparation results/nonzero exits.
 Its subprocess tests join the audited heavy scheduling group. The C3 test
 infrastructure map documents the existing components. CI is still unchanged
 in this task; template default and two-worker promotion are task 4.2.
+
+## Task 4.2 — promote the measured configuration
+
+Template preparation is now the pytest fixture default; parallelism remains
+explicit. Full PR CI appends only `-n 2 --dist=loadgroup
+--postgres-test-db-mode=template --max-worker-restart=0` to its existing command.
+Parsed YAML deep comparison with origin/main confirms every other workflow
+field is unchanged: unfiltered pull_request/manual triggers, Python 3.14,
+prerequisites, real PostgreSQL/OIDC, fail-fast, strict completion, 95% coverage
+and all JavaScript checks. The opt-in metrics plugin is not added to CI.
+
+The strict gate/controller/scheduler and real fixture-contract set passes
+**57 cases in 17.31s** under two workers. A separate real default invocation
+passes both fixture-contract cases (**1.37s**) and its measurement record
+confirms template mode with no explicit mode argument. Post-promotion
+collection-only comparison retains all **3,304 canonical IDs in exact order**;
+this is manifest evidence, not another claimed full execution. The existing
+explicit fresh reference remains available and was already fully verified.
+
+Developer documentation now gives the accepted complete command, serial/fresh
+fallback, local focused feedback guidance and measured scope/limitations.
+Only the option default and explicit workflow flags change execution selection;
+CI uses exactly the previously measured C configuration. No application, test
+assertion, coverage scope, source, dependency or schema change occurs here.
+The sandbox initially denied Node's nested Git process; the native parsed
+workflow check succeeds with the authorized execution permission.

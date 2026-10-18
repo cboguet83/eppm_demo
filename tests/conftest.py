@@ -78,7 +78,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     parser.addoption(
         "--postgres-test-db-mode",
         choices=("fresh", "template"),
-        default="fresh",
+        default="template",
         help="Prepare PostgreSQL tests through fresh migrations or clones.",
     )
 
