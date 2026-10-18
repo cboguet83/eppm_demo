@@ -181,6 +181,11 @@ def test_direct_rebuilt_and_root_wheels_contain_matching_complete_assets(
             assert names == expected.keys()
             for name, content in expected.items():
                 assert wheel.read(prefix + name) == content
+            if artifact.startswith("application"):
+                host = ROOT / "app/presentation/assets/components/gantt"
+                for path in host.iterdir():
+                    if path.is_file() and path.suffix in {".html", ".js", ".css"}:
+                        assert wheel.read("app/presentation/assets/components/gantt/" + path.name) == path.read_bytes()
     _validator().validate_frontend(planning_artifacts["extracted"])
 
 

@@ -5,16 +5,17 @@ import {createLifetime} from '../workspace/lifetime.js';
 
 /** Connect a supplied root to one Streamlit parent with lossless queued delivery.
  * @param {HTMLElement} root Owned host element.
- * @param {{mount?:Function,onError?:Function}} options Optional host normalization/mount seam.
+ * @param {{mount?:Function,onError?:Function,prepareRender?:Function,encodeEvent?:Function}} options Host normalization seams; core contracts remain validated.
  * @returns {{destroy:Function}} Idempotent bridge disposal.
  */
-export function connectStreamlit(root,{mount=mountPlanningView,onError=()=>{}}={}) {
+export function connectStreamlit(root,{mount=mountPlanningView,onError=()=>{},prepareRender=args=>args,encodeEvent=event=>event}={}) {
   const win=root.ownerDocument.defaultView,lifetime=createLifetime(win),reads=new Map(),writes=new Map();
   let origin=null,instance=null,snapshotKey=null,optionsKey=null,messagesKey=null,queue=[],inFlight=null,scope=null,revision=null;
   const send=(type,fields={})=>{if(!lifetime.disposed)win.parent.postMessage({isStreamlitMessage:true,type,...fields},origin ?? '*');};
   const flush=()=>{
     if(inFlight || !queue.length || lifetime.disposed)return;
-    inFlight=queue[0].requestId;send('streamlit:setComponentValue',{value:queue[0],dataType:'json'});
+    const value=encodeEvent(queue[0]);
+    inFlight=queue[0].requestId;send('streamlit:setComponentValue',{value,dataType:'json'});
   };
   const enqueue=input=>{
     if(lifetime.disposed)return;
@@ -50,8 +51,9 @@ export function connectStreamlit(root,{mount=mountPlanningView,onError=()=>{}}={
   };
   lifetime.listen(win,'message',event=>{
     if(event.source!==win.parent || (origin!==null && event.origin!==origin) || event.data?.type!=='streamlit:render')return;
-    const args=event.data.args;
     try {
+      const args=prepareRender(event.data.args,{emit:enqueue});
+      if(args===null && event.data.args!==null)return; // Host may request its missing initial payload first.
       if(!args || !Array.isArray(args.messages ?? []) || !Array.isArray(args.ackRequestIds ?? []) || (args.ackRequestIds ?? []).some(id=>typeof id!=='string'))throw new ContractError('streamlit.args');
       if(args.lazy!==undefined && typeof args.lazy!=='boolean')throw new ContractError('streamlit.lazy');
       if(args.options!==undefined && (!args.options || typeof args.options!=='object' || Array.isArray(args.options)))throw new ContractError('streamlit.options');

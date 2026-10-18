@@ -52,6 +52,10 @@ function rows(values, path) {
     identity(value.id, path + '.id');
     requireValue(!ids.has(value.id), path + '.duplicateId');
     ids.add(value.id);
+    if(value.capabilities!==undefined) {
+      record(value.capabilities,path+'.capabilities');
+      requireValue(Object.values(value.capabilities).every(item=>typeof item==='boolean'),path+'.capabilities');
+    }
   }
   return values;
 }
@@ -81,6 +85,10 @@ function dependencies(values, path) {
       requireValue(['project', 'task', 'unavailable'].includes(endpoint.kind), path + '.kind');
       if (endpoint.kind !== 'unavailable') identity(endpoint.id, path + '.endpointId');
       if(endpoint.projectId!==undefined)identity(endpoint.projectId,path+'.projectId');
+      if(endpoint.kind!=='unavailable') {
+        if(endpoint.name!==undefined)requireValue(typeof endpoint.name==='string',path+'.endpointName');
+        if(endpoint.start!==undefined || endpoint.end!==undefined)range(endpoint,path+'.endpointDates');
+      }
     }
     if (dependency.lagDays !== undefined) requireValue(Number.isInteger(dependency.lagDays), path + '.lagDays');
     for(const flag of ['violated','evaluable','external']) {
@@ -130,6 +138,10 @@ function hierarchy(value, path) {
     identity(node.id, path + '.id');
     requireValue(!objects.has(node) && !keys.has(node.id), path + '.duplicateOrCycle');
     objects.add(node); keys.add(node.id);
+    if(node.capabilities!==undefined) {
+      record(node.capabilities,path+'.capabilities');
+      requireValue(Object.values(node.capabilities).every(item=>typeof item==='boolean'),path+'.capabilities');
+    }
     if (node.resourceId !== undefined) identity(node.resourceId, path + '.resourceId');
     if(node.name!==undefined)requireValue(typeof node.name==='string',path+'.name');
     if (node.children === undefined) continue;
@@ -166,6 +178,21 @@ function jsonData(input) {
 
 /** @param {object} value Data-bearing message. */
 function data(value) {
+  if(value.choiceProjects!==undefined)for(const project of rows(value.choiceProjects,'choiceProjects'))requireValue(typeof project.name==='string','choiceProjects.name');
+  if(value.viewHints!==undefined) {
+    const hints=record(value.viewHints,'viewHints');
+    for(const field of ['editEnabled','resetResourceFilters'])if(hints[field]!==undefined)requireValue(typeof hints[field]==='boolean','viewHints.'+field);
+    if(hints.focusProjectId!==undefined)identity(hints.focusProjectId,'viewHints.focusProjectId');
+    if(hints.expandedProjectIds!==undefined) {
+      requireValue(Array.isArray(hints.expandedProjectIds),'viewHints.expandedProjectIds');
+      hints.expandedProjectIds.forEach(id=>identity(id,'viewHints.expandedProjectIds'));
+      requireValue(new Set(hints.expandedProjectIds).size===hints.expandedProjectIds.length,'viewHints.expandedProjectIds');
+    }
+    if(hints.filters!==undefined) {
+      const filters=record(hints.filters,'viewHints.filters');
+      for(const [key,item] of Object.entries(filters))requireValue(['internalLinks','externalLinks','descriptions','hover'].includes(key) && typeof item==='boolean','viewHints.filters');
+    }
+  }
   if(value.resourceFilter!==undefined && value.resourceFilter!==null) {
     const filter=record(value.resourceFilter,'resourceFilter');
     requireValue(filter.resourceId!==undefined || filter.groupId!==undefined,'resourceFilter.target');
@@ -176,6 +203,7 @@ function data(value) {
   if (value.projects !== undefined) {
     for (const project of rows(value.projects, 'projects')) {
       requireValue(typeof project.name === 'string', 'projects.name');
+      if(project.defaultPhase!==undefined)requireValue(typeof project.defaultPhase==='string','projects.defaultPhase');
       if(project.start!=null || project.end!=null)range(project,'projects');
       if(project.taskCount!==undefined)requireValue(Number.isSafeInteger(project.taskCount) && project.taskCount>=0,'projects.taskCount');
     }

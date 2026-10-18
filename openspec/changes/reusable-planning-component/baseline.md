@@ -67,6 +67,41 @@ resource vertical scroll/reset through the store.
 
 ## Commands and current results
 
+Task 5.1 replaces the monolithic asset with the shared core/bridge plus scoped
+EPPM DTO/transport/command/choice/project-batch modules. Native scenario and
+project-dependency selectors now address mounted parts, opaque targets, lanes
+and accessible menu/form controls. All persistence, baseline isolation, colors,
+milestone/date-handle counts, label associations/focus, dependency warning text,
+stale drafts, explicit reload, relative allocations, activation confirmation and
+single-rerun assertions remain. Diagnostic warning marks open their inspector
+directly; its same delivered content is asserted without the former intermediate
+global menu ID. The registration test now patches the Python presentation adapter.
+
+Integration validation (targeted evidence, not final acceptance):
+
+- PostgreSQL/native group: `test_gantt_scenarios_browser.py`,
+  `test_project_dependency_browser.py`, `test_gantt_step_reruns.py`,
+  `test_scoped_planning_updates_ui.py`, `test_planning_ui.py`,
+  `test_gantt_scenarios.py`, `test_planning_http.py`, `test_planning_log_event.py`,
+  `test_shared_project_filters_browser.py`: **111 passed in 195.03 s** using the
+  isolated workflow database configuration and actual restricted browser servers.
+- EPPM/shared mounted browser, distributions, installed consumers and Python
+  adapter checks: **45 passed in 55.23 s**. These retain resource row/cell bounds,
+  two-instance isolation, frame/scroll alignment and installed asset checks.
+- Latest Node module/protocol checks: **105 passed**. These include captured
+  draft revisions, task-creation defaults, approval/admin versus edit hints,
+  403/409 single refresh, source tokens, redaction and group filter identities.
+- After preserving creation defaults, EPPM browser/Python follow-up: **12 passed
+  in 5.33 s**. Python callback/event/edit-mode checks: **33 passed in 0.43 s**.
+
+Native checks exposed a rerun/menu race and missing comparison-summary identity;
+both were corrected. Mounted checks exposed scale/scroll extent publication
+before the next animation frame; mode changes now publish geometry synchronously.
+Restored individual column controls required the existing splitter selectors to
+name the main splitter explicitly. Failed attempts are not acceptance evidence.
+Remaining legacy source/global consumers and repeated benchmark comparisons are
+tracked in tasks 5.2 and 6.1.
+
 - `node --test tests/test_gantt_scrolling.cjs tests/test_gantt_permissions.cjs tests/test_planning_lazy.cjs tests/test_ui_menus.cjs`: four files passed.
 - Targeted Python edit-mode, event, view, and resource-header checks: 28 passed.
 - Tooltip and Gantt keyboard browser checks: two passed, seven unrelated cases deselected.

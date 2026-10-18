@@ -3,6 +3,7 @@ import {shiftTask} from '../calendar/index.js';
 import {createActionController,validateActions,actionAllowed} from './actions.js';
 import {createContextMenu} from './menu.js';
 import {createEditor} from './editor.js';
+import {createDiagnostics} from './diagnostics.js';
 
 /** @param {HTMLElement} node Rendered entity. @returns {object|null} Opaque target. */
 function targetOf(node) {
@@ -25,7 +26,16 @@ export function createInteractions({frame,toolbar,store,lifetime,options,calenda
   const commands=validateActions(options.contextActions),menu=createContextMenu(frame,lifetime);
   const commandIndex=new Map(),pendingCommands=[...commands];
   while(pendingCommands.length){const command=pendingCommands.pop();commandIndex.set(command.id,command);for(const child of command.children ?? [])pendingCommands.push(child);}
-  const editor=createEditor({frame,store,actions,lifetime});
+  const editor=createEditor({frame,store,actions,lifetime,options});
+  const diagnostics=createDiagnostics({frame,store,actions,lifetime,options});
+  const openTarget=target=>{
+    if(target.kind!=='dependencies' || options.dependencyEditor!=='successor')return actions.open(target);
+    const resolved=actions.resolve(target);if(!resolved)return false;
+    const endpoint=resolved.record.successor,owner={kind:endpoint.kind==='project'?'projects':'tasks',id:endpoint.id,...(target.overlayId?{overlayId:target.overlayId}:{})};
+    if(endpoint.kind==='task')return actions.open(owner);
+    if(endpoint.kind==='project' && options.projectDependenciesCommand){actions.command({id:options.projectDependenciesCommand},owner);return true;}
+    return false;
+  };
   const tooltip=doc.createElement('div');tooltip.className='planning-tooltip';tooltip.setAttribute('role','tooltip');tooltip.hidden=true;frame.append(tooltip);
   const status=doc.createElement('p');status.className='planning-error planning-status';status.setAttribute('role','alert');status.hidden=true;toolbar.after(status);
   const editLabel=doc.createElement('label'),edit=doc.createElement('input'),hoverLabel=doc.createElement('label'),hover=doc.createElement('input');
@@ -47,20 +57,29 @@ export function createInteractions({frame,toolbar,store,lifetime,options,calenda
   /** @param {object} target Current target. @param {MouseEvent} event Invocation. */
   const openMenu=(target,event,context={})=>{
     const {data,view}=store.read(),entries=[];hideHover();cancelSelection();
-    if(['tasks','dependencies'].includes(target.kind))entries.push({label:data.labels.edit || 'Edit',disabled:!actions.canEdit(target,target.kind==='dependencies'?'dependency':'task'),run:()=>actions.open(target)});
+    if(['tasks','dependencies'].includes(target.kind))entries.push({label:data.labels.edit || 'Edit',disabled:!actions.canEdit(target,target.kind==='dependencies'?'dependency':'task'),run:()=>openTarget(target)});
     // Each entry is checked again on invocation; a formerly enabled menu is safe.
     const pending=[{source:commands,destination:entries}];
     while(pending.length) {
       const {source,destination}=pending.pop();
       for(const command of source) {
         if(!actionAllowed(command,data,view,target))continue;
-        const entry={label:command.label,run:()=>actions.command(command,target,context)};destination.push(entry);
+        const entry={label:data.labels['command_'+command.id] || command.label,run:()=>{
+          const latest=store.read();if(!actionAllowed(command,latest.data,latest.view,target))return;
+          if(command.editor==='createTask')actions.openCreate(target);
+          else if(command.editor==='diagnostics')diagnostics.open(target);
+          else if(command.editor==='predecessors')diagnostics.open(target,'predecessors');
+          else return actions.command(command,target,context);
+        }};destination.push(entry);
         if(command.children){entry.children=[];pending.push({source:command.children,destination:entry.children});}
       }
     }
     menu.open(entries,event.clientX,event.clientY);
   };
-  lifetime.listen(edit,'change',()=>{const {view}=store.read();store.setView({filters:{...view.filters,editEnabled:edit.checked}});});
+  lifetime.listen(edit,'change',()=>{
+    const {data,view}=store.read();store.setView({filters:{...view.filters,editEnabled:edit.checked}});
+    if(options.editCommand && data.projects.length)actions.command({id:options.editCommand},{kind:'projects',id:data.projects[0].id},{enabled:edit.checked});
+  });
   lifetime.listen(hover,'change',()=>{hideHover();const {view}=store.read();store.setView({filters:{...view.filters,hover:hover.checked}});});
   lifetime.listen(frame,'contextmenu',event=>{
     const node=event.target.closest('[data-target-id]'),target=targetOf(node);
@@ -72,6 +91,7 @@ export function createInteractions({frame,toolbar,store,lifetime,options,calenda
     if(extension){const command=commandIndex.get(extension.dataset.hostAction);if(command)actions.command(command,targetOf(extension),contextOf(extension));return;}
     if(suppressClick){suppressClick=false;return;}
     const node=event.target.closest('[data-target-id]'),target=targetOf(node);
+    if(target && event.target.closest('[data-diagnostics]')){cancelSelection();diagnostics.open(target);return;}
     if(target && !event.target.closest('[data-expand],[data-toggle-resource]') && !node.dataset.scope?.startsWith('alternative_')) {
       cancelSelection();selectionTimer=lifetime.timeout(()=>{selectionTimer=null;actions.select(target,contextOf(node));},300);
     }
@@ -99,6 +119,11 @@ export function createInteractions({frame,toolbar,store,lifetime,options,calenda
       hoverTimer=null;if(!node.isConnected || hovered!==node)return;
       const {record}=actions.resolve(target) ?? {};if(!record)return;
       tooltip.textContent=node.dataset.tooltip ?? record.tooltip ?? [record.name,record.start && record.start+' → '+record.end,record.description].filter(Boolean).join('\n');
+      if(node.matches('.planning-resource-cell') && node.dataset.excess!=='') {
+        const lines=tooltip.textContent.split('\n'),title=doc.createElement('strong'),status=doc.createElement('div');
+        title.textContent=lines[0];status.textContent=lines.at(-1);status.className='planning-tooltip-status';status.dataset.overallocated=node.dataset.overallocated;
+        tooltip.replaceChildren(title,doc.createTextNode('\n'),status,doc.createTextNode(lines.slice(1,-1).join('\n')));
+      }
       tooltip.hidden=false;place(event);
     },options.tooltipDelay ?? 1000);
   });
@@ -120,9 +145,9 @@ export function createInteractions({frame,toolbar,store,lifetime,options,calenda
     const edge=event.target.dataset.edge ?? 'move',{data,view}=store.read(),operation=edge==='progress'?'progress':'dates';
     if(view.pendingRequestId || !actions.canEdit(target,operation))return;
     event.preventDefault();hideHover();menu.close();node.focus();node.setPointerCapture(event.pointerId);node.classList.add('planning-dragging');
-    const record=actions.resolve(target).record;
+    const {record,overlay}=actions.resolve(target);
     drag={node,target,pointerId:event.pointerId,x:event.clientX,startX:calendar().dateToX(record.start),record:{...record,progress:record.progress ?? 0},
-      width:parseFloat(node.style.width),edge,moved:false,scope:data.scope,revision:data.revision};
+      width:parseFloat(node.style.width),edge,moved:false,scope:data.scope,revision:data.revision,overlayRevision:overlay?.revision};
   });
   lifetime.listen(frame,'pointerup',event=>{
     if(!drag || event.pointerId!==drag.pointerId)return;
@@ -135,11 +160,16 @@ export function createInteractions({frame,toolbar,store,lifetime,options,calenda
   });
   lifetime.listen(frame,'pointercancel',()=>{stopDrag();store.setView({preview:null});});
   lifetime.listen(frame,'lostpointercapture',()=>{if(drag){stopDrag();store.setView({preview:null});}});
+  let menuScope=store.read().data.scope,menuRevision=store.read().data.revision;
   lifetime.own(store.subscribe(reason=>{
     if(reason==='destroy')return;
     const {data,view}=store.read();
-    if(reason==='data'){hideHover();cancelSelection();menu.close();}
-    if(drag && (data.scope!==drag.scope || data.revision!==drag.revision || !actions.canEdit(drag.target,drag.edge==='progress'?'progress':'dates'))) {
+    if(reason==='data') {
+      hideHover();cancelSelection();
+      if(data.scope!==menuScope || data.revision!==menuRevision)menu.close();
+      menuScope=data.scope;menuRevision=data.revision;
+    }
+    if(drag && (data.scope!==drag.scope || data.revision!==drag.revision || actions.resolve(drag.target)?.overlay?.revision!==drag.overlayRevision || !actions.canEdit(drag.target,drag.edge==='progress'?'progress':'dates'))) {
       stopDrag();store.setView({preview:null});
     }
     const target=view.draft?.values?.target;
@@ -148,7 +178,7 @@ export function createInteractions({frame,toolbar,store,lifetime,options,calenda
   lifetime.own(()=>{stopDrag();hideHover();cancelSelection();actions.destroy();tooltip.remove();status.remove();commandIndex.clear();});
   return {
     cancelSelection,
-    openDependency(entry){hideHover();return actions.open({kind:'dependencies',id:entry.dependency.id,...(entry.overlay?{overlayId:entry.overlay.id}:{})});},
+    openDependency(entry){hideHover();return openTarget({kind:'dependencies',id:entry.dependency.id,...(entry.overlay?{overlayId:entry.overlay.id}:{})});},
     render() {
       const {data,view}=store.read();editLabel.hidden=!data.capabilities.edit;edit.checked=!!view.filters.editEnabled;
       status.hidden=!view.error || !!view.draft;status.textContent=view.error ?? '';

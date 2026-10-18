@@ -10,6 +10,7 @@ import {createInteractions} from './interactions.js';
 import {validateActions,canEdit} from './actions.js';
 import {createResourceRenderer} from '../resources/render.js';
 import {createColumnGuides} from './columns.js';
+import {createViewControls} from './controls.js';
 
 /** @param {Document} doc Document. @param {string} tag HTML tag. @param {string} name Part. @param {string} className Scoped style. */
 function element(doc,tag,name,className) {
@@ -117,13 +118,17 @@ function bindSplitter(frame,splitter,lifetime,change,width) {
 export function mountPlanningView(root,options) {
   if(!root || root.nodeType!==1 || !root.ownerDocument?.defaultView)throw new ContractError('root');
   if(!options || typeof options!=='object')throw new ContractError('options');
-  for(const name of ['onHeight','onEvent','load','onLoadError']) {
+  for(const name of ['onHeight','onEvent','load','onLoadError','loadChoices']) {
     if(options[name]!==undefined && typeof options[name]!=='function')throw new ContractError('options.'+name);
   }
   for(const name of ['showResources','grouped','editEnabled'])if(options[name]!==undefined && typeof options[name]!=='boolean')throw new ContractError('options.'+name);
   if(options.tooltipDelay!==undefined && (!Number.isFinite(options.tooltipDelay) || options.tooltipDelay<0 || options.tooltipDelay>60000))throw new ContractError('options.tooltipDelay');
   if(options.resourceUnit!==undefined && typeof options.resourceUnit!=='string')throw new ContractError('options.resourceUnit');
+  if(options.editCommand!==undefined && (typeof options.editCommand!=='string' || !options.editCommand.trim()))throw new ContractError('options.editCommand');
+  if(options.projectDependenciesCommand!==undefined && (typeof options.projectDependenciesCommand!=='string' || !options.projectDependenciesCommand.trim()))throw new ContractError('options.projectDependenciesCommand');
+  if(options.dependencyEditor!==undefined && options.dependencyEditor!=='successor')throw new ContractError('options.dependencyEditor');
   if(options.resourceMaxHeight!==undefined && (!Number.isFinite(options.resourceMaxHeight) || options.resourceMaxHeight<50 || options.resourceMaxHeight>2000))throw new ContractError('options.resourceMaxHeight');
+  if(options.timelineHeight!==undefined && (!options.timelineHeight || !Number.isFinite(options.timelineHeight.min) || !Number.isFinite(options.timelineHeight.max) || options.timelineHeight.min<42 || options.timelineHeight.max<options.timelineHeight.min || options.timelineHeight.max>2000))throw new ContractError('options.timelineHeight');
   if(options.resourceOptions!==undefined && (!options.resourceOptions || typeof options.resourceOptions!=='object' || Array.isArray(options.resourceOptions) || Object.entries(options.resourceOptions).some(([key,value])=>!['hideUnused','onlyOverallocated','showTotal','showSelected','collapsed'].includes(key) || typeof value!=='boolean')))throw new ContractError('options.resourceOptions');
   if(options.loading!==undefined && (!options.loading || typeof options.loading!=='object' || Array.isArray(options.loading)))throw new ContractError('options.loading');
   const loading={batchSize:options.loading?.batchSize ?? 25,maxProjects:options.loading?.maxProjects ?? 100};
@@ -134,7 +139,8 @@ export function mountPlanningView(root,options) {
   const today=options.today ?? [now.getFullYear(),String(now.getMonth()+1).padStart(2,'0'),String(now.getDate()).padStart(2,'0')].join('-');
   const store=createPlanningStore(options.snapshot);
   if(options.mode)store.setView({mode:options.mode});
-  if(options.editEnabled || options.resourceOptions)store.setView({filters:{editEnabled:!!options.editEnabled,resources:options.resourceOptions ?? {}}});
+  if(options.editEnabled!==undefined || options.resourceOptions)store.setView({filters:{...store.read().view.filters,
+    ...(options.editEnabled!==undefined?{editEnabled:options.editEnabled}:{}),resources:options.resourceOptions ?? {}}});
   // Fail invalid geometry before allocating DOM/listeners or notifying a host.
   calendarFor(store.read().data,store.read().view.mode,today,0);
   const lifetime=createLifetime(win),instanceId=win.crypto.randomUUID();
@@ -156,6 +162,7 @@ export function mountPlanningView(root,options) {
   frame.append(sheet,toolbar,timeline.root,resourceHeading,resource.root);root.append(frame);
   lifetime.own(()=>frame.remove());lifetime.own(()=>store.destroy());
   let leftWidth=425,cancelRender=null,loader=null,geometry=null,geometryKey=null,lastHeight=null;
+  const renderControls=createViewControls({toolbar,store,lifetime});
   lifetime.own(()=>{geometry=null;geometryKey=null;});
   const timelineRenderer=createTimelineRenderer({panel:timeline,store,lifetime,options});
   const interactions=createInteractions({frame,toolbar,store,lifetime,options,calendar:()=>geometry});
@@ -175,6 +182,7 @@ export function mountPlanningView(root,options) {
       renderHeader(timeline.headerInner,geometry);renderHeader(resource.headerInner,geometry);
     }
     const calendar=geometry;
+    renderControls();
     retry.hidden=!loader?.status().failed;retry.textContent=data.labels.retry || 'Retry loading';
     for(const item of [timeline,resource])item.canvas.style.width=calendar.width+'px';
     for(const button of toolbar.querySelectorAll('[data-mode]')) {
@@ -194,7 +202,11 @@ export function mountPlanningView(root,options) {
   lifetime.own(store.subscribe(()=>schedule()));
   lifetime.listen(toolbar,'click',event=>{
     const button=event.target.closest('button[data-mode]');
-    if(button && toolbar.contains(button))store.setView({mode:button.dataset.mode});
+    if(button && toolbar.contains(button)) {
+      store.setView({mode:button.dataset.mode});
+      // Publish the new scroll extent before a following wheel/scroll event.
+      cancelRender?.();cancelRender=null;draw();
+    }
   });
   lifetime.listen(retry,'click',()=>{loader?.retry();store.setView({error:null});schedule();});
   bindScrolling({timeline,resource},store,lifetime,schedule);

@@ -345,7 +345,7 @@ def test_registered_gantt_receives_only_the_current_actor_project_projection(bus
 
     path, _, _, editor, _ = business
     browser = Mock(return_value=None)
-    with patch("app.presentation.pages.planning.components.declare_component", return_value=browser) as register:
+    with patch("app.presentation.components.planning_component.components.declare_component", return_value=browser) as register:
         app = AppTest.from_function(scoped_planning_app, args=(path, editor.actor), default_timeout=30).run()
     assert not app.exception and not app.error
     assert register.call_args.args == ("interactive_gantt",)

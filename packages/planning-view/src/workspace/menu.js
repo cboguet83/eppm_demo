@@ -4,8 +4,8 @@
 export function createContextMenu(frame,lifetime) {
   const doc=frame.ownerDocument,menu=doc.createElement('div');
   menu.className='planning-menu';menu.setAttribute('role','menu');menu.hidden=true;frame.append(menu);
-  let stack=[],restore=null;
-  const close=()=>{menu.hidden=true;stack=[];if(restore?.isConnected)restore.focus();};
+  let stack=[],restore=null,cancelHover=null;
+  const close=()=>{cancelHover?.();cancelHover=null;menu.hidden=true;stack=[];if(restore?.isConnected)restore.focus();};
   const render=()=>{
     const entries=stack.at(-1);menu.replaceChildren();
     for(const [index,entry] of entries.entries()) {
@@ -21,8 +21,15 @@ export function createContextMenu(frame,lifetime) {
   const activate=index=>{
     const entry=stack.at(-1)?.[index];if(!entry || entry.disabled)return;
     if(entry.children?.length){stack.push(entry.children);render();return;}
-    close();entry.run?.();
+    const previous=stack;close();
+    if(entry.run?.()===false){stack=previous;menu.hidden=false;render();}
   };
+  lifetime.listen(menu,'pointerover',event=>{
+    const button=event.target.closest('[data-menu-index]');if(!button || button.contains(event.relatedTarget))return;
+    cancelHover?.();cancelHover=null;const entries=stack.at(-1),index=Number(button.dataset.menuIndex);
+    if(entries?.[index]?.children?.length)cancelHover=lifetime.timeout(()=>{cancelHover=null;if(!menu.hidden && stack.at(-1)===entries)activate(index);},150);
+  });
+  lifetime.listen(menu,'pointerleave',()=>{cancelHover?.();cancelHover=null;});
   lifetime.listen(menu,'click',event=>{const button=event.target.closest('[data-menu-index]');if(button)activate(Number(button.dataset.menuIndex));});
   lifetime.listen(menu,'keydown',event=>{
     const buttons=[...menu.querySelectorAll('button:not(:disabled)')],index=buttons.indexOf(doc.activeElement);

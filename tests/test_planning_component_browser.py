@@ -113,6 +113,26 @@ def test_mounts_have_independent_modes_scoped_css_and_unique_ownership(planning_
     expect(page.locator("#first > span")).to_have_text("Retained")
 
 
+def test_frozen_columns_resize_without_sorting_or_changing_another_instance(planning_page: Page) -> None:
+    """Keyboard and pointer widths stay aligned with rows and belong to one view."""
+    page = planning_page
+    header = page.locator("#first [data-part=timeline-left-header] .planning-column-name")
+    before = header.bounding_box()["width"]
+    page.locator("#first [data-resize-column=name]").press("ArrowRight")
+    expect(header).to_have_css("width", f"{int(before + 8)}px")
+    row = page.locator("#first .planning-frozen-row .planning-column-name").first
+    assert abs(header.bounding_box()["width"] - row.bounding_box()["width"]) < 1
+    assert page.locator("#second [data-part=timeline-left-header] .planning-column-name").bounding_box()["width"] == before
+    handle = page.locator("#first [data-resize-column=start]").bounding_box()
+    page.mouse.move(handle["x"] + 2, handle["y"] + 10)
+    page.mouse.down()
+    page.mouse.move(handle["x"] + 22, handle["y"] + 10)
+    page.mouse.up()
+    expect(page.locator("#first [data-part=timeline-left-header] .planning-column-start")).to_have_css("width", "110px")
+    page.locator("#first [data-resize-column=name]").press("Home")
+    expect(header).to_have_css("width", "190px")
+
+
 def test_scroll_coordination_and_splitter_stay_inside_the_instance(planning_page: Page) -> None:
     """Both pane directions share horizontal geometry and independent vertical offsets."""
     page = planning_page
@@ -128,11 +148,11 @@ def test_scroll_coordination_and_splitter_stay_inside_the_instance(planning_page
     assert page.locator("#first [data-part=resource-left]").evaluate("n=>n.scrollTop") == 150
     first = page.locator("#first [data-part=timeline-left]")
     width = first.bounding_box()["width"]
-    page.locator("#first [role=separator]").press("ArrowRight")
+    page.locator("#first [data-part=splitter]").press("ArrowRight")
     page.wait_for_function("document.querySelector('#first [data-part=timeline-left]').clientWidth===435")
     assert first.bounding_box()["width"] == width + 10
     assert page.locator("#second [data-part=timeline-left]").bounding_box()["width"] == width
-    splitter = page.locator("#first [role=separator]").bounding_box()
+    splitter = page.locator("#first [data-part=splitter]").bounding_box()
     page.mouse.move(splitter["x"] + 4, splitter["y"] + 10)
     page.mouse.down()
     page.mouse.move(splitter["x"] + 54, splitter["y"] + 10)
@@ -174,7 +194,7 @@ def test_destroy_cancels_scheduled_work_and_remount_has_one_handler_set(planning
     assert page.locator("#first .planning-view").count() == 0
     assert page.evaluate("instances[0].update(null)") is False
     page.evaluate("instances[0]=mount(document.getElementById('first'),{snapshot,today:'2026-01-01'})")
-    page.locator("#first [role=separator]").press("ArrowRight")
+    page.locator("#first [data-part=splitter]").press("ArrowRight")
     page.wait_for_function("document.querySelector('#first [data-part=timeline-left]').clientWidth===435")
     expect(page.locator("#second [data-mode=Day]")).to_have_attribute("aria-pressed", "true")
 
@@ -432,9 +452,9 @@ def test_resize_progress_and_pending_tooltip_disposal(editable_page: Page) -> No
     page = editable_page
     bar = page.locator("#first .planning-bar[data-target-id=alpha]")
     handle = bar.locator(".planning-handle-progress").bounding_box()
-    page.mouse.move(handle["x"] + 2, handle["y"] + 8)
+    page.mouse.move(handle["x"] + 2, handle["y"] + handle["height"] / 2)
     page.mouse.down()
-    page.mouse.move(handle["x"] + 40, handle["y"] + 8)
+    page.mouse.move(handle["x"] + 40, handle["y"] + handle["height"] / 2)
     page.mouse.up()
     page.wait_for_function("events.length===1")
     assert page.evaluate("events[0].type") == "progress"
@@ -561,7 +581,7 @@ def test_resource_filters_scroll_virtualization_and_optional_layout(resource_pag
     assert page.locator("#first .planning-resource-cell").count() < 40 * 30
     assert page.locator("#first [data-part=resource-left]").evaluate("n=>n.scrollTop") == 10000
     page.locator("#first [data-resource-control=onlyOverallocated]").check()
-    expect(page.locator("#first .planning-resource-count")).to_have_text("1 Pools")
+    expect(page.locator("#first .planning-resource-count")).to_have_text("1 Pool")
     page.locator("#first [data-resource-control=showSelected]").uncheck()
     expect(page.locator('#first .planning-resource-cell[data-scope=selected]')).to_have_count(0)
     page.locator("#first [data-resource-control=collapse]").click()

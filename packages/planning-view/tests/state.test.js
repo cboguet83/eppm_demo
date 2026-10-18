@@ -10,6 +10,27 @@ const initial=(count=2)=>({version:1,kind:'snapshot',scope:'view',revision:'r1',
   tasks:[task('t0','p0'),task('t1','p1')],loadedProjectIds:['p0','p1']});
 const patch=values=>({version:1,kind:'patch',scope:'view',revision:'r1',...values});
 
+test('validated host view hints change only requested view fields and reject atomically',()=>{
+  const store=createPlanningStore({...initial(),viewHints:{expandedProjectIds:['p0'],editEnabled:true,filters:{externalLinks:false}}});
+  store.setView({scrollTop:120,draft:{kind:'tasks',id:'t1',values:{name:'Draft'}},filters:{...store.read().view.filters,resources:{onlyOverallocated:true},query:'Retain'}});
+  store.update(patch({viewHints:{editEnabled:false,focusProjectId:'p1',resetResourceFilters:true}}));
+  const {data,view}=store.read();assert.equal(view.scrollTop,120);assert.equal(view.draft.values.name,'Draft');
+  assert.equal(data.projects[0].id,'p0');
+  assert.equal(view.filters.query,'Retain');assert.equal(view.filters.editEnabled,false);assert.equal(view.filters.externalLinks,false);
+  assert.deepEqual(view.expandedProjects,['p0','p1']);assert.equal(view.focusProjectId,'p1');assert.deepEqual(view.filters.resources,{hideUnused:true,onlyOverallocated:false});
+  for(const hints of [null,{editEnabled:1},{expandedProjectIds:['p0','p0']},{expandedProjectIds:[1]},{focusProjectId:1},{filters:{query:'unsafe'}},{filters:null}]) {
+    assert.throws(()=>store.update(patch({viewHints:hints})),ContractError);assert.equal(store.read().data,data);assert.equal(store.read().view,view);
+  }
+});
+
+test('view-only hints and responses retain data identity without rebuilding renderer indexes',()=>{
+  const store=createPlanningStore(initial()),before=store.read().data;
+  store.update(patch({viewHints:{editEnabled:true}}));assert.equal(store.read().data,before);
+  store.setView({pendingRequestId:'request'});
+  store.update({version:1,kind:'response',scope:'view',revision:'r1',requestId:'request',accepted:false,error:'Safe rejection'});
+  assert.equal(store.read().data,before);assert.equal(store.read().view.error,'Safe rejection');
+});
+
 test('patches are atomic and preserve unchanged records, resources, draft and viewport',()=>{
   const store=createPlanningStore({...initial(),resources:[{id:'pool',name:'Pool',capacity:2,usage:{'2026-01-01':1}}]});
   store.setView({scrollTop:100,scrollLeft:25,draft:{kind:'tasks',id:'t1',values:{name:'Unsaved'}}});

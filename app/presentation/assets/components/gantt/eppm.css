@@ -1,0 +1,10 @@
+/* Application-owned forms; the visualization owns its own scoped stylesheet. */
+html,body {margin:0;padding:0;}
+.planning-view .eppm-project-editor fieldset {margin:0;padding:0;border:0;}
+.planning-view .eppm-project-editor label {display:block;margin:8px 0;}
+.planning-view .eppm-project-editor input,.planning-view .eppm-project-editor select {display:block;width:100%;font:inherit;padding:5px;border:1px solid #e2e8f0;border-radius:4px;}
+.planning-view .eppm-project-editor [role=alert] {white-space:pre-wrap;}
+[data-eppm-error] {font:12px system-ui,sans-serif;color:#b91c1c;}
+.planning-view [data-edit-dependency]:disabled,.planning-view .planning-menu button:disabled {display:none;}
+.planning-view .planning-toolbar button[data-mode][aria-pressed=true] {background:#c41039;color:#fff;}
+.planning-view .planning-toolbar button[data-mode][aria-pressed=false] {background:#f1f5f9;color:#475569;}

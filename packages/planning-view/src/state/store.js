@@ -37,6 +37,21 @@ function initialView() {
     selection:null,draft:null,preview:null,pendingRequestId:null,error:null,filters:{}};
 }
 
+/** Apply validated host view hints without replacing unrelated local drafts.
+ * @param {object} view Current view. @param {object} hints Validated host hints.
+ */
+function hintedView(view,hints={}) {
+  const next={...view,filters:{...view.filters,...hints.filters}};
+  if(hints.editEnabled!==undefined)next.filters.editEnabled=hints.editEnabled;
+  if(hints.resetResourceFilters)next.filters.resources={hideUnused:true,onlyOverallocated:false};
+  if(hints.expandedProjectIds)next.expandedProjects=[...hints.expandedProjectIds];
+  if(hints.focusProjectId) {
+    next.expandedProjects=[...new Set([...next.expandedProjects,hints.focusProjectId])];
+    next.focusProjectId=hints.focusProjectId;
+  }
+  return next;
+}
+
 /** @param {object} value Candidate. @param {string} field Unique identifier list. */
 function ids(value,field) {
   const list=value[field] ?? [];
@@ -50,6 +65,8 @@ function ids(value,field) {
  * @param {object} previous Frozen snapshot. @param {object} patch Validated patch.
  */
 function patchData(previous,patch) {
+  const dataFields=[...COLLECTIONS,'loadedProjectIds','replaceProjectIds','removeProjectIds','evictProjectIds','removeTaskIds','removeDependencyIds','removeResourceIds','capabilities','labels','resourceFilter','choiceProjects'];
+  if(patch.revision===previous.revision && !dataFields.some(field=>patch[field]!==undefined))return previous;
   const replaced=ids(patch,'replaceProjectIds'),removed=ids(patch,'removeProjectIds');
   const evicted=ids(patch,'evictProjectIds'),removeTasks=ids(patch,'removeTaskIds');
   const unloaded=new Set([...removed,...replaced,...evicted]);
@@ -67,7 +84,7 @@ function patchData(previous,patch) {
     dependencies:merge(previous.dependencies,patch.dependencies,removeDependencies),
     resources:merge(previous.resources,patch.resources,ids(patch,'removeResourceIds'))};
   result.overlays=previous.overlays.filter(row=>!removed.has(row.projectId));
-  for(const field of ['hierarchy','overlays','capabilities','labels','resourceFilter']) {
+  for(const field of ['hierarchy','overlays','capabilities','labels','resourceFilter','choiceProjects']) {
     if(patch[field]!==undefined) result[field]=patch[field];
   }
   result.loadedProjectIds=patch.loadedProjectIds ?? previous.loadedProjectIds.filter(id=>!removed.has(id) && !evicted.has(id));
@@ -121,7 +138,7 @@ function validateView(view) {
 export function createPlanningStore(input) {
   const validated=validateMessage(input);
   if(validated.kind!=='snapshot') throw new ContractError('initialSnapshot');
-  let data=freeze(complete(validated)),indexes=buildIndexes(data),view=freeze(initialView()),disposed=false;
+  let data=freeze(complete(validated)),indexes=buildIndexes(data),view=freeze(hintedView(initialView(),validated.viewHints)),disposed=false;
   membership(data);
   const listeners=new Set();
   const notify=type=>{for(const listener of listeners) listener(type);};
@@ -138,8 +155,8 @@ export function createPlanningStore(input) {
     // Each changed record was validated above. Check resulting relationships
     // without walking/cloning every unchanged daily series on each task patch.
     membership(candidate);
-    const nextIndexes=buildIndexes(candidate);
-    let nextView=changedScope || next.reset?initialView():{...view};
+    const nextIndexes=candidate===data?indexes:buildIndexes(candidate);
+    let nextView=hintedView(changedScope || next.reset?initialView():view,next.viewHints);
     const target=nextView.draft;
     if(target && !nextIndexes[target.kind].has(target.id)) {
       nextView.draft=null;nextView.error='The edited item is no longer available.';

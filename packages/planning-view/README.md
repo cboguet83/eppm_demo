@@ -3,7 +3,7 @@
 The independent contracts module uses native ES modules and no runtime imports.
 Run `node --test packages/planning-view/tests/*.test.js` from the repository root.
 The root export is `mountPlanningView`; internal modules remain implementation
-seams for focused tests. Rendering features are added by the extraction tasks.
+seams for focused tests.
 
 `validateMessage(input)` returns an independently owned validated JSON copy or
 throws `ContractError` with only a schema location. Call it before changing view
@@ -29,10 +29,17 @@ optional `resourceId`, and optional `children`; cycles are rejected iteratively.
 Overlays supply `id`, `kind` baseline/alternative, `projectId`, `tasks`, and
 optional dependencies using the same record shapes.
 
+Projects, tasks and overlays can carry flat boolean record `capabilities` and
+JSON `context` metadata. Record capabilities override a matching global menu
+capability; project overlay capabilities override the corresponding project hint.
+Entity context is carried into requests/commands/selections, merged with period
+context. Editor drafts capture context when opened, so a host revision inside
+that context is not silently replaced by a later data patch.
+
 Patches supply changed collections and optional unique string lists
 `replaceProjectIds`, `removeProjectIds`, `loadedProjectIds`. State ownership,
 cross-collection patch reconciliation, and request cancellation belong to the
-instance store, added in task 2.3. `reset` is an optional explicit boolean.
+instance store. `reset` is an optional explicit boolean.
 Responses carry `requestId`, `accepted`, and optional safe text `error`.
 
 Events carry the same version/scope/revision plus `requestId` and `type`:
@@ -344,6 +351,56 @@ resolve only their provider request. Aborted reads, stale revisions and disposed
 instances cannot deliver late results. Page disposal releases the bridge/core.
 Finite `loading:{batchSize,maxProjects}` mount options default to 25/100.
 Read failures retain valid data and expose an explicit Retry loading button.
+
+Host adapters can supply `prepareRender(args, {emit})` and `encodeEvent(event)`
+to `connectStreamlit(root, options)`. The first normalizes a host's wire format
+into `{snapshot,messages,ackRequestIds,options}`; returning null for a non-null
+host payload defers mounting while it requests initialization. The second maps a
+validated queued event to that host's wire format. These codecs do not bypass
+core message/event validation. Receipt acknowledgements still use the original
+public request ID even if the wire field has another name.
+
+## Retained controls and host-specific editors
+
+Optional checked `viewHints` on snapshots/patches contain `editEnabled`, unique
+`expandedProjectIds`, `focusProjectId`, `resetResourceFilters`, or boolean
+`filters` for `internalLinks`, `externalLinks`, `descriptions` and `hover`. They
+change only the requested retained fields. Focus expands the project and moves
+to its header. A view-only hint does not replace data records. Ordinary data
+patches do not overwrite an unrelated local filter or draft.
+
+The toolbar owns link/description visibility, scale and expansion. Frozen
+columns support pointer resizing and Arrow Left/Right/Home keyboard controls;
+the main splitter coordinates the two panels. `timelineHeight:{min,max}` can
+bound the timeline body from at least 42 through 2,000 px. Its header adds 56 px;
+the default body remains 280 px. Resource height is independently bounded.
+
+Menu entries can use `requiresMode:true` for edit-mode actions governed by a
+separate capability (for example an approval permission); `requiresEdit:true`
+also checks editable entity/lane hints. `editor:'createTask'` opens the shared
+creation form; `editor:'diagnostics'` opens delivered diagnostics and
+`editor:'predecessors'` lists incoming links. Task creation
+emits `type:'task', operation:'create', targetKind:'projects', targetId:projectId`
+with normal task fields in `values`; the host assigns the new task identity.
+Creation after a task retains that task's phase/end date; project creation uses
+the displayed schedule's end and optional project `defaultPhase` (otherwise
+General). The initial proposed duration is fourteen calendar days.
+Returning false synchronously from `onEvent` cancels a command and retains its
+menu, supporting application-owned confirmation dialogs.
+
+`editCommand` optionally emits a host command when edit mode changes. Optional
+`dependencyEditor:'successor'` opens the dependency's successor task form;
+project successors use `projectDependenciesCommand`. Without these options,
+individual dependency fields use the shared dependency editor.
+
+Supply `choiceProjects:[{id,name}]` in data and a cancellable `loadChoices` mount
+function for project-scoped predecessor options. It receives
+`{projectId,scope,revision,overlayId,signal}` and resolves `[{id,name}]`. Choices
+are not hydrated schedules and do not affect loaded-project retention. Reads
+are aborted when their form/row closes or the instance is disposed; stale
+callbacks cannot change another draft. Failed reads disable the endpoint and
+Save until the user selects the project to retry. Without this provider, the
+editor uses only delivered project/task records.
 
 `packages/streamlit-planning-view` contains the typed independent Python wrapper
 and full-data/lazy-host examples. It requires Python 3.14 and Streamlit 1.63.x

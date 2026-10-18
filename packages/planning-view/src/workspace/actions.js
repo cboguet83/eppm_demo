@@ -1,5 +1,6 @@
 /** Fresh capability checks and correlated user intentions, independent of the DOM. */
 import {ContractError,validateEvent,validateMessage} from '../contracts/index.js';
+import {addDays} from '../calendar/index.js';
 
 const TARGET_KINDS=Object.freeze(['tasks','projects','dependencies','resources','hierarchy']);
 
@@ -49,6 +50,8 @@ export function validateActions(actions=[]) {
     if(action.capability!==undefined && typeof action.capability!=='string')throw new ContractError('contextActions.capability');
     for(const field of ['targetKinds','lanes'])if(action[field]!==undefined && (!Array.isArray(action[field]) || action[field].some(value=>typeof value!=='string')))throw new ContractError('contextActions.'+field);
     if(action.requiresEdit!==undefined && typeof action.requiresEdit!=='boolean')throw new ContractError('contextActions.requiresEdit');
+    if(action.requiresMode!==undefined && typeof action.requiresMode!=='boolean')throw new ContractError('contextActions.requiresMode');
+    if(action.editor!==undefined && !['createTask','diagnostics','predecessors'].includes(action.editor))throw new ContractError('contextActions.editor');
     if(action.children!==undefined) {
       if(!Array.isArray(action.children))throw new ContractError('contextActions.children');
       for(const child of action.children)pending.push({action:child,depth:depth+1});
@@ -62,7 +65,8 @@ export function actionAllowed(action,data,view,target) {
   const resolved=resolveTarget(data,target);
   if(!resolved)return false;
   return (!action.targetKinds || action.targetKinds.includes(target.kind)) && (!action.lanes || action.lanes.includes(resolved.lane)) &&
-    (!action.capability || data.capabilities[action.capability]===true) && (!action.requiresEdit || canEdit(data,view,target,'command'));
+    (!action.requiresMode || view.filters.editEnabled===true) &&
+    (!action.capability || ((target.kind==='projects'?resolved.overlay?.capabilities?.[action.capability]:undefined) ?? resolved.record.capabilities?.[action.capability] ?? data.capabilities[action.capability])===true) && (!action.requiresEdit || canEdit(data,view,target,'command'));
 }
 
 /** Validate edited values before setting pending state or notifying the host.
@@ -97,6 +101,11 @@ export function createActionController({store,onEvent=()=>{},requestId=()=>crypt
     return record?{record,overlay,lane:overlay?.kind ?? 'current',projectId:record.projectId ?? (target.kind==='projects'?record.id:undefined)}:null;
   };
   const targetState=target=>target.overlayId?{kind:'overlays',id:target.overlayId,values:{target}}:{kind:target.kind,id:target.id,values:{target}};
+  const creationTarget=target=>{
+    const resolved=resolve(target);if(!resolved?.projectId)return null;
+    const alternative=store.read().data.overlays.find(row=>row.projectId===resolved.projectId && row.kind==='alternative');
+    return {kind:'projects',id:resolved.projectId,...(alternative?{overlayId:alternative.id}:{})};
+  };
   const failure=id=>{
     if(disposed || store.read().view.pendingRequestId!==id)return;
     store.setView({pendingRequestId:null,preview:null,error:'The host could not process this action.'});
@@ -104,6 +113,7 @@ export function createActionController({store,onEvent=()=>{},requestId=()=>crypt
   const deliver=event=>{
     try {
       const result=onEvent(event);
+      if(result===false){failure(event.requestId);return false;}
       if(result && typeof result.then==='function')Promise.resolve(result).catch(()=>failure(event.requestId));
     }catch(error){failure(event.requestId);throw error;}
     return event;
@@ -111,15 +121,34 @@ export function createActionController({store,onEvent=()=>{},requestId=()=>crypt
   return {
     resolve,
     canEdit(target,operation='task'){if(disposed)return false;const {data,view}=store.read();return canEdit(data,view,target,operation,resolve(target));},
+    openCreate(target) {
+      if(disposed)return false;
+      const owner=creationTarget(target),{data,view}=store.read();
+      if(!owner || view.pendingRequestId || !canEdit(data,view,owner,'command',resolve(owner)))return false;
+      const {record,overlay}=resolve(owner),source=resolve(target).record;
+      const latest=overlay?.tasks.length?overlay.tasks.reduce((end,task)=>task.end>end?task.end:end,overlay.tasks[0].end):record.end;
+      const start=(target.kind==='tasks'?source.end:latest) ?? new Date().toISOString().slice(0,10);
+      store.setView({draft:{...targetState(owner),values:{target:owner,create:true,context:{...record.context,...overlay?.context},fields:{name:'',phase:source.phase ?? record.defaultPhase ?? 'General',description:'',start,end:addDays(start,14),progress:0,dependencies:[]}}},error:null});return true;
+    },
+    requestCreate(target,values) {
+      if(disposed)return null;
+      const {data,view}=store.read(),resolved=resolve(target);
+      if(view.pendingRequestId || !resolved || target.kind!=='projects' || !canEdit(data,view,target,'command',resolved))return null;
+      validateValues('task',values,{id:'new',projectId:target.id});
+      const event=validateEvent({version:1,scope:data.scope,revision:data.revision,requestId:requestId(),type:'task',operation:'create',
+        targetId:target.id,targetKind:'projects',overlayId:target.overlayId ?? null,lane:resolved.lane,
+        context:{...(view.draft?.values?.context ?? {...resolved.record.context,...resolved.overlay?.context}),projectId:target.id},values});
+      store.setView({pendingRequestId:event.requestId,error:null});return deliver(event);
+    },
     open(target) {
       if(disposed)return false;
       const {data,view}=store.read(),operation=target.kind==='dependencies'?'dependency':'task';
       if(view.pendingRequestId || !canEdit(data,view,target,operation,resolve(target)))return false;
-      const {record}=resolve(target);
+      const {record,overlay}=resolve(target);
       const fields=operation==='dependency'?{type:record.type,lagDays:record.lagDays ?? 0,predecessor:record.predecessor,successor:record.successor}:
         {name:record.name,start:record.start,end:record.end,progress:record.progress ?? 0,description:record.description ?? '',phase:record.phase ?? '',
           dependencies:(target.overlayId?data.overlays.find(row=>row.id===target.overlayId).dependencies ?? []:data.dependencies).filter(dep=>dep.successor.kind==='task' && dep.successor.id===record.id)};
-      store.setView({draft:{...targetState(target),values:{target,fields}},error:null});return true;
+      store.setView({draft:{...targetState(target),values:{target,context:{...record.context,...overlay?.context},fields}},error:null});return true;
     },
     request(type,target,values={}) {
       if(disposed)return null;
@@ -128,6 +157,7 @@ export function createActionController({store,onEvent=()=>{},requestId=()=>crypt
       validateValues(type,values,resolved.record);
       const event=validateEvent({version:1,scope:data.scope,revision:data.revision,requestId:requestId(),type,
         targetId:target.id,targetKind:target.kind,overlayId:target.overlayId ?? null,lane:resolved.lane,
+        ...(resolved.record.context?{context:JSON.stringify(view.draft?.values?.target)===JSON.stringify(target)?view.draft.values.context:resolved.record.context}:{}),
         ...(['task','dependency'].includes(type)?{values}:values)});
       store.setView({pendingRequestId:event.requestId,error:null,preview:{target,...values}});
       return deliver(event);
@@ -137,7 +167,7 @@ export function createActionController({store,onEvent=()=>{},requestId=()=>crypt
       const {data,view}=store.read();
       if(!actionAllowed(action,data,view,target))return null;
       const event=validateEvent({version:1,scope:data.scope,revision:data.revision,requestId:requestId(),type:'command',command:action.id,
-        targetId:target.id,targetKind:target.kind,overlayId:target.overlayId ?? null,context});
+        targetId:target.id,targetKind:target.kind,overlayId:target.overlayId ?? null,context:{...resolve(target).record.context,...context}});
       return deliver(event);
     },
     select(target,context={}) {
@@ -146,7 +176,7 @@ export function createActionController({store,onEvent=()=>{},requestId=()=>crypt
       if(data.capabilities.select===false || !resolveTarget(data,target))return null;
       store.setView({selection:targetState(target)});
       return deliver(validateEvent({version:1,scope:data.scope,revision:data.revision,requestId:requestId(),type:'select',targetId:target.id,
-        targetKind:target.kind,overlayId:target.overlayId ?? null,context}));
+        targetKind:target.kind,overlayId:target.overlayId ?? null,context:{...resolve(target).record.context,...context}}));
     },
     close(){if(!disposed)store.setView({draft:null,error:null});},
     destroy(){disposed=true;overlayIndexes=new WeakMap();}

@@ -10,7 +10,6 @@ import html
 import io
 from collections.abc import Callable
 from functools import wraps
-from app.presentation.assets import component_path
 from typing import Any
 import pandas as pd
 import streamlit as st
@@ -18,7 +17,7 @@ import streamlit as st
 from app.presentation.components.dialog import dialog
 from app.presentation.components.authorized_cache import authorized_cache
 from app.domain.access.models import Permission
-import streamlit.components.v1 as components
+from app.presentation.components.planning_component import render_planning_component
 from app.application.exceptions import (
     OrganizationStorageError,
     PlanningStorageError,
@@ -103,9 +102,8 @@ def require_change(changed: bool) -> None:
 
 
 def _interactive_gantt(**payload: Any) -> Any:
-    """Register the existing component in the active Streamlit runtime."""
-    path = component_path("gantt")
-    return components.declare_component("interactive_gantt", path=str(path))(**payload)
+    """Render the shared visualization through the EPPM presentation adapter."""
+    return render_planning_component(**payload)
 
 
 def _get_gantt_event_nonce(gantt_event: dict[str, Any]) -> str:
@@ -226,7 +224,11 @@ def _handle_gantt_component_change(widget_key: str, workspace: PlanningWorkspace
         return
     gantt_event = validate_event(gantt_event)
     if gantt_event['action'] in SCENARIO_ACTIONS:
-        handle_scenario_event(gantt_event, workspace)
+        try:
+            handle_scenario_event(gantt_event, workspace)
+        except (ValueError, PlanningStorageError, ProjectStorageError) as exc:
+            st.session_state["planning_step_form_error"] = str(exc)
+            return
         if gantt_event['action'] in {'hide_alternatives', 'activate_alternative', 'toggle_baseline'}:
             st.rerun('planning_workspace')
     elif gantt_event.get("action") == "initialize_planning":
@@ -257,7 +259,12 @@ def _handle_gantt_component_change(widget_key: str, workspace: PlanningWorkspace
             st.session_state["planning_pending_change"] = change
     else:
         before = _planning_edit_revision(workspace)
-        if _apply_immediate_gantt_update(gantt_event, workspace):
+        try:
+            updated = _apply_immediate_gantt_update(gantt_event, workspace)
+        except (ValueError, PlanningStorageError, ProjectStorageError) as exc:
+            st.session_state["planning_step_form_error"] = str(exc)
+            return
+        if updated:
             st.session_state["planning_pending_change"] = {
                 **gantt_event,
                 "before_revision": before,
@@ -1407,7 +1414,8 @@ def _render_planning_chart(
     from uuid import uuid4
 
     feedback = st.empty()
-    if error := st.session_state.pop("planning_step_form_error", None):
+    error = st.session_state.pop("planning_step_form_error", None)
+    if error:
         feedback.error(error)
     selected_id = selected_projects[0]
     all_proj_ids = df_projects.id.tolist()
@@ -1581,6 +1589,7 @@ def _render_planning_chart(
                      "baseline_all": permissions.allows(Permission.SHARED) or permissions.allows(Permission.APPROVE),
                      "manage_shared": permissions.allows(Permission.SHARED)},
         filter_reset=st.session_state.get("planning_filter_reset", 0),
+        adapter_error=error,
         key=widget_key,
         on_change=lambda: _handle_gantt_component_change(widget_key, workspace),
     )

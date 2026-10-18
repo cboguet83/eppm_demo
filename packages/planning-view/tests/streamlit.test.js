@@ -67,3 +67,18 @@ test('malformed transport is rejected before mounting while stale writes are rec
   assert.equal(h.updates[1].revision,'next');
   h.win.dispatchEvent(new Event('pagehide'));assert.equal(h.mounts[0].disposed,true);
 });
+
+test('host codecs translate partial reruns and wire events while core contracts stay checked',()=>{
+  const win=new EventTarget(),sent=[],updates=[];
+  Object.assign(win,{AbortController,DOMException,parent:{postMessage:message=>sent.push(message)}});
+  let emit=null,mounted=null;
+  const bridge=connectStreamlit({ownerDocument:{defaultView:win}},{
+    prepareRender:(args,callbacks)=>{emit=callbacks.emit;return args?.initial?{snapshot:snapshot(),ackRequestIds:args.ack?[args.ack]:[]}:null;},
+    encodeEvent:event=>({action:event.command,nonce:event.requestId}),
+    mount:(root,options)=>{mounted=options;return {update:message=>updates.push(message),destroy:()=>{}};}
+  });
+  const render=args=>{const event=new Event('message');Object.defineProperties(event,{source:{value:win.parent},origin:{value:'https://host'},data:{value:{type:'streamlit:render',args}}});win.dispatchEvent(event);};
+  render({});assert.equal(mounted,null);emit(command('initialize'));assert.equal(sent.at(-1).value.action,'host');
+  render({initial:true,ack:'initialize'});mounted.onEvent(command('edit'));
+  assert.deepEqual(sent.at(-1).value,{action:'host',nonce:'edit'});assert.equal(updates.length,0);bridge.destroy();
+});

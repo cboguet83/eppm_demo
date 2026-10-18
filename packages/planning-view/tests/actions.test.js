@@ -15,6 +15,39 @@ function harness(input=snapshot(),options={}) {
   return {store,actions,events};
 }
 
+test('task creation targets the displayed project alternative and captures its revision',()=>{
+  const input=snapshot();input.projects[0].context={projectId:'project'};
+  input.overlays=[{id:'alt',kind:'alternative',projectId:'project',editable:true,context:{planRevision:4},tasks:[]}];
+  const h=harness(input);assert.equal(h.actions.openCreate(current),true);
+  const draft=h.store.read().view.draft;assert.equal(draft.kind,'overlays');assert.equal(draft.id,'alt');assert.equal(draft.values.create,true);
+  assert.equal(draft.values.target.id,'project');
+  const event=h.actions.requestCreate(draft.values.target,{...draft.values.fields,name:'New step'});
+  assert.equal(event.operation,'create');assert.equal(event.type,'task');assert.equal(event.overlayId,'alt');assert.equal(event.context.planRevision,4);
+  assert.equal(event.targetKind,'projects');assert.equal(h.events.length,1);
+  assert.equal(h.actions.requestCreate(draft.values.target,draft.values.fields),null);
+  h.store.update({version:1,kind:'response',scope:'scope',revision:'r1',requestId:event.requestId,accepted:false,error:'Stale plan'});
+  assert.equal(h.store.read().view.draft.values.fields.name,'');
+  h.store.update(patch({capabilities:{edit:false}}));assert.equal(h.actions.openCreate(current),false);
+  assert.equal(h.actions.requestCreate(draft.values.target,{...draft.values.fields,name:'Forbidden'}),null);
+});
+
+test('an open draft retains host revision context when authoritative metadata changes',()=>{
+  const input=snapshot();input.tasks[0].context={projectId:'project',planRevision:4};
+  const h=harness(input);h.actions.open(current);
+  h.store.update(patch({tasks:[{...input.tasks[0],context:{projectId:'project',planRevision:5}}]}));
+  const fields=h.store.read().view.draft.values.fields;
+  const event=h.actions.request('task',current,{...fields,name:'Old draft'});
+  assert.equal(event.context.planRevision,4);assert.equal(h.store.lookup('tasks','task').context.planRevision,5);
+});
+
+test('creation starts after the invoked task or the displayed project schedule and preserves phase defaults',()=>{
+  const input=snapshot();input.projects[0].defaultPhase='Host default';input.tasks[0].phase='Task phase';
+  const h=harness(input);h.actions.openCreate(current);
+  assert.equal(h.store.read().view.draft.values.fields.phase,'Task phase');
+  assert.equal(h.store.read().view.draft.values.fields.start,input.tasks[0].end);h.actions.close();
+  h.actions.openCreate({kind:'projects',id:'project'});assert.equal(h.store.read().view.draft.values.fields.phase,'Host default');
+});
+
 test('edits are correlated once, reject safely and settle only on authoritative updates',()=>{
   const h=harness();assert.equal(h.actions.open(current),true);
   const event=h.actions.request('dates',current,{start:'2026-01-02',end:'2026-01-04'});

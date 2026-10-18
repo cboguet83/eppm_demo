@@ -67,7 +67,7 @@ export function createResourceRenderer({panel,heading,store,lifetime,options,can
       const key=JSON.stringify([view.collapsedResources,filters,calendar.start,calendar.end,calendar.width,view.mode]);
       const changed=data!==previousData || key!==previousKey;
       if(changed){model=resourceRows(data,view,calendar,summaries);previousData=data;previousKey=key;}
-      count.textContent=String(model.pools.size)+' '+(labels.pools || 'Pools');
+      count.textContent=String(model.pools.size)+' '+(model.pools.size===1?(labels.pool || 'Pool'):(labels.pools || 'Pools'));
       const active=data.resourceFilter;
       filter.hidden=!active;filter.textContent=active?[active.name || active.resourceId || active.groupId,active.start,active.end].filter(Boolean).join(' · '):'';
       if(active?.clearAction) {

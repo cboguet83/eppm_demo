@@ -104,8 +104,10 @@ export function inspectDependency(entry) {
   const details=(supplied,resolved)=>{
     if(supplied.kind==='unavailable')return {kind:'unavailable'};
     const result={kind:supplied.kind,id:supplied.id};
+    if(supplied.name!==undefined)result.name=supplied.name;
+    if(supplied.start && supplied.end)Object.assign(result,{start:supplied.start,end:supplied.end});
     if(resolved?.record)Object.assign(result,{name:resolved.record.name,projectId:resolved.projectId});
-    // A collapsed project anchor does not reveal undelivered task dates.
+    // A collapsed anchor supplies no task dates beyond explicitly delivered metadata.
     if(resolved?.record && (supplied.kind==='project' || resolved.record.id===supplied.id)) {
       const dates=supplied.kind==='project'?resolved.dates:resolved.record;
       if(dates.start && dates.end)Object.assign(result,{start:dates.start,end:dates.end});

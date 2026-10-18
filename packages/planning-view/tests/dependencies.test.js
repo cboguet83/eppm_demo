@@ -53,6 +53,13 @@ test('unavailable, undelivered and undated endpoints never invent hidden metadat
   assert.equal(noDates.index.size,0);
 });
 
+test('explicitly supplied external endpoint details remain inspectable without hydration',()=>{
+  const input=initial();input.dependencies=[dependency('external','FS',{predecessor:{kind:'task',id:'outside',projectId:'outside-project',name:'Delivered external task',start:'2026-01-01',end:'2026-01-03'}})];
+  const h=fixture(input,['p']);
+  const details=inspectDependency(h.index.query(0,10)[0]).predecessor;
+  assert.deepEqual(details,{kind:'task',id:'outside',name:'Delivered external task',start:'2026-01-01',end:'2026-01-03'});
+});
+
 test('interval candidates include crossing paths while excluding distant unrelated edges',()=>{
   const input=initial();input.projects=input.projects.slice(0,1);
   input.tasks=Array.from({length:2000},(_,i)=>task(String(i)));
