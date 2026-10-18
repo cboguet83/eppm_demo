@@ -1,6 +1,6 @@
 # Verification: reusable-planning-component
 
-Status: **passed; rearchived after packaging correction on 2026-10-18**. The OpenSpec verify-change workflow
+Status: **passed; ready for rearchive after consumer completion correction**. The OpenSpec verify-change workflow
 checked completeness, all requirement/scenario mappings, design adherence and
 code-pattern consistency against the integrated implementation. No applicable
 check was skipped or left unverified.
@@ -9,7 +9,7 @@ check was skipped or left unverified.
 
 | Dimension | Final finding |
 | --- | --- |
-| Completeness | 27/27 tasks complete; all 16 added requirements implemented. No removed/renamed requirements. |
+| Completeness | 28/28 tasks complete; all 16 added requirements implemented. No removed/renamed requirements. |
 | Correctness | All 35 scenarios mapped below. Complete PostgreSQL/authenticated-browser acceptance passed with zero skips and 97.71% application coverage. |
 | Coherence | Explicit host dependencies, independent lifecycle/state, canonical assets and thin EPPM integration follow the design. Approved initial-render limits and every unchanged timing/hard gate pass. |
 
@@ -68,13 +68,13 @@ characterization meanings and hard bounds remain in `baseline.md`.
 ## Final validation evidence
 
 Application/browser runtime remains `098f9b8`, including current main `664f72a`,
-with the matching Docker image. The build-only task 8.1 correction was frozen
+with the matching Docker image. The task 8.1 build correction and task 9.1 test-consumer sequencing were frozen
 during renewed full acceptance. Subsequent edits are documentation/evidence only.
 Python 3.14.7, Node 26.11.1 and installed Playwright 1.62 Chromium were used.
 
 | Check | Actual result |
 | --- | --- |
-| Complete strict integrated suite | **3,483 passed + 5 subtests, zero skips in 1,248.42 s (20:48)**. Exactly two loadgroup workers, template-backed isolated PostgreSQL, authenticated browser deployments, no worker restarts and complete worker/collection proof. |
+| Complete strict integrated suite | **3,484 passed + 5 subtests, zero skips in 1,556.86 s (25:56)**. Exactly two loadgroup workers, template-backed isolated PostgreSQL, authenticated browser deployments, no worker restarts and complete worker/collection proof. |
 | Application coverage | **17,097 statements, 392 missed, 97.71%**; unchanged `app` source/exclusion scope and >=95% gate. Native host subprocess coverage included; containerized OIDC remains a separate behavior gate. |
 | JavaScript | **324 passed, zero failures/skips**, including all original entry points, extracted modules and current-main startup/completion checks. |
 | Independent wrapper/example coverage | **46 passed, 275/275 statements, 100%** against unchanged >=95% gate. |
@@ -124,7 +124,7 @@ Run the explicit five-repeat collector separately from full-suite/database-copy
 checks, with a new ignored basetemp, as documented in the benchmark procedure.
 
 Portable results are recorded here; local logs are
-`/tmp/planning-packaging-final-pytest.log`, `/tmp/planning-81-node.log`,
+`/tmp/planning-consumer-final-pytest.log`, `/tmp/planning-81-node.log`,
 `/tmp/planning-81-wrapper.log`, `/tmp/planning-73-browser.log`, and
 `/tmp/planning-candidate-scroll-fixed.log`.
 
@@ -165,10 +165,11 @@ Portable results are recorded here; local logs are
 
 The focused ledger below is from `git log main..HEAD --oneline` filtered by the
 change label, with `git log origin/main..HEAD --oneline` confirming the actual
-PR base. Current main is an ancestor of the verified source. Task 8.1 contains the final packaging correction and renewed acceptance; its
-already-existing hash was added by this archive follow-up.
+PR base. Current main is an ancestor of the verified source. Task 9.1 contains the final consumer correction and renewed acceptance; its
+own hash is recorded only by the subsequent archive follow-up.
 
 ```text
+fc2db4a chore(reusable-planning-component): archive verified packaging correction
 4abe570 fix(reusable-planning-component): complete task 8.1 isolated packaging hooks
 3eab64d chore(reusable-planning-component): rearchive integrated verified change
 ac8e6e2 test(reusable-planning-component): complete task 7.2 integrated acceptance
@@ -200,8 +201,8 @@ e68f994 feat(reusable-planning-component): complete task 2.1 host contracts
 48386c9 docs(reusable-planning-component): complete task 1.1 extraction plan
 ```
 
-PR: https://github.com/cboguet83/eppm_demo/pull/4. All 27 tasks are complete;
-final packaging acceptance is complete and the change is rearchived at
+PR: https://github.com/cboguet83/eppm_demo/pull/4. All 28 tasks are complete;
+final acceptance is complete and the change is rearchived at
 `openspec/changes/archive/2026-10-18-reusable-planning-component/`. Both capability
 specs remain synced. Full CI on the final PR revision is an additional gate
 before requesting merge approval. Registry publication and merge have not
@@ -214,8 +215,7 @@ preserving task history.
 
 ## Final assessment
 
-All applicable implementation and packaging checks passed. The change is
-rearchived; final PR CI must pass before merge approval is requested.
+All applicable implementation and packaging checks passed. Ready for rearchive; final PR CI must pass before merge approval is requested.
 
 ## Hosted packaging correction
 
@@ -241,3 +241,26 @@ was downloaded or changed. The isolated Python -I hook tests separately prove
 source-root imports are unnecessary. Complete renewed strict acceptance passed
 3,483 tests + 5 subtests, zero skips, 97.71% app coverage in 1,248.42 seconds;
 324 JavaScript checks and all 46 wrapper/example checks (100% coverage) pass.
+
+## Hosted full-shell consumer completion
+
+CI run 39149646724 on fc2db4a passed corrected installation, database setup and
+image build, then stopped with 1 failed / 555 passed in 214.46 seconds. The
+unchanged `test_dashboard_filter_spacing_in_full_shell` clicked Service A twice
+while checking only Reset-filter color between clicks. The second toggle was
+not reflected (Reset stayed red). Its sibling organization test already waits
+for native completion and published service aria-pressed state; task 9.1 applies
+that sequencing to the remaining full-shell consumer with delayed redraw
+coverage, retaining all existing assertions. No dashboard business code changes.
+
+Task 9.1 uses the existing ScriptCompletion protocol observer around state-changing
+actions and checks Service A aria-pressed true/false before the next action.
+All geometry/filter/color assertions and existing deadlines remain. Eight
+organization/completion checks pass in 35.43 seconds, including immediate and
+delayed full-shell redraws. Local delayed-only and pending-rerun probes did not
+reproduce the original hosted failure; the CI trace is the observed red case.
+No claim of a deterministic local reproduction or dashboard production fix is
+made. Full renewed acceptance passed 3,484 tests + 5 subtests with zero skips and
+97.71% application coverage in 1,556.86 seconds. All original full-shell
+assertions remain, with stronger published-selection checks; no dashboard
+production code, tolerance or timeout was changed.

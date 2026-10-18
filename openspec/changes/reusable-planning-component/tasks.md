@@ -58,6 +58,10 @@ Each numbered checkbox is one focused commit containing its implementation, rele
 
 - [x] 8.1 Make root and independent-wrapper build guards work in isolated PEP 517 hooks without importing source-root modules through sys.path. Remove the test helper's source-path insertion; verify get-requires/editable-wheel hooks plus direct/source-rebuilt artifacts and installed consumers, then rerun complete strict two-worker acceptance, wrapper/JavaScript/asset/spec checks and OpenSpec verification. Preserve asset-integrity failures and all prior gates, record the hosted failure and final evidence. Delivery follows the plain workflow bullets below.
 
+## 9. Hosted full-shell consumer completion
+
+- [x] 9.1 Make the remaining dashboard full-shell filter consumer wait for real native script completion and published service-button selection before issuing the next toggle. Add delayed service redraw coverage for the hosted toggle sequence, retain every geometry/filter/color assertion and existing deadlines, verify focused native/completion checks and complete strict acceptance, and record final evidence before delivery follow-ups.
+
 ## Workflow follow-up
 
 - After all tracked tasks and required checks pass, sync both capability deltas and archive the change on this branch. Inspect and commit the archive and verification evidence in a separate lifecycle commit.
