@@ -1,6 +1,6 @@
 # Verification: reusable-planning-component
 
-Status: **passed; ready for archive**. The OpenSpec verify-change workflow
+Status: **passed; archived on 2026-10-18**. The OpenSpec verify-change workflow
 checked the proposal, design, both deltas, all tracked tasks and implementation
 evidence. All applicable checks passed; none were skipped or left unverified.
 
@@ -147,7 +147,10 @@ it is not represented as host-process coverage.
 ## Delivery status
 
 The feature branch and unrelated primary checkout remain separate. Verification
-is complete; archive and PR delivery follow under the standing workflow. Registry
+is complete; both capability deltas were synced with authored purposes and all
+requirement/scenario blocks intact. The change is archived at
+`openspec/changes/archive/2026-10-18-reusable-planning-component/`. All seven main
+specs passed strict validation. PR delivery follows under the standing workflow. Registry
 publication has not occurred. Merge requires the user's explicit approval of the
 concrete PR and successful full CI on the final revision. Repository settings were inspected read-only: `main` is unprotected; merge,
 squash and rebase methods are enabled. No settings were changed. This workflow
@@ -155,11 +158,11 @@ still requires explicit PR approval and a merge commit preserving task history.
 
 ## Task commits
 
-The following evidence is from `git log main..HEAD --oneline` before acceptance.
-Task 6.1 is the commit containing this finalized report; its own hash is recorded
-only by subsequent history, not embedded in itself.
+The following evidence is from `git log main..HEAD --oneline` through acceptance.
+The task 6.1 hash was added in this archive follow-up, after its commit existed.
 
 ```text
+46a2d3e test(reusable-planning-component): complete task 6.1 full acceptance
 ad15b55 perf(reusable-planning-component): complete task 5.5 approved render budget
 d3cfd24 fix(reusable-planning-component): complete task 5.8 shared menu visual parity
 8e065c4 fix(reusable-planning-component): complete task 5.7 callback loading fallback
@@ -187,5 +190,5 @@ e68f994 feat(reusable-planning-component): complete task 2.1 host contracts
 
 ## Final assessment
 
-All checks passed. Ready for archive. Archive and PR publication are delivery
-steps; full PR CI is an additional gate before requesting merge approval.
+All checks passed before archive. Specs are synced and the change is archived.
+Full PR CI is an additional gate before requesting merge approval.
