@@ -26,6 +26,15 @@ jobs:
       - name: Create isolated PostgreSQL credentials and database service
         run: |
           python -m scripts.configure_postgresql
+          # Compose interpolates the optional pgAdmin service even in test runs.
+          python - <<'PY'
+          from pathlib import Path
+          from secrets import token_urlsafe
+
+          with Path('.local/postgresql.env').open('a', encoding='utf-8') as output:
+              output.write('PGADMIN_EMAIL=acceptance@example.invalid\n')
+              output.write(f'PGADMIN_PASSWORD={token_urlsafe(36)}\n')
+          PY
           docker compose --project-name eppm-tests --env-file .local/postgresql.env -f docker-compose.postgresql.yml -f docker-compose.postgresql-test.yml up -d --wait postgres
           python -m scripts.postgresql_admin --env-file .local/postgresql.env --url-variable POSTGRES_TEST_ADMIN_URL provision
       - name: Build isolated authenticated browser application
