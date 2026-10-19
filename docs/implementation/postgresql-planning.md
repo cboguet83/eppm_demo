@@ -191,4 +191,3 @@ write operation. A stale source rejects the operation rather than retrying with
 new values. Dates and saved snapshots are unchanged. The component boundary
 validates positive endpoint identities, exactly one predecessor, the four link
 types, and zero-day lag before dispatch.
-

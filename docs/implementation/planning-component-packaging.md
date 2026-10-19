@@ -21,7 +21,7 @@ From the repository root using Python 3.14:
 
 ```bash
 python -m scripts.build_planning_assets \
-  --browser-archive .local/planning-distributions/planning-view-0.1.0.tar.gz
+  --browser-archive .local/planning-distributions/planning-view-0.2.0.tar.gz
 python -m scripts.build_planning_assets --check
 ```
 
@@ -58,8 +58,8 @@ Rebuild a wheel from extracted sources without EPPM, source paths, a JavaScript
 compiler, or a build-time browser download:
 
 ```bash
-tar -xzf streamlit_planning_view-0.1.0.tar.gz
-cd streamlit_planning_view-0.1.0
+tar -xzf streamlit_planning_view-0.2.0.tar.gz
+cd streamlit_planning_view-0.2.0
 python -c "from setuptools.build_meta import build_wheel; build_wheel('dist')"
 ```
 
@@ -68,7 +68,7 @@ checksum. Missing/modified resources fail wheel and source builds. Standalone
 sources do not need the repository assembly script. Install either wheel:
 
 ```bash
-python -m pip install /path/to/streamlit_planning_view-0.1.0-py3-none-any.whl
+python -m pip install /path/to/streamlit_planning_view-0.2.0-py3-none-any.whl
 ```
 
 The wrapper README documents full-data/lazy hosts. Browser hosts unpack their

@@ -8,7 +8,7 @@ seams for focused tests.
 `validateMessage(input)` returns an independently owned validated JSON copy or
 throws `ContractError` with only a schema location. Call it before changing view
 state. `validateEvent(input)` validates display intentions; hosts must still
-authorize every read/write. Contract version 1 is separate from package 0.1.0.
+authorize every read/write. Contract version 1 is separate from package 0.2.0.
 
 Messages have `version: 1`, nonempty opaque `scope` and `revision` strings and
 `kind` of `snapshot`, `patch`, or `response`. A snapshot supplies `projects` and
@@ -457,11 +457,11 @@ tests also prepare a temporary frontend directly from this one source.
 Unpack the browser artifact into an empty consumer directory, then serve it:
 
 ```bash
-tar -xzf planning-view-0.1.0.tar.gz -C /path/to/consumer
+tar -xzf planning-view-0.2.0.tar.gz -C /path/to/consumer
 python -m http.server 8000 --bind 127.0.0.1 --directory /path/to/consumer
 ```
 
-Open `http://127.0.0.1:8000/planning-view-0.1.0/examples/index.html`. The example
+Open `http://127.0.0.1:8000/planning-view-0.2.0/examples/index.html`. The example
 imports only its adjacent installed modules/styles. It demonstrates two
 instances with overlapping IDs, host-accepted/rejected edits, marked resource
 periods, lazy reads, snapshot/reset updates and explicit unmount/remount. The
@@ -476,7 +476,7 @@ The browser runtime needs native ES modules, `structuredClone`, secure-context
 loopback supports local examples; deployed hosts use their normal secure origin.
 No Node runtime/compiler is required by a consumer. Other browser engines have
 not been part of the acceptance checks. Contract 1 is the supported protocol;
-package version 0.1.0 does not replace `version:1` in data/events. Unsupported
+package version 0.2.0 does not replace `version:1` in data/events. Unsupported
 contract versions fail explicitly. Keep labels/capabilities in data for upgrades
 that retain applicable interaction state, and destroy instances on host unmount.
 

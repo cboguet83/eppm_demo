@@ -26,7 +26,7 @@ Planning evidence (2026-10-19): fetched `origin/main`; local main and origin/mai
 
 ## 5. Distribution and acceptance
 
-- [ ] 5.1 Synchronize package versions/manifests and generated planning assets using `python -m scripts.build_planning_assets`; update independent host/Streamlit examples for explicit opt-in. Extend packaging/embedding regression coverage to prove omitted support remains compatible and installed artifacts create/acknowledge/edit dependencies using only packaged assets. Verify both JavaScript suites, generated-asset consistency, and affected packaging/plain-web/Streamlit tests pass.
+- [x] 5.1 Synchronize package versions/manifests and generated planning assets using `python -m scripts.build_planning_assets`; update independent host/Streamlit examples for explicit opt-in. Extend packaging/embedding regression coverage to prove omitted support remains compatible and installed artifacts create/acknowledge/edit dependencies using only packaged assets. Verify both JavaScript suites, generated-asset consistency, and affected packaging/plain-web/Streamlit tests pass.
 - [ ] 5.2 Run final acceptance per `docs/development-workflow.md`: strict OpenSpec validation, the verify-change workflow against every scenario, and the canonical complete `python -m scripts.run_tests full` environment with isolated PostgreSQL and authenticated browser deployments, both JavaScript suites, asset consistency, and at least 95% application statement coverage. Record actual commands/results/coverage/skips, scenario evidence, final diff review, and task-to-commit mapping in `verification.md` using `git log main..HEAD --oneline`. Keep this task incomplete if a required check fails or cannot run.
 
 ## Workflow follow-up

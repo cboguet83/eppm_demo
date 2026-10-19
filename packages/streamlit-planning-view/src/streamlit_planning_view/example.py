@@ -2,6 +2,7 @@
 
 from datetime import date
 from typing import cast
+from uuid import uuid4
 
 import streamlit as st
 
@@ -23,7 +24,8 @@ def initial_snapshot(scope: str, *, lazy: bool = False) -> JsonObject:
     """
     snapshot: JsonObject = {
         "version": 1, "kind": "snapshot", "scope": scope, "revision": "r1",
-        "capabilities": {"edit": scope.startswith("primary")},
+        "capabilities": {"edit": scope.startswith("primary"),
+                         "createDependencies": scope.startswith("primary")},
         "projects": [{"id": "alpha", "name": "Alpha", "taskCount": 2,
                       "start": "2026-01-01", "end": "2026-12-31"}],
         "tasks": [
@@ -127,6 +129,8 @@ def handle_event(
     if received["type"] not in ("dates", "progress", "task", "dependency"):
         return data, [], "No change"
     values = cast(JsonObject, received.get("values", received))
+    if received['type'] == 'dependency' and received.get('operation') == 'create':
+        return _create_dependency(data, received, values)
     collection = ("dependencies" if received["type"] == "dependency"
                   else "tasks")
     rows = cast(list[JsonObject], data[collection])
@@ -151,6 +155,24 @@ def handle_event(
         ] + incoming
     data["revision"] = "r" + str(int(str(data["revision"])[1:]) + 1)
     return data, [_response(data, received, True)], "Change accepted"
+
+
+def _create_dependency(
+    data: JsonObject, event: JsonObject, values: JsonObject,
+) -> tuple[JsonObject, list[JsonObject], str]:
+    """Append a fixture link only when both endpoints exist and editing is allowed."""
+    grants = cast(JsonObject, data['capabilities'])
+    for side in ('predecessor', 'successor'):
+        endpoint = cast(JsonObject, values[side])
+        rows = cast(list[JsonObject], data['tasks' if endpoint['kind'] == 'task' else 'projects'])
+        if not any(row['id'] == endpoint['id'] for row in rows):
+            return data, [_response(data, event, False)], 'Unknown endpoint'
+    if not grants.get('edit') or not grants.get('createDependencies'):
+        return data, [_response(data, event, False)], 'Change rejected'
+    dependencies = cast(list[JsonObject], data['dependencies'])
+    dependencies.append({'id': str(uuid4()), **values})
+    data['revision'] = 'r' + str(int(str(data['revision'])[1:]) + 1)
+    return data, [_response(data, event, True)], 'Dependency created'
 
 
 def main() -> None:

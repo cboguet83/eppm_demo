@@ -36,7 +36,7 @@ def installed_web_example(planning_artifacts: dict[str, Path]) -> Iterator[str]:
         thread.start()
         try:
             yield (f"http://127.0.0.1:{server.server_port}/"
-                   "planning-view-0.1.0/examples/index.html")
+                   "planning-view-0.2.0/examples/index.html")
         finally:
             server.shutdown()
             thread.join(timeout=5)
@@ -186,5 +186,53 @@ def test_installed_streamlit_example_handles_edits_resource_events_and_lazy_read
             expect(primary.locator('.planning-bar[data-target-id="design"]')).to_be_attached()
             assert page.locator('[data-testid="stException"]').count() == 0
             assert primary.locator(".planning-view").evaluate("n=>Math.ceil(n.getBoundingClientRect().height)<=innerHeight+1")
+        finally:
+            browser.close()
+
+
+def test_installed_web_example_creates_and_edits_a_dependency(installed_web_example: str) -> None:
+    """Installed browser assets submit zero-lag creation and expose later type/lag editing."""
+    with playwright_api.sync_playwright() as driver:
+        browser = driver.chromium.launch(executable_path=os.environ.get('EPPM_BENCHMARK_BROWSER'))
+        try:
+            page = browser.new_page(viewport={'width': 1500, 'height': 1700})
+            page.goto(installed_web_example)
+            primary = page.locator('#primary')
+            primary.locator('[data-mode=Month]').click()
+            source = primary.locator('.planning-bar[data-target-id=design] [data-connect=S]')
+            source.focus()
+            source.press('Enter')
+            primary.locator('.planning-bar[data-target-id=build] [data-connect=F]').press('Enter')
+            expect(page.locator('#feedback')).to_have_text('Dependency created')
+            expect(page.locator('#accepted')).to_have_text('Accepted edits: 1')
+            source.focus()
+            source.press('Enter')
+            primary.locator('.planning-bar[data-target-id=build] [data-connect=F]').press('Enter')
+            editor = primary.locator('.planning-editor')
+            expect(editor).to_be_visible()
+            editor.locator('[data-field=type]').select_option('SS')
+            editor.locator('[data-field=lagDays]').fill('-2')
+            editor.locator('button[type=submit]').click()
+            expect(page.locator('#accepted')).to_have_text('Accepted edits: 2')
+            assert page.locator('#secondary [data-connect]:visible').count() == 0
+        finally:
+            browser.close()
+
+
+def test_installed_streamlit_example_creates_a_dependency(installed_streamlit_example: str) -> None:
+    """Both installed wheels deliver a direct connection to their independent Python host."""
+    with playwright_api.sync_playwright() as driver:
+        browser = driver.chromium.launch(executable_path=os.environ.get('EPPM_BENCHMARK_BROWSER'))
+        try:
+            page = browser.new_page(viewport={'width': 1600, 'height': 2000})
+            page.goto(installed_streamlit_example)
+            primary = page.frame_locator('iframe').nth(0)
+            primary.locator('[data-mode=Month]').click(timeout=30000)
+            source = primary.locator('.planning-bar[data-target-id=design] [data-connect=F]')
+            source.focus()
+            source.press('Enter')
+            primary.locator('.planning-bar[data-target-id=build] [data-connect=S]').press('Enter')
+            expect(page.get_by_text('Dependency created', exact=True)).to_be_visible(timeout=15000)
+            assert page.locator('[data-testid=stException]').count() == 0
         finally:
             browser.close()

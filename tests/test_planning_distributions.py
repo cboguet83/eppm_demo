@@ -94,7 +94,7 @@ def test_assembly_requires_matching_versions_and_owns_only_marked_directories(
     """Source/version drift and symlink/unmarked targets never get overwritten."""
     project = asset_root / "packages/streamlit-planning-view/pyproject.toml"
     original = project.read_text(encoding="utf-8")
-    project.write_text(original.replace('version = "0.1.0"', 'version = "0.2.0"'), encoding="utf-8")
+    project.write_text(original.replace('version = "0.2.0"', 'version = "0.3.0"'), encoding="utf-8")
     with pytest.raises(AssetError, match="versions disagree"):
         source_files(asset_root)
     project.write_text(original, encoding="utf-8")
@@ -288,7 +288,7 @@ def test_clean_browser_archive_renders_without_eppm_sources(
                     page.goto(f"http://127.0.0.1:{server.server_port}")
                     page.evaluate("""async () => {
                       document.body.innerHTML='<main></main>';
-                      const {mountPlanningView}=await import('/planning-view-0.1.0/src/index.js');
+                      const {mountPlanningView}=await import('/planning-view-0.2.0/src/index.js');
                       mountPlanningView(document.querySelector('main'),{today:'2026-01-01',grouped:false,
                         snapshot:{version:1,kind:'snapshot',scope:'portable',revision:'r',
                           projects:[{id:'p',name:'Project'}],tasks:[{id:'task',projectId:'p',name:'Portable task',start:'2026-01-01',end:'2026-01-03'}],
