@@ -6,6 +6,33 @@ service composition now use PostgreSQL. Every service receives the same
 key, one bounded derived cache, and an opaque presentation identity. No runtime
 factory accepts a SQLite path or substitutes operator credentials.
 
+## Optional pgAdmin for local development
+
+Database/application startup does not need pgAdmin credentials. To opt in,
+create an ignored `.local/pgadmin.env` containing your `PGADMIN_EMAIL` and
+`PGADMIN_PASSWORD`. Use the same Compose project name as the existing database
+(`eppm_demo` for the default checkout) to keep its network and volume identity:
+
+```bash
+docker compose --project-name eppm_demo \
+  --env-file .local/postgresql.env --env-file .local/pgadmin.env \
+  -f docker-compose.postgresql.yml -f docker-compose.pgadmin.yml \
+  --profile tools up -d --no-deps pgadmin
+```
+
+Open `http://localhost:5050`; register host `postgres`, port `5432`, with the
+appropriate database role. The pgAdmin login is separate from database and
+Keycloak accounts. PostgreSQL remains exposed on loopback port 5434 for host
+clients. The tool preserves settings in the project's `pgadmin_data` volume;
+never delete database volumes when changing application or tool containers.
+The pinned image follows the [official container deployment
+guide](https://www.pgadmin.org/docs/pgadmin4/9.18/container_deployment.html).
+
+For tests, use a separate project and the PostgreSQL test overlay. It replaces
+the development binding with loopback port 15432, matching the generated test
+URLs; it does not share the application's port or volume. Do not add this
+overlay to the existing application's project to run tests.
+
 ## C3 — Runtime components
 
 ```mermaid

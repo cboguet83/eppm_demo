@@ -70,18 +70,21 @@ docker build -t eppm-demo:local .
 POSTGRES_TEST_CLIENT_CONTAINER=eppm-workflow-tests-postgres-1 \
 EPPM_RUN_OIDC_E2E=1 \
 python -m dotenv -f .local/workflow-tests.env run -- \
-  python -m pytest -q -x -p no:cacheprovider --require-full-suite \
-    --cov=app --cov-fail-under=95 -n 2 --dist=loadgroup \
-    --postgres-test-db-mode=template --max-worker-restart=0
-node --test tests/test_*.cjs
-node --test packages/planning-view/tests/*.test.js
-python -m scripts.build_planning_assets --check
+  python -m scripts.run_tests full
 openspec validate <change-name> --strict
 ```
 
+The full runner includes both JavaScript suites and generated-asset consistency.
+It creates a fresh canonical collection and requires the complete serial/worker
+collection to match it. Full mode accepts no path, keyword, marker or last-failed
+selection; unset `PYTEST_ADDOPTS` and `PYTEST_PLUGINS`. Canonical discovery and
+coverage use the checked project configuration. A partial selection containing
+both required groups is not sufficient full proof.
+
 The verified full-run command uses migrated templates and exactly two workers.
 For a serial/fresh diagnostic, replace the worker/template options with
-`-n 0 --postgres-test-db-mode=fresh`. Empty-database migration/upgrade tests stay
+`-n 0 --postgres-test-db-mode=fresh` in a direct pytest invocation; full mode keeps
+the canonical acceptance options. Empty-database migration/upgrade tests stay
 unmigrated in either mode. Run affected paths locally while editing; full
 acceptance still requires the complete command and JavaScript checks.
 
@@ -134,9 +137,39 @@ a separate lifecycle commit for the archive.
 
 Publish the branch and create a PR targeting `main`, describing the outcome,
 validation, task commits, and archived change. Attach the PR to the Codex chat.
-The full GitHub Actions workflow runs automatically on every PR; manual dispatch
-remains available. Revalidate relevant checks after further edits and require
-successful full PR CI on the final revision, including archive changes.
+Keep PRs in draft during ordinary iteration: fast Python, both JavaScript suites,
+and generated assets provide partial feedback. The required `tests` check stays
+unsuccessful until full code acceptance; a green feedback job does not permit a
+code merge. Marking a code PR ready automatically runs full acceptance, including
+all later ready revisions. Test-selection/full-gate/workflow policy changes and
+uncertain diffs run full checks even in draft. The classifier reads the complete
+Git diff, including rename origins and deletions; unknown/mixed files are code.
+Only the explicit allowlist of prose in README, direct decision/implementation
+guides, and OpenSpec change documents/metadata can omit runtime tests. Workflow
+policy instructions, scripts, assets, dependencies and arbitrary YAML cannot.
+Both sides of prose changes must also be plain UTF-8, nonexecutable Git blobs;
+symlinks, binary data, shebang scripts or unavailable content evidence require
+full checks even when the filename ends in Markdown.
+
+Manual full diagnostics have their own check context. Metadata-only code edits
+do not launch or cancel full acceptance. Their stable `tests` gate can pass only
+by revalidating immutable full proof for the exact PR/head/base/tested merge and
+workflow source. The latest actual acceptance attempt must have succeeded with
+all required jobs; missing, expired, stale, failed, cancelled, partial or manual
+evidence never qualifies. This avoids GitHub leaving `tests` Expected when a
+later metadata run omits the required check. A metadata edit during full execution
+fails promptly; after full succeeds, rerun only that metadata gate to revalidate
+proof, without another expensive suite. Prose-only updates retain fresh complete
+diff/blob validation. Read-only Actions/PR access retrieves bounded proof files;
+credentials and signed download URLs never enter the artifacts or logs.
+The always-evaluated merge gate requires the selected jobs' explicit success
+and the exact tested revision/head/base decision. Missing, stale, cancelled, or
+unexpectedly skipped work fails. Concurrency cancels obsolete runs for the same
+PR, including readiness changes. Preserve existing SonarCloud analysis.
+
+Revalidate after edits and require successful full code PR CI on the final
+revision, including archive changes. A mixed code PR cannot use a prose-only
+exemption because its last commit happens to contain only archival documents.
 
 ## 5. Obtain approval and merge
 
@@ -146,8 +179,9 @@ and passing final checks, use a **merge commit** into `main`, preserving every
 task commit. Do not squash or rebase merge.
 
 Recommended GitHub repository settings are PR-required changes to `main`, the
-full `tests` job as a required status check, merge commits enabled, squash/rebase
-merge methods disabled, and no linear-history rule that prevents merge commits.
+stable GitHub Actions `tests` gate as a required status check with the branch
+up to date, protections applied to administrators, merge commits enabled,
+squash/rebase/automatic merging disabled, and no conflicting linear-history rule.
 Inspect and report settings when accessible; local instructions do not enforce
 remote protection. Changing remote administrative settings requires a separate
 explicit request. Report missing or unverified protection without claiming it
