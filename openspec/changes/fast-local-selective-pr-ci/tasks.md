@@ -110,7 +110,7 @@ authorized at creation; the remaining boxes require a subsequent apply request.
   incomplete if any required check fails; no seven-minute deadline or weakened
   gates. This task integrates already-tested/documented work from tasks 2–4.
 
-- [ ] 5.2 Repeat full local acceptance on the corrected runtime/test/CI sources,
+- [x] 5.2 Repeat full local acceptance on the corrected runtime/test/CI sources,
   including all PostgreSQL/OIDC/browser tests, unchanged 95% application coverage,
   both JavaScript suites and assets. Verify the approved plan and every new
   failure-mode regression, source identity, main/protection and task commits;

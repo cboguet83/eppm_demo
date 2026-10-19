@@ -64,6 +64,60 @@ dependency, browser synchronization, worker policy or coverage configuration
 was changed. Full local acceptance and real hosted/native-merge verification
 remain required; these focused results do not complete task 5.2.
 
+### Task 5.2 — corrected-source full acceptance
+
+Accepted implementation: `ca078da`. Python 3.14.7, pytest 9.1.1,
+pytest-cov 7.1.0, xdist 3.8.0 and Playwright 1.62.0 use the dedicated
+worktree's own editable installation. The image was built from this branch.
+Only ignored test credentials were copied, without display, from the existing
+isolated test setup; no application database or shared checkout was modified.
+
+```bash
+POSTGRES_TEST_CLIENT_CONTAINER=eppm-fast-ci-tests-postgres-1 \
+EPPM_RUN_OIDC_E2E=1 \
+EPPM_E2E_APP_IMAGE=eppm-demo:fast-ci-metadata-tests \
+.venv/bin/python -m dotenv -f .local/fast-ci-metadata.env run -- \
+  .venv/bin/python -m scripts.run_tests full
+```
+
+| Required check | Observed result |
+| --- | --- |
+| Canonical discovery, strict real PostgreSQL/OIDC/browser suite | **3,628 passed, five subtests passed; 1,083.11s (18m03s)** |
+| Application/subprocess statement coverage, unchanged 95% gate | **97.7072%; 16,705/17,097 statements, 392 missing** |
+| Root JavaScript suite | **221 passed**, no failures/cancellations/skips |
+| Planning-view JavaScript suite | **117 passed**, no failures/cancellations/skips |
+| Generated browser assets | Verified |
+| Required/conditional skips, worker crashes/restarts | None |
+| Strict OpenSpec validation | Passed; intentionally no product spec deltas |
+| Remote main | Still `d4a769f12d92fc01d6fc49a1c4d16ca0be41ecee` |
+| Protection read-back | Up-to-date Actions `tests`, app 15368, admins enforced, PR reviews 0; force/deletion blocked, merge commits only |
+
+All 853 frozen runtime/test/CI/build files match their pre-run SHA-256 manifest,
+with zero mismatches. Combined digest:
+`e10ac95576c87e14b03d1de92a756ba02daa2c799ac1852e5be2386854d72848`.
+Logs, coverage and the manifest are ignored `.local/metadata-*` evidence.
+The disposable browser deployment was removed; the existing application and
+both isolated PostgreSQL services remain healthy. The 47 additional cases
+exercise the correction; no prior test or assertion was removed or weakened.
+
+#### Updated OpenSpec verification report
+
+| Dimension | Status |
+| --- | --- |
+| Completeness | All 11 tasks implemented and evidenced after the acceptance checkbox below; specs intentionally not applicable (`skip_specs: true`). |
+| Correctness | Product requirement/scenario mapping not applicable. All tooling outcomes verified by focused, fast and complete execution; prior Compose/runner/protection evidence remains valid. |
+| Coherence | All six design decisions followed. Decision 6 maps to `ci_full_proof.py`, policy CLI and explicit artifact/gate workflow steps. Read-only boundaries, bounded transport, source identity, fresh prose validation, manual isolation and strict failed-result rejection reviewed. |
+
+No critical issues, warnings or suggestions remain in the pre-archive review;
+no applicable verification check was skipped. All applicable checks passed.
+Ready for re-archive. Hosted full CI/SonarCloud on the final archived revision
+and the genuine metadata edit/native merge-box check remain delivery gates,
+not claims made by local verification. No merge is authorized.
+
+Task audit additions: 1.2 `cb93d27`; 4.4 `ca078da`; prior 5.1 `59a6a2c`.
+Resolve task 5.2 through its dedicated `complete task 5.2` commit subject; a
+commit cannot contain its own hash. Re-archive is a separate lifecycle commit.
+
 ## Planning only — 2026-10-19
 
 Status: task 1.1 complete; all six implementation/acceptance tasks remain open.
