@@ -292,6 +292,17 @@ export function validateEvent(input) {
   identity(value.requestId, 'requestId');
   requireValue(['dates', 'progress', 'task', 'dependency', 'select', 'command', 'load', 'error'].includes(value.type), 'event.type');
   if (['dates', 'progress', 'task', 'dependency', 'select'].includes(value.type)) identity(value.targetId, 'targetId');
+  if(value.type==='dependency' && value.operation==='create') {
+    requireValue(['tasks','projects'].includes(value.targetKind),'dependency.targetKind');
+    const fields=record(value.values,'dependency.values');
+    dependencies([{...fields,id:'creation'}],'dependency.values');
+    requireValue(fields.predecessor.kind!=='unavailable' && fields.successor.kind!=='unavailable','dependency.endpoint');
+    requireValue(fields.lagDays===0,'dependency.lagDays');
+    requireValue(fields.successor.id===value.targetId && fields.successor.kind===(value.targetKind==='tasks'?'task':'project'),'dependency.successor');
+    requireValue(!(fields.predecessor.kind===fields.successor.kind && fields.predecessor.id===fields.successor.id),'dependency.self');
+    requireValue(value.overlayId==null || typeof value.overlayId==='string','dependency.overlayId');
+    requireValue(value.lane===(value.overlayId?'alternative':'current'),'dependency.lane');
+  }
   if (value.type === 'dates') range(value, 'event');
   if (value.type === 'progress') requireValue(Number.isFinite(value.progress) && value.progress >= 0 && value.progress <= 100, 'progress');
   if (value.type === 'command') identity(value.command, 'command');

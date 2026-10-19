@@ -417,6 +417,17 @@ menu, supporting application-owned confirmation dialogs.
 project successors use `projectDependenciesCommand`. Without these options,
 individual dependency fields use the shared dependency editor.
 
+Dependency creation is an additive contract-1 operation. Hosts opt in with
+`capabilities.createDependencies:true`; omission leaves creation disabled.
+The host receives `type:'dependency', operation:'create'`, with successor
+`targetKind:'tasks'|'projects'` and `targetId`, successor lane/overlay/context,
+scope/revision/requestId, and `values:{predecessor,successor,type,lagDays:0}`.
+Endpoint IDs remain opaque strings. Authorize and append the requested link,
+then return authoritative dependency data and a correlated response. Do not
+replace an incoming-link collection from partial client data. Rejections clear
+pending visuals and retain unrelated editor drafts. No dependency ID is invented
+before acceptance; existing edit-by-ID events remain unchanged.
+
 Supply `choiceProjects:[{id,name}]` in data and a cancellable `loadChoices` mount
 function for project-scoped predecessor options. It receives
 `{projectId,scope,revision,overlayId,signal}` and resolves `[{id,name}]`. Choices

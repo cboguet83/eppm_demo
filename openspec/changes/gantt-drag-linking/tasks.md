@@ -10,7 +10,7 @@ Planning evidence (2026-10-19): fetched `origin/main`; local main and origin/mai
 
 ## 2. Reusable creation contract
 
-- [ ] 2.1 Extend `packages/planning-view/src/contracts/` and `workspace/actions.js` with opt-in `createDependencies` and validated `dependency`/`operation:create` intentions targeting successor task/project identities; capture endpoint/overlay/revision context, reject malformed or mismatched endpoints, and reconcile pending acceptance/rejection. Add contract/action/store tests for opaque IDs, omitted capability, all types, fresh permission checks, one request, and stale responses; document the additive version-1 host extension. Verify the planning-view Node suite and affected pytest contract/model tests pass.
+- [x] 2.1 Extend `packages/planning-view/src/contracts/` and `workspace/actions.js` with opt-in `createDependencies` and validated `dependency`/`operation:create` intentions targeting successor task/project identities; capture endpoint/overlay/revision context, reject malformed or mismatched endpoints, and reconcile pending acceptance/rejection. Add contract/action/store tests for opaque IDs, omitted capability, all types, fresh permission checks, one request, and stale responses; document the additive version-1 host extension. Verify the planning-view Node suite and affected pytest contract/model tests pass.
 
 ## 3. Direct chart interaction
 

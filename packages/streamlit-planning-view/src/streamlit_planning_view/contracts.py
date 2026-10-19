@@ -173,6 +173,8 @@ def _edit_values(result: JsonObject) -> None:
     _require(isinstance(values, dict), "values")
     if event_type == "dependency":
         _dependency(values, partial=True)
+        if result.get("operation") == "create":
+            _dependency_creation(result, values)
         return
     if "start" in values or "end" in values:
         _range(values)
@@ -189,6 +191,27 @@ def _edit_values(result: JsonObject) -> None:
         )
         for dependency in values["dependencies"]:
             _dependency(dependency)
+
+
+def _dependency_creation(result: JsonObject, values: JsonObject) -> None:
+    """Validate directed creation without inventing a persisted link ID."""
+    _dependency(values)
+    _require(result.get("targetKind") in ("tasks", "projects"), "targetKind")
+    _require(type(values.get("lagDays")) is int and values["lagDays"] == 0,
+             "dependency.lagDays")
+    predecessor = cast(JsonObject, values["predecessor"])
+    successor = cast(JsonObject, values["successor"])
+    _require(predecessor["kind"] != "unavailable", "predecessor")
+    kind = "task" if result["targetKind"] == "tasks" else "project"
+    _require(successor["kind"] == kind and successor["id"] == result["targetId"],
+             "successor")
+    _require((predecessor["kind"], predecessor["id"]) !=
+             (successor["kind"], successor["id"]), "dependency.self")
+    overlay = result.get("overlayId")
+    _require(overlay is None or isinstance(overlay, str) and bool(overlay.strip()),
+             "overlayId")
+    _require(result.get("lane") == ("alternative" if overlay else "current"),
+             "lane")
 
 
 def validate_event(value: Mapping[str, JsonValue]) -> JsonObject:
