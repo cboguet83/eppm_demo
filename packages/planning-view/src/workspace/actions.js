@@ -44,6 +44,8 @@ export function canCreateDependency(data,view,source,target,predecessor=resolveT
   if(!predecessor || !successor || !['tasks','projects'].includes(source.kind) || !['tasks','projects'].includes(target.kind))return false;
   if(data.capabilities.createDependencies!==true || data.capabilities.editDependencies===false || view.pendingRequestId)return false;
   if(!canEdit(data,view,target,'command',successor) || predecessor.lane==='baseline')return false;
+  if(target.overlayId && predecessor.projectId===successor.projectId && source.overlayId!==target.overlayId)return false;
+  if(predecessor.projectId!==successor.projectId && source.overlayId)return false;
   if(source.kind===target.kind && source.id===target.id)return false;
   if(predecessor.projectId===successor.projectId && (source.kind==='projects' || target.kind==='projects'))return false;
   if(target.kind==='tasks' && !target.overlayId && predecessor.record.editable===false)return false;

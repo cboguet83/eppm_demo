@@ -23,6 +23,8 @@ Planning evidence (2026-10-19): fetched `origin/main`; local main and origin/mai
 
 - [x] 3.4 Use indexed endpoint resolution for pair checks and hide connectors when no authorized rendered pair exists; preserve read-only predecessors for editable project successors. Verify the new permissions browser regression, all direct gesture cases, the package suite, and regenerated assets.
 
+- [x] 3.5 Enforce the user-confirmed comparison source rules: same-project predecessors use the successor alternative, external predecessors use current/live bars. Add eligibility and browser regressions, document the resolver behavior, and verify package/affected browser tests plus regenerated assets.
+
 ## 4. EPPM authoritative append flow
 
 - [x] 4.1 Add the validated Python creation boundary action and focused transactional live append service flow using existing task/project persistence, endpoint restrictions, and source/revision checks. Preserve inaccessible/unrelated links and date fields; keep cycles and uniqueness behavior unchanged. Add pytest boundary/service tests and real PostgreSQL regressions for all task/project pairings/types, stale sources, hidden/self/own-project endpoints, revoked permissions, read-only predecessor policy, rollback, and retained links. Document the service behavior and verify affected pytest/PostgreSQL suites pass.

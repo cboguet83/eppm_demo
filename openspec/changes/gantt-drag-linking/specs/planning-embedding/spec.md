@@ -39,6 +39,10 @@ EPPM SHALL authorize and validate dependency creation server-side using existing
 - **WHEN** an eligible connection is completed during comparison
 - **THEN** the successor's editable alternative draft receives the dependency through its revision-checked workflow and the live schedule and saved snapshots remain unchanged
 
+#### Scenario: Preserve comparison source meaning
+- **WHEN** an alternative successor is selected during linking
+- **THEN** only sources from that same alternative within its project, or current/live sources in other projects, are eligible, matching the established dependency resolver after saving
+
 #### Scenario: Follow existing predecessor authorization
 - **WHEN** a predecessor is visible but read-only and the actor can edit the successor
 - **THEN** project-successor linking follows its existing predecessor-visibility policy and live task-successor linking retains its existing predecessor edit restrictions

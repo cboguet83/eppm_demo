@@ -945,3 +945,38 @@ def test_read_only_endpoints_are_shown_only_when_a_valid_pair_exists(linking_pag
         tasks:linkSnapshot.tasks.map(row=>({...row,editable:false}))});
     }""")
     expect(page.locator('#first [data-connect]:not([hidden])')).to_have_count(0)
+
+
+@pytest.mark.parametrize('source_id,source_overlay,eligible', [
+    ('a', 'one-alt', True), ('a', '', False),
+    ('b', '', True), ('b', 'two-alt', False),
+])
+def test_comparison_connectors_preserve_existing_source_resolution(
+    linking_page: Page, source_id: str, source_overlay: str, eligible: bool,
+) -> None:
+    """Local alternative and external live bars match the saved dependency meaning."""
+    page = linking_page
+    page.evaluate("""() => {
+      const local={id:'c',projectId:'one',name:'C',start:'2026-01-15',end:'2026-01-20'};
+      instances[0].update({...linkSnapshot,tasks:[...linkSnapshot.tasks,local],overlays:[
+        {id:'one-alt',kind:'alternative',projectId:'one',tasks:[linkSnapshot.tasks[0],local]},
+        {id:'two-alt',kind:'alternative',projectId:'two',tasks:[linkSnapshot.tasks[1]]}]});
+    }""")
+    source = page.locator(
+        f'#first .planning-bar[data-target-id={source_id}]'
+        f'[data-overlay-id="{source_overlay}"] [data-connect=F]'
+    )
+    destination = page.locator(
+        '#first .planning-bar[data-target-id=c][data-overlay-id=one-alt] [data-connect=S]'
+    )
+    source.focus()
+    source.press('Enter')
+    expect(destination).to_have_attribute('data-connect-eligible', str(eligible).lower())
+    destination.press('Enter')
+    assert page.evaluate('events.length') == int(eligible)
+    if eligible:
+        event = page.evaluate('events[0]')
+        assert event['overlayId'] == 'one-alt'
+        assert event['values']['predecessor']['id'] == source_id
+        assert event['values']['predecessor']['projectId'] == ('one' if source_id == 'a' else 'two')
+        assert event['values']['lagDays'] == 0

@@ -75,3 +75,18 @@ test('a failed creation cannot leave draft-preservation enabled for a later ordi
   h.store.update({version:1,kind:'response',scope:'scope',revision:'r1',requestId:event.requestId,accepted:true});
   assert.equal(h.store.read().view.draft,null);
 });
+
+test('comparison sources match the existing local-alternative and external-current resolver',()=>{
+  const input={overlays:[{id:'one-alt',kind:'alternative',projectId:'alpha',tasks:[
+    {id:'a',projectId:'alpha',name:'A alternative',start:'2026-01-02',end:'2026-01-04'},
+    {id:'other',projectId:'alpha',name:'Other alternative',start:'2026-01-03',end:'2026-01-05'}]},
+    {id:'two-alt',kind:'alternative',projectId:'beta',tasks:[
+      {id:'b',projectId:'beta',name:'B alternative',start:'2026-01-03',end:'2026-01-07'}]}]};
+  const h=harness(input),destination={kind:'tasks',id:'other',overlayId:'one-alt'};
+  assert.equal(h.actions.canCreateDependency({kind:'tasks',id:'a'},destination),false);
+  assert.equal(h.actions.canCreateDependency({kind:'tasks',id:'a',overlayId:'one-alt'},destination),true);
+  assert.equal(h.actions.canCreateDependency({kind:'tasks',id:'b'},destination),true);
+  assert.equal(h.actions.canCreateDependency({kind:'tasks',id:'b',overlayId:'two-alt'},destination),false);
+  assert.equal(h.actions.canCreateDependency({kind:'projects',id:'beta'},destination),true);
+  assert.equal(h.actions.canCreateDependency({kind:'projects',id:'beta',overlayId:'two-alt'},destination),false);
+});
