@@ -147,6 +147,9 @@ Git diff, including rename origins and deletions; unknown/mixed files are code.
 Only the explicit allowlist of prose in README, direct decision/implementation
 guides, and OpenSpec change documents/metadata can omit runtime tests. Workflow
 policy instructions, scripts, assets, dependencies and arbitrary YAML cannot.
+Both sides of prose changes must also be plain UTF-8, nonexecutable Git blobs;
+symlinks, binary data, shebang scripts or unavailable content evidence require
+full checks even when the filename ends in Markdown.
 
 Manual full diagnostics have their own check context. Metadata-only edits do
 not launch or cancel full acceptance and cannot publish a passing `tests` gate.

@@ -216,8 +216,19 @@ def test_malformed_event_state_fails_before_selecting_work(mutation: dict[str, o
         policy.decide(event, "pull_request", MERGE, {"README.md"})
 
 
+@pytest.mark.parametrize("filename,content,kind,lane", [
+    ("app.py", "# source change\n", "regular", "feedback"),
+    ("README.md", "# Plain documentation\n", "regular", "docs"),
+    ("README.md", "# Executable content\n", "executable", "full"),
+    ("README.md", "#!/bin/sh\nexit 0\n", "regular", "full"),
+    ("README.md", "binary\0content", "regular", "full"),
+    ("README.md", "", "symlink", "full"),
+    ("README.md", "", "invalid-utf8", "full"),
+    ("README.md", "", "deleted-executable", "full"),
+])
 def test_policy_cli_uses_real_merge_parents_and_json_job_transport(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    filename: str, content: str, kind: str, lane: str,
 ) -> None:
     """A real Git graph connects planning, identity receipts and the gate CLI."""
     def git(*arguments: str) -> str:
@@ -232,11 +243,24 @@ def test_policy_cli_uses_real_merge_parents_and_json_job_transport(
     (tmp_path / "tests/suites.json").write_text(json.dumps({
         "version": 1, "fast": ["tests/test_case.py"], "extended": [],
     }))
+    if kind == "deleted-executable":
+        (tmp_path / "README.md").write_text("#!/bin/sh\n")
+        (tmp_path / "README.md").chmod(0o755)
     git("add", ".")
     git("commit", "-qm", "base")
     base = git("rev-parse", "HEAD")
     git("checkout", "-qb", "feature")
-    (tmp_path / "app.py").write_text("# source change\n")
+    source = tmp_path / filename
+    if kind == "deleted-executable":
+        source.unlink()
+    elif kind == "invalid-utf8":
+        source.write_bytes(b"\xff")
+    elif kind == "symlink":
+        source.symlink_to("tests/test_case.py")
+    else:
+        source.write_text(content)
+    if kind == "executable":
+        source.chmod(0o755)
     git("add", ".")
     git("commit", "-qm", "feature")
     head = git("rev-parse", "HEAD")
@@ -253,9 +277,9 @@ def test_policy_cli_uses_real_merge_parents_and_json_job_transport(
     monkeypatch.setenv("GITHUB_OUTPUT", str(output))
     assert policy.main(["plan", "--event", str(payload), "--event-name", "pull_request", "--sha", merged]) == 0
     decision = policy.Decision.decode(output.read_text().splitlines()[0].split("=", 1)[1])
-    assert decision.lane == "feedback"
+    assert decision.lane == lane
     monkeypatch.setenv("EPPM_TEST_DECISION", decision.encode())
     assert policy.main(["attest"]) == 0
     assert f"sha={merged}" in output.read_text()
     monkeypatch.setenv("EPPM_TEST_NEEDS", json.dumps(_needs(decision)))
-    assert policy.main(["gate", "--sha", merged]) == 1  # Partial draft is blocked.
+    assert policy.main(["gate", "--sha", merged]) == (1 if lane == "feedback" else 0)

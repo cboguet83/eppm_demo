@@ -74,6 +74,14 @@ authorized at creation; the remaining boxes require a subsequent apply request.
   requested protection, leave this task incomplete and report the actual gap;
   do not claim that local instructions enforce GitHub merging.
 
+- [x] 4.3 Close the verification finding in prose-only classification: validate
+  authoritative Git modes and UTF-8/plain document content on both sides of
+  the diff so executable/symlink/binary/shebang files cannot use a prose suffix
+  to omit full acceptance. Include real-Git/CLI regressions and document the
+  conservative fallback; verify those cases and commit this correction
+  separately before task 5.1. This restores the existing design boundary,
+  without changing the readiness policy or coverage gate.
+
 ## 5. Integrated acceptance
 
 - [ ] 5.1 On the final implementation revision, verify all plan outcomes and

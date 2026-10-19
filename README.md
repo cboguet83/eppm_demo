@@ -192,7 +192,9 @@ draft feedback, with a deferral message; the separate feedback job can pass.
 Marking ready triggers the full suite even without a new commit. Every later
 ready code revision needs fresh full acceptance. Unknown/mixed files count as
 code; selection never removes tests from the full suite. Obsolete PR runs are
-cancelled. Title/body-only edits and manual diagnostics use separate check names
+cancelled. Prose exemptions also require nonexecutable, plain UTF-8 Git blobs;
+symlinks, binary data and shebang scripts require full checks regardless of suffix.
+Title/body-only edits and manual diagnostics use separate check names
 and cannot replace acceptance. Standalone full runs remain available under
 **Actions → Application and PostgreSQL checks → Run workflow**. SonarCloud
 integration remains in place. Effective GitHub main protection must require

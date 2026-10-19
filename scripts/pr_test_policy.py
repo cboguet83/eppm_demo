@@ -216,6 +216,51 @@ def verify_checkout(decision: Decision, root: Path = ROOT) -> None:
             raise ValueError("PR merge parents differ from event head/base.")
 
 
+def plain_prose_diff(base: str, head: str, root: Path = ROOT) -> bool:
+    """Verify both sides are plain UTF-8 blobs, never executable/link/script data.
+
+    Args:
+        base: Validated PR base revision.
+        head: Validated PR head revision.
+        root: Repository used for authoritative modes and blob contents.
+
+    Returns:
+        Whether every changed blob is nonexecutable plain document content.
+
+    Raises:
+        ValueError: Diff records or text encoding cannot be validated.
+        subprocess.SubprocessError: Complete Git evidence is unavailable.
+    """
+    records = git(["diff", "--raw", "--no-abbrev", "-z", "--find-renames",
+                   f"{base}...{head}"], root).split("\0")
+    index = 0
+    checked: set[str] = set()
+    while index < len(records) - 1:
+        fields = records[index].split()
+        if len(fields) != 5 or not fields[0].startswith(":"):
+            raise ValueError("Malformed document diff evidence.")
+        modes = (fields[0][1:], fields[1])
+        if not all(_plain_blob(mode, blob, checked, root)
+                   for mode, blob in zip(modes, fields[2:4], strict=True)):
+            return False
+        index += 3 if fields[4][0] in "RC" else 2
+    return True
+
+
+def _plain_blob(mode: str, blob: str, checked: set[str], root: Path) -> bool:
+    if mode == "000000":
+        return True
+    if mode != "100644" or not SHA.fullmatch(blob):
+        return False
+    if blob in checked:
+        return True
+    content = git(["cat-file", "blob", blob], root)
+    plain = "\0" not in content and not content.lstrip("\ufeff").startswith("#!")
+    if plain:
+        checked.add(blob)
+    return plain
+
+
 def accept(needs: dict[str, object], tested_sha: str) -> Decision:
     """Require every selected job, matching identity, and complete code acceptance.
 
@@ -301,7 +346,15 @@ def _plan(event_path: Path | None, event_name: str, sha: str) -> Decision:
             changed = changed_paths(preliminary.base_sha, preliminary.head_sha, ROOT)
         except (ValueError, subprocess.SubprocessError):
             LOGGER.warning("Complete diff unavailable; requiring full acceptance.")
-    return decide(event, event_name, sha, changed)
+    decision = decide(event, event_name, sha, changed)
+    if decision.lane == "docs":
+        try:
+            if plain_prose_diff(decision.base_sha, decision.head_sha, ROOT):
+                return decision
+        except (ValueError, subprocess.SubprocessError):
+            LOGGER.warning("Plain document evidence unavailable; requiring full acceptance.")
+        return decide(event, event_name, sha, None)
+    return decision
 
 
 if __name__ == "__main__":

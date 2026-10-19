@@ -105,6 +105,26 @@ task's commit and actual validation evidence here.
   diagnostics, cancellation, and source-bound gate evidence. SonarCloud
   integration and full-suite/coverage scope remain unchanged.
 
+## Task 4.3 — authoritative prose validation
+
+Verification identified that path suffixes alone did not enforce the design's
+nonexecutable/prose boundary. Added a separate correction task/commit rather
+than rewriting task 4.1. Both sides of the complete raw Git diff now validate
+regular nonexecutable modes and plain UTF-8 blobs; executable/link/binary/shebang
+or unavailable content evidence selects full acceptance.
+
+`python -m pytest -q tests/test_pr_test_policy.py`: 51 passed in 0.39s, including
+actual Git/CLI cases for ordinary prose, executable Markdown, shebang text,
+NUL/non-UTF-8 blobs, symlinks, and deleted executable Markdown. This adds
+document checks without adding a parser/library dependency or weakening any
+existing full gate.
+
+Task 4.2 remains incomplete: automatic approval review rejected the persistent
+main-protection write pending explicit approval of its exact payload, specifically
+administrator enforcement and disabling force pushes/deletion. The prepared JSON
+is reviewable; no remote settings have changed. A user question is pending while
+unaffected local acceptance work continues.
+
 ## Implementation acceptance
 
 Pending a subsequent user request to apply. This change has not been archived,
