@@ -1,5 +1,34 @@
 # Verification evidence
 
+## Reopened rollout correction — 2026-10-19
+
+The user approved the focused metadata-proof correction after the first hosted
+rollout. PR #6 at `22d3965` passed full CI: 3,581 cases plus five subtests in
+1,623.33s, 97.71% coverage, both JavaScript suites and assets; full job 29m15s.
+SonarCloud passed. Main remains `d4a769f` and the approved protection is active.
+Later metadata-only runs leave the native merge box listing required `tests`
+as Expected even though the API retains the older passing check. The screenshot
+and sanitized logs are in the original checkout's ignored `.local/fast-ci-pr6-*`.
+
+Fast actual-symptom reproduction, executed before correction:
+
+```bash
+gh api repos/cboguet83/eppm_demo/pulls/6 --jq \
+  'if .mergeable_state == "clean" then "PASS: native merge gate" else error("FAIL: native merge gate remains " + .mergeable_state) end'
+```
+
+Exit 1: `FAIL: native merge gate remains blocked`. Repeated API/UI observations
+confirm the same symptom. The leading hypothesis is omission of `tests` by the
+later metadata workflow; source-app/base mismatch is ruled out by read-back,
+and the state persists beyond a transient mergeability cache refresh.
+
+Reused this chat's clean attached worktree at
+`/home/cb2/.codex/worktrees/performance-verification/eppm_demo`, switched only
+that checkout to `codex/fast-local-selective-pr-ci`, and reopened the archive
+without changing its prior evidence. The shared checkout's Gantt work is
+untouched. Tasks 1.2, 4.4 and 5.2 track this approved extension separately;
+prior completed tasks retain their commits and historical evidence below.
+
 ## Planning only — 2026-10-19
 
 Status: task 1.1 complete; all six implementation/acceptance tasks remain open.

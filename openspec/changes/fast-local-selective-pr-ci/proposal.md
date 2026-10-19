@@ -71,3 +71,24 @@ must be previewed and their permissions verified before application.
 
 This proposal authorizes planning only. Implementation, external settings
 changes, acceptance, archive, and PR delivery follow a later apply request.
+
+## Approved rollout correction — 2026-10-19
+
+The original implementation was verified, archived and published as PR #6.
+Hosted full acceptance passed 3,581 tests and five subtests with 97.71%
+application coverage; both JavaScript suites, assets and SonarCloud passed.
+GitHub's live merge box nevertheless shows required `tests` as Expected after
+a later metadata-only run omits that check. Main and the tested revision did
+not change. The API's older passing check alone does not establish native merge
+readiness.
+
+The user approved reopening this change to let code-PR metadata updates publish
+the stable `tests` gate only after validating already-successful full acceptance
+for the exact PR, head, base, tested merge revision and workflow source. Preserve
+the prose-only exemption through a fresh audited diff, and keep manual diagnostic
+results separate. Missing, stale, failed, cancelled or incomplete full proof and
+draft feedback never qualify. Pending proof fails quickly; retrying that cheap
+gate after full completion must not rerun the expensive suite. Add focused
+regressions and separate task commits, repeat full acceptance, re-archive, update
+PR #6, and verify the native merge box after a genuine evidence-only edit. No
+merge or weakening of the approved branch protection is authorized.

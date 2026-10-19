@@ -15,6 +15,12 @@ authorized at creation; the remaining boxes require a subsequent apply request.
   skipped, internal-link checks, and a reviewed planning-only diff; record the
   planning check results in `verification.md` and commit this task separately.
 
+- [x] 1.2 Reopen the archived change on its dedicated PR branch in the clean
+  attached verification worktree. Record the live native-gate reproduction and
+  the user's approved metadata-proof exception coherently in proposal/design/
+  tasks, retaining completed task history and unchanged protection. Verify
+  strict OpenSpec validation and the scoped planning diff; commit separately.
+
 ## 2. Repair optional database tools startup
 
 - [x] 2.1 Extract pgAdmin into an opt-in development Compose overlay, declare
@@ -82,6 +88,14 @@ authorized at creation; the remaining boxes require a subsequent apply request.
   separately before task 5.1. This restores the existing design boundary,
   without changing the readiness policy or coverage gate.
 
+- [ ] 4.4 Implement decision 6's stable metadata gate and bounded, authenticated
+  reuse of exact-revision full proof. Record immutable policy/full artifacts,
+  validate the live PR and latest actual acceptance attempt/job graph, reject
+  missing/stale/failed/pending/manual/feedback evidence and unsafe downloads,
+  and retain fresh prose validation, manual isolation and read-only permissions.
+  Add call-path regressions before the fix, verify failure and success cases,
+  update operator/developer guidance and commit this correction separately.
+
 ## 5. Integrated acceptance
 
 - [x] 5.1 On the final implementation revision, verify all plan outcomes and
@@ -95,6 +109,12 @@ authorized at creation; the remaining boxes require a subsequent apply request.
   and document skips/limitations and revised developer examples. Keep acceptance
   incomplete if any required check fails; no seven-minute deadline or weakened
   gates. This task integrates already-tested/documented work from tasks 2–4.
+
+- [ ] 5.2 Repeat full local acceptance on the corrected runtime/test/CI sources,
+  including all PostgreSQL/OIDC/browser tests, unchanged 95% application coverage,
+  both JavaScript suites and assets. Verify the approved plan and every new
+  failure-mode regression, source identity, main/protection and task commits;
+  record actual evidence and commit acceptance separately before re-archive.
 
 ## Workflow follow-up
 

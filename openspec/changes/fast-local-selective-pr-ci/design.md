@@ -142,12 +142,11 @@ requires full acceptance before it can merge. There is no label-based bypass.
 Trigger PR checks for `main` on `opened`, `reopened`, `synchronize`,
 `ready_for_review`, and `converted_to_draft`. Handle base retargeting through
 the `edited` event as well: a changed base invalidates classification and full
-acceptance. A title/body-only edit must neither launch another expensive run
-nor publish a passing `tests` check. Use a separate explicitly named metadata
-check context for such no-op events, including skipped-job cases; do not rely
-on a skipped required job being a merge blocker. Validate this naming in the
-workflow/policy regression matrix. Manual dispatch likewise uses its own
-diagnostic context. Unexpected event shapes fail safely.
+acceptance. A title/body-only edit must not launch another expensive run or
+cancel full acceptance. Following the approved rollout correction in decision
+6, retain the stable `tests` context and validate prior full proof before a
+code metadata gate can pass. Never use a skipped required job as acceptance.
+Manual dispatch keeps its own diagnostic context. Unexpected events fail safely.
 
 Use workflow-level concurrency keyed by repository/PR number, cancelling
 obsolete PR runs including draft-to-ready transitions. Give manual diagnostics
@@ -231,6 +230,49 @@ image documentation; this does not add another application dependency.
 
 Alternative: add dummy defaults or real pgAdmin credentials to every CI run.
 Rejected because optional tools would still affect unrelated database startup.
+
+### 6. Revalidate full proof for metadata updates (approved rollout correction)
+
+PR #6's completed full run passed, but the native merge box lists `tests` as
+Expected after the later metadata run replaces its gate with `metadata checks`.
+Read-only reproduction: `gh api repos/cboguet83/eppm_demo/pulls/6` reports
+`mergeable_state: blocked`, while the required-check API reports passing `tests`.
+The live merge box is the final rollout signal, not that API result alone.
+
+Keep `tests` as the gate name on every PR run. Record a small versioned policy
+decision artifact, and record a full-acceptance artifact only after canonical
+full execution succeeds. Bind each to repository, run ID/attempt, workflow ref
+and SHA, and the decision's PR/head/base/tested-merge identities. Use immutable,
+attempt-specific names, bounded JSON/ZIP reading and short artifact retention;
+upload only the named proof files, never a directory containing credentials.
+
+A metadata gate uses only read access to Actions and the live PR. Check its
+current open PR/draft/head/base/merge state and workflow source. Search complete
+same-workflow PR run history for this head, ignoring authenticated metadata
+decisions and foreign PRs. The latest actual acceptance decision controls: a
+newer failed/pending/feedback attempt prevents fallback to an older full pass.
+Require a successful complete run and latest full attempt, matching policy/full
+artifacts and all expected policy/full/feedback/gate job results. Manual, local,
+docs or feedback results cannot stand in for code full proof. Reject missing,
+expired, ambiguous, malformed, stale or incomplete evidence and API failures.
+Never forward API authorization to signed artifact-download destinations or
+log credentials/signed URLs. Keep all workflow permissions read-only.
+
+Metadata during full execution fails promptly with a clear retry instruction.
+After full acceptance succeeds, rerun only the metadata gate; do not occupy a
+runner waiting or launch another expensive suite. Prose-only PRs retain their
+existing exemption through fresh complete-diff/blob validation. This is fresh
+prose policy validation, not reuse of a code acceptance result. Manual diagnostics
+remain separate. Existing readiness and cancellation rules stay unchanged.
+
+Regression tests must cover the actual metadata gate call path with no proof,
+valid full proof, changed identities/state, pending/failed/latest-attempt cases,
+manual/draft feedback, corrupt/expired artifacts, pagination and transport
+failure. Preserve previous assertions except the deliberately superseded
+metadata-context rule. After local full verification and re-archive, confirm
+hosted full acceptance and perform a real evidence-only PR description update;
+the native merge box must recognize the current passing `tests` check. Do not
+attempt a merge as a diagnostic.
 
 ## Risks / Trade-offs
 
