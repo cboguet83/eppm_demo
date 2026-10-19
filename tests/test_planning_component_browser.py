@@ -924,3 +924,24 @@ def test_connection_virtualization_cancels_source_and_bounds_connector_count(lin
     expect(page.locator('#first .planning-connection-preview')).to_be_hidden()
     assert page.locator('#first [data-connect]').count() < 100
     assert page.evaluate('events.length') == 0
+
+
+def test_read_only_endpoints_are_shown_only_when_a_valid_pair_exists(linking_page: Page) -> None:
+    """Read-only predecessors remain usable for editable projects; wholly read-only views hide controls."""
+    page = linking_page
+    page.evaluate("""() => instances[0].update({version:1,kind:'patch',scope:'links',revision:'r1',
+      projects:linkSnapshot.projects.map(row=>({...row,editable:row.id==='one'})),
+      tasks:linkSnapshot.tasks.map(row=>({...row,editable:row.projectId==='one'}))})""")
+    expect(_connector(page, 'projects', 'two', 'F')).not_to_have_attribute('hidden', '')
+    source = _connector(page, 'projects', 'two', 'F')
+    source.focus()
+    source.press('Enter')
+    _connector(page, 'projects', 'one', 'S').press('Enter')
+    page.wait_for_function('events.length===1')
+    page.evaluate("""() => {
+      instances[0].update({version:1,kind:'response',scope:'links',revision:'r1',requestId:events[0].requestId,accepted:false});
+      instances[0].update({version:1,kind:'patch',scope:'links',revision:'r1',
+        projects:linkSnapshot.projects.map(row=>({...row,editable:false})),
+        tasks:linkSnapshot.tasks.map(row=>({...row,editable:false}))});
+    }""")
+    expect(page.locator('#first [data-connect]:not([hidden])')).to_have_count(0)

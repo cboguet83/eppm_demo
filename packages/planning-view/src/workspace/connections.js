@@ -94,9 +94,11 @@ export function createConnections({frame,store,actions,lifetime,onStart,onInspec
     const {data,view}=store.read();
     if(state && (!enabled() || state.scope!==data.scope || state.revision!==data.revision ||
       state.overlayRevision!==actions.resolve(state.source)?.overlay?.revision))cancel();
-    for(const node of controls()) {
+    const nodes=controls(),targets=[...new Map(nodes.map(node=>[identity(target(node)),target(node)])).values()];
+    for(const node of nodes) {
       const owner=bar(node),resolved=actions.resolve(target(node));
-      const visible=enabled() && resolved && resolved.lane!=='baseline';
+      const visible=enabled() && resolved && resolved.lane!=='baseline' && targets.some(other=>
+        actions.canCreateDependency(target(node),other) || actions.canCreateDependency(other,target(node)));
       node.hidden=!visible;node.tabIndex=visible?0:-1;
       node.setAttribute('aria-label',(labels()[node.dataset.connect==='S'?'connectStart':'connectFinish'] || (node.dataset.connect==='S'?'Link start':'Link finish'))+' · '+(resolved?.record.name ?? ''));
       node.dataset.connectEligible=String(!!state && actions.canCreateDependency(state.source,target(node)));

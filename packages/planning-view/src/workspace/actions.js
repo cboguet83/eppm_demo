@@ -40,8 +40,7 @@ export function canEdit(data,view,target,operation='task',resolved=resolveTarget
  * @param {object} source Predecessor target. @param {object} target Successor target.
  * @returns {boolean} Whether creation is available.
  */
-export function canCreateDependency(data,view,source,target) {
-  const predecessor=resolveTarget(data,source),successor=resolveTarget(data,target);
+export function canCreateDependency(data,view,source,target,predecessor=resolveTarget(data,source),successor=resolveTarget(data,target)) {
   if(!predecessor || !successor || !['tasks','projects'].includes(source.kind) || !['tasks','projects'].includes(target.kind))return false;
   if(data.capabilities.createDependencies!==true || data.capabilities.editDependencies===false || view.pendingRequestId)return false;
   if(!canEdit(data,view,target,'command',successor) || predecessor.lane==='baseline')return false;
@@ -138,11 +137,11 @@ export function createActionController({store,onEvent=()=>{},requestId=()=>crypt
   };
   return {
     resolve,
-    canCreateDependency(source,target){if(disposed)return false;const {data,view}=store.read();return canCreateDependency(data,view,source,target);},
+    canCreateDependency(source,target){if(disposed)return false;const {data,view}=store.read();return canCreateDependency(data,view,source,target,resolve(source),resolve(target));},
     requestDependency(source,target,type) {
       if(disposed)return null;
       const {data,view}=store.read();
-      if(!canCreateDependency(data,view,source,target))return null;
+      if(!canCreateDependency(data,view,source,target,resolve(source),resolve(target)))return null;
       const predecessor=resolve(source),successor=resolve(target);
       const endpoint=(item,resolved)=>({kind:item.kind==='tasks'?'task':'project',id:item.id,projectId:resolved.projectId});
       const values={predecessor:endpoint(source,predecessor),successor:endpoint(target,successor),type,lagDays:0};
