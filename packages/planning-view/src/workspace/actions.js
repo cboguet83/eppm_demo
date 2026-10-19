@@ -126,7 +126,7 @@ export function createActionController({store,onEvent=()=>{},requestId=()=>crypt
   };
   const failure=id=>{
     if(disposed || store.read().view.pendingRequestId!==id)return;
-    store.setView({pendingRequestId:null,preview:null,error:'The host could not process this action.'});
+    store.setView({pendingRequestId:null,preservePendingDraft:false,preview:null,error:'The host could not process this action.'});
   };
   const deliver=event=>{
     try {
@@ -170,7 +170,7 @@ export function createActionController({store,onEvent=()=>{},requestId=()=>crypt
       const event=validateEvent({version:1,scope:data.scope,revision:data.revision,requestId:requestId(),type:'task',operation:'create',
         targetId:target.id,targetKind:'projects',overlayId:target.overlayId ?? null,lane:resolved.lane,
         context:{...(view.draft?.values?.context ?? {...resolved.record.context,...resolved.overlay?.context}),projectId:target.id},values});
-      store.setView({pendingRequestId:event.requestId,error:null});return deliver(event);
+      store.setView({pendingRequestId:event.requestId,preservePendingDraft:false,error:null});return deliver(event);
     },
     open(target) {
       if(disposed)return false;
@@ -191,7 +191,7 @@ export function createActionController({store,onEvent=()=>{},requestId=()=>crypt
         targetId:target.id,targetKind:target.kind,overlayId:target.overlayId ?? null,lane:resolved.lane,
         ...(resolved.record.context?{context:JSON.stringify(view.draft?.values?.target)===JSON.stringify(target)?view.draft.values.context:resolved.record.context}:{}),
         ...(['task','dependency'].includes(type)?{values}:values)});
-      store.setView({pendingRequestId:event.requestId,error:null,preview:{target,...values}});
+      store.setView({pendingRequestId:event.requestId,preservePendingDraft:false,error:null,preview:{target,...values}});
       return deliver(event);
     },
     command(action,target,context={}) {

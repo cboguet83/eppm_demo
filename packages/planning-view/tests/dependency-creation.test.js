@@ -65,3 +65,13 @@ test('creation rejects malformed payloads before notifying the host',()=>{
   }
   assert.throws(()=>validateEvent({...event,overlayId:'alt'}),ContractError);
 });
+
+test('a failed creation cannot leave draft-preservation enabled for a later ordinary save',()=>{
+  const h=harness();h.actions.open(target);
+  const broken=createActionController({store:h.store,onEvent:()=>false,requestId:()=> 'failed'});
+  assert.equal(broken.requestDependency(source,target,'FS'),false);
+  assert.equal(h.store.read().view.preservePendingDraft,false);
+  const event=h.actions.request('task',target,{...h.store.read().view.draft.values.fields,name:'Saved'});
+  h.store.update({version:1,kind:'response',scope:'scope',revision:'r1',requestId:event.requestId,accepted:true});
+  assert.equal(h.store.read().view.draft,null);
+});

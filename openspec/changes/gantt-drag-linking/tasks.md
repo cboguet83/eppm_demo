@@ -12,6 +12,8 @@ Planning evidence (2026-10-19): fetched `origin/main`; local main and origin/mai
 
 - [x] 2.1 Extend `packages/planning-view/src/contracts/` and `workspace/actions.js` with opt-in `createDependencies` and validated `dependency`/`operation:create` intentions targeting successor task/project identities; capture endpoint/overlay/revision context, reject malformed or mismatched endpoints, and reconcile pending acceptance/rejection. Add contract/action/store tests for opaque IDs, omitted capability, all types, fresh permission checks, one request, and stale responses; document the additive version-1 host extension. Verify the planning-view Node suite and affected pytest contract/model tests pass.
 
+- [x] 2.2 Correct pending-draft preservation after a synchronous/asynchronous creation delivery failure so a subsequent ordinary editor save closes normally; add an action-controller regression and verify the complete package Node suite.
+
 ## 3. Direct chart interaction
 
 - [x] 3.1 Add distinct start/finish connector controls to virtualized task/project/milestone bars, scoped styles, preview/highlighting, and delegated armed/dragging/completion state in `workspace/interactions.js`; preserve existing resize/move/progress/expand gestures. Add browser regressions for both pointer gestures across all four endpoint combinations and task/project pairings, empty-space cancellation, synthetic-click suppression, duplicate-delivered-link inspection, and date invariance. Include interaction guidance with this change; verify package tests and affected component/browser tests pass.
