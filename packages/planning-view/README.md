@@ -428,6 +428,14 @@ replace an incoming-link collection from partial client data. Rejections clear
 pending visuals and retain unrelated editor drafts. No dependency ID is invented
 before acceptance; existing edit-by-ID events remain unchanged.
 
+Hover or focus a bar to reveal start/finish connectors outside its resize
+handles. Drag between connectors, or click the source then click a destination.
+The source is always the predecessor; endpoint sides determine FS/SS/FF/SF.
+Completion submits immediately with zero lag. Adjust type/lag through the
+accepted link's existing editor. Escape or empty-space completion cancels.
+An identical delivered link opens its editor instead of submitting a duplicate.
+Project connectors refer to its summary bounds, including collapsed projects.
+
 Supply `choiceProjects:[{id,name}]` in data and a cancellable `loadChoices` mount
 function for project-scoped predecessor options. It receives
 `{projectId,scope,revision,overlayId,signal}` and resolves `[{id,name}]`. Choices

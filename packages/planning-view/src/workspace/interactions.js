@@ -4,6 +4,7 @@ import {createActionController,validateActions,actionAllowed} from './actions.js
 import {createContextMenu} from './menu.js';
 import {createEditor} from './editor.js';
 import {createDiagnostics} from './diagnostics.js';
+import {createConnections} from './connections.js';
 
 /** @param {HTMLElement} node Rendered entity. @returns {object|null} Opaque target. */
 function targetOf(node) {
@@ -54,6 +55,7 @@ export function createInteractions({frame,toolbar,store,lifetime,options,calenda
     if(current.node.hasPointerCapture(current.pointerId))current.node.releasePointerCapture(current.pointerId);
     current.node.classList.remove('planning-dragging');tooltip.hidden=true;
   };
+  const connections=createConnections({frame,store,actions,lifetime,onStart:()=>{hideHover();cancelSelection();menu.close();},onInspect:openTarget});
   /** @param {object} target Current target. @param {MouseEvent} event Invocation. */
   const openMenu=(target,event,context={})=>{
     const {data,view}=store.read(),entries=[];hideHover();cancelSelection();
@@ -113,7 +115,7 @@ export function createInteractions({frame,toolbar,store,lifetime,options,calenda
   });
   lifetime.listen(frame,'pointerover',event=>{
     const node=event.target.closest('[data-target-id]');
-    if(!node || node.dataset.nativeTitle==='true' || node.contains(event.relatedTarget) || drag || store.read().view.filters.hover===false)return;
+    if(!node || node.dataset.nativeTitle==='true' || node.contains(event.relatedTarget) || drag || connections.active || store.read().view.filters.hover===false)return;
     hideHover();const target=targetOf(node),resolved=actions.resolve(target);if(!resolved)return;
     hovered=node;
     hoverTimer=lifetime.timeout(()=>{
@@ -202,6 +204,7 @@ export function createInteractions({frame,toolbar,store,lifetime,options,calenda
         const handle=node.querySelector('.planning-handle-progress');if(handle)handle.style.left=(current.progress ?? 0)+'%';
       }
       editor.render();
+      connections.render();
     }
   };
 }

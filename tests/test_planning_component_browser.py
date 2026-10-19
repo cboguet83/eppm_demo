@@ -11,6 +11,7 @@ import pytest
 
 playwright_api = pytest.importorskip("playwright.sync_api")
 Page = playwright_api.Page
+Locator = playwright_api.Locator
 expect = playwright_api.expect
 
 
@@ -767,3 +768,78 @@ def test_baseline_pairing_preserves_row_height_bar_proportions_and_former_task_c
     page.evaluate('instances[0].update(baselineHost)')
     expect(former).to_have_count(0)
     assert current.bounding_box()['height'] == before
+
+
+@pytest.fixture
+def linking_page(planning_page: Page) -> Page:
+    """Mount visible task/project endpoints in an opted-in independent host."""
+    planning_page.evaluate("""() => {
+      instances[0].destroy();window.events=[];
+      window.linkSnapshot={version:1,kind:'snapshot',scope:'links',revision:'r1',
+        capabilities:{edit:true,createDependencies:true},
+        projects:[{id:'one',name:'One'},{id:'two',name:'Two'}],
+        tasks:[{id:'a',projectId:'one',name:'A',start:'2026-01-05',end:'2026-01-12'},
+          {id:'b',projectId:'two',name:'B',start:'2026-02-03',end:'2026-02-14'}],
+        viewHints:{expandedProjectIds:['one','two']}};
+      instances[0]=mount(document.getElementById('first'),{snapshot:linkSnapshot,
+        today:'2026-01-01',mode:'Month',editEnabled:true,onEvent:e=>events.push(e)});
+    }""")
+    expect(planning_page.locator('#first [data-target-id=b].planning-bar')).to_be_visible()
+    return planning_page
+
+
+def _connector(page: Page, kind: str, identity: str, edge: str) -> Locator:
+    """Locate a visible bar's endpoint control."""
+    return page.locator(f'#first .planning-bar[data-target-kind={kind}]'
+                        f'[data-target-id={identity}] [data-connect={edge}]')
+
+
+@pytest.mark.parametrize('gesture', ['drag', 'click'])
+@pytest.mark.parametrize('edges,kind', [('FS', 'FS'), ('SS', 'SS'), ('FF', 'FF'), ('SF', 'SF')])
+@pytest.mark.parametrize('pair', [('tasks', 'tasks'), ('tasks', 'projects'),
+                                 ('projects', 'tasks'), ('projects', 'projects')])
+def test_direct_dependency_gestures_submit_once_without_date_edits(
+    linking_page: Page, gesture: str, edges: str, kind: str, pair: tuple[str, str],
+) -> None:
+    """Both gestures preserve directed endpoint kinds and zero lag for every pair."""
+    page = linking_page
+    source = _connector(page, pair[0], 'a' if pair[0] == 'tasks' else 'one', edges[0])
+    destination = _connector(page, pair[1], 'b' if pair[1] == 'tasks' else 'two', edges[1])
+    source.focus()
+    a, b = source.bounding_box(), destination.bounding_box()
+    if gesture == 'click':
+        source.click()
+        destination.click()
+    else:
+        page.mouse.move(a['x'] + 10, a['y'] + 10)
+        page.mouse.down()
+        page.mouse.move(b['x'] + 10, b['y'] + 10, steps=8)
+        page.mouse.up()
+    page.wait_for_function('events.length===1')
+    result = page.evaluate('events[0]')
+    assert result['type'] == 'dependency'
+    assert result['operation'] == 'create'
+    assert result['values']['type'] == kind
+    assert result['values']['lagDays'] == 0
+    assert result['values']['predecessor']['kind'] == pair[0][:-1]
+    assert result['values']['successor']['kind'] == pair[1][:-1]
+    assert page.evaluate('events.length') == 1
+    assert page.locator('#first .planning-editor').is_hidden()
+    assert page.locator('#first .planning-bar[data-target-id=a]').get_attribute('data-start') == '2026-01-05'
+
+
+def test_direct_connection_cancels_on_empty_space_and_opens_existing_link(linking_page: Page) -> None:
+    """Cancellation never mutates, and a delivered identical link opens inspection."""
+    page = linking_page
+    source = _connector(page, 'tasks', 'a', 'F')
+    source.focus()
+    source.click()
+    page.locator('#first [data-mode=Month]').click()
+    assert page.evaluate('events.length') == 0
+    page.evaluate("""() => instances[0].update({version:1,kind:'patch',scope:'links',revision:'r1',
+      dependencies:[{id:'existing',type:'FS',lagDays:0,predecessor:{kind:'task',id:'a'},successor:{kind:'task',id:'b'}}]})""")
+    source.focus()
+    source.click()
+    _connector(page, 'tasks', 'b', 'S').click()
+    expect(page.locator('#first .planning-editor')).to_be_visible()
+    assert page.evaluate('events.length') == 0
