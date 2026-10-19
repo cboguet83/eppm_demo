@@ -16,7 +16,7 @@ from app.presentation.components.planning_workspace import PlanningWorkspace
 SCENARIO_ACTIONS = frozenset({'toggle_edit', 'toggle_baseline', 'baseline_current_project',
                               'delete_project_baseline', 'choose_alternative', 'update_alternative_dates',
                               'hide_alternatives', 'activate_alternative', 'alternative_action', 'create_alternative'})
-MUTATIONS = frozenset({'update_dates', 'update_progress', 'create_step_full', 'update_task_full',
+MUTATIONS = frozenset({'create_dependency', 'update_dates', 'update_progress', 'create_step_full', 'update_task_full',
                        'delete_step', 'save_project_dependencies', 'import_csv_template',
                        'manage_task_tags', 'manage_task_pools', 'manage_project_tags',
                        'manage_project_pools'})

@@ -8,7 +8,7 @@ seams for focused tests.
 `validateMessage(input)` returns an independently owned validated JSON copy or
 throws `ContractError` with only a schema location. Call it before changing view
 state. `validateEvent(input)` validates display intentions; hosts must still
-authorize every read/write. Contract version 1 is separate from package 0.1.0.
+authorize every read/write. Contract version 1 is separate from package 0.2.0.
 
 Messages have `version: 1`, nonempty opaque `scope` and `revision` strings and
 `kind` of `snapshot`, `patch`, or `response`. A snapshot supplies `projects` and
@@ -417,6 +417,25 @@ menu, supporting application-owned confirmation dialogs.
 project successors use `projectDependenciesCommand`. Without these options,
 individual dependency fields use the shared dependency editor.
 
+Dependency creation is an additive contract-1 operation. Hosts opt in with
+`capabilities.createDependencies:true`; omission leaves creation disabled.
+The host receives `type:'dependency', operation:'create'`, with successor
+`targetKind:'tasks'|'projects'` and `targetId`, successor lane/overlay/context,
+scope/revision/requestId, and `values:{predecessor,successor,type,lagDays:0}`.
+Endpoint IDs remain opaque strings. Authorize and append the requested link,
+then return authoritative dependency data and a correlated response. Do not
+replace an incoming-link collection from partial client data. Rejections clear
+pending visuals and retain unrelated editor drafts. No dependency ID is invented
+before acceptance; existing edit-by-ID events remain unchanged.
+
+Hover or focus a bar to reveal start/finish connectors outside its resize
+handles. Drag between connectors, or click the source then click a destination.
+The source is always the predecessor; endpoint sides determine FS/SS/FF/SF.
+Completion submits immediately with zero lag. Adjust type/lag through the
+accepted link's existing editor. Escape or empty-space completion cancels.
+An identical delivered link opens its editor instead of submitting a duplicate.
+Project connectors refer to its summary bounds, including collapsed projects.
+
 Supply `choiceProjects:[{id,name}]` in data and a cancellable `loadChoices` mount
 function for project-scoped predecessor options. It receives
 `{projectId,scope,revision,overlayId,signal}` and resolves `[{id,name}]`. Choices
@@ -438,11 +457,11 @@ tests also prepare a temporary frontend directly from this one source.
 Unpack the browser artifact into an empty consumer directory, then serve it:
 
 ```bash
-tar -xzf planning-view-0.1.0.tar.gz -C /path/to/consumer
+tar -xzf planning-view-0.2.0.tar.gz -C /path/to/consumer
 python -m http.server 8000 --bind 127.0.0.1 --directory /path/to/consumer
 ```
 
-Open `http://127.0.0.1:8000/planning-view-0.1.0/examples/index.html`. The example
+Open `http://127.0.0.1:8000/planning-view-0.2.0/examples/index.html`. The example
 imports only its adjacent installed modules/styles. It demonstrates two
 instances with overlapping IDs, host-accepted/rejected edits, marked resource
 periods, lazy reads, snapshot/reset updates and explicit unmount/remount. The
@@ -457,6 +476,14 @@ The browser runtime needs native ES modules, `structuredClone`, secure-context
 loopback supports local examples; deployed hosts use their normal secure origin.
 No Node runtime/compiler is required by a consumer. Other browser engines have
 not been part of the acceptance checks. Contract 1 is the supported protocol;
-package version 0.1.0 does not replace `version:1` in data/events. Unsupported
+package version 0.2.0 does not replace `version:1` in data/events. Unsupported
 contract versions fail explicitly. Keep labels/capabilities in data for upgrades
 that retain applicable interaction state, and destroy instances on host unmount.
+
+Connector keyboard controls use Enter/Space to choose each endpoint and Escape
+to cancel. Hosts can localize `connectStart`, `connectFinish`,
+`chooseDependencyTarget`, `savingDependency`, `dependencyCreated`, and
+`dependencyCancelled`. Only delivered, rendered bars are connection targets;
+scrolling or filtering a source out of the rendered window cancels the gesture.
+Scale/layout changes recompute preview anchors. Creation never loads otherwise
+unrequested schedules or changes configured hydration limits.

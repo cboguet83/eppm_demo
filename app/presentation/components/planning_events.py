@@ -12,6 +12,8 @@ def validate_event(event: dict[str, Any]) -> dict[str, Any]:
     ranges, and dependency rules remain authoritative in application/domain code.
     """
     result = dict(event)
+    if result.get('action') == 'create_dependency' or result.get('operation') == 'create_dependency':
+        _validate_dependency_creation(result)
     if result.get('action') in {'load_project_dependencies', 'save_project_dependencies', 'log_project_event',
                               'baseline_current_project', 'delete_project_baseline', 'choose_alternative', 'create_alternative', 'update_alternative_dates', 'activate_alternative', 'alternative_action'}:
         result['project_id'] = positive_identity(result.get('project_id'))
@@ -52,3 +54,23 @@ def validate_event(event: dict[str, Any]) -> dict[str, Any]:
     ):
         raise ValueError("Invalid dependency selection.")
     return result
+
+
+def _validate_dependency_creation(event: dict[str, Any]) -> None:
+    """Validate append-only linking JSON before numeric scalar coercion."""
+    event['project_id'] = positive_identity(event.get('project_id'))
+    for field in ('task_id', 'predecessor_task_id', 'predecessor_project_id'):
+        if event.get(field) is not None:
+            event[field] = positive_identity(event[field])
+    if (event.get('predecessor_task_id') is None) == (event.get('predecessor_project_id') is None):
+        raise ValueError('Choose one predecessor endpoint.')
+    if event.get('link_type') not in ('FS', 'SS', 'FF', 'SF'):
+        raise ValueError('Choose FS, SS, FF or SF.')
+    if type(event.get('lag_days')) is not int or event['lag_days'] != 0:
+        raise ValueError('A new chart dependency must have zero-day lag.')
+    sources = event.get('source_tokens')
+    if not isinstance(sources, dict) or not 1 <= len(sources) <= 2:
+        raise ValueError('Dependency source fingerprints are required.')
+    if any(not isinstance(value, str) or not value for value in sources.values()):
+        raise ValueError('Invalid dependency source fingerprint.')
+    event['source_tokens'] = {positive_identity(key): value for key, value in sources.items()}

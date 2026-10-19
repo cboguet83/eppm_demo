@@ -9,7 +9,7 @@ from app.domain.planning.rules import normalize_dependency, normalize_task
 from app.presentation.components.planning_workspace import PlanningWorkspace
 
 
-OPERATIONS = frozenset({'create_step_full', 'update_task_full', 'delete_step', 'manage_dependencies',
+OPERATIONS = frozenset({'create_dependency', 'create_step_full', 'update_task_full', 'delete_step', 'manage_dependencies',
     'manage_task_tags', 'manage_task_pools', 'manage_project_pools', 'import_csv_template', 'export_csv_template',
     'update_progress'})
 
@@ -30,6 +30,8 @@ def selected_plan(event: dict, workspace: PlanningWorkspace) -> ProjectPlan:
     if plan.revision != event['revision']:
         raise ValueError('The plan changed. Close this popup and reopen it before saving.')
     if event.get('id') is not None and not any(task['id'] == event['id'] for task in plan.content.tasks):
+        raise ValueError('The task is not part of the selected scenario.')
+    if event.get('task_id') is not None and not any(task['id'] == event['task_id'] for task in plan.content.tasks):
         raise ValueError('The task is not part of the selected scenario.')
     return plan
 
@@ -57,10 +59,16 @@ def _apply_step_fields(content: PlanContent, event: dict) -> None:
 def handle_alternative_action(event: dict, workspace: PlanningWorkspace) -> None:
     """Apply shared step commands or open an editor for the selected scenario."""
     plan = selected_plan(event, workspace)
-    if event['operation'] in {'create_step_full', 'update_task_full', 'delete_step', 'update_progress', 'manage_dependencies'}:
+    if event['operation'] in {'create_dependency', 'create_step_full', 'update_task_full', 'delete_step', 'update_progress', 'manage_dependencies'}:
         content = deepcopy(plan.content)
         if event['operation'] in {'create_step_full', 'update_task_full'}:
             _apply_step_fields(content, event)
+        elif event['operation'] == 'create_dependency':
+            task_id = event.get('task_id')
+            dependency = normalize_dependency(task_id if task_id is not None else -1, event)
+            if dependency is None:
+                raise ValueError('Choose distinct dependency endpoints.')
+            content.dependencies.append(dict(task_id=task_id, **dependency))
         elif event['operation'] == 'delete_step':
             content.tasks = [task for task in content.tasks if task['id'] != event['id']]
         elif event['operation'] == 'manage_dependencies':

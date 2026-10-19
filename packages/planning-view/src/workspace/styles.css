@@ -1,4 +1,4 @@
-.planning-view {--planning-left-width:425px;--planning-row-height:41.4px;font:12px system-ui,sans-serif;color:var(--planning-text,#0f172a);background:var(--planning-background,#fff);border:1px solid var(--planning-border,#e2e8f0);border-radius:8px;overflow:hidden;min-width:0;}
+.planning-view {position:relative;--planning-left-width:425px;--planning-row-height:41.4px;font:12px system-ui,sans-serif;color:var(--planning-text,#0f172a);background:var(--planning-background,#fff);border:1px solid var(--planning-border,#e2e8f0);border-radius:8px;overflow:hidden;min-width:0;}
 .planning-view, .planning-view * {box-sizing:border-box;}
 .planning-view .planning-toolbar {display:flex;align-items:center;gap:4px;flex-wrap:wrap;padding:5px 14px;border-bottom:1px solid var(--planning-border,#e2e8f0);}
 .planning-view button {font:inherit;color:inherit;border:1px solid var(--planning-border,#e2e8f0);border-radius:4px;background:var(--planning-header,#f8fafc);padding:5px 12px;cursor:pointer;}
@@ -39,6 +39,17 @@
 .planning-view .planning-bar {position:absolute;top:11px;height:20px;background:var(--planning-primary,#3b82f6);border:1px solid #1d4ed8;border-radius:3px;cursor:pointer;touch-action:none;}
 .planning-view .planning-project-row .planning-bar {height:10px;top:16px;background:#64748b;border-color:#475569;}
 .planning-view .planning-progress {height:100%;background:#1d4ed8;pointer-events:none;}
+.planning-view .planning-connector {position:absolute;top:50%;width:20px;height:20px;transform:translateY(-50%);z-index:5;opacity:0;cursor:crosshair;touch-action:none;}
+.planning-view .planning-connector::after {content:'';position:absolute;inset:5px;border:2px solid #2563eb;border-radius:50%;background:white;}
+.planning-view .planning-connector-S {left:-22px;}
+.planning-view .planning-connector-F {right:-22px;}
+.planning-view .planning-bar:hover .planning-connector,.planning-view .planning-bar:focus-within .planning-connector,.planning-view.planning-connecting .planning-connector {opacity:1;}
+.planning-view .planning-connector[data-connect-eligible=true]::after {background:#bbf7d0;border-color:#15803d;}
+.planning-view .planning-connector:focus {outline:2px solid #2563eb;border-radius:50%;opacity:1;}
+.planning-view .planning-connector[hidden] {display:none;}
+.planning-view .planning-connection-preview {position:absolute;inset:0;z-index:20;pointer-events:none;overflow:hidden;}
+.planning-view .planning-connection-preview path {stroke:#2563eb;stroke-width:2;stroke-dasharray:5 3;fill:none;}
+.planning-view .planning-connection-status {position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);}
 .planning-view .planning-complete {filter:saturate(.45);}
 .planning-view .planning-violated {outline:1px solid #ef4444;}
 .planning-view .planning-milestone {width:14px;height:14px;transform:translateX(-7px) rotate(45deg);top:13px;border-radius:1px;}

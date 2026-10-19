@@ -29,6 +29,10 @@ function bar(owner,task,calendar,lane,targetKind,overlayId='',overlay=null) {
     }
   }
   owner.append(el);
+  for(const edge of ['S','F']) {
+    const connector=node(owner.ownerDocument,'span','planning-connector planning-connector-'+edge);
+    connector.dataset.connect=edge;connector.setAttribute('role','button');connector.hidden=true;el.append(connector);
+  }
 }
 
 /** @param {object} panel Private timeline DOM slots. @param {object} store Store. @param {object} lifetime Instance lifetime. @param {object} options Presentation configuration. */

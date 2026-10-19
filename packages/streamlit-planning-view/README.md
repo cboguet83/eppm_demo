@@ -2,7 +2,7 @@
 
 Independent adapter for the same native browser modules used by ordinary web
 hosts. Python 3.14 and Streamlit 1.63 or later in the 1.x series are required.
-Package version 0.1.0 and data contract version 1 are distinct. This repository
+Package version 0.2.0 and data contract version 1 are distinct. This repository
 prepares local wheel/source artifacts; no public registry release is implied.
 
 The package imports Streamlit and Python's standard library. It has no EPPM,
@@ -106,7 +106,7 @@ After installing either the direct wheel or a wheel rebuilt from this package's
 source distribution, launch its packaged example from any directory:
 
 ```bash
-python -m pip install /path/to/streamlit_planning_view-0.1.0-py3-none-any.whl
+python -m pip install /path/to/streamlit_planning_view-0.2.0-py3-none-any.whl
 python -m streamlit_planning_view --server.address=127.0.0.1 --server.port=8501
 ```
 

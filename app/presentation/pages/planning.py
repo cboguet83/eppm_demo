@@ -211,6 +211,7 @@ def _handle_gantt_component_change(widget_key: str, workspace: PlanningWorkspace
         "save_project_dependencies",
         "load_project_tasks",
         "initialize_planning",
+        "create_dependency",
     }:
         return
     nonce = _get_gantt_event_nonce(gantt_event)
@@ -249,6 +250,16 @@ def _handle_gantt_component_change(widget_key: str, workspace: PlanningWorkspace
     elif gantt_event.get("action") == "filter_project":
         st.session_state["pending_project_context_filter"] = gantt_event
         st.rerun("planning_workspace")
+    elif gantt_event.get('action') == 'create_dependency':
+        try:
+            workspace.planning.create_dependency(
+                gantt_event['project_id'], gantt_event.get('task_id'),
+                {key: gantt_event[key] for key in ('predecessor_task_id', 'predecessor_project_id', 'link_type', 'lag_days')},
+                gantt_event['source_tokens'],
+            )
+        except (ValueError, PlanningStorageError, ProjectStorageError) as exc:
+            st.session_state['planning_step_form_error'] = str(exc)
+        st.session_state.pop('planning_chart_snapshot', None)
     elif gantt_event.get("action") in {"create_step_full", "update_task_full"}:
         try:
             change = _apply_step_form(gantt_event, workspace)

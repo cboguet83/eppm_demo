@@ -18,7 +18,7 @@ from .contracts import (
 )
 
 __all__ = ["PlanningContractError", "planning_view"]
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 _RECENT_EVENTS = 256
 
 

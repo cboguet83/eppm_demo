@@ -4,6 +4,7 @@ from collections.abc import Iterator
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import os
+import re
 from pathlib import Path
 from threading import Thread
 
@@ -11,6 +12,7 @@ import pytest
 
 playwright_api = pytest.importorskip("playwright.sync_api")
 Page = playwright_api.Page
+Locator = playwright_api.Locator
 expect = playwright_api.expect
 
 
@@ -767,3 +769,214 @@ def test_baseline_pairing_preserves_row_height_bar_proportions_and_former_task_c
     page.evaluate('instances[0].update(baselineHost)')
     expect(former).to_have_count(0)
     assert current.bounding_box()['height'] == before
+
+
+@pytest.fixture
+def linking_page(planning_page: Page) -> Page:
+    """Mount visible task/project endpoints in an opted-in independent host."""
+    planning_page.evaluate("""() => {
+      instances[0].destroy();window.events=[];
+      window.linkSnapshot={version:1,kind:'snapshot',scope:'links',revision:'r1',
+        capabilities:{edit:true,createDependencies:true},
+        projects:[{id:'one',name:'One'},{id:'two',name:'Two'}],
+        tasks:[{id:'a',projectId:'one',name:'A',start:'2026-01-05',end:'2026-01-12'},
+          {id:'b',projectId:'two',name:'B',start:'2026-02-03',end:'2026-02-14'}],
+        viewHints:{expandedProjectIds:['one','two']}};
+      instances[0]=mount(document.getElementById('first'),{snapshot:linkSnapshot,
+        today:'2026-01-01',mode:'Month',editEnabled:true,onEvent:e=>events.push(e)});
+    }""")
+    expect(planning_page.locator('#first [data-target-id=b].planning-bar')).to_be_visible()
+    return planning_page
+
+
+def _connector(page: Page, kind: str, identity: str, edge: str) -> Locator:
+    """Locate a visible bar's endpoint control."""
+    return page.locator(f'#first .planning-bar[data-target-kind={kind}]'
+                        f'[data-target-id={identity}] [data-connect={edge}]')
+
+
+@pytest.mark.parametrize('gesture', ['drag', 'click'])
+@pytest.mark.parametrize('edges,kind', [('FS', 'FS'), ('SS', 'SS'), ('FF', 'FF'), ('SF', 'SF')])
+@pytest.mark.parametrize('pair', [('tasks', 'tasks'), ('tasks', 'projects'),
+                                 ('projects', 'tasks'), ('projects', 'projects')])
+def test_direct_dependency_gestures_submit_once_without_date_edits(
+    linking_page: Page, gesture: str, edges: str, kind: str, pair: tuple[str, str],
+) -> None:
+    """Both gestures preserve directed endpoint kinds and zero lag for every pair."""
+    page = linking_page
+    source = _connector(page, pair[0], 'a' if pair[0] == 'tasks' else 'one', edges[0])
+    destination = _connector(page, pair[1], 'b' if pair[1] == 'tasks' else 'two', edges[1])
+    source.focus()
+    a, b = source.bounding_box(), destination.bounding_box()
+    if gesture == 'click':
+        source.click()
+        destination.click()
+    else:
+        page.mouse.move(a['x'] + 10, a['y'] + 10)
+        page.mouse.down()
+        page.mouse.move(b['x'] + 10, b['y'] + 10, steps=8)
+        page.mouse.up()
+    page.wait_for_function('events.length===1')
+    result = page.evaluate('events[0]')
+    assert result['type'] == 'dependency'
+    assert result['operation'] == 'create'
+    assert result['values']['type'] == kind
+    assert result['values']['lagDays'] == 0
+    assert result['values']['predecessor']['kind'] == pair[0][:-1]
+    assert result['values']['successor']['kind'] == pair[1][:-1]
+    assert page.evaluate('events.length') == 1
+    assert page.locator('#first .planning-editor').is_hidden()
+    assert page.locator('#first .planning-bar[data-target-id=a]').get_attribute('data-start') == '2026-01-05'
+
+
+def test_direct_connection_cancels_on_empty_space_and_opens_existing_link(linking_page: Page) -> None:
+    """Cancellation never mutates, and a delivered identical link opens inspection."""
+    page = linking_page
+    source = _connector(page, 'tasks', 'a', 'F')
+    source.focus()
+    source.click()
+    page.locator('#first [data-part=timeline-body]').click(position={'x': 850, 'y': 250})
+    assert page.evaluate('events.length') == 0
+    page.evaluate("""() => instances[0].update({version:1,kind:'patch',scope:'links',revision:'r1',
+      dependencies:[{id:'existing',type:'FS',lagDays:0,predecessor:{kind:'task',id:'a'},successor:{kind:'task',id:'b'}}]})""")
+    source.focus()
+    source.click()
+    _connector(page, 'tasks', 'b', 'S').click()
+    expect(page.locator('#first .planning-editor')).to_be_visible()
+    assert page.evaluate('events.length') == 0
+
+
+def test_connection_keyboard_cancellation_revocation_and_remount(linking_page: Page) -> None:
+    """Keyboard completion and cancelled/stale/disposed gestures retain instance isolation."""
+    page = linking_page
+    source = _connector(page, 'tasks', 'a', 'S')
+    source.focus()
+    source.press('Enter')
+    expect(page.locator('#first .planning-connection-preview')).to_be_visible()
+    expect(page.locator('#first .planning-connection-preview > path')).to_have_attribute('marker-end', re.compile('^url'))
+    source.press('Escape')
+    expect(page.locator('#first .planning-connection-preview')).to_be_hidden()
+    assert page.evaluate('events.length') == 0
+    source.press('Space')
+    _connector(page, 'tasks', 'b', 'F').press('Enter')
+    page.wait_for_function('events.length===1')
+    assert page.evaluate('events[0].values.type') == 'SF'
+    page.evaluate("""() => instances[0].update({version:1,kind:'response',scope:'links',revision:'r1',
+      requestId:events[0].requestId,accepted:true})""")
+    expect(page.locator('#first [role=status]')).to_have_text('Dependency created.')
+    source.focus()
+    source.press('Enter')
+    page.evaluate("""() => instances[0].update({version:1,kind:'patch',scope:'links',revision:'r1',capabilities:{edit:false}})""")
+    expect(page.locator('#first .planning-connection-preview')).to_be_hidden()
+    assert page.locator('#first [data-connect]:visible').count() == 0
+    assert page.locator('#second [data-connect]:visible').count() == 0
+    page.evaluate("""() => {instances[0].destroy();instances[0].destroy();instances[0]=mount(document.getElementById('first'),{
+      snapshot:linkSnapshot,today:'2026-01-01',mode:'Month',editEnabled:true,onEvent:e=>events.push(e)});}""")
+    source.focus()
+    source.press('Enter')
+    _connector(page, 'tasks', 'b', 'S').press('Enter')
+    page.wait_for_function('events.length===2')
+
+
+def test_connection_repositions_cancels_on_pointer_and_source_removal(linking_page: Page) -> None:
+    """A layout change retains anchors; cancelling or removing an endpoint emits nothing."""
+    page = linking_page
+    source = _connector(page, 'tasks', 'a', 'F')
+    source.focus()
+    source.click()
+    page.locator('#first [data-mode=Quarter]').dispatch_event('click')
+    expect(page.locator('#first .planning-connection-preview')).to_be_visible()
+    page.locator('#first .planning-view').dispatch_event('pointercancel')
+    expect(page.locator('#first .planning-connection-preview')).to_be_hidden()
+    source.focus()
+    source.press('Enter')
+    page.evaluate("""() => instances[0].update({version:1,kind:'patch',scope:'links',revision:'r1',removeTaskIds:['a']})""")
+    expect(page.locator('#first .planning-connection-preview')).to_be_hidden()
+    assert page.evaluate('events.length') == 0
+
+
+def test_milestone_connectors_and_collapsed_project_targets_are_distinct(linking_page: Page) -> None:
+    """Equal-date bars expose both endpoints and collapsed summaries keep project identity."""
+    page = linking_page
+    page.evaluate("""() => instances[0].update({version:1,kind:'patch',scope:'links',revision:'r1',tasks:[
+      {...linkSnapshot.tasks[0],end:'2026-01-05'}]})""")
+    start, finish = _connector(page, 'tasks', 'a', 'S'), _connector(page, 'tasks', 'a', 'F')
+    start.focus()
+    assert start.bounding_box() != finish.bounding_box()
+    page.locator('#first .planning-frozen-row[data-target-id=two] [data-expand]').click()
+    expect(page.locator('#first .planning-bar[data-target-id=b]')).to_have_count(0)
+    start.focus()
+    start.press('Enter')
+    _connector(page, 'projects', 'two', 'F').press('Space')
+    page.wait_for_function('events.length===1')
+    assert page.evaluate('events[0].values.successor.kind') == 'project'
+
+
+def test_connection_virtualization_cancels_source_and_bounds_connector_count(linking_page: Page) -> None:
+    """A thousand projects retain viewport-sized connector DOM and safe cancellation."""
+    page = linking_page
+    page.evaluate("""() => instances[0].update({version:1,kind:'patch',scope:'links',revision:'r1',
+      projects:Array.from({length:1000},(_,i)=>({id:'extra-'+i,name:'Extra '+i,start:'2026-01-01',end:'2026-02-01'}))})""")
+    source = _connector(page, 'tasks', 'a', 'F')
+    source.focus()
+    source.press('Enter')
+    page.locator('#first [data-part=timeline-body]').evaluate('node=>node.scrollTop=12000')
+    expect(page.locator('#first .planning-connection-preview')).to_be_hidden()
+    assert page.locator('#first [data-connect]').count() < 100
+    assert page.evaluate('events.length') == 0
+
+
+def test_read_only_endpoints_are_shown_only_when_a_valid_pair_exists(linking_page: Page) -> None:
+    """Read-only predecessors remain usable for editable projects; wholly read-only views hide controls."""
+    page = linking_page
+    page.evaluate("""() => instances[0].update({version:1,kind:'patch',scope:'links',revision:'r1',
+      projects:linkSnapshot.projects.map(row=>({...row,editable:row.id==='one'})),
+      tasks:linkSnapshot.tasks.map(row=>({...row,editable:row.projectId==='one'}))})""")
+    expect(_connector(page, 'projects', 'two', 'F')).not_to_have_attribute('hidden', '')
+    source = _connector(page, 'projects', 'two', 'F')
+    source.focus()
+    source.press('Enter')
+    _connector(page, 'projects', 'one', 'S').press('Enter')
+    page.wait_for_function('events.length===1')
+    page.evaluate("""() => {
+      instances[0].update({version:1,kind:'response',scope:'links',revision:'r1',requestId:events[0].requestId,accepted:false});
+      instances[0].update({version:1,kind:'patch',scope:'links',revision:'r1',
+        projects:linkSnapshot.projects.map(row=>({...row,editable:false})),
+        tasks:linkSnapshot.tasks.map(row=>({...row,editable:false}))});
+    }""")
+    expect(page.locator('#first [data-connect]:not([hidden])')).to_have_count(0)
+
+
+@pytest.mark.parametrize('source_id,source_overlay,eligible', [
+    ('a', 'one-alt', True), ('a', '', False),
+    ('b', '', True), ('b', 'two-alt', False),
+])
+def test_comparison_connectors_preserve_existing_source_resolution(
+    linking_page: Page, source_id: str, source_overlay: str, eligible: bool,
+) -> None:
+    """Local alternative and external live bars match the saved dependency meaning."""
+    page = linking_page
+    page.evaluate("""() => {
+      const local={id:'c',projectId:'one',name:'C',start:'2026-01-15',end:'2026-01-20'};
+      instances[0].update({...linkSnapshot,tasks:[...linkSnapshot.tasks,local],overlays:[
+        {id:'one-alt',kind:'alternative',projectId:'one',tasks:[linkSnapshot.tasks[0],local]},
+        {id:'two-alt',kind:'alternative',projectId:'two',tasks:[linkSnapshot.tasks[1]]}]});
+    }""")
+    source = page.locator(
+        f'#first .planning-bar[data-target-id={source_id}]'
+        f'[data-overlay-id="{source_overlay}"] [data-connect=F]'
+    )
+    destination = page.locator(
+        '#first .planning-bar[data-target-id=c][data-overlay-id=one-alt] [data-connect=S]'
+    )
+    source.focus()
+    source.press('Enter')
+    expect(destination).to_have_attribute('data-connect-eligible', str(eligible).lower())
+    destination.press('Enter')
+    assert page.evaluate('events.length') == int(eligible)
+    if eligible:
+        event = page.evaluate('events[0]')
+        assert event['overlayId'] == 'one-alt'
+        assert event['values']['predecessor']['id'] == source_id
+        assert event['values']['predecessor']['projectId'] == ('one' if source_id == 'a' else 'two')
+        assert event['values']['lagDays'] == 0

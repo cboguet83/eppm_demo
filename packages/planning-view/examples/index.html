@@ -13,7 +13,7 @@ import {mountPlanningView} from '../src/index.js';
 import {validateEvent,validateMessage} from '../src/contracts/index.js';
 const tasks=[{id:'design',stableId:'design',projectId:'alpha',name:'Design',start:'2026-01-01',end:'2026-01-05',progress:20},
   {id:'build',stableId:'build',projectId:'alpha',name:'Build',start:'2026-02-01',end:'2026-12-31',progress:0}];
-const initial=()=>({version:1,kind:'snapshot',scope:'primary',revision:'r1',capabilities:{edit:true},
+const initial=()=>({version:1,kind:'snapshot',scope:'primary',revision:'r1',capabilities:{edit:true,createDependencies:true},
   projects:[{id:'alpha',name:'Alpha',start:'2026-01-01',end:'2026-12-31',taskCount:2}],tasks:structuredClone(tasks),
   dependencies:[{id:'build-after-design',type:'FS',lagDays:0,predecessor:{kind:'task',id:'design'},successor:{kind:'task',id:'build'}}],
   resources:[{id:'engineering',name:'Engineering',capacity:10,usage:{'2026-01-01':6,'2026-01-02':4},
@@ -31,6 +31,14 @@ const onEvent=input=>{
     if(event.command==='mark-period')data.resourceFilter={resourceId:event.targetId,name:'Engineering',start:event.context.start,end:event.context.end,clearAction:'clear-period'};
     if(event.command==='clear-period')data.resourceFilter=null;
     primary.update({...data});feedback.textContent=event.command==='mark-period'?'Resource period marked':'Resource period cleared';return;
+  }
+  if(event.type==='dependency' && event.operation==='create') {
+    if(event.scope!==data.scope || event.revision!==data.revision){reply(event,false,'View changed.');return;}
+    const oldRevision=data.revision;
+    const dependency={id:crypto.randomUUID(),...event.values};
+    data=validateMessage({...data,revision:'r'+(Number(oldRevision.slice(1))+1),dependencies:[...data.dependencies,dependency]});
+    primary.update({version:1,kind:'patch',scope:data.scope,revision:data.revision,baseRevision:oldRevision,dependencies:[dependency]});
+    reply(event,true);accepted++;counter.textContent='Accepted edits: '+accepted;feedback.textContent='Dependency created';return;
   }
   const values=['task','dependency'].includes(event.type)?event.values:event;
   const collection=event.type==='dependency'?'dependencies':'tasks',original=data[collection].find(record=>record.id===event.targetId);

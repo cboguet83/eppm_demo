@@ -222,3 +222,20 @@ def test_message_boundary_rejects_invalid_envelopes(
     """Transport cannot send unsupported kinds or invalid action responses."""
     with pytest.raises(wrapper.PlanningContractError):
         wrapper.validate_message({**snapshot(), **changes})
+
+
+def test_dependency_creation_validates_directed_zero_lag_payload(wrapper: ModuleType) -> None:
+    """Reject malformed creation before exposing an intention to its host."""
+    fields = {"type": "FS", "lagDays": 0,
+              "predecessor": {"kind": "task", "id": "opaque-a"},
+              "successor": {"kind": "task", "id": "task"}}
+    value = event("dependency", operation="create", lane="current", values=fields)
+    assert wrapper.validate_event(value) == value
+    for changes in ({"lagDays": 1}, {"lagDays": True},
+                    {"predecessor": {"kind": "unavailable"}},
+                    {"successor": {"kind": "project", "id": "task"}},
+                    {"predecessor": fields["successor"]}):
+        with pytest.raises(ValueError):
+            wrapper.validate_event({**value, "values": fields | changes})
+    with pytest.raises(ValueError):
+        wrapper.validate_event({**value, "overlayId": "alternative"})

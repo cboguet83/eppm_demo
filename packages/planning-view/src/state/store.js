@@ -165,7 +165,8 @@ export function createPlanningStore(input) {
     if(next.kind==='response') {
       nextView.pendingRequestId=null;nextView.preview=null;
       nextView.error=next.accepted?null:(next.error || 'The requested change was rejected.');
-      if(next.accepted) nextView.draft=null;
+      if(next.accepted && !nextView.preservePendingDraft) nextView.draft=null;
+      nextView.preservePendingDraft=false;
     }
     data=freeze(candidate);indexes=nextIndexes;view=freeze(nextView);
     notify('data');

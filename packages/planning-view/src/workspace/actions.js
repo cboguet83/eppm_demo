@@ -35,6 +35,23 @@ export function canEdit(data,view,target,operation='task',resolved=resolveTarget
   return !!capability && data.capabilities[capability]!==false;
 }
 
+/** Check a proposed pair against fresh delivered records and host hints.
+ * @param {object} data Snapshot. @param {object} view View.
+ * @param {object} source Predecessor target. @param {object} target Successor target.
+ * @returns {boolean} Whether creation is available.
+ */
+export function canCreateDependency(data,view,source,target,predecessor=resolveTarget(data,source),successor=resolveTarget(data,target)) {
+  if(!predecessor || !successor || !['tasks','projects'].includes(source.kind) || !['tasks','projects'].includes(target.kind))return false;
+  if(data.capabilities.createDependencies!==true || data.capabilities.editDependencies===false || view.pendingRequestId)return false;
+  if(!canEdit(data,view,target,'command',successor) || predecessor.lane==='baseline')return false;
+  if(target.overlayId && predecessor.projectId===successor.projectId && source.overlayId!==target.overlayId)return false;
+  if(predecessor.projectId!==successor.projectId && source.overlayId)return false;
+  if(source.kind===target.kind && source.id===target.id)return false;
+  if(predecessor.projectId===successor.projectId && (source.kind==='projects' || target.kind==='projects'))return false;
+  if(target.kind==='tasks' && !target.overlayId && predecessor.record.editable===false)return false;
+  return true;
+}
+
 /** Validate declarative menu entries iteratively with bounded depth and no cycles.
  * @param {object[]} actions Host-owned context commands.
  */
@@ -110,7 +127,7 @@ export function createActionController({store,onEvent=()=>{},requestId=()=>crypt
   };
   const failure=id=>{
     if(disposed || store.read().view.pendingRequestId!==id)return;
-    store.setView({pendingRequestId:null,preview:null,error:'The host could not process this action.'});
+    store.setView({pendingRequestId:null,preservePendingDraft:false,preview:null,error:'The host could not process this action.'});
   };
   const deliver=event=>{
     try {
@@ -122,6 +139,20 @@ export function createActionController({store,onEvent=()=>{},requestId=()=>crypt
   };
   return {
     resolve,
+    canCreateDependency(source,target){if(disposed)return false;const {data,view}=store.read();return canCreateDependency(data,view,source,target,resolve(source),resolve(target));},
+    requestDependency(source,target,type) {
+      if(disposed)return null;
+      const {data,view}=store.read();
+      if(!canCreateDependency(data,view,source,target,resolve(source),resolve(target)))return null;
+      const predecessor=resolve(source),successor=resolve(target);
+      const endpoint=(item,resolved)=>({kind:item.kind==='tasks'?'task':'project',id:item.id,projectId:resolved.projectId});
+      const values={predecessor:endpoint(source,predecessor),successor:endpoint(target,successor),type,lagDays:0};
+      const event=validateEvent({version:1,scope:data.scope,revision:data.revision,requestId:requestId(),type:'dependency',operation:'create',
+        targetId:target.id,targetKind:target.kind,overlayId:target.overlayId ?? null,lane:successor.lane,
+        context:{...successor.record.context,...successor.overlay?.context,projectId:successor.projectId},values});
+      store.setView({pendingRequestId:event.requestId,preservePendingDraft:true,error:null,preview:{dependency:values}});
+      return deliver(event);
+    },
     canEdit(target,operation='task'){if(disposed)return false;const {data,view}=store.read();return canEdit(data,view,target,operation,resolve(target));},
     openCreate(target) {
       if(disposed)return false;
@@ -140,7 +171,7 @@ export function createActionController({store,onEvent=()=>{},requestId=()=>crypt
       const event=validateEvent({version:1,scope:data.scope,revision:data.revision,requestId:requestId(),type:'task',operation:'create',
         targetId:target.id,targetKind:'projects',overlayId:target.overlayId ?? null,lane:resolved.lane,
         context:{...(view.draft?.values?.context ?? {...resolved.record.context,...resolved.overlay?.context}),projectId:target.id},values});
-      store.setView({pendingRequestId:event.requestId,error:null});return deliver(event);
+      store.setView({pendingRequestId:event.requestId,preservePendingDraft:false,error:null});return deliver(event);
     },
     open(target) {
       if(disposed)return false;
@@ -161,7 +192,7 @@ export function createActionController({store,onEvent=()=>{},requestId=()=>crypt
         targetId:target.id,targetKind:target.kind,overlayId:target.overlayId ?? null,lane:resolved.lane,
         ...(resolved.record.context?{context:JSON.stringify(view.draft?.values?.target)===JSON.stringify(target)?view.draft.values.context:resolved.record.context}:{}),
         ...(['task','dependency'].includes(type)?{values}:values)});
-      store.setView({pendingRequestId:event.requestId,error:null,preview:{target,...values}});
+      store.setView({pendingRequestId:event.requestId,preservePendingDraft:false,error:null,preview:{target,...values}});
       return deliver(event);
     },
     command(action,target,context={}) {
