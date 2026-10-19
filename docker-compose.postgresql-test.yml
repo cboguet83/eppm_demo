@@ -1,5 +1,5 @@
 # Loopback exposure for the host's isolated test runner; omit for application deployment.
 services:
   postgres:
-    ports:
+    ports: !override
       - "127.0.0.1:15432:5432"

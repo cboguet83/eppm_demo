@@ -17,7 +17,7 @@ authorized at creation; the remaining boxes require a subsequent apply request.
 
 ## 2. Repair optional database tools startup
 
-- [ ] 2.1 Extract pgAdmin into an opt-in development Compose overlay, declare
+- [x] 2.1 Extract pgAdmin into an opt-in development Compose overlay, declare
   `pgadmin_data`, preserve PostgreSQL volume/ports and required private tools
   credentials, avoid global container-name collisions, and make the test overlay
   replace the development port with isolated 15432. Include config-only

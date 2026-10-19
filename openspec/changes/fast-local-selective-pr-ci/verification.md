@@ -44,6 +44,17 @@ Resolve its hash with `git log main..HEAD --oneline`; do not embed the commit's
 own hash inside its contents. Later apply work must record every subsequent
 task's commit and actual validation evidence here.
 
+## Task 2.1 — optional tools startup
+
+- `python -m pytest -q tests/test_compose_configuration.py`: five passed in
+  1.47s. Covers database/test/application combinations, required opt-in
+  credentials, volume/port identities and project-scoped tool names.
+- Isolated `eppm-fast-ci-tests` PostgreSQL startup passed with only the generated
+  `.local/fast-ci-tests.env`, no pgAdmin values, and port 15432. The existing
+  application services/database on 8501/5434 were not recreated or modified.
+- pgAdmin image pinned to 9.18, verified against its official container docs;
+  only config resolution was tested, without starting the optional tool.
+
 ## Implementation acceptance
 
 Pending a subsequent user request to apply. This change has not been archived,
