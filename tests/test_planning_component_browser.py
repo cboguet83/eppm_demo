@@ -4,6 +4,7 @@ from collections.abc import Iterator
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import os
+import re
 from pathlib import Path
 from threading import Thread
 
@@ -852,6 +853,7 @@ def test_connection_keyboard_cancellation_revocation_and_remount(linking_page: P
     source.focus()
     source.press('Enter')
     expect(page.locator('#first .planning-connection-preview')).to_be_visible()
+    expect(page.locator('#first .planning-connection-preview > path')).to_have_attribute('marker-end', re.compile('^url'))
     source.press('Escape')
     expect(page.locator('#first .planning-connection-preview')).to_be_hidden()
     assert page.evaluate('events.length') == 0

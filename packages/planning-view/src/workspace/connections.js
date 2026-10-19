@@ -9,6 +9,11 @@ const identity=target=>JSON.stringify(target);
 export function createConnections({frame,store,actions,lifetime,onStart,onInspect}) {
   const doc=frame.ownerDocument,ns='http://www.w3.org/2000/svg';
   const svg=doc.createElementNS(ns,'svg'),path=doc.createElementNS(ns,'path');
+  const defs=doc.createElementNS(ns,'defs'),marker=doc.createElementNS(ns,'marker'),arrow=doc.createElementNS(ns,'path');
+  marker.id='planning-connection-'+doc.defaultView.crypto.randomUUID();
+  for(const [key,value] of Object.entries({viewBox:'0 0 10 10',refX:'9',refY:'5',markerWidth:'6',markerHeight:'6',orient:'auto-start-reverse'}))marker.setAttribute(key,value);
+  arrow.setAttribute('d','M0,0 L10,5 L0,10 Z');arrow.style.fill='#2563eb';marker.append(arrow);defs.append(marker);svg.append(defs);
+  path.setAttribute('marker-end',`url(#${marker.id})`);
   svg.classList.add('planning-connection-preview');svg.append(path);frame.append(svg);
   const status=doc.createElement('span');status.className='planning-connection-status';status.setAttribute('role','status');frame.append(status);
   let state=null,down=null,consume=false,lastPoint=null,wasPending=false;
@@ -101,7 +106,7 @@ export function createConnections({frame,store,actions,lifetime,onStart,onInspec
       svg.style.display='none';
       if(wasPending)status.textContent=view.error ?? (labels().dependencyCreated || 'Dependency created.');
     }
-    wasPending=!!view.pendingRequestId;
+    wasPending=!!view.pendingRequestId && !!view.preview?.dependency;
   };
   lifetime.own(store.subscribe(reason=>{if(reason!=='destroy')render();}));
   lifetime.own(()=>{cancel();svg.remove();status.remove();});
