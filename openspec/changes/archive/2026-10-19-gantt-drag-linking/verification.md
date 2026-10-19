@@ -183,6 +183,7 @@ are unchanged.
 Output of `git log main..HEAD --oneline` before final acceptance:
 
 ```text
+f740f33 test(gantt-drag-linking): complete task 5.2 strict acceptance
 33e77d0 ci(gantt-drag-linking): complete task 5.3 disposable test configuration
 0e41e83 fix(gantt-drag-linking): complete task 3.5 comparison source rules
 a970e8a fix(gantt-drag-linking): complete task 3.4 indexed eligibility
@@ -197,9 +198,13 @@ c389877 feat(gantt-drag-linking): complete task 2.1 creation contract
 0899c5f docs(gantt-drag-linking): complete task 1.1 planning
 ```
 
-Task 5.2's commit is identified by its subject after it exists; its own hash is not
-embedded in its contents. Archive and PR lifecycle follow only after full local
-acceptance. Remote CI remains a separate gate on the final PR revision.
+Task 5.2's hash was added only after that commit existed. After local acceptance,
+all three embedding and four visualization requirements were synced to the main
+specs, preserving their titles, purposes, and existing requirements. All nine
+main specs passed strict validation, and every added requirement block was
+compared with its delta before archiving. The archive retains its metadata,
+planning artifacts, task history, and this verification report. Remote CI remains
+a separate gate on the final PR revision.
 
 ## Delivery controls inspected
 
