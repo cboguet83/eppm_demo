@@ -195,3 +195,59 @@ def test_changed_successor_bounds_and_step_membership_refresh_project_warnings(l
     assert not planning.get_project_summaries([1])[0]['hasViolations']
     with pytest.raises(PlanningConflictError):
         planning.save_project_dependencies(1, [], [], saved['revision'])
+
+
+@pytest.mark.parametrize('kind', ['FS', 'SS', 'FF', 'SF'])
+@pytest.mark.parametrize('successor_task', [None, 1])
+@pytest.mark.parametrize('predecessor_task', [None, 2])
+def test_chart_creation_appends_all_endpoint_pairs_without_changing_dates(
+    links, kind: str, successor_task: int | None, predecessor_task: int | None,
+) -> None:
+    """Direct creation appends one authorized zero-lag link and preserves schedules."""
+    planning = service(links, user_id=4)
+    before = links.query('SELECT id,start_date,end_date FROM eppm.project_task ORDER BY id')
+    sources = {owner: planning.get_project_dependency_panel(owner)['revision'] for owner in (1, 2)}
+    values = link(None if predecessor_task else 2, predecessor_task, kind)
+    planning.create_dependency(1, successor_task, values, sources)
+    table = 'project_dependency' if successor_task is None else 'task_dependencies'
+    rows = links.query(f'SELECT link_type,lag_days FROM eppm.{table}')
+    assert rows == [(kind, 0)]
+    assert links.query('SELECT id,start_date,end_date FROM eppm.project_task ORDER BY id') == before
+    with pytest.raises(PlanningConflictError):
+        planning.create_dependency(1, successor_task, values, sources)
+    assert links.query(f'SELECT link_type,lag_days FROM eppm.{table}') == rows
+
+
+def test_chart_creation_preserves_hidden_links_and_existing_predecessor_policy(links) -> None:
+    """Append does not replace protected links and keeps task predecessor edit checks."""
+    with psycopg.connect(links.setup.operator_url) as connection:
+        connection.execute('INSERT INTO eppm.project_dependency(project_id,predecessor_project_id,project_plan_id) '
+                           'VALUES (1,3,(SELECT id FROM eppm.project_plan WHERE project_id=1 AND is_current))')
+    planning = service(links)
+    from app.infrastructure.postgresql.planning_sources import PostgresPlanningSources
+    from app.domain.access.models import AccessDenied
+
+    sources = PostgresPlanningSources(links.database, links.key, access=links.binding(1).access).read([1, 2])
+    planning.create_dependency(1, None, link(), sources)
+    assert len(links.query('SELECT * FROM eppm.project_dependency', user_id=4)) == 2
+    sources = PostgresPlanningSources(links.database, links.key, access=links.binding(1).access).read([1, 2])
+    with pytest.raises((AccessDenied, ValueError)):
+        planning.create_dependency(1, 1, link(), sources)
+    assert links.query('SELECT * FROM eppm.task_dependencies') == []
+
+
+@pytest.mark.parametrize('task_id,values,sources', [
+    (1, link(lag=1), {}), (1, link(None, 1), {}),
+    (2, link(), {}), (1, link(None, 3), {}),
+    (None, link(project=1), {}), (None, link(None, 1), {}),
+    (None, link(), {}),
+])
+def test_chart_creation_invalid_or_stale_inputs_leave_no_partial_writes(
+    links, task_id: int | None, values: dict, sources: dict,
+) -> None:
+    """Forged, self, stale, and mismatched-owner requests fail atomically."""
+    planning = service(links)
+    with pytest.raises((ValueError, PlanningConflictError)):
+        planning.create_dependency(1, task_id, values, sources)
+    assert links.query('SELECT * FROM eppm.task_dependencies') == []
+    assert links.query('SELECT * FROM eppm.project_dependency') == []

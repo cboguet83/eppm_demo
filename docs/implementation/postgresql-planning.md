@@ -180,3 +180,15 @@ The real HTTP/query regression checks direct and copied predecessors, exact
 result equivalence after 5,000 unrelated rows, a maximum 64-buffer increase and
 no task/dependency scan exceeding two rows. Native planning and plan lifecycle
 regressions retain transaction, authorization and active/baseline isolation checks.
+# Direct Gantt dependency creation
+
+`PlanningService.create_dependency` appends one zero-lag incoming dependency
+without replacing existing or inaccessible links. The successor project must be
+editable; task/project endpoint restrictions remain authoritative in the existing
+store and database guards. Both endpoint projects' displayed source tokens are
+compared through `project_dependency_revision` inside the same serializable
+write operation. A stale source rejects the operation rather than retrying with
+new values. Dates and saved snapshots are unchanged. The component boundary
+validates positive endpoint identities, exactly one predecessor, the four link
+types, and zero-day lag before dispatch.
+

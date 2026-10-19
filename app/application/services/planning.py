@@ -259,6 +259,71 @@ class PlanningService:
             store.insert_dependency(task_id, dependency)
         self._gateway.run(operation, write=True)
 
+    def create_dependency(
+        self, project_id: int, task_id: int | None,
+        values: DependencyInput, expected_sources: dict[int, str],
+    ) -> None:
+        """Append one chart link under transactional endpoint/source checks.
+
+        Args:
+            project_id: Successor project whose schedule is being edited.
+            task_id: Successor task, or None for the whole project.
+            values: Directed predecessor, dependency type, and zero-day lag.
+            expected_sources: Display fingerprints for both endpoint projects.
+
+        Raises:
+            ValueError: Endpoints, ownership, or creation values are invalid.
+            PlanningConflictError: An endpoint schedule or permission changed.
+        """
+        project_id = positive_identity(project_id)
+        task_id = positive_identity(task_id) if task_id is not None else None
+        if type(values.get('lag_days')) is not int or values['lag_days'] != 0:
+            raise ValueError('A new chart dependency must have zero-day lag.')
+        checked = normalize_project_dependency(project_id, values)
+        checked.pop('id', None)
+        normalized = (normalize_dependency(task_id, checked) if task_id is not None
+                      else checked)
+        if normalized is None:
+            raise ValueError('Choose distinct dependency endpoints.')
+        sources = dict(expected_sources)
+
+        def operation(store: PlanningStore) -> None:
+            self._check_creation_sources(store, project_id, task_id, normalized, sources)
+            if task_id is not None:
+                store.insert_dependency(task_id, normalized)
+                return
+            tasks = {normalized['predecessor_task_id']} - {None}
+            projects = {normalized['predecessor_project_id']} - {None}
+            if store.valid_template_references(project_id, tasks, projects) != (tasks, projects):
+                raise ValueError('A predecessor is unavailable or belongs to this project.')
+            store.write_project_dependencies(project_id, [normalized], [])
+
+        self._gateway.run(operation, write=True, permission=Permission.EDIT,
+                          project_ids=[project_id])
+
+    @staticmethod
+    def _check_creation_sources(
+        store: PlanningStore, project_id: int, task_id: int | None,
+        values: DependencyInput, sources: dict[int, str],
+    ) -> None:
+        """Resolve authorized owners and compare both sources in the write snapshot."""
+        if task_id is not None:
+            task = store.get_milestone_by_id(task_id)
+            if task is None or task['project_id'] != project_id:
+                raise ValueError('The successor task is unavailable.')
+        predecessor = values.get('predecessor_project_id')
+        if values.get('predecessor_task_id') is not None:
+            task = store.get_milestone_by_id(values['predecessor_task_id'])
+            if task is None:
+                raise ValueError('The predecessor is unavailable.')
+            predecessor = task['project_id']
+        if predecessor is None or not store.project_exists(predecessor):
+            raise ValueError('The predecessor is unavailable.')
+        for owner in {project_id, predecessor}:
+            expected = sources.get(owner)
+            if not expected or store.project_dependency_revision(owner) != expected:
+                raise PlanningConflictError('Dependency endpoints changed. Refresh the chart.')
+
     def update_dates(self, milestone_id: int, start_date: str, end_date: str) -> bool:
         """Validate a drag command before changing the schedule."""
         start, end = normalize_dates(start_date, end_date)
