@@ -38,7 +38,7 @@ authorized at creation; the remaining boxes require a subsequent apply request.
   absent and without invoking Docker/browser services, plus one explicit
   targeted invocation; document prerequisites, scope, and examples in this
   commit. Do not apply the 95% full-coverage gate to these partial modes.
-- [ ] 3.2 Add canonical `full` mode using complete repository discovery,
+- [x] 3.2 Add canonical `full` mode using complete repository discovery,
   existing strict two-worker/template pytest, unchanged application/subprocess
   coverage of at least 95%, both JavaScript suites, and asset consistency.
   Include subprocess/collection regressions that reject explicit/implicit

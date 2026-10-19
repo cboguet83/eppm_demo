@@ -170,9 +170,9 @@ and a current `eppm-demo:local` image for authenticated browser tests.
 # Run against the isolated PostgreSQL test environment
 $env:POSTGRES_TEST_CLIENT_CONTAINER = 'eppm_demo-postgres-1'
 $env:EPPM_RUN_OIDC_E2E = '1'
-python -m dotenv -f .local/postgresql.env run -- python -m pytest -q --require-full-suite --cov=app --cov-fail-under=95
+python -m dotenv -f .local/postgresql.env run -- python -m scripts.run_tests full
 
-# Run custom-component regressions
+# Component-only feedback (both suites also run in full mode)
 node --test tests/*.cjs
 ```
 
@@ -184,6 +184,14 @@ Manual runs remain available under **Actions → Application and PostgreSQL chec
 → Run workflow**. The strict pytest option rejects missing PostgreSQL/browser
 prerequisites or collection and fails required skips; ordinary partial local
 runs can omit it.
+
+The full runner uses two audited workers and migrated templates, reconciles
+execution against an independently collected canonical manifest, and then runs
+both JavaScript suites and the asset check. It accepts no path/filter options;
+unset `PYTEST_ADDOPTS` and `PYTEST_PLUGINS`. It does not automatically load the
+application's `.env` or prepare/reset databases. Follow the
+[development workflow](docs/development-workflow.md#3-verify-before-archive)
+for isolated preparation and the matching test container name.
 
 Follow the [OpenSpec development workflow](docs/development-workflow.md) for
 GrillMe discovery, dedicated feature branches, per-task commits, verification,

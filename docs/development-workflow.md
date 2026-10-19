@@ -70,18 +70,21 @@ docker build -t eppm-demo:local .
 POSTGRES_TEST_CLIENT_CONTAINER=eppm-workflow-tests-postgres-1 \
 EPPM_RUN_OIDC_E2E=1 \
 python -m dotenv -f .local/workflow-tests.env run -- \
-  python -m pytest -q -x -p no:cacheprovider --require-full-suite \
-    --cov=app --cov-fail-under=95 -n 2 --dist=loadgroup \
-    --postgres-test-db-mode=template --max-worker-restart=0
-node --test tests/test_*.cjs
-node --test packages/planning-view/tests/*.test.js
-python -m scripts.build_planning_assets --check
+  python -m scripts.run_tests full
 openspec validate <change-name> --strict
 ```
 
+The full runner includes both JavaScript suites and generated-asset consistency.
+It creates a fresh canonical collection and requires the complete serial/worker
+collection to match it. Full mode accepts no path, keyword, marker or last-failed
+selection; unset `PYTEST_ADDOPTS` and `PYTEST_PLUGINS`. Canonical discovery and
+coverage use the checked project configuration. A partial selection containing
+both required groups is not sufficient full proof.
+
 The verified full-run command uses migrated templates and exactly two workers.
 For a serial/fresh diagnostic, replace the worker/template options with
-`-n 0 --postgres-test-db-mode=fresh`. Empty-database migration/upgrade tests stay
+`-n 0 --postgres-test-db-mode=fresh` in a direct pytest invocation; full mode keeps
+the canonical acceptance options. Empty-database migration/upgrade tests stay
 unmigrated in either mode. Run affected paths locally while editing; full
 acceptance still requires the complete command and JavaScript checks.
 

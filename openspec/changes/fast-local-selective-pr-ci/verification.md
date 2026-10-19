@@ -71,6 +71,21 @@ task's commit and actual validation evidence here.
 - No test/assertion was removed. The fast inventory is maintained in
   `tests/suites.json`; full tests retain their existing discovery.
 
+## Task 3.2 — canonical full command
+
+- Full/local runner, existing strict serial/parallel gate, and actual repository
+  scheduling regressions: 91 passed in 18.94s. Covers canonical/worker identity,
+  a new discovered test, stale references, partial collections retaining both
+  required groups, implicit/explicit selection, missing prerequisites, skips,
+  crashes/completion failures, and narrowed discovery/coverage configuration.
+- `python -m scripts.run_tests full --dry-run` confirms separate unfiltered
+  canonical collection, strict two-worker/template execution with the unchanged
+  application/subprocess coverage config and 95% threshold, both JS suites,
+  and generated assets. A fresh exclusive temporary manifest is used in real
+  runs; a stale prior file cannot become the canonical proof.
+- README and the development workflow now document the shared full entry point.
+  Real complete integration acceptance remains task 5.1, not this focused check.
+
 ## Implementation acceptance
 
 Pending a subsequent user request to apply. This change has not been archived,

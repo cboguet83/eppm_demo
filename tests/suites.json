@@ -306,6 +306,7 @@
     "tests/test_fragment_reruns.py",
     "tests/test_full_suite.py",
     "tests/test_full_suite_parallel.py",
+    "tests/test_full_test_runner.py",
     "tests/test_gantt_tooltip_browser.py",
     "tests/test_layer_boundaries.py",
     "tests/test_layered_shell.py",
