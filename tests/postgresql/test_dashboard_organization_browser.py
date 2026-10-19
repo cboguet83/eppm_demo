@@ -27,10 +27,13 @@ if TYPE_CHECKING:
 
 @contextmanager
 def _completed_action(
-    page: 'Page', services: tuple[str, ...] | None = None,
+    page: 'Page', completion: ScriptCompletion,
+    services: tuple[str, ...] | None = None,
 ) -> Iterator[None]:
     """Wait for server completion and any expected service-button redraw."""
-    with _completed_filter_run(page, prefix='Dashboard test run: '):
+    with _completed_filter_run(
+        page, completion, prefix='Dashboard test run: ',
+    ):
         yield
     if services is not None:
         pressed = page.locator(
@@ -98,6 +101,7 @@ def test_dashboard_organization_buttons_cascade_and_keep_status_default(
         browser = playwright.chromium.launch(headless=True)
         try:
             page = server.new_page(browser, viewport={'width':1500, 'height':1100})
+            completion = ScriptCompletion(page)
             page.goto(server.origin)
             services = page.locator('.st-key-dashboard_filter_service_buttons')
             expect(services.get_by_role('button', name='Service A', exact=True)).to_be_visible(timeout=30000)
@@ -121,55 +125,55 @@ def test_dashboard_organization_buttons_cascade_and_keep_status_default(
             assert divisions.bounding_box()['height'] == 24
             assert teams.bounding_box()['y'] - (divisions.bounding_box()['y'] + 24) == 8
             page.screenshot(path=str(tmp_path / 'organization-panel-default.png'), full_page=True)
-            with _completed_action(page, services=('Service A',)):
+            with _completed_action(page, completion, services=('Service A',)):
                 services.get_by_role('button', name='Service A', exact=True).click()
             count(1)
             expect(services.get_by_role('button', name='Service A', exact=True)).to_have_attribute('title', 'Ctrl+click to select multiple options.')
-            with _completed_action(page, services=('Service B',)):
+            with _completed_action(page, completion, services=('Service B',)):
                 services.get_by_role('button', name='Service B', exact=True).click()
             expect(services.get_by_role('button', name='Service A', exact=True)).to_have_attribute('aria-pressed', 'false')
             expect(services.get_by_role('button', name='Service B', exact=True)).to_have_attribute('aria-pressed', 'true')
-            with _completed_action(page, services=('Service A',)):
+            with _completed_action(page, completion, services=('Service A',)):
                 services.get_by_role('button', name='Service A', exact=True).click()
             expect(services.get_by_role('button', name='Service B', exact=True)).to_have_attribute('aria-pressed', 'false')
             expect(budget_point).to_have_attribute('aria-label', re.compile(r': 25 kEUR$'))
             expect(page.locator('.st-key-dashboard_filter_org_manager_buttons')).to_contain_text('Alice Manager')
-            with _completed_action(page, services=('Service A', 'Service B')):
+            with _completed_action(page, completion, services=('Service A', 'Service B')):
                 services.get_by_role('button', name='Service B', exact=True).click(modifiers=['Control'])
             count(2)
             expect(budget_point).to_have_attribute('aria-label', re.compile(r': 100 kEUR$'))
-            with _completed_action(page, services=('Service B',)):
+            with _completed_action(page, completion, services=('Service B',)):
                 services.get_by_role('button', name='Service A', exact=True).click(modifiers=['Control'])
             count(1)
-            with _completed_action(page):
+            with _completed_action(page, completion):
                 divisions.locator('summary').click()
             assert divisions.locator('[data-testid="stExpanderDetails"]').evaluate('(element) => getComputedStyle(element).paddingBottom') == '2px'
             division_choices = page.locator('.st-key-dashboard_filter_division_buttons')
             expect(division_choices).to_contain_text('Division B')
             expect(division_choices).not_to_contain_text('Division A')
-            with _completed_action(page):
+            with _completed_action(page, completion):
                 division_choices.get_by_role('button', name='Division B', exact=True).click()
-            with _completed_action(page):
+            with _completed_action(page, completion):
                 teams.locator('summary').click()
             expect(page.locator('.st-key-dashboard_filter_org_team_buttons')).to_contain_text('Team B')
-            with _completed_action(page):
+            with _completed_action(page, completion):
                 page.locator('.st-key-dashboard_filter_org_team_buttons').get_by_role('button', name='Team B', exact=True).click()
-            with _completed_action(page, services=('Service A', 'Service B')):
+            with _completed_action(page, completion, services=('Service A', 'Service B')):
                 services.get_by_role('button', name='Service A', exact=True).click(modifiers=['Control'])
             expect(division_choices).to_contain_text('Division A')
-            with _completed_action(page, services=('Service A',)):
+            with _completed_action(page, completion, services=('Service A',)):
                 services.get_by_role('button', name='Service B', exact=True).click(modifiers=['Control'])
             count(1)
             expect(division_choices).to_contain_text('Division A')
             expect(division_choices).not_to_contain_text('Division B')
-            with _completed_action(page, services=()):
+            with _completed_action(page, completion, services=()):
                 services.get_by_role('button', name='Service A', exact=True).click()
             expect(division_choices).to_contain_text('Division B')
-            with _completed_action(page, services=('Not assigned',)):
+            with _completed_action(page, completion, services=('Not assigned',)):
                 services.get_by_role('button', name='Not assigned', exact=True).click()
             count(1)
             expect(page.locator('.st-key-dashboard_filter_org_manager_buttons')).to_contain_text('Not assigned')
-            with _completed_action(page, services=()):
+            with _completed_action(page, completion, services=()):
                 page.locator('.st-key-dashboard_clear button').click()
             count(3)
             expect(page.locator('.st-key-dashboard_filter_status')).to_contain_text('In Progress')
@@ -177,16 +181,16 @@ def test_dashboard_organization_buttons_cascade_and_keep_status_default(
             if delay_services:
                 # Fault injection: a user pauses while the queued redraw finishes.
                 page.wait_for_timeout(1200)
-            with _completed_action(page, services=('Service A',)):
+            with _completed_action(page, completion, services=('Service A',)):
                 page.keyboard.press('Space')
             count(1)
             services.get_by_role('button', name='Service A', exact=True).focus()
-            with _completed_action(page, services=()):
+            with _completed_action(page, completion, services=()):
                 page.keyboard.press('Space')
             count(3)
-            with _completed_action(page):
+            with _completed_action(page, completion):
                 managers.locator('summary').click()
-            with _completed_action(page):
+            with _completed_action(page, completion):
                 page.locator('.st-key-dashboard_filter_org_manager_buttons').get_by_role('button', name='Alice Manager', exact=True).click()
             count(1)
             page.screenshot(path=str(tmp_path / 'organization-panel.png'), full_page=True)

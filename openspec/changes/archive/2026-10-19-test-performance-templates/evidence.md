@@ -707,3 +707,118 @@ Actual focused validation on the integrated working tree:
 - unresolved index paths: none; staged whitespace check: passed.
 
 Unrelated user .env.example and docker-compose.postgresql.yml contents match pre-merge hashes; neither enters the merge commit. The new main schema/application/test sources invalidate earlier timing comparisons as final acceptance, so task 4.4 stays open. The previous hosted restoration and Chrome failure causes are not claimed as fixed by a merge or by green focused checks. PR #2 remains draft and still requires final full CI and explicit merge approval.
+
+### Task 3.15 — explicitly approved readiness hardening, uncertain original cause
+
+The user chose “Add readiness guard and record uncertainty” after the original hosted restoration failure remained unreproduced across 30 pristine and 100 instrumented local passes and successful full hosted runs. At integrated revision 1ec6560, hosted run 39118926242 passed 3,368 cases plus five subtests, 124 JavaScript cases and 97.70% coverage. These passes do not explain the original missing Alpha row.
+
+The restoration test now uses its existing ScriptCompletion observer's unchanged 10-second bound to await initial successful completion and an idle script, requires the active Beta tree, clicks deleted visibility, and awaits that action's actual successful completion. There is no retry, larger deadline, assertion removal or application change. Passive sanitized failure diagnostics remain. A second parameter delays only the initial test screen's tail by two seconds; an outbound BackMsg observer retains only the successful-completion count and running flag at the first real true visibility request. No raw frame, widget ID, cookie or payload is retained.
+
+Controlled RED: the delayed case with the original bare click fails in 5.22s with `Toggle preceded initial successful completion`, observed count zero. All original popup/deleted-record assertions still pass in that run. This proves a readiness precondition gap; it explicitly does NOT reproduce the original hosted missing-row symptom or establish its cause. GREEN: fresh/serial mapping, diagnostic and completion checks pass 15 cases in 13.78s; template/two-worker with real revision peers passes 31 in 14.10s. An added outbound-observer privacy/first-request regression and all diagnostic/completion unit checks pass nine in 0.29s. Final serial/template focused checks including that regression pass 16 in 15.08s. An AST comparison confirms every original restoration assertion is retained. Strict change validation and focused whitespace checks pass. The initial sandboxed attempt could not connect to isolated PostgreSQL; actual database/browser runs above used the authorized local service.
+
+The narrower hardening is accepted under the user's explicit decision despite causal uncertainty. Both lost hosted restoration/Chrome causes remain unknown. Task 4.4 must renew all nine preparation cohorts and four full acceptance runs on the committed integrated sources, followed by re-archive and full final-head PR CI. PR #2 remains draft and unmerged.
+
+### Task 3.16 — bounded actual Gantt browser shutdown
+
+Renewed series at clean 557983f completed all nine preparation cohorts (54 canonical cases each, 69.151504% median preparation reduction), then full fresh/serial passed 3,370 tests plus five subtests, 16,687/17,079 statements (97.704784%) and all 124 Node cases. Monitored wall time was 2803.367568s; 2,286 migrated preparations totaled 957.787219s. Peak clients 12; zero remaining databases/other clients. Serial/template then failed after 310 passes in 244.66s: the Gantt native browser test exceeded its unchanged 120-second subprocess deadline even though its completed JSON rendering report had already been printed. Raw series is retained in ignored .local/template-performance-20261018-165614 in the managed verification checkout. These are historical checks, not final acceptance after this task.
+
+The earlier partial .local/template-performance-20261018-165240 series stopped after six passing cohorts when an unrelated local build replaced the shared eppm-demo:local tag. Its image-identity assertion correctly blocked promotion. The restarted series used a dedicated eppm-demo:test-performance-557983f tag and the existing EPPM_E2E_APP_IMAGE setting with its immutable image ID. No unrelated Docker image/container was removed. All final comparisons must likewise use a dedicated immutable image.
+
+Diagnosis ranked an unanswered Browser.close, socket closure before acknowledgement and native Python cleanup as possible post-report stalls. A temporary first probe mistakenly filtered notifications with undefined IDs; it was corrected and its result is excluded. The corrected real-browser/database probe suppresses ONLY the matching Browser.close response: rendering report emitted, close requested, acknowledgement dropped, socket closed and browser exited, but finally/native-input closure never reached. The original driver hangs until the probe's 15-second bound (16.58s including setup). The permanent canonical regression then reproduces the same post-report TimeoutExpired at the unchanged 120-second deadline, failing in 121.31s. This confirms the unbounded close-acknowledgement defect at the actual diagnostic call site. The original natural failure did not capture protocol close events, so its exact missing-acknowledgement cause is not claimed as directly observed.
+
+The repair requests close once and requires observed successful browser process exit within the pre-existing 1,000ms shutdown grace period. An acknowledgement alone cannot accept a live browser; nonzero/signal/process errors and persistent children remain failures. Pending/rejected protocol promises do not hold the cleanup path indefinitely. Listeners/timers are removed, and the existing finally block closes the socket, kills a remaining owned browser and closes native-session stdin. Startup deadline, browser sandbox/security flags, real database isolation, the 120-second integration deadline and every original rendering/copy/source assertion remain unchanged. This changes diagnostic tooling only, not application/business/security code.
+
+The corrected instrumented genuine path now records all phases, including actual browser exit, finally entered and native input closed, with return code zero and original source/copy assertions passing (1 case, 6.18s). Ordinary and lost-acknowledgement serial/template cases pass (2 cases, 11.53s). Permanent coverage also includes an ignored Browser.close request: the still-live browser is a failure after 1,000ms, while the real native copy is removed and source remains identical. All 16 benchmark cases pass fresh/serial in 37.06s; benchmark plus ordinary revision peers pass all 32 template/two-worker cases in 30.89s. Twenty focused Node startup/shutdown cases cover pending/rejected acknowledgements, live/failed/already-exited/real children, sanitized errors, invalid bounds and listener cleanup; the complete Node command passes all 134 cases with no fail/cancel/skip/TODO. AST comparison retains every original benchmark assertion. Strict OpenSpec and focused whitespace checks pass.
+
+GitHub read-only inspection also establishes that cboguet83 already merged PR #2 on 2026-10-18 at 11:04:58 UTC with merge commit 664f72a (head 1ec6560). Its source tree equals 1ec6560. The earlier task 3.15 statement that PR #2 remained draft used stale metadata and is superseded. Guard 557983f and this task are follow-up changes. Final delivery will create a new PR after renewed acceptance and re-archive, require full final-head CI/Sonar and await explicit approval before a merge commit. No merge was performed during these follow-ups.
+
+### Task 3.17 — organization view completion and stale duplicate retirement
+
+At clean 20b0fff, series .local/template-performance-20261018-181128 passes all nine cohorts (67.579813% median migrated preparation reduction), then three complete runs with identical 3,372 canonical tests plus five subtests, 97.704784% coverage (16,687/17,079) and all 134 Node cases: fresh/serial 2926.516402s, template/serial 2111.256669s, first template/two-worker 1368.008414s. The first parallel result is 53.254716% below fresh wall time and ends with zero databases/other clients, peak 23 clients. The repeated parallel run fails after 1,364 passes in 789.47s pytest / 791.269387s monitored: test_organization_frames_preserve_state_and_highlight_collapsed_filters[immediate] reads manager highlight CSS after view replacement, but its strict locator matches TWO manager summaries. No earlier pass or performance percentage is promoted as final acceptance after that failure.
+
+Ranked hypotheses were a completion caption preceding old-node retirement, persistent application duplication after completion, and an intentionally nonunique selector. A new controlled parameter delays only the test-owned page tail for one second after its view caption. The original caption-only helper reproduces the identical manager-summary strict-mode failure at the same original CSS assertion in 9.09s: two summaries with different Streamlit classes instead of the expected single highlighted manager. Advancing the caption does not establish completed page rendering/old-node retirement. The ordinary and original delayed-expander parameters remain, with their original IDs.
+
+The shared private helper now receives a ScriptCompletion observer attached before navigation, waits for actual prior/requested successful whole/fragment completion under its existing 10-second bound, retains its advancing-caption check under its existing 30-second bound, and requires a unique caption. Existing frame/detail/summary assertions gain explicit bounded exact-one readiness before strict visibility/highlight checks. There is no last-element fallback, assertion removal, application change or arbitrary sleep in the ordinary flow. The one-second page delay is controlled regression instrumentation only. The dashboard organization helper imports this private helper; dependency inspection found and adapted that caller to pass its own pre-navigation observer while preserving all existing service, keyboard, cascading, matching-count, budget and layout assertions.
+
+Actual verification: canonical shared-filter module passes all four cases in serial/template (36.87s). Shared-filter plus existing completion negative/positive checks pass eight fresh/serial cases (36.24s). A real native page deliberately retaining an extra manager summary after completion still fails the new exact-one assertion with actual count TWO at the 30-second bound; the negative probe passes (37.57s), proving duplicates are not hidden. Canonical shared-filter + ordinary revision peers pass 20 template/two-worker cases (35.62s); after adapting its dashboard caller, both affected browser modules + peers pass all 23 (60.06s). Each ordinary/delayed-expander/delayed-page scenario is repeated three times on separate template databases: nine passes in 89.10s. The adapted dashboard module also passes all three fresh cases (25.38s). AST comparisons preserve every original assertion/expectation in both modules, including expectations inside lambdas. Strict change validation and focused whitespace checks pass. An initial combined temporary repeat command registered fixture plugins twice and executed no tests; it is excluded, and canonical parallel/repeated diagnostic runs were separated.
+
+This fixes the reproduced premature-observation pattern; the original failing run did not record its exact protocol/frame timestamps. Persistent post-completion duplication remains a failure, and missing/early/error acknowledgements remain covered by existing ScriptCompletion regressions. The independently lost hosted restoration/Chrome startup causes remain unproven as recorded in earlier tasks. The change is test-only under the user's standing focused follow-up authorization; business rules, application code, all 71 migrations, diagnostic shutdown code, CI triggers/gates and 95% coverage remain unchanged. All cohorts and four full runs must restart on this separately committed final source, including the repeated optimized run. The renewed harness also fingerprints tracked root application entrypoints, Streamlit config and Docker context rules; the existing immutable 20b0fff application image is reused only after verifying every Docker COPY input is byte-identical, since tests are not copied into that image.
+
+
+## Main integration after PR #4 (task 3.18)
+
+Main advanced to 47897b7 through externally merged reusable-planning-component
+PR #4 while the fca42c8 comparison was running. Preserve ADR 0065, both packages,
+host-owned workflows and all expanded CI gates. Merge without rewriting task
+history. Application and migration bytes match main; no application redesign
+is included. The fca42c8 comparison passed, but is historical for this integration.
+
+The mounted public-renderer harness replaces the old CDP launcher. Adapt the
+approved shutdown regressions using Playwright's public BrowserServer process
+API, a shared 20-second startup budget, loopback binding, bounded actual process
+exit and unconditional native-session/HTTP cleanup. Keep --move-task and all
+upstream assertions. A close acknowledgement alone never accepts a live browser.
+
+Installed-wheel checks must use a genuinely separate interpreter. Python -I
+in the checkout's own virtualenv still exposes editable finder paths; a fresh
+private virtualenv links only third-party dependencies, excludes editable hooks
+and proves checkout packages unavailable before adding the installed artifact.
+Every original source/import-path assertion remains.
+
+Renew acceptance with canonical package/build inputs fingerprinted, a rebuilt
+private application image, root and package JavaScript suites, generated-asset
+checks and unchanged full pytest/OIDC/PostgreSQL/95% coverage gates.
+
+Focused verification before the integration merge:
+
+- Asset assembly and `python -m scripts.build_planning_assets --check`: passed.
+- `node --test tests/test_*.cjs`: 221 passed; package JS: 117 passed.
+- Mounted native benchmark variants plus startup privacy: 4 passed in 20.68s.
+- Controlled cleanup-boundary probe: 2 passed in 24.41s. The old finally
+  structure leaves native stdin open when close raises and hits a 15-second
+  diagnostic timeout; nested finally closes it and retains original data/copy
+  checks. The ordinary 120-second integration deadline is unchanged.
+- Original wheel isolation assertion reproduced without coverage in 1.90s;
+  the separate interpreter preserves that assertion and fixes editable leakage.
+- Packaging, installed consumers, wrapper/example/component models and scheduling:
+  82 passed in 28.17s with focused coverage (288 relative source paths, none
+  external). This is not a claim of full-suite coverage.
+- Final two-worker/template native benchmark, organization, restoration, revisions
+  and startup checks: 48 passed in 110.79s, with no retries or skipped assertions.
+- Application and migrations have no diff against incoming main. All four merge
+  conflicts reconciled; old shutdown/readiness checks and new mounted editing
+  checks retained. User .env.example and Compose edits excluded.
+
+Original hosted restoration and Chrome startup causes remain unknown. These
+focused successes do not establish those causes or replace final acceptance.
+
+
+## Task 4.4 — renewed integrated acceptance at 9ee4836
+
+All nine ABC/BCA/CAB cohorts and all four complete runs passed on identical
+tracked source/package/build inputs and immutable rebuilt application image.
+Fresh/serial: 2706.244404s; template/serial: 2060.796884s; template/two-worker:
+1135.924798s and 1151.056192s. The slower parallel result lowers full wall
+time by 57.466658%; migrated preparation median falls 66.857157%. Both
+unchanged relative targets pass; no absolute seven-minute limit applies.
+
+Every full run passes 3,489 canonical cases plus five subtests, 16,705/17,097
+statements (97.707200%), 221 root and 117 package JavaScript cases and the
+generated-asset check. Audit confirms exactly one successful setup/call/teardown
+per case, identical coverage file/statement/exclusion/missing-line maps, both
+workers doing real work, no required skips/retries/restarts/missing reports and
+zero test databases/other clients at every boundary. Each full run prepares
+2,290 migrated fixtures. Peak client samples remain within the 40-client budget.
+Detailed measurements, versions, sampling limitations and source/image hashes
+are in measurement.md and measurements.json. The raw ignored V13 directory is
+.local/template-performance-20261018-230313 in the managed verification checkout.
+
+Strict validation passes for this change and all nine main specs. The exact
+three delta requirement blocks/seven scenarios already match their main specs.
+Application, all migration bytes and full CI configuration match main 47897b7.
+AST review preserves all original assertions/Playwright expectations in the
+five affected restoration/organization/distribution modules. Changes after
+9ee4836 are evidence and archive lifecycle only. No local Sonar scan is claimed:
+final archived-head automatic hosted CI and SonarCloud remain delivery gates.
+The original hosted restoration/startup causes remain unproven as explicitly
+approved; green local comparisons do not establish those causes.

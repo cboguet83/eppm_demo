@@ -4,10 +4,35 @@ const fs=require('node:fs');
 const path=require('node:path');
 const http=require('node:http');
 const {execFileSync}=require('node:child_process');
-const {browserStartupError}=require('./benchmark_browser.cjs');
+const {browserStartupError,waitForBrowserShutdown}=require('./benchmark_browser.cjs');
 const root=path.resolve(__dirname,'..');
 const localPython=path.join(root,'.venv',process.platform==='win32'?'Scripts/python.exe':'bin/python');
 const python=process.env.EPPM_BENCHMARK_PYTHON || (fs.existsSync(localPython)?localPython:'python');
+
+
+/** Close only this mounted harness's browser process and loopback server.
+ * The process exit, rather than a transport response, establishes completion.
+ * The nested finally blocks retain HTTP cleanup if graceful close or kill fails.
+ * @param {{process: () => import('node:child_process').ChildProcess,
+ *   close: () => Promise<void>, kill: () => Promise<void>} | undefined} browserServer
+ *   Playwright server owning this invocation's Chromium process.
+ * @param {import('node:http').Server} server Private mounted-asset HTTP server.
+ * @returns {Promise<void>} Completes after owned resources close, or propagates failure.
+ */
+async function closePlanningResources(browserServer, server) {
+  try {
+    if(browserServer) await waitForBrowserShutdown(
+      browserServer.process(), () => browserServer.close(),
+    );
+  } finally {
+    try {
+      if(browserServer) await browserServer.kill();
+    } finally {
+      server.closeAllConnections();
+      await new Promise(resolve => server.close(resolve));
+    }
+  }
+}
 
 async function openPlanningBrowser(executable=process.env.EPPM_BENCHMARK_BROWSER) {
   const driver=execFileSync(python,['-c','from pathlib import Path; import playwright; print(Path(playwright.__file__).parent / "driver/package")'],{encoding:'utf8'}).trim();
@@ -24,10 +49,12 @@ async function openPlanningBrowser(executable=process.env.EPPM_BENCHMARK_BROWSER
     });
   });
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
-  let browser;
+  let browser, browserServer;
   try {
     try {
-      browser=await chromium.launch({headless:true,chromiumSandbox:true,timeout:20000,...(executable?{executablePath:executable}:{})});
+      const started=performance.now();
+      browserServer=await chromium.launchServer({headless:true,chromiumSandbox:true,host:'127.0.0.1',timeout:20000,...(executable?{executablePath:executable}:{})});
+      browser=await chromium.connect(browserServer.wsEndpoint(),{timeout:Math.max(1,20000-(performance.now()-started))});
     }catch(error){throw browserStartupError(error);}
     const page=await browser.newPage({viewport:{width:1500,height:1100}});
     const errors=[];page.on('pageerror',error=>errors.push(error.message));
@@ -40,8 +67,12 @@ async function openPlanningBrowser(executable=process.env.EPPM_BENCHMARK_BROWSER
       const sheet=document.createElement('link');sheet.rel='stylesheet';sheet.href='./planning-view/src/workspace/styles.css';
       document.head.append(sheet);await new Promise((resolve,reject)=>{sheet.onload=resolve;sheet.onerror=reject;});
     });
-    return {page,errors,async close(){await browser.close();await new Promise(resolve=>server.close(resolve));}};
-  }catch(error){await browser?.close();await new Promise(resolve=>server.close(resolve));throw error;}
+    return {page,errors,async close(){await closePlanningResources(browserServer,server);}};
+  }catch(error){
+    try{await closePlanningResources(browserServer,server);}
+    catch{console.error('The mounted planning browser also failed during cleanup.');}
+    throw error;
+  }
 }
 
 function fixture({projects=100,tasksPerProject=10,pools=127}={}) {

@@ -5,20 +5,18 @@ from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import os
 from pathlib import Path
-import shutil
 import socket
 import subprocess
 import sys
-import sysconfig
 import tarfile
 from threading import Thread
 import time
 from urllib.error import URLError
 from urllib.request import urlopen
-import venv
 
 import pytest
 
+from tests.planning_distribution_runtime import isolated_installed_runtime
 from tests.test_planning_distributions import planning_artifacts
 
 playwright_api = pytest.importorskip("playwright.sync_api")
@@ -97,21 +95,7 @@ def test_installed_web_example_edits_resources_and_unmount_remount(
 
 def _isolated_runtime(directory: Path, installed: Path) -> tuple[Path, dict[str, str]]:
     """Use installed third-party dependencies without their editable import hooks."""
-    environment_root = directory / "runtime"
-    venv.EnvBuilder(with_pip=False).create(environment_root)
-    dependencies = directory / "site-packages"
-    dependencies.mkdir()
-    for entry in Path(sysconfig.get_path("purelib")).iterdir():
-        if (entry.name.startswith((".", "__editable__", "eppm_demo",
-                                   "streamlit_planning_view"))
-                or entry.name in ("app", "scripts", "tests", "__pycache__")
-                or entry.suffix in (".pth", ".egg-link")):
-            continue
-        (dependencies / entry.name).symlink_to(entry, target_is_directory=entry.is_dir())
-    environment = os.environ.copy()
-    environment["PYTHONPATH"] = os.pathsep.join((str(installed), str(dependencies)))
-    environment["PYTHONDONTWRITEBYTECODE"] = "1"
-    python = environment_root / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    python, environment = isolated_installed_runtime(directory, installed)
     probe = subprocess.run([
         str(python), "-c",
         "import importlib.util,pathlib,streamlit_planning_view as p;"

@@ -101,6 +101,6 @@ async function main() {
     });
     if(harness.errors.length)throw new Error(harness.errors.join('\n'));
     console.log(JSON.stringify(result,null,2));
-  }finally{await harness?.close();child?.stdin.end();}
+  }finally{try{await harness?.close();}finally{child?.stdin.end();}}
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

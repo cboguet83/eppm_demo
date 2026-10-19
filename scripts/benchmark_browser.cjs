@@ -1,4 +1,4 @@
-// Bounded Chromium readiness observation for the native Gantt diagnostic.
+// Bounded Chromium startup and shutdown for native planning diagnostics.
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -108,4 +108,52 @@ function browserStartupError(error) {
   return new Error(`The benchmark browser could not start (${exitStatus(code === undefined ? null : Number(code), signal)}, spawn=${spawn}, diagnostics=${reasons}).`);
 }
 
-module.exports = {waitForBrowserPort, browserStartupError};
+/**
+ * Require a clean owned browser exit even when its close promise never resolves.
+ *
+ * @param {import('node:child_process').ChildProcess} browser Owned Chromium child.
+ * @param {() => Promise<unknown>} requestClose Request one graceful browser close.
+ * @param {{timeoutMs?: number}} options Existing bounded shutdown grace period.
+ * @returns {Promise<void>} Resolves only after successful actual process exit.
+ */
+async function waitForBrowserShutdown(browser, requestClose, {timeoutMs = 1000} = {}) {
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1) {
+    throw new RangeError('Browser shutdown timeout must be positive integer milliseconds.');
+  }
+  const exitError = (code, signal) => new Error(
+    `The benchmark browser failed during shutdown (${exitStatus(code, signal)}).`,
+  );
+  if (browser.exitCode !== null || browser.signalCode !== null) {
+    if (browser.exitCode === 0 && browser.signalCode === null) return;
+    throw exitError(browser.exitCode, browser.signalCode);
+  }
+  let resolveExit, rejectExit, timer, requestRejected = false;
+  const exited = new Promise((resolve, reject) => {
+    resolveExit = resolve;
+    rejectExit = reject;
+  });
+  const onExit = (code, signal) => {
+    if (code === 0 && signal === null) resolveExit();
+    else rejectExit(exitError(code, signal));
+  };
+  const onError = error => rejectExit(new Error(
+    `The benchmark browser shutdown reported a process error (code=${SPAWN_CODES.has(error.code) ? error.code : 'unknown'}).`,
+  ));
+  browser.once('exit', onExit);
+  browser.once('error', onError);
+  try {
+    timer = setTimeout(() => rejectExit(new Error(
+      `The benchmark browser did not exit within ${timeoutMs} milliseconds (close_request_rejected=${requestRejected}).`,
+    )), timeoutMs);
+    // A close acknowledgement is neither required nor sufficient for process exit.
+    // Observe rejection without exposing protocol details or leaving it unhandled.
+    Promise.resolve().then(requestClose).catch(() => { requestRejected = true; });
+    await exited;
+  } finally {
+    clearTimeout(timer);
+    browser.off('exit', onExit);
+    browser.off('error', onError);
+  }
+}
+
+module.exports = {waitForBrowserPort, browserStartupError, waitForBrowserShutdown};

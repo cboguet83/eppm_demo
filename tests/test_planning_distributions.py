@@ -15,6 +15,8 @@ from zipfile import ZipFile
 
 import pytest
 
+from tests.planning_distribution_runtime import isolated_installed_runtime
+
 from scripts.build_planning_assets import (
     AssetError, TARGETS, browser_archive, check_assets, prepare_assets, source_files,
 )
@@ -222,6 +224,7 @@ def test_wheel_installs_outside_checkout_without_editable_paths(
         "--target", str(directory), str(planning_artifacts[artifact]),
     ], cwd=planning_artifacts["directory"], capture_output=True, text=True,
         timeout=45, check=True)
+    python, environment = isolated_installed_runtime(directory, directory)
     package = "app" if artifact.startswith("application") else "streamlit_planning_view"
     relative = ("presentation/assets/components/gantt/planning-view"
                 if artifact.startswith("application") else "frontend")
@@ -239,10 +242,10 @@ assert not any(pathlib.Path(entry).resolve().is_relative_to(source)
                for entry in sys.path if entry)
 """
     result = subprocess.run([
-        sys.executable, "-I", "-c", script, str(directory), package, relative,
+        str(python), "-I", "-c", script, str(directory), package, relative,
         str(ROOT),
-    ], cwd=planning_artifacts["directory"], capture_output=True, text=True,
-        timeout=15)
+    ], cwd=planning_artifacts["directory"], env=environment,
+        capture_output=True, text=True, timeout=15)
     assert result.returncode == 0, result.stderr[-2000:]
 
 
