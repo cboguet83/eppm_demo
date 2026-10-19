@@ -834,7 +834,7 @@ def test_direct_connection_cancels_on_empty_space_and_opens_existing_link(linkin
     source = _connector(page, 'tasks', 'a', 'F')
     source.focus()
     source.click()
-    page.locator('#first [data-mode=Month]').click()
+    page.locator('#first [data-part=timeline-body]').click(position={'x': 850, 'y': 250})
     assert page.evaluate('events.length') == 0
     page.evaluate("""() => instances[0].update({version:1,kind:'patch',scope:'links',revision:'r1',
       dependencies:[{id:'existing',type:'FS',lagDays:0,predecessor:{kind:'task',id:'a'},successor:{kind:'task',id:'b'}}]})""")
@@ -842,4 +842,83 @@ def test_direct_connection_cancels_on_empty_space_and_opens_existing_link(linkin
     source.click()
     _connector(page, 'tasks', 'b', 'S').click()
     expect(page.locator('#first .planning-editor')).to_be_visible()
+    assert page.evaluate('events.length') == 0
+
+
+def test_connection_keyboard_cancellation_revocation_and_remount(linking_page: Page) -> None:
+    """Keyboard completion and cancelled/stale/disposed gestures retain instance isolation."""
+    page = linking_page
+    source = _connector(page, 'tasks', 'a', 'S')
+    source.focus()
+    source.press('Enter')
+    expect(page.locator('#first .planning-connection-preview')).to_be_visible()
+    source.press('Escape')
+    expect(page.locator('#first .planning-connection-preview')).to_be_hidden()
+    assert page.evaluate('events.length') == 0
+    source.press('Space')
+    _connector(page, 'tasks', 'b', 'F').press('Enter')
+    page.wait_for_function('events.length===1')
+    assert page.evaluate('events[0].values.type') == 'SF'
+    page.evaluate("""() => instances[0].update({version:1,kind:'response',scope:'links',revision:'r1',
+      requestId:events[0].requestId,accepted:true})""")
+    expect(page.locator('#first [role=status]')).to_have_text('Dependency created.')
+    source.focus()
+    source.press('Enter')
+    page.evaluate("""() => instances[0].update({version:1,kind:'patch',scope:'links',revision:'r1',capabilities:{edit:false}})""")
+    expect(page.locator('#first .planning-connection-preview')).to_be_hidden()
+    assert page.locator('#first [data-connect]:visible').count() == 0
+    assert page.locator('#second [data-connect]:visible').count() == 0
+    page.evaluate("""() => {instances[0].destroy();instances[0].destroy();instances[0]=mount(document.getElementById('first'),{
+      snapshot:linkSnapshot,today:'2026-01-01',mode:'Month',editEnabled:true,onEvent:e=>events.push(e)});}""")
+    source.focus()
+    source.press('Enter')
+    _connector(page, 'tasks', 'b', 'S').press('Enter')
+    page.wait_for_function('events.length===2')
+
+
+def test_connection_repositions_cancels_on_pointer_and_source_removal(linking_page: Page) -> None:
+    """A layout change retains anchors; cancelling or removing an endpoint emits nothing."""
+    page = linking_page
+    source = _connector(page, 'tasks', 'a', 'F')
+    source.focus()
+    source.click()
+    page.locator('#first [data-mode=Quarter]').dispatch_event('click')
+    expect(page.locator('#first .planning-connection-preview')).to_be_visible()
+    page.locator('#first .planning-view').dispatch_event('pointercancel')
+    expect(page.locator('#first .planning-connection-preview')).to_be_hidden()
+    source.focus()
+    source.press('Enter')
+    page.evaluate("""() => instances[0].update({version:1,kind:'patch',scope:'links',revision:'r1',removeTaskIds:['a']})""")
+    expect(page.locator('#first .planning-connection-preview')).to_be_hidden()
+    assert page.evaluate('events.length') == 0
+
+
+def test_milestone_connectors_and_collapsed_project_targets_are_distinct(linking_page: Page) -> None:
+    """Equal-date bars expose both endpoints and collapsed summaries keep project identity."""
+    page = linking_page
+    page.evaluate("""() => instances[0].update({version:1,kind:'patch',scope:'links',revision:'r1',tasks:[
+      {...linkSnapshot.tasks[0],end:'2026-01-05'}]})""")
+    start, finish = _connector(page, 'tasks', 'a', 'S'), _connector(page, 'tasks', 'a', 'F')
+    start.focus()
+    assert start.bounding_box() != finish.bounding_box()
+    page.locator('#first .planning-frozen-row[data-target-id=two] [data-expand]').click()
+    expect(page.locator('#first .planning-bar[data-target-id=b]')).to_have_count(0)
+    start.focus()
+    start.press('Enter')
+    _connector(page, 'projects', 'two', 'F').press('Space')
+    page.wait_for_function('events.length===1')
+    assert page.evaluate('events[0].values.successor.kind') == 'project'
+
+
+def test_connection_virtualization_cancels_source_and_bounds_connector_count(linking_page: Page) -> None:
+    """A thousand projects retain viewport-sized connector DOM and safe cancellation."""
+    page = linking_page
+    page.evaluate("""() => instances[0].update({version:1,kind:'patch',scope:'links',revision:'r1',
+      projects:Array.from({length:1000},(_,i)=>({id:'extra-'+i,name:'Extra '+i,start:'2026-01-01',end:'2026-02-01'}))})""")
+    source = _connector(page, 'tasks', 'a', 'F')
+    source.focus()
+    source.press('Enter')
+    page.locator('#first [data-part=timeline-body]').evaluate('node=>node.scrollTop=12000')
+    expect(page.locator('#first .planning-connection-preview')).to_be_hidden()
+    assert page.locator('#first [data-connect]').count() < 100
     assert page.evaluate('events.length') == 0

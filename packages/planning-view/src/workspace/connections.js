@@ -11,13 +11,18 @@ export function createConnections({frame,store,actions,lifetime,onStart,onInspec
   const svg=doc.createElementNS(ns,'svg'),path=doc.createElementNS(ns,'path');
   svg.classList.add('planning-connection-preview');svg.append(path);frame.append(svg);
   const status=doc.createElement('span');status.className='planning-connection-status';status.setAttribute('role','status');frame.append(status);
-  let state=null,down=null,consume=false,lastPoint=null;
+  let state=null,down=null,consume=false,lastPoint=null,wasPending=false;
   const controls=()=>[...frame.querySelectorAll('[data-connect]')];
   const bar=node=>node.closest('.planning-bar');
   const target=node=>targetOf(bar(node));
   const labels=()=>store.read().data.labels;
   const enabled=()=>{const {data,view}=store.read();return data.capabilities.createDependencies===true && data.capabilities.edit && view.filters.editEnabled && !view.pendingRequestId;};
-  const cancel=()=>{state=null;down=null;lastPoint=null;svg.style.display='none';frame.classList.remove('planning-connecting');for(const n of controls())n.removeAttribute('data-connect-eligible');};
+  const cancel=()=>{
+    const pointer=down?.id;state=null;down=null;lastPoint=null;svg.style.display='none';
+    if(pointer!==undefined && frame.hasPointerCapture(pointer))frame.releasePointerCapture(pointer);
+    frame.classList.remove('planning-connecting');for(const n of controls())n.removeAttribute('data-connect-eligible');
+    status.textContent=labels().dependencyCancelled || 'Connection cancelled.';
+  };
   const findSource=()=>controls().find(n=>identity(target(n))===identity(state.source) && n.dataset.connect===state.edge);
   const point=node=>{const r=node.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};};
   const draw=()=>{
@@ -70,6 +75,7 @@ export function createConnections({frame,store,actions,lifetime,onStart,onInspec
   },{capture:true});
   lifetime.listen(frame,'click',event=>{
     if(event.target.closest('[data-connect]') || consume){consume=false;event.preventDefault();event.stopImmediatePropagation();return;}
+    if(event.target.closest('.planning-toolbar'))return;
     if(state){cancel();event.preventDefault();event.stopImmediatePropagation();}
   },{capture:true});
   lifetime.listen(frame,'pointercancel',cancel);
@@ -91,7 +97,11 @@ export function createConnections({frame,store,actions,lifetime,onStart,onInspec
       node.dataset.connectEligible=String(!!state && actions.canCreateDependency(state.source,target(node)));
       owner.classList.toggle('planning-connectable',!!visible);
     }
-    if(state)draw();else if(!view.pendingRequestId){svg.style.display='none';status.textContent=view.error ?? '';}
+    if(state)draw();else if(!view.pendingRequestId){
+      svg.style.display='none';
+      if(wasPending)status.textContent=view.error ?? (labels().dependencyCreated || 'Dependency created.');
+    }
+    wasPending=!!view.pendingRequestId;
   };
   lifetime.own(store.subscribe(reason=>{if(reason!=='destroy')render();}));
   lifetime.own(()=>{cancel();svg.remove();status.remove();});

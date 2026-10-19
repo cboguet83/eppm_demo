@@ -21,6 +21,7 @@ export function labelsFor(catalog={}) {
       dependencies_header:'dependencies',btn_add_pred:'addDependency',whole_project_option:'wholeProject'},
     diagnostics:{title:'diagnostics',btn_close:'close'}};
   for(const [section,keys] of Object.entries(sections))for(const [key,target] of Object.entries(keys))if(typeof catalog[section]?.[key]==='string')result[target]=catalog[section][key];
+  for(const key of ['connectStart','connectFinish','chooseDependencyTarget','savingDependency','dependencyCreated','dependencyCancelled'])if(typeof catalog.modal?.[key]==='string')result[key]=catalog.modal[key];
   if(result.showTotal)result.total=result.showTotal;
   if(result.showSelected)result.selected=result.showSelected;
   const commands={project_dependencies:'manage_dependencies',manage_project_pools:'manage_project_pools',manage_task_pools:'assign_resource',

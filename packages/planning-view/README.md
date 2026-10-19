@@ -479,3 +479,11 @@ not been part of the acceptance checks. Contract 1 is the supported protocol;
 package version 0.1.0 does not replace `version:1` in data/events. Unsupported
 contract versions fail explicitly. Keep labels/capabilities in data for upgrades
 that retain applicable interaction state, and destroy instances on host unmount.
+
+Connector keyboard controls use Enter/Space to choose each endpoint and Escape
+to cancel. Hosts can localize `connectStart`, `connectFinish`,
+`chooseDependencyTarget`, `savingDependency`, `dependencyCreated`, and
+`dependencyCancelled`. Only delivered, rendered bars are connection targets;
+scrolling or filtering a source out of the rendered window cancels the gesture.
+Scale/layout changes recompute preview anchors. Creation never loads otherwise
+unrequested schedules or changes configured hydration limits.
