@@ -119,11 +119,11 @@ NUL/non-UTF-8 blobs, symlinks, and deleted executable Markdown. This adds
 document checks without adding a parser/library dependency or weakening any
 existing full gate.
 
-At this point task 4.2 was incomplete: automatic approval review rejected the persistent
-main-protection write pending explicit approval of its exact payload, specifically
-administrator enforcement and disabling force pushes/deletion. The prepared JSON
-is reviewable; no remote settings have changed. A user question is pending while
-unaffected local acceptance work continues.
+At this point task 4.2 was incomplete: automatic approval review rejected the
+persistent main-protection write pending explicit approval of its exact payload,
+specifically administrator enforcement and disabling force pushes/deletion. The
+prepared JSON was reviewable and no remote settings had changed. Local acceptance
+continued while approval was pending; the next section records its resolution.
 
 ## Task 4.2 — effective main protection
 
@@ -147,10 +147,122 @@ identity. See `main-protection-request.json`, `merge-methods-request.json`, and
 Operator inspection and conservative rollback are documented in
 `docs/implementation/pr-ci-operations.md`. No administrative token enters CI.
 
-## Implementation acceptance
+## Task 5.1 — integrated local acceptance
 
-Pending a subsequent user request to apply. This change has not been archived,
-published as a PR, or approved for merging. The planned final acceptance retains
-full tests and at least 95% unchanged application coverage, effective remote
-protection, one commit per task, and explicit approval of the concrete PR before
-a merge commit into main.
+Environment: Python 3.14.7, the existing development/browser dependencies,
+PostgreSQL 18.6 in isolated Compose project `eppm-fast-ci-tests`, two xdist
+workers, migrated templates, and Playwright Chromium. The dedicated credentials
+are ignored under `.local/`; the existing application database was not used.
+The disposable application image was `eppm-demo:fast-ci-tests`, config digest
+`sha256:9c93dda7538111a96a55367feb020d345e44546a15b61d25a7b6a9490dc160b8`.
+The application's `eppm-demo:local` image tag was not changed.
+
+Three sequential `python -m scripts.run_tests fast` runs, with service variables
+absent and automatic pytest plugin loading disabled by the runner:
+
+| Run | Passed | Pytest seconds | Wrapper wall seconds |
+| --- | ---: | ---: | ---: |
+| 1 | 717 | 2.46 | 3.058 |
+| 2 | 717 | 2.29 | 2.801 |
+| 3 | 717 | 2.28 | 2.799 |
+
+Median: 2.29s pytest, 2.801s wall. This is partial feedback from 66 modules,
+not full coverage. The initial 783-case candidate included four modules with
+real CLI/Node subprocesses; their cases remain in the extended/full suite.
+The documented targeted example passed 27 finance cases in 0.05s. Policy and
+Compose matrices passed as recorded above and also ran in full acceptance.
+
+The final local full command exited zero:
+
+```bash
+POSTGRES_TEST_CLIENT_CONTAINER=eppm-fast-ci-tests-postgres-1 \
+EPPM_RUN_OIDC_E2E=1 \
+EPPM_E2E_APP_IMAGE=eppm-demo:fast-ci-tests \
+.venv/bin/python -m dotenv -f .local/fast-ci-tests.env run -- \
+  .venv/bin/python -m scripts.run_tests full
+```
+
+| Required gate | Result |
+| --- | --- |
+| Canonical discovery and strict real PostgreSQL/OIDC/browser execution | 3,581 passed, five subtests passed; 1,078.54s (17m58s) |
+| Application/subprocess statement coverage, threshold 95% | 97.7072%; 16,705 of 17,097 statements, 392 missing |
+| Root JavaScript suite | 221 passed, zero failed/cancelled/skipped |
+| Planning-view JavaScript suite | 117 passed, zero failed/cancelled/skipped |
+| Generated browser assets | Verified |
+| Required/conditional skips, worker crashes or restarts | None |
+| Strict OpenSpec validation | Passed; intentional `skip_specs: true` accepted |
+| Main protection and merge settings | Applied and read back; see task 4.2 |
+| Current main | Fetched again; local/remote divergence 0/0 at `d4a769f` |
+
+Full execution uses all existing tests plus 92 new cases, not the fast inventory.
+No existing assertion/test was deleted or weakened. No application, package,
+migration, dependency or application coverage configuration source changed from
+main. Full collection, security/integrity, scheduling and recovery checks remain.
+
+The accepted runtime/test/CI/build sources are those of `1f77db1`. A SHA-256
+manifest of 852 tracked files was captured before execution and rechecked after
+it, with zero mismatches. Combined source digest:
+`ceb9a72a60a4d00a2302649dfd3d6cc6dad70d42c37368b282f75596f0c45ec9`.
+Subsequent task 4.2, this acceptance task and archive only change evidence/docs
+or remote settings. The full log, coverage export, source manifest and timing
+JSON remain in ignored `.local/fast-ci-*` files; no credentials are committed.
+
+Revised PostgreSQL developer examples now use a dedicated test project, separate
+credentials/client container, and explicit partial `targeted` mode. Fixtures
+migrate disposable databases, so the examples do not migrate the root test
+database or touch an existing application volume. Final Docker inspection shows
+the existing app/database healthy and the disposable browser deployment removed.
+
+### Verification report: fast-local-selective-pr-ci
+
+| Dimension | Status |
+| --- | --- |
+| Completeness | All eight tasks implemented and evidenced; task completion confirmed by OpenSpec after recording this acceptance. Spec coverage: not applicable (`skip_specs: true`). |
+| Correctness | Spec requirement mapping/scenario coverage: not applicable to this tooling-only change. Plan outcomes verified through the runner/policy/Compose regressions, complete local execution and remote read-back above. |
+| Coherence | All five design decisions followed. CLI argument-list execution, focused script boundaries, strict typing, existing pytest/Compose conventions and unchanged application behavior reviewed. |
+
+Design-to-implementation evidence:
+
+- Decision 1: `scripts/run_tests.py`, `scripts/test_inventory.py`,
+  `scripts/fast_test_guard.py`, `tests/suites.json` and the 19 runner regressions
+  enforce explicit partial selection, complete inventory and resource guards.
+- Decision 2: `scripts/full_test_proof.py`, full-mode/config validation and the
+  actual accepted command reconcile independent discovery with both workers;
+  existing strict completion checks and the complete JS/asset gates remain.
+- Decisions 3–4: `scripts/pr_test_policy.py`, the four-job workflow and 51 policy
+  cases cover complete diffs, blob/mode checks, draft/readiness on the same SHA,
+  later/base revisions, metadata/manual isolation, failure/cancellation/missing
+  receipts and strict result aggregation. Actual GitHub protection matches it.
+- Decision 5: optional pgAdmin overlay, scoped volume/service identity and
+  isolated test port replacement are covered by five config cases and actual
+  isolated PostgreSQL startup. Existing application services were preserved.
+
+No critical issues, warnings or suggestions remain in this pre-archive review;
+no applicable verification check was skipped. All applicable checks passed.
+Ready for archive. Product specs are intentionally not applicable, not missing.
+
+### Task-to-commit audit
+
+| Task | Dedicated commit |
+| --- | --- |
+| 1.1 | `0efc23d` |
+| 2.1 | `2af1b6c` |
+| 3.1 | `dc861f9` |
+| 3.2 | `053ab17` |
+| 4.1 | `5151315` |
+| 4.3 | `1f77db1` |
+| 4.2 | `9374039` |
+| 5.1 | Resolve the dedicated `complete task 5.1` subject with `git log main..HEAD --oneline`; a commit cannot contain its own hash. |
+
+The staged/final diffs were inspected and whitespace checks passed. Unrelated
+generated diagnostics under `docs/diagnostics/` remain untracked and preserved.
+The archive has a separate lifecycle commit. No merge is authorized.
+
+### Delivery checks after archive
+
+Hosted full CI and the existing SonarCloud integration must still confirm the
+final PR revision after publication; local success does not replace them. No
+SonarCloud MCP was available for a separate local server analysis, and none is
+claimed. A new failure requires resolution and fresh affected acceptance before
+merge. Present the concrete PR and obtain explicit user approval before using
+a merge commit into main. Automatic merging remains disabled.

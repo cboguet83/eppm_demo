@@ -84,7 +84,7 @@ authorized at creation; the remaining boxes require a subsequent apply request.
 
 ## 5. Integrated acceptance
 
-- [ ] 5.1 On the final implementation revision, verify all plan outcomes and
+- [x] 5.1 On the final implementation revision, verify all plan outcomes and
   record actual commands/results in `verification.md`: repeat fast timings with
   environment/test counts, demonstrate the documented targeted command, run the
   policy/state/result regression matrix, validate all Compose combinations and

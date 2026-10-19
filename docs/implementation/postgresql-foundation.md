@@ -12,15 +12,15 @@ representative browser-load/deployed recovery acceptance remain open.
 Use the project Python 3.14 environment with the pinned requirements installed:
 
 ```powershell
-.venv/Scripts/python.exe -m scripts.configure_postgresql
-docker compose --env-file .local/postgresql.env -f docker-compose.postgresql.yml -f docker-compose.postgresql-test.yml up -d --wait postgres
-.venv/Scripts/python.exe -m scripts.postgresql_admin --env-file .local/postgresql.env --url-variable POSTGRES_TEST_ADMIN_URL provision
-.venv/Scripts/python.exe -m scripts.postgresql_admin --env-file .local/postgresql.env --url-variable POSTGRES_TEST_ADMIN_URL migrate
-.venv/Scripts/python.exe -m scripts.postgresql_admin --env-file .local/postgresql.env --url-variable POSTGRES_TEST_ADMIN_URL configure-security
-.venv/Scripts/python.exe -m dotenv -f .local/postgresql.env run -- .venv/Scripts/python.exe -m pytest -q --tb=short -p no:cacheprovider tests/postgresql
+.venv/Scripts/python.exe -m scripts.configure_postgresql --output .local/workflow-tests.env
+docker compose --project-name eppm-workflow-tests --env-file .local/workflow-tests.env -f docker-compose.postgresql.yml -f docker-compose.postgresql-test.yml up -d --wait postgres
+.venv/Scripts/python.exe -m scripts.postgresql_admin --env-file .local/workflow-tests.env --url-variable POSTGRES_TEST_ADMIN_URL provision
+$env:POSTGRES_TEST_CLIENT_CONTAINER = 'eppm-workflow-tests-postgres-1'
+.venv/Scripts/python.exe -m dotenv -f .local/workflow-tests.env run -- .venv/Scripts/python.exe -m scripts.run_tests targeted tests/postgresql
 ```
 
-The generator exclusively creates `.local/postgresql.env` and refuses overwrite.
+Reuse an existing test environment file; omit generation on subsequent runs.
+The generator exclusively creates the requested ignored file and refuses overwrite.
 It generates separate operator and runtime passwords and a 256-bit
 `DATABASE_CONTEXT_KEY` without printing them. Existing configuration created
 before actor binding needs that additional deployment-managed key. The
@@ -28,8 +28,13 @@ before actor binding needs that additional deployment-managed key. The
 it never generates a replacement implicitly. Key rotation takes effect on
 subsequent transaction snapshots and requires coordinated server configuration.
 The operator URL is supplied explicitly to commands; runtime configuration never
-falls back to it. The test overlay exposes PostgreSQL only on loopback port 15432;
-omit that overlay for internal-network-only deployment.
+falls back to it. The test overlay replaces development port 5434 with loopback
+port 15432. Always use a dedicated test project and credentials; never apply
+the test overlay to the application's existing Compose project. These commands
+provide partial PostgreSQL feedback, not full acceptance. The fixtures migrate
+their disposable databases themselves. Use the [development workflow's full
+preparation and command](../development-workflow.md#3-verify-before-archive)
+for complete PostgreSQL/OIDC/browser, JavaScript and 95% coverage acceptance.
 
 The official PostgreSQL image creates the initial operator role for cluster
 administration. `provision` explicitly creates `eppm_runtime` (nonlogin group)
