@@ -138,3 +138,35 @@ def test_progress_is_copied_then_edited_and_activated_independently(authorized):
     plans.activate_alternative(1, alternative.id, alternative.revision)
     assert plans.current_content(1).tasks[0]['progress_pct'] == 100
     assert next(row for row in plans.list_plans(1) if row.id == current.id).content.tasks[0]['progress_pct'] == 50
+
+
+def test_direct_link_alternative_append_preserves_live_schedule_and_rejects_stale_revision(
+    authorized, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The real plan service appends to the selected alternative only, under revision checks."""
+    from unittest.mock import Mock
+    from app.presentation.pages import planning_alternative_editor as editor
+    from app.presentation.components.planning_events import validate_event
+
+    plans = service(authorized, 4)
+    current = plans.initialize(1)
+    content = deepcopy(current.content)
+    content.tasks = [draft_task(-1, 'First'), draft_task(-2, 'Second')]
+    alternative = plans.save(1, current.id, current.revision, 'Link option', content)
+    first, second = [row['id'] for row in alternative.content.tasks]
+    state = {'planning_edit_enabled': True, 'planning_alternatives': {1: alternative.id}}
+    monkeypatch.setattr(editor.st, 'session_state', state)
+    monkeypatch.setattr(editor.st, 'toast', lambda *args, **kwargs: None)
+    event = validate_event(dict(action='alternative_action', operation='create_dependency',
+                                project_id=1, plan_id=alternative.id, revision=alternative.revision,
+                                task_id=second, predecessor_task_id=first, predecessor_project_id=None,
+                                link_type='SF', lag_days=0, source_tokens={'1': 'display-source'}))
+    editor.handle_alternative_action(event, Mock(plans=plans))
+    saved = next(row for row in plans.list_plans(1) if row.id == alternative.id)
+    assert saved.content.dependencies == [dict(task_id=second, predecessor_task_id=first,
+                                               predecessor_project_id=None, link_type='SF', lag_days=0)]
+    assert next(row for row in plans.list_plans(1) if row.is_current).content == current.content
+    assert authorized.query('SELECT * FROM eppm.current_task_dependencies') == []
+    with pytest.raises(ValueError, match='plan changed'):
+        editor.handle_alternative_action(event, Mock(plans=plans))
+    assert len(next(row for row in plans.list_plans(1) if row.id == alternative.id).content.dependencies) == 1

@@ -155,6 +155,21 @@ handles an own `__proto__` key without changing the result's prototype.
 
 ## Source and verification boundaries
 
+Direct endpoint linking is explicitly enabled by EPPM's adapter. A completed
+gesture emits one dependency creation intention; `eppm-contract.js` maps it to
+`create_dependency`, preserving both endpoint source tokens and successor
+ownership. Python validates identities, zero lag, type, and source tokens before
+the application service appends. The callback deduplicates reruns by nonce and
+refreshes authoritative chart data; failures return through the existing safe
+adapter error path. Existing links and dates are preserved.
+
+Comparison creation uses `alternative_action` with operation
+`create_dependency` and the captured successor plan revision. It appends to the
+selected alternative's authoritative content and reuses normal reference and
+permission validation. The current schedule and baseline stay unchanged.
+Accepted links remain accessible through dependency inspection and the existing
+successor task or project dependency editor for later type/signed-lag changes.
+
 See [package assembly](planning-component-packaging.md) for deterministic browser,
 wheel, source-distribution and Docker resources. EPPM's small host modules/styles
 are also included in root wheels and source distributions; generated shared

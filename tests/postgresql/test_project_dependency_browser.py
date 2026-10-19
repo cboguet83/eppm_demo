@@ -117,3 +117,38 @@ def test_project_menu_panel_saves_cancels_and_retains_stale_drafts_without_step_
             page.screenshot(path=str(tmp_path / 'project-dependencies.png'), full_page=True)
         finally:
             browser.close()
+
+
+def test_direct_project_link_creates_immediately_and_edits_type_lag_in_existing_panel(links, tmp_path) -> None:
+    """Authenticated chart linking persists once, then reuses the project dependency editor."""
+    with psycopg.connect(links.setup.operator_url) as connection:
+        connection.execute("UPDATE eppm.project SET status='In Progress'")
+    app = _APP.replace("[1])", "[1, 2])")
+    with native_server(links, tmp_path, app, user_id=1) as server, sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            page = server.new_page(browser, viewport={'width': 1700, 'height': 1200})
+            page.goto(server.origin)
+            frame = page.frame_locator('iframe[title*="interactive_gantt"]')
+            frame.get_by_role('checkbox', name=re.compile('Enable edit mode')).check(timeout=40000)
+            source = frame.locator('.planning-bar[data-target-kind=projects][data-target-id="2"] [data-connect=F]')
+            target = frame.locator('.planning-bar[data-target-kind=projects][data-target-id="1"] [data-connect=S]')
+            source.focus()
+            source.press('Enter')
+            target.press('Enter')
+            expect(frame.locator('.planning-connection-preview')).to_be_hidden(timeout=20000)
+            # The rerun supplies authoritative data without requiring an initial form save.
+            frame.locator('.planning-frozen-row[data-target-kind=projects][data-target-id="1"]').click(button='right')
+            frame.get_by_role('menuitem', name='Manage dependencies', exact=True).click()
+            editor = frame.locator('[data-part=project-dependency-editor]')
+            expect(editor.locator('[data-field=lagDays]')).to_have_value('0', timeout=20000)
+            assert links.query('SELECT project_id,predecessor_project_id,link_type,lag_days FROM eppm.project_dependency', user_id=4) == [(1, 2, 'FS', 0)]
+            expect(editor.locator('button[type=submit]')).to_be_enabled(timeout=15000)
+            expect(editor.get_by_role('combobox', name='Predecessor', exact=True)).to_be_enabled(timeout=15000)
+            editor.locator('[data-field=type]').select_option('SS')
+            editor.locator('[data-field=lagDays]').fill('-2')
+            editor.locator('button[type=submit]').click()
+            expect(editor).to_be_hidden(timeout=20000)
+            assert links.query('SELECT link_type,lag_days FROM eppm.project_dependency', user_id=4) == [('SS', -2)]
+        finally:
+            browser.close()

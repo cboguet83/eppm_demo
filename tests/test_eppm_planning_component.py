@@ -63,3 +63,24 @@ def test_failed_edit_callback_provides_a_correlated_browser_rejection(
         workspace.planning.update_dates.assert_called_once()
     else:
         scenario.assert_called_once()
+
+
+@pytest.mark.parametrize('rejected', [False, True])
+def test_direct_link_callback_appends_once_and_refreshes_authoritative_data(
+    monkeypatch: pytest.MonkeyPatch, rejected: bool,
+) -> None:
+    """A repeated rerun cannot duplicate the append; safe errors reach the adapter."""
+    event = dict(action='create_dependency', project_id=1, task_id=7,
+                 predecessor_task_id=None, predecessor_project_id=2,
+                 link_type='FS', lag_days=0, source_tokens={'1': 'a', '2': 'b'}, nonce='create-link')
+    state = {'instance': event, 'planning_edit_enabled': True, 'planning_chart_snapshot': {'old': True}}
+    workspace = Mock()
+    if rejected:
+        workspace.planning.create_dependency.side_effect = ValueError('Source changed.')
+    monkeypatch.setattr(planning.st, 'session_state', state)
+    planning._handle_gantt_component_change('instance', workspace)
+    planning._handle_gantt_component_change('instance', workspace)
+    workspace.planning.create_dependency.assert_called_once_with(
+        1, 7, dict(predecessor_task_id=None, predecessor_project_id=2, link_type='FS', lag_days=0), {1: 'a', 2: 'b'})
+    assert 'planning_chart_snapshot' not in state
+    assert state.get('planning_step_form_error') == ('Source changed.' if rejected else None)

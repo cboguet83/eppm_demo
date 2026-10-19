@@ -178,3 +178,21 @@ test('EPPM callback loading uses the queued bridge and returns correlated canoni
   const {createPlanningStore}=await import('../packages/planning-view/src/state/store.js');
   const store=createPlanningStore({...initial.snapshot,revision:'r2'});assert.equal(store.update(stale),false);assert.equal(store.read().data.tasks.length,0);
 });
+
+test('direct dependency creation carries successor ownership, both sources and alternative revision',async()=>{
+  const {eventFor,snapshotFor}=await contracts,host={...fixture(),task_source_tokens:{1:'own',2:'predecessor'}};
+  const event={type:'dependency',operation:'create',targetKind:'tasks',targetId:'7',requestId:'link',
+    context:{projectId:'1',planRevision:4},values:{type:'SF',lagDays:0,
+      predecessor:{kind:'task',id:'8',projectId:'2'},successor:{kind:'task',id:'7',projectId:'1'}}};
+  assert.equal(snapshotFor(host).capabilities.createDependencies,true);
+  const wire=eventFor(event,host,['1','2']);
+  assert.equal(wire.action,'create_dependency');assert.equal(wire.task_id,7);assert.equal(wire.predecessor_task_id,8);
+  assert.equal(wire.link_type,'SF');assert.equal(wire.lag_days,0);assert.deepEqual(wire.source_tokens,{'1':'own','2':'predecessor'});
+  host.alternatives={1:{id:21,revision:5}};
+  const alternative=eventFor({...event,overlayId:'alternative:21'},host);
+  assert.equal(alternative.action,'alternative_action');assert.equal(alternative.operation,'create_dependency');
+  assert.equal(alternative.revision,4);assert.equal(alternative.plan_id,21);
+  const project=eventFor({...event,targetKind:'projects',targetId:'1',values:{...event.values,successor:{kind:'project',id:'1'}}},host);
+  assert.equal(project.task_id,null);
+  assert.throws(()=>eventFor(event,{...host,task_source_tokens:{}}),/dependencySources/);
+});

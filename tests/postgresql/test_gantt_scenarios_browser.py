@@ -420,3 +420,41 @@ def test_alternative_context_edits_dependencies_hide_reload_and_confirm_activati
             expect(page.get_by_test_id('stException')).to_have_count(0)
         finally:
             browser.close()
+
+
+def test_direct_task_link_in_alternative_persists_without_changing_live_tasks(authorized, tmp_path) -> None:
+    """Authenticated alternative linking targets stable task IDs and the selected revision."""
+    plans = service(authorized, 4)
+    current = plans.initialize(1)
+    content = deepcopy(current.content)
+    content.tasks = [draft_task(-1, 'Source', '2027-01-01', '2027-01-05'),
+                     draft_task(-2, 'Target', '2027-01-10', '2027-01-20')]
+    alternative = plans.save(1, current.id, current.revision, 'Link option', content)
+    with psycopg.connect(authorized.setup.operator_url) as connection:
+        connection.execute("UPDATE eppm.project SET status='In Progress'")
+    with native_server(authorized, tmp_path, _APP, user_id=4) as server, sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            page = server.new_page(browser, viewport={'width': 1700, 'height': 1200})
+            page.goto(server.origin)
+            frame = page.frame_locator('iframe[title*="interactive_gantt"]')
+            frame.get_by_role('checkbox', name=re.compile('Enable edit mode')).check(timeout=40000)
+            display_alternative(page, frame, 'Link option')
+            bars = frame.locator('.planning-bar[data-lane=alternative][data-target-kind=tasks]')
+            expect(bars).to_have_count(2)
+            source, target = bars.nth(0).locator('[data-connect=F]'), bars.nth(1).locator('[data-connect=S]')
+            source.focus()
+            source.press('Enter')
+            target.press('Enter')
+            expect(frame.locator('.planning-connection-preview')).to_be_hidden(timeout=20000)
+            # Rerendered plan diagnostics become inspectable after the authoritative update.
+            expect(frame.locator('.planning-link')).to_be_attached(timeout=20000)
+            with psycopg.connect(authorized.setup.operator_url) as connection:
+                saved = read_plans(connection, [alternative.id])[alternative.id]
+            assert len(saved.dependencies) == 1
+            assert saved.dependencies[0]['lag_days'] == 0
+            assert saved.dependencies[0]['link_type'] == 'FS'
+            assert authorized.query('SELECT * FROM eppm.current_task_dependencies') == []
+            assert authorized.query('SELECT * FROM eppm.current_project_task') == []
+        finally:
+            browser.close()

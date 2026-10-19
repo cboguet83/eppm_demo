@@ -161,7 +161,7 @@ export function snapshotFor(args) {
   while(pending.length){const node=pending.pop();if(groupId!==null && id(node.context.groupId)===id(filter.group_id))groupId=node.id;for(const child of node.children ?? [])pending.push(child);}
   return ownMessage({version:1,kind:'snapshot',scope:args.view_scope ?? args.scope_token,revision:args.task_revision,projects:patch.projects,tasks:patch.tasks,dependencies:patch.dependencies,
     resources:(args.resource_pools ?? []).map(pool=>resourceFor(pool,args.alternative_pool_usage,args.permissions)),hierarchy,
-    overlays:overlaysFor(args),loadedProjectIds:(args.loaded_project_ids ?? []).map(id),capabilities:{edit:true,select:true,clearResourceFilter:!!filter},labels:labelsFor(args.translations),
+    overlays:overlaysFor(args),loadedProjectIds:(args.loaded_project_ids ?? []).map(id),capabilities:{edit:true,select:true,createDependencies:true,clearResourceFilter:!!filter},labels:labelsFor(args.translations),
     choiceProjects:(args.all_projects ?? args.project_summaries).map(row=>({id:id(row.id),name:row.name})),
     resourceFilter:filter?{...(filter.pool_id?{resourceId:id(filter.pool_id)}:{groupId}),name:filter.pool_name ?? filter.name ?? '',
       ...(filter.start_date && filter.end_date?{start:filter.start_date,end:filter.end_date}:{}),clearAction:'clear_resource_pool_filter'}:null,
@@ -184,6 +184,18 @@ export function eventFor(event,host,loaded=[]) {
   const context=event.context ?? {},project=context.projectId ?? (event.targetKind==='projects'?event.targetId:null);
   const plan=event.overlayId?.startsWith('alternative:') || event.type==='command'?(host.alternatives ?? {})[project]:null;
   const base={nonce:event.requestId,scope_token:host.scope_token,loaded_project_ids:loaded.map(Number)};
+  if(event.type==='dependency' && event.operation==='create') {
+    const values=event.values,predecessor=values.predecessor;
+    const owners=[project,predecessor.projectId ?? (predecessor.kind==='project'?predecessor.id:null)];
+    if(owners.some(owner=>owner==null || typeof host.task_source_tokens?.[owner]!=='string'))throw new ContractError('eppm.dependencySources');
+    return {...base,action:plan?'alternative_action':'create_dependency',project_id:Number(project),
+      task_id:event.targetKind==='tasks'?Number(event.targetId):null,
+      predecessor_task_id:predecessor.kind==='task'?Number(predecessor.id):null,
+      predecessor_project_id:predecessor.kind==='project'?Number(predecessor.id):null,
+      link_type:values.type,lag_days:values.lagDays,
+      source_tokens:Object.fromEntries(owners.map(owner=>[owner,host.task_source_tokens[owner]])),
+      ...(plan?{operation:'create_dependency',plan_id:plan.id,revision:context.planRevision}: {})};
+  }
   if(event.type==='load')return {...base,action:'load_project_tasks',project_ids:event.projectIds.map(Number),revision:event.revision};
   if(event.type==='dates')return {...base,action:plan?'update_alternative_dates':'update_dates',id:Number(event.targetId),start_date:event.start,end_date:event.end,
     ...(plan?{project_id:Number(project),plan_id:plan.id,revision:context.planRevision}: {})};
