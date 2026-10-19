@@ -55,6 +55,22 @@ task's commit and actual validation evidence here.
 - pgAdmin image pinned to 9.18, verified against its official container docs;
   only config resolution was tested, without starting the optional tool.
 
+## Task 3.1 — explicit partial feedback
+
+- `python -m pytest -q tests/test_local_test_runner.py`: 19 passed in 0.83s.
+  Tests cover complete inventory accounting, new module/case behavior, unsafe
+  selections, propagation of child failure, and actual guarded subprocess
+  attempts at database/network/container work in isolated pytest sessions.
+- `python -m scripts.run_tests fast`: 717 passed in 2.43s with guarded resource
+  creation, cleaned inherited credentials, no service prerequisites, no browser
+  or container calls, and no coverage claim. 66 candidate modules remain fast;
+  four modules with actual CLI/Node subprocesses are explicitly extended rather
+  than exempted from resource guards. All their cases remain in full discovery.
+- `python -m scripts.run_tests targeted tests/test_finance.py`: 27 passed in
+  0.05s; dry-run labels partial scope and never executes commands.
+- No test/assertion was removed. The fast inventory is maintained in
+  `tests/suites.json`; full tests retain their existing discovery.
+
 ## Implementation acceptance
 
 Pending a subsequent user request to apply. This change has not been archived,

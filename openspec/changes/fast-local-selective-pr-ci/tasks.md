@@ -29,7 +29,7 @@ authorized at creation; the remaining boxes require a subsequent apply request.
 
 ## 3. Local feedback and full acceptance entry points
 
-- [ ] 3.1 Add the maintained, audited fast-suite inventory and
+- [x] 3.1 Add the maintained, audited fast-suite inventory and
   `python -m scripts.run_tests fast` / `targeted <paths-or-nodeids...>` commands,
   with explicit partial-result summaries and a command-listing/dry-run mode.
   Include meaningful runner/inventory regressions for path validation, command

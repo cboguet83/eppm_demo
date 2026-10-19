@@ -140,6 +140,26 @@ resets or supplies operator credentials. A host process uses
 through its environment.
 
 ### 4. Run Automated Tests
+For routine editing, use explicit partial feedback from an activated Python
+3.14 environment with `.[dev]` installed:
+
+```bash
+python -m scripts.run_tests fast
+python -m scripts.run_tests targeted tests/test_finance.py
+python -m scripts.run_tests fast --dry-run
+```
+
+Fast mode uses the audited inventory in `tests/suites.json`, without coverage
+or database/browser/container services. It guards real service/process creation
+and reports partial scope. The current inventory includes 66 modules; four
+candidate modules with real CLI/Node subprocesses stay in the extended/full
+suite. Adding test cases inside a listed module needs no inventory edit; new
+modules must be classified exactly once as `fast` or `extended`. Full pytest
+discovery always includes both categories. Targeted mode accepts explicit test
+paths/node IDs and needs the normal isolated prerequisites for those tests.
+Neither partial mode is full acceptance or the 95% application coverage gate.
+Unset `PYTEST_ADDOPTS`; the runner does not accept hidden selection options.
+
 Prepare isolated PostgreSQL test credentials and the test service as described in
 the [PostgreSQL foundation guide](docs/implementation/postgresql-foundation.md).
 Run database tests with the restricted runtime role and separate fixture setup
