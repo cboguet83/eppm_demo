@@ -168,9 +168,9 @@ and a current `eppm-demo:local` image for authenticated browser tests.
 
 ```powershell
 # Run against the isolated PostgreSQL test environment
-$env:POSTGRES_TEST_CLIENT_CONTAINER = 'eppm_demo-postgres-1'
+$env:POSTGRES_TEST_CLIENT_CONTAINER = 'eppm-workflow-tests-postgres-1'
 $env:EPPM_RUN_OIDC_E2E = '1'
-python -m dotenv -f .local/postgresql.env run -- python -m scripts.run_tests full
+python -m dotenv -f .local/workflow-tests.env run -- python -m scripts.run_tests full
 
 # Component-only feedback (both suites also run in full mode)
 node --test tests/*.cjs
@@ -178,12 +178,25 @@ node --test tests/*.cjs
 
 ---
 
-GitHub Actions runs the full suite automatically on every pull request, including
-PostgreSQL, authenticated browser, JavaScript, and 95% application coverage checks.
-Manual runs remain available under **Actions → Application and PostgreSQL checks
-→ Run workflow**. The strict pytest option rejects missing PostgreSQL/browser
-prerequisites or collection and fails required skips; ordinary partial local
-runs can omit it.
+Use draft PRs while iterating locally. GitHub Actions selects feedback as follows:
+
+| PR state/change | Checks |
+| --- | --- |
+| Draft code PR | Fast Python, both JavaScript suites, asset consistency |
+| Ready code PR or a later ready revision | Full PostgreSQL/browser suite, ≥95% application coverage, both JavaScript suites and assets |
+| Allowlisted prose only | Complete-diff policy and inventory checks |
+| Test/CI policy change or unavailable diff | Full acceptance, including drafts |
+
+The required `tests` merge gate deliberately stays unsuccessful for partial
+draft feedback, with a deferral message; the separate feedback job can pass.
+Marking ready triggers the full suite even without a new commit. Every later
+ready code revision needs fresh full acceptance. Unknown/mixed files count as
+code; selection never removes tests from the full suite. Obsolete PR runs are
+cancelled. Title/body-only edits and manual diagnostics use separate check names
+and cannot replace acceptance. Standalone full runs remain available under
+**Actions → Application and PostgreSQL checks → Run workflow**. SonarCloud
+integration remains in place. Effective GitHub main protection must require
+`tests` and an up-to-date branch; local documentation alone does not enforce it.
 
 The full runner uses two audited workers and migrated templates, reconciles
 execution against an independently collected canonical manifest, and then runs

@@ -323,6 +323,7 @@
     "tests/test_planning_streamlit_browser.py",
     "tests/test_portfolio_layout_browser.py",
     "tests/test_portfolio_project_modal.py",
+    "tests/test_pr_test_policy.py",
     "tests/test_project_dialog_performance.py",
     "tests/test_project_form_browser.py",
     "tests/test_resource_grid_headers.py",

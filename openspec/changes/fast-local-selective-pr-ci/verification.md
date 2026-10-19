@@ -86,6 +86,25 @@ task's commit and actual validation evidence here.
 - README and the development workflow now document the shared full entry point.
   Real complete integration acceptance remains task 5.1, not this focused check.
 
+## Task 4.1 — selective feedback and strict merge gate
+
+- Policy/state/result/transport regressions: 44 passed in 0.14s. Includes real
+  Git merge-parent and JSON job-transport checks, rename/deletion origins and
+  350 added files, same-SHA readiness, draft conversion, changed base, missing
+  results, all unsuccessful required results, and stale execution receipts.
+- Combined Compose/local/full/policy regression pass before the final added
+  real-Git transport case: 84 passed in 3.06s. The final policy module was rerun
+  after its additions and passed all 44 cases.
+- Workflow YAML parsed with the existing system PyYAML validator; checked
+  events, exact dependency graph, read-only permissions and cancellation. No
+  validator/project dependency was added. GitHub's context reference confirms
+  needs outputs are available for job display names; manual/metadata contexts
+  do not replace `tests`, and metadata has a separate concurrency key.
+- README and delivery policy describe partial draft deferral, full ready-code
+  acceptance, allowlisted prose, automatic later revision checks, manual
+  diagnostics, cancellation, and source-bound gate evidence. SonarCloud
+  integration and full-suite/coverage scope remain unchanged.
+
 ## Implementation acceptance
 
 Pending a subsequent user request to apply. This change has not been archived,

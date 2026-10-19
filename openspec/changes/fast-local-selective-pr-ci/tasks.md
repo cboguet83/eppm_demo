@@ -50,7 +50,7 @@ authorized at creation; the remaining boxes require a subsequent apply request.
 
 ## 4. Selective PR feedback with enforceable merge acceptance
 
-- [ ] 4.1 Implement the complete-diff policy helper and selective PR workflow
+- [x] 4.1 Implement the complete-diff policy helper and selective PR workflow
   from design decisions 3–4: audited prose exemption, fast draft feedback,
   automatic full checks for ready code revisions, forced full checks for policy
   changes/uncertain diffs, manual diagnostic isolation, obsolete-run cancellation,
