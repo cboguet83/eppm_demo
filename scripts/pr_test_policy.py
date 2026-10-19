@@ -1,6 +1,7 @@
 """Select PR feedback and reject incomplete or stale merge acceptance evidence."""
 
 import argparse
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
 import hashlib
 import json
@@ -21,6 +22,7 @@ POLICY_PATHS = frozenset({
     "docs/development-workflow.md", "tests/test_test_scheduling.py",
     "tests/test_local_test_runner.py", "tests/test_full_test_runner.py",
     "tests/test_pr_test_policy.py",
+    "tests/test_ci_full_proof.py",
 })
 
 
@@ -67,7 +69,7 @@ class Decision:
     @property
     def context(self) -> str:
         """Return the only permitted check name for this event's evidence."""
-        return {"manual": "manual acceptance", "metadata": "metadata checks"}.get(
+        return {"manual": "manual acceptance"}.get(
             self.lane, "tests",
         )
 
@@ -261,7 +263,10 @@ def _plain_blob(mode: str, blob: str, checked: set[str], root: Path) -> bool:
     return plain
 
 
-def accept(needs: dict[str, object], tested_sha: str) -> Decision:
+def accept(
+    needs: dict[str, object], tested_sha: str,
+    metadata_verifier: Callable[[Decision], None] | None = None,
+) -> Decision:
     """Require every selected job, matching identity, and complete code acceptance.
 
     Raises:
@@ -277,17 +282,28 @@ def accept(needs: dict[str, object], tested_sha: str) -> Decision:
         raise ValueError("Stale policy revision.")
     selected = {"full": "full", "manual": "full", "feedback": "feedback"}.get(decision.lane)
     for name in ("full", "feedback"):
-        job = _mapping(needs[name])
-        expected = "success" if name == selected else "skipped"
-        if job.get("result") != expected:
-            raise ValueError("A job result differs from the selected policy.")
-        if name == selected:
-            outputs = _mapping(job.get("outputs"))
-            if outputs.get("sha") != tested_sha or outputs.get("decision_digest") != decision.digest:
-                raise ValueError("Missing or stale execution identity receipt.")
+        _accept_job(name, needs[name], selected, decision, tested_sha)
     if decision.lane == "feedback":
         raise ValueError("Full acceptance deferred until the code PR is ready for review.")
+    if decision.lane == "metadata":
+        if metadata_verifier is None:
+            raise ValueError("Metadata acceptance requires verified full proof.")
+        metadata_verifier(decision)
     return decision
+
+
+def _accept_job(
+    name: str, value: object, selected: str | None, decision: Decision, tested_sha: str,
+) -> None:
+    job = _mapping(value)
+    expected = "success" if name == selected else "skipped"
+    if job.get("result") != expected:
+        raise ValueError("A job result differs from the selected policy.")
+    if name != selected:
+        return
+    outputs = _mapping(job.get("outputs"))
+    if outputs.get("sha") != tested_sha or outputs.get("decision_digest") != decision.digest:
+        raise ValueError("Missing or stale execution identity receipt.")
 
 
 def _outputs(values: dict[str, str]) -> None:
@@ -307,6 +323,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--event", type=Path)
     parser.add_argument("--event-name")
     parser.add_argument("--sha", default=os.environ.get("GITHUB_SHA", ""))
+    parser.add_argument("--record", type=Path)
     arguments = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     try:
@@ -320,7 +337,11 @@ def main(argv: list[str] | None = None) -> int:
             _outputs({"sha": decision.tested_sha, "decision_digest": decision.digest})
         else:
             needs = _mapping(json.loads(os.environ.get("EPPM_TEST_NEEDS", "")))
-            decision = accept(needs, arguments.sha)
+            decision = accept(needs, arguments.sha, _verify_metadata)
+        if arguments.record is not None:
+            from scripts.ci_full_proof import record
+
+            record(arguments.record, arguments.operation, decision, os.environ)
         LOGGER.info("%s: %s (%s)", decision.context, decision.lane, decision.reason)
         return 0
     except ValueError as error:
@@ -329,6 +350,13 @@ def main(argv: list[str] | None = None) -> int:
     except (OSError, subprocess.SubprocessError):
         LOGGER.error("CI proof rejected; no complete current acceptance was established.")
         return 1
+
+
+def _verify_metadata(decision: Decision) -> None:
+    from scripts.ci_full_proof import verify_metadata
+
+    verify_checkout(decision, ROOT)
+    verify_metadata(decision, os.environ)
 
 
 def _plan(event_path: Path | None, event_name: str, sha: str) -> Decision:
@@ -347,6 +375,9 @@ def _plan(event_path: Path | None, event_name: str, sha: str) -> Decision:
         except (ValueError, subprocess.SubprocessError):
             LOGGER.warning("Complete diff unavailable; requiring full acceptance.")
     decision = decide(event, event_name, sha, changed)
+    if decision.lane == "metadata" and _select_lane(changed, decision.draft)[0] == "docs":
+        decision = Decision("docs", "prose-only", sha, decision.head_sha,
+                            decision.base_sha, decision.pr_number, decision.draft)
     if decision.lane == "docs":
         try:
             if plain_prose_diff(decision.base_sha, decision.head_sha, ROOT):

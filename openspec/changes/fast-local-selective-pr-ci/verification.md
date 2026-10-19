@@ -29,6 +29,41 @@ without changing its prior evidence. The shared checkout's Gantt work is
 untouched. Tasks 1.2, 4.4 and 5.2 track this approved extension separately;
 prior completed tasks retain their commits and historical evidence below.
 
+### Tasks 1.2 and 4.4 — metadata proof correction
+
+Task 1.2 is committed as `cb93d27`. Strict OpenSpec validation passed after
+the approved proposal/design/task revision. Decision 6 supersedes the former
+metadata-context rule; all other acceptance and protection rules remain.
+
+Before implementation, the new metadata regression failed because the context
+was `metadata checks` rather than required `tests`. It passes after the fix.
+The actual gate CLI now reaches bounded read-only proof validation. Its 45
+isolated proof cases cover exact identities, latest failed/pending attempts,
+readiness, complete job graphs, missing/expired/corrupt/ambiguous artifacts,
+digest validation, pagination, transport limits and authorization-free signed
+download redirects. Manual diagnostics and partial results cannot qualify.
+
+Final focused command:
+
+```bash
+.venv/bin/python -m pytest -q tests/test_ci_full_proof.py \
+  tests/test_pr_test_policy.py tests/test_local_test_runner.py \
+  tests/test_full_test_runner.py tests/test_compose_configuration.py
+```
+
+Result: **139 passed in 3.16s**. The audited fast command passed **762 tests in
+2.44s**, without real services. It remains explicitly partial feedback. A real
+Git/CLI regression also verifies fresh prose-only metadata classification.
+Workflow YAML parsed successfully: the same four jobs remain, global and gate
+permissions are read-only, the gate has a three-minute timeout, and each upload
+contains only one explicit public JSON receipt with seven-day retention.
+The proof client has a 30-second read budget and bounded JSON/ZIP reads.
+
+Diff review and whitespace checks passed. No application, migration,
+dependency, browser synchronization, worker policy or coverage configuration
+was changed. Full local acceptance and real hosted/native-merge verification
+remain required; these focused results do not complete task 5.2.
+
 ## Planning only — 2026-10-19
 
 Status: task 1.1 complete; all six implementation/acceptance tasks remain open.

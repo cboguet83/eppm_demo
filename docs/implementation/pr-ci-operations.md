@@ -32,10 +32,26 @@ operator's authenticated session, never in the test workflow.
 Draft code changes receive `feedback`; their required `tests` gate intentionally
 stays unsuccessful until full acceptance. Mark the PR ready to trigger the full
 suite. Policy changes run full checks even while draft. Allowlisted prose-only
-changes can pass their policy lane. A manual diagnostic or metadata edit cannot
-satisfy the PR gate. Inspect the job summary for the selected lane, pinned
+changes can pass their policy lane. A manual diagnostic cannot satisfy the PR
+gate. Metadata code edits retain the `tests` name and must revalidate the latest
+successful complete PR full attempt for the identical head/base/tested merge,
+readiness and workflow source. Immutable, attempt-specific policy/full artifacts
+expire after seven days. Missing, expired, malformed, stale or unsuccessful
+evidence blocks replay; no fallback to an older pass after a newer failed full
+attempt is allowed. Only the exact named JSON files are uploaded, never `.local/`
+or a credentials directory. Inspect the job log for the selected lane, pinned
 revision, and failed prerequisite before rerunning. A cancelled or stale run
 does not count as acceptance; ready code updates need their own full result.
+
+If a metadata edit occurs during full execution, the metadata gate fails quickly
+rather than consuming runner minutes waiting. After full succeeds, rerun only
+that metadata gate (GitHub's failed-job rerun, or `gh run rerun --job <gate-job-id>`).
+This revalidates existing full proof and does not rerun the suite. If proof is
+missing/expired or the latest acceptance was a partial rerun without a complete
+full attempt, run fresh full acceptance. Verify the native merge box recognizes
+passing `tests`; an older green check in the API alone is insufficient. Keep
+manual diagnostics in their separate check context. Never attempt a merge just
+to test whether protection is working.
 
 If the selective rollout fails, restore full-on-every-PR execution through a
 reviewed fix while preserving the required `tests` context, complete collection,

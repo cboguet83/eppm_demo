@@ -30,7 +30,15 @@ jobs:
           python-version: '3.14'
       - name: Classify complete diff and audit test inventory
         id: plan
-        run: python -m scripts.pr_test_policy plan --event "$GITHUB_EVENT_PATH" --event-name "$GITHUB_EVENT_NAME"
+        run: python -m scripts.pr_test_policy plan --event "$GITHUB_EVENT_PATH" --event-name "$GITHUB_EVENT_NAME" --record .local/ci-proof/plan.json
+      - name: Preserve source-bound policy decision
+        uses: actions/upload-artifact@v7
+        with:
+          name: eppm-plan-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/ci-proof/plan.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
 
   feedback:
     needs: policy
@@ -104,7 +112,16 @@ jobs:
         id: receipt
         env:
           EPPM_TEST_DECISION: ${{ needs.policy.outputs.decision }}
-        run: python -m scripts.pr_test_policy attest
+        run: python -m scripts.pr_test_policy attest --record .local/ci-proof/full.json
+      - name: Preserve complete PR acceptance proof
+        if: needs.policy.outputs.lane == 'full'
+        uses: actions/upload-artifact@v7
+        with:
+          name: eppm-attest-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .local/ci-proof/full.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
       - name: Stop isolated database service
         if: always()
         run: |
@@ -118,12 +135,20 @@ jobs:
     needs: [policy, full, feedback]
     if: always()
     runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v7
         with:
           python-version: '3.14'
       - name: Require complete current acceptance
         env:
           EPPM_TEST_NEEDS: ${{ toJSON(needs) }}
+          GH_TOKEN: ${{ github.token }}
         run: python -m scripts.pr_test_policy gate

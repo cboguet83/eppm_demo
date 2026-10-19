@@ -43,6 +43,7 @@ def _needs(decision: policy.Decision) -> dict[str, Any]:
     (False, {"docs/archive/sqlite/benchmarks/observer.py"}, "full"),
     (True, {".github/workflows/tests.yml"}, "full"),
     (True, {"scripts/pr_test_policy.py"}, "full"),
+    (True, {"tests/test_ci_full_proof.py"}, "full"),
     (True, {"tests/suites.json"}, "full"),
     (True, {"docs/development-workflow.md"}, "full"),
     (True, None, "full"), (False, set(), "full"),
@@ -109,16 +110,27 @@ def test_base_change_requires_new_full_proof_even_with_the_same_head() -> None:
         policy.accept(stale, MERGE)
 
 
-def test_metadata_and_manual_runs_never_publish_the_required_pr_context() -> None:
-    """A title edit or standalone diagnostic cannot replace PR acceptance."""
+def test_metadata_requires_full_proof_and_manual_diagnostics_stay_separate() -> None:
+    """Metadata needs real full proof; a standalone diagnostic cannot replace it."""
     event = _event(action="edited")
     event["changes"] = {"body": {"from": "old body"}}
     metadata = policy.decide(event, "pull_request", MERGE, {"app/main.py"})
     manual = policy.decide({}, "workflow_dispatch", HEAD, None)
-    assert metadata.context == "metadata checks"
+    assert metadata.context == "tests"
     assert manual.context == "manual acceptance"
-    assert policy.accept(_needs(metadata), MERGE) == metadata
+    with pytest.raises(ValueError, match="full proof"):
+        policy.accept(_needs(metadata), MERGE)
     assert policy.accept(_needs(manual), HEAD) == manual
+
+
+def test_metadata_gate_keeps_required_name_and_rejects_unproved_acceptance() -> None:
+    """A later metadata run must keep the native gate without inventing a pass."""
+    event = _event(action="edited")
+    event["changes"] = {"body": {"from": "old body"}}
+    decision = policy.decide(event, "pull_request", MERGE, {"app/main.py"})
+    assert decision.context == "tests"
+    with pytest.raises(ValueError, match="full proof"):
+        policy.accept(_needs(decision), MERGE)
 
 
 def test_missing_results_and_stale_policy_are_not_acceptance() -> None:
@@ -283,3 +295,11 @@ def test_policy_cli_uses_real_merge_parents_and_json_job_transport(
     assert f"sha={merged}" in output.read_text()
     monkeypatch.setenv("EPPM_TEST_NEEDS", json.dumps(_needs(decision)))
     assert policy.main(["gate", "--sha", merged]) == (1 if lane == "feedback" else 0)
+    if lane == "docs":
+        event.update(action="edited", changes={"body": {"from": "old body"}})
+        payload.write_text(json.dumps(event))
+        assert policy.main(["plan", "--event", str(payload), "--event-name", "pull_request", "--sha", merged]) == 0
+        fresh = policy.Decision.decode(output.read_text().splitlines()[-3].split("=", 1)[1])
+        assert fresh.lane == "docs" and fresh.context == "tests"
+        monkeypatch.setenv("EPPM_TEST_NEEDS", json.dumps(_needs(fresh)))
+        assert policy.main(["gate", "--sha", merged]) == 0

@@ -15,6 +15,7 @@
     "tests/test_authorized_cache.py",
     "tests/test_budget_decimal_arithmetic.py",
     "tests/test_capacity_timeline.py",
+    "tests/test_ci_full_proof.py",
     "tests/test_csv_task_correlation.py",
     "tests/test_dashboard.py",
     "tests/test_dashboard_financials.py",

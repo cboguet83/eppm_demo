@@ -151,8 +151,17 @@ Both sides of prose changes must also be plain UTF-8, nonexecutable Git blobs;
 symlinks, binary data, shebang scripts or unavailable content evidence require
 full checks even when the filename ends in Markdown.
 
-Manual full diagnostics have their own check context. Metadata-only edits do
-not launch or cancel full acceptance and cannot publish a passing `tests` gate.
+Manual full diagnostics have their own check context. Metadata-only code edits
+do not launch or cancel full acceptance. Their stable `tests` gate can pass only
+by revalidating immutable full proof for the exact PR/head/base/tested merge and
+workflow source. The latest actual acceptance attempt must have succeeded with
+all required jobs; missing, expired, stale, failed, cancelled, partial or manual
+evidence never qualifies. This avoids GitHub leaving `tests` Expected when a
+later metadata run omits the required check. A metadata edit during full execution
+fails promptly; after full succeeds, rerun only that metadata gate to revalidate
+proof, without another expensive suite. Prose-only updates retain fresh complete
+diff/blob validation. Read-only Actions/PR access retrieves bounded proof files;
+credentials and signed download URLs never enter the artifacts or logs.
 The always-evaluated merge gate requires the selected jobs' explicit success
 and the exact tested revision/head/base decision. Missing, stale, cancelled, or
 unexpectedly skipped work fails. Concurrency cancels obsolete runs for the same

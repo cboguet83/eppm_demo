@@ -88,7 +88,7 @@ authorized at creation; the remaining boxes require a subsequent apply request.
   separately before task 5.1. This restores the existing design boundary,
   without changing the readiness policy or coverage gate.
 
-- [ ] 4.4 Implement decision 6's stable metadata gate and bounded, authenticated
+- [x] 4.4 Implement decision 6's stable metadata gate and bounded, authenticated
   reuse of exact-revision full proof. Record immutable policy/full artifacts,
   validate the live PR and latest actual acceptance attempt/job graph, reject
   missing/stale/failed/pending/manual/feedback evidence and unsafe downloads,

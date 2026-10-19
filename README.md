@@ -194,8 +194,11 @@ ready code revision needs fresh full acceptance. Unknown/mixed files count as
 code; selection never removes tests from the full suite. Obsolete PR runs are
 cancelled. Prose exemptions also require nonexecutable, plain UTF-8 Git blobs;
 symlinks, binary data and shebang scripts require full checks regardless of suffix.
-Title/body-only edits and manual diagnostics use separate check names
-and cannot replace acceptance. Standalone full runs remain available under
+Title/body-only code edits retain `tests` and revalidate a completed full PR run
+for the exact revision and workflow source; partial, stale or failed proof never
+qualifies. They do not restart the suite. If full acceptance is still running,
+retry only the metadata gate after it succeeds. Manual diagnostics keep a
+separate check name and cannot replace PR acceptance. Standalone full runs remain available under
 **Actions → Application and PostgreSQL checks → Run workflow**. SonarCloud
 integration remains in place. Effective GitHub main protection must require
 `tests` and an up-to-date branch; local documentation alone does not enforce it.
