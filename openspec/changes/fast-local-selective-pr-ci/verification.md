@@ -119,11 +119,33 @@ NUL/non-UTF-8 blobs, symlinks, and deleted executable Markdown. This adds
 document checks without adding a parser/library dependency or weakening any
 existing full gate.
 
-Task 4.2 remains incomplete: automatic approval review rejected the persistent
+At this point task 4.2 was incomplete: automatic approval review rejected the persistent
 main-protection write pending explicit approval of its exact payload, specifically
 administrator enforcement and disabling force pushes/deletion. The prepared JSON
 is reviewable; no remote settings have changed. A user question is pending while
 unaffected local acceptance work continues.
+
+## Task 4.2 — effective main protection
+
+The user explicitly approved the exact protection payload after reviewing its
+administrator enforcement and force-push/deletion restrictions. The first API
+submission returned HTTP 422 because `contexts` and `checks` are alternative
+input shapes; removing the redundant empty `contexts` field preserved every
+approved rule. The corrected protection PUT and merge-method PATCH succeeded.
+
+Read-back at 2026-10-19 12:26 UTC confirms required PRs, strict/up-to-date
+GitHub Actions `tests` (app 15368), administrator enforcement, blocked force
+pushes/deletion, and no linear-history requirement. Merge commits alone are
+enabled; squash, rebase, and automatic merging are disabled. Required GitHub
+reviews remain zero; explicit user approval of the concrete PR is still needed.
+
+The legacy protection endpoint returns these enforced rules; the separate
+ruleset endpoint remains `[]`. Existing successful `tests` history at
+`1761338f5818a4e7c0a8842d4e83bed658e25e5d` confirms the required app/context
+identity. See `main-protection-request.json`, `merge-methods-request.json`, and
+`github-settings-evidence.json` for sanitized requests and before/after evidence.
+Operator inspection and conservative rollback are documented in
+`docs/implementation/pr-ci-operations.md`. No administrative token enters CI.
 
 ## Implementation acceptance
 

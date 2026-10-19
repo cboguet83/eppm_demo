@@ -63,7 +63,7 @@ authorized at creation; the remaining boxes require a subsequent apply request.
   cannot turn all-skipped jobs green. Preserve read-only test permissions,
   SonarCloud integration, all full gates and cleanup. Update README and
   `docs/development-workflow.md` to the agreed policy in this same commit.
-- [ ] 4.2 After local gate regressions pass, preview and apply the explicitly
+- [x] 4.2 After local gate regressions pass, preview and apply the explicitly
   requested main protections: PR-based changes, required GitHub Actions `tests`
   context, up-to-date branches, and effective administrator enforcement; keep
   merge commits and disable squash/rebase/automatic merging without altering
